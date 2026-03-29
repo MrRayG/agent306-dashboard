@@ -22,11 +22,32 @@ const STATE_FILE = dataPath("agent_reach_state.json");
 // ── Configuration with env-var overrides ──────────────────────────────────────
 
 const DEFAULT_TWITTER_ACCOUNTS = [
+  // ── AI Leaders & Labs ──
+  "OpenAI",
+  "GoogleDeepMind",
+  "AnthropicAI",
+  "xai",
+  "sama",
+  "karpathy",
+  "AndrewYNg",
+  "ylecun",
+  "TheRundownAI",
+  "dair_ai",
+  // ── Web3 & Crypto ──
+  "VitalikButerin",
+  "binance",
+  "coinbase",
+  "ethereum",
+  "cz_binance",
+  "brian_armstrong",
+  "balajis",
+  "APompliano",
+  "saylor",
+  "a16z",
+  // ── NORMIES Ecosystem ──
   "normiesART",
   "BoredApeGazette",
   "punk6529",
-  "VitalikButerin",
-  "balajis",
   "ai16zdao",
 ];
 
