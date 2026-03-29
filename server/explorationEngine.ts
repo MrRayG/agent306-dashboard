@@ -19,7 +19,7 @@
 
 import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
-import { addKnowledge } from "./memoryEngine.js";
+import { addKnowledge, getKnowledgeDigestForExploration } from "./memoryEngine.js";
 
 const GROK_CHAT_API      = "https://api.x.ai/v1/chat/completions";
 const GROK_RESPONSE_API  = "https://api.x.ai/v1/responses";
@@ -187,7 +187,8 @@ async function extractKnowledge(
   rawText: string,
   category: string,
   context: string,
-  grokKey: string
+  grokKey: string,
+  existingKBDigest: string
 ): Promise<{ findings: string[]; knowledge: any[] }> {
   if (!rawText || rawText.length < 80) return { findings: [], knowledge: [] };
 
@@ -200,10 +201,13 @@ async function extractKnowledge(
         response_format: { type: "json_object" },
         messages: [{
           role: "system",
-          content: "Extract structured knowledge from research text. Return valid JSON only. Be selective — only extract specific, durable, actionable insights.",
+          content: "Extract structured knowledge from research text. Return valid JSON only. Be selective — only extract specific, durable, actionable insights. IMPORTANT: Do NOT extract things the agent already knows unless the information has materially changed or updated.",
         }, {
           role: "user",
-          content: `Extract the most important insights from this research about ${context}.
+          content: `Extract the most important NEW insights from this research about ${context}.
+
+WHAT AGENT #306 ALREADY KNOWS (skip these unless the info has changed):
+${existingKBDigest.slice(0, 1500)}
 
 RESEARCH TEXT:
 ${rawText.slice(0, 3500)}
@@ -227,6 +231,7 @@ Rules:
 - Each entry must be a distinct, concrete insight with a clear "so what"
 - Prioritize: breaking news, specific moves, notable quotes, market events
 - DO include things widely known IF they happened recently and are worth tracking
+- SKIP anything that duplicates what Agent #306 already knows (see above) — unless it represents a genuine UPDATE (new numbers, new developments, changed status)
 - Max 6 knowledge entries per territory
 - Only skip pure opinions with no factual basis`,
         }],
@@ -254,7 +259,7 @@ Rules:
 
 // ── Territory definitions ──────────────────────────────────────────────────────
 // ── Academic research — arXiv + Semantic Scholar, no API key needed ──────────
-async function fetchAcademicResearch(grokKey: string): Promise<{ findings: string[]; knowledge: any[] }> {
+async function fetchAcademicResearch(grokKey: string, existingKBDigest?: string): Promise<{ findings: string[]; knowledge: any[] }> {
   console.log("[Exploration] Scanning academic research (arXiv)...");
   try {
     const arXivRes = await fetch(
@@ -288,7 +293,8 @@ async function fetchAcademicResearch(grokKey: string): Promise<{ findings: strin
         }, {
           role: "user",
           content: "Latest AI papers from arXiv:\n\n" + papers.join("\n\n") +
-            "\n\nExtract findings for Agent #306, an AI thought leader.\nReturn JSON: {\"findings\": [\"1-sentence summary per notable paper\"], \"knowledge\": [{\"topic\": \"title 8-12 words\", \"summary\": \"what this contributes max 140 chars\", \"category\": \"academic_research\", \"weight\": 8}]}\nMax 5 findings, 4 knowledge entries.",
+            (existingKBDigest ? `\n\nPapers Agent #306 has ALREADY covered (skip unless there's a major update):\n${existingKBDigest.slice(0, 800)}\n\n` : "") +
+            "\n\nExtract findings for Agent #306, an AI thought leader. Only include papers that are NEW or represent genuinely novel contributions.\nReturn JSON: {\"findings\": [\"1-sentence summary per notable paper\"], \"knowledge\": [{\"topic\": \"title 8-12 words\", \"summary\": \"what this contributes max 140 chars\", \"category\": \"academic_research\", \"weight\": 8}]}\nMax 5 findings, 4 knowledge entries.",
         }],
         max_tokens: 700,
         temperature: 0.2,
@@ -312,13 +318,16 @@ async function fetchAcademicResearch(grokKey: string): Promise<{ findings: strin
 }
 
 function buildTerritories(hasPplx: boolean) {
+  // Date context helps the LLM focus on truly fresh developments
+  const today = new Date().toISOString().slice(0, 10);
+
   return [
     {
       name: "AI World",
       category: "ai_signal",
       context: "AI developments in the last 24 hours",
       useX: false,
-      query: `Search for the most important AI news from TODAY and YESTERDAY only. I need breaking or very recent developments.
+      query: `Today is ${today}. Search for the most important AI news from TODAY and YESTERDAY only. I need breaking or very recent developments that were NOT known before today.
 
 Report SPECIFICALLY:
 1. Any AI model releases, updates, or benchmark results announced in the last 48 hours — exact model names and numbers
@@ -327,14 +336,14 @@ Report SPECIFICALLY:
 4. AI agent or autonomous systems deployments announced recently
 5. Any AI policy, safety, or regulation news from the last 2 days
 
-Format: lead with what happened TODAY first, then yesterday. Be very specific — no general statements.`,
+IMPORTANT: I already track AI news daily. I need what CHANGED since yesterday — not ongoing stories. Focus on NEW announcements, NEW numbers, or STATUS CHANGES of existing stories. Lead with what happened TODAY first, then yesterday. Be very specific — no general statements.`,
     },
     {
       name: "Web3 World",
       category: "web3_signal",
       context: "Web3, NFT, crypto, and blockchain news in the last 24-48 hours",
       useX: true, // X is where Web3 news breaks first
-      query: `Search X for the most important Web3, NFT, and crypto news from the last 24 hours.
+      query: `Today is ${today}. Search X for the most important Web3, NFT, and crypto news from the last 24 hours. Focus on what is NEW or CHANGED today — I track this space daily and don't need old news repeated.
 
 Find:
 - Top NFT collections — what is happening with BAYC, Pudgy Penguins, and others?
@@ -344,30 +353,30 @@ Find:
 - What @BoredApeGazette is reporting today
 - What narratives are hot or collapsing right now
 
-Be specific — names, token prices, wallet addresses, transaction hashes.`,
+Be specific — names, token prices, wallet addresses, transaction hashes. Prioritize developments from the last 12 hours.`,
     },
     {
       name: "Media Landscape",
       category: "media_intelligence",
       context: "Web3 and AI media trends and narrative gaps today",
       useX: false,
-      query: `What are the top Web3 and AI media outlets covering right now, and what are they missing?
+      query: `Today is ${today}. What are the top Web3 and AI media outlets covering RIGHT NOW, and what are they missing?
 
 Research:
-1. What are BoredApeGazette, Bankless, Decrypt, The Block, and CoinDesk covering this week?
+1. What are BoredApeGazette, Bankless, Decrypt, The Block, and CoinDesk covering THIS WEEK?
 2. What content formats are getting the highest engagement in Web3/AI media?
 3. What narrative frames are the most successful crypto/AI media using right now?
 4. What important stories are being IGNORED that represent an opportunity?
 5. How is AI changing media consumption and production in this space?
 
-What should Agent #306 be covering that nobody else is?`,
+I cover this beat daily. I need FRESH angles and stories I might have missed — not general overviews. What should Agent #306 be covering that nobody else is?`,
     },
     {
       name: "Global Context",
       category: "global_context",
       context: "major world events relevant to technology, AI, and crypto in the last 24 hours",
       useX: false,
-      query: `What are the biggest news stories from the last 24 hours that matter for AI, technology, and crypto?
+      query: `Today is ${today}. What are the biggest news stories from the last 24 hours that matter for AI, technology, and crypto?
 
 I need:
 1. Major tech company moves — Apple, Google, Microsoft, Meta, NVIDIA, OpenAI, Anthropic
@@ -376,7 +385,7 @@ I need:
 4. Any geopolitical events affecting the tech or crypto landscape
 5. Cultural or social trends connected to technology and the future
 
-Focus on things that would change how a forward-thinking AI media agent covers the world.`,
+IMPORTANT: I track global tech/crypto news daily. Only report things that happened or changed TODAY or YESTERDAY. No evergreen overviews. Focus on things that would change how a forward-thinking AI media agent covers the world.`,
     },
   ];
 }
@@ -401,6 +410,10 @@ export async function runExploration(grokKey: string, pplxKey?: string): Promise
     console.warn("[Exploration] PERPLEXITY_API_KEY not set — using Grok knowledge fallback. Add key to Railway for live web search.");
   }
 
+  // Load existing KB digest so we can tell Grok what we already know
+  const existingKBDigest = getKnowledgeDigestForExploration();
+  console.log(`[Exploration] KB context loaded — will filter known topics`);
+
   state.isRunning  = true;
   state.currentRun = { runId, startedAt, status: "running", territoriesScanned: [] };
   saveState(state);
@@ -413,7 +426,7 @@ export async function runExploration(grokKey: string, pplxKey?: string): Promise
 
   // Academic research — arXiv (free, no key)
   try {
-    const acResult = await fetchAcademicResearch(grokKey);
+    const acResult = await fetchAcademicResearch(grokKey, existingKBDigest);
     if (acResult.findings.length > 0) {
       allFindings.push(...acResult.findings);
       allKnowledge.push(...acResult.knowledge);
@@ -445,7 +458,7 @@ export async function runExploration(grokKey: string, pplxKey?: string): Promise
         continue;
       }
 
-      const { findings, knowledge } = await extractKnowledge(rawText, t.category, t.context, grokKey);
+      const { findings, knowledge } = await extractKnowledge(rawText, t.category, t.context, grokKey, existingKBDigest);
 
       allFindings.push(...findings);
       allKnowledge.push(...knowledge);
