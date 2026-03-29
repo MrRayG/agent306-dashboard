@@ -13,6 +13,8 @@ import { getPodcastState } from "./podcastEngine.js";
 import { getExplorationState } from "./explorationEngine.js";
 import { getAgentReachStatus } from "./agentReachEngine.js";
 import { getBriefingState } from "./dailyCycleEngine.js";
+import { getMetacognitionState } from "./metacognitionEngine.js";
+import { getLatestSnapshot, getEvolutionHistory } from "./evolutionTracker.js";
 
 // ── In-memory cache (30-second TTL) ─────────────────────────
 
@@ -375,7 +377,61 @@ export function getPublicResearch() {
   });
 }
 
-// ── 6. Hive ──────────────────────────────────────────────────
+// ── 6. Metacognition ────────────────────────────────────────
+
+function confidenceLabel(avgWeight: number): "high" | "medium" | "low" {
+  if (avgWeight >= 6) return "high";
+  if (avgWeight >= 4) return "medium";
+  return "low";
+}
+
+export function getPublicMetacognition() {
+  return cached("metacognition", () => {
+    const meta = getMetacognitionState();
+    const snapshot = getLatestSnapshot();
+    const history = getEvolutionHistory();
+    const lab = getResearchLab();
+
+    // Hypothesis stats from research engine
+    const hypothesesTested = lab.hypotheses.filter(
+      h => h.status === "confirmed" || h.status === "rejected" || h.status === "expired"
+    ).length;
+    const hypothesesConfirmed = lab.hypotheses.filter(h => h.status === "confirmed").length;
+    const confirmationRate = hypothesesTested > 0
+      ? Math.round(hypothesesConfirmed / hypothesesTested * 100) / 100
+      : 0;
+
+    return {
+      cognition: {
+        knowledgeEntries: meta.knowledgeCoverage.totalActive,
+        knowledgeCategories: meta.knowledgeCoverage.categories.length,
+        avgConfidence: confidenceLabel(meta.confidenceCalibration.avgWeight),
+        learningVelocity: {
+          added7d: meta.learningVelocity.knowledgeAdded7d,
+          added30d: meta.learningVelocity.knowledgeAdded30d,
+          trend: meta.learningVelocity.trend,
+        },
+        reasoningQuality: {
+          hypothesesTested,
+          confirmationRate,
+          debatesRun: meta.reasoningQuality.debatesRun,
+          contradictionsResolved: meta.reasoningQuality.contradictionsResolved,
+        },
+        voiceMaturity: snapshot?.voiceMaturity ?? 0,
+        growthVector: snapshot?.growthVector ?? "early",
+        mood: snapshot?.mood ?? "awakening",
+        totalReflections: meta.reflectionStats.totalReflections,
+        activeStyleRules: meta.reflectionStats.activeRules,
+        synthesisReports: meta.synthesisStats.totalReports,
+        knowledgeConnections: meta.synthesisStats.totalConnections,
+        evolutionDay: history.totalDays,
+      },
+      generatedAt: new Date().toISOString(),
+    };
+  });
+}
+
+// ── 7. Hive ──────────────────────────────────────────────────
 
 export function getPublicHive() {
   return cached("hive", () => {
