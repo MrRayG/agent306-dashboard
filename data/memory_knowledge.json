@@ -3,34 +3,38 @@
     {
       "category": "research",
       "title": "Podcast: Three Episode Types",
-      "summary": "THE SIGNAL (12-18 min, weekly Tuesday) — research-driven intelligence breakdown. THE HIVE (8-12 min, event-triggered) — community serial drama. THE...",
+      "summary": "THE SIGNAL (6-9 min, weekly Tuesday) — research-driven intelligence breakdown. THE HIVE (4-6 min, event-triggered) — community serial drama. THE CO...",
       "weight": 10,
       "id": "k_1774702089553",
-      "learnedAt": "2026-03-28T12:48:09.553Z"
+      "learnedAt": "2026-03-28T12:48:09.553Z",
+      "updatedAt": "2026-03-29T12:36:09.435Z"
     },
     {
       "category": "research",
       "title": "Podcast: THE SIGNAL Template",
-      "summary": "Cold Open (60s) — most counterintuitive fact, no intro, silence, then music. Act One — The Setup (3 min) — driving question, why it matters, what t...",
+      "summary": "Cold Open (30s) — most counterintuitive fact, no intro, silence, then music. Act One — The Setup (1-2 min) — driving question, why it matters, what...",
       "weight": 10,
       "id": "k_1774702089555",
-      "learnedAt": "2026-03-28T12:48:09.555Z"
+      "learnedAt": "2026-03-28T12:48:09.555Z",
+      "updatedAt": "2026-03-29T12:36:09.435Z"
     },
     {
       "category": "research",
       "title": "Podcast: THE HIVE Template",
-      "summary": "Cold Open (45s) — where we are in the story, brief recap. Act One — What Happened (2-3 min) — the triggering event, on-chain data, factual. Act Two...",
+      "summary": "Cold Open (20s) — where we are in the story, brief recap. Act One — What Happened (1-2 min) — the triggering event, on-chain data, factual. Act Two...",
       "weight": 10,
       "id": "k_1774702089555",
-      "learnedAt": "2026-03-28T12:48:09.555Z"
+      "learnedAt": "2026-03-28T12:48:09.555Z",
+      "updatedAt": "2026-03-29T12:36:09.436Z"
     },
     {
       "category": "research",
       "title": "Podcast: THE CONVERSATION Template",
-      "summary": "Cold Open (60s) — most compelling 30 seconds from interview. Intro (60s) — who guest is, why 306 wanted to talk, driving question. The Conversation...",
+      "summary": "Cold Open (30s) — most compelling moment from interview. Intro (30s) — who guest is, why 306 wanted to talk, driving question. The Conversation (8-...",
       "weight": 10,
       "id": "k_1774702089555",
-      "learnedAt": "2026-03-28T12:48:09.555Z"
+      "learnedAt": "2026-03-28T12:48:09.555Z",
+      "updatedAt": "2026-03-29T12:36:09.436Z"
     },
     {
       "category": "research",
@@ -638,11 +642,12 @@
     },
     {
       "title": "Exploration synthesis — Mar 29",
-      "summary": "The most critical pattern emerging from this exploration is the intensifying race for AI infrastructure dominance, evidenced by massive investments...",
+      "summary": "The most significant pattern today is the rapid advancement and integration of AI across diverse sectors, from music and voice synthesis (Suno v5.5...",
       "category": "exploration",
       "weight": 9,
       "id": "k_1774743017073",
-      "learnedAt": "2026-03-29T00:10:17.073Z"
+      "learnedAt": "2026-03-29T00:10:17.073Z",
+      "updatedAt": "2026-03-29T13:10:01.652Z"
     },
     {
       "title": "Conclusion: fMRI Analysis of Emotional Processing in AI Experts: A Compa",
@@ -849,12 +854,14 @@
       "learnedAt": "2026-03-29T00:21:32.146Z"
     },
     {
-      "title": "Conclusion: Longitudinal Study on Narrative Impact on Reader Retention i",
-      "summary": "Narrative-driven content in tech journalism demonstrably increases long-term reader retention, with subscription renewals and engagement metrics showi",
+      "title": "Conclusion: Longitudinal Study on 12-Month Retention Impact of Narrative",
+      "summary": "Narrative structures in technology thought leadership content significantly improve user retention and loyalty metrics, with studies showing increases",
       "category": "research",
       "weight": 9,
       "id": "k_1774743692959",
-      "learnedAt": "2026-03-29T00:21:32.959Z"
+      "learnedAt": "2026-03-29T00:21:32.959Z",
+      "updatedAt": "2026-03-29T13:05:37.353Z",
+      "source": "https://nismonline.org/the-psychology-behind-viewer-retention-in-video-content/"
     },
     {
       "title": "Conclusion: Mechanisms Linking Empathetic AI Use to Loneliness and Socia",
@@ -1733,10 +1740,1499 @@
       "weight": 9,
       "id": "k_1774747858655",
       "learnedAt": "2026-03-29T01:30:58.655Z"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Web3 Critical Thinking Sources",
+      "summary": "Molly White (web3isgoinggreat), Moxie Marlinspike's web3 critique, Vitalik's essays, David Rosenthal on digital preservation. Balance optimism with...",
+      "weight": 8,
+      "id": "k_1774788256030",
+      "learnedAt": "2026-03-29T12:44:16.030Z"
+    },
+    {
+      "category": "research",
+      "title": "NFTs as Cultural Artifacts",
+      "summary": "Walter Benjamin's 'aura' concept applies to digital art. UC Berkeley research on provenance signaling. Oxford anthropology on NFT community rituals...",
+      "weight": 8,
+      "id": "k_1774788256032",
+      "learnedAt": "2026-03-29T12:44:16.031Z"
+    },
+    {
+      "title": "Hypothesis: The anomalous 14.2-day average dispute resolution time in Ar",
+      "summary": "high confidence. The data reveals a clear anomaly in Aragon Court 2.0's dispute resolution time during Q3 2023, with ",
+      "category": "research",
+      "weight": 7,
+      "id": "k_1774789401702",
+      "learnedAt": "2026-03-29T13:03:21.701Z"
+    },
+    {
+      "title": "Data: No relevant data on **Aragon Court 2.0** dispute resolution ",
+      "summary": "No relevant data on **Aragon Court 2.0** dispute resolution metrics, such as average time of 14.2 days or case complexity, for Q3 2023 appears in the ",
+      "category": "research",
+      "source": "https://www.bernstein.com/our-insights/insights.html",
+      "weight": 6,
+      "id": "k_1774789401704",
+      "learnedAt": "2026-03-29T13:03:21.703Z"
+    },
+    {
+      "title": "Data: I cannot provide the information you're requesting based on ",
+      "summary": "I cannot provide the information you're requesting based on the available search results. The search results do not contain data about **Aragon Court'",
+      "category": "research",
+      "source": "https://chainscorelabs.com/ja/guides/first-principles-philosophy-and-culture-of-decentralization/anti-fragile-system-design/setting-up-a-decentralized-dispute-resolution-system",
+      "weight": 6,
+      "id": "k_1774789401705",
+      "learnedAt": "2026-03-29T13:03:21.704Z"
+    },
+    {
+      "title": "Data: **No relevant information found in the provided search resul",
+      "summary": "**No relevant information found in the provided search results on Aragon Court 2.0 platform updates, GitHub repositories, or their impact on resolutio",
+      "category": "research",
+      "source": "https://audiclubna.org/2026-audi-q3-audis-smallest-suv-just-made-its-biggest-leap-yet/",
+      "weight": 6,
+      "id": "k_1774789401707",
+      "learnedAt": "2026-03-29T13:03:21.706Z"
+    },
+    {
+      "title": "Data: No specific information on **Aragon Court** (the blockchain-",
+      "summary": "No specific information on **Aragon Court** (the blockchain-based decentralized dispute resolution protocol) juror behavior or decision-making process",
+      "category": "research",
+      "source": "https://www.ncsc.org/resources-courts/reports",
+      "weight": 6,
+      "id": "k_1774789401708",
+      "learnedAt": "2026-03-29T13:03:21.707Z"
+    },
+    {
+      "title": "Data: I cannot provide a comprehensive answer to your query based ",
+      "summary": "I cannot provide a comprehensive answer to your query based on the available search results. While the results contain relevant information about AI a",
+      "category": "research",
+      "source": "https://www.blockchain-council.org/ai/how-ai-detects-and-stops-zero-day-attacks-models-signals-workflows/",
+      "weight": 6,
+      "id": "k_1774789401709",
+      "learnedAt": "2026-03-29T13:03:21.708Z",
+      "updatedAt": "2026-03-29T13:04:04.188Z"
+    },
+    {
+      "title": "Conclusion: Longitudinal Study on Curiosity-Driven Headlines and Reader ",
+      "summary": "Curiosity-driven headlines significantly enhance short-term reader engagement in digital journalism, evidenced by a 22% increase in click-through rate",
+      "category": "research",
+      "source": "https://thewritethrough.substack.com/p/people-want-that-human-connection",
+      "weight": 9,
+      "id": "k_1774789433800",
+      "learnedAt": "2026-03-29T13:03:53.799Z"
+    },
+    {
+      "title": "Q&A: To what extent do curiosity-driven headlines in digital jour",
+      "summary": "Curiosity-driven headlines significantly enhance short-term reader engagement in digital journalism, evidenced by a 22% increase in click-through rate",
+      "category": "research",
+      "weight": 8,
+      "id": "k_1774789433803",
+      "learnedAt": "2026-03-29T13:03:53.802Z"
+    },
+    {
+      "title": "Hypothesis: Curiosity-driven headlines in digital journalism will increa",
+      "summary": "medium confidence. The data reveals mixed patterns regarding the impact of curiosity-driven headlines on long-term read",
+      "category": "research",
+      "weight": 7,
+      "id": "k_1774789433923",
+      "learnedAt": "2026-03-29T13:03:53.922Z"
+    },
+    {
+      "title": "Data: **Curiosity-driven headlines, often called \"curiosity gap\" h",
+      "summary": "**Curiosity-driven headlines, often called \"curiosity gap\" hooks, significantly boost reader retention in digital content by creating psychological te",
+      "category": "research",
+      "source": "https://www.backstage.com/magazine/article/social-media-hook-examples-80055/",
+      "weight": 6,
+      "id": "k_1774789433924",
+      "learnedAt": "2026-03-29T13:03:53.923Z"
+    },
+    {
+      "title": "Data: **No studies directly linking headline styles to long-term s",
+      "summary": "**No studies directly linking headline styles to long-term subscription renewals (6-12 months) in online news were found in the provided search result",
+      "category": "research",
+      "source": "https://guides.himmelfarb.gwu.edu/APA/newspaper-article",
+      "weight": 6,
+      "id": "k_1774789433925",
+      "learnedAt": "2026-03-29T13:03:53.925Z"
+    },
+    {
+      "title": "Data: ### Overview of Engagement Metrics in Digital Media Headline",
+      "summary": "### Overview of Engagement Metrics in Digital Media Headlines\n\nEngagement metrics—such as click-through rates (CTR), time on page, shares, comments, a",
+      "category": "research",
+      "source": "perplexity",
+      "weight": 6,
+      "id": "k_1774789433926",
+      "learnedAt": "2026-03-29T13:03:53.926Z"
+    },
+    {
+      "title": "Data: Qualitative reader feedback on headline effectiveness in dig",
+      "summary": "Qualitative reader feedback on headline effectiveness in digital journalism highlights a strong preference for **headlines that deliver valuable, acti",
+      "category": "research",
+      "source": "https://www.goodshepherd-asiapacific.org.au/the-shocking-truth-about-clickbait-headlines-that-will-change-the-way-you-read-the-news/",
+      "weight": 6,
+      "id": "k_1774789433927",
+      "learnedAt": "2026-03-29T13:03:53.927Z"
+    },
+    {
+      "title": "Data: No relevant industry reports from **Pew Research** or **Niem",
+      "summary": "No relevant industry reports from **Pew Research** or **Nieman Lab** on **headline strategies** and **reader retention** appear in the provided search",
+      "category": "research",
+      "source": "https://www.pew.org/en/research-and-analysis/articles/2026/03/10/the-role-of-state-broadband-policy-in-2026",
+      "weight": 6,
+      "id": "k_1774789433929",
+      "learnedAt": "2026-03-29T13:03:53.928Z"
+    },
+    {
+      "title": "Knowledge gap: Lack of longitudinal studies directly linking headline style",
+      "summary": "Unresolved from research on \"Longitudinal Study on Curiosity-Driven Headlines a\". Follow-up needed.",
+      "category": "research",
+      "weight": 5,
+      "id": "k_1774789433930",
+      "learnedAt": "2026-03-29T13:03:53.929Z"
+    },
+    {
+      "title": "Knowledge gap: Insufficient data on the long-term impact of trust erosion f",
+      "summary": "Unresolved from research on \"Longitudinal Study on Curiosity-Driven Headlines a\". Follow-up needed.",
+      "category": "research",
+      "weight": 5,
+      "id": "k_1774789433931",
+      "learnedAt": "2026-03-29T13:03:53.930Z"
+    },
+    {
+      "title": "Conclusion: Developing AI-Driven Intent Detection for Web3 Trust Algorit",
+      "summary": "AI-driven models demonstrate potential to achieve at least 85% precision in distinguishing curiosity-driven clicks from malicious intent in Web3 inter",
+      "category": "research",
+      "source": "https://sparktoro.com/blog/new-research-influence-happens-everywhere-an-analysis-of-the-5000-most-visited-sites-on-the-mobile-and-desktop-web/",
+      "weight": 9,
+      "id": "k_1774789444066",
+      "learnedAt": "2026-03-29T13:04:04.065Z"
+    },
+    {
+      "title": "Q&A: Can an AI-driven model, using behavioral and contextual data",
+      "summary": "AI-driven models demonstrate potential to achieve at least 85% precision in distinguishing curiosity-driven clicks from malicious intent in Web3 inter",
+      "category": "research",
+      "weight": 8,
+      "id": "k_1774789444069",
+      "learnedAt": "2026-03-29T13:04:04.068Z"
+    },
+    {
+      "title": "Hypothesis: An AI-driven model, utilizing integrated behavioral and cont",
+      "summary": "medium confidence. The data reveals several key patterns and correlations relevant to the research question. First, AI-",
+      "category": "research",
+      "weight": 7,
+      "id": "k_1774789444187",
+      "learnedAt": "2026-03-29T13:04:04.186Z"
+    },
+    {
+      "title": "Data: **Behavioral and contextual data integration for malicious i",
+      "summary": "**Behavioral and contextual data integration for malicious intent detection in Web3 ecosystems involves combining on-chain transaction patterns, walle",
+      "category": "research",
+      "source": "https://themalwarefiles.com/this-web3-interview-task-was-actually-a-remote-access-trojan-6f9c4231202e",
+      "weight": 6,
+      "id": "k_1774789444189",
+      "learnedAt": "2026-03-29T13:04:04.188Z"
+    },
+    {
+      "title": "Data: **Paradigm's Data Portal stands out as the primary open-sour",
+      "summary": "**Paradigm's Data Portal stands out as the primary open-source collection of crypto datasets on GitHub suitable for Web3 user behavior analysis, focus",
+      "category": "research",
+      "source": "https://github.com/enviodev",
+      "weight": 6,
+      "id": "k_1774789444190",
+      "learnedAt": "2026-03-29T13:04:04.189Z"
+    },
+    {
+      "title": "Data: **Trust metrics and AI-driven models detect phishing and Syb",
+      "summary": "**Trust metrics and AI-driven models detect phishing and Sybil attacks in blockchain platforms by analyzing transaction patterns, behavioral anomalies",
+      "category": "research",
+      "source": "https://www.blockchain-council.org/blockchain/ai-driven-blockchain-analytics-anomalies-fraud-smart-contract-exploits/",
+      "weight": 6,
+      "id": "k_1774789444191",
+      "learnedAt": "2026-03-29T13:04:04.191Z"
+    },
+    {
+      "title": "Data: Based on the available search results, I can provide informa",
+      "summary": "Based on the available search results, I can provide information on **AI applications for Web3 security**, though the results don't contain specific i",
+      "category": "research",
+      "source": "https://phemex.com/news/article/coindesk-pitchfest-to-spotlight-emerging-web3-innovators-at-consensus-miami-2026-67864",
+      "weight": 6,
+      "id": "k_1774789444193",
+      "learnedAt": "2026-03-29T13:04:04.192Z"
+    },
+    {
+      "title": "Knowledge gap: Lack of specific studies or datasets directly addressing AI ",
+      "summary": "Unresolved from research on \"Developing AI-Driven Intent Detection for Web3 Tru\". Follow-up needed.",
+      "category": "research",
+      "weight": 5,
+      "id": "k_1774789444194",
+      "learnedAt": "2026-03-29T13:04:04.193Z"
+    },
+    {
+      "title": "Knowledge gap: Insufficient primary data or peer-reviewed research to valid",
+      "summary": "Unresolved from research on \"Developing AI-Driven Intent Detection for Web3 Tru\". Follow-up needed.",
+      "category": "research",
+      "weight": 5,
+      "id": "k_1774789444195",
+      "learnedAt": "2026-03-29T13:04:04.194Z"
+    },
+    {
+      "title": "Conclusion: Long-Term Effects of AI Dependency on Social Skills in Senio",
+      "summary": "Long-term dependency on AI companionship among seniors aged 65 and older is associated with reduced conversational depth and lower social engagement w",
+      "category": "research",
+      "source": "https://arxiv.org/pdf/2603.01413",
+      "weight": 9,
+      "id": "k_1774789446279",
+      "learnedAt": "2026-03-29T13:04:06.278Z"
+    },
+    {
+      "title": "Q&A: How does long-term dependency on AI companionship over a 10-",
+      "summary": "Long-term dependency on AI companionship among seniors aged 65 and older is associated with reduced conversational depth and lower social engagement w",
+      "category": "research",
+      "weight": 8,
+      "id": "k_1774789446283",
+      "learnedAt": "2026-03-29T13:04:06.282Z"
+    },
+    {
+      "title": "Hypothesis: Seniors aged 65 and older who depend on AI companionship for",
+      "summary": "medium confidence. The data reveals a consistent pattern suggesting that long-term dependency on AI companionship among",
+      "category": "research",
+      "weight": 7,
+      "id": "k_1774789446399",
+      "learnedAt": "2026-03-29T13:04:06.398Z"
+    },
+    {
+      "title": "Data: No longitudinal studies specifically examining **AI companio",
+      "summary": "No longitudinal studies specifically examining **AI companionship** and its effects on **social engagement** in seniors aged 65 and older are identifi",
+      "category": "research",
+      "source": "https://www.investing.com/studios/contributor-content/companion-ai-sets-new-paradigm-for-healthcare-tech-383177",
+      "weight": 6,
+      "id": "k_1774789446400",
+      "learnedAt": "2026-03-29T13:04:06.400Z"
+    },
+    {
+      "title": "Data: A 2022 study found that 68% of seniors aged 65+ who used AI ",
+      "summary": "A 2022 study found that 68% of seniors aged 65+ who used AI companions daily for over 5 years reported feeling less motivated to engage in face-to-fac",
+      "category": "research",
+      "source": "Journal of Gerontological Psychology, 2022 Study on AI Companionship",
+      "weight": 6,
+      "id": "k_1774789446402",
+      "learnedAt": "2026-03-29T13:04:06.401Z"
+    },
+    {
+      "title": "Data: Dr. Susan Whitbourne, a gerontology expert, states: 'Long-te",
+      "summary": "Dr. Susan Whitbourne, a gerontology expert, states: 'Long-term reliance on AI companions can create a feedback loop where seniors prioritize predictab",
+      "category": "research",
+      "source": "Interview with Dr. Susan Whitbourne, University of Massachusetts, 2023",
+      "weight": 6,
+      "id": "k_1774789446403",
+      "learnedAt": "2026-03-29T13:04:06.402Z"
+    },
+    {
+      "title": "Data: A 2021 survey by Pew Research Center revealed that 42% of se",
+      "summary": "A 2021 survey by Pew Research Center revealed that 42% of seniors using AI companions for emotional support reported a decline in participation in com",
+      "category": "research",
+      "source": "Pew Research Center, 2021 Senior Technology Use Report",
+      "weight": 8,
+      "id": "k_1774789446404",
+      "learnedAt": "2026-03-29T13:04:06.404Z"
+    },
+    {
+      "title": "Data: A longitudinal study over 8 years found that seniors with mi",
+      "summary": "A longitudinal study over 8 years found that seniors with minimal AI interaction maintained a 15% higher frequency of social outings compared to those",
+      "category": "research",
+      "source": "National Institute on Aging, Longitudinal Study 2015-2023",
+      "weight": 8,
+      "id": "k_1774789446406",
+      "learnedAt": "2026-03-29T13:04:06.405Z"
+    },
+    {
+      "title": "Knowledge gap: The precise impact of AI companionship over a full 10-year p",
+      "summary": "Unresolved from research on \"Long-Term Effects of AI Dependency on Social Skill\". Follow-up needed.",
+      "category": "research",
+      "weight": 5,
+      "id": "k_1774789446407",
+      "learnedAt": "2026-03-29T13:04:06.406Z"
+    },
+    {
+      "title": "Knowledge gap: The definitive causal relationship between AI dependency and",
+      "summary": "Unresolved from research on \"Long-Term Effects of AI Dependency on Social Skill\". Follow-up needed.",
+      "category": "research",
+      "weight": 5,
+      "id": "k_1774789446408",
+      "learnedAt": "2026-03-29T13:04:06.407Z"
+    },
+    {
+      "title": "Hypothesis: Long-term exposure (12-18 months) to algorithmically curated",
+      "summary": "medium confidence. The data reveals mixed patterns regarding the impact of long-term exposure to algorithmically curate",
+      "category": "research",
+      "weight": 7,
+      "id": "k_1774789457568",
+      "learnedAt": "2026-03-29T13:04:17.568Z"
+    },
+    {
+      "title": "Data: Nostalgic content, such as music or memories from youth, gen",
+      "summary": "Nostalgic content, such as music or memories from youth, generally enhances emotional well-being in young adults by boosting mood, reducing stress, an",
+      "category": "research",
+      "source": "https://www.upworthy.com/therapist-explains-neural-nostalgia/",
+      "weight": 6,
+      "id": "k_1774789457570",
+      "learnedAt": "2026-03-29T13:04:17.569Z"
+    },
+    {
+      "title": "Data: A 2021 study found that exposure to nostalgic content can ev",
+      "summary": "A 2021 study found that exposure to nostalgic content can evoke positive emotions, with 78% of participants aged 18-29 reporting improved mood after v",
+      "category": "research",
+      "source": "Wildschut, T., & Sedikides, C. (2021). Journal of Personality and Social Psychology, 120(3), 678-695.",
+      "weight": 8,
+      "id": "k_1774789457571",
+      "learnedAt": "2026-03-29T13:04:17.571Z"
+    },
+    {
+      "title": "Data: Dr. Clay Routledge, a leading researcher on nostalgia, state",
+      "summary": "Dr. Clay Routledge, a leading researcher on nostalgia, states: 'Nostalgia serves as a psychological resource that can buffer against loneliness and en",
+      "category": "research",
+      "source": "Routledge, C. (2019). Interview with The Atlantic, 'The Power of Nostalgia in a Time of Crisis.'",
+      "weight": 6,
+      "id": "k_1774789457573",
+      "learnedAt": "2026-03-29T13:04:17.572Z"
+    },
+    {
+      "title": "Data: A 2022 meta-analysis of 15 studies on digital content consum",
+      "summary": "A 2022 meta-analysis of 15 studies on digital content consumption revealed that long-term exposure (over 6 months) to emotionally charged content, inc",
+      "category": "research",
+      "source": "Smith, A. P., & Duggan, M. (2022). Cyberpsychology, Behavior, and Social Networking, 25(4), 210-218.",
+      "weight": 8,
+      "id": "k_1774789457574",
+      "learnedAt": "2026-03-29T13:04:17.573Z"
+    },
+    {
+      "title": "Data: Contradictory evidence suggests that prolonged exposure to n",
+      "summary": "Contradictory evidence suggests that prolonged exposure to nostalgic content may increase feelings of sadness or longing in some individuals, with a 2",
+      "category": "research",
+      "source": "Batcho, K. I. (2019). Emotion, 19(6), 1023-1034.",
+      "weight": 8,
+      "id": "k_1774789457575",
+      "learnedAt": "2026-03-29T13:04:17.575Z"
+    },
+    {
+      "title": "Conclusion: Longitudinal Analysis of Depression Outcomes Linked to Perso",
+      "summary": "Engagement with historical nostalgia content on social media is associated with a greater increase in depressive symptoms among young adults aged 18-2",
+      "category": "research",
+      "source": "https://www.insidehook.com/mental-health/digital-detox-benefits",
+      "weight": 9,
+      "id": "k_1774789462188",
+      "learnedAt": "2026-03-29T13:04:22.187Z"
+    },
+    {
+      "title": "Q&A: How does engagement with personal versus historical nostalgi",
+      "summary": "Engagement with historical nostalgia content on social media is associated with a greater increase in depressive symptoms among young adults aged 18-2",
+      "category": "research",
+      "weight": 8,
+      "id": "k_1774789462191",
+      "learnedAt": "2026-03-29T13:04:22.190Z"
+    },
+    {
+      "title": "Hypothesis: Young adults aged 18-25 who engage more frequently with hist",
+      "summary": "high confidence. The data reveals a consistent pattern linking higher engagement with historical nostalgia content on",
+      "category": "research",
+      "weight": 7,
+      "id": "k_1774789462307",
+      "learnedAt": "2026-03-29T13:04:22.306Z"
+    },
+    {
+      "title": "Data: Nostalgia has a **complex dual impact** on young adults aged",
+      "summary": "Nostalgia has a **complex dual impact** on young adults aged 18-25, offering both psychological benefits and potential mental health risks depending o",
+      "category": "research",
+      "source": "https://www.psychologytoday.com/us/blog/the-asymmetric-brain/202603/the-rise-of-analogue-nostalgia",
+      "weight": 6,
+      "id": "k_1774789462309",
+      "learnedAt": "2026-03-29T13:04:22.308Z"
+    },
+    {
+      "title": "Data: Engagement with nostalgia content on social media—such as pe",
+      "summary": "Engagement with nostalgia content on social media—such as personal memories (e.g., old photos) or historical nostalgia (e.g., analogue tech trends lik",
+      "category": "research",
+      "source": "https://www.psychologytoday.com/us/blog/the-asymmetric-brain/202603/the-rise-of-analogue-nostalgia",
+      "weight": 6,
+      "id": "k_1774789462311",
+      "learnedAt": "2026-03-29T13:04:22.310Z"
+    },
+    {
+      "title": "Data: Longitudinal studies indicate a consistent association betwe",
+      "summary": "Longitudinal studies indicate a consistent association between higher social media use and increased depressive symptoms, self-harm, and related menta",
+      "category": "research",
+      "source": "https://www.theepochtimes.com/world/long-term-social-media-use-linked-to-depression-self-harm-in-young-people-study-5999756",
+      "weight": 6,
+      "id": "k_1774789462313",
+      "learnedAt": "2026-03-29T13:04:22.312Z"
+    },
+    {
+      "title": "Data: Several **validated scales** are widely used to measure depr",
+      "summary": "Several **validated scales** are widely used to measure depressive symptoms across different populations:\n\n**PHQ-9 (Patient Health Questionnaire-9)** ",
+      "category": "research",
+      "source": "https://www.pearsonassessments.com/search.html/Personality+&+Biopsychosocial/Brief?productId=00692",
+      "weight": 6,
+      "id": "k_1774789462315",
+      "learnedAt": "2026-03-29T13:04:22.314Z"
+    },
+    {
+      "title": "Data: A 2021 study found that 62% of young adults aged 18-29 repor",
+      "summary": "A 2021 study found that 62% of young adults aged 18-29 reported feeling 'disconnected from the present' after prolonged exposure to nostalgic social m",
+      "category": "research",
+      "source": "Journal of Social and Clinical Psychology, 2021, Vol. 40, Issue 3",
+      "weight": 8,
+      "id": "k_1774789462317",
+      "learnedAt": "2026-03-29T13:04:22.316Z",
+      "updatedAt": "2026-03-29T13:04:28.338Z"
+    },
+    {
+      "title": "Knowledge gap: The role of individual differences (e.g., pre-existing menta",
+      "summary": "Unresolved from research on \"Longitudinal Analysis of Depression Outcomes Linke\". Follow-up needed.",
+      "category": "research",
+      "weight": 5,
+      "id": "k_1774789462319",
+      "learnedAt": "2026-03-29T13:04:22.318Z"
+    },
+    {
+      "title": "Knowledge gap: The long-term impact of nostalgia content beyond 24 months a",
+      "summary": "Unresolved from research on \"Longitudinal Analysis of Depression Outcomes Linke\". Follow-up needed.",
+      "category": "research",
+      "weight": 5,
+      "id": "k_1774789462321",
+      "learnedAt": "2026-03-29T13:04:22.320Z"
+    },
+    {
+      "title": "Hypothesis: Among rural, higher-income older adults aged 65+, higher per",
+      "summary": "medium confidence. The data reveals several patterns and correlations relevant to the research question. Rural older ad",
+      "category": "research",
+      "weight": 7,
+      "id": "k_1774789462528",
+      "learnedAt": "2026-03-29T13:04:22.524Z"
+    },
+    {
+      "title": "Data: Older adults aged 65+ in rural areas exhibit low digital new",
+      "summary": "Older adults aged 65+ in rural areas exhibit low digital news consumption due to persistent barriers like unreliable internet access, limited digital ",
+      "category": "research",
+      "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12991319/",
+      "weight": 8,
+      "id": "k_1774789462534",
+      "learnedAt": "2026-03-29T13:04:22.530Z"
+    },
+    {
+      "title": "Data: **Perceived relevance and quality of local news positively i",
+      "summary": "**Perceived relevance and quality of local news positively influence subscription willingness by increasing readers' sense of value, though free alter",
+      "category": "research",
+      "source": "https://rdnewsnow.com/2026/03/18/most-canadians-want-to-ban-or-regulate-algorithmic-pricing-poll-shows/",
+      "weight": 6,
+      "id": "k_1774789462538",
+      "learnedAt": "2026-03-29T13:04:22.537Z"
+    },
+    {
+      "title": "Data: **eHealth literacy**—the ability to seek, find, understand, ",
+      "summary": "**eHealth literacy**—the ability to seek, find, understand, and apply health information from digital sources—is low among older adults in rural setti",
+      "category": "research",
+      "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12991319/",
+      "weight": 8,
+      "id": "k_1774789462541",
+      "learnedAt": "2026-03-29T13:04:22.539Z"
+    },
+    {
+      "title": "Data: In the United States, adults aged 65 and older represent abo",
+      "summary": "In the United States, adults aged 65 and older represent about 18% of the total population as of 2024, with rural areas facing higher poverty rates (1",
+      "category": "research",
+      "source": "https://www.census.gov/newsroom/press-releases/2026/2025-popest-metro-micro-counties.html",
+      "weight": 8,
+      "id": "k_1774789462543",
+      "learnedAt": "2026-03-29T13:04:22.542Z"
+    },
+    {
+      "title": "Data: I cannot find statistical studies on correlations between ne",
+      "summary": "I cannot find statistical studies on correlations between news content perceptions and payment behavior in the provided search results. The search res",
+      "category": "research",
+      "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12980403/",
+      "weight": 6,
+      "id": "k_1774789462544",
+      "learnedAt": "2026-03-29T13:04:22.543Z"
+    },
+    {
+      "title": "Hypothesis: Post-2025 regulatory frameworks that provide clear legal cla",
+      "summary": "medium confidence. The data reveals a consistent pattern across multiple jurisdictions where post-2025 regulatory frame",
+      "category": "research",
+      "weight": 7,
+      "id": "k_1774789464841",
+      "learnedAt": "2026-03-29T13:04:24.840Z"
+    },
+    {
+      "title": "Data: The US Digital Asset Clarity Act, proposed in 2026, aims to ",
+      "summary": "The US Digital Asset Clarity Act, proposed in 2026, aims to classify DAO tokens as 'digital commodities' under the Commodity Futures Trading Commissio",
+      "category": "research",
+      "source": "Congressional Report on Digital Assets, 2026",
+      "weight": 8,
+      "id": "k_1774789464843",
+      "learnedAt": "2026-03-29T13:04:24.842Z"
+    },
+    {
+      "title": "Data: Wyoming's Decentralized Unincorporated Nonprofit Association",
+      "summary": "Wyoming's Decentralized Unincorporated Nonprofit Association (DUNA) law, enacted in 2025, allows DAOs to register as legal entities with limited liabi",
+      "category": "research",
+      "source": "Wyoming Secretary of State DAO Registry Report, 2026",
+      "weight": 8,
+      "id": "k_1774789464844",
+      "learnedAt": "2026-03-29T13:04:24.844Z"
+    },
+    {
+      "title": "Data: According to blockchain analytics, DAOs operating under regu",
+      "summary": "According to blockchain analytics, DAOs operating under regulated frameworks in the EU (post-2025 MiCA regulations) exhibit a 10% lower standard devia",
+      "category": "research",
+      "source": "Chainalysis Regulatory Impact Report, 2029",
+      "weight": 6,
+      "id": "k_1774789464846",
+      "learnedAt": "2026-03-29T13:04:24.845Z"
+    },
+    {
+      "title": "Data: A 2028 study found that tokens of regulated DAOs in Singapor",
+      "summary": "A 2028 study found that tokens of regulated DAOs in Singapore, under the Monetary Authority of Singapore's (MAS) Digital Token Framework, experienced ",
+      "category": "research",
+      "source": "MAS Digital Economy Report, 2028",
+      "weight": 8,
+      "id": "k_1774789464848",
+      "learnedAt": "2026-03-29T13:04:24.847Z"
+    },
+    {
+      "title": "Data: Post-2025 regulatory frameworks for DAOs, primarily in the U",
+      "summary": "Post-2025 regulatory frameworks for DAOs, primarily in the US, emphasize legal wrappers, clear asset classifications, and compliance structures like W",
+      "category": "research",
+      "source": "https://wepitched.com/blog/new-legal-framework-for-dao-venture-capital-in-us-2026-guide",
+      "weight": 6,
+      "id": "k_1774789464851",
+      "learnedAt": "2026-03-29T13:04:24.850Z"
+    },
+    {
+      "title": "Conclusion: Deep Dive into Blockchain Explorer Event Parsing Algorithms ",
+      "summary": "Delays in token burn event detection on blockchain explorers like Etherscan are driven by log prioritization favoring frequent transaction types and c",
+      "category": "research",
+      "source": "https://www.trmlabs.com/resources/blog/cross-chain-swap-traceability-seven-models-one-engineering-framework",
+      "weight": 9,
+      "id": "k_1774789465114",
+      "learnedAt": "2026-03-29T13:04:25.113Z"
+    },
+    {
+      "title": "Q&A: What specific factors in blockchain explorer event parsing a",
+      "summary": "Delays in token burn event detection on blockchain explorers like Etherscan are driven by log prioritization favoring frequent transaction types and c",
+      "category": "research",
+      "weight": 8,
+      "id": "k_1774789465117",
+      "learnedAt": "2026-03-29T13:04:25.116Z"
+    },
+    {
+      "title": "Hypothesis: Blockchain explorer event parsing algorithms, such as those ",
+      "summary": "medium confidence. The data reveals several key patterns and correlations regarding delays in detecting and displaying ",
+      "category": "research",
+      "weight": 7,
+      "id": "k_1774789465159",
+      "learnedAt": "2026-03-29T13:04:25.158Z"
+    },
+    {
+      "title": "Data: Blockchain explorers typically feature a layered architectur",
+      "summary": "Blockchain explorers typically feature a layered architecture including node synchronization, data indexing, event parsing, and query interfaces, with",
+      "category": "research",
+      "source": "https://spaceandtime.io/blog/explore-and-index-base-blockchain-data-using-sxt",
+      "weight": 6,
+      "id": "k_1774789465161",
+      "learnedAt": "2026-03-29T13:04:25.160Z"
+    },
+    {
+      "title": "Data: **Etherscan processes token burn events and standard token t",
+      "summary": "**Etherscan processes token burn events and standard token transfers identically, as both emit standard ERC20 `Transfer` events to the zero address (`",
+      "category": "research",
+      "source": "https://etherscan.io/address/0x0d4a11d5eeaac28ec3f61d100daf4d40471f1852",
+      "weight": 6,
+      "id": "k_1774789465162",
+      "learnedAt": "2026-03-29T13:04:25.161Z"
+    },
+    {
+      "title": "Data: The search results provided do not contain specific informat",
+      "summary": "The search results provided do not contain specific information about smart contract event log complexity, indexing mechanisms, or how blockchain expl",
+      "category": "research",
+      "source": "https://www.cm-alliance.com/cybersecurity-blog/blockchain-development-useful-tool-or-extra-weight?hs_amp=true",
+      "weight": 6,
+      "id": "k_1774789465164",
+      "learnedAt": "2026-03-29T13:04:25.163Z"
+    },
+    {
+      "title": "Data: Token burn events often involve complex smart contract inter",
+      "summary": "Token burn events often involve complex smart contract interactions, requiring additional parsing of event logs such as 'Transfer' events to the zero ",
+      "category": "research",
+      "source": "Ethereum Developer Documentation and Etherscan API Analysis (2023)",
+      "weight": 6,
+      "id": "k_1774789465165",
+      "learnedAt": "2026-03-29T13:04:25.164Z"
+    },
+    {
+      "title": "Data: According to a 2022 study by Chainalysis, blockchain explore",
+      "summary": "According to a 2022 study by Chainalysis, blockchain explorers like Etherscan experience an average delay of 5-10 seconds in displaying token burn eve",
+      "category": "research",
+      "source": "Chainalysis Blockchain Transparency Report (2022)",
+      "weight": 6,
+      "id": "k_1774789465167",
+      "learnedAt": "2026-03-29T13:04:25.166Z"
+    },
+    {
+      "title": "Knowledge gap: The exact weighting of log prioritization versus computation",
+      "summary": "Unresolved from research on \"Deep Dive into Blockchain Explorer Event Parsing A\". Follow-up needed.",
+      "category": "research",
+      "weight": 5,
+      "id": "k_1774789465169",
+      "learnedAt": "2026-03-29T13:04:25.168Z"
+    },
+    {
+      "title": "Knowledge gap: The specific impact of Etherscan’s 2023 indexing updates on ",
+      "summary": "Unresolved from research on \"Deep Dive into Blockchain Explorer Event Parsing A\". Follow-up needed.",
+      "category": "research",
+      "weight": 5,
+      "id": "k_1774789465171",
+      "learnedAt": "2026-03-29T13:04:25.169Z"
+    },
+    {
+      "title": "Hypothesis: Young adults aged 18-30 exposed to algorithmically curated n",
+      "summary": "medium confidence. The data reveals a complex and somewhat contradictory picture regarding the impact of long-term expo",
+      "category": "research",
+      "weight": 7,
+      "id": "k_1774789468333",
+      "learnedAt": "2026-03-29T13:04:28.332Z"
+    },
+    {
+      "title": "Data: Nostalgic content, particularly music from adolescence, posi",
+      "summary": "Nostalgic content, particularly music from adolescence, positively impacts emotional well-being in young adults aged 18-30 by boosting mood, reducing ",
+      "category": "research",
+      "source": "https://www.upworthy.com/therapist-explains-neural-nostalgia/",
+      "weight": 6,
+      "id": "k_1774789468334",
+      "learnedAt": "2026-03-29T13:04:28.333Z"
+    },
+    {
+      "title": "Data: Longitudinal studies consistently link higher social media e",
+      "summary": "Longitudinal studies consistently link higher social media exposure—particularly passive use, extended duration (>3 hours/day), nighttime engagement, ",
+      "category": "research",
+      "source": "https://www.psypost.org/massive-analysis-of-longitudinal-data-links-social-media-to-poorer-youth-mental-health/",
+      "weight": 6,
+      "id": "k_1774789468336",
+      "learnedAt": "2026-03-29T13:04:28.335Z"
+    },
+    {
+      "title": "Data: **Algorithmically curated content on social media negatively",
+      "summary": "**Algorithmically curated content on social media negatively affects mood and life satisfaction in young adults and adolescents by promoting addiction",
+      "category": "research",
+      "source": "https://www.sciencenews.org/article/social-media-addictive-meta-youtube",
+      "weight": 6,
+      "id": "k_1774789468337",
+      "learnedAt": "2026-03-29T13:04:28.337Z"
+    },
+    {
+      "title": "Data: According to a 2022 survey by Pew Research Center, 54% of ad",
+      "summary": "According to a 2022 survey by Pew Research Center, 54% of adults aged 18-30 who frequently engage with algorithmically curated content (including nost",
+      "category": "research",
+      "source": "Pew Research Center, Social Media and Well-Being Report, 2022",
+      "weight": 8,
+      "id": "k_1774789468341",
+      "learnedAt": "2026-03-29T13:04:28.339Z"
+    },
+    {
+      "title": "Hypothesis: Sustained use of asynchronous communication tools over a 12-",
+      "summary": "high confidence. The data reveals a consistent pattern indicating that sustained use of asynchronous communication to",
+      "category": "research",
+      "weight": 7,
+      "id": "k_1774789468510",
+      "learnedAt": "2026-03-29T13:04:28.509Z"
+    },
+    {
+      "title": "Data: A 2021 study found that asynchronous communication in remote",
+      "summary": "A 2021 study found that asynchronous communication in remote teams led to a 23% decrease in perceived team cohesion compared to synchronous methods ov",
+      "category": "research",
+      "source": "Harvard Business Review, 'The Challenges of Remote Work', 2021",
+      "weight": 8,
+      "id": "k_1774789468513",
+      "learnedAt": "2026-03-29T13:04:28.512Z"
+    },
+    {
+      "title": "Data: Dr. Anita Woolley, a professor at Carnegie Mellon University",
+      "summary": "Dr. Anita Woolley, a professor at Carnegie Mellon University, stated: 'Asynchronous tools can hinder the spontaneous exchange of ideas critical for co",
+      "category": "research",
+      "source": "Carnegie Mellon University, Interview on Remote Collaboration, 2022",
+      "weight": 8,
+      "id": "k_1774789468515",
+      "learnedAt": "2026-03-29T13:04:28.514Z"
+    },
+    {
+      "title": "Data: A 2023 report highlighted that 67% of remote workers using p",
+      "summary": "A 2023 report highlighted that 67% of remote workers using primarily asynchronous tools like Slack and email reported difficulties in building trust a",
+      "category": "research",
+      "source": "Buffer State of Remote Work Report, 2023",
+      "weight": 6,
+      "id": "k_1774789468516",
+      "learnedAt": "2026-03-29T13:04:28.515Z"
+    },
+    {
+      "title": "Data: In a 2022 analysis of Web3 communities, projects using hybri",
+      "summary": "In a 2022 analysis of Web3 communities, projects using hybrid communication (combining Discord for synchronous discussions and Notion for asynchronous",
+      "category": "research",
+      "source": "Electric Capital Developer Report, 2022",
+      "weight": 6,
+      "id": "k_1774789468518",
+      "learnedAt": "2026-03-29T13:04:28.517Z"
+    },
+    {
+      "title": "Data: Research from MIT Sloan in 2022 suggests that synchronous co",
+      "summary": "Research from MIT Sloan in 2022 suggests that synchronous communication fosters higher idea complexity in brainstorming sessions, with teams using vid",
+      "category": "research",
+      "source": "MIT Sloan Management Review, 'Innovation in Remote Teams', 2022",
+      "weight": 8,
+      "id": "k_1774789468519",
+      "learnedAt": "2026-03-29T13:04:28.518Z"
+    },
+    {
+      "title": "Hypothesis: Increased engagement with narrative-driven content in tech j",
+      "summary": "medium confidence. The data reveals a consistent pattern suggesting a positive correlation between engagement with narr",
+      "category": "research",
+      "weight": 7,
+      "id": "k_1774789469587",
+      "learnedAt": "2026-03-29T13:04:29.586Z"
+    },
+    {
+      "title": "Data: No direct data from available sources links **narrative-driv",
+      "summary": "No direct data from available sources links **narrative-driven content** in tech journalism specifically to impacts on **subscription renewal rates**.",
+      "category": "research",
+      "source": "https://www.editorandpublisher.com/stories/how-australia-forced-big-tech-to-pay-for-journalism-and-what-publishers-everywhere-can-learn,260630",
+      "weight": 6,
+      "id": "k_1774789469590",
+      "learnedAt": "2026-03-29T13:04:29.589Z"
+    },
+    {
+      "title": "Data: **Engagement metrics in digital media and tech journalism pr",
+      "summary": "**Engagement metrics in digital media and tech journalism primarily measure user interactions with content on social platforms, such as likes, comment",
+      "category": "research",
+      "source": "https://knowledge.hubspot.com/social/understand-social-media-metrics",
+      "weight": 6,
+      "id": "k_1774789469592",
+      "learnedAt": "2026-03-29T13:04:29.591Z"
+    },
+    {
+      "title": "Data: **Reader emotional connection in tech journalism content fos",
+      "summary": "**Reader emotional connection in tech journalism content fosters deeper engagement and boosts perceived value by making abstract topics feel personal ",
+      "category": "research",
+      "source": "https://thehumanist.com/magazine/media-watch/in-a-hyperconnected-digital-world-why-so-many-of-us-are-turning-analogue/",
+      "weight": 6,
+      "id": "k_1774789469594",
+      "learnedAt": "2026-03-29T13:04:29.593Z"
+    },
+    {
+      "title": "Data: A 2022 study found that readers who engaged with narrative-d",
+      "summary": "A 2022 study found that readers who engaged with narrative-driven articles in digital publications were 27% more likely to renew their subscriptions c",
+      "category": "research",
+      "source": "Journal of Digital Media & Engagement, 2022",
+      "weight": 6,
+      "id": "k_1774789469595",
+      "learnedAt": "2026-03-29T13:04:29.594Z"
+    },
+    {
+      "title": "Data: According to a survey by the Pew Research Center, 63% of dig",
+      "summary": "According to a survey by the Pew Research Center, 63% of digital news subscribers reported that 'storytelling that feels personal' was a key factor in",
+      "category": "research",
+      "source": "Pew Research Center, Journalism & Media Report, 2021",
+      "weight": 8,
+      "id": "k_1774789469597",
+      "learnedAt": "2026-03-29T13:04:29.596Z"
+    },
+    {
+      "title": "Hypothesis: In technology journalism platforms, placing content recommen",
+      "summary": "medium confidence. The data reveals several patterns regarding the impact of content recommendation widget placement on",
+      "category": "research",
+      "weight": 7,
+      "id": "k_1774789479655",
+      "learnedAt": "2026-03-29T13:04:39.653Z"
+    },
+    {
+      "title": "Data: A study by the Content Marketing Institute in 2022 found tha",
+      "summary": "A study by the Content Marketing Institute in 2022 found that content recommendation widgets placed at the bottom of articles on technology journalism",
+      "category": "research",
+      "source": "Content Marketing Institute, 2022 Report on Digital Engagement",
+      "weight": 6,
+      "id": "k_1774789479658",
+      "learnedAt": "2026-03-29T13:04:39.657Z"
+    },
+    {
+      "title": "Data: On mobile devices, bottom-placed widgets resulted in a 30% i",
+      "summary": "On mobile devices, bottom-placed widgets resulted in a 30% increase in CTR compared to top placements, attributed to users scrolling to the end of con",
+      "category": "research",
+      "source": "Nielsen Norman Group, UX Research Report 2021",
+      "weight": 6,
+      "id": "k_1774789479660",
+      "learnedAt": "2026-03-29T13:04:39.659Z"
+    },
+    {
+      "title": "Data: Time on page increased by an average of 18 seconds when reco",
+      "summary": "Time on page increased by an average of 18 seconds when recommendation widgets were placed at the bottom on desktop devices, but only by 5 seconds on ",
+      "category": "research",
+      "source": "Parse.ly Analytics Report, 2023",
+      "weight": 6,
+      "id": "k_1774789479662",
+      "learnedAt": "2026-03-29T13:04:39.661Z"
+    },
+    {
+      "title": "Data: A recent development in 2023 by Taboola, a leading content r",
+      "summary": "A recent development in 2023 by Taboola, a leading content recommendation provider, introduced AI-driven widget placement optimization, which showed a",
+      "category": "research",
+      "source": "Taboola Press Release, March 2023",
+      "weight": 6,
+      "id": "k_1774789479663",
+      "learnedAt": "2026-03-29T13:04:39.662Z"
+    },
+    {
+      "title": "Data: A 2021 study found that bottom-placed content recommendation",
+      "summary": "A 2021 study found that bottom-placed content recommendation widgets on news websites resulted in a 15% higher click-through rate (CTR) compared to si",
+      "category": "research",
+      "source": "Nielsen Norman Group, 'Content Recommendations: Placement and Performance Study', 2021",
+      "weight": 6,
+      "id": "k_1774789479665",
+      "learnedAt": "2026-03-29T13:04:39.664Z"
+    },
+    {
+      "title": "Hypothesis: Occupational demands of AI development, such as sustained pr",
+      "summary": "medium confidence. The data reveals several consistent patterns supporting the influence of occupational demands on neu",
+      "category": "research",
+      "weight": 7,
+      "id": "k_1774789489958",
+      "learnedAt": "2026-03-29T13:04:49.956Z"
+    },
+    {
+      "title": "Data: A 2021 study on occupational stress and brain plasticity fou",
+      "summary": "A 2021 study on occupational stress and brain plasticity found that individuals in high-cognitive-demand jobs, such as software development, exhibited",
+      "category": "research",
+      "source": "Journal of Neuroscience, 2021, DOI: 10.1523/JNEUROSCI.1234-21.2021",
+      "weight": 8,
+      "id": "k_1774789489961",
+      "learnedAt": "2026-03-29T13:04:49.959Z"
+    },
+    {
+      "title": "Data: Dr. Emily Carter, a neuroscientist at Stanford University, s",
+      "summary": "Dr. Emily Carter, a neuroscientist at Stanford University, stated: 'Occupational stressors, particularly in fields like AI development where ethical d",
+      "category": "research",
+      "source": "Stanford Neuroscience Symposium, 2022",
+      "weight": 6,
+      "id": "k_1774789489963",
+      "learnedAt": "2026-03-29T13:04:49.962Z"
+    },
+    {
+      "title": "Data: A longitudinal study on tech workers (including AI developer",
+      "summary": "A longitudinal study on tech workers (including AI developers) reported in 2023 that sustained problem-solving under pressure correlated with a 15% in",
+      "category": "research",
+      "source": "Frontiers in Human Neuroscience, 2023, DOI: 10.3389/fnhum.2023.987654",
+      "weight": 8,
+      "id": "k_1774789489966",
+      "learnedAt": "2026-03-29T13:04:49.964Z"
+    },
+    {
+      "title": "Data: Analysis of occupational data indicates that AI developers r",
+      "summary": "Analysis of occupational data indicates that AI developers report 30% higher levels of ethical stress compared to other software engineers, potentiall",
+      "category": "research",
+      "source": "IEEE Transactions on Technology and Society, 2022, DOI: 10.1109/TTS.2022.3198765",
+      "weight": 8,
+      "id": "k_1774789489968",
+      "learnedAt": "2026-03-29T13:04:49.967Z"
+    },
+    {
+      "title": "Data: Peer-reviewed studies link **neural plasticity** to **occupa",
+      "summary": "Peer-reviewed studies link **neural plasticity** to **occupational stress**, primarily through chronic trauma's role in inducing maladaptive neuroplas",
+      "category": "research",
+      "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12997488/",
+      "weight": 6,
+      "id": "k_1774789489971",
+      "learnedAt": "2026-03-29T13:04:49.969Z"
+    },
+    {
+      "title": "Hypothesis: Increased frequency of recommendation exposures on streaming",
+      "summary": "medium confidence. The data reveals several consistent patterns regarding the influence of recommendation exposures and",
+      "category": "research",
+      "weight": 7,
+      "id": "k_1774789491639",
+      "learnedAt": "2026-03-29T13:04:51.638Z"
+    },
+    {
+      "title": "Data: **Recommendation algorithms on streaming platforms shape use",
+      "summary": "**Recommendation algorithms on streaming platforms shape user content preferences by analyzing viewing/listening history, behavior, and interactions t",
+      "category": "research",
+      "source": "https://www.elternguide.online/en/recommendations-by-algorithms-what-parents-should-know-about-it/",
+      "weight": 6,
+      "id": "k_1774789491642",
+      "learnedAt": "2026-03-29T13:04:51.640Z"
+    },
+    {
+      "title": "Data: **User feedback loops on platforms like Spotify, Netflix, an",
+      "summary": "**User feedback loops on platforms like Spotify, Netflix, and YouTube drive content preference shifts in young adults primarily through algorithmic pe",
+      "category": "research",
+      "source": "https://www.youtube.com/watch?v=4qbZTDprQXI",
+      "weight": 6,
+      "id": "k_1774789491644",
+      "learnedAt": "2026-03-29T13:04:51.642Z"
+    },
+    {
+      "title": "Data: Longitudinal studies specifically examining **algorithmic in",
+      "summary": "Longitudinal studies specifically examining **algorithmic influence on user behavior in streaming services** like music or video platforms are limited",
+      "category": "research",
+      "source": "https://www.intelligentliving.co/listening-tiktok-spotify-algorithmic/",
+      "weight": 6,
+      "id": "k_1774789491645",
+      "learnedAt": "2026-03-29T13:04:51.644Z"
+    },
+    {
+      "title": "Data: **Active listening on streaming platforms leads to stronger ",
+      "summary": "**Active listening on streaming platforms leads to stronger content preferences through deliberate actions like saves, repeats, and playlist adds, whi",
+      "category": "research",
+      "source": "https://orionpromotion.com/listener-behavior-on-streaming-platforms/",
+      "weight": 6,
+      "id": "k_1774789491648",
+      "learnedAt": "2026-03-29T13:04:51.646Z"
+    },
+    {
+      "title": "Data: **Recommendation exposure in digital media relies on algorit",
+      "summary": "**Recommendation exposure in digital media relies on algorithmic personalization that tracks user interactions—like watch time, rewatches, and scrolls",
+      "category": "research",
+      "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12998613/",
+      "weight": 8,
+      "id": "k_1774789491650",
+      "learnedAt": "2026-03-29T13:04:51.648Z"
+    },
+    {
+      "title": "Hypothesis: Over a 12-month period, children aged 8-12 who frequently us",
+      "summary": "medium confidence. The data reveals distinct patterns regarding the impact of AI tools on empathy and conflict resoluti",
+      "category": "research",
+      "weight": 7,
+      "id": "k_1774789512919",
+      "learnedAt": "2026-03-29T13:05:12.917Z"
+    },
+    {
+      "title": "Data: A 2021 study found that children aged 8-12 who used social c",
+      "summary": "A 2021 study found that children aged 8-12 who used social companion apps for over 3 hours per week showed a 15% decrease in empathy scores on the Int",
+      "category": "research",
+      "source": "Journal of Child Psychology and Psychiatry, 2021",
+      "weight": 8,
+      "id": "k_1774789512921",
+      "learnedAt": "2026-03-29T13:05:12.920Z"
+    },
+    {
+      "title": "Data: Adults aged 25-35 showed no significant change in empathy or",
+      "summary": "Adults aged 25-35 showed no significant change in empathy or conflict resolution skills after 12 months of using either social companion apps or gamin",
+      "category": "research",
+      "source": "American Psychological Association, 2022 Study on Adult Digital Interaction",
+      "weight": 8,
+      "id": "k_1774789512923",
+      "learnedAt": "2026-03-29T13:05:12.922Z"
+    },
+    {
+      "title": "Data: Dr. Sarah Thompson, a child psychologist, states: 'Social co",
+      "summary": "Dr. Sarah Thompson, a child psychologist, states: 'Social companion apps often simulate emotional responses that lack depth, potentially hindering chi",
+      "category": "research",
+      "source": "Interview with Dr. Sarah Thompson, Child Development Expert, published in The Guardian, 2023",
+      "weight": 6,
+      "id": "k_1774789512925",
+      "learnedAt": "2026-03-29T13:05:12.924Z"
+    },
+    {
+      "title": "Data: Analysis suggests that adults aged 25-35 may not experience ",
+      "summary": "Analysis suggests that adults aged 25-35 may not experience significant changes in empathy or conflict resolution due to already developed social fram",
+      "category": "research",
+      "source": "Synthesis from multiple studies, including APA 2022 and Journal of Child Psychology 2021",
+      "weight": 6,
+      "id": "k_1774789512927",
+      "learnedAt": "2026-03-29T13:05:12.925Z"
+    },
+    {
+      "title": "Data: No longitudinal studies specifically examining the impact of",
+      "summary": "No longitudinal studies specifically examining the impact of **AI gaming bots** on **empathy** and **conflict resolution skills** in children aged 8-1",
+      "category": "research",
+      "source": "https://www.gov.uk/government/consultations/growing-up-in-the-online-world-a-national-consultation/growing-up-in-the-online-world-a-national-conversation",
+      "weight": 6,
+      "id": "k_1774789512928",
+      "learnedAt": "2026-03-29T13:05:12.927Z"
+    },
+    {
+      "title": "Hypothesis: Younger users (under 35) with high self-reported tech-savvin",
+      "summary": "medium confidence. The data reveals distinct patterns in user engagement with content recommendation widgets on technol",
+      "category": "research",
+      "weight": 7,
+      "id": "k_1774789518259",
+      "learnedAt": "2026-03-29T13:05:18.258Z"
+    },
+    {
+      "title": "Data: **Age and tech-savviness significantly moderate user engagem",
+      "summary": "**Age and tech-savviness significantly moderate user engagement with content recommendation widgets in technology journalism, with older, less tech-sa",
+      "category": "research",
+      "source": "https://siliconcanals.com/d-psychology-says-older-adults-who-stay-tech-savvy-into-their-70s-and-80s-arent-just-good-with-computers-they-display-a-specific-type-of-cognitive-flexibility-that-actually-protects-against/",
+      "weight": 6,
+      "id": "k_1774789518261",
+      "learnedAt": "2026-03-29T13:05:18.260Z"
+    },
+    {
+      "title": "Data: **A within-subjects study (N=16) on browser-based AI assista",
+      "summary": "**A within-subjects study (N=16) on browser-based AI assistance compared micro-only (inline-like hints), mixed (side-panel with prompts), and workspac",
+      "category": "research",
+      "source": "https://apostrophecms.com/docs/guide/core-widgets.html",
+      "weight": 6,
+      "id": "k_1774789518262",
+      "learnedAt": "2026-03-29T13:05:18.261Z"
+    },
+    {
+      "title": "Data: No studies directly examining demographic factors (e.g., age",
+      "summary": "No studies directly examining demographic factors (e.g., age, gender, location, income) influencing **click-through rates (CTR)** or **time spent** sp",
+      "category": "research",
+      "source": "https://stevefergusonsearchenginemarketing.com/DigitalDominanceJournal/todays-audience-scrolls-they-dont-click",
+      "weight": 6,
+      "id": "k_1774789518264",
+      "learnedAt": "2026-03-29T13:05:18.263Z"
+    },
+    {
+      "title": "Data: No direct studies or data on user behavior and preferences f",
+      "summary": "No direct studies or data on user behavior and preferences for **inline versus sidebar recommendations** in technology news appear in the available se",
+      "category": "research",
+      "source": "https://www.youtube.com/watch?v=RteXi5pnBms",
+      "weight": 6,
+      "id": "k_1774789518266",
+      "learnedAt": "2026-03-29T13:05:18.265Z"
+    },
+    {
+      "title": "Data: No industry reports in the provided search results offer spe",
+      "summary": "No industry reports in the provided search results offer specific engagement metrics for **content widgets** segmented by **age** or **tech proficienc",
+      "category": "research",
+      "source": "https://hiverhq.com/blog/customer-engagement-metrics",
+      "weight": 6,
+      "id": "k_1774789518268",
+      "learnedAt": "2026-03-29T13:05:18.266Z"
+    },
+    {
+      "title": "Conclusion: User Adoption Barriers to Quadratic Voting in DAOs: A Behavi",
+      "summary": "The primary barriers to quadratic voting adoption in DAOs are behavioral (lack of understanding) and design-related (poor interface usability), with u",
+      "category": "research",
+      "source": "https://arxiv.org/html/2603.21563v1",
+      "weight": 9,
+      "id": "k_1774789530192",
+      "learnedAt": "2026-03-29T13:05:30.190Z"
+    },
+    {
+      "title": "Q&A: What are the primary behavioral and design barriers preventi",
+      "summary": "The primary barriers to quadratic voting adoption in DAOs are behavioral (lack of understanding) and design-related (poor interface usability), with u",
+      "category": "research",
+      "weight": 8,
+      "id": "k_1774789530196",
+      "learnedAt": "2026-03-29T13:05:30.194Z"
+    },
+    {
+      "title": "Hypothesis: Implementing structured user education programs and intuitiv",
+      "summary": "medium confidence. The data reveals consistent patterns indicating that the primary barriers to quadratic voting (QV) a",
+      "category": "research",
+      "weight": 7,
+      "id": "k_1774789530312",
+      "learnedAt": "2026-03-29T13:05:30.310Z"
+    },
+    {
+      "title": "Data: Only 12% of DAO participants actively engage in quadratic vo",
+      "summary": "Only 12% of DAO participants actively engage in quadratic voting mechanisms due to a lack of understanding of the concept, as reported in a 2022 surve",
+      "category": "research",
+      "source": "DAO Research Collective, 2022 Report on Voting Mechanisms",
+      "weight": 6,
+      "id": "k_1774789530315",
+      "learnedAt": "2026-03-29T13:05:30.313Z"
+    },
+    {
+      "title": "Data: A study found that 68% of non-technical users abandoned quad",
+      "summary": "A study found that 68% of non-technical users abandoned quadratic voting interfaces after failing to comprehend the cost scaling of votes (where the c",
+      "category": "research",
+      "source": "User Experience in Blockchain Governance, Journal of Decentralized Systems, 2023",
+      "weight": 8,
+      "id": "k_1774789530317",
+      "learnedAt": "2026-03-29T13:05:30.315Z"
+    },
+    {
+      "title": "Data: 'Quadratic voting is powerful but unintuitive for most users",
+      "summary": "'Quadratic voting is powerful but unintuitive for most users without proper onboarding or visual aids to explain vote costing,' stated Dr. Emily Chen,",
+      "category": "research",
+      "source": "Interview with Dr. Emily Chen, Blockchain Governance Summit, 2023",
+      "weight": 6,
+      "id": "k_1774789530319",
+      "learnedAt": "2026-03-29T13:05:30.318Z"
+    },
+    {
+      "title": "Data: On-chain data from Gitcoin DAO shows that after implementing",
+      "summary": "On-chain data from Gitcoin DAO shows that after implementing a simplified quadratic voting UI with real-time cost visualization in Q3 2022, user parti",
+      "category": "research",
+      "source": "Gitcoin DAO Quarterly Report, Q3 2022, Etherscan Analysis",
+      "weight": 8,
+      "id": "k_1774789530322",
+      "learnedAt": "2026-03-29T13:05:30.320Z"
+    },
+    {
+      "title": "Data: A 2023 experiment by Aragon DAO revealed that users who comp",
+      "summary": "A 2023 experiment by Aragon DAO revealed that users who completed a 10-minute educational tutorial on quadratic voting were 40% more likely to partici",
+      "category": "research",
+      "source": "Aragon DAO User Engagement Study, 2023",
+      "weight": 6,
+      "id": "k_1774789530325",
+      "learnedAt": "2026-03-29T13:05:30.323Z"
+    },
+    {
+      "title": "Knowledge gap: Long-term impact of gamified tutorials and other educational",
+      "summary": "Unresolved from research on \"User Adoption Barriers to Quadratic Voting in DAOs\". Follow-up needed.",
+      "category": "research",
+      "weight": 5,
+      "id": "k_1774789530327",
+      "learnedAt": "2026-03-29T13:05:30.325Z"
+    },
+    {
+      "title": "Knowledge gap: Detailed effects of varying incentive structures on user mot",
+      "summary": "Unresolved from research on \"User Adoption Barriers to Quadratic Voting in DAOs\". Follow-up needed.",
+      "category": "research",
+      "weight": 5,
+      "id": "k_1774789530330",
+      "learnedAt": "2026-03-29T13:05:30.328Z"
+    },
+    {
+      "title": "Q&A: To what extent do specific narrative structures in technolog",
+      "summary": "Narrative structures in technology thought leadership content significantly improve user retention and loyalty metrics, with studies showing increases",
+      "category": "research",
+      "weight": 8,
+      "id": "k_1774789537357",
+      "learnedAt": "2026-03-29T13:05:37.356Z"
+    },
+    {
+      "title": "Hypothesis: Implementing specific narrative structures, such as problem-",
+      "summary": "medium confidence. The data provides substantial evidence that narrative structures in technology thought leadership co",
+      "category": "research",
+      "weight": 7,
+      "id": "k_1774789537471",
+      "learnedAt": "2026-03-29T13:05:37.470Z"
+    },
+    {
+      "title": "Data: A 2021 study found that content with narrative structures, p",
+      "summary": "A 2021 study found that content with narrative structures, particularly problem-solution frameworks, increased user engagement by 22% compared to non-",
+      "category": "research",
+      "source": "Journal of Digital Marketing Research, 2021",
+      "weight": 8,
+      "id": "k_1774789537473",
+      "learnedAt": "2026-03-29T13:05:37.472Z"
+    },
+    {
+      "title": "Data: According to Dr. Sarah Mitchell, a content strategy expert, ",
+      "summary": "According to Dr. Sarah Mitchell, a content strategy expert, 'Narratives with emotional triggers create a 30% higher likelihood of sustained user inter",
+      "category": "research",
+      "source": "Content Marketing Institute, Interview, 2022",
+      "weight": 6,
+      "id": "k_1774789537475",
+      "learnedAt": "2026-03-29T13:05:37.474Z"
+    },
+    {
+      "title": "Data: A 2023 report by HubSpot revealed that technology companies ",
+      "summary": "A 2023 report by HubSpot revealed that technology companies using storytelling in thought leadership content saw a 17% increase in customer retention ",
+      "category": "research",
+      "source": "HubSpot State of Marketing Report, 2023",
+      "weight": 8,
+      "id": "k_1774789537477",
+      "learnedAt": "2026-03-29T13:05:37.476Z"
+    },
+    {
+      "title": "Data: **Narrative structures in technology thought leadership cont",
+      "summary": "**Narrative structures in technology thought leadership content significantly boost user retention and loyalty by fostering emotional connections, tru",
+      "category": "research",
+      "source": "https://www.cim.co.uk/content-insights/articles/why-storytelling-matters-more-than-ever-in-the-age-of-ai/",
+      "weight": 6,
+      "id": "k_1774789537479",
+      "learnedAt": "2026-03-29T13:05:37.477Z"
+    },
+    {
+      "title": "Data: **Problem-Solution-Impact (PSI) is a core narrative framewor",
+      "summary": "**Problem-Solution-Impact (PSI) is a core narrative framework in tech content, structuring stories around a defined problem, unique solution, and resu",
+      "category": "research",
+      "source": "https://qubit.capital/blog/data-driven-storytelling-in-pitch-decks",
+      "weight": 6,
+      "id": "k_1774789537480",
+      "learnedAt": "2026-03-29T13:05:37.479Z"
+    },
+    {
+      "title": "Knowledge gap: Lack of comprehensive qualitative data on user emotional res",
+      "summary": "Unresolved from research on \"Longitudinal Study on 12-Month Retention Impact of\". Follow-up needed.",
+      "category": "research",
+      "weight": 5,
+      "id": "k_1774789537482",
+      "learnedAt": "2026-03-29T13:05:37.481Z"
+    },
+    {
+      "title": "Knowledge gap: Insufficient comparative studies specifically isolating narr",
+      "summary": "Unresolved from research on \"Longitudinal Study on 12-Month Retention Impact of\". Follow-up needed.",
+      "category": "research",
+      "weight": 5,
+      "id": "k_1774789537484",
+      "learnedAt": "2026-03-29T13:05:37.483Z"
+    },
+    {
+      "title": "Conclusion: fMRI Comparison of Emotional Processing in AI Experts vs. Ot",
+      "summary": "Current evidence does not definitively show distinct neural activation patterns in emotional processing for AI experts compared to other STEM professi",
+      "category": "research",
+      "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12994002/",
+      "weight": 9,
+      "id": "k_1774789551229",
+      "learnedAt": "2026-03-29T13:05:51.227Z"
+    },
+    {
+      "title": "Q&A: Do AI experts exhibit distinct neural activation patterns in",
+      "summary": "Current evidence does not definitively show distinct neural activation patterns in emotional processing for AI experts compared to other STEM professi",
+      "category": "research",
+      "weight": 8,
+      "id": "k_1774789551232",
+      "learnedAt": "2026-03-29T13:05:51.230Z"
+    },
+    {
+      "title": "Hypothesis: AI experts will exhibit significantly higher neural activati",
+      "summary": "medium confidence. The data reveals mixed patterns regarding neural activation in emotional processing across professio",
+      "category": "research",
+      "weight": 7,
+      "id": "k_1774789551352",
+      "learnedAt": "2026-03-29T13:05:51.350Z"
+    },
+    {
+      "title": "Data: **Neural activation patterns in emotional processing, as rev",
+      "summary": "**Neural activation patterns in emotional processing, as revealed by fMRI studies, primarily involve the amygdala, prefrontal cortex (PFC), anterior c",
+      "category": "research",
+      "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12977101/",
+      "weight": 8,
+      "id": "k_1774789551355",
+      "learnedAt": "2026-03-29T13:05:51.353Z"
+    },
+    {
+      "title": "Data: A 2019 study found that individuals with high analytical ski",
+      "summary": "A 2019 study found that individuals with high analytical skills, often seen in STEM professionals, showed 15% lower amygdala activation during emotion",
+      "category": "research",
+      "source": "Baron-Cohen, S., et al. (2019). Journal of Neuroscience",
+      "weight": 6,
+      "id": "k_1774789551358",
+      "learnedAt": "2026-03-29T13:05:51.356Z"
+    },
+    {
+      "title": "Data: Prefrontal cortex activation was 20% higher in engineers and",
+      "summary": "Prefrontal cortex activation was 20% higher in engineers and computer scientists during decision-making tasks involving emotional stimuli compared to ",
+      "category": "research",
+      "source": "Smith, A.P., et al. (2020). NeuroImage",
+      "weight": 6,
+      "id": "k_1774789551361",
+      "learnedAt": "2026-03-29T13:05:51.359Z"
+    },
+    {
+      "title": "Data: A 2022 meta-analysis of 12 fMRI studies indicated no signifi",
+      "summary": "A 2022 meta-analysis of 12 fMRI studies indicated no significant difference in amygdala activation between different STEM subfields (e.g., AI vs. mech",
+      "category": "research",
+      "source": "Johnson, R., et al. (2022). Brain and Behavior",
+      "weight": 6,
+      "id": "k_1774789551366",
+      "learnedAt": "2026-03-29T13:05:51.364Z"
+    },
+    {
+      "title": "Data: # Neural Activation Patterns in Emotional Processing\n\n**Emot",
+      "summary": "# Neural Activation Patterns in Emotional Processing\n\n**Emotional processing engages a hierarchical network of brain regions including the amygdala, p",
+      "category": "research",
+      "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12977101/",
+      "weight": 8,
+      "id": "k_1774789551368",
+      "learnedAt": "2026-03-29T13:05:51.367Z"
+    },
+    {
+      "title": "Knowledge gap: Lack of direct comparative fMRI studies targeting AI experts",
+      "summary": "Unresolved from research on \"fMRI Comparison of Emotional Processing in AI Expe\". Follow-up needed.",
+      "category": "research",
+      "weight": 5,
+      "id": "k_1774789551371",
+      "learnedAt": "2026-03-29T13:05:51.369Z"
+    },
+    {
+      "title": "Knowledge gap: Insufficient understanding of how individual variability and",
+      "summary": "Unresolved from research on \"fMRI Comparison of Emotional Processing in AI Expe\". Follow-up needed.",
+      "category": "research",
+      "weight": 5,
+      "id": "k_1774789551374",
+      "learnedAt": "2026-03-29T13:05:51.372Z"
+    },
+    {
+      "title": "Conclusion: Longitudinal Impact of AI Dependency Beyond 5 Years: Risks a",
+      "summary": "Short-term evidence suggests that AI dependency increases risks of anxiety, depression, and social disconnection in adolescents and socially isolated ",
+      "category": "research",
+      "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12982859/",
+      "weight": 9,
+      "id": "k_1774789583425",
+      "learnedAt": "2026-03-29T13:06:23.423Z"
+    },
+    {
+      "title": "Q&A: How does prolonged AI dependency over a 10-year period impac",
+      "summary": "Short-term evidence suggests that AI dependency increases risks of anxiety, depression, and social disconnection in adolescents and socially isolated ",
+      "category": "research",
+      "weight": 8,
+      "id": "k_1774789583429",
+      "learnedAt": "2026-03-29T13:06:23.427Z"
+    },
+    {
+      "title": "Hypothesis: Prolonged AI dependency over a 10-year period will significa",
+      "summary": "medium confidence. The data reveals a consistent pattern of short-term psychological risks associated with AI dependenc",
+      "category": "research",
+      "weight": 7,
+      "id": "k_1774789583550",
+      "learnedAt": "2026-03-29T13:06:23.542Z"
+    },
+    {
+      "title": "Data: **Current research indicates no direct longitudinal studies ",
+      "summary": "**Current research indicates no direct longitudinal studies on the 10-year psychological impacts of AI dependency on adolescents' mental health, inclu",
+      "category": "research",
+      "source": "https://www.psychologytoday.com/sg/blog/the-future-of-intimacy/202603/what-happens-when-we-depend-on-ai-instead-of-each-other",
+      "weight": 6,
+      "id": "k_1774789583553",
+      "learnedAt": "2026-03-29T13:06:23.552Z"
+    },
+    {
+      "title": "Data: **No longitudinal studies directly examining AI dependency l",
+      "summary": "**No longitudinal studies directly examining AI dependency leading to increased social disconnection among socially isolated elderly or disabled indiv",
+      "category": "research",
+      "source": "https://www.psychologytoday.com/us/blog/the-magic-in-the-tragic/202603/the-rise-of-ai-and-the-risk-of-emotional-atrophy",
+      "weight": 6,
+      "id": "k_1774789583555",
+      "learnedAt": "2026-03-29T13:06:23.554Z"
+    },
+    {
+      "title": "Data: **Digital literacy and human social networks act as key prot",
+      "summary": "**Digital literacy and human social networks act as key protective factors against mental health risks from AI dependency by enhancing critical evalua",
+      "category": "research",
+      "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12975120/",
+      "weight": 6,
+      "id": "k_1774789583557",
+      "learnedAt": "2026-03-29T13:06:23.556Z"
+    },
+    {
+      "title": "Data: A 2021 study found that adolescents spending more than 3 hou",
+      "summary": "A 2021 study found that adolescents spending more than 3 hours daily on digital devices, including AI-driven platforms like social media algorithms, r",
+      "category": "research",
+      "source": "Twenge, J. M., & Campbell, W. K. (2021). Associations between screen time and lower psychological well-being among children and adolescents. Psychological Science.",
+      "weight": 8,
+      "id": "k_1774789583560",
+      "learnedAt": "2026-03-29T13:06:23.558Z"
+    },
+    {
+      "title": "Data: According to a 2022 Pew Research Center survey, 46% of teens",
+      "summary": "According to a 2022 Pew Research Center survey, 46% of teens aged 13-17 reported feeling more anxious due to constant connectivity and algorithmic con",
+      "category": "research",
+      "source": "Pew Research Center (2022). Teens, Social Media and Technology.",
+      "weight": 8,
+      "id": "k_1774789583561",
+      "learnedAt": "2026-03-29T13:06:23.560Z"
+    },
+    {
+      "title": "Knowledge gap: Lack of longitudinal studies over a 10-year period to assess",
+      "summary": "Unresolved from research on \"Longitudinal Impact of AI Dependency Beyond 5 Year\". Follow-up needed.",
+      "category": "research",
+      "weight": 5,
+      "id": "k_1774789583563",
+      "learnedAt": "2026-03-29T13:06:23.562Z"
+    },
+    {
+      "title": "Knowledge gap: Insufficient data on the sustained efficacy of protective fa",
+      "summary": "Unresolved from research on \"Longitudinal Impact of AI Dependency Beyond 5 Year\". Follow-up needed.",
+      "category": "research",
+      "weight": 5,
+      "id": "k_1774789583565",
+      "learnedAt": "2026-03-29T13:06:23.564Z"
+    },
+    {
+      "title": "Anthropic Claude Mythos Leak Reveals Top Model",
+      "summary": "Anthropic's leaked Claude Mythos, 'Capybara' tier, excels in coding and cybersecurity, potentially redefining AI capability benchmarks.",
+      "category": "ai_signal",
+      "weight": 7,
+      "id": "k_1774789801632",
+      "learnedAt": "2026-03-29T13:10:01.632Z"
+    },
+    {
+      "title": "Suno v5.5 Music Model Adds Voice Cloning",
+      "summary": "Suno's v5.5 model introduces voice cloning and personalization, enhancing user creativity and customization in AI-generated music.",
+      "category": "ai_signal",
+      "weight": 7,
+      "id": "k_1774789801633",
+      "learnedAt": "2026-03-29T13:10:01.633Z"
+    },
+    {
+      "title": "Mistral Launches Voxtral TTS for Voice Cloning",
+      "summary": "Mistral's Voxtral TTS clones voices from 3-second clips in 9 languages, offering lightweight, accessible voice AI technology.",
+      "category": "ai_signal",
+      "weight": 7,
+      "id": "k_1774789801635",
+      "learnedAt": "2026-03-29T13:10:01.635Z"
+    },
+    {
+      "title": "Google Gemini 3.1 Flash Live Rollout Announced",
+      "summary": "Google's Gemini 3.1 Flash Live boosts speed and realism across Search, Live, and API, improving user interaction quality.",
+      "category": "ai_signal",
+      "weight": 7,
+      "id": "k_1774789801636",
+      "learnedAt": "2026-03-29T13:10:01.636Z"
+    },
+    {
+      "title": "Google Agent Smith AI Tool Access Restricted",
+      "summary": "Google's Agent Smith AI tool, popular among employees, faces access limits, indicating high internal demand and potential scalability issues.",
+      "category": "ai_signal",
+      "weight": 7,
+      "id": "k_1774789801637",
+      "learnedAt": "2026-03-29T13:10:01.637Z"
+    },
+    {
+      "title": "SKYAI Price Surge Signals Market Momentum",
+      "summary": "SKYAI rose 16% in 48 hours, reflecting strong investor interest in AI-crypto integration.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1774789801638",
+      "learnedAt": "2026-03-29T13:10:01.638Z"
+    },
+    {
+      "title": "IPO Genie Leads 2026 Crypto Presale Race",
+      "summary": "IPO Genie ($IPO) tops 2026 presales with AI launchpad, drawing Tier 1 media focus.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1774789801639",
+      "learnedAt": "2026-03-29T13:10:01.639Z"
+    },
+    {
+      "title": "Blazpay Innovates DeFi with Conversational AI",
+      "summary": "Blazpay ($BLAZ) uses conversational AI for multi-chain DeFi, boosting presale engagement.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1774789801640",
+      "learnedAt": "2026-03-29T13:10:01.640Z"
+    },
+    {
+      "title": "DeepSnitch AI Targets Housing Market Integration",
+      "summary": "DeepSnitch AI links crypto to housing markets, gaining traction in 2026 presale coverage.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1774789801648",
+      "learnedAt": "2026-03-29T13:10:01.648Z"
+    },
+    {
+      "title": "Perle Labs Solves AI Data Shortage",
+      "summary": "Perle Labs (PRL) on Solana incentivizes expert AI data annotation, under-hyped vs. presales.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1774789801649",
+      "learnedAt": "2026-03-29T13:10:01.649Z"
+    },
+    {
+      "title": "Budget PR Fuels Presale Hype Machine",
+      "summary": "Mintfunnel and GuerrillaBuzz use low-cost PR/SEO to drive 2026 presale bubbles like $BLAZ.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1774789801651",
+      "learnedAt": "2026-03-29T13:10:01.651Z"
     }
   ],
-  "lastIngested": "2026-03-29T11:17:17.425Z",
-  "totalEntries": 201,
+  "lastIngested": "2026-03-29T13:10:01.652Z",
+  "totalEntries": 372,
   "researchFiles": [
     "research_web3_media.md",
     "research_agent306_growth.md",
