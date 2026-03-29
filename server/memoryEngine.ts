@@ -57,8 +57,14 @@ export interface KnowledgeEntry {
   summary: string;
   source?: string;
   learnedAt: string;
+  updatedAt?: string;  // set when an existing entry is refreshed with new info
   weight: number; // 1-10, how relevant/important
 }
+
+// ── KB size configuration ─────────────────────────────────────
+// MAX_KB_ENTRIES: hard ceiling on knowledge base size.
+// Set via AGENT_MAX_KB_ENTRIES env var, defaults to 500.
+const MAX_KB_ENTRIES = Math.max(100, Math.min(2000, Number(process.env.AGENT_MAX_KB_ENTRIES) || 500));
 
 export interface KnowledgeMemory {
   entries: KnowledgeEntry[];
@@ -375,28 +381,129 @@ export function ratePost(tweetUrl: string, rating: number): void {
   save(PERFORMANCE_FILE, performance);
 }
 
-/** Add a knowledge entry */
+/**
+ * Normalize a title for fuzzy matching: lowercase, strip filler prefixes,
+ * collapse whitespace, remove trailing punctuation.
+ */
+function normalizeTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/^(conclusion|q&a|hypothesis|data|knowledge gap|exploration synthesis):\s*/i, "")
+    .replace(/\s+/g, " ")
+    .replace(/[.\-—]+$/, "")
+    .trim();
+}
+
+/**
+ * Simple word-overlap similarity (Jaccard-ish) between two strings.
+ * Returns 0–1 where 1 = identical word sets.
+ */
+function titleSimilarity(a: string, b: string): number {
+  const wordsA = new Set(normalizeTitle(a).split(/\s+/).filter(w => w.length > 2));
+  const wordsB = new Set(normalizeTitle(b).split(/\s+/).filter(w => w.length > 2));
+  if (wordsA.size === 0 || wordsB.size === 0) return 0;
+  let overlap = 0;
+  Array.from(wordsA).forEach(w => { if (wordsB.has(w)) overlap++; });
+  return overlap / Math.max(wordsA.size, wordsB.size);
+}
+
+/**
+ * Add a knowledge entry (or update an existing similar entry if the new info is fresher).
+ *
+ * Dedup logic:
+ *   1. Exact title match → update only if summary content changed (sets updatedAt).
+ *   2. Fuzzy title match (>= 0.7 similarity, same category) → update if new weight >= old weight.
+ *   3. Otherwise → insert as new entry.
+ *
+ * If the KB exceeds MAX_KB_ENTRIES, the lowest-weight entries are pruned.
+ */
 export function addKnowledge(entry: Omit<KnowledgeEntry, "id" | "learnedAt">): void {
+  const now = new Date().toISOString();
+  const summary = entry.summary.length > 150 ? entry.summary.slice(0, 147) + "..." : entry.summary;
+
+  // ── 1. Exact title match → refresh if content changed ──────────────────
+  const exactMatch = knowledge.entries.find(e => e.title === entry.title);
+  if (exactMatch) {
+    // Same title: only touch it if the summary is actually different
+    if (exactMatch.summary !== summary) {
+      exactMatch.summary   = summary;
+      exactMatch.weight    = Math.max(exactMatch.weight, entry.weight);
+      exactMatch.updatedAt = now;
+      if (entry.source) exactMatch.source = entry.source;
+      knowledge.lastIngested = now;
+      save(KNOWLEDGE_FILE, knowledge);
+    }
+    return;
+  }
+
+  // ── 2. Fuzzy title match (same category, high word overlap) ────────────
+  const fuzzyMatch = knowledge.entries.find(e =>
+    e.category === entry.category && titleSimilarity(e.title, entry.title) >= 0.7
+  );
+  if (fuzzyMatch) {
+    // Similar entry exists — update if the new info is at least as important
+    if (entry.weight >= fuzzyMatch.weight) {
+      fuzzyMatch.title     = entry.title;   // adopt the newer title
+      fuzzyMatch.summary   = summary;
+      fuzzyMatch.weight    = entry.weight;
+      fuzzyMatch.updatedAt = now;
+      if (entry.source) fuzzyMatch.source = entry.source;
+      knowledge.lastIngested = now;
+      save(KNOWLEDGE_FILE, knowledge);
+    }
+    return;
+  }
+
+  // ── 3. Genuinely new entry → insert ────────────────────────────────────
   const full: KnowledgeEntry = {
     ...entry,
-    // Proposal D: cap summaries at 150 chars — saves ~60 tokens/entry in context
-    summary: entry.summary.length > 150 ? entry.summary.slice(0, 147) + "..." : entry.summary,
+    summary,
     id: `k_${Date.now()}`,
-    learnedAt: new Date().toISOString(),
+    learnedAt: now,
   };
-  // Avoid exact duplicates
-  const exists = knowledge.entries.some(e => e.title === full.title);
-  if (!exists) {
-    knowledge.entries.push(full);
+
+  knowledge.entries.push(full);
+  knowledge.totalEntries = knowledge.entries.length;
+  knowledge.lastIngested = now;
+
+  // Prune if over the configurable cap
+  if (knowledge.entries.length > MAX_KB_ENTRIES) {
+    knowledge.entries.sort((a, b) => b.weight - a.weight);
+    knowledge.entries = knowledge.entries.slice(0, MAX_KB_ENTRIES);
     knowledge.totalEntries = knowledge.entries.length;
-    knowledge.lastIngested = new Date().toISOString();
-    // Keep top 200 entries by weight
-    if (knowledge.entries.length > 200) {
-      knowledge.entries.sort((a, b) => b.weight - a.weight);
-      knowledge.entries = knowledge.entries.slice(0, 200);
-    }
-    save(KNOWLEDGE_FILE, knowledge);
   }
+  save(KNOWLEDGE_FILE, knowledge);
+}
+
+/** Get all KB titles grouped by category (for exploration de-dup context) */
+export function getKnowledgeTitles(): { category: string; titles: string[] }[] {
+  const byCategory: Record<string, string[]> = {};
+  for (const e of knowledge.entries) {
+    const cat = e.category ?? "other";
+    if (!byCategory[cat]) byCategory[cat] = [];
+    byCategory[cat].push(e.title);
+  }
+  return Object.entries(byCategory).map(([category, titles]) => ({ category, titles }));
+}
+
+/** Get a compact digest of existing KB for injection into exploration/research prompts */
+export function getKnowledgeDigestForExploration(): string {
+  if (knowledge.entries.length === 0) return "Knowledge base is empty — everything is new.";
+
+  const byCategory: Record<string, KnowledgeEntry[]> = {};
+  for (const e of knowledge.entries) {
+    const cat = e.category ?? "other";
+    if (!byCategory[cat]) byCategory[cat] = [];
+    byCategory[cat].push(e);
+  }
+
+  const lines: string[] = [`Agent #306 already knows ${knowledge.entries.length} things. By category:`];
+  for (const [cat, entries] of Object.entries(byCategory)) {
+    // Show top 5 titles per category (by weight) so exploration can skip them
+    const top = entries.sort((a, b) => b.weight - a.weight).slice(0, 5);
+    lines.push(`[${cat.toUpperCase()}] (${entries.length} entries): ${top.map(e => e.title).join("; ")}`);
+  }
+  return lines.join("\n");
 }
 
 /** Get all memory state for the /api/house endpoint */
@@ -534,7 +641,8 @@ function getCategoryBreakdown(): Record<string, number> {
   return breakdown;
 }
 
-/** Decay knowledge entry weights over time so stale entries don't dominate context forever */
+/** Decay knowledge entry weights over time so stale entries don't dominate context forever.
+ *  Uses updatedAt (if set) instead of learnedAt, so refreshed entries stay relevant longer. */
 export function decayKnowledge(): void {
   const now        = Date.now();
   const TWO_WEEKS  = 14 * 24 * 60 * 60 * 1000;
@@ -542,7 +650,9 @@ export function decayKnowledge(): void {
   let changed = false;
 
   for (const entry of knowledge.entries) {
-    const age = now - new Date(entry.learnedAt).getTime();
+    // Use the most recent timestamp (updatedAt or learnedAt) for decay calculation
+    const referenceDate = entry.updatedAt ?? entry.learnedAt;
+    const age = now - new Date(referenceDate).getTime();
     if (age > FOUR_WEEKS && entry.weight > 2) {
       entry.weight = Math.max(2, entry.weight - 2); // -2 after 4 weeks
       changed = true;
