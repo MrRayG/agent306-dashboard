@@ -2309,10 +2309,424 @@ function GoalsTab({ goals, stats, topics, refetch }: {
   );
 }
 
+// ── The Mirror — Reflection Tab ──────────────────────────────────────────────
+function MirrorTab({ reflections, rules, refetchReflections, refetchRules }: {
+  reflections: any[]; rules: any[]; refetchReflections: () => void; refetchRules: () => void;
+}) {
+  const { toast } = useToast();
+  const runMut = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/reflections/run").then(r => r.json()),
+    onSuccess: (d: any) => { toast({ title: `Reflected on ${d.count} posts` }); refetchReflections(); },
+    onError: (e: any) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/reflections/rules/${id}`).then(r => r.json()),
+    onSuccess: () => { toast({ title: "Rule deleted" }); refetchRules(); },
+    onError: (e: any) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+        <div>
+          <p style={{ ...mono, fontSize: "0.56rem", fontWeight: 700, color: ORANGE, margin: 0 }}>POST-ACTION REFLECTIONS</p>
+          <p style={{ ...mono, fontSize: "0.42rem", color: DIM, margin: "2px 0 0" }}>Grok analyzes why posts succeed or fail — extracts patterns into style rules</p>
+        </div>
+        <button onClick={() => runMut.mutate()} disabled={runMut.isPending}
+          style={{ ...mono, fontSize: "0.5rem", padding: "6px 14px", background: runMut.isPending ? "rgba(249,115,22,0.2)" : ORANGE, color: "#0e0f10", border: "none", cursor: "pointer", fontWeight: 700 }}>
+          {runMut.isPending ? "REFLECTING..." : "RUN REFLECTION"}
+        </button>
+      </div>
+
+      {/* Style Rules */}
+      {rules.length > 0 && (
+        <div style={{ marginBottom: "1.25rem" }}>
+          <p style={{ ...mono, fontSize: "0.46rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 8px" }}>
+            Active Style Rules ({rules.length})
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {rules.map((r: any) => (
+              <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", border: "1px solid rgba(227,229,228,0.06)", background: "rgba(227,229,228,0.015)" }}>
+                <div style={{ flex: 1 }}>
+                  <p style={{ ...mono, fontSize: "0.48rem", color: "rgba(227,229,228,0.7)", margin: 0 }}>{r.rule}</p>
+                  <p style={{ ...mono, fontSize: "0.38rem", color: DIMMER, margin: "2px 0 0" }}>
+                    {r.confidence} confidence · {r.hitCount} hits · {fmtShort(r.createdAt)}
+                  </p>
+                </div>
+                <button onClick={() => deleteMut.mutate(r.id)}
+                  style={{ ...mono, fontSize: "0.4rem", padding: "3px 8px", background: "transparent", border: `1px solid ${RED}40`, color: RED, cursor: "pointer" }}>
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Reflections List */}
+      {reflections.length === 0 ? (
+        <p style={{ ...mono, fontSize: "0.48rem", color: DIMMER, textAlign: "center", padding: "2rem 0" }}>No reflections yet — run reflection after posts have engagement data</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {reflections.slice(0, 15).map((r: any) => (
+            <div key={r.id} style={{ padding: "10px 12px", border: "1px solid rgba(227,229,228,0.06)", background: "rgba(227,229,228,0.015)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <p style={{ ...mono, fontSize: "0.44rem", color: "rgba(227,229,228,0.5)", margin: 0, flex: 1 }}>
+                  "{r.postText?.slice(0, 120)}..."
+                </p>
+                <span style={{ ...mono, fontSize: "0.5rem", fontWeight: 700, color: r.score >= 7 ? GREEN : r.score >= 4 ? YELLOW : RED, marginLeft: 10, flexShrink: 0 }}>
+                  {r.score}/10
+                </span>
+              </div>
+              <p style={{ ...mono, fontSize: "0.46rem", color: ORANGE, margin: "0 0 4px" }}>{r.analysis?.whyWorked}</p>
+              {r.analysis?.patterns?.length > 0 && (
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" as const, marginBottom: 4 }}>
+                  {r.analysis.patterns.map((p: string, i: number) => (
+                    <span key={i} style={{ ...mono, fontSize: "0.38rem", padding: "2px 6px", border: "1px solid rgba(249,115,22,0.2)", color: "rgba(249,115,22,0.6)" }}>{p}</span>
+                  ))}
+                </div>
+              )}
+              {r.analysis?.styleNote && (
+                <p style={{ ...mono, fontSize: "0.4rem", color: DIM, margin: 0, fontStyle: "italic" }}>{r.analysis.styleNote}</p>
+              )}
+              <p style={{ ...mono, fontSize: "0.36rem", color: DIMMER, margin: "4px 0 0" }}>
+                {r.engagement?.likes ?? 0} likes · {r.engagement?.replies ?? 0} replies · {r.engagement?.retweets ?? 0} RTs · {fmtDate(r.createdAt)}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── The Forge — Reasoning Tab ────────────────────────────────────────────────
+function ForgeTab({ debates, contradictions, decaying, refetchDebates, refetchContradictions }: {
+  debates: any[]; contradictions: any[]; decaying: any[]; refetchDebates: () => void; refetchContradictions: () => void;
+}) {
+  const { toast } = useToast();
+  const decayMut = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/reasoning/decay-check").then(r => r.json()),
+    onSuccess: (d: any) => toast({ title: `Decay check: ${d.downgraded} downgraded, ${d.flaggedForReview} flagged` }),
+    onError: (e: any) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+  const resolveMut = useMutation({
+    mutationFn: ({ id, resolution }: { id: string; resolution: string }) =>
+      apiRequest("POST", `/api/reasoning/contradictions/${id}/resolve`, { resolution }).then(r => r.json()),
+    onSuccess: () => { toast({ title: "Contradiction resolved" }); refetchContradictions(); },
+    onError: (e: any) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+
+  const openContradictions = contradictions.filter((c: any) => c.status === "open");
+
+  return (
+    <div>
+      {/* Debates */}
+      <div style={{ marginBottom: "1.5rem" }}>
+        <p style={{ ...mono, fontSize: "0.56rem", fontWeight: 700, color: PURPLE, margin: "0 0 4px" }}>SELF-DEBATES (Devil's Advocate)</p>
+        <p style={{ ...mono, fontSize: "0.42rem", color: DIM, margin: "0 0 12px" }}>Grok critiques manuscripts and hypotheses — finds weaknesses before publication</p>
+        {debates.length === 0 ? (
+          <p style={{ ...mono, fontSize: "0.48rem", color: DIMMER, textAlign: "center", padding: "1rem 0" }}>No debates yet — debates auto-run when manuscripts are approved</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {debates.slice(0, 10).map((d: any) => (
+              <div key={d.id} style={{ padding: "10px 12px", border: "1px solid rgba(167,139,250,0.12)", background: "rgba(167,139,250,0.02)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <p style={{ ...mono, fontSize: "0.5rem", fontWeight: 700, color: "rgba(227,229,228,0.7)", margin: 0 }}>{d.title}</p>
+                  <span style={{
+                    ...mono, fontSize: "0.4rem", padding: "2px 8px",
+                    color: d.critique?.overallAssessment === "solid" ? GREEN : d.critique?.overallAssessment === "flawed" ? RED : YELLOW,
+                    border: `1px solid ${d.critique?.overallAssessment === "solid" ? GREEN : d.critique?.overallAssessment === "flawed" ? RED : YELLOW}40`,
+                  }}>
+                    {d.critique?.overallAssessment?.toUpperCase()}
+                  </span>
+                </div>
+                {d.critique?.weaknesses?.length > 0 && (
+                  <div style={{ marginBottom: 4 }}>
+                    <p style={{ ...mono, fontSize: "0.4rem", color: RED, margin: "0 0 2px" }}>Weaknesses:</p>
+                    {d.critique.weaknesses.map((w: string, i: number) => (
+                      <p key={i} style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.5)", margin: "1px 0", paddingLeft: 8 }}>• {w}</p>
+                    ))}
+                  </div>
+                )}
+                {d.critique?.suggestions?.length > 0 && (
+                  <div>
+                    <p style={{ ...mono, fontSize: "0.4rem", color: GREEN, margin: "0 0 2px" }}>Suggestions:</p>
+                    {d.critique.suggestions.map((s: string, i: number) => (
+                      <p key={i} style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.5)", margin: "1px 0", paddingLeft: 8 }}>• {s}</p>
+                    ))}
+                  </div>
+                )}
+                <p style={{ ...mono, fontSize: "0.36rem", color: DIMMER, margin: "4px 0 0" }}>{d.topicType} · {fmtDate(d.createdAt)}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Contradictions */}
+      <div style={{ marginBottom: "1.5rem" }}>
+        <p style={{ ...mono, fontSize: "0.56rem", fontWeight: 700, color: RED, margin: "0 0 4px" }}>CONTRADICTIONS ({openContradictions.length} open)</p>
+        <p style={{ ...mono, fontSize: "0.42rem", color: DIM, margin: "0 0 12px" }}>Detected when new knowledge conflicts with existing entries</p>
+        {openContradictions.length === 0 ? (
+          <p style={{ ...mono, fontSize: "0.48rem", color: DIMMER, textAlign: "center", padding: "1rem 0" }}>No open contradictions</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {openContradictions.map((c: any) => (
+              <div key={c.id} style={{ padding: "10px 12px", border: `1px solid ${RED}20`, background: `${RED}05` }}>
+                <p style={{ ...mono, fontSize: "0.46rem", color: "rgba(227,229,228,0.7)", margin: "0 0 6px" }}>{c.description}</p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+                  <div style={{ padding: "6px 8px", border: "1px solid rgba(227,229,228,0.06)" }}>
+                    <p style={{ ...mono, fontSize: "0.38rem", color: ORANGE, margin: "0 0 2px" }}>ENTRY A</p>
+                    <p style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.6)", margin: 0 }}>{c.entryA?.title}</p>
+                  </div>
+                  <div style={{ padding: "6px 8px", border: "1px solid rgba(227,229,228,0.06)" }}>
+                    <p style={{ ...mono, fontSize: "0.38rem", color: TEAL, margin: "0 0 2px" }}>ENTRY B</p>
+                    <p style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.6)", margin: 0 }}>{c.entryB?.title}</p>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {(["keep_new", "keep_old", "keep_both", "merge"] as const).map(res => (
+                    <button key={res} onClick={() => resolveMut.mutate({ id: c.id, resolution: res })}
+                      style={{ ...mono, fontSize: "0.38rem", padding: "3px 8px", background: "transparent", border: `1px solid rgba(227,229,228,0.12)`, color: "rgba(227,229,228,0.5)", cursor: "pointer" }}>
+                      {res.replace("_", " ").toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Confidence Decay */}
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <div>
+            <p style={{ ...mono, fontSize: "0.56rem", fontWeight: 700, color: YELLOW, margin: "0 0 4px" }}>CONFIDENCE DECAY</p>
+            <p style={{ ...mono, fontSize: "0.42rem", color: DIM, margin: 0 }}>Knowledge entries losing confidence from staleness</p>
+          </div>
+          <button onClick={() => decayMut.mutate()} disabled={decayMut.isPending}
+            style={{ ...mono, fontSize: "0.46rem", padding: "4px 10px", background: "transparent", border: `1px solid ${YELLOW}40`, color: YELLOW, cursor: "pointer" }}>
+            {decayMut.isPending ? "CHECKING..." : "RUN DECAY CHECK"}
+          </button>
+        </div>
+        {decaying.length === 0 ? (
+          <p style={{ ...mono, fontSize: "0.48rem", color: DIMMER, textAlign: "center", padding: "1rem 0" }}>All knowledge entries are fresh</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            {decaying.slice(0, 15).map((e: any) => (
+              <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 10px", border: "1px solid rgba(227,229,228,0.04)" }}>
+                <div>
+                  <span style={{ ...mono, fontSize: "0.44rem", color: "rgba(227,229,228,0.6)" }}>{e.title}</span>
+                  <span style={{ ...mono, fontSize: "0.38rem", color: DIMMER, marginLeft: 8 }}>{e.category}</span>
+                </div>
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <span style={{ ...mono, fontSize: "0.4rem", color: e.status === "critical" ? RED : e.status === "decaying" ? YELLOW : DIM }}>
+                    {e.daysSinceUpdate}d stale
+                  </span>
+                  <span style={{ ...mono, fontSize: "0.4rem", color: DIMMER }}>w:{e.weight}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── The Nexus — Synthesis Tab ────────────────────────────────────────────────
+function NexusTab({ connections, reports, refetchConnections, refetchReports }: {
+  connections: any[]; reports: any[]; refetchConnections: () => void; refetchReports: () => void;
+}) {
+  const { toast } = useToast();
+  const scanMut = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/synthesis/scan").then(r => r.json()),
+    onSuccess: (d: any) => { toast({ title: `Found ${d.count} new connections` }); refetchConnections(); },
+    onError: (e: any) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+  const synthMut = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/synthesis/generate", {}).then(r => r.json()),
+    onSuccess: () => { toast({ title: "Synthesis report generated" }); refetchReports(); },
+    onError: (e: any) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+
+  const STRENGTH_COLOR: Record<string, string> = { strong: GREEN, moderate: YELLOW, weak: DIM };
+
+  return (
+    <div>
+      {/* Actions */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+        <div>
+          <p style={{ ...mono, fontSize: "0.56rem", fontWeight: 700, color: TEAL, margin: 0 }}>KNOWLEDGE GRAPH</p>
+          <p style={{ ...mono, fontSize: "0.42rem", color: DIM, margin: "2px 0 0" }}>{connections.length} connections across knowledge entries</p>
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={() => scanMut.mutate()} disabled={scanMut.isPending}
+            style={{ ...mono, fontSize: "0.46rem", padding: "4px 10px", background: "transparent", border: `1px solid ${TEAL}40`, color: TEAL, cursor: "pointer" }}>
+            {scanMut.isPending ? "SCANNING..." : "SCAN CONNECTIONS"}
+          </button>
+          <button onClick={() => synthMut.mutate()} disabled={synthMut.isPending}
+            style={{ ...mono, fontSize: "0.46rem", padding: "4px 10px", background: "transparent", border: `1px solid ${PURPLE}40`, color: PURPLE, cursor: "pointer" }}>
+            {synthMut.isPending ? "GENERATING..." : "GENERATE SYNTHESIS"}
+          </button>
+        </div>
+      </div>
+
+      {/* Connections */}
+      {connections.length > 0 && (
+        <div style={{ marginBottom: "1.5rem" }}>
+          <p style={{ ...mono, fontSize: "0.46rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 8px" }}>
+            Connections
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            {connections.slice(0, 20).map((c: any) => (
+              <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px", border: "1px solid rgba(227,229,228,0.04)" }}>
+                <span style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.6)", flex: 1 }}>{c.fromTitle}</span>
+                <span style={{ ...mono, fontSize: "0.38rem", color: STRENGTH_COLOR[c.strength] ?? DIM, flexShrink: 0 }}>↔</span>
+                <span style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.6)", flex: 1 }}>{c.toTitle}</span>
+                <span style={{ ...mono, fontSize: "0.36rem", color: DIMMER, flex: 1.5, textAlign: "right" as const }}>{c.relationship}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Synthesis Reports */}
+      <div>
+        <p style={{ ...mono, fontSize: "0.46rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 8px" }}>
+          Synthesis Reports ({reports.length})
+        </p>
+        {reports.length === 0 ? (
+          <p style={{ ...mono, fontSize: "0.48rem", color: DIMMER, textAlign: "center", padding: "1.5rem 0" }}>No synthesis reports yet — scan connections first, then generate a synthesis</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {reports.slice(0, 8).map((r: any) => (
+              <div key={r.id} style={{ padding: "12px 14px", border: "1px solid rgba(45,212,191,0.12)", background: "rgba(45,212,191,0.02)" }}>
+                <p style={{ ...mono, fontSize: "0.52rem", fontWeight: 700, color: TEAL, margin: "0 0 6px" }}>{r.title}</p>
+                <p style={{ ...mono, fontSize: "0.44rem", color: "rgba(227,229,228,0.6)", margin: "0 0 6px", lineHeight: 1.6, whiteSpace: "pre-wrap" as const }}>
+                  {r.thesis}
+                </p>
+                <p style={{ ...mono, fontSize: "0.36rem", color: DIMMER, margin: 0 }}>
+                  Sources: {r.sourceEntryTitles?.join(", ")} · {fmtDate(r.createdAt)}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── The Network — Conversation Learning Tab ──────────────────────────────────
+function NetworkTab({ insights, relationships, refetchInsights, refetchRelationships }: {
+  insights: any[]; relationships: any[]; refetchInsights: () => void; refetchRelationships: () => void;
+}) {
+  const { toast } = useToast();
+  const extractMut = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/conversations/extract").then(r => r.json()),
+    onSuccess: (d: any) => { toast({ title: `Extracted ${d.count} insights` }); refetchInsights(); },
+    onError: (e: any) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+  const analyzeMut = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/conversations/analyze").then(r => r.json()),
+    onSuccess: (d: any) => { toast({ title: `Analyzed ${d.count} relationships` }); refetchRelationships(); },
+    onError: (e: any) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+
+  const TAG_COLOR: Record<string, string> = {
+    power_user: ORANGE, critic: RED, ally: GREEN, new_voice: TEAL, contributor: PURPLE, lurker: DIM,
+  };
+
+  return (
+    <div>
+      {/* Relationships */}
+      <div style={{ marginBottom: "1.5rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div>
+            <p style={{ ...mono, fontSize: "0.56rem", fontWeight: 700, color: GREEN, margin: 0 }}>RELATIONSHIP INTELLIGENCE</p>
+            <p style={{ ...mono, fontSize: "0.42rem", color: DIM, margin: "2px 0 0" }}>Community engagement patterns and key voices</p>
+          </div>
+          <button onClick={() => analyzeMut.mutate()} disabled={analyzeMut.isPending}
+            style={{ ...mono, fontSize: "0.46rem", padding: "4px 10px", background: "transparent", border: `1px solid ${GREEN}40`, color: GREEN, cursor: "pointer" }}>
+            {analyzeMut.isPending ? "ANALYZING..." : "ANALYZE RELATIONSHIPS"}
+          </button>
+        </div>
+        {relationships.length === 0 ? (
+          <p style={{ ...mono, fontSize: "0.48rem", color: DIMMER, textAlign: "center", padding: "1rem 0" }}>No relationship data yet</p>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+            {relationships.slice(0, 15).map((r: any) => (
+              <div key={r.username} style={{ padding: "8px 10px", border: "1px solid rgba(227,229,228,0.06)", background: "rgba(227,229,228,0.015)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                  <span style={{ ...mono, fontSize: "0.48rem", fontWeight: 700, color: "rgba(227,229,228,0.7)" }}>@{r.username}</span>
+                  <span style={{ ...mono, fontSize: "0.4rem", color: DIMMER }}>{r.totalInteractions} chats</span>
+                </div>
+                <div style={{ display: "flex", gap: 3, flexWrap: "wrap" as const, marginBottom: 4 }}>
+                  {(r.tags ?? []).map((t: string) => (
+                    <span key={t} style={{ ...mono, fontSize: "0.34rem", padding: "1px 5px", border: `1px solid ${TAG_COLOR[t] ?? DIM}40`, color: TAG_COLOR[t] ?? DIM }}>
+                      {t.replace("_", " ")}
+                    </span>
+                  ))}
+                </div>
+                <p style={{ ...mono, fontSize: "0.36rem", color: DIMMER, margin: 0 }}>
+                  Last: {fmtShort(r.lastInteraction)}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Insights */}
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div>
+            <p style={{ ...mono, fontSize: "0.56rem", fontWeight: 700, color: TEAL, margin: 0 }}>CONVERSATION INSIGHTS</p>
+            <p style={{ ...mono, fontSize: "0.42rem", color: DIM, margin: "2px 0 0" }}>Knowledge extracted from community interactions</p>
+          </div>
+          <button onClick={() => extractMut.mutate()} disabled={extractMut.isPending}
+            style={{ ...mono, fontSize: "0.46rem", padding: "4px 10px", background: "transparent", border: `1px solid ${TEAL}40`, color: TEAL, cursor: "pointer" }}>
+            {extractMut.isPending ? "EXTRACTING..." : "EXTRACT INSIGHTS"}
+          </button>
+        </div>
+        {insights.length === 0 ? (
+          <p style={{ ...mono, fontSize: "0.48rem", color: DIMMER, textAlign: "center", padding: "1rem 0" }}>No insights extracted yet — run extraction after community conversations</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {insights.slice(0, 20).map((i: any) => (
+              <div key={i.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "6px 10px", border: "1px solid rgba(227,229,228,0.04)" }}>
+                <div style={{ flex: 1 }}>
+                  <p style={{ ...mono, fontSize: "0.44rem", color: "rgba(227,229,228,0.7)", margin: "0 0 2px" }}>{i.insight}</p>
+                  <p style={{ ...mono, fontSize: "0.36rem", color: DIMMER, margin: 0 }}>{i.source} · {fmtShort(i.createdAt)}</p>
+                </div>
+                <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0, marginLeft: 8 }}>
+                  <span style={{
+                    ...mono, fontSize: "0.36rem", padding: "1px 5px",
+                    color: i.confidence === "high" ? GREEN : i.confidence === "medium" ? YELLOW : RED,
+                    border: `1px solid ${i.confidence === "high" ? GREEN : i.confidence === "medium" ? YELLOW : RED}30`,
+                  }}>
+                    {i.confidence}
+                  </span>
+                  {i.addedToKB && (
+                    <span style={{ ...mono, fontSize: "0.34rem", color: GREEN }}>+KB</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 export default function AgentHQ() {
   const { toast } = useToast();
-  const [researchTab, setResearchTab] = useState<"queue" | "hypotheses" | "manuscripts" | "publication" | "goals">("queue");
+  const [researchTab, setResearchTab] = useState<"queue" | "hypotheses" | "manuscripts" | "publication" | "goals" | "reflection" | "reasoning" | "synthesis" | "network">("queue");
 
   const { data: house, isLoading: houseLoading } = useQuery<HouseData>({
     queryKey: ["/api/house"],
@@ -2338,10 +2752,63 @@ export default function AgentHQ() {
   const goals: AgentGoal[]    = goalsData?.goals ?? [];
   const goalsStats             = goalsData?.stats ?? { total: 0, active: 0, achieved: 0 };
 
+  // ── Self-improvement engine queries ─────────────────────────────────────
+  const { data: metaData } = useQuery<any>({
+    queryKey: ["/api/metacognition"],
+    refetchInterval: 60_000,
+  });
+
+  const { data: reflectionsData, refetch: refetchReflections } = useQuery<{ reflections: any[] }>({
+    queryKey: ["/api/reflections"],
+    refetchInterval: 30_000,
+  });
+
+  const { data: rulesData, refetch: refetchRules } = useQuery<{ rules: any[] }>({
+    queryKey: ["/api/reflections/rules"],
+    refetchInterval: 30_000,
+  });
+
+  const { data: debatesData, refetch: refetchDebates } = useQuery<{ debates: any[] }>({
+    queryKey: ["/api/reasoning/debates"],
+    refetchInterval: 30_000,
+  });
+
+  const { data: contradictionsData, refetch: refetchContradictions } = useQuery<{ contradictions: any[] }>({
+    queryKey: ["/api/reasoning/contradictions"],
+    refetchInterval: 30_000,
+  });
+
+  const { data: decayingData } = useQuery<{ entries: any[] }>({
+    queryKey: ["/api/reasoning/decaying"],
+    refetchInterval: 60_000,
+  });
+
+  const { data: connectionsData, refetch: refetchConnections } = useQuery<{ connections: any[] }>({
+    queryKey: ["/api/synthesis/connections"],
+    refetchInterval: 30_000,
+  });
+
+  const { data: synthesisReportsData, refetch: refetchSynthesisReports } = useQuery<{ reports: any[] }>({
+    queryKey: ["/api/synthesis/reports"],
+    refetchInterval: 30_000,
+  });
+
+  const { data: insightsData, refetch: refetchInsights } = useQuery<{ insights: any[] }>({
+    queryKey: ["/api/conversations/insights"],
+    refetchInterval: 30_000,
+  });
+
+  const { data: relationshipsData, refetch: refetchRelationships } = useQuery<{ relationships: any[] }>({
+    queryKey: ["/api/conversations/relationships"],
+    refetchInterval: 30_000,
+  });
+
   const pendingReviewCount = (topics as ResearchTopic[]).filter(t => t.status === "pending_review").length;
   const approvedCount      = (topics as ResearchTopic[]).filter(t => t.status === "approved").length;
   const researchingCount   = (topics as ResearchTopic[]).filter(t => t.status === "researching" || t.status === "synthesizing").length;
   const activeGoalsCount   = goalsStats.active;
+
+  const openContradictions = (contradictionsData?.contradictions ?? []).filter((c: any) => c.status === "open").length;
 
   const TAB_LABELS: Array<{ key: typeof researchTab; label: string; badge?: number }> = [
     { key: "queue",       label: "Research Queue",   badge: researchingCount || undefined },
@@ -2349,6 +2816,10 @@ export default function AgentHQ() {
     { key: "manuscripts", label: "Manuscripts",       badge: pendingReviewCount || undefined },
     { key: "publication", label: "Publication Queue", badge: approvedCount || undefined },
     { key: "goals",       label: "Dev Goals",         badge: activeGoalsCount || undefined },
+    { key: "reflection",  label: "The Mirror" },
+    { key: "reasoning",   label: "The Forge",          badge: openContradictions || undefined },
+    { key: "synthesis",   label: "The Nexus" },
+    { key: "network",     label: "The Network" },
   ];
 
   return (
@@ -2431,6 +2902,76 @@ export default function AgentHQ() {
         )}
       </div>
 
+      {/* ── The Mind — Metacognition Dashboard ── */}
+      {metaData && (
+        <div style={{ marginBottom: "1.25rem", border: "1px solid rgba(249,115,22,0.15)", background: "rgba(249,115,22,0.02)", padding: "0.85rem 1.25rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "0.7rem" }}>
+            <span style={{ fontSize: "0.9rem" }}>🧠</span>
+            <span style={{ ...mono, fontSize: "0.6rem", fontWeight: 700, color: ORANGE, textTransform: "uppercase" as const, letterSpacing: "0.12em" }}>
+              The Mind
+            </span>
+            <span style={{ ...mono, fontSize: "0.46rem", color: "rgba(227,229,228,0.2)" }}>
+              Cognitive State Overview
+            </span>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+            {/* Knowledge Coverage */}
+            <div style={{ padding: "0.6rem", border: "1px solid rgba(227,229,228,0.06)", background: "rgba(227,229,228,0.015)" }}>
+              <p style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 6px" }}>Knowledge</p>
+              <p style={{ ...mono, fontSize: "1rem", fontWeight: 700, color: TEAL, margin: "0 0 4px" }}>{metaData.knowledgeCoverage?.totalActive ?? 0}</p>
+              <p style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.25)", margin: 0 }}>
+                {(metaData.knowledgeCoverage?.categories ?? []).length} categories · avg weight {metaData.confidenceCalibration?.avgWeight ?? 0}
+              </p>
+            </div>
+            {/* Learning Velocity */}
+            <div style={{ padding: "0.6rem", border: "1px solid rgba(227,229,228,0.06)", background: "rgba(227,229,228,0.015)" }}>
+              <p style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 6px" }}>Velocity</p>
+              <p style={{ ...mono, fontSize: "1rem", fontWeight: 700, color: metaData.learningVelocity?.trend === "accelerating" ? GREEN : metaData.learningVelocity?.trend === "slowing" ? RED : YELLOW, margin: "0 0 4px" }}>
+                {metaData.learningVelocity?.knowledgeAdded7d ?? 0}<span style={{ fontSize: "0.5rem", color: "rgba(227,229,228,0.3)" }}>/7d</span>
+              </p>
+              <p style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.25)", margin: 0 }}>
+                {metaData.learningVelocity?.knowledgeAdded30d ?? 0}/30d · {metaData.learningVelocity?.trend ?? "steady"}
+              </p>
+            </div>
+            {/* Reasoning Quality */}
+            <div style={{ padding: "0.6rem", border: "1px solid rgba(227,229,228,0.06)", background: "rgba(227,229,228,0.015)" }}>
+              <p style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 6px" }}>Reasoning</p>
+              <p style={{ ...mono, fontSize: "1rem", fontWeight: 700, color: PURPLE, margin: "0 0 4px" }}>
+                {metaData.reasoningQuality?.debatesRun ?? 0}<span style={{ fontSize: "0.5rem", color: "rgba(227,229,228,0.3)" }}> debates</span>
+              </p>
+              <p style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.25)", margin: 0 }}>
+                {metaData.reasoningQuality?.contradictionsOpen ?? 0} open contradictions · {metaData.reasoningQuality?.contradictionsResolved ?? 0} resolved
+              </p>
+            </div>
+            {/* Reflection & Performance */}
+            <div style={{ padding: "0.6rem", border: "1px solid rgba(227,229,228,0.06)", background: "rgba(227,229,228,0.015)" }}>
+              <p style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 6px" }}>Performance</p>
+              <p style={{ ...mono, fontSize: "1rem", fontWeight: 700, color: metaData.reflectionStats?.scoreTrend === "improving" ? GREEN : metaData.reflectionStats?.scoreTrend === "declining" ? RED : YELLOW, margin: "0 0 4px" }}>
+                {metaData.reflectionStats?.avgPostScore7d ?? 0}<span style={{ fontSize: "0.5rem", color: "rgba(227,229,228,0.3)" }}>/10</span>
+              </p>
+              <p style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.25)", margin: 0 }}>
+                {metaData.reflectionStats?.activeRules ?? 0} style rules · {metaData.reflectionStats?.scoreTrend ?? "stable"}
+              </p>
+            </div>
+          </div>
+          {/* Second row: synthesis + conversation stats */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 10 }}>
+            <div style={{ padding: "0.4rem 0.6rem", border: "1px solid rgba(227,229,228,0.04)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase" as const }}>Connections</span>
+              <span style={{ ...mono, fontSize: "0.58rem", fontWeight: 700, color: TEAL }}>{metaData.synthesisStats?.totalConnections ?? 0}</span>
+            </div>
+            <div style={{ padding: "0.4rem 0.6rem", border: "1px solid rgba(227,229,228,0.04)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase" as const }}>Syntheses</span>
+              <span style={{ ...mono, fontSize: "0.58rem", fontWeight: 700, color: PURPLE }}>{metaData.synthesisStats?.totalReports ?? 0}</span>
+            </div>
+            <div style={{ padding: "0.4rem 0.6rem", border: "1px solid rgba(227,229,228,0.04)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase" as const }}>Relationships</span>
+              <span style={{ ...mono, fontSize: "0.58rem", fontWeight: 700, color: GREEN }}>{metaData.conversationStats?.relationshipsTracked ?? 0}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Research Lab ── */}
       <div style={{ border: "1px solid rgba(227,229,228,0.07)", background: "rgba(227,229,228,0.01)" }}>
         {/* Research lab header */}
@@ -2493,6 +3034,39 @@ export default function AgentHQ() {
           )}
           {researchTab === "goals" && (
             <GoalsTab goals={goals} stats={goalsStats} topics={topics} refetch={refetchGoals} />
+          )}
+          {researchTab === "reflection" && (
+            <MirrorTab
+              reflections={reflectionsData?.reflections ?? []}
+              rules={rulesData?.rules ?? []}
+              refetchReflections={refetchReflections}
+              refetchRules={refetchRules}
+            />
+          )}
+          {researchTab === "reasoning" && (
+            <ForgeTab
+              debates={debatesData?.debates ?? []}
+              contradictions={contradictionsData?.contradictions ?? []}
+              decaying={decayingData?.entries ?? []}
+              refetchDebates={refetchDebates}
+              refetchContradictions={refetchContradictions}
+            />
+          )}
+          {researchTab === "synthesis" && (
+            <NexusTab
+              connections={connectionsData?.connections ?? []}
+              reports={synthesisReportsData?.reports ?? []}
+              refetchConnections={refetchConnections}
+              refetchReports={refetchSynthesisReports}
+            />
+          )}
+          {researchTab === "network" && (
+            <NetworkTab
+              insights={insightsData?.insights ?? []}
+              relationships={relationshipsData?.relationships ?? []}
+              refetchInsights={refetchInsights}
+              refetchRelationships={refetchRelationships}
+            />
           )}
         </div>
       </div>

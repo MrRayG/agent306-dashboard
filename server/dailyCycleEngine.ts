@@ -20,6 +20,11 @@ import {
   getArchiveStats,
   getActiveKnowledgeCount,
 } from "./memoryEngine.js";
+import { runReflection } from "./reflectionEngine.js";
+import { runConfidenceDecay } from "./reasoningEngine.js";
+import { runConnectionScan } from "./synthesisEngine.js";
+import { extractInsights } from "./conversationLearningEngine.js";
+import { getMetacognitionState } from "./metacognitionEngine.js";
 
 const GROK_URL     = "https://api.x.ai/v1/chat/completions";
 const GROK_API_KEY = process.env.GROK_API_KEY ?? "";
@@ -374,6 +379,24 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
 
   // 4. Auto-ingest knowledge from research completions
   ingestResearchKnowledge(result.researchCompletions);
+
+  // 4b. Self-improvement cycle (non-blocking — failures are logged, never crash)
+  try {
+    console.log("[DailyCycle] Running self-improvement engines...");
+    // Reflection: analyze posts with new engagement data
+    await runReflection().catch(e => console.warn("[DailyCycle] Reflection failed:", e.message));
+    // Confidence decay: downgrade stale knowledge
+    runConfidenceDecay();
+    // Knowledge synthesis: scan for new connections if KB was updated
+    await runConnectionScan().catch(e => console.warn("[DailyCycle] Connection scan failed:", e.message));
+    // Conversation learning: extract insights from recent conversations
+    await extractInsights().catch(e => console.warn("[DailyCycle] Insight extraction failed:", e.message));
+    // Metacognition: log cognitive state summary
+    const meta = getMetacognitionState();
+    console.log(`[DailyCycle] Cognitive state — KB: ${meta.knowledgeCoverage.totalActive} entries, Velocity: ${meta.learningVelocity.trend}, Connections: ${meta.synthesisStats.totalConnections}`);
+  } catch (e: any) {
+    console.warn("[DailyCycle] Self-improvement cycle error (non-fatal):", e.message);
+  }
 
   // 5. Build briefing
   const briefing: DailyBriefing = {

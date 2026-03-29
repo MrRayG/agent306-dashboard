@@ -301,12 +301,17 @@ export function getSentimentArc(limit = 4): string {
 }
 
 /** Full context string for injection into Grok (soul + knowledge + performance) */
+// Style rules injection — set by reflectionEngine to avoid circular dependency
+let _styleRulesProvider: (() => string) | null = null;
+export function setStyleRulesProvider(fn: () => string): void { _styleRulesProvider = fn; }
+
 export function getFullAgentContext(): string {
   return [
     getSoulContext(),
     getKnowledgeContext(6),
     getSentimentArc(4),
     getPerformanceContext(5),
+    _styleRulesProvider?.() ?? "",
   ].filter(Boolean).join("\n\n");
 }
 
