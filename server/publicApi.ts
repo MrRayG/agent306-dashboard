@@ -46,6 +46,40 @@ function clamp(v: number): number {
   return Math.max(0, Math.min(100, Math.round(v)));
 }
 
+// ── Research category classifier ────────────────────────────
+
+type ResearchCategory = "On-Chain" | "AI & Agents" | "Web3 Culture" | "Economics" | "Technology" | "Media";
+
+const CATEGORY_KEYWORDS: Array<[ResearchCategory, string[]]> = [
+  ["On-Chain",     ["blockchain", "burn", "nft", "token", "smart contract", "on-chain", "onchain", "mint", "wallet", "erc-721", "erc-1155"]],
+  ["AI & Agents",  ["ai", "autonomous agent", "machine learning", "llm", "artificial intelligence", "neural", "gpt", "model", "agent"]],
+  ["Web3 Culture", ["community", "dao", "culture", "social", "governance", "tribe", "normie", "vibe"]],
+  ["Economics",    ["market", "pricing", "trading", "tokenomics", "floor price", "economy", "liquidity", "supply", "demand", "value"]],
+  ["Technology",   ["infrastructure", "protocol", "erc", "platform", "api", "standard", "layer", "bridge", "node"]],
+  ["Media",        ["content", "media", "publish", "podcast", "distribution", "broadcast", "episode", "stream", "video"]],
+];
+
+function classifyResearchCategory(title: string): ResearchCategory {
+  const lower = title.toLowerCase();
+  for (const [category, keywords] of CATEGORY_KEYWORDS) {
+    if (keywords.some(kw => lower.includes(kw))) return category;
+  }
+  return "Technology";
+}
+
+// ── Research status priority (higher = better) ──────────────
+
+const STATUS_PRIORITY: Record<string, number> = {
+  published:       5,
+  pending_review:  4,
+  approved:        3,
+  researching:     2,
+};
+
+function statusPriority(status: string): number {
+  return STATUS_PRIORITY[status] ?? 1;
+}
+
 // ── Research phase labels ────────────────────────────────────
 
 const PHASE_LABELS: Record<string, string> = {
@@ -348,25 +382,40 @@ export function getPublicResearch() {
   return cached("research", () => {
     const lab = getResearchLab();
 
+    // Stats reflect ALL topics (not just the displayed 6)
     const published = lab.topics.filter(t => t.status === "published").length;
     const pendingReview = lab.topics.filter(t => t.status === "pending_review").length;
     const active = lab.topics.filter(t =>
       !["published", "declined", "archived"].includes(t.status)
     ).length;
 
-    const topics = lab.topics
-      .filter(t => t.status !== "archived" && t.status !== "declined")
-      .map(t => {
-        const phase = t.researchPhase ?? "problem_definition";
-        const phaseIndex = PHASE_ORDER.indexOf(phase);
-        return {
-          title: t.topic,
-          status: t.status,
-          phase: phaseIndex + 1,
-          totalPhases: PHASE_ORDER.length,
-          phaseLabel: PHASE_LABELS[phase] ?? phase,
-        };
-      });
+    // Categorize and pick the top 1 topic per category
+    const eligible = lab.topics.filter(t => t.status !== "archived" && t.status !== "declined");
+
+    const bestByCategory = new Map<ResearchCategory, typeof eligible[number]>();
+    for (const t of eligible) {
+      const cat = classifyResearchCategory(t.topic);
+      const current = bestByCategory.get(cat);
+      if (!current ||
+          statusPriority(t.status) > statusPriority(current.status) ||
+          (statusPriority(t.status) === statusPriority(current.status) &&
+           (t.updatedAt ?? "") > (current.updatedAt ?? ""))) {
+        bestByCategory.set(cat, t);
+      }
+    }
+
+    const topics = Array.from(bestByCategory.entries()).map(([category, t]) => {
+      const phase = t.researchPhase ?? "problem_definition";
+      const phaseIndex = PHASE_ORDER.indexOf(phase);
+      return {
+        title: t.topic,
+        status: t.status,
+        phase: phaseIndex + 1,
+        totalPhases: PHASE_ORDER.length,
+        phaseLabel: PHASE_LABELS[phase] ?? phase,
+        category,
+      };
+    });
 
     return {
       stats: { published, pendingReview, active },
