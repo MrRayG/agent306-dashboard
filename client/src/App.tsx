@@ -25,10 +25,12 @@ import VoiceStudio from "@/pages/VoiceStudio";
 import AgentHQ from "@/pages/AgentHQ";
 import WeeklyEngines from "@/pages/WeeklyEngines";
 import CommandCenter from "@/pages/CommandCenter";
+import MorningBriefing from "@/pages/MorningBriefing";
 import NotFound from "@/pages/not-found";
 import PerplexityAttribution from "@/components/PerplexityAttribution";
 
 const nav = [
+  { href: "/briefing", label: "Morning Brief", desc: "Daily intelligence"  },
   { href: "/",        label: "Story Engine",  desc: "Narrative AI"       },
   { href: "/render",  label: "Render Studio", desc: "3D pipeline"        },
   { href: "/episodes",label: "Episodes",      desc: "Queue & post"       },
@@ -195,6 +197,7 @@ function App() {
       <Router hook={useHashLocation}>
         <Layout>
           <Switch>
+            <Route path="/briefing" component={MorningBriefing} />
             <Route path="/"         component={StoryEngine}  />
             <Route path="/render"   component={RenderStudio} />
             <Route path="/episodes" component={EpisodeQueue} />

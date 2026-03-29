@@ -59,6 +59,7 @@ export interface KnowledgeEntry {
   learnedAt: string;
   updatedAt?: string;  // set when an existing entry is refreshed with new info
   weight: number; // 1-10, how relevant/important
+  status?: "active" | "archived"; // defaults to "active" for backward compat
 }
 
 // ── KB size configuration ─────────────────────────────────────
@@ -267,15 +268,16 @@ export function getPerformanceContext(limit = 5): string {
   return ctx;
 }
 
-/** Get top knowledge entries to inject as context */
+/** Get top knowledge entries to inject as context (active only) */
 export function getKnowledgeContext(limit = 8): string {
-  if (knowledge.entries.length === 0) return "";
+  const active = knowledge.entries.filter(e => (e.status ?? "active") === "active");
+  if (active.length === 0) return "";
 
-  const top = knowledge.entries
+  const top = active
     .sort((a, b) => b.weight - a.weight)
     .slice(0, limit);
 
-  let ctx = `\n=== KNOWLEDGE BASE (${knowledge.totalEntries} entries) ===\n`;
+  let ctx = `\n=== KNOWLEDGE BASE (${active.length} active entries) ===\n`;
   for (const e of top) {
     ctx += `[${e.category.toUpperCase()}] ${e.title}: ${e.summary}\n`;
   }
@@ -479,10 +481,11 @@ export function addKnowledge(entry: Omit<KnowledgeEntry, "id" | "learnedAt">): v
   save(KNOWLEDGE_FILE, knowledge);
 }
 
-/** Get all KB titles grouped by category (for exploration de-dup context) */
+/** Get all KB titles grouped by category (for exploration de-dup context, active only) */
 export function getKnowledgeTitles(): { category: string; titles: string[] }[] {
   const byCategory: Record<string, string[]> = {};
   for (const e of knowledge.entries) {
+    if ((e.status ?? "active") !== "active") continue;
     const cat = e.category ?? "other";
     if (!byCategory[cat]) byCategory[cat] = [];
     byCategory[cat].push(e.title ?? "(untitled)");
@@ -490,24 +493,60 @@ export function getKnowledgeTitles(): { category: string; titles: string[] }[] {
   return Object.entries(byCategory).map(([category, titles]) => ({ category, titles }));
 }
 
-/** Get a compact digest of existing KB for injection into exploration/research prompts */
+/** Get a compact digest of existing KB for injection into exploration/research prompts (active only) */
 export function getKnowledgeDigestForExploration(): string {
-  if (knowledge.entries.length === 0) return "Knowledge base is empty — everything is new.";
+  const active = knowledge.entries.filter(e => (e.status ?? "active") === "active");
+  if (active.length === 0) return "Knowledge base is empty — everything is new.";
 
   const byCategory: Record<string, KnowledgeEntry[]> = {};
-  for (const e of knowledge.entries) {
+  for (const e of active) {
     const cat = e.category ?? "other";
     if (!byCategory[cat]) byCategory[cat] = [];
     byCategory[cat].push(e);
   }
 
-  const lines: string[] = [`Agent #306 already knows ${knowledge.entries.length} things. By category:`];
+  const lines: string[] = [`Agent #306 already knows ${active.length} things. By category:`];
   for (const [cat, entries] of Object.entries(byCategory)) {
     // Show top 5 titles per category (by weight) so exploration can skip them
     const top = entries.sort((a, b) => b.weight - a.weight).slice(0, 5);
     lines.push(`[${cat.toUpperCase()}] (${entries.length} entries): ${top.map(e => e.title ?? "(untitled)").join("; ")}`);
   }
   return lines.join("\n");
+}
+
+/** Archive a knowledge entry by ID — moves it to long-term memory */
+export function archiveKnowledge(entryId: string): boolean {
+  const entry = knowledge.entries.find(e => e.id === entryId);
+  if (!entry) return false;
+  entry.status = "archived";
+  save(KNOWLEDGE_FILE, knowledge);
+  console.log(`[Memory] Archived: "${entry.title}"`);
+  return true;
+}
+
+/** Search archived entries by keyword/category — for on-demand deep context */
+export function searchArchive(query: string, limit = 10): KnowledgeEntry[] {
+  const q = query.toLowerCase();
+  const archived = knowledge.entries.filter(e => (e.status ?? "active") === "archived");
+  const scored = archived.map(e => {
+    let score = 0;
+    if (e.title?.toLowerCase().includes(q)) score += 3;
+    if (e.summary?.toLowerCase().includes(q)) score += 2;
+    if (e.category?.toLowerCase().includes(q)) score += 1;
+    return { entry: e, score };
+  }).filter(s => s.score > 0);
+  scored.sort((a, b) => b.score - a.score || b.entry.weight - a.entry.weight);
+  return scored.slice(0, limit).map(s => s.entry);
+}
+
+/** Get count of archived entries by category */
+export function getArchiveStats(): { total: number; byCategory: Record<string, number> } {
+  const archived = knowledge.entries.filter(e => (e.status ?? "active") === "archived");
+  const byCategory: Record<string, number> = {};
+  for (const e of archived) {
+    byCategory[e.category] = (byCategory[e.category] ?? 0) + 1;
+  }
+  return { total: archived.length, byCategory };
 }
 
 /** Get all memory state for the /api/house endpoint */
@@ -640,20 +679,26 @@ function analyzePatterns(): void {
 function getCategoryBreakdown(): Record<string, number> {
   const breakdown: Record<string, number> = {};
   for (const e of knowledge.entries) {
+    if ((e.status ?? "active") !== "active") continue;
     breakdown[e.category] = (breakdown[e.category] ?? 0) + 1;
   }
   return breakdown;
 }
 
 /** Decay knowledge entry weights over time so stale entries don't dominate context forever.
- *  Uses updatedAt (if set) instead of learnedAt, so refreshed entries stay relevant longer. */
+ *  Uses updatedAt (if set) instead of learnedAt, so refreshed entries stay relevant longer.
+ *  Auto-archives entries when weight drops below 3. */
 export function decayKnowledge(): void {
   const now        = Date.now();
   const TWO_WEEKS  = 14 * 24 * 60 * 60 * 1000;
   const FOUR_WEEKS = 28 * 24 * 60 * 60 * 1000;
   let changed = false;
+  let archived = 0;
 
   for (const entry of knowledge.entries) {
+    // Skip already-archived entries
+    if ((entry.status ?? "active") === "archived") continue;
+
     // Use the most recent timestamp (updatedAt or learnedAt) for decay calculation
     const referenceDate = entry.updatedAt ?? entry.learnedAt;
     const age = now - new Date(referenceDate).getTime();
@@ -664,13 +709,25 @@ export function decayKnowledge(): void {
       entry.weight = Math.max(4, entry.weight - 1); // -1 after 2 weeks
       changed = true;
     }
+
+    // Auto-archive when weight drops below 3
+    if (entry.weight < 3) {
+      entry.status = "archived";
+      archived++;
+      changed = true;
+    }
   }
 
   if (changed) {
     knowledge.lastIngested = new Date().toISOString();
     save(KNOWLEDGE_FILE, knowledge);
-    console.log("[Memory] Knowledge decay applied.");
+    console.log(`[Memory] Knowledge decay applied.${archived > 0 ? ` ${archived} entries archived.` : ""}`);
   }
+}
+
+/** Get count of active entries */
+export function getActiveKnowledgeCount(): number {
+  return knowledge.entries.filter(e => (e.status ?? "active") === "active").length;
 }
 
 // Export raw state for advanced use

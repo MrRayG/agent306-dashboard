@@ -19,7 +19,7 @@ import { scheduleWeeklyLeaderboard, postWeeklyLeaderboard, fetchLiveLeaderboard 
 import { scheduleFollowingSync, syncFollowing, getFollowingState, buildFollowingQuery, getPfpHolderUsernames, getFollowingUsernames } from "./followingSync";
 import { generateBoost } from "./boostEngine";
 import { generateVoiceClip, getVoiceQuota, getClip, getRecentClips } from "./voiceEngine";
-import { getMemoryState, recordPost, ratePost, performance as perfMemory, decayKnowledge, addKnowledge } from "./memoryEngine.js";
+import { getMemoryState, recordPost, ratePost, performance as perfMemory, decayKnowledge, addKnowledge, archiveKnowledge, searchArchive, getArchiveStats } from "./memoryEngine.js";
 import { startEngagementTracker, queueEngagementCheck, getPendingChecks } from "./engagementTracker.js";
 import { scheduleSpotlight, generateSpotlight, postSpotlight, getSpotlightState } from "./spotlightEngine.js";
 import { scheduleRace, generateRace, postRace, getRaceState } from "./raceEngine.js";
@@ -49,6 +49,7 @@ import {
 import { takeSnapshot, getEvolutionHistory, getLatestSnapshot, scheduleEvolutionTracking } from "./evolutionTracker.js";
 import { runResearchScan, getScannerState, scheduleResearchScan, scanGoalsForResearch } from "./researchScanner.js";
 import { generateArticleCard } from "./articleImageCard.js";
+import { runDailyCycle, getBriefingState, scheduleDailyCycle } from "./dailyCycleEngine.js";
 
 const NORMIES_API = "https://api.normies.art";
 
@@ -1046,6 +1047,11 @@ setTimeout(() => {
   scheduleWeeklyArticle(xWrite, process.env.GROK_API_KEY ?? "");
 }, 45_000);
 
+// ── DAILY CYCLE — 6am ET (10:00 UTC) daily ──────────────────────────────────
+setTimeout(() => {
+  scheduleDailyCycle();
+}, 50_000);
+
 // ── Editorial Summary Cache ─────────────────────────────────────────────────────
 // Decoupled from signal collection — generated async, served instantly from cache.
 // Prevents the digest endpoint from timing out while waiting for Grok.
@@ -1439,6 +1445,42 @@ export function registerRoutes(httpServer: Server, app: Express) {
   });
 
   // ── The House — live room data ──────────────────────────────────────────────
+  // ── Daily Briefing ─────────────────────────────────────────────────
+  app.get("/api/daily-briefing", (_req, res) => {
+    const s = getBriefingState();
+    res.json({
+      briefing: s.current,
+      lastRunAt: s.lastRunAt,
+      nextRunAt: s.nextRunAt,
+    });
+  });
+
+  app.get("/api/daily-briefing/history", (_req, res) => {
+    const s = getBriefingState();
+    res.json({ history: s.history });
+  });
+
+  app.post("/api/daily-briefing/run", async (_req, res) => {
+    res.json({ ok: true, message: "Daily cycle triggered" });
+    runDailyCycle().catch(e => console.error("[DailyCycle] Manual run error:", e));
+  });
+
+  // ── Knowledge Archive ─────────────────────────────────────────────
+  app.post("/api/knowledge/archive/:id", (req, res) => {
+    const ok = archiveKnowledge(req.params.id);
+    res.json({ ok });
+  });
+
+  app.get("/api/knowledge/archive/search", (req, res) => {
+    const query = (req.query.q as string) ?? "";
+    const limit = Number(req.query.limit) || 10;
+    res.json({ results: searchArchive(query, limit) });
+  });
+
+  app.get("/api/knowledge/archive/stats", (_req, res) => {
+    res.json(getArchiveStats());
+  });
+
   app.get("/api/house", (_req, res) => {
     const memState = getMemoryState();
     const communityCache = getCommunitySignalCache();
