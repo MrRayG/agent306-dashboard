@@ -23,6 +23,14 @@ interface ExplorationRun {
 interface ExplorationState {
   lastRunAt: string | null; totalRuns: number; history: ExplorationRun[]; isRunning: boolean;
 }
+interface AgentReachChannel {
+  active: boolean; ok: boolean; lastError?: string; lastSuccess?: string;
+  accounts?: number; channels?: number; feeds?: number;
+}
+interface AgentReachStatus {
+  enabled: boolean;
+  channels: { twitter: AgentReachChannel; youtube: AgentReachChannel; rss: AgentReachChannel };
+}
 
 const mono = { fontFamily: "'Courier New', monospace" } as const;
 
@@ -147,6 +155,11 @@ export default function AgentStatus() {
   const { data: explorationState, refetch: refetchExploration } = useQuery<ExplorationState>({
     queryKey: ["/api/exploration/state"],
     refetchInterval: 30_000,
+  });
+
+  const { data: agentReach } = useQuery<AgentReachStatus>({
+    queryKey: ["/api/exploration/agent-reach"],
+    refetchInterval: 60_000,
   });
 
   const snapshot = evolution?.snapshots?.[0] ?? null;
@@ -370,9 +383,10 @@ export default function AgentStatus() {
           <div style={{ border: "1px solid rgba(167,139,250,0.15)", background: "rgba(167,139,250,0.02)", padding: "1.25rem", marginBottom: "1.25rem" }}>
             <p style={{ ...mono, fontSize: "0.55rem", color: "rgba(167,139,250,0.5)", textTransform: "uppercase" as const, letterSpacing: "0.15em", marginBottom: "0.75rem" }}>Autonomous Exploration</p>
             <p style={{ ...mono, fontSize: "0.7rem", color: "rgba(227,229,228,0.6)", margin: 0, lineHeight: 1.7 }}>
-              Agent #306 explores 4 territories every day at 3am ET: AI World, Web3 World, Media Landscape, and Global Context.
+              Agent #306 explores 4 territories + 3 Agent-Reach channels every day at 3am ET.
+              Core territories: AI World, Web3 World, Media Landscape, Global Context.
+              Agent-Reach channels: Twitter Pulse, Video Intelligence, RSS Wire.
               Everything she finds gets extracted into her permanent knowledge base.
-              Click "Explore Now" to send her out immediately.
             </p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginTop: "1rem" }}>
               {["AI World", "Web3 World", "Media Landscape", "Global Context"].map(t => (
@@ -382,6 +396,52 @@ export default function AgentStatus() {
               ))}
             </div>
           </div>
+
+          {/* Agent-Reach Channels */}
+          {agentReach && (
+            <div style={{ border: "1px solid rgba(45,212,191,0.15)", background: "rgba(45,212,191,0.02)", padding: "1.25rem", marginBottom: "1.25rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+                <p style={{ ...mono, fontSize: "0.55rem", color: "rgba(45,212,191,0.5)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: 0 }}>
+                  Agent-Reach Channels
+                </p>
+                <span style={{
+                  ...mono, fontSize: "0.5rem",
+                  color: agentReach.enabled ? "#4ade80" : "rgba(227,229,228,0.3)",
+                  border: `1px solid ${agentReach.enabled ? "rgba(74,222,128,0.3)" : "rgba(227,229,228,0.1)"}`,
+                  padding: "1px 6px",
+                }}>
+                  {agentReach.enabled ? "ENABLED" : "DISABLED"}
+                </span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+                {([
+                  { key: "twitter" as const, label: "Twitter Pulse", icon: "X", detail: `${agentReach.channels.twitter.accounts ?? 0} accounts` },
+                  { key: "youtube" as const, label: "Video Intel", icon: "YT", detail: `${agentReach.channels.youtube.channels ?? 0} channels` },
+                  { key: "rss" as const, label: "RSS Wire", icon: "RSS", detail: `${agentReach.channels.rss.feeds ?? 0} feeds` },
+                ]).map(ch => {
+                  const status = agentReach.channels[ch.key];
+                  const statusColor = !status.active ? "rgba(227,229,228,0.2)" : status.ok ? "#4ade80" : "#fbbf24";
+                  return (
+                    <div key={ch.key} style={{ padding: "0.6rem 0.75rem", background: "rgba(45,212,191,0.03)", border: `1px solid rgba(45,212,191,0.1)` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                        <span style={{ ...mono, fontSize: "0.58rem", color: "#2dd4bf", fontWeight: 700 }}>{ch.label}</span>
+                        <div style={{ width: 6, height: 6, borderRadius: "50%", background: statusColor, flexShrink: 0 }} />
+                      </div>
+                      <p style={{ ...mono, fontSize: "0.5rem", color: "rgba(227,229,228,0.35)", margin: 0 }}>{ch.detail}</p>
+                      {status.lastSuccess && (
+                        <p style={{ ...mono, fontSize: "0.48rem", color: "rgba(227,229,228,0.2)", margin: "2px 0 0" }}>
+                          last: {new Date(status.lastSuccess).toLocaleDateString("en-US", { month: "short", day: "numeric" })} {new Date(status.lastSuccess).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                        </p>
+                      )}
+                      {status.lastError && !status.ok && (
+                        <p style={{ ...mono, fontSize: "0.48rem", color: "rgba(251,191,36,0.5)", margin: "2px 0 0" }}>{status.lastError}</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {explorationState?.isRunning && (
             <div style={{ padding: "1rem", background: "rgba(167,139,250,0.06)", border: "1px solid rgba(167,139,250,0.2)", marginBottom: "1rem", display: "flex", alignItems: "center", gap: 10 }}>
