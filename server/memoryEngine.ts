@@ -385,7 +385,8 @@ export function ratePost(tweetUrl: string, rating: number): void {
  * Normalize a title for fuzzy matching: lowercase, strip filler prefixes,
  * collapse whitespace, remove trailing punctuation.
  */
-function normalizeTitle(title: string): string {
+function normalizeTitle(title: string | null | undefined): string {
+  if (!title) return "";
   return title
     .toLowerCase()
     .replace(/^(conclusion|q&a|hypothesis|data|knowledge gap|exploration synthesis):\s*/i, "")
@@ -419,7 +420,10 @@ function titleSimilarity(a: string, b: string): number {
  */
 export function addKnowledge(entry: Omit<KnowledgeEntry, "id" | "learnedAt">): void {
   const now = new Date().toISOString();
-  const summary = entry.summary.length > 150 ? entry.summary.slice(0, 147) + "..." : entry.summary;
+  const summary = (entry.summary ?? "").length > 150 ? (entry.summary ?? "").slice(0, 147) + "..." : (entry.summary ?? "");
+
+  // Guard: skip entries with no usable title
+  if (!entry.title) return;
 
   // ── 1. Exact title match → refresh if content changed ──────────────────
   const exactMatch = knowledge.entries.find(e => e.title === entry.title);
@@ -438,7 +442,7 @@ export function addKnowledge(entry: Omit<KnowledgeEntry, "id" | "learnedAt">): v
 
   // ── 2. Fuzzy title match (same category, high word overlap) ────────────
   const fuzzyMatch = knowledge.entries.find(e =>
-    e.category === entry.category && titleSimilarity(e.title, entry.title) >= 0.7
+    e.title && e.category === entry.category && titleSimilarity(e.title, entry.title) >= 0.7
   );
   if (fuzzyMatch) {
     // Similar entry exists — update if the new info is at least as important
@@ -481,7 +485,7 @@ export function getKnowledgeTitles(): { category: string; titles: string[] }[] {
   for (const e of knowledge.entries) {
     const cat = e.category ?? "other";
     if (!byCategory[cat]) byCategory[cat] = [];
-    byCategory[cat].push(e.title);
+    byCategory[cat].push(e.title ?? "(untitled)");
   }
   return Object.entries(byCategory).map(([category, titles]) => ({ category, titles }));
 }
@@ -501,7 +505,7 @@ export function getKnowledgeDigestForExploration(): string {
   for (const [cat, entries] of Object.entries(byCategory)) {
     // Show top 5 titles per category (by weight) so exploration can skip them
     const top = entries.sort((a, b) => b.weight - a.weight).slice(0, 5);
-    lines.push(`[${cat.toUpperCase()}] (${entries.length} entries): ${top.map(e => e.title).join("; ")}`);
+    lines.push(`[${cat.toUpperCase()}] (${entries.length} entries): ${top.map(e => e.title ?? "(untitled)").join("; ")}`);
   }
   return lines.join("\n");
 }
