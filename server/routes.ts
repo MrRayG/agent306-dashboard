@@ -31,6 +31,7 @@ import { getVideoStats } from "./videoEngine.js";
 import { requestPost, registerPost, releasePost, getCoordinatorState, resetCooldown } from "./postCoordinator.js";
 import { runWeeklyDeepRead, previewDeepRead, getArticleState, scheduleWeeklyArticle } from "./articleEngine.js";
 import { runExploration, getExplorationState, scheduleExploration } from "./explorationEngine.js";
+import { getAgentReachStatus } from "./agentReachEngine.js";
 import { postCast, isFarcasterEnabled, getFarcasterState, setFarcasterEnabled, createSigner, getSignerStatus, fetchMentions, determineChannel, getStoredSignerUuid, storeSignerUuid, getVerifiedHandles, addVerifiedHandle, removeVerifiedHandle } from "./farcasterEngine.js";
 import {
   getResearchLab, addTopic, updateTopicStatus, getTopicById,
@@ -2946,6 +2947,11 @@ needsHelp: true only when you genuinely need his direction or information`,
         takeSnapshot();
       })
       .catch(e => console.error("[Exploration] Error:", e.message));
+  });
+
+  // ── Agent-Reach channel status ──────────────────────────────────────────────
+  app.get("/api/exploration/agent-reach", (_req, res) => {
+    res.json(getAgentReachStatus());
   });
 
     // ── GitHub Sync — push live Railway knowledge back to repo ───────────────

@@ -20,6 +20,7 @@
 import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { addKnowledge, getKnowledgeDigestForExploration } from "./memoryEngine.js";
+import { fetchTwitterFeed, fetchYouTubeTranscripts, fetchRSSFeeds, isAgentReachEnabled } from "./agentReachEngine.js";
 
 const GROK_CHAT_API      = "https://api.x.ai/v1/chat/completions";
 const GROK_RESPONSE_API  = "https://api.x.ai/v1/responses";
@@ -435,6 +436,79 @@ export async function runExploration(grokKey: string, pplxKey?: string): Promise
       await new Promise(r => setTimeout(r, 1500));
     }
   } catch (e: any) { console.warn("[Exploration] Academic error:", e.message); }
+
+  // ── Agent-Reach channels (Twitter Pulse, Video Intelligence, RSS Wire) ──────
+  if (isAgentReachEnabled()) {
+    console.log("[Exploration] Agent-Reach channels enabled — scanning...");
+
+    // Twitter Pulse — read key Web3/AI accounts via Jina Reader
+    try {
+      console.log("[Exploration] → Twitter Pulse (Agent-Reach)");
+      const twitterRaw = await fetchTwitterFeed();
+      if (twitterRaw && twitterRaw.length > 80) {
+        const { findings, knowledge } = await extractKnowledge(
+          twitterRaw, "web3_signal",
+          "recent tweets from key Web3/AI thought leaders on X/Twitter",
+          grokKey, existingKBDigest
+        );
+        allFindings.push(...findings);
+        allKnowledge.push(...knowledge);
+        scanned.push("Twitter Pulse");
+        console.log(`[Exploration] Twitter Pulse: ${findings.length} findings, ${knowledge.length} entries`);
+        await new Promise(r => setTimeout(r, 1500));
+      } else {
+        console.log("[Exploration] Twitter Pulse: no usable content");
+      }
+    } catch (e: any) {
+      console.warn("[Exploration] Twitter Pulse failed:", e.message);
+    }
+
+    // Video Intelligence — YouTube transcripts via RSS + Jina
+    try {
+      console.log("[Exploration] → Video Intelligence (Agent-Reach)");
+      const ytRaw = await fetchYouTubeTranscripts();
+      if (ytRaw && ytRaw.length > 80) {
+        const { findings, knowledge } = await extractKnowledge(
+          ytRaw, "media_intelligence",
+          "recent YouTube videos from key Web3/AI channels and podcasts",
+          grokKey, existingKBDigest
+        );
+        allFindings.push(...findings);
+        allKnowledge.push(...knowledge);
+        scanned.push("Video Intelligence");
+        console.log(`[Exploration] Video Intelligence: ${findings.length} findings, ${knowledge.length} entries`);
+        await new Promise(r => setTimeout(r, 1500));
+      } else {
+        console.log("[Exploration] Video Intelligence: no usable content");
+      }
+    } catch (e: any) {
+      console.warn("[Exploration] Video Intelligence failed:", e.message);
+    }
+
+    // RSS Wire — news feeds from crypto/AI outlets
+    try {
+      console.log("[Exploration] → RSS Wire (Agent-Reach)");
+      const rssRaw = await fetchRSSFeeds();
+      if (rssRaw && rssRaw.length > 80) {
+        const { findings, knowledge } = await extractKnowledge(
+          rssRaw, "media_intelligence",
+          "latest articles from crypto and AI news outlets via RSS feeds",
+          grokKey, existingKBDigest
+        );
+        allFindings.push(...findings);
+        allKnowledge.push(...knowledge);
+        scanned.push("RSS Wire");
+        console.log(`[Exploration] RSS Wire: ${findings.length} findings, ${knowledge.length} entries`);
+        await new Promise(r => setTimeout(r, 1500));
+      } else {
+        console.log("[Exploration] RSS Wire: no new content");
+      }
+    } catch (e: any) {
+      console.warn("[Exploration] RSS Wire failed:", e.message);
+    }
+  } else {
+    console.log("[Exploration] Agent-Reach channels disabled (AGENT_REACH_ENABLED=false)");
+  }
 
   for (const t of territories) {
     try {
