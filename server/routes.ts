@@ -50,6 +50,7 @@ import { takeSnapshot, getEvolutionHistory, getLatestSnapshot, scheduleEvolution
 import { runResearchScan, getScannerState, scheduleResearchScan, scanGoalsForResearch } from "./researchScanner.js";
 import { generateArticleCard } from "./articleImageCard.js";
 import { runDailyCycle, getBriefingState, scheduleDailyCycle } from "./dailyCycleEngine.js";
+import { getPublicStatus, getPublicProgress, getPublicActivity, getPublicGoals, getPublicResearch, getPublicHive } from "./publicApi.js";
 
 const NORMIES_API = "https://api.normies.art";
 
@@ -3461,6 +3462,58 @@ needsHelp: true only when you genuinely need his direction or information`,
         identity: { tokenId: 306, collection: "NORMIES", chain: "ethereum" },
         philosophy: "I don't predict the future. I build it.",
       });
+    }
+  });
+
+  // ── Public API endpoints (no auth — for agent306.ai) ──────────────
+
+  const publicCacheHeaders = { "Cache-Control": "public, max-age=30" };
+
+  app.get("/api/public/status", (_req, res) => {
+    try {
+      res.set(publicCacheHeaders).json(getPublicStatus());
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to fetch status" });
+    }
+  });
+
+  app.get("/api/public/progress", (_req, res) => {
+    try {
+      res.set(publicCacheHeaders).json(getPublicProgress());
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to fetch progress" });
+    }
+  });
+
+  app.get("/api/public/activity", (_req, res) => {
+    try {
+      res.set(publicCacheHeaders).json(getPublicActivity());
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to fetch activity" });
+    }
+  });
+
+  app.get("/api/public/goals", (_req, res) => {
+    try {
+      res.set(publicCacheHeaders).json(getPublicGoals());
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to fetch goals" });
+    }
+  });
+
+  app.get("/api/public/research", (_req, res) => {
+    try {
+      res.set(publicCacheHeaders).json(getPublicResearch());
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to fetch research" });
+    }
+  });
+
+  app.get("/api/public/hive", (_req, res) => {
+    try {
+      res.set(publicCacheHeaders).json(getPublicHive());
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to fetch hive status" });
     }
   });
 
