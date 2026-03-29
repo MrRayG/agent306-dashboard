@@ -44,11 +44,12 @@ const DEFAULT_TWITTER_ACCOUNTS = [
   "APompliano",
   "saylor",
   "a16z",
-  // ── NORMIES Ecosystem ──
-  "normiesART",
   "BoredApeGazette",
   "punk6529",
   "ai16zdao",
+  // ── NORMIES Ecosystem ──
+  "serc1n",
+  "normiesART",
 ];
 
 const DEFAULT_YOUTUBE_CHANNELS: { name: string; channelId: string }[] = [
