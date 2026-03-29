@@ -268,6 +268,19 @@ export default function PodcastStudio() {
     setWorking(null);
   }
 
+  async function regenerateScript(id: string) {
+    setWorking(`regenerate-${id}`);
+    toast({ title: "Regenerating script...", description: "Agent #306 writing a fresh take via Grok — ~30 seconds" });
+    try {
+      await apiRequest("POST", `/api/podcast/episodes/${id}/regenerate-script`, {});
+      toast({ title: "Script regenerated", description: "New draft ready for review" });
+      refetchAll();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+    setWorking(null);
+  }
+
   async function reviewEpisode(id: string, decision: "reviewed" | "shelved", notes?: string) {
     setWorking(`review-${id}`);
     try {
@@ -468,6 +481,7 @@ export default function PodcastStudio() {
             working={working}
             onScanTopics={scanTopics}
             onGenerateScript={generateScript}
+            onRegenerateScript={regenerateScript}
             onReview={reviewEpisode}
             onExportScript={exportScript}
             onMarkProduced={markProduced}
@@ -481,6 +495,7 @@ export default function PodcastStudio() {
             episodes={hiveEpisodes}
             working={working}
             onGenerateScript={generateScript}
+            onRegenerateScript={regenerateScript}
             onReview={reviewEpisode}
             onExportScript={exportScript}
             onMarkProduced={markProduced}
@@ -513,6 +528,7 @@ function SignalTab({
   working,
   onScanTopics,
   onGenerateScript,
+  onRegenerateScript,
   onReview,
   onExportScript,
   onMarkProduced,
@@ -524,6 +540,7 @@ function SignalTab({
   working: string | null;
   onScanTopics: () => void;
   onGenerateScript: (id: string) => void;
+  onRegenerateScript: (id: string) => void;
   onReview: (id: string, decision: "reviewed" | "shelved", notes?: string) => void;
   onExportScript: (id: string, title: string) => void;
   onMarkProduced: (id: string) => void;
@@ -567,6 +584,7 @@ function SignalTab({
         accentColor={ORANGE}
         working={working}
         onGenerateScript={onGenerateScript}
+        onRegenerateScript={onRegenerateScript}
         onReview={onReview}
         onExportScript={onExportScript}
         onMarkProduced={onMarkProduced}
@@ -584,6 +602,7 @@ function HiveTab({
   episodes,
   working,
   onGenerateScript,
+  onRegenerateScript,
   onReview,
   onExportScript,
   onMarkProduced,
@@ -594,6 +613,7 @@ function HiveTab({
   episodes: any[];
   working: string | null;
   onGenerateScript: (id: string) => void;
+  onRegenerateScript: (id: string) => void;
   onReview: (id: string, decision: "reviewed" | "shelved", notes?: string) => void;
   onExportScript: (id: string, title: string) => void;
   onMarkProduced: (id: string) => void;
@@ -650,6 +670,7 @@ function HiveTab({
         accentColor={GREEN}
         working={working}
         onGenerateScript={onGenerateScript}
+        onRegenerateScript={onRegenerateScript}
         onReview={onReview}
         onExportScript={onExportScript}
         onMarkProduced={onMarkProduced}
@@ -781,6 +802,7 @@ function EpisodePipeline({
   accentColor,
   working,
   onGenerateScript,
+  onRegenerateScript,
   onReview,
   onExportScript,
   onMarkProduced,
@@ -790,6 +812,7 @@ function EpisodePipeline({
   accentColor: string;
   working: string | null;
   onGenerateScript: (id: string) => void;
+  onRegenerateScript: (id: string) => void;
   onReview: (id: string, decision: "reviewed" | "shelved", notes?: string) => void;
   onExportScript: (id: string, title: string) => void;
   onMarkProduced: (id: string) => void;
@@ -951,6 +974,13 @@ function EpisodePipeline({
                               {expandedScript === ep.id ? "HIDE SCRIPT" : "REVIEW SCRIPT"}
                             </ActionButton>
                             <ActionButton
+                              onClick={() => onRegenerateScript(ep.id)}
+                              color={YELLOW}
+                              disabled={working === `regenerate-${ep.id}`}
+                            >
+                              {working === `regenerate-${ep.id}` ? "REGENERATING..." : "↻ REGENERATE"}
+                            </ActionButton>
+                            <ActionButton
                               onClick={() => onReview(ep.id, "reviewed")}
                               color={GREEN}
                               disabled={working === `review-${ep.id}`}
@@ -974,6 +1004,13 @@ function EpisodePipeline({
                               color={BLUE}
                             >
                               ↓ EXPORT SCRIPT
+                            </ActionButton>
+                            <ActionButton
+                              onClick={() => onRegenerateScript(ep.id)}
+                              color={YELLOW}
+                              disabled={working === `regenerate-${ep.id}`}
+                            >
+                              {working === `regenerate-${ep.id}` ? "REGENERATING..." : "↻ REGENERATE"}
                             </ActionButton>
                             <ActionButton
                               onClick={() => onMarkProduced(ep.id)}
