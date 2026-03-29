@@ -142,7 +142,7 @@ const QUICK_PROMPTS = [
   "What should NORMIES TV post about today?",
   "Do you feel ready to be the CNN of Web3?",
   "What gaps in your knowledge do you need filled?",
-  "How are the 8,500 agents going to change media?",
+  "How are the 10,000 agents going to change media?",
 ];
 
 // ── Main ───────────────────────────────────────────────────────────────────────
