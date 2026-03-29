@@ -51,6 +51,11 @@ import { runResearchScan, getScannerState, scheduleResearchScan, scanGoalsForRes
 import { generateArticleCard } from "./articleImageCard.js";
 import { runDailyCycle, getBriefingState, scheduleDailyCycle } from "./dailyCycleEngine.js";
 import { getPublicStatus, getPublicProgress, getPublicActivity, getPublicGoals, getPublicResearch, getPublicHive } from "./publicApi.js";
+import { getReflections, getStyleRules, deleteStyleRule, runReflection } from "./reflectionEngine.js";
+import { getDebates, getContradictions, runDebate, resolveContradiction, runConfidenceDecay, getDecayingEntries } from "./reasoningEngine.js";
+import { getConnections, getReports, runConnectionScan, generateSynthesis } from "./synthesisEngine.js";
+import { getInsights, getRelationships, extractInsights, analyzeRelationships } from "./conversationLearningEngine.js";
+import { getMetacognitionState } from "./metacognitionEngine.js";
 
 const NORMIES_API = "https://api.normies.art";
 
@@ -3515,6 +3520,162 @@ needsHelp: true only when you genuinely need his direction or information`,
     } catch (e: any) {
       res.status(500).json({ error: "Failed to fetch hive status" });
     }
+  });
+
+  // ── Reflection Engine (The Mirror) ────────────────────────────────────────
+
+  app.get("/api/reflections", (_req, res) => {
+    try { res.json({ reflections: getReflections() }); }
+    catch (e: any) { res.status(500).json({ error: "Failed to fetch reflections" }); }
+  });
+
+  app.get("/api/reflections/rules", (_req, res) => {
+    try { res.json({ rules: getStyleRules() }); }
+    catch (e: any) { res.status(500).json({ error: "Failed to fetch style rules" }); }
+  });
+
+  app.post("/api/reflections/run", requireDashAuth, async (_req, res) => {
+    try {
+      const results = await runReflection();
+      res.json({ reflections: results, count: results.length });
+    } catch (e: any) {
+      res.status(500).json({ error: "Reflection failed: " + e.message });
+    }
+  });
+
+  app.delete("/api/reflections/rules/:id", requireDashAuth, (req, res) => {
+    try {
+      const ok = deleteStyleRule(req.params.id);
+      res.json({ ok });
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to delete rule" });
+    }
+  });
+
+  // ── Reasoning Engine (The Forge) ────────────────────────────────────────
+
+  app.get("/api/reasoning/debates", (_req, res) => {
+    try { res.json({ debates: getDebates() }); }
+    catch (e: any) { res.status(500).json({ error: "Failed to fetch debates" }); }
+  });
+
+  app.post("/api/reasoning/debate/:topicId", requireDashAuth, async (req, res) => {
+    try {
+      const { topicType, title, text } = req.body as { topicType?: string; title?: string; text?: string };
+      if (!title || !text) return res.status(400).json({ error: "title and text required" });
+      const debate = await runDebate(
+        req.params.topicId,
+        (topicType as "manuscript" | "hypothesis") ?? "manuscript",
+        title,
+        text,
+      );
+      if (!debate) return res.status(500).json({ error: "Debate generation failed" });
+      res.json({ debate });
+    } catch (e: any) {
+      res.status(500).json({ error: "Debate failed: " + e.message });
+    }
+  });
+
+  app.get("/api/reasoning/contradictions", (_req, res) => {
+    try { res.json({ contradictions: getContradictions() }); }
+    catch (e: any) { res.status(500).json({ error: "Failed to fetch contradictions" }); }
+  });
+
+  app.post("/api/reasoning/contradictions/:id/resolve", requireDashAuth, (req, res) => {
+    try {
+      const { resolution } = req.body as { resolution?: string };
+      if (!resolution) return res.status(400).json({ error: "resolution required" });
+      const ok = resolveContradiction(
+        req.params.id,
+        resolution as "keep_new" | "keep_old" | "keep_both" | "merge",
+      );
+      res.json({ ok });
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to resolve contradiction" });
+    }
+  });
+
+  app.post("/api/reasoning/decay-check", requireDashAuth, async (_req, res) => {
+    try {
+      const result = runConfidenceDecay();
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ error: "Decay check failed: " + e.message });
+    }
+  });
+
+  app.get("/api/reasoning/decaying", (_req, res) => {
+    try { res.json({ entries: getDecayingEntries() }); }
+    catch (e: any) { res.status(500).json({ error: "Failed to fetch decaying entries" }); }
+  });
+
+  // ── Synthesis Engine (The Nexus) ────────────────────────────────────────
+
+  app.get("/api/synthesis/connections", (_req, res) => {
+    try { res.json({ connections: getConnections() }); }
+    catch (e: any) { res.status(500).json({ error: "Failed to fetch connections" }); }
+  });
+
+  app.post("/api/synthesis/scan", requireDashAuth, async (_req, res) => {
+    try {
+      const newConns = await runConnectionScan();
+      res.json({ connections: newConns, count: newConns.length });
+    } catch (e: any) {
+      res.status(500).json({ error: "Scan failed: " + e.message });
+    }
+  });
+
+  app.get("/api/synthesis/reports", (_req, res) => {
+    try { res.json({ reports: getReports() }); }
+    catch (e: any) { res.status(500).json({ error: "Failed to fetch reports" }); }
+  });
+
+  app.post("/api/synthesis/generate", requireDashAuth, async (req, res) => {
+    try {
+      const { entryIds } = req.body as { entryIds?: string[] };
+      const report = await generateSynthesis(entryIds);
+      if (!report) return res.status(500).json({ error: "Synthesis generation failed" });
+      res.json({ report });
+    } catch (e: any) {
+      res.status(500).json({ error: "Synthesis failed: " + e.message });
+    }
+  });
+
+  // ── Conversation Learning Engine (The Network) ──────────────────────────
+
+  app.get("/api/conversations/insights", (_req, res) => {
+    try { res.json({ insights: getInsights() }); }
+    catch (e: any) { res.status(500).json({ error: "Failed to fetch insights" }); }
+  });
+
+  app.post("/api/conversations/extract", requireDashAuth, async (_req, res) => {
+    try {
+      const results = await extractInsights();
+      res.json({ insights: results, count: results.length });
+    } catch (e: any) {
+      res.status(500).json({ error: "Extraction failed: " + e.message });
+    }
+  });
+
+  app.get("/api/conversations/relationships", (_req, res) => {
+    try { res.json({ relationships: getRelationships() }); }
+    catch (e: any) { res.status(500).json({ error: "Failed to fetch relationships" }); }
+  });
+
+  app.post("/api/conversations/analyze", requireDashAuth, async (_req, res) => {
+    try {
+      const results = await analyzeRelationships();
+      res.json({ relationships: results, count: results.length });
+    } catch (e: any) {
+      res.status(500).json({ error: "Analysis failed: " + e.message });
+    }
+  });
+
+  // ── Metacognition (The Mind) ────────────────────────────────────────────
+
+  app.get("/api/metacognition", (_req, res) => {
+    try { res.json(getMetacognitionState()); }
+    catch (e: any) { res.status(500).json({ error: "Failed to fetch metacognition state" }); }
   });
 
     // ── Seed demo data ────────────────────────────────────────────────
