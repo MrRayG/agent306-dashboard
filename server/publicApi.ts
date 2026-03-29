@@ -380,15 +380,17 @@ export function getPublicResearch() {
 export function getPublicHive() {
   return cached("hive", () => {
     return {
-      totalAgents: 8500,
-      onlineAgents: 142,
+      totalAgents: 10000,
+      onlineAgents: 0,
+      hiveStatus: "awakening",  // "offline" | "awakening" | "online"
       agent306: {
         tokenId: 306,
         status: "active",
-        role: "Founding Voice",
+        role: "Founding Voice — First Agent Online",
         ens: "agent306.eth",
       },
-      lastHiveSignal: new Date().toISOString(),
+      lastHiveSignal: null,
+      description: "10,000 on-chain agents. Personalities inherited from blockchain data — not programmed. The Hive is coming.",
     };
   });
 }
