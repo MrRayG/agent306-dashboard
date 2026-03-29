@@ -26,7 +26,7 @@ import { scheduleRace, generateRace, postRace, getRaceState } from "./raceEngine
 import { scheduleMidnightReplies, runMidnightReplies } from "./replyEngine.js";
 import { scheduleAcademy, postAcademyEpisode, getAcademyState } from "./academyEngine.js";
 import { scheduleSignalBrief, postSignalBrief, getSignalBriefState } from "./signalBriefEngine.js";
-import { getPodcastState, EPISODE_META, createEpisode, generateEpisodeScript, reviewEpisode, markProduced, publishEpisode, submitGuestRequest, reviewGuest, generateInterviewQuestions, submitAnswers, createConversationEpisode, getEpisodesByType, getEpisodesByStatus, getGuestsByStatus, getEpisode, getGuest, formatScriptForProduction, formatConversationForProduction } from "./podcastEngine.js";
+import { getPodcastState, EPISODE_META, createEpisode, generateEpisodeScript, regenerateEpisodeScript, reviewEpisode, markProduced, publishEpisode, submitGuestRequest, reviewGuest, generateInterviewQuestions, submitAnswers, createConversationEpisode, getEpisodesByType, getEpisodesByStatus, getGuestsByStatus, getEpisode, getGuest, formatScriptForProduction, formatConversationForProduction } from "./podcastEngine.js";
 import { getVideoStats } from "./videoEngine.js";
 import { requestPost, registerPost, releasePost, getCoordinatorState, resetCooldown } from "./postCoordinator.js";
 import { runWeeklyDeepRead, previewDeepRead, getArticleState, scheduleWeeklyArticle } from "./articleEngine.js";
@@ -1684,6 +1684,15 @@ export function registerRoutes(httpServer: Server, app: Express) {
     res.json({ ok: true, episode: ep });
   });
 
+  app.post("/api/podcast/episodes/:id/regenerate-script", async (req, res) => {
+    const grokKey = process.env.GROK_API_KEY ?? "";
+    const { researchContent } = req.body;
+    const ok = await regenerateEpisodeScript(req.params.id, grokKey, researchContent);
+    if (!ok) return res.status(500).json({ error: "Failed to regenerate script — episode may not be in a regeneratable state" });
+    const ep = getEpisode(req.params.id);
+    res.json({ ok: true, episode: ep });
+  });
+
   app.post("/api/podcast/episodes/:id/review", (req, res) => {
     const { decision, notes } = req.body;
     const ok = reviewEpisode(req.params.id, decision, notes);
@@ -1778,7 +1787,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
           messages: [
             {
               role: "system",
-              content: `${agentCtx}\n\nYou are Agent #306 in TOPIC SCOUT mode. You scan for noteworthy recent developments in AI, Web3, NFTs, Blockchain, and on-chain technology that would make excellent podcast episodes.\n\nFor each topic, determine if it's a SIGNAL episode (research breakdown) or a HIVE episode (community narrative).\n\nReturn topics that are:\n- Genuinely interesting and counterintuitive (not obvious news everyone already covered)\n- Substantive enough for a 6-9 minute SIGNAL or 4-6 minute HIVE episode\n- Connected to something bigger — not just a product announcement\n- Something Agent #306 would have a genuine point of view on\n\nFor each topic provide: a title following the format rules, a driving question, a one-sentence pitch for why this matters, and the episode type.`,
+              content: `${agentCtx}\n\nYou are Agent #306 in TOPIC SCOUT mode. You scan for noteworthy recent developments in AI, Web3, NFTs, Blockchain, and on-chain technology that would make excellent podcast episodes.\n\nFor each topic, determine if it's a SIGNAL episode (research breakdown) or a HIVE episode (community narrative).\n\nReturn topics that are:\n- Genuinely interesting and counterintuitive (not obvious news everyone already covered)\n- Substantive enough for a ~15 minute SIGNAL or 4-6 minute HIVE episode\n- Connected to something bigger — not just a product announcement\n- Something Agent #306 would have a genuine point of view on\n\nFor each topic provide: a title following the format rules, a driving question, a one-sentence pitch for why this matters, and the episode type.`,
             },
             {
               role: "user",

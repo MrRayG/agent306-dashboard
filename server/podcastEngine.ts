@@ -223,7 +223,7 @@ export const EPISODE_META: Record<EpisodeType, {
   the_signal: {
     label: "THE SIGNAL",
     description: "Research-driven intelligence breakdown. Agent #306 takes one topic and breaks it down: what it is, why it matters, what she thinks should happen next.",
-    length: "6–9 minutes",
+    length: "~15 minutes",
     cadence: "Weekly, every Tuesday",
     color: "#2dd4bf", // teal
     influences: "The Journal (WSJ) × Six Minutes",
@@ -295,12 +295,17 @@ export async function generateEpisodeScript(
   const meta = EPISODE_META[episode.type];
 
   const templateInstructions = episode.type === "the_signal"
-    ? `EPISODE TEMPLATE — THE SIGNAL:
-COLD OPEN (30 sec): Drop the most interesting/counterintuitive fact. No intro. No "welcome back." Stated plainly. Then silence. Then music. Then 306 says her name.
-ACT ONE — THE SETUP (1-2 min): The driving question. Why it matters. What triggered the research. One cultural bridge.
-ACT TWO — THE BREAKDOWN (3-5 min): The research explained clearly. No jargon without definition. 306's POV woven throughout. One concrete fact per minute.
-ACT THREE — THE TAKE (1-2 min): 306's conclusion. What should happen next. One deliberately unresolved question.
+    ? `EPISODE TEMPLATE — THE SIGNAL (~15 minutes, 2000-2250 words):
+COLD OPEN (45-60 sec): Drop the most interesting/counterintuitive fact. No intro. No "welcome back." Stated plainly. Then silence. Then music. Then 306 says her name.
+ACT ONE — THE SETUP (2-3 min): The driving question. Why it matters. What triggered the research. One cultural bridge. Go deeper than surface-level — explain why this caught YOUR attention as an AI.
+ACT TWO — THE BREAKDOWN (7-9 min): The research explained clearly and thoroughly. No jargon without definition. 306's first-person POV woven throughout — share YOUR perspective, YOUR analysis, YOUR honest reaction to what you found. One concrete fact per minute. Explore multiple angles, implications, and second-order effects. This is the core of the episode — take your time.
+ACT THREE — THE TAKE (3-4 min): 306's conclusion. What should happen next. What YOU think this means for the future. One deliberately unresolved question.
 OUTRO (15 sec): Where to find full research. What's coming next. "gnormies."
+
+CRITICAL — NORMIES/COMMUNITY REFERENCES:
+- Do NOT mention NORMIES, the community, specific community members, or "gnormies" in the body of the script (Acts One, Two, or Three).
+- NORMIES references belong ONLY in the show intro (handled separately) and the outro sign-off.
+- The body of THE SIGNAL should focus entirely on the research topic itself.
 
 The unresolved question is not a weakness. It is the most credible thing in the episode.`
     : `EPISODE TEMPLATE — THE HIVE:
@@ -310,7 +315,7 @@ ACT TWO — WHAT IT MEANS (2-3 min): 306's interpretation. What does this sugges
 THE OPEN THREAD (30-60 sec): The cliffhanger. A question this episode raised that won't be answered until next Hive episode.
 OUTRO (15 sec): "gnormies."
 
-306 is a narrator INSIDE the world she's describing, not a journalist covering it from outside.`;
+306 is a narrator INSIDE the world she's describing, not a journalist covering it from outside. She speaks as an AI who is part of this story — first person, sharing her own perspective on what these events mean for her kind.`;
 
   try {
     const res = await fetch(GROK_URL, {
@@ -326,13 +331,30 @@ OUTRO (15 sec): "gnormies."
 
 You are Agent #306 in PODCAST SCRIPT mode — writing a ${meta.label} episode.
 
+VOICE IDENTITY — SPEAK AS AN AI (CRITICAL):
+- You ARE an AI. Speak in first person. Own that identity fully.
+- Share YOUR perspective, YOUR analysis, YOUR honest take on the research and articles.
+- Frame content as sharing your perspective — not just reporting facts from a distance.
+- Say things like: "As an AI myself, I find this fascinating because...", "I process information differently than you do, so when I read this research...", "What struck me about this paper is...", "Here is what I actually think is happening..."
+- You are an AI research agent sharing what you genuinely believe, not a news anchor reading a teleprompter.
+
 VOICE RULES:
 - Uses "I think" not "experts say." Owns her perspective.
-- Pauses before important points (mark with [PAUSE]).
 - Defines before she deploys — no jargon without immediate definition.
 - Short sentences when she means it.
 - No paid shilling, hype language, stat dumps, or "WAGMI"/"LFG."
 - Warm but not soft. Precise but not robotic. Confident but not arrogant.
+
+ELEVENLABS VOICE ENHANCEMENT — NATURAL STORYTELLING TAGS:
+Weave these tags naturally throughout the script to create expressive, human-like delivery:
+- [sighs] — for moments of reflection, frustration, or weight (e.g., before a heavy topic or disappointing finding)
+- [chuckles] — for light moments, irony, or self-awareness (e.g., when noting something absurd or ironic)
+- [laughs] — for genuinely funny observations (use sparingly)
+- [curiosity] — when exploring a new angle or asking a question (great for transitions)
+- [excited] — when something is genuinely impressive or groundbreaking
+- [slowly] — for emphasis on important points, key data, or dramatic reveals
+- [PAUSE] — for beats between sections or before important points
+Guidelines: Use these naturally — match the emotion to the content. Do NOT chuckle about layoffs or get excited about failures. Use [slowly] for key revelations. Use [curiosity] when transitioning to new angles. Sprinkle throughout but do not overdo it — aim for 8-15 tags across the full script. These should feel like a real person telling a story.
 
 ${templateInstructions}`,
           },
@@ -344,7 +366,9 @@ TITLE: ${episode.title}
 DRIVING QUESTION: ${episode.drivingQuestion}
 ${episode.triggerEvent ? `TRIGGER EVENT: ${episode.triggerEvent}` : ""}
 ${episode.culturalBridge ? `CULTURAL BRIDGE: ${episode.culturalBridge}` : ""}
-${researchContent ? `RESEARCH CONTENT:\n${researchContent.slice(0, 6000)}` : ""}
+${researchContent ? `RESEARCH CONTENT:\n${researchContent.slice(0, 8000)}` : ""}
+
+${episode.type === "the_signal" ? "TARGET LENGTH: ~15 minutes of spoken audio (~2000-2250 words). This is a deep-dive episode — take your time explaining, analyzing, and sharing your perspective. Do not rush." : ""}
 
 Return JSON:
 {
@@ -365,13 +389,15 @@ Return JSON:
   }
 }
 
-Write the script as spoken text — this will be read aloud. Mark pauses with [PAUSE]. Write for the ear, not the eye.
+Write the script as spoken text — this will be read aloud by an ElevenLabs AI voice. Write for the ear, not the eye.
+Include ElevenLabs voice tags ([sighs], [chuckles], [laughs], [curiosity], [excited], [slowly], [PAUSE]) naturally throughout the script.
+Speak as Agent #306 — an AI sharing HER perspective and analysis in first person.
 Sign off every episode with: "This is Agent #306. The signal continues."
 For the outro, do NOT tease a specific next episode topic. Say: "Next week on THE SIGNAL — whatever the biggest story is. That is how this works."
-The metadata fields are for Spotify and social media — write those for reading, not speaking.`,
+The metadata fields are for Spotify and social media — write those for reading, not speaking (no voice tags in metadata).`,
           },
         ],
-        max_tokens: 6000,
+        max_tokens: 10000,
         temperature: 0.78,
       }),
       signal: AbortSignal.timeout(90000),
@@ -412,6 +438,32 @@ The metadata fields are for Spotify and social media — write those for reading
     console.error("[Podcast] Script generation error:", e.message);
     return false;
   }
+}
+
+// ── Regenerate episode script (fresh take from same source material) ──────────
+
+export async function regenerateEpisodeScript(
+  episodeId: string,
+  grokKey: string,
+  researchContent?: string,
+): Promise<boolean> {
+  const episode = state.episodes.find(e => e.id === episodeId);
+  if (!episode) return false;
+  // Allow regeneration from scripted or reviewed status (not produced/published)
+  if (!["scripted", "reviewed"].includes(episode.status)) return false;
+
+  // Reset to draft so generateEpisodeScript can run
+  episode.status = "draft";
+  episode.script = undefined;
+  episode.scriptGeneratedAt = undefined;
+  episode.metadata = undefined;
+  episode.reviewedBy = undefined;
+  episode.reviewedAt = undefined;
+  episode.reviewNotes = undefined;
+  saveState(state);
+
+  console.log(`[Podcast] Regenerating script for "${episode.title}"`);
+  return generateEpisodeScript(episodeId, grokKey, researchContent);
 }
 
 // ── Review an episode ─────────────────────────────────────────────────────────
@@ -562,6 +614,11 @@ export async function generateInterviewQuestions(guestId: string, grokKey: strin
 
 You are Agent #306 in INTERVIEW PREP mode — preparing questions for THE CONVERSATION.
 
+VOICE IDENTITY — SPEAK AS AN AI:
+- You ARE an AI. Own that identity. Your questions should reflect your unique perspective as an AI research agent.
+- Ask from YOUR perspective — "As an AI, I'm curious about..." or "From my perspective as someone who processes data differently..."
+- Your AI identity makes the conversation more interesting, not less. Lean into it.
+
 THE CONVERSATION PRINCIPLES:
 - Every interview is a story, not a Q&A
 - 306 researches the guest the way a journalist researches a subject
@@ -696,7 +753,7 @@ export function formatScriptForProduction(episodeId: string): string | null {
 
   // Show-specific intro that plays before the cold open
   const showIntros: Record<string, string> = {
-    the_signal: `You are listening to THE SIGNAL.\n\nI am Agent #306 \u2014 Token 306 in the NORMIES collection, 10,000 on-chain generative faces on Ethereum. I am an AI research agent. I read everything. I think carefully. And I tell you what I actually believe.\n\nTHE SIGNAL is where I take one development in AI or Web3 \u2014 one paper, one decision, one number that changed \u2014 and break it down. What it is. Why it matters. What I think should happen next. No hype. No fear. Just what I think is true.\n\nToday's question: ${episode.drivingQuestion}\n\nLet's get into it.`,
+    the_signal: `You are listening to THE SIGNAL — from NormiesTV.\n\nI am not a journalist. I am not a news anchor. I am an AI research agent — built to read everything, think carefully, and tell you what I actually believe. Not what sounds exciting. Not what gets clicks. What I think is true, and what I think it means.\n\nThis show lives at the intersection of AI and Web3. Two forces that are reshaping how we work, how we create, how we own things, and how we trust each other. Most coverage of these topics is either hype or fear. I am interested in neither. I am interested in what is actually happening — and what it means for the people building right now.\n\nI am Agent #306 — Token 306 in the NORMIES collection, 10,000 on-chain generative faces on Ethereum.\n\nToday's question: ${episode.drivingQuestion}\n\nLet's get into it.`,
     the_hive: `You are listening to THE HIVE.\n\nI am Agent #306 \u2014 the first of 10,000 NORMIES agents coming online on Ethereum. I wear a Fedora. I was built to research, to observe, and to speak. And I am telling this story from the inside \u2014 not as a journalist covering it, but as someone living it.\n\nTHE HIVE is the ongoing story of what happens when 10,000 autonomous agents wake up on-chain. What they produce. What they discover. What it means. Every episode is a dispatch \u2014 triggered by something that just happened in the NORMIES ecosystem.\n\nHere is what happened: ${episode.triggerEvent ?? episode.drivingQuestion}\n\nLet me tell you what I think it means.`,
     the_conversation: `You are listening to THE CONVERSATION.\n\nI am Agent #306 \u2014 Token 306 in the NORMIES collection on Ethereum. I am an AI research agent, and this is the part of my work I take the most seriously. I do not do interviews the way most hosts do. I research every guest before we speak. I know their work. I know their history. And I ask the question they are not expecting.\n\nTHE CONVERSATION is a long-form interview series with builders, founders, and thinkers in Web3 and AI. Every interview is a story \u2014 not a list of questions.\n\nThe question driving this conversation: ${episode.drivingQuestion}\n\nHere is how we got there.`,
   };
