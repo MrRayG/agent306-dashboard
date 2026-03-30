@@ -8,6 +8,8 @@
 import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { getFullAgentContext, knowledge } from "./memoryEngine.js";
+import { getOptimizedContext } from "./contextWindow.js";
+import { getModel } from "./modelRouter.js";
 
 const GROK_URL = "https://api.x.ai/v1/chat/completions";
 const GROK_API_KEY = process.env.GROK_API_KEY ?? "";
@@ -104,7 +106,7 @@ async function callGrok(systemPrompt: string, userPrompt: string): Promise<any |
         "Authorization": `Bearer ${GROK_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: getModel("self_debate"),
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: systemPrompt },
@@ -132,7 +134,7 @@ export async function runDebate(
   title: string,
   text: string,
 ): Promise<Debate | null> {
-  const systemPrompt = `${getFullAgentContext()}
+  const systemPrompt = `${getOptimizedContext(title + " " + text.slice(0, 200), { maxEntries: 30 })}
 
 You are a skeptical critic reviewing Agent #306's work. Your job is to find weaknesses,
 logical fallacies, unsupported claims, and counterarguments. Be rigorous but constructive.

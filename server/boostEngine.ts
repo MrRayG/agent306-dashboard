@@ -31,6 +31,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { getSlimAgentContext } from "./memoryEngine.js";
+import { getModel } from "./modelRouter.js";
 
 const GROK_CHAT_API     = "https://api.x.ai/v1/chat/completions";
 const GROK_RESPONSE_API = "https://api.x.ai/v1/responses";
@@ -88,7 +89,7 @@ async function readTweetWithXSearch(url: string, apiKey: string): Promise<{
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: getModel("boost"),
         stream: false,
         input: [{
           role: "user",
@@ -193,7 +194,7 @@ Community tone: ${tweetData.communityMood}`.trim()
       "Authorization": `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "grok-3-fast",
+      model: getModel("boost"),
       response_format: { type: "json_object" },
       messages: [
         {

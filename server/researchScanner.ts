@@ -22,6 +22,7 @@
 import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { addTopic, getResearchLab } from "./researchEngine.js";
+import { getModel } from "./modelRouter.js";
 
 const GROK_CHAT_API  = "https://api.x.ai/v1/chat/completions";
 const KNOWLEDGE_FILE = dataPath("memory_knowledge.json");
@@ -175,7 +176,7 @@ export async function runResearchScan(grokKey: string): Promise<ScanResult> {
       method:  "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
       body: JSON.stringify({
-        model:           "grok-3",
+        model:           getModel("research_scan"),
         response_format: { type: "json_object" },
         messages: [{
           role:    "system",
@@ -352,7 +353,7 @@ export async function scanGoalsForResearch(grokKey: string): Promise<GoalScanRes
         method:  "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
         body: JSON.stringify({
-          model:           "grok-3",
+          model:           getModel("research_scan"),
           response_format: { type: "json_object" },
           messages: [{
             role:    "system",

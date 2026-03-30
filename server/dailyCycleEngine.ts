@@ -20,6 +20,9 @@ import {
   getArchiveStats,
   getActiveKnowledgeCount,
 } from "./memoryEngine.js";
+import { getOptimizedContext } from "./contextWindow.js";
+import { getModel } from "./modelRouter.js";
+import { checkAndExtractSkills } from "./skillEngine.js";
 import { runReflection } from "./reflectionEngine.js";
 import { runConfidenceDecay, runDebate, checkContradictions, getDebates } from "./reasoningEngine.js";
 import { runConnectionScan } from "./synthesisEngine.js";
@@ -213,7 +216,7 @@ async function callGrokForBriefing(context: {
     return null;
   }
 
-  const agentCtx = getFullAgentContext();
+  const agentCtx = getOptimizedContext("daily briefing status update hypotheses research goals");
   const now = new Date();
   const dateStr = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 
@@ -291,7 +294,7 @@ Generate the daily briefing. Respond with JSON only.`;
         "Authorization": `Bearer ${GROK_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "grok-4-1-fast",
+        model: getModel("daily_briefing"),
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: systemPrompt },
@@ -410,7 +413,7 @@ async function autoResolveHypotheses(): Promise<number> {
           Authorization: `Bearer ${GROK_API_KEY}`,
         },
         body: JSON.stringify({
-          model: "grok-3-mini-fast",
+          model: getModel("hypothesis_resolution"),
           response_format: { type: "json_object" },
           messages: [
             {
@@ -564,6 +567,9 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     // Metacognition: log cognitive state summary
     const meta = getMetacognitionState();
     console.log(`[DailyCycle] Cognitive state — KB: ${meta.knowledgeCoverage.totalActive} entries, Velocity: ${meta.learningVelocity.trend}, Connections: ${meta.synthesisStats.totalConnections}`);
+    // Skill extraction: check for recent successful outcomes and extract patterns
+    const skills = await checkAndExtractSkills().catch(e => { console.warn("[DailyCycle] Skill extraction failed:", e.message); return []; });
+    if (skills.length > 0) console.log(`[DailyCycle] Extracted ${skills.length} new skill(s)`);
   } catch (e: any) {
     console.warn("[DailyCycle] Self-improvement cycle error (non-fatal):", e.message);
   }

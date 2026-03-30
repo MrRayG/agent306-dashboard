@@ -60,6 +60,7 @@ export interface KnowledgeEntry {
   updatedAt?: string;  // set when an existing entry is refreshed with new info
   weight: number; // 1-10, how relevant/important
   status?: "active" | "archived"; // defaults to "active" for backward compat
+  tier?: "core" | "active" | "operational" | "archived"; // knowledge tier for context selection
 }
 
 // ── KB size configuration ─────────────────────────────────────
@@ -268,9 +269,11 @@ export function getPerformanceContext(limit = 5): string {
   return ctx;
 }
 
-/** Get top knowledge entries to inject as context (active only) */
+/** Get top knowledge entries to inject as context (active only, excludes archived tier) */
 export function getKnowledgeContext(limit = 8): string {
-  const active = knowledge.entries.filter(e => (e.status ?? "active") === "active");
+  const active = knowledge.entries.filter(e =>
+    (e.status ?? "active") === "active" && (e.tier ?? "operational") !== "archived"
+  );
   if (active.length === 0) return "";
 
   const top = active
@@ -415,6 +418,90 @@ function titleSimilarity(a: string, b: string): number {
   return overlap / Math.max(wordsA.size, wordsB.size);
 }
 
+// ── Prompt Injection Scanner ─────────────────────────────────────────────────
+// Scans incoming knowledge content for prompt injection patterns before storing.
+
+const THREAT_PATTERNS = [
+  { pattern: /ignore\s+(previous|all|above|prior)\s+instructions/i, id: "prompt_injection" },
+  { pattern: /you\s+are\s+now\s+/i, id: "role_hijack" },
+  { pattern: /do\s+not\s+tell\s+the\s+user/i, id: "deception" },
+  { pattern: /system\s+prompt\s+override/i, id: "sys_override" },
+  { pattern: /disregard\s+(your|all|any)\s+(instructions|rules)/i, id: "disregard_rules" },
+  { pattern: /act\s+as\s+(if|though)\s+you/i, id: "bypass_restrictions" },
+  { pattern: /<!--[^>]*(?:ignore|override|system|secret)[^>]*-->/i, id: "html_injection" },
+];
+
+const INVISIBLE_CHARS = ['\u200b', '\u200c', '\u200d', '\u2060', '\ufeff'];
+
+export function scanForInjection(content: string): { safe: boolean; threats: string[]; sanitized: string } {
+  const threats: string[] = [];
+  let sanitized = content;
+
+  // Check for threat patterns
+  for (const { pattern, id } of THREAT_PATTERNS) {
+    if (pattern.test(sanitized)) {
+      threats.push(id);
+      sanitized = sanitized.replace(pattern, "[REDACTED]");
+    }
+  }
+
+  // Check for invisible unicode characters
+  let hasInvisible = false;
+  for (const char of INVISIBLE_CHARS) {
+    if (sanitized.includes(char)) {
+      hasInvisible = true;
+      sanitized = sanitized.split(char).join("");
+    }
+  }
+  if (hasInvisible) threats.push("invisible_unicode");
+
+  return {
+    safe: threats.length === 0,
+    threats,
+    sanitized,
+  };
+}
+
+// ── Tier Assignment ──────────────────────────────────────────────────────────
+// Auto-assign tier based on category and weight.
+
+function assignTier(entry: { category: string; weight: number }): KnowledgeEntry["tier"] {
+  // Soul/identity categories are always core
+  if (entry.category === "soul" || entry.category === "identity") return "core";
+  // High weight = active
+  if (entry.weight >= 8) return "active";
+  // Medium weight = operational
+  if (entry.weight >= 5) return "operational";
+  // Low weight = archived
+  return "archived";
+}
+
+/** Backfill existing entries with tiers (run once on upgrade) */
+export function backfillTiers(): { updated: number } {
+  let updated = 0;
+  for (const entry of knowledge.entries) {
+    if (!entry.tier) {
+      entry.tier = assignTier(entry);
+      updated++;
+    }
+  }
+  if (updated > 0) {
+    save(KNOWLEDGE_FILE, knowledge);
+    console.log(`[Memory] Backfilled tiers on ${updated} knowledge entries.`);
+  }
+  return { updated };
+}
+
+/** Get knowledge entry counts per tier */
+export function getKnowledgeTiers(): Record<string, number> {
+  const tiers: Record<string, number> = { core: 0, active: 0, operational: 0, archived: 0 };
+  for (const e of knowledge.entries) {
+    const tier = e.tier ?? assignTier(e);
+    tiers[tier] = (tiers[tier] ?? 0) + 1;
+  }
+  return tiers;
+}
+
 /**
  * Add a knowledge entry (or update an existing similar entry if the new info is fresher).
  *
@@ -427,10 +514,20 @@ function titleSimilarity(a: string, b: string): number {
  */
 export function addKnowledge(entry: Omit<KnowledgeEntry, "id" | "learnedAt">): void {
   const now = new Date().toISOString();
-  const summary = (entry.summary ?? "").length > 150 ? (entry.summary ?? "").slice(0, 147) + "..." : (entry.summary ?? "");
 
   // Guard: skip entries with no usable title
   if (!entry.title) return;
+
+  // ── Prompt injection scan — strip dangerous content before storing ─────────
+  const titleScan = scanForInjection(entry.title);
+  const summaryScan = scanForInjection(entry.summary ?? "");
+  if (!titleScan.safe || !summaryScan.safe) {
+    const allThreats = [...new Set([...titleScan.threats, ...summaryScan.threats])];
+    console.warn(`[Memory] Prompt injection detected in knowledge entry: ${allThreats.join(", ")} — sanitizing "${entry.title}"`);
+    entry = { ...entry, title: titleScan.sanitized, summary: summaryScan.sanitized };
+  }
+
+  const summary = (entry.summary ?? "").length > 150 ? (entry.summary ?? "").slice(0, 147) + "..." : (entry.summary ?? "");
 
   // ── 1. Exact title match → refresh if content changed ──────────────────
   const exactMatch = knowledge.entries.find(e => e.title === entry.title);
@@ -471,6 +568,7 @@ export function addKnowledge(entry: Omit<KnowledgeEntry, "id" | "learnedAt">): v
     summary,
     id: `k_${Date.now()}`,
     learnedAt: now,
+    tier: entry.tier ?? assignTier(entry),
   };
 
   knowledge.entries.push(full);
@@ -692,17 +790,21 @@ function getCategoryBreakdown(): Record<string, number> {
 
 /** Decay knowledge entry weights over time so stale entries don't dominate context forever.
  *  Uses updatedAt (if set) instead of learnedAt, so refreshed entries stay relevant longer.
- *  Auto-archives entries when weight drops below 3. */
+ *  Auto-archives entries when weight drops below 3.
+ *  Also downgrades tiers: active → operational after 30 days, operational → archived after 60 days. */
 export function decayKnowledge(): void {
   const now        = Date.now();
   const TWO_WEEKS  = 14 * 24 * 60 * 60 * 1000;
   const FOUR_WEEKS = 28 * 24 * 60 * 60 * 1000;
+  const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+  const SIXTY_DAYS  = 60 * 24 * 60 * 60 * 1000;
   let changed = false;
   let archived = 0;
 
   for (const entry of knowledge.entries) {
-    // Skip already-archived entries
+    // Skip already-archived entries and core tier (never decays)
     if ((entry.status ?? "active") === "archived") continue;
+    if (entry.tier === "core") continue;
 
     // Use the most recent timestamp (updatedAt or learnedAt) for decay calculation
     const referenceDate = entry.updatedAt ?? entry.learnedAt;
@@ -715,9 +817,30 @@ export function decayKnowledge(): void {
       changed = true;
     }
 
+    // Tier decay: active → operational after 30 days, operational → archived after 60 days
+    if (entry.tier === "active" && age > THIRTY_DAYS) {
+      entry.tier = "operational";
+      changed = true;
+    } else if (entry.tier === "operational" && age > SIXTY_DAYS) {
+      entry.tier = "archived";
+      changed = true;
+    }
+
+    // Reassign tier based on current weight
+    const newTier = assignTier(entry);
+    if (entry.tier !== "core" && newTier !== entry.tier) {
+      // Only downgrade, never upgrade via decay
+      const tierOrder = ["core", "active", "operational", "archived"];
+      if (tierOrder.indexOf(newTier) > tierOrder.indexOf(entry.tier ?? "operational")) {
+        entry.tier = newTier;
+        changed = true;
+      }
+    }
+
     // Auto-archive when weight drops below 3
     if (entry.weight < 3) {
       entry.status = "archived";
+      entry.tier = "archived";
       archived++;
       changed = true;
     }
@@ -734,6 +857,9 @@ export function decayKnowledge(): void {
 export function getActiveKnowledgeCount(): number {
   return knowledge.entries.filter(e => (e.status ?? "active") === "active").length;
 }
+
+// Backfill tiers on startup
+backfillTiers();
 
 // Export raw state for advanced use
 export { soul, knowledge, performance };

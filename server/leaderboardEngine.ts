@@ -8,6 +8,7 @@ import { createCanvas } from "canvas";
 import { requestPost, registerPost } from "./postCoordinator.js";
 import * as fs from "fs";
 import * as https from "https";
+import { getModel } from "./modelRouter.js";
 
 const NORMIES_API = "https://api.normies.art";
 import { dataPath } from "./dataPaths.js";
@@ -442,7 +443,7 @@ Return JSON: {"t1": "...", "t2": "...", "t3": "..."}`;
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
           body: JSON.stringify({
-            model: "grok-3-fast",
+            model: getModel("leaderboard"),
             response_format: { type: "json_object" },
             messages: [{ role: "user", content: prompt }],
             max_tokens: 600,

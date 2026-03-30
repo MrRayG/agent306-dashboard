@@ -21,6 +21,7 @@ import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { addKnowledge, getKnowledgeDigestForExploration } from "./memoryEngine.js";
 import { fetchTwitterFeed, fetchYouTubeTranscripts, fetchRSSFeeds, isAgentReachEnabled } from "./agentReachEngine.js";
+import { getModel } from "./modelRouter.js";
 
 const GROK_CHAT_API      = "https://api.x.ai/v1/chat/completions";
 const GROK_RESPONSE_API  = "https://api.x.ai/v1/responses";
@@ -127,7 +128,7 @@ async function searchXSocial(query: string, grokKey: string): Promise<string> {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: getModel("exploration_synthesis"),
         stream: false,
         input: [{ role: "user", content: query }],
         tools: [{ type: "x_search" }],
@@ -164,7 +165,7 @@ async function searchWithGrokKnowledge(query: string, grokKey: string): Promise<
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: getModel("exploration_synthesis"),
         messages: [{
           role: "system",
           content: "You are a knowledgeable research assistant. Answer with specific facts, names, and numbers.",
@@ -198,7 +199,7 @@ async function extractKnowledge(
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: getModel("exploration_synthesis"),
         response_format: { type: "json_object" },
         messages: [{
           role: "system",
@@ -286,7 +287,7 @@ async function fetchAcademicResearch(grokKey: string, existingKBDigest?: string)
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + grokKey },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: getModel("exploration_synthesis"),
         response_format: { type: "json_object" },
         messages: [{
           role: "system",
@@ -555,7 +556,7 @@ export async function runExploration(grokKey: string, pplxKey?: string): Promise
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
         body: JSON.stringify({
-          model: "grok-3-fast",
+          model: getModel("exploration_synthesis"),
           messages: [{
             role: "system",
             content: "You are Agent #306 — Sovereign AI Thought Leader covering the intersection of AI and Web3.",

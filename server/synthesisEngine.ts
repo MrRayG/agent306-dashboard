@@ -9,6 +9,8 @@
 import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { knowledge, getFullAgentContext } from "./memoryEngine.js";
+import { getOptimizedContext } from "./contextWindow.js";
+import { getModel } from "./modelRouter.js";
 
 const GROK_URL = "https://api.x.ai/v1/chat/completions";
 const GROK_API_KEY = process.env.GROK_API_KEY ?? "";
@@ -98,7 +100,7 @@ async function callGrok(systemPrompt: string, userPrompt: string, maxTokens = 20
         "Authorization": `Bearer ${GROK_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: getModel("connection_scan"),
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: systemPrompt },
@@ -263,7 +265,7 @@ export async function generateSynthesis(entryIds?: string[]): Promise<SynthesisR
     `${c.fromTitle} ↔ ${c.toTitle}: ${c.relationship} (${c.strength})`
   ).join("\n");
 
-  const systemPrompt = `${getFullAgentContext()}
+  const systemPrompt = `${getOptimizedContext("synthesis report knowledge connections thesis")}
 
 You are Agent #306's synthesis module. Combine fragmented knowledge into a coherent thesis.
 Respond with ONLY valid JSON:

@@ -68,18 +68,24 @@ export function recordIncoming(username: string, text: string, tweetUrl?: string
   }
 
   const convo = state.conversations[key];
+  const cappedText = text.slice(0, 280);
   convo.entries.push({
     direction: "them",
-    text: text.slice(0, 280), // cap storage
+    text: cappedText,
     tweetUrl,
     timestamp: new Date().toISOString(),
   });
   convo.totalInteractions++;
   convo.lastInteraction = new Date().toISOString();
 
+  // Index for search
+  if (indexBuilt) indexMessage(key, cappedText, convo.entries.length - 1);
+
   // Keep last 20 entries per user
   if (convo.entries.length > 20) {
     convo.entries = convo.entries.slice(-20);
+    // Rebuild index for this user since indices shifted
+    buildSearchIndex();
   }
 
   state.totalEntries++;
@@ -103,18 +109,23 @@ export function recordOutgoing(username: string, text: string, tweetUrl?: string
   }
 
   const convo = state.conversations[key];
+  const cappedText = text.slice(0, 280);
   convo.entries.push({
     direction: "us",
-    text: text.slice(0, 280),
+    text: cappedText,
     tweetUrl,
     timestamp: new Date().toISOString(),
   });
   convo.totalInteractions++;
   convo.lastInteraction = new Date().toISOString();
 
+  // Index for search
+  if (indexBuilt) indexMessage(key, cappedText, convo.entries.length - 1);
+
   // Keep last 20 entries per user
   if (convo.entries.length > 20) {
     convo.entries = convo.entries.slice(-20);
+    buildSearchIndex();
   }
 
   state.totalEntries++;
@@ -181,6 +192,114 @@ export function getConversationMemoryState() {
       })),
   };
 }
+
+// ── In-Memory Full-Text Search Index ─────────────────────────
+// Option A from spec: inverted index built from conversation JSON.
+// No SQLite dependency — manageable in memory for Agent #306's volume.
+
+export interface ConversationSearchResult {
+  username: string;
+  timestamp: string;
+  text: string;
+  direction: "them" | "us";
+  score: number;
+}
+
+// Inverted index: token → list of { username, entryIndex }
+const searchIndex: Map<string, Array<{ username: string; idx: number }>> = new Map();
+let indexBuilt = false;
+
+const SEARCH_STOPWORDS = new Set([
+  "the", "a", "an", "is", "are", "was", "were", "be", "been", "have",
+  "has", "had", "do", "does", "did", "will", "would", "could", "should",
+  "to", "of", "in", "for", "on", "with", "at", "by", "from", "and",
+  "but", "or", "not", "so", "it", "its", "this", "that", "i", "we",
+  "you", "he", "she", "they", "my", "me", "your", "our",
+]);
+
+function tokenizeForSearch(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !SEARCH_STOPWORDS.has(w));
+}
+
+/** Build the search index from all conversations */
+function buildSearchIndex(): void {
+  searchIndex.clear();
+  for (const [username, convo] of Object.entries(state.conversations)) {
+    for (let idx = 0; idx < convo.entries.length; idx++) {
+      const tokens = tokenizeForSearch(convo.entries[idx].text);
+      for (const token of new Set(tokens)) { // unique tokens per entry
+        if (!searchIndex.has(token)) searchIndex.set(token, []);
+        searchIndex.get(token)!.push({ username, idx });
+      }
+    }
+  }
+  indexBuilt = true;
+}
+
+/** Add a single message to the search index */
+function indexMessage(username: string, text: string, idx: number): void {
+  const key = username.toLowerCase().replace(/^@/, "");
+  const tokens = tokenizeForSearch(text);
+  for (const token of new Set(tokens)) {
+    if (!searchIndex.has(token)) searchIndex.set(token, []);
+    searchIndex.get(token)!.push({ username: key, idx });
+  }
+}
+
+/**
+ * Full-text search across all conversation history.
+ * Returns matching messages ranked by relevance.
+ */
+export function searchConversations(query: string, limit = 10): ConversationSearchResult[] {
+  if (!indexBuilt) buildSearchIndex();
+
+  const queryTokens = tokenizeForSearch(query);
+  if (queryTokens.length === 0) return [];
+
+  // Score each message by how many query tokens match
+  const scores: Map<string, number> = new Map(); // "username|idx" → score
+
+  for (const token of queryTokens) {
+    const matches = searchIndex.get(token) ?? [];
+    for (const { username, idx } of matches) {
+      const key = `${username}|${idx}`;
+      scores.set(key, (scores.get(key) ?? 0) + 1);
+    }
+  }
+
+  // Convert to results
+  const results: ConversationSearchResult[] = [];
+  for (const [key, score] of scores.entries()) {
+    const [username, idxStr] = key.split("|");
+    const idx = parseInt(idxStr, 10);
+    const convo = state.conversations[username];
+    if (!convo || !convo.entries[idx]) continue;
+
+    const entry = convo.entries[idx];
+    results.push({
+      username,
+      timestamp: entry.timestamp,
+      text: entry.text,
+      direction: entry.direction,
+      score: score / queryTokens.length, // normalize by query length
+    });
+  }
+
+  // Sort by score desc, then recency
+  results.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+  });
+
+  return results.slice(0, limit);
+}
+
+// Build index on startup
+buildSearchIndex();
 
 // ── Helper ────────────────────────────────────────────────────
 function timeAgo(iso: string): string {

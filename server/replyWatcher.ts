@@ -12,6 +12,7 @@
 import * as fs from "fs";
 
 import { dataPath } from "./dataPaths.js";
+import { getModel } from "./modelRouter.js";
 const REPLY_STATE_FILE = dataPath("replies.json");
 const GROK_KEY = process.env.GROK_API_KEY ?? "";
 
@@ -206,7 +207,7 @@ async function fetchMentionsViaGrok(): Promise<CommunityReply[]> {
         "Authorization": `Bearer ${GROK_KEY}`,
       },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: getModel("reply_classification"),
         stream: false,
         input: [{
           role: "user",
@@ -307,7 +308,7 @@ async function fetchMrRayGMentions(): Promise<CommunityReply[]> {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${GROK_KEY}` },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: getModel("reply_classification"),
         stream: false,
         input: [{
           role: "user",

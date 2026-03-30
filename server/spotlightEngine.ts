@@ -16,6 +16,7 @@ import { getMostActive, getStorySourceHolders } from "./holderCatalog.js";
 import { generateSpotlightCard } from "./imageCard.js";
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
 import fs from "fs";
+import { getModel } from "./modelRouter.js";
 
 const NORMIES_API = "https://api.normies.art";
 
@@ -163,7 +164,7 @@ export async function generateSpotlight(grokKey: string): Promise<{
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: getModel("spotlight"),
         response_format: { type: "json_object" },
         messages: [{ role: "user", content: prompt }],
         temperature: 0.8,

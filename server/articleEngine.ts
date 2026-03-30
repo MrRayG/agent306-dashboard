@@ -21,6 +21,8 @@ import * as fs   from "fs";
 import * as path from "path";
 import { dataPath } from "./dataPaths.js";
 import { getFullAgentContext } from "./memoryEngine.js";
+import { getOptimizedContext } from "./contextWindow.js";
+import { getModel } from "./modelRouter.js";
 import { TwitterApi } from "twitter-api-v2";
 
 const GROK_CHAT_API     = "https://api.x.ai/v1/chat/completions";
@@ -78,7 +80,7 @@ async function discoverArticle(apiKey: string): Promise<{
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: getModel("x_search"),
         stream: false,
         input: [{
           role: "user",
@@ -175,7 +177,7 @@ async function generateDeepReadArticle(
 }> {
   console.log("[ArticleEngine] Generating Deep Read article...");
 
-  const agentCtx = getFullAgentContext();
+  const agentCtx = getOptimizedContext("article deep read AI news analysis");
 
   const res = await fetch(GROK_CHAT_API, {
     method: "POST",
@@ -184,7 +186,7 @@ async function generateDeepReadArticle(
       "Authorization": `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "grok-3-fast",
+      model: getModel("article_draft"),
       response_format: { type: "json_object" },
       messages: [
         {

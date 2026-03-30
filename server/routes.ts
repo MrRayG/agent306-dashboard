@@ -56,6 +56,11 @@ import { getDebates, getContradictions, runDebate, resolveContradiction, runConf
 import { getConnections, getReports, runConnectionScan, generateSynthesis } from "./synthesisEngine.js";
 import { getInsights, getRelationships, extractInsights, analyzeRelationships } from "./conversationLearningEngine.js";
 import { getMetacognitionState } from "./metacognitionEngine.js";
+import { searchConversations } from "./conversationMemory.js";
+import { getKnowledgeTiers, scanForInjection } from "./memoryEngine.js";
+import { getModel, getModelRouterStats } from "./modelRouter.js";
+import { getCoreIdentity, getRelevantContext, getOptimizedContext } from "./contextWindow.js";
+import { getSkills, getSkillById, deleteSkill, extractSkill, getSkillsState, checkAndExtractSkills } from "./skillEngine.js";
 
 const NORMIES_API = "https://api.normies.art";
 
@@ -412,7 +417,7 @@ ${replyContext}`
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKeyQ}` },
           body: JSON.stringify({
-            model: "grok-3-fast",
+            model: getModel("routine"),
             messages: [{
               role: "system",
               content: "You are a quality editor for @NORMIES_TV. Score tweets ruthlessly. Only high-quality, human-sounding tweets earn a post.",
@@ -641,7 +646,7 @@ async function postDailyNewsDispatch() {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: getModel("reply_generation"),
         response_format: { type: "json_object" },
         messages: [{
           role: "user",
@@ -1101,7 +1106,7 @@ async function refreshEditorialSummaryAsync(posts: any[], grokKey: string) {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: getModel("reflection"),
         response_format: { type: "json_object" },
         messages: [{
           role: "system",
@@ -1825,13 +1830,12 @@ export function registerRoutes(httpServer: Server, app: Express) {
     if (!grokKey) return res.status(500).json({ error: "No GROK_API_KEY configured" });
 
     try {
-      const { getFullAgentContext } = await import("./memoryEngine.js");
-      const agentCtx = getFullAgentContext();
+      const agentCtx = getOptimizedContext("podcast topic scanning normies research community");
       const scanRes = await fetch("https://api.x.ai/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${grokKey}` },
         body: JSON.stringify({
-          model: "grok-3-fast",
+          model: getModel("research_phase"),
           response_format: { type: "json_object" },
           messages: [
             {
@@ -2505,7 +2509,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
             body: JSON.stringify({
-              model: "grok-4-1-fast",
+              model: getModel("x_search"),
               tools: [{ type: "x_search" }],
               messages: [{
                 role: "user",
@@ -2736,7 +2740,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
         body: JSON.stringify({
-          model: "grok-3-fast",
+          model: getModel("conversation_insight"),
           response_format: { type: "json_object" },
           messages: [{
             role: "system",
@@ -2847,16 +2851,15 @@ If nothing worth extracting, return: {"entries": []}`,
       content: m.text,
     }));
 
-    // Full agent context
-    const { getFullAgentContext } = await import("./memoryEngine.js");
-    const agentCtx = getFullAgentContext();
+    // Optimized agent context
+    const agentCtx = getOptimizedContext("chat conversation normies community");
 
     try {
       const response = await fetch("https://api.x.ai/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
         body: JSON.stringify({
-          model: "grok-3-fast",
+          model: getModel("reply_generation"),
           messages: [
             {
               role: "system",
@@ -3687,6 +3690,82 @@ needsHelp: true only when you genuinely need his direction or information`,
   });
 
     // ── Seed demo data ────────────────────────────────────────────────
+  // ── Knowledge Tiers ──────────────────────────────────────────────────────
+  app.get("/api/knowledge/tiers", (_req, res) => {
+    res.json(getKnowledgeTiers());
+  });
+
+  // ── Conversation Search (FTS5) ──────────────────────────────────────────
+  app.get("/api/conversations/search", (req, res) => {
+    const q = String(req.query.q ?? "");
+    const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 10));
+    if (!q) return res.status(400).json({ error: "Missing q parameter" });
+    const results = searchConversations(q, limit);
+    res.json({ results });
+  });
+
+  // ── Model Router ────────────────────────────────────────────────────────
+  app.get("/api/model-router", (_req, res) => {
+    res.json(getModelRouterStats());
+  });
+
+  // ── Prompt Injection Scanner (test endpoint) ───────────────────────────
+  app.post("/api/security/scan", (req, res) => {
+    const { content } = req.body ?? {};
+    if (!content) return res.status(400).json({ error: "Missing content" });
+    res.json(scanForInjection(content));
+  });
+
+  // ── Skills Engine ───────────────────────────────────────────────────────
+  app.get("/api/skills", (_req, res) => {
+    res.json(getSkills());
+  });
+
+  app.get("/api/skills/state", (_req, res) => {
+    res.json(getSkillsState());
+  });
+
+  app.get("/api/skills/:id", (req, res) => {
+    const skill = getSkillById(req.params.id);
+    if (!skill) return res.status(404).json({ error: "Skill not found" });
+    res.json(skill);
+  });
+
+  app.delete("/api/skills/:id", requireDashAuth, (req, res) => {
+    const deleted = deleteSkill(req.params.id);
+    if (!deleted) return res.status(404).json({ error: "Skill not found" });
+    res.json({ ok: true });
+  });
+
+  app.post("/api/skills/extract", requireDashAuth, async (req, res) => {
+    try {
+      const { type, sourceId, content, successMetric } = req.body ?? {};
+      if (!type || !sourceId || !content) {
+        return res.status(400).json({ error: "Missing type, sourceId, or content" });
+      }
+      const skill = await extractSkill({ type, sourceId, content, successMetric: successMetric ?? "Manual extraction" });
+      if (!skill) return res.status(500).json({ error: "Extraction failed" });
+      res.json(skill);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── Context Window (debug/preview) ──────────────────────────────────────
+  app.post("/api/context-window/preview", (req, res) => {
+    const { query, maxEntries, categories } = req.body ?? {};
+    if (!query) return res.status(400).json({ error: "Missing query" });
+    const context = getRelevantContext(query, { maxEntries, categories });
+    const core = getCoreIdentity();
+    res.json({
+      coreLength: core.length,
+      contextLength: context.length,
+      totalChars: core.length + context.length,
+      estimatedTokens: Math.ceil((core.length + context.length) / 4),
+      context,
+    });
+  });
+
   app.post("/api/seed", (_req, res) => {
     const demoSignals = [
       { type: "burn", tokenId: 603, description: "50 Normies burned into #603 — Agent #306 born", weight: 10, phase: "phase1", rawData: "{}" },

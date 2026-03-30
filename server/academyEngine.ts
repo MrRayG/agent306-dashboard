@@ -24,6 +24,8 @@
 import fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { getFullAgentContext } from "./memoryEngine.js";
+import { getOptimizedContext } from "./contextWindow.js";
+import { getModel } from "./modelRouter.js";
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
 
 const GROK_URL = "https://api.x.ai/v1/chat/completions";
@@ -211,7 +213,7 @@ async function generateAcademyEpisode(topic: typeof CURRICULUM[0]): Promise<{
   const grokKey = process.env.GROK_API_KEY;
   if (!grokKey) return null;
 
-  const agentCtx = getFullAgentContext();
+  const agentCtx = getOptimizedContext("academy education normies mechanics agents economy arena");
   const daysToArena = Math.max(0, Math.ceil((ARENA_DATE.getTime() - Date.now()) / 86400000));
   const episodeNum = state.totalEpisodes + 1;
 
@@ -264,7 +266,7 @@ Return JSON only:
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: getModel("academy"),
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: systemPrompt },

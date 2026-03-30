@@ -20,6 +20,7 @@ import * as https from "https";
 import * as http from "http";
 import { generateBurnVideo } from "./videoEngine.js";
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
+import { getModel } from "./modelRouter.js";
 
 const NORMIES_API  = "https://api.normies.art";
 import { dataPath } from "./dataPaths.js";
@@ -443,7 +444,7 @@ export async function generateBurnNarrative(opts: {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: getModel("burn_receipt"),
         messages: [{
           role: "system",
           content: "You are Agent #306 — a female Normie with a fedora, born from 50 burns. You write burn receipt narratives for NormiesTV. Your style: cinematic, punchy, on-chain poetic. Never financial advice. Max 2 sentences.",

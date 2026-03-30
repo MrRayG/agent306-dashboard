@@ -18,6 +18,7 @@
 import * as fs from "fs";
 
 import { dataPath } from "./dataPaths.js";
+import { getModel } from "./modelRouter.js";
 const CYOA_STATE_FILE = dataPath("cyoa_state.json");
 
 export type CYOATrigger =
@@ -184,7 +185,7 @@ YOU MUST RETURN EXACTLY THIS JSON — use these exact field names, nothing else:
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: getModel("cyoa"),
         messages: [
           { role: "system", content: "You are a JSON generator. You ONLY output valid JSON objects. Never use markdown. Never add explanations. Output ONLY the raw JSON object requested, starting with { and ending with }." },
           { role: "user", content: prompt }

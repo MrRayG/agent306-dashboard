@@ -25,6 +25,8 @@
 import fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { getFullAgentContext } from "./memoryEngine.js";
+import { getOptimizedContext } from "./contextWindow.js";
+import { getModel } from "./modelRouter.js";
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
 
 const GROK_URL          = "https://api.x.ai/v1/chat/completions";
@@ -92,7 +94,7 @@ async function fetchFreshSignals(grokKey: string): Promise<{
         "Authorization": `Bearer ${grokKey}`,
       },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: getModel("x_search"),
         stream: false,
         input: [{
           role: "user",
@@ -150,7 +152,7 @@ async function generateSignalBrief(grokKey: string): Promise<{
 } | null> {
   if (!grokKey) return null;
 
-  const agentCtx    = getFullAgentContext();
+  const agentCtx    = getOptimizedContext("signal brief AI web3 market news intelligence");
   const briefNumber = state.totalBriefs + 1;
   const weekLabel   = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
   const dayOfWeek   = new Date().toLocaleDateString("en-US", { weekday: "long" });
@@ -166,7 +168,7 @@ async function generateSignalBrief(grokKey: string): Promise<{
         "Authorization": `Bearer ${grokKey}`,
       },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: getModel("signal_brief"),
         response_format: { type: "json_object" },
         messages: [
           {

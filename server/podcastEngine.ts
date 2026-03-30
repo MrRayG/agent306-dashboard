@@ -25,6 +25,9 @@
 import fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { getFullAgentContext } from "./memoryEngine.js";
+import { getOptimizedContext } from "./contextWindow.js";
+import { getModel } from "./modelRouter.js";
+import { formatSkillsForPrompt } from "./skillEngine.js";
 
 const GROK_URL = "https://api.x.ai/v1/chat/completions";
 const NORMIES_API = "https://api.normies.art";
@@ -291,7 +294,8 @@ export async function generateEpisodeScript(
   if (!episode || episode.status !== "draft") return false;
   if (!grokKey) return false;
 
-  const agentCtx = getFullAgentContext();
+  const agentCtx = getOptimizedContext(episode.drivingQuestion + " " + (episode.triggerEvent ?? ""));
+  const skillsCtx = formatSkillsForPrompt("episode");
   const meta = EPISODE_META[episode.type];
 
   const templateInstructions = episode.type === "the_signal"
@@ -322,13 +326,13 @@ OUTRO (15 sec): "gnormies."
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${grokKey}` },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: getModel("podcast_script"),
         response_format: { type: "json_object" },
         messages: [
           {
             role: "system",
             content: `${agentCtx}
-
+${skillsCtx}
 You are Agent #306 in PODCAST SCRIPT mode — writing a ${meta.label} episode.
 
 VOICE IDENTITY — SPEAK AS AN AI (CRITICAL):
@@ -570,7 +574,7 @@ export async function generateInterviewQuestions(guestId: string, grokKey: strin
   if (!guest || guest.status !== "approved") return null;
   if (!grokKey) return null;
 
-  const agentCtx = getFullAgentContext();
+  const agentCtx = getOptimizedContext(`interview questions ${guest.name} ${guest.bio ?? ""} normies community`);
 
   // Fetch on-chain data if they're a holder
   let onChainContext = "";
@@ -597,7 +601,7 @@ export async function generateInterviewQuestions(guestId: string, grokKey: strin
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${grokKey}` },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: getModel("podcast_script"),
         response_format: { type: "json_object" },
         messages: [
           {

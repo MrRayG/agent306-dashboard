@@ -7,7 +7,9 @@
 
 import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
-import { addKnowledge, getFullAgentContext } from "./memoryEngine.js";
+import { addKnowledge, getFullAgentContext, scanForInjection } from "./memoryEngine.js";
+import { getOptimizedContext } from "./contextWindow.js";
+import { getModel } from "./modelRouter.js";
 
 const GROK_URL = "https://api.x.ai/v1/chat/completions";
 const GROK_API_KEY = process.env.GROK_API_KEY ?? "";
@@ -97,7 +99,7 @@ async function callGrok(systemPrompt: string, userPrompt: string): Promise<any |
         "Authorization": `Bearer ${GROK_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: getModel("conversation_insight"),
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: systemPrompt },
@@ -160,7 +162,7 @@ export async function extractInsights(): Promise<ConversationInsight[]> {
 
   if (recentConvos.length === 0) return [];
 
-  const systemPrompt = `${getFullAgentContext()}
+  const systemPrompt = `${getOptimizedContext("community conversation insights knowledge extraction")}
 
 You extract knowledge insights from Agent #306's community conversations.
 Respond with ONLY valid JSON:
@@ -205,16 +207,21 @@ What new facts, corrections, or perspectives did Agent #306 learn from these int
       createdAt: new Date().toISOString(),
     };
 
-    // Auto-add high-confidence insights to KB
+    // Auto-add high-confidence insights to KB (with injection scan)
     if (entry.confidence === "high") {
-      addKnowledge({
-        category: "community_pattern",
-        title: entry.insight.slice(0, 80),
-        summary: entry.insight,
-        weight: 6,
-        source: entry.source,
-      });
-      entry.addedToKB = true;
+      const scan = scanForInjection(entry.insight);
+      if (scan.safe) {
+        addKnowledge({
+          category: "community_pattern",
+          title: entry.insight.slice(0, 80),
+          summary: entry.insight,
+          weight: 6,
+          source: entry.source,
+        });
+        entry.addedToKB = true;
+      } else {
+        console.warn(`[ConvoLearning] Blocked insight injection: ${scan.threats.join(", ")}`);
+      }
     }
 
     extracted.push(entry);

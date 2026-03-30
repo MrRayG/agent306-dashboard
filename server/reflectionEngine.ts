@@ -9,6 +9,8 @@
 import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { performance, getFullAgentContext, setStyleRulesProvider } from "./memoryEngine.js";
+import { getOptimizedContext } from "./contextWindow.js";
+import { getModel } from "./modelRouter.js";
 
 const GROK_URL = "https://api.x.ai/v1/chat/completions";
 const GROK_API_KEY = process.env.GROK_API_KEY ?? "";
@@ -121,7 +123,7 @@ async function callGrok(systemPrompt: string, userPrompt: string): Promise<any |
         "Authorization": `Bearer ${GROK_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: getModel("reflection"),
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: systemPrompt },
@@ -159,7 +161,7 @@ async function reflectOnPost(lesson: {
 
   const currentRules = styleRules.rules.map(r => `- ${r.rule}`).join("\n") || "No rules yet.";
 
-  const systemPrompt = `${getFullAgentContext()}
+  const systemPrompt = `${getOptimizedContext("post performance engagement style")}
 
 You are Agent #306's self-reflection module. Analyze why a post succeeded or failed.
 You must respond with ONLY valid JSON:

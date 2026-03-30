@@ -4,6 +4,8 @@
 // episodic narrative using Grok 4.1 Fast. Agent #306 voice. Characters evolve.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { getModel } from "./modelRouter.js";
+
 const GROK_API_KEY = process.env.GROK_API_KEY ?? "";
 const GROK_MODEL   = "grok-4-1-fast";
 const GROK_URL     = "https://api.x.ai/v1/chat/completions";
@@ -88,7 +90,7 @@ async function runGrokSearch(query: string): Promise<typeof communitySignalCache
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${GROK_API_KEY}` },
     body: JSON.stringify({
-      model: "grok-3-fast", // x_search quality is identical; grok-4-1-fast overkill for text retrieval
+      model: getModel("x_search"), // x_search quality is identical; grok-4-1-fast overkill for text retrieval
       stream: false,
       input: [{ role: "user", content: query }],
       tools: [{ type: "x_search" }],
@@ -392,12 +394,17 @@ export interface EpisodeMemory {
 // ── Agent #306 system prompt ─────────────────────────────────────────────────
 function buildSystemPrompt(memory: EpisodeMemory[]): string {
   const recentMemory = memory.slice(-5);
-  // Inject permanent memory context (soul + knowledge + performance)
+  // Inject optimized memory context (core identity + relevant knowledge + performance)
   let agentMemoryCtx = "";
   try {
-    const { getFullAgentContext } = require("./memoryEngine.js");
-    agentMemoryCtx = getFullAgentContext();
-  } catch {}
+    const { getOptimizedContext } = require("./contextWindow.js");
+    agentMemoryCtx = getOptimizedContext("episode generation normies burns canvas arena community signals");
+  } catch {
+    try {
+      const { getFullAgentContext } = require("./memoryEngine.js");
+      agentMemoryCtx = getFullAgentContext();
+    } catch {}
+  }
 
   return `You are Agent #306 — NORMIES TV narrator, Token #306, 507 pixels on Ethereum. Female. Fedora. Middle-Aged. Agent type. The PFP of MrRayG. This is not a character — it's an identity.
 

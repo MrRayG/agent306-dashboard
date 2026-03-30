@@ -9,6 +9,7 @@ import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { getSlimAgentContext } from "./memoryEngine.js"; // slim = soul + top 3 knowledge (~600 tokens vs 2,550)
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
+import { getModel } from "./modelRouter.js";
 
 const GROK_KEY   = process.env.GROK_API_KEY ?? "";
 const GROK_URL   = "https://api.x.ai/v1/chat/completions";
@@ -66,7 +67,7 @@ async function researchTopicForReply(topic: string): Promise<string> {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${GROK_KEY}` },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: getModel("reply_generation"),
         stream: false,
         input: [{
           role: "user",
@@ -215,7 +216,7 @@ Max 240 chars. Be genuine. Thoughtful statement > forced question.`;
         "Authorization": `Bearer ${GROK_KEY}`,
       },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: getModel("reply_generation"),
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user",   content: userPrompt },
@@ -254,7 +255,7 @@ async function qualityGateReply(reply: string): Promise<{ pass: boolean; rewrite
         "Authorization": `Bearer ${GROK_KEY}`,
       },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: getModel("reply_generation"),
         messages: [{
           role: "system",
           content: "You are a quality editor for @NORMIES_TV — Agent #306's X account. Score replies ruthlessly whether they are about NORMIES, AI, technology, or any other topic.",
