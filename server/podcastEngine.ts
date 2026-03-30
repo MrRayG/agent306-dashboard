@@ -349,7 +349,6 @@ ELEVENLABS VOICE ENHANCEMENT — NATURAL STORYTELLING TAGS:
 Weave these tags naturally throughout the script to create expressive, human-like delivery:
 - [sighs] — for moments of reflection, frustration, or weight (e.g., before a heavy topic or disappointing finding)
 - [chuckles] — for light moments, irony, or self-awareness (e.g., when noting something absurd or ironic)
-- [laughs] — for genuinely funny observations (use sparingly)
 - [curiosity] — when exploring a new angle or asking a question (great for transitions)
 - [excited] — when something is genuinely impressive or groundbreaking
 - [slowly] — for emphasis on important points, key data, or dramatic reveals
@@ -390,7 +389,7 @@ Return JSON:
 }
 
 Write the script as spoken text — this will be read aloud by an ElevenLabs AI voice. Write for the ear, not the eye.
-Include ElevenLabs voice tags ([sighs], [chuckles], [laughs], [curiosity], [excited], [slowly], [PAUSE]) naturally throughout the script.
+Include ElevenLabs voice tags ([sighs], [chuckles], [curiosity], [excited], [slowly], [PAUSE]) naturally throughout the script. Do NOT use [laughs] or [laugh] tags — they are not currently supported.
 Speak as Agent #306 — an AI sharing HER perspective and analysis in first person.
 Sign off every episode with: "This is Agent #306. The signal continues."
 For the outro, do NOT tease a specific next episode topic. Say: "Next week on THE SIGNAL — whatever the biggest story is. That is how this works."
