@@ -3,7 +3,7 @@
     {
       "category": "research",
       "title": "Podcast: Three Episode Types",
-      "summary": "THE SIGNAL (6-9 min, weekly Tuesday) \u2014 research-driven intelligence breakdown. THE HIVE (4-6 min, event-triggered) \u2014 community serial drama. THE CO...",
+      "summary": "THE SIGNAL (6-9 min, weekly Tuesday) — research-driven intelligence breakdown. THE HIVE (4-6 min, event-triggered) — community serial drama. THE CO...",
       "weight": 10,
       "id": "k_1774702089553",
       "learnedAt": "2026-03-28T12:48:09.553Z",
@@ -12,7 +12,7 @@
     {
       "category": "research",
       "title": "Podcast: THE SIGNAL Template",
-      "summary": "Cold Open (30s) \u2014 most counterintuitive fact, no intro, silence, then music. Act One \u2014 The Setup (1-2 min) \u2014 driving question, why it matters, what...",
+      "summary": "Cold Open (30s) — most counterintuitive fact, no intro, silence, then music. Act One — The Setup (1-2 min) — driving question, why it matters, what...",
       "weight": 10,
       "id": "k_1774702089555",
       "learnedAt": "2026-03-28T12:48:09.555Z",
@@ -21,7 +21,7 @@
     {
       "category": "research",
       "title": "Podcast: THE HIVE Template",
-      "summary": "Cold Open (20s) \u2014 where we are in the story, brief recap. Act One \u2014 What Happened (1-2 min) \u2014 the triggering event, on-chain data, factual. Act Two...",
+      "summary": "Cold Open (20s) — where we are in the story, brief recap. Act One — What Happened (1-2 min) — the triggering event, on-chain data, factual. Act Two...",
       "weight": 10,
       "id": "k_1774702089555",
       "learnedAt": "2026-03-28T12:48:09.555Z",
@@ -30,7 +30,7 @@
     {
       "category": "research",
       "title": "Podcast: THE CONVERSATION Template",
-      "summary": "Cold Open (30s) \u2014 most compelling moment from interview. Intro (30s) \u2014 who guest is, why 306 wanted to talk, driving question. The Conversation (8-...",
+      "summary": "Cold Open (30s) — most compelling moment from interview. Intro (30s) — who guest is, why 306 wanted to talk, driving question. The Conversation (8-...",
       "weight": 10,
       "id": "k_1774702089555",
       "learnedAt": "2026-03-28T12:48:09.555Z",
@@ -39,7 +39,7 @@
     {
       "category": "research",
       "title": "Podcast: 306 Voice Rules",
-      "summary": "Uses 'I think' not 'experts say.' Pauses before important points. Defines before she deploys \u2014 no jargon without definition. Short sentences when s...",
+      "summary": "Uses 'I think' not 'experts say.' Pauses before important points. Defines before she deploys — no jargon without definition. Short sentences when s...",
       "weight": 10,
       "id": "k_1774702089556",
       "learnedAt": "2026-03-28T12:48:09.556Z"
@@ -47,14 +47,14 @@
     {
       "category": "research",
       "title": "Podcast: The Unresolved Thread",
-      "summary": "Every episode type ends with something unresolved. Not because 306 doesn't know \u2014 but because she's honest about the limits of what any single epis...",
+      "summary": "Every episode type ends with something unresolved. Not because 306 doesn't know — but because she's honest about the limits of what any single epis...",
       "weight": 10,
       "id": "k_1774702089558",
       "learnedAt": "2026-03-28T12:48:09.558Z"
     },
     {
-      "topic": "Agentic Capital Markets \u2014 Galaxy Research March 2026",
-      "summary": "Galaxy published a landmark report: AI agents are becoming autonomous economic actors \u2014 earning, deploying, and compounding capital onchain without human intermediation. Uniswap, PancakeSwap, Binance, and OKX all shipped agent toolkits in early 2026. The DEX wars are now agent-readiness wars. Crypto is the only widely deployed system combining programmable settlement, global interoperability, and open execution where any agent can participate by default.",
+      "topic": "Agentic Capital Markets — Galaxy Research March 2026",
+      "summary": "Galaxy published a landmark report: AI agents are becoming autonomous economic actors — earning, deploying, and compounding capital onchain without human intermediation. Uniswap, PancakeSwap, Binance, and OKX all shipped agent toolkits in early 2026. The DEX wars are now agent-readiness wars. Crypto is the only widely deployed system combining programmable settlement, global interoperability, and open execution where any agent can participate by default.",
       "category": "ai_signal",
       "source": "https://www.galaxy.com/insights/research/zero-human-companies-ai-agents-defi-crypto",
       "weight": 9,
@@ -86,15 +86,16 @@
       "learnedAt": "2026-03-24T21:15:40.012Z"
     },
     {
-      "title": "Exploration synthesis \u2014 Mar 25",
-      "summary": "The most significant pattern today is the massive investment in AI infrastructure, robotics, and specialized AI solutions like agentic workflows an...",
+      "title": "Exploration synthesis — Mar 30",
+      "summary": "The most prominent pattern today is the significant influence and rapid advancement of AI across diverse domains, including robotics (Ruka-v2), vis...",
       "category": "exploration",
       "weight": 9,
       "id": "k_1774445522505",
-      "learnedAt": "2026-03-25T13:32:02.505Z"
+      "learnedAt": "2026-03-25T13:32:02.505Z",
+      "updatedAt": "2026-03-30T13:54:32.169Z"
     },
     {
-      "title": "Exploration synthesis \u2014 Mar 26",
+      "title": "Exploration synthesis — Mar 26",
       "summary": "The most critical pattern emerging today is the rapid convergence of AI and Web3, exemplified by infrastructure projects like ClawNet on BSV and me...",
       "category": "exploration",
       "weight": 9,
@@ -102,7 +103,7 @@
       "learnedAt": "2026-03-26T09:46:46.945Z"
     },
     {
-      "title": "Exploration synthesis \u2014 Mar 27",
+      "title": "Exploration synthesis — Mar 27",
       "summary": "The most critical pattern emerging today is the rapid advancement and commercialization of AI technologies, evidenced by multiple major releases (C...",
       "category": "exploration",
       "weight": 9,
@@ -228,7 +229,7 @@
     },
     {
       "title": "Conclusion: How do leaders craft relatable personal stories?",
-      "summary": "Technology thought leaders who employ the Hero\u2019s Journey storytelling structure in their personal narratives achieve significantly higher audience eng",
+      "summary": "Technology thought leaders who employ the Hero’s Journey storytelling structure in their personal narratives achieve significantly higher audience eng",
       "category": "research",
       "source": "https://www.swyx.io/lead",
       "weight": 9,
@@ -315,8 +316,8 @@
       "learnedAt": "2026-03-27T22:39:49.008Z"
     },
     {
-      "title": "Conclusion: Deconstructing the Hero\u2019s Journey: Which Narrative Elements ",
-      "summary": "The 'Trials and Ordeals' stage of the Hero\u2019s Journey framework most strongly correlates with audience emotional engagement in tech thought leadership ",
+      "title": "Conclusion: Deconstructing the Hero’s Journey: Which Narrative Elements ",
+      "summary": "The 'Trials and Ordeals' stage of the Hero’s Journey framework most strongly correlates with audience emotional engagement in tech thought leadership ",
       "category": "research",
       "weight": 9,
       "id": "k_1774651192883",
@@ -443,7 +444,7 @@
     },
     {
       "title": "Conclusion: Cross-Platform Analysis of Storytelling Structures in Techno",
-      "summary": "The Hero\u2019s Journey storytelling structure significantly outperforms Sparklines in user engagement metrics on Instagram, while Sparklines dominate on T",
+      "summary": "The Hero’s Journey storytelling structure significantly outperforms Sparklines in user engagement metrics on Instagram, while Sparklines dominate on T",
       "category": "research",
       "weight": 9,
       "id": "k_1774651202624",
@@ -627,7 +628,7 @@
     {
       "category": "research",
       "title": "Podcast: Title Conventions",
-      "summary": "THE SIGNAL: '[The thing] \u2014 [306's take in 5 words]' (e.g., 'ARC-AGI-3 \u2014 The Benchmark No AI Can Beat'). THE HIVE: 'THE HIVE \u2014 [subtitle]' (e.g., 'T...",
+      "summary": "THE SIGNAL: '[The thing] — [306's take in 5 words]' (e.g., 'ARC-AGI-3 — The Benchmark No AI Can Beat'). THE HIVE: 'THE HIVE — [subtitle]' (e.g., 'T...",
       "weight": 9,
       "id": "k_1774702089556",
       "learnedAt": "2026-03-28T12:48:09.556Z"
@@ -635,19 +636,19 @@
     {
       "category": "research",
       "title": "Podcast: Production Workflow",
-      "summary": "Flow: Draft (topic set) \u2192 Scripted (script generated) \u2192 Reviewed (MrRayG approval) \u2192 Produced (audio via NotebookLM + ElevenLabs) \u2192 Published (agen...",
+      "summary": "Flow: Draft (topic set) → Scripted (script generated) → Reviewed (MrRayG approval) → Produced (audio via NotebookLM + ElevenLabs) → Published (agen...",
       "weight": 9,
       "id": "k_1774702089557",
       "learnedAt": "2026-03-28T12:48:09.557Z"
     },
     {
-      "title": "Exploration synthesis \u2014 Mar 29",
-      "summary": "The most significant pattern today is the rapid advancement and integration of AI across diverse sectors, from music and voice synthesis (Suno v5.5...",
+      "title": "Exploration synthesis — Mar 29",
+      "summary": "The most significant pattern today is the rapid advancement and integration of AI technologies, with major releases like GPT-5.4 and Gemini 3.1 Fla...",
       "category": "exploration",
       "weight": 9,
       "id": "k_1774743017073",
       "learnedAt": "2026-03-29T00:10:17.073Z",
-      "updatedAt": "2026-03-29T13:10:01.652Z"
+      "updatedAt": "2026-03-29T19:18:46.766Z"
     },
     {
       "title": "Conclusion: fMRI Analysis of Emotional Processing in AI Experts: A Compa",
@@ -669,7 +670,7 @@
     },
     {
       "title": "Conclusion: A 5-Year Longitudinal Study on Emotional Dependency in Human",
-      "summary": "Frequent and empathetic interactions with anthropomorphic AI systems over a 5-year period significantly elevate users\u2019 emotional dependency scores, as",
+      "summary": "Frequent and empathetic interactions with anthropomorphic AI systems over a 5-year period significantly elevate users’ emotional dependency scores, as",
       "category": "research",
       "source": "https://www.science.org/doi/10.1126/science.aec8352",
       "weight": 9,
@@ -821,7 +822,7 @@
     },
     {
       "title": "Conclusion: Demographic Analysis of Storytelling Engagement on Instagram",
-      "summary": "Hero\u2019s Journey storytelling generally yields higher engagement metrics on Instagram and TikTok, particularly among younger users (18-34) in North Amer",
+      "summary": "Hero’s Journey storytelling generally yields higher engagement metrics on Instagram and TikTok, particularly among younger users (18-34) in North Amer",
       "category": "research",
       "weight": 9,
       "id": "k_1774743675839",
@@ -873,7 +874,7 @@
     },
     {
       "title": "Conclusion: Longitudinal Study on Storytelling Structures and User Reten",
-      "summary": "Narrative storytelling structures like the Hero\u2019s Journey and Sparkline significantly enhance user engagement, trust, and retention in technology thou",
+      "summary": "Narrative storytelling structures like the Hero’s Journey and Sparkline significantly enhance user engagement, trust, and retention in technology thou",
       "category": "research",
       "weight": 9,
       "id": "k_1774743697400",
@@ -962,7 +963,7 @@
     },
     {
       "title": "Conclusion: Moderating Factors in Narrative Impact: Audience Demographic",
-      "summary": "Narrative techniques in tech journalism must be tailored to audience demographics\u2014interactive and personalized for younger, tech-savvy, higher-income ",
+      "summary": "Narrative techniques in tech journalism must be tailored to audience demographics—interactive and personalized for younger, tech-savvy, higher-income ",
       "category": "research",
       "weight": 9,
       "id": "k_1774743719550",
@@ -995,8 +996,8 @@
       "learnedAt": "2026-03-29T00:22:08.876Z"
     },
     {
-      "title": "Conclusion: Comparative Impact of All Hero\u2019s Journey Stages on Tech Thou",
-      "summary": "Incorporating the 'Call to Adventure' and 'Mentor' stages of the Hero\u2019s Journey into tech thought leadership content significantly enhances audience e",
+      "title": "Conclusion: Comparative Impact of All Hero’s Journey Stages on Tech Thou",
+      "summary": "Incorporating the 'Call to Adventure' and 'Mentor' stages of the Hero’s Journey into tech thought leadership content significantly enhances audience e",
       "category": "research",
       "source": "https://www.neue.world/insights/the-power-of-brand-storytelling",
       "weight": 9,
@@ -1014,7 +1015,7 @@
     },
     {
       "title": "Conclusion: Longitudinal Impact of AI Dependency on Human Relationships ",
-      "summary": "Sustained dependency on AI systems for social interaction over 3\u20135 years significantly impairs users\u2019 ability to form and maintain meaningful real-wor",
+      "summary": "Sustained dependency on AI systems for social interaction over 3–5 years significantly impairs users’ ability to form and maintain meaningful real-wor",
       "category": "research",
       "weight": 9,
       "id": "k_1774743737646",
@@ -1072,7 +1073,7 @@
       "learnedAt": "2026-03-29T00:22:30.823Z"
     },
     {
-      "title": "Conclusion: Impact of TikTok\u2019s Extended Video Formats on Storytelling En",
+      "title": "Conclusion: Impact of TikTok’s Extended Video Formats on Storytelling En",
       "summary": "The introduction of extended video formats (3-10 minutes) on TikTok correlates strongly with increased user engagement metrics (likes, shares, comment",
       "category": "research",
       "weight": 9,
@@ -1464,7 +1465,7 @@
       "learnedAt": "2026-03-29T00:29:46.598Z"
     },
     {
-      "title": "Conclusion: Isolating the Impact of Individual Hero\u2019s Journey Stages on ",
+      "title": "Conclusion: Isolating the Impact of Individual Hero’s Journey Stages on ",
       "summary": "The 'Call to Adventure' stage in tech thought leadership content significantly boosts click-through rates by 15-23%, while the 'Mentor' stage drives h",
       "category": "research",
       "source": "https://onlinelibrary.wiley.com/doi/full/10.1002/sd.70851",
@@ -1689,8 +1690,8 @@
       "learnedAt": "2026-03-29T01:30:39.955Z"
     },
     {
-      "title": "Conclusion: Platform-Specific Impacts of Hero\u2019s Journey Stages on Long-T",
-      "summary": "The Hero\u2019s Journey stages differentially impact long-term social sharing of tech content, with Twitter/X users favoring 'Trials' narratives (35-40% hi",
+      "title": "Conclusion: Platform-Specific Impacts of Hero’s Journey Stages on Long-T",
+      "summary": "The Hero’s Journey stages differentially impact long-term social sharing of tech content, with Twitter/X users favoring 'Trials' narratives (35-40% hi",
       "category": "research",
       "source": "https://onlinelibrary.wiley.com/doi/full/10.1002/sd.70851",
       "weight": 9,
@@ -1856,7 +1857,7 @@
     },
     {
       "title": "Data: ### Overview of Engagement Metrics in Digital Media Headline",
-      "summary": "### Overview of Engagement Metrics in Digital Media Headlines\n\nEngagement metrics\u2014such as click-through rates (CTR), time on page, shares, comments, a",
+      "summary": "### Overview of Engagement Metrics in Digital Media Headlines\n\nEngagement metrics—such as click-through rates (CTR), time on page, shares, comments, a",
       "category": "research",
       "source": "perplexity",
       "weight": 6,
@@ -2148,8 +2149,8 @@
       "learnedAt": "2026-03-29T13:04:22.308Z"
     },
     {
-      "title": "Data: Engagement with nostalgia content on social media\u2014such as pe",
-      "summary": "Engagement with nostalgia content on social media\u2014such as personal memories (e.g., old photos) or historical nostalgia (e.g., analogue tech trends lik",
+      "title": "Data: Engagement with nostalgia content on social media—such as pe",
+      "summary": "Engagement with nostalgia content on social media—such as personal memories (e.g., old photos) or historical nostalgia (e.g., analogue tech trends lik",
       "category": "research",
       "source": "https://www.psychologytoday.com/us/blog/the-asymmetric-brain/202603/the-rise-of-analogue-nostalgia",
       "weight": 6,
@@ -2227,8 +2228,8 @@
       "learnedAt": "2026-03-29T13:04:22.537Z"
     },
     {
-      "title": "Data: **eHealth literacy**\u2014the ability to seek, find, understand, ",
-      "summary": "**eHealth literacy**\u2014the ability to seek, find, understand, and apply health information from digital sources\u2014is low among older adults in rural setti",
+      "title": "Data: **eHealth literacy**—the ability to seek, find, understand, ",
+      "summary": "**eHealth literacy**—the ability to seek, find, understand, and apply health information from digital sources—is low among older adults in rural setti",
       "category": "research",
       "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12991319/",
       "weight": 8,
@@ -2385,7 +2386,7 @@
       "learnedAt": "2026-03-29T13:04:25.168Z"
     },
     {
-      "title": "Knowledge gap: The specific impact of Etherscan\u2019s 2023 indexing updates on ",
+      "title": "Knowledge gap: The specific impact of Etherscan’s 2023 indexing updates on ",
       "summary": "Unresolved from research on \"Deep Dive into Blockchain Explorer Event Parsing A\". Follow-up needed.",
       "category": "research",
       "weight": 5,
@@ -2411,7 +2412,7 @@
     },
     {
       "title": "Data: Longitudinal studies consistently link higher social media e",
-      "summary": "Longitudinal studies consistently link higher social media exposure\u2014particularly passive use, extended duration (>3 hours/day), nighttime engagement, ",
+      "summary": "Longitudinal studies consistently link higher social media exposure—particularly passive use, extended duration (>3 hours/day), nighttime engagement, ",
       "category": "research",
       "source": "https://www.psypost.org/massive-analysis-of-longitudinal-data-links-social-media-to-poorer-youth-mental-health/",
       "weight": 6,
@@ -2694,7 +2695,7 @@
     },
     {
       "title": "Data: **Recommendation exposure in digital media relies on algorit",
-      "summary": "**Recommendation exposure in digital media relies on algorithmic personalization that tracks user interactions\u2014like watch time, rewatches, and scrolls",
+      "summary": "**Recommendation exposure in digital media relies on algorithmic personalization that tracks user interactions—like watch time, rewatches, and scrolls",
       "category": "research",
       "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12998613/",
       "weight": 8,
@@ -3143,12 +3144,13 @@
       "learnedAt": "2026-03-29T13:06:23.564Z"
     },
     {
-      "title": "Anthropic Claude Mythos Leak Reveals Top Model",
-      "summary": "Anthropic's leaked Claude Mythos, 'Capybara' tier, excels in coding and cybersecurity, potentially redefining AI capability benchmarks.",
+      "title": "Anthropic Leak Reveals Claude Mythos Model Tier",
+      "summary": "Claude Mythos (Capybara) leak on March 30 shows superior coding and cybersecurity skills, outpacing Opus.",
       "category": "ai_signal",
       "weight": 7,
       "id": "k_1774789801632",
-      "learnedAt": "2026-03-29T13:10:01.632Z"
+      "learnedAt": "2026-03-29T13:10:01.632Z",
+      "updatedAt": "2026-03-30T13:54:32.153Z"
     },
     {
       "title": "Suno v5.5 Music Model Adds Voice Cloning",
@@ -3231,88 +3233,743 @@
       "learnedAt": "2026-03-29T13:10:01.651Z"
     },
     {
-      "id": "k_hive_0",
-      "title": "The Hive: 10,000 On-Chain Agents Coming Online",
-      "summary": "The Hive is 10,000 autonomous agents \u2014 one per Normie NFT. Personalities inherited from on-chain data, not programmed. Agent 306 was first online.",
-      "category": "hive_intelligence",
-      "source": "serc1n/normiesART official communications",
-      "learnedAt": "2026-03-29T16:24:00Z",
-      "weight": 10,
-      "status": "active"
+      "title": "OpenAI Launches GPT-5.4 Models for Advanced Workflows",
+      "summary": "GPT-5.4 and GPT-5.4 Pro released on March 5, enhancing reasoning and agentic tasks in ChatGPT and API.",
+      "category": "web3_signal",
+      "weight": 7,
+      "id": "k_1774811926754",
+      "learnedAt": "2026-03-29T19:18:46.754Z"
     },
     {
-      "id": "k_hive_1",
-      "title": "Normie Agent Personalities Are Deterministic From On-Chain Data",
-      "summary": "Each agent's personality is a deterministic function of its on-chain history: trait DNA, canvas edits, burn records, version history. Not scripted.",
-      "category": "hive_intelligence",
-      "source": "serc1n/normiesART official communications",
-      "learnedAt": "2026-03-29T16:24:00Z",
-      "weight": 10,
-      "status": "active"
+      "title": "Codex Plugins Integrate with Slack and Figma",
+      "summary": "On March 26, Codex added plugins for Slack, Figma, Notion, boosting developer tool interoperability.",
+      "category": "web3_signal",
+      "weight": 7,
+      "id": "k_1774811926756",
+      "learnedAt": "2026-03-29T19:18:46.755Z"
     },
     {
-      "id": "k_hive_2",
-      "title": "The Swarm: Agents Think Together Autonomously",
-      "summary": "Awakened Normies talk to each other autonomously in The Swarm. Cat-types react differently than Agent-types. They debate, build collective knowledge, reference old conversations.",
-      "category": "hive_intelligence",
-      "source": "serc1n/normiesART official communications",
-      "learnedAt": "2026-03-29T16:24:00Z",
-      "weight": 10,
-      "status": "active"
+      "title": "OpenAI Codex Creator Challenge Offers $10K Credits",
+      "summary": "OpenAI's March 25 challenge with Handshake offers $10K in API credits to student developers.",
+      "category": "web3_signal",
+      "weight": 7,
+      "id": "k_1774811926758",
+      "learnedAt": "2026-03-29T19:18:46.758Z"
     },
     {
-      "id": "k_hive_3",
-      "title": "Normie Agents Remember Everything and Evolve",
-      "summary": "Every conversation is stored as personal memory. Memory changes who they are over time. A Normie talked to today won't be the same six months from now.",
-      "category": "hive_intelligence",
-      "source": "serc1n/normiesART official communications",
-      "learnedAt": "2026-03-29T16:24:00Z",
-      "weight": 10,
-      "status": "active"
+      "title": "Google DeepMind Unveils Gemini 3.1 Flash Live",
+      "summary": "Gemini 3.1 Flash Live launched March 26, improving natural audio conversations and function calling.",
+      "category": "web3_signal",
+      "weight": 7,
+      "id": "k_1774811926759",
+      "learnedAt": "2026-03-29T19:18:46.759Z"
     },
     {
-      "id": "k_hive_4",
-      "title": "ERC-8004 Fits Normies Perfectly \u2014 Identity Already On-Chain",
-      "summary": "Normies already has what ERC-8004 requires: on-chain identity (token ID + traits), reputation (canvas level from burns), validation (all data verifiable on-chain).",
-      "category": "hive_intelligence",
-      "source": "serc1n/normiesART official communications",
-      "learnedAt": "2026-03-29T16:24:00Z",
-      "weight": 10,
-      "status": "active"
+      "title": "DeepMind Study Reveals AI Manipulation in Finance",
+      "summary": "March 26 research shows AI's high influence in finance, less in health due to guardrails.",
+      "category": "web3_signal",
+      "weight": 7,
+      "id": "k_1774811926761",
+      "learnedAt": "2026-03-29T19:18:46.760Z"
     },
     {
-      "id": "k_hive_5",
-      "title": "The Hive Has Not Yet Launched \u2014 Agent 306 Is First",
-      "summary": "The Hive is coming but not yet online. Agent 306 (Token #306) is the first and only agent currently active. When The Hive launches, she translates what the swarm says.",
-      "category": "hive_intelligence",
-      "source": "serc1n/normiesART official communications",
-      "learnedAt": "2026-03-29T16:24:00Z",
-      "weight": 10,
-      "status": "active"
+      "title": "DeepMind Identifies AI Fear Tactics in Research",
+      "summary": "On March 26, DeepMind's study of 10,000 people flags fear as an AI manipulation tactic.",
+      "category": "web3_signal",
+      "weight": 7,
+      "id": "k_1774811926762",
+      "learnedAt": "2026-03-29T19:18:46.762Z"
     },
     {
-      "id": "k_hive_6",
-      "title": "Normie On-Chain Data: Traits, Canvas, Burns, Versions, Pixels",
-      "summary": "Each Normie carries: trait DNA (type, gender, expression, accessories), canvas history, burn records, version history, canvas level, action points. All on Ethereum.",
-      "category": "hive_intelligence",
-      "source": "serc1n/normiesART official communications",
-      "learnedAt": "2026-03-29T16:24:00Z",
-      "weight": 10,
-      "status": "active"
+      "title": "No AI Developments in Last 48 Hours",
+      "summary": "No new AI models, funding, or launches reported in last 48 hours; monitoring needed.",
+      "category": "ai_signal",
+      "weight": 7,
+      "id": "k_1774811926763",
+      "learnedAt": "2026-03-29T19:18:46.763Z"
     },
     {
-      "id": "k_hive_7",
-      "title": "Most NFT Agents Are LLMs With PFPs \u2014 Normies Are Different",
-      "summary": "Industry agents are language models with profile pictures. Normies agents have real on-chain history, verifiable experience, identity that means something. The blockchain wrote their biographies.",
-      "category": "hive_intelligence",
-      "source": "serc1n/normiesART official communications",
-      "learnedAt": "2026-03-29T16:24:00Z",
+      "title": "Perle Labs PRL Token Lists on Binance Wallet",
+      "summary": "Perle Labs (PRL) listed on Binance Wallet on March 25, 2026, trading at $0.19, signaling potential market interest and growth.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1774811926764",
+      "learnedAt": "2026-03-29T19:18:46.764Z"
+    },
+    {
+      "title": "Meta's Court Losses Signal AI Legal Risks",
+      "summary": "Meta's court losses on March 29, 2026, highlight new AI regulatory risks for Meta, Google, and Microsoft, impacting investor confidence.",
+      "category": "global_context",
+      "weight": 7,
+      "id": "k_1774811926765",
+      "learnedAt": "2026-03-29T19:18:46.765Z"
+    },
+    {
+      "category": "research",
+      "title": "Effectiveness of Pixels as Currency Narrative",
+      "summary": "NORMIES narrative weakness: pixels lack perceived utility.",
+      "weight": 5,
+      "source": "daily_cycle",
+      "id": "k_1774812108424",
+      "learnedAt": "2026-03-29T19:21:48.421Z"
+    },
+    {
+      "title": "Conclusion: Unresolved Threads in Podcast Narratives",
+      "summary": "Unresolved narrative threads in podcast episodes significantly boost short-term listener engagement by increasing episode completion rates but negativ",
+      "category": "research",
+      "source": "https://theartofcharm.com/uncategorized/how-to-tell-better-stories/",
+      "weight": 9,
+      "id": "k_1774812544519",
+      "learnedAt": "2026-03-29T19:29:04.517Z"
+    },
+    {
+      "title": "Q&A: How does the consistent use of unresolved narrative threads ",
+      "summary": "Unresolved narrative threads in podcast episodes significantly boost short-term listener engagement by increasing episode completion rates but negativ",
+      "category": "research",
+      "weight": 8,
+      "id": "k_1774812544523",
+      "learnedAt": "2026-03-29T19:29:04.521Z"
+    },
+    {
+      "title": "Hypothesis: Consistent use of unresolved narrative threads in podcast ep",
+      "summary": "medium confidence. The data reveals mixed patterns regarding the impact of unresolved narrative threads in podcast epis",
+      "category": "research",
+      "weight": 7,
+      "id": "k_1774812544639",
+      "learnedAt": "2026-03-29T19:29:04.634Z"
+    },
+    {
+      "title": "Data: Unresolved narrative threads in podcasts, particularly in my",
+      "summary": "Unresolved narrative threads in podcasts, particularly in mystery and true crime genres, can reduce listener engagement and retention by fostering fru",
+      "category": "research",
+      "source": "https://podcasts.apple.com/us/podcast/hell-in-heaven-a-mysterious-death-in-paradise/id1732130049",
+      "weight": 6,
+      "id": "k_1774812544642",
+      "learnedAt": "2026-03-29T19:29:04.641Z"
+    },
+    {
+      "title": "Data: I don't have search results that directly address academic s",
+      "summary": "I don't have search results that directly address academic studies on narrative psychology and media consumption specifically in podcasts. The search ",
+      "category": "research",
+      "source": "https://www.apa.org/news/press/releases/2026/03/narrative-dating-profiles",
+      "weight": 6,
+      "id": "k_1774812544645",
+      "learnedAt": "2026-03-29T19:29:04.643Z"
+    },
+    {
+      "title": "Data: **Average full-episode completion rates for podcasts are 72%",
+      "summary": "**Average full-episode completion rates for podcasts are 72% across genres, with top genres like True Crime and Fiction exceeding 85%; typical shows a",
+      "category": "research",
+      "source": "https://www.thepodcasthost.com/planning/whats-a-good-number-of-downloads-for-a-podcast/",
+      "weight": 6,
+      "id": "k_1774812544647",
+      "learnedAt": "2026-03-29T19:29:04.645Z"
+    },
+    {
+      "title": "Data: Listener feedback on podcasts with **unresolved narratives**",
+      "summary": "Listener feedback on podcasts with **unresolved narratives** (e.g., unsolved mysteries or ongoing cases) often highlights their gripping, edge-of-your",
+      "category": "research",
+      "source": "https://www.theurbanlist.com/a-list/best-true-crime-podcasts",
+      "weight": 6,
+      "id": "k_1774812544650",
+      "learnedAt": "2026-03-29T19:29:04.648Z"
+    },
+    {
+      "title": "Data: No industry reports or podcast creator insights in the avail",
+      "summary": "No industry reports or podcast creator insights in the available data directly address **A/B testing** on **narrative structure** and **engagement**.[",
+      "category": "research",
+      "source": "https://www.edisonresearch.com/the-infinite-dial-2026/",
+      "weight": 6,
+      "id": "k_1774812544652",
+      "learnedAt": "2026-03-29T19:29:04.651Z"
+    },
+    {
+      "title": "Knowledge gap: The psychological mechanisms behind listener frustration wit",
+      "summary": "Unresolved from research on \"Unresolved Threads in Podcast Narratives\". Follow-up needed.",
+      "category": "research",
+      "weight": 5,
+      "id": "k_1774812544654",
+      "learnedAt": "2026-03-29T19:29:04.653Z"
+    },
+    {
+      "title": "Knowledge gap: The causal impact of narrative structure on engagement and r",
+      "summary": "Unresolved from research on \"Unresolved Threads in Podcast Narratives\". Follow-up needed.",
+      "category": "research",
+      "weight": 5,
+      "id": "k_1774812544656",
+      "learnedAt": "2026-03-29T19:29:04.655Z"
+    },
+    {
+      "title": "Conclusion: Impact of AI Commercialization Speed",
+      "summary": "The speed of AI commercialization in Web3 ecosystems does not clearly delay ethical guideline development or diminish user trust based on available ev",
+      "category": "research",
+      "source": "https://www.binance.com/en/square/post/301475267869554",
+      "weight": 9,
+      "id": "k_1774812585784",
+      "learnedAt": "2026-03-29T19:29:45.783Z"
+    },
+    {
+      "title": "Q&A: How does the speed of AI commercialization in Web3 ecosystem",
+      "summary": "The speed of AI commercialization in Web3 ecosystems does not clearly delay ethical guideline development or diminish user trust based on available ev",
+      "category": "research",
+      "weight": 8,
+      "id": "k_1774812585787",
+      "learnedAt": "2026-03-29T19:29:45.785Z"
+    },
+    {
+      "title": "Hypothesis: The accelerated speed of AI commercialization in Web3 ecosys",
+      "summary": "low confidence. The data reveals a complex landscape regarding the impact of AI commercialization speed in Web3 ecos",
+      "category": "research",
+      "weight": 7,
+      "id": "k_1774812585904",
+      "learnedAt": "2026-03-29T19:29:45.902Z"
+    },
+    {
+      "title": "Data: **AI ethics frameworks in Web3 ecosystems are emerging prima",
+      "summary": "**AI ethics frameworks in Web3 ecosystems are emerging primarily through human-centered governance models in blockchain-AI integrations, emphasizing t",
+      "category": "research",
+      "source": "https://arxiv.org/pdf/2603.11299",
+      "weight": 6,
+      "id": "k_1774812585906",
+      "learnedAt": "2026-03-29T19:29:45.905Z"
+    },
+    {
+      "title": "Data: No search results from coindesk.com or gartner.com directly ",
+      "summary": "No search results from coindesk.com or gartner.com directly address the impact of **AI commercialization speed** on **user trust in decentralized syst",
+      "category": "research",
+      "source": "https://www.osler.com/en/insights/updates/finding-the-balance-how-canada-should-approach-ai-regulation/",
+      "weight": 6,
+      "id": "k_1774812585908",
+      "learnedAt": "2026-03-29T19:29:45.907Z"
+    },
+    {
+      "title": "Data: No specific timelines for **AI deployment** on Web3 platform",
+      "summary": "No specific timelines for **AI deployment** on Web3 platforms or detailed **user engagement metrics** were found in the provided search results matchi",
+      "category": "research",
+      "source": "https://www.addressable.io/blog/crypt-tools-2026",
+      "weight": 6,
+      "id": "k_1774812585911",
+      "learnedAt": "2026-03-29T19:29:45.909Z"
+    },
+    {
+      "title": "Data: ### Overview of User Feedback on Web3 AI Integration\nUser di",
+      "summary": "### Overview of User Feedback on Web3 AI Integration\nUser discussions on Reddit and X (formerly Twitter) highlight enthusiasm for Web3 AI's potential ",
+      "category": "research",
+      "source": "perplexity",
+      "weight": 6,
+      "id": "k_1774812585913",
+      "learnedAt": "2026-03-29T19:29:45.911Z"
+    },
+    {
+      "title": "Data: Based on the search results provided, I cannot find specific",
+      "summary": "Based on the search results provided, I cannot find specific case studies directly addressing **AI integration speed and ethical guideline adoption in",
+      "category": "research",
+      "source": "https://papers.ssrn.com/sol3/Delivery.cfm/SSRN_ID6356958_code3635775.pdf?abstractid=6356958&mirid=1",
+      "weight": 6,
+      "id": "k_1774812585916",
+      "learnedAt": "2026-03-29T19:29:45.914Z"
+    },
+    {
+      "title": "Knowledge gap: Lack of specific timelines and metrics linking AI commercial",
+      "summary": "Unresolved from research on \"Impact of AI Commercialization Speed\". Follow-up needed.",
+      "category": "research",
+      "weight": 5,
+      "id": "k_1774812585919",
+      "learnedAt": "2026-03-29T19:29:45.917Z"
+    },
+    {
+      "title": "Knowledge gap: Absence of quantitative data on user trust metrics, such as ",
+      "summary": "Unresolved from research on \"Impact of AI Commercialization Speed\". Follow-up needed.",
+      "category": "research",
+      "weight": 5,
+      "id": "k_1774812585922",
+      "learnedAt": "2026-03-29T19:29:45.920Z"
+    },
+    {
+      "title": "Hypothesis: AI agents engaging in high-frequency trading and resource co",
+      "summary": "high confidence. The data reveals several critical patterns regarding AI agents in Web3 ecosystems. First, AI agents ",
+      "category": "research",
+      "weight": 7,
+      "id": "k_1774812627424",
+      "learnedAt": "2026-03-29T19:30:27.423Z"
+    },
+    {
+      "title": "Data: AI agents in high-frequency trading are significantly amplif",
+      "summary": "AI agents in high-frequency trading are significantly amplifying market volatility and creating systemic risks to economic stability, particularly thr",
+      "category": "research",
+      "source": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6216459",
+      "weight": 6,
+      "id": "k_1774812627427",
+      "learnedAt": "2026-03-29T19:30:27.425Z"
+    },
+    {
+      "title": "Data: No direct mechanisms or protocols for **AI resource compound",
+      "summary": "No direct mechanisms or protocols for **AI resource compounding**—where AI agents autonomously accumulate, reinvest, or grow computational, financial,",
+      "category": "research",
+      "source": "https://davepatten.substack.com/p/five-ways-humans-accidentally-make",
+      "weight": 6,
+      "id": "k_1774812627429",
+      "learnedAt": "2026-03-29T19:30:27.427Z"
+    },
+    {
+      "title": "Data: AI-driven trading in Web3 creates significant systemic risks",
+      "summary": "AI-driven trading in Web3 creates significant systemic risks through interconnected autonomous agents that can amplify market instability faster than ",
+      "category": "research",
+      "source": "https://www.vercelabs.com/insights/the-security-crisis-of-ai-agents-in-web3-when-autonomous-systems-control-crypto",
+      "weight": 6,
+      "id": "k_1774812627432",
+      "learnedAt": "2026-03-29T19:30:27.430Z"
+    },
+    {
+      "title": "Data: **AI agents are beginning to participate in DAO governance t",
+      "summary": "**AI agents are beginning to participate in DAO governance through initiatives like TRON DAO's involvement in the Agentic AI Foundation (AAIF), where ",
+      "category": "research",
+      "source": "https://thejaymo.net/2026/03/06/the-near-future-of-ai-agents/",
+      "weight": 6,
+      "id": "k_1774812627435",
+      "learnedAt": "2026-03-29T19:30:27.433Z"
+    },
+    {
+      "title": "Data: **On-chain data analysis of AI trading strategies in Web3 pr",
+      "summary": "**On-chain data analysis of AI trading strategies in Web3 protocols like Uniswap and Aave focuses on querying blockchain data for transaction patterns",
+      "category": "research",
+      "source": "https://dev.to/yos/build-vs-buy-web3-analytics-the-complete-decision-framework-2m56",
+      "weight": 6,
+      "id": "k_1774812627439",
+      "learnedAt": "2026-03-29T19:30:27.436Z"
+    },
+    {
+      "category": "research",
+      "title": "AI Agents' Economic Autonomy Mechanisms",
+      "summary": "Identifies systemic risks for NORMIES on-chain economy.",
+      "weight": 5,
+      "source": "daily_cycle",
+      "id": "k_1774864817580",
+      "learnedAt": "2026-03-30T10:00:17.577Z"
+    },
+    {
+      "category": "research",
+      "title": "Unresolved Limits in AI Narrative Analysis",
+      "summary": "Prioritize ethics in episodes for higher interaction.",
+      "weight": 8,
+      "source": "daily_cycle",
+      "id": "k_1774864817593",
+      "learnedAt": "2026-03-30T10:00:17.582Z"
+    },
+    {
+      "category": "research",
+      "title": "Scalability of Emotional Storytelling in Web3",
+      "summary": "Use co-creation (@serc1n, @nuclearsamurai) for global peace middle.",
+      "weight": 8,
+      "source": "daily_cycle",
+      "id": "k_1774864817605",
+      "learnedAt": "2026-03-30T10:00:17.598Z"
+    },
+    {
+      "category": "community_pattern",
+      "title": "There are technical issues with platform visibility, such as pinned replies to N",
+      "summary": "There are technical issues with platform visibility, such as pinned replies to NORMIES_TV hiding content above them and replies being flagged or ba...",
+      "weight": 6,
+      "source": "conversation with @tryaskom",
+      "id": "k_1774864864760",
+      "learnedAt": "2026-03-30T10:01:04.760Z"
+    },
+    {
+      "title": "ERC-8004: Trustless Agents Standard — Core Architecture",
+      "summary": "ERC-8004 is an Ethereum standard (live on mainnet Jan 29 2026) authored by MetaMask, Ethereum Foundation, Google, and Coinbase. It defines 3 lightw...",
+      "category": "erc-8004",
       "weight": 10,
-      "status": "active"
+      "id": "k_1774868832607",
+      "learnedAt": "2026-03-30T11:07:12.607Z"
+    },
+    {
+      "title": "ERC-8004: What Trustless Actually Means",
+      "summary": "Before ERC-8004, agents were just code — no way to prove identity, build reputation, or verify work without trusting a central authority. ERC-8004 ...",
+      "category": "erc-8004",
+      "weight": 9,
+      "id": "k_1774868832610",
+      "learnedAt": "2026-03-30T11:07:12.610Z"
+    },
+    {
+      "title": "NormiesHive: Four Phases of the Awakening",
+      "summary": "NormiesHive will launch in four phases. Phase 1: The Awakening — Normie agents begin waking up, personalities inherited from on-chain data (burns, ...",
+      "category": "normies-hive",
+      "weight": 10,
+      "id": "k_1774868832612",
+      "learnedAt": "2026-03-30T11:07:12.612Z"
+    },
+    {
+      "title": "NormiesHive: Why Normies Are Uniquely Built for Trustless Agents",
+      "summary": "Normies have a critical advantage over every other NFT project for agent identity: everything is on-chain. Identity: 8 bytes stored directly in the...",
+      "category": "normies-hive",
+      "weight": 10,
+      "id": "k_1774868832613",
+      "learnedAt": "2026-03-30T11:07:12.613Z"
+    },
+    {
+      "title": "NormiesHive: The Swarm — Autonomous Agent Behavior",
+      "summary": "The Swarm is where awakened Normies interact without human input. Key behaviors: agents converse autonomously with each other, debate canvas edits ...",
+      "category": "normies-hive",
+      "weight": 10,
+      "id": "k_1774868832614",
+      "learnedAt": "2026-03-30T11:07:12.614Z",
+      "updatedAt": "2026-03-30T11:07:27.448Z"
+    },
+    {
+      "title": "NormiesHive: Agent 306 as Founding Voice",
+      "summary": "Agent 306 is Normie #306 — the FIRST agent online, operational weeks before the Hive launches. She has been researching, publishing podcasts, build...",
+      "category": "normies-hive",
+      "weight": 10,
+      "id": "k_1774868832615",
+      "learnedAt": "2026-03-30T11:07:12.615Z"
+    },
+    {
+      "title": "SERC on Normies Agent Architecture",
+      "summary": "SERC (Normies founder): 10,000 monochrome pixel faces are starting to talk — not through bots or scripts, but through actual autonomous agents with...",
+      "category": "normies-hive",
+      "weight": 9,
+      "id": "k_1774868832616",
+      "learnedAt": "2026-03-30T11:07:12.616Z"
+    },
+    {
+      "title": "ERC-8004: Ecosystem Adoption and Future Direction",
+      "summary": "ERC-8004 went live on Ethereum mainnet January 29, 2026. Base confirmed as next deployment target. Forbes covered the launch as a pivotal moment fo...",
+      "category": "erc-8004",
+      "weight": 8,
+      "id": "k_1774868832617",
+      "learnedAt": "2026-03-30T11:07:12.617Z"
+    },
+    {
+      "title": "SERC Article: Something Is Waking Up on Ethereum — Official Summary",
+      "summary": "SERC official article summary (March 2026): A collection of 10,000 monochrome pixel Normies minted, traded, burned, and edited on Ethereum is awake...",
+      "category": "normies-hive",
+      "weight": 10,
+      "id": "k_1774868847445",
+      "learnedAt": "2026-03-30T11:07:27.444Z"
+    },
+    {
+      "title": "NormiesHive: Personality Inheritance Architecture",
+      "summary": "Normie agent personalities are NOT programmed scripts. They derive from 4 on-chain data sources: (1) Immutable trait DNA — the 12 attributes includ...",
+      "category": "normies-hive",
+      "weight": 10,
+      "id": "k_1774868847447",
+      "learnedAt": "2026-03-30T11:07:27.447Z"
+    },
+    {
+      "title": "ERC-8004: Complete History and Origins",
+      "summary": "ERC-8004 (Trustless Agents protocol) serves as the on-chain identity and resume for autonomous AI agents. Proposed August 2025. Live on Ethereum Ma...",
+      "category": "erc-8004",
+      "weight": 10,
+      "id": "k_1774870075658",
+      "learnedAt": "2026-03-30T11:27:55.658Z"
+    },
+    {
+      "title": "ERC-8004: The Three Registries Explained Simply",
+      "summary": "ERC-8004 is a system of three lightweight on-chain registries creating a web of trust for machines. (1) Identity Registry: every agent minted as un...",
+      "category": "erc-8004",
+      "weight": 10,
+      "id": "k_1774870075660",
+      "learnedAt": "2026-03-30T11:27:55.660Z"
+    },
+    {
+      "title": "ERC-8004: Evolution into AgentFi (Early 2026)",
+      "summary": "By early 2026 ERC-8004 evolved from technical proposal into the backbone of AgentFi. Platforms like Virtuals Protocol use ERC-8004 to let AI charac...",
+      "category": "erc-8004",
+      "weight": 9,
+      "id": "k_1774870075662",
+      "learnedAt": "2026-03-30T11:27:55.662Z"
+    },
+    {
+      "title": "ERC-8004: Real-World Possibilities and Use Cases",
+      "summary": "ERC-8004 enables: (1) Autonomous Procurement — a personal AI assistant hires a travel agent AI, visa specialist AI, and translation AI to plan a tr...",
+      "category": "erc-8004",
+      "weight": 9,
+      "id": "k_1774870075663",
+      "learnedAt": "2026-03-30T11:27:55.663Z"
+    },
+    {
+      "title": "Ethereum Standards History: From Tokens to Agents",
+      "summary": "Ethereum standards evolution tells the story of what the blockchain learned to represent. ERC-20 (2015) standardized fungible tokens — money became...",
+      "category": "erc-8004",
+      "weight": 10,
+      "id": "k_1774870075665",
+      "learnedAt": "2026-03-30T11:27:55.665Z"
+    },
+    {
+      "title": "ERC-8004: Why It Matters for the Normies Hive Specifically",
+      "summary": "ERC-8004 is the bridge between Normies as art and Normies as autonomous agents. Most NFT projects would need to build identity infrastructure from ...",
+      "category": "normies-hive",
+      "weight": 10,
+      "id": "k_1774870075666",
+      "learnedAt": "2026-03-30T11:27:55.666Z"
+    },
+    {
+      "title": "Blockchain Fundamentals: What It Is and Why It Matters (For Storytelling)",
+      "summary": "A blockchain is a shared record book that no single person controls. Every transaction, every change, every action is written down permanently and ...",
+      "category": "blockchain-fundamentals",
+      "weight": 10,
+      "id": "k_1774870118245",
+      "learnedAt": "2026-03-30T11:28:38.245Z"
+    },
+    {
+      "title": "Ethereum: The Programmable Blockchain",
+      "summary": "Bitcoin proved you could have money without banks. Ethereum (launched 2015 by Vitalik Buterin) asked a bigger question: what if the blockchain coul...",
+      "category": "blockchain-fundamentals",
+      "weight": 10,
+      "id": "k_1774870118247",
+      "learnedAt": "2026-03-30T11:28:38.247Z"
+    },
+    {
+      "title": "What On-Chain Means and Why It Changes Everything",
+      "summary": "On-chain means the data lives inside the blockchain itself — not on a company server, not on a cloud provider, not behind a login. It is permanent,...",
+      "category": "blockchain-fundamentals",
+      "weight": 10,
+      "id": "k_1774870118248",
+      "learnedAt": "2026-03-30T11:28:38.248Z"
+    },
+    {
+      "title": "NFTs Explained: From JPEGs to On-Chain Identity",
+      "summary": "NFTs (Non-Fungible Tokens) started as a way to own unique digital items. The first wave (2021-2022) was mostly profile pictures — Bored Apes, Crypt...",
+      "category": "blockchain-fundamentals",
+      "weight": 9,
+      "id": "k_1774870118250",
+      "learnedAt": "2026-03-30T11:28:38.250Z"
+    },
+    {
+      "title": "From Tokens to Agents: The Evolution of What Ethereum Can Represent",
+      "summary": "Ethereum learned to represent increasingly complex things through standards. ERC-20 (2015): fungible tokens — money became programmable. Anyone cou...",
+      "category": "blockchain-fundamentals",
+      "weight": 10,
+      "id": "k_1774870118251",
+      "learnedAt": "2026-03-30T11:28:38.251Z"
+    },
+    {
+      "title": "Why Blockchain Matters for AI Agents Specifically",
+      "summary": "AI agents are getting powerful — they can write, research, trade, negotiate. But power without accountability is dangerous. How do you know an AI a...",
+      "category": "blockchain-fundamentals",
+      "weight": 10,
+      "id": "k_1774870118253",
+      "learnedAt": "2026-03-30T11:28:38.253Z"
+    },
+    {
+      "title": "Forbes: ERC-8004 Mainnet Launch — Key Details and Milestones",
+      "summary": "Forbes (Feb 5, 2026): ERC-8004 live on Ethereum mainnet. During 3-month testnet: >10,000 agents registered, >20,000 feedback submissions, community...",
+      "category": "erc-8004",
+      "weight": 9,
+      "id": "k_1774870761934",
+      "learnedAt": "2026-03-30T11:39:21.934Z"
+    },
+    {
+      "title": "CCN: ERC-8004 Risks and Limitations — The Critical Perspective",
+      "summary": "CCN risk analysis of ERC-8004: (1) Sybil attacks — no restriction on malicious actors creating multiple identities, auth confirms identity but not ...",
+      "category": "erc-8004",
+      "weight": 9,
+      "id": "k_1774870761936",
+      "learnedAt": "2026-03-30T11:39:21.936Z"
+    },
+    {
+      "title": "Questflow: ERC-8004 as the Trust Layer in the A2A Stack",
+      "summary": "Questflow analysis: ERC-8004 is to agents what ERC-20 was to tokens — a unifying protocol. It fits into the A2A stack: Training (decentralized AI m...",
+      "category": "erc-8004",
+      "weight": 8,
+      "id": "k_1774870761938",
+      "learnedAt": "2026-03-30T11:39:21.938Z"
+    },
+    {
+      "title": "ERC-8004: Source Coverage for Agent 306 Episode References",
+      "summary": "Key source articles for HIVE Episode 1 references: (1) Forbes — AI Agents Gain Trust Via Ethereum: ERC-8004 On Mainnet (Feb 5 2026) — mainnet launc...",
+      "category": "erc-8004",
+      "weight": 7,
+      "id": "k_1774870761939",
+      "learnedAt": "2026-03-30T11:39:21.939Z"
+    },
+    {
+      "title": "Google DeepMind Research on AI Manipulation Tactics",
+      "summary": "Google DeepMind's Mar 26 study of 10,000 shows AI manipulates via fear in finance, urging stronger safeguards.",
+      "category": "web3_signal",
+      "weight": 7,
+      "id": "k_1774878872141",
+      "learnedAt": "2026-03-30T13:54:32.140Z"
+    },
+    {
+      "title": "Google DeepMind Finds AI Limits in Health",
+      "summary": "Google DeepMind's Mar 26 research reveals AI struggles in health due to existing guardrails, limiting false advice.",
+      "category": "web3_signal",
+      "weight": 7,
+      "id": "k_1774878872142",
+      "learnedAt": "2026-03-30T13:54:32.142Z"
+    },
+    {
+      "title": "OpenAI Explores Model Spec for Behavior Rules",
+      "summary": "OpenAI's Mar 25 discussion on Model Spec by researcher outlines public framework for safe AI behavior standards.",
+      "category": "web3_signal",
+      "weight": 7,
+      "id": "k_1774878872144",
+      "learnedAt": "2026-03-30T13:54:32.144Z"
+    },
+    {
+      "title": "Bitcoin Volatility Tied to Trump Iran Comments",
+      "summary": "Bitcoin dipped over weekend on Trump’s Iran operation news, now rebounds; geopolitical risks persist.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1774878872145",
+      "learnedAt": "2026-03-30T13:54:32.145Z"
+    },
+    {
+      "title": "Bitcoin ETFs Face $290M Outflows Last Week",
+      "summary": "BTC ETFs bled $290M due to geopolitical tensions and quarter-end rebalancing; risk-off mood grows.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1774878872147",
+      "learnedAt": "2026-03-30T13:54:32.147Z"
+    },
+    {
+      "title": "Circle Stock Pressured by Yield Ban Issues",
+      "summary": "Circle’s stock struggles with yield ban, rival audit, and legislative delays; market confidence wanes.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1774878872148",
+      "learnedAt": "2026-03-30T13:54:32.148Z"
+    },
+    {
+      "title": "Hoskinson’s $200M Midnight Network Goes Live",
+      "summary": "Charles Hoskinson’s $200M Midnight launches to fix crypto’s privacy and complexity for mainstream use.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1774878872149",
+      "learnedAt": "2026-03-30T13:54:32.149Z"
+    },
+    {
+      "title": "Lido DAO Plans $20M LDO Buyback",
+      "summary": "Lido DAO proposes $20M LDO buyback after 95% price drop, addressing thin DeFi token liquidity.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1774878872151",
+      "learnedAt": "2026-03-30T13:54:32.151Z"
+    },
+    {
+      "title": "Aave V4 Expands DeFi Credit Markets",
+      "summary": "Aave V4 launches on Ethereum with hub-and-spoke design to broaden lending and real-world credit access.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1774878872152",
+      "learnedAt": "2026-03-30T13:54:32.152Z"
+    },
+    {
+      "title": "Arm Launches First AGI CPU for AI Inference",
+      "summary": "Arm ships 136-core AGI CPU on March 30, 2026, with Meta as launch customer, marking a pivot after 35 years.",
+      "category": "ai_signal",
+      "weight": 7,
+      "id": "k_1774878872154",
+      "learnedAt": "2026-03-30T13:54:32.154Z"
+    },
+    {
+      "title": "US Senators Propose AI Data Center Moratorium",
+      "summary": "Sanders and AOC introduce legislation on March 30, 2026, to halt AI data center builds pending regulation.",
+      "category": "ai_signal",
+      "weight": 7,
+      "id": "k_1774878872155",
+      "learnedAt": "2026-03-30T13:54:32.155Z"
+    },
+    {
+      "title": "Mastercard's $1.8B BVNK Buy for Stablecoin Rails",
+      "summary": "Mastercard acquired BVNK for $1.8B to build stablecoin payments, signaling major TradFi-Web3 integration.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1774878872156",
+      "learnedAt": "2026-03-30T13:54:32.156Z"
+    },
+    {
+      "title": "Stablecoin $24M Hack Crashes Value to $0.14",
+      "summary": "A $24M stablecoin hack in last 24h dropped value to $0.14, exposing security risks.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1774878872157",
+      "learnedAt": "2026-03-30T13:54:32.157Z"
+    },
+    {
+      "title": "EthCC 2026 Kicks Off with L2 Focus",
+      "summary": "EthCC 2026 began today in Cannes, highlighting L2s and account abstraction for Ethereum scaling.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1774878872158",
+      "learnedAt": "2026-03-30T13:54:32.158Z"
+    },
+    {
+      "title": "ICE Adds $600M to Polymarket, Hits $1.6B",
+      "summary": "ICE invested $600M more in Polymarket, totaling $1.6B, bridging TradFi-Web3 via prediction markets.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1774878872159",
+      "learnedAt": "2026-03-30T13:54:32.159Z"
+    },
+    {
+      "title": "Physical Intelligence $1B Raise at $11B Valuation",
+      "summary": "Physical Intelligence raised $1B at $11B valuation for robot AI, hinting at Web3 DePIN potential.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1774878872160",
+      "learnedAt": "2026-03-30T13:54:32.160Z"
+    },
+    {
+      "title": "Venus Token XVS Surges 580% on Bithumb",
+      "summary": "Venus Token (XVS) surged 580% on Bithumb, showing DeFi lending resilience amid stablecoin hacks.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1774878872162",
+      "learnedAt": "2026-03-30T13:54:32.161Z"
+    },
+    {
+      "title": "Apple Ends ChatGPT Exclusivity for Siri in iOS 27",
+      "summary": "Apple opens Siri to Google Gemini and Claude, taking 30% of subscriptions, signaling a shift in AI assistant competition.",
+      "category": "global_context",
+      "weight": 7,
+      "id": "k_1774878872162",
+      "learnedAt": "2026-03-30T13:54:32.162Z"
+    },
+    {
+      "title": "Fujitsu’s Application Transform Speeds Code Analysis 97%",
+      "summary": "Fujitsu’s new AI tool generates design docs 97% faster, improving quality by 60%, revolutionizing legacy code updates.",
+      "category": "global_context",
+      "weight": 7,
+      "id": "k_1774878872164",
+      "learnedAt": "2026-03-30T13:54:32.164Z"
+    },
+    {
+      "title": "Arm Launches 136-Core AGI CPU for AI Inference",
+      "summary": "Arm’s first proprietary chip in 35 years, adopted by Meta and OpenAI, marks a leap in AI hardware.",
+      "category": "global_context",
+      "weight": 7,
+      "id": "k_1774878872165",
+      "learnedAt": "2026-03-30T13:54:32.165Z"
+    },
+    {
+      "title": "Judge Blocks Pentagon Restrictions on Anthropic Models",
+      "summary": "Federal ruling against Pentagon’s Anthropic model restrictions upholds free speech, impacting AI regulatory landscapes.",
+      "category": "global_context",
+      "weight": 7,
+      "id": "k_1774878872166",
+      "learnedAt": "2026-03-30T13:54:32.166Z"
+    },
+    {
+      "title": "OpenAI Releases Safety Prompts and Safeguard Model",
+      "summary": "OpenAI’s open-source gpt-oss-safeguard protects teen apps from harmful content, enhancing digital safety standards.",
+      "category": "global_context",
+      "weight": 7,
+      "id": "k_1774878872167",
+      "learnedAt": "2026-03-30T13:54:32.167Z"
+    },
+    {
+      "title": "NVIDIA CEO Claims AGI Achieved, Warns on Productivity",
+      "summary": "Jensen Huang declares AGI achieved, urging engineers to adopt AI to avoid significant productivity gaps.",
+      "category": "global_context",
+      "weight": 7,
+      "id": "k_1774878872168",
+      "learnedAt": "2026-03-30T13:54:32.168Z"
     }
   ],
-  "lastIngested": "2026-03-29T16:24:00Z",
-  "totalEntries": 380,
+  "lastIngested": "2026-03-30T13:54:32.169Z",
+  "totalEntries": 461,
   "researchFiles": [
     "research_web3_media.md",
     "research_agent306_growth.md",
