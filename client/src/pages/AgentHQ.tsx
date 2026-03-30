@@ -927,6 +927,55 @@ function TopicModal({ topic, onClose }: { topic: ResearchTopic; onClose: () => v
   );
 }
 
+// ── Bulk Action Toolbar ──────────────────────────────────────────────────────
+function BulkActionToolbar({
+  selectedCount,
+  onClearSelection,
+  actions,
+}: {
+  selectedCount: number;
+  onClearSelection: () => void;
+  actions: Array<{ label: string; color: string; onClick: () => void; disabled?: boolean; outline?: boolean }>;
+}) {
+  if (selectedCount === 0) return null;
+  return (
+    <div style={{
+      position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
+      background: "#1a1b1c", border: `1px solid ${ORANGE}40`,
+      padding: "0.65rem 1.25rem", display: "flex", alignItems: "center", gap: 12,
+      zIndex: 1000, boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+    }}>
+      <span style={{ ...mono, fontSize: "0.58rem", color: ORANGE, fontWeight: 700 }}>
+        {selectedCount} selected
+      </span>
+      <div style={{ width: 1, height: 20, background: "rgba(227,229,228,0.1)" }} />
+      {actions.map((a, i) => (
+        <Btn key={i} onClick={a.onClick} disabled={a.disabled} color={a.color} outline={a.outline} small>
+          {a.label}
+        </Btn>
+      ))}
+      <div style={{ width: 1, height: 20, background: "rgba(227,229,228,0.1)" }} />
+      <Btn onClick={onClearSelection} color={DIM} outline small>Clear</Btn>
+    </div>
+  );
+}
+
+function SelectCheckbox({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      onClick={e => { e.stopPropagation(); onChange(!checked); }}
+      style={{
+        width: 16, height: 16, flexShrink: 0,
+        border: `1px solid ${checked ? ORANGE : "rgba(227,229,228,0.2)"}`,
+        background: checked ? ORANGE : "transparent",
+        cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+      }}
+    >
+      {checked && <span style={{ fontSize: "0.5rem", color: "#0e0f10", fontWeight: 900 }}>✓</span>}
+    </button>
+  );
+}
+
 // ── Research Queue tab ────────────────────────────────────────────────────────
 function ResearchQueueTab({ topics, goals, refetch }: { topics: ResearchTopic[]; goals: AgentGoal[]; refetch: () => void }) {
   const { toast } = useToast();
@@ -935,6 +984,26 @@ function ResearchQueueTab({ topics, goals, refetch }: { topics: ResearchTopic[];
   const [form, setForm] = useState({ topic: "", description: "", priority: "medium" });
   const [expanded, setExpanded] = useState<string | null>(null);
   const [modalTopic, setModalTopic] = useState<ResearchTopic | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const toggleSelect = (id: string) => setSelected(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
+  const bulkArchiveMut = useMutation({
+    mutationFn: (ids: string[]) => apiRequest("POST", "/api/bulk/research/archive", { ids }).then(r => r.json()),
+    onSuccess: (data: any) => { refetch(); setSelected(new Set()); toast({ title: `${data.archived} topics archived` }); },
+    onError: () => toast({ title: "Bulk archive failed", variant: "destructive" }),
+  });
+
+  const bulkAbandonResearchMut = useMutation({
+    mutationFn: (ids: string[]) => apiRequest("POST", "/api/bulk/research/abandon", { ids }).then(r => r.json()),
+    onSuccess: (data: any) => { refetch(); setSelected(new Set()); toast({ title: `${data.abandoned} topics abandoned` }); },
+    onError: () => toast({ title: "Bulk abandon failed", variant: "destructive" }),
+  });
 
   const addMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/research/add", form).then(r => r.json()),
@@ -969,10 +1038,32 @@ function ResearchQueueTab({ topics, goals, refetch }: { topics: ResearchTopic[];
     onError: () => toast({ title: "Scan failed", variant: "destructive" }),
   });
 
+  const autoArchiveMut = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/research/auto-archive", {}).then(r => r.json()),
+    onSuccess: (data: any) => {
+      refetch();
+      toast({ title: `${data.count} topics archived`, description: data.archived?.join(", ") || "Nothing to archive." });
+    },
+    onError: () => toast({ title: "Auto-archive failed", variant: "destructive" }),
+  });
+
+  const autoAdvanceMut = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/research/auto-advance", {}).then(r => r.json()),
+    onSuccess: (data: any) => {
+      refetch();
+      toast({ title: `${data.count} topics advanced`, description: data.advanced?.map((a: any) => `${a.topic}: ${a.from} → ${a.to}`).join(", ") || "Nothing to advance." });
+    },
+    onError: () => toast({ title: "Auto-advance failed", variant: "destructive" }),
+  });
+
   const { data: scannerData } = useQuery<{ lastScanAt: string | null; totalQueued: number; totalScans: number }>({
     queryKey: ["/api/research/scanner"],
     refetchInterval: 60_000,
   });
+
+  const archivedCount = topics.filter(t => t.status === "archived").length;
+  const visibleTopics = showArchived ? topics : topics.filter(t => t.status !== "archived");
+  const stuckTopics = topics.filter(t => isResearchStuck(t));
 
   return (
     <div>
@@ -980,7 +1071,7 @@ function ResearchQueueTab({ topics, goals, refetch }: { topics: ResearchTopic[];
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap" as const, gap: 8 }}>
         <div style={{ display: "flex", flexDirection: "column" as const, gap: 3 }}>
           <span style={{ ...mono, fontSize: "0.55rem", color: DIM, textTransform: "uppercase" as const, letterSpacing: "0.1em" }}>
-            {topics.length} topics in queue
+            {visibleTopics.length} topics in queue{archivedCount > 0 && !showArchived ? ` (${archivedCount} archived)` : ""}
           </span>
           {scannerData?.lastScanAt && (
             <span style={{ ...mono, fontSize: "0.46rem", color: DIMMER }}>
@@ -988,7 +1079,28 @@ function ResearchQueueTab({ topics, goals, refetch }: { topics: ResearchTopic[];
             </span>
           )}
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
+          <Btn
+            onClick={() => autoAdvanceMut.mutate()}
+            disabled={autoAdvanceMut.isPending}
+            color={GREEN}
+            outline
+          >
+            {autoAdvanceMut.isPending ? "Advancing..." : "⏩ Auto-Advance"}
+          </Btn>
+          <Btn
+            onClick={() => autoArchiveMut.mutate()}
+            disabled={autoArchiveMut.isPending}
+            color={TEAL}
+            outline
+          >
+            {autoArchiveMut.isPending ? "Archiving..." : "📦 Auto-Archive"}
+          </Btn>
+          {archivedCount > 0 && (
+            <Btn onClick={() => setShowArchived(v => !v)} outline color={DIMMER}>
+              {showArchived ? "Hide Archived" : `Show ${archivedCount} Archived`}
+            </Btn>
+          )}
           <Btn
             onClick={() => scanMutation.mutate()}
             disabled={scanMutation.isPending}
@@ -1001,6 +1113,19 @@ function ResearchQueueTab({ topics, goals, refetch }: { topics: ResearchTopic[];
           </Btn>
         </div>
       </div>
+
+      {/* Select All */}
+      {visibleTopics.length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <SelectCheckbox
+            checked={visibleTopics.length > 0 && visibleTopics.every(t => selected.has(t.id))}
+            onChange={v => setSelected(v ? new Set(visibleTopics.map(t => t.id)) : new Set())}
+          />
+          <span style={{ ...mono, fontSize: "0.48rem", color: DIM, textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>
+            Select All
+          </span>
+        </div>
+      )}
 
       {/* Add form */}
       {showForm && (
@@ -1031,14 +1156,16 @@ function ResearchQueueTab({ topics, goals, refetch }: { topics: ResearchTopic[];
       {modalTopic && <TopicModal topic={modalTopic} onClose={() => setModalTopic(null)} />}
 
       {/* Topic list */}
-      {topics.length === 0 && (
+      {visibleTopics.length === 0 && (
         <div style={{ padding: "2rem", textAlign: "center" as const, border: `1px solid ${DIMMEST}` }}>
-          <p style={{ ...mono, fontSize: "0.65rem", color: DIMMER, margin: 0 }}>No research topics yet. Add one above.</p>
+          <p style={{ ...mono, fontSize: "0.65rem", color: DIMMER, margin: 0 }}>
+            {topics.length === 0 ? "No research topics yet. Add one above." : "All topics are archived. Toggle \"Show Archived\" to see them."}
+          </p>
         </div>
       )}
 
       <div style={{ display: "flex", flexDirection: "column" as const, gap: 8 }}>
-        {[...topics].sort((a, b) => {
+        {[...visibleTopics].sort((a, b) => {
           if (a.status === "needs_input" && b.status !== "needs_input") return -1;
           if (a.status !== "needs_input" && b.status === "needs_input") return 1;
           return 0;
@@ -1066,6 +1193,9 @@ function ResearchQueueTab({ topics, goals, refetch }: { topics: ResearchTopic[];
               </p>
             )}
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+              <div style={{ paddingTop: 2, flexShrink: 0 }}>
+                <SelectCheckbox checked={selected.has(topic.id)} onChange={() => toggleSelect(topic.id)} />
+              </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" as const, marginBottom: 4 }}>
                   <StatusBadge status={topic.status} />
@@ -1103,6 +1233,15 @@ function ResearchQueueTab({ topics, goals, refetch }: { topics: ResearchTopic[];
                   {topic.loopbackCount != null && topic.loopbackCount > 0 && (
                     <span style={{ ...mono, fontSize: "0.44rem", color: YELLOW }}>
                       ↩ {topic.loopbackCount} loopback{topic.loopbackCount !== 1 ? "s" : ""}
+                    </span>
+                  )}
+                  {isResearchStuck(topic) && (
+                    <span style={{
+                      ...mono, fontSize: "0.44rem", color: RED, background: "rgba(248,113,113,0.1)",
+                      border: `1px solid ${RED}30`, padding: "1px 5px",
+                      textTransform: "uppercase" as const, letterSpacing: "0.06em",
+                    }}>
+                      STUCK · {getResearchStuckDays(topic)}d
                     </span>
                   )}
                   <span style={{ ...mono, fontSize: "0.45rem", color: "rgba(227,229,228,0.25)" }}>
@@ -1175,6 +1314,15 @@ function ResearchQueueTab({ topics, goals, refetch }: { topics: ResearchTopic[];
           );
         })}
       </div>
+
+      <BulkActionToolbar
+        selectedCount={selected.size}
+        onClearSelection={() => setSelected(new Set())}
+        actions={[
+          { label: "Archive", color: TEAL, onClick: () => bulkArchiveMut.mutate(Array.from(selected)), disabled: bulkArchiveMut.isPending, outline: true },
+          { label: "Abandon", color: RED, onClick: () => bulkAbandonResearchMut.mutate(Array.from(selected)), disabled: bulkAbandonResearchMut.isPending, outline: true },
+        ]}
+      />
     </div>
   );
 }
@@ -1364,6 +1512,19 @@ function ManuscriptsTab({ topics, refetch }: { topics: ResearchTopic[]; refetch:
   const manuscripts = topics.filter(t => t.manuscript && ["pending_review", "approved", "published", "declined", "drafting"].includes(t.status));
   const [expanded, setExpanded] = useState<string | null>(null);
   const [actionState, setActionState] = useState<Record<string, { note: string; declining: boolean; revising: boolean }>>({});
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const toggleSelect = (id: string) => setSelected(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
+  const bulkApproveMut = useMutation({
+    mutationFn: (ids: string[]) => apiRequest("POST", "/api/bulk/manuscripts/approve", { ids }).then(r => r.json()),
+    onSuccess: (data: any) => { refetch(); setSelected(new Set()); toast({ title: `${data.approved} manuscripts approved` }); },
+    onError: () => toast({ title: "Bulk approve failed", variant: "destructive" }),
+  });
 
   const getAS = (id: string) => actionState[id] ?? { note: "", declining: false, revising: false };
   const setAS = (id: string, patch: Partial<{ note: string; declining: boolean; revising: boolean }>) =>
@@ -1400,8 +1561,22 @@ function ManuscriptsTab({ topics, refetch }: { topics: ResearchTopic[]; refetch:
     );
   }
 
+  const pendingManuscripts = manuscripts.filter(t => t.status === "pending_review");
+
   return (
     <div style={{ display: "flex", flexDirection: "column" as const, gap: 10 }}>
+      {/* Select All */}
+      {manuscripts.length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <SelectCheckbox
+            checked={manuscripts.length > 0 && manuscripts.every(t => selected.has(t.id))}
+            onChange={v => setSelected(v ? new Set(manuscripts.map(t => t.id)) : new Set())}
+          />
+          <span style={{ ...mono, fontSize: "0.48rem", color: DIM, textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>
+            Select All
+          </span>
+        </div>
+      )}
       {manuscripts.map(topic => {
         const as = getAS(topic.id);
         const isExpanded = expanded === topic.id;
@@ -1411,6 +1586,9 @@ function ManuscriptsTab({ topics, refetch }: { topics: ResearchTopic[]; refetch:
           <div key={topic.id} style={{ background: "rgba(227,229,228,0.015)", border: "1px solid rgba(227,229,228,0.07)" }}>
             <div style={{ padding: "0.75rem 1rem" }}>
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                <div style={{ paddingTop: 2, flexShrink: 0 }}>
+                  <SelectCheckbox checked={selected.has(topic.id)} onChange={() => toggleSelect(topic.id)} />
+                </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" as const, marginBottom: 5 }}>
                     <StatusBadge status={topic.status} />
@@ -1521,6 +1699,19 @@ function ManuscriptsTab({ topics, refetch }: { topics: ResearchTopic[]; refetch:
           </div>
         );
       })}
+
+      <BulkActionToolbar
+        selectedCount={selected.size}
+        onClearSelection={() => setSelected(new Set())}
+        actions={[
+          {
+            label: "Approve",
+            color: GREEN,
+            onClick: () => bulkApproveMut.mutate(Array.from(selected).filter(id => pendingManuscripts.some(m => m.id === id))),
+            disabled: bulkApproveMut.isPending,
+          },
+        ]}
+      />
     </div>
   );
 }
@@ -1699,6 +1890,33 @@ const GOAL_STATUS_BADGE: Record<GoalStatus, { color: string; bg: string; label: 
   abandoned: { color: DIM,    bg: DIMMEST,                  label: "ABANDONED" },
 };
 
+// ── Helpers: staleness / stuck detection ──────────────────────────────────────
+function isGoalStale(goal: AgentGoal, thresholdDays = 7): boolean {
+  if (goal.status !== "active") return false;
+  const lastActivity = goal.progressUpdatedAt ?? goal.updatedAt ?? goal.createdAt;
+  const staleDays = (Date.now() - new Date(lastActivity).getTime()) / (24 * 60 * 60 * 1000);
+  return staleDays >= thresholdDays;
+}
+
+function getGoalStaleDays(goal: AgentGoal): number {
+  const lastActivity = goal.progressUpdatedAt ?? goal.updatedAt ?? goal.createdAt;
+  return Math.floor((Date.now() - new Date(lastActivity).getTime()) / (24 * 60 * 60 * 1000));
+}
+
+function isResearchStuck(topic: ResearchTopic, thresholdDays = 14): boolean {
+  if (["archived", "published", "declined", "approved"].includes(topic.status)) return false;
+  if (!topic.researchPhase) return false;
+  const lastPhaseEntry = (topic.phaseHistory ?? []).filter(p => p.phase === topic.researchPhase).pop();
+  const enteredAt = lastPhaseEntry?.enteredAt ?? topic.updatedAt;
+  return (Date.now() - new Date(enteredAt).getTime()) > thresholdDays * 24 * 60 * 60 * 1000;
+}
+
+function getResearchStuckDays(topic: ResearchTopic): number {
+  const lastPhaseEntry = (topic.phaseHistory ?? []).filter(p => p.phase === topic.researchPhase).pop();
+  const enteredAt = lastPhaseEntry?.enteredAt ?? topic.updatedAt;
+  return Math.floor((Date.now() - new Date(enteredAt).getTime()) / (24 * 60 * 60 * 1000));
+}
+
 function GoalStatusBadge({ status }: { status: GoalStatus }) {
   const cfg = GOAL_STATUS_BADGE[status];
   return (
@@ -1739,6 +1957,13 @@ function GoalsTab({ goals, stats, topics, refetch }: {
   const [expanded,  setExpanded]  = useState<string | null>(null);
   const [filterCat, setFilterCat] = useState<GoalCategory | "all">("all");
   const [filterSt,  setFilterSt]  = useState<GoalStatus | "all">("active");
+  const [selected,  setSelected]  = useState<Set<string>>(new Set());
+
+  const toggleSelect = (id: string) => setSelected(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
 
   // form state
   const [form, setForm] = useState({
@@ -1802,6 +2027,30 @@ function GoalsTab({ goals, stats, topics, refetch }: {
     },
     onError: () => toast({ title: "Scan failed", variant: "destructive" }),
   });
+
+  const resolveStaleGoalsMut = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/goals/auto-resolve-stale", {}).then(r => r.json()),
+    onSuccess: (data: any) => {
+      refetch();
+      toast({ title: `${data.count} stale goals resolved`, description: data.resolved?.join(", ") || "No stale goals found." });
+    },
+    onError: () => toast({ title: "Failed to resolve stale goals", variant: "destructive" }),
+  });
+
+  const bulkResolveGoalsMut = useMutation({
+    mutationFn: (ids: string[]) => apiRequest("POST", "/api/bulk/goals/resolve", { ids }).then(r => r.json()),
+    onSuccess: (data: any) => { refetch(); setSelected(new Set()); toast({ title: `${data.resolved} goals resolved` }); },
+    onError: () => toast({ title: "Bulk resolve failed", variant: "destructive" }),
+  });
+
+  const bulkAbandonGoalsMut = useMutation({
+    mutationFn: (ids: string[]) => apiRequest("POST", "/api/bulk/goals/abandon", { ids }).then(r => r.json()),
+    onSuccess: (data: any) => { refetch(); setSelected(new Set()); toast({ title: `${data.abandoned} goals abandoned` }); },
+    onError: () => toast({ title: "Bulk abandon failed", variant: "destructive" }),
+  });
+
+  const staleGoals = goals.filter(g => isGoalStale(g));
+  const staleCount = staleGoals.length;
 
   // Grok milestone evaluation mutations
   const evaluateMut = useMutation({
@@ -1880,6 +2129,16 @@ function GoalsTab({ goals, stats, topics, refetch }: {
               outline
             >
               {scanGoalsMut.isPending ? "Scanning..." : "🔬 Suggest Research for Goals"}
+            </Btn>
+          )}
+          {staleCount > 0 && (
+            <Btn
+              onClick={() => resolveStaleGoalsMut.mutate()}
+              disabled={resolveStaleGoalsMut.isPending}
+              color={YELLOW}
+              outline
+            >
+              {resolveStaleGoalsMut.isPending ? "Resolving..." : `Resolve ${staleCount} Stale`}
             </Btn>
           )}
           <Btn onClick={() => setShowAdd(v => !v)}>
@@ -1967,7 +2226,18 @@ function GoalsTab({ goals, stats, topics, refetch }: {
         ))}
       </div>
 
-      {/* Goal list */}
+      {/* Select All + Goal list */}
+      {filtered.length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <SelectCheckbox
+            checked={filtered.length > 0 && filtered.every(g => selected.has(g.id))}
+            onChange={v => setSelected(v ? new Set(filtered.map(g => g.id)) : new Set())}
+          />
+          <span style={{ ...mono, fontSize: "0.48rem", color: DIM, textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>
+            Select All
+          </span>
+        </div>
+      )}
       {filtered.length === 0 ? (
         <div style={{ textAlign: "center" as const, padding: "2.5rem", color: DIM }}>
           <p style={{ ...mono, fontSize: "0.6rem", marginBottom: 8 }}>
@@ -2002,10 +2272,22 @@ function GoalsTab({ goals, stats, topics, refetch }: {
                     display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12,
                   }}
                 >
+                  <div style={{ paddingTop: 2, flexShrink: 0 }}>
+                    <SelectCheckbox checked={selected.has(goal.id)} onChange={() => toggleSelect(goal.id)} />
+                  </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const, marginBottom: 4 }}>
                       <CategoryTag category={goal.category} />
                       <GoalStatusBadge status={goal.status} />
+                      {isGoalStale(goal) && (
+                        <span style={{
+                          ...mono, fontSize: "0.46rem", color: YELLOW, background: "rgba(251,191,36,0.1)",
+                          border: `1px solid ${YELLOW}30`, padding: "1px 6px",
+                          textTransform: "uppercase" as const, letterSpacing: "0.1em",
+                        }}>
+                          STALE · {getGoalStaleDays(goal)}d
+                        </span>
+                      )}
                       <span style={{
                         ...mono, fontSize: "0.46rem",
                         color: PRIORITY_COLOR[goal.priority],
@@ -2305,6 +2587,15 @@ function GoalsTab({ goals, stats, topics, refetch }: {
           })}
         </div>
       )}
+
+      <BulkActionToolbar
+        selectedCount={selected.size}
+        onClearSelection={() => setSelected(new Set())}
+        actions={[
+          { label: "Resolve", color: GREEN, onClick: () => bulkResolveGoalsMut.mutate(Array.from(selected)), disabled: bulkResolveGoalsMut.isPending },
+          { label: "Abandon", color: RED, onClick: () => bulkAbandonGoalsMut.mutate(Array.from(selected)), disabled: bulkAbandonGoalsMut.isPending, outline: true },
+        ]}
+      />
     </div>
   );
 }

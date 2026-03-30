@@ -45,6 +45,10 @@ import {
   evaluateMilestonesWithGrok, approveMilestoneEval, rejectMilestoneEval,
   // Lab management
   resetResearchLab,
+  // Autonomy
+  getStaleGoals, autoResolveStaleGoals,
+  autoArchiveCompletedResearch, getStuckResearch,
+  autoAdvanceResearch,
 } from "./researchEngine.js";
 import { takeSnapshot, getEvolutionHistory, getLatestSnapshot, scheduleEvolutionTracking } from "./evolutionTracker.js";
 import { runResearchScan, getScannerState, scheduleResearchScan, scanGoalsForResearch } from "./researchScanner.js";
@@ -3448,6 +3452,85 @@ needsHelp: true only when you genuinely need his direction or information`,
       lastEvaluatedAt: (goal as any).lastEvaluatedAt ?? null,
       lastEvaluatedTopicId: (goal as any).lastEvaluatedTopicId ?? null,
     });
+  });
+
+  // ── AUTONOMY: Auto-Resolve Stale Goals ──────────────────────────────────
+  app.get("/api/goals/stale", requireDashAuth, (_req, res) => {
+    const stale = getStaleGoals();
+    res.json({ stale, count: stale.length });
+  });
+
+  app.post("/api/goals/auto-resolve-stale", requireDashAuth, (_req, res) => {
+    const result = autoResolveStaleGoals();
+    res.json(result);
+  });
+
+  // ── AUTONOMY: Auto-Archive Completed Research ─────────────────────────────
+  app.post("/api/research/auto-archive", requireDashAuth, (_req, res) => {
+    const result = autoArchiveCompletedResearch();
+    res.json(result);
+  });
+
+  app.get("/api/research/stuck", requireDashAuth, (_req, res) => {
+    const stuck = getStuckResearch();
+    res.json({ stuck, count: stuck.length });
+  });
+
+  // ── AUTONOMY: Auto-Advance Pipelines ──────────────────────────────────────
+  app.post("/api/research/auto-advance", requireDashAuth, (_req, res) => {
+    const result = autoAdvanceResearch();
+    res.json(result);
+  });
+
+  // ── AUTONOMY: Bulk Actions ────────────────────────────────────────────────
+  app.post("/api/bulk/goals/resolve", requireDashAuth, (req, res) => {
+    const { ids } = req.body ?? {};
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: "ids array required" });
+    let resolved = 0;
+    for (const id of ids) {
+      if (updateGoalStatus(id, "abandoned", "Bulk-resolved via Agent HQ")) resolved++;
+    }
+    res.json({ resolved, total: ids.length });
+  });
+
+  app.post("/api/bulk/goals/abandon", requireDashAuth, (req, res) => {
+    const { ids } = req.body ?? {};
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: "ids array required" });
+    let abandoned = 0;
+    for (const id of ids) {
+      if (updateGoalStatus(id, "abandoned")) abandoned++;
+    }
+    res.json({ abandoned, total: ids.length });
+  });
+
+  app.post("/api/bulk/research/archive", requireDashAuth, (req, res) => {
+    const { ids } = req.body ?? {};
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: "ids array required" });
+    let archived = 0;
+    for (const id of ids) {
+      if (updateTopicStatus(id, "archived")) archived++;
+    }
+    res.json({ archived, total: ids.length });
+  });
+
+  app.post("/api/bulk/research/abandon", requireDashAuth, (req, res) => {
+    const { ids } = req.body ?? {};
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: "ids array required" });
+    let abandoned = 0;
+    for (const id of ids) {
+      if (updateTopicStatus(id, "declined", { reviewNote: "Bulk-abandoned via Agent HQ" })) abandoned++;
+    }
+    res.json({ abandoned, total: ids.length });
+  });
+
+  app.post("/api/bulk/manuscripts/approve", requireDashAuth, (req, res) => {
+    const { ids } = req.body ?? {};
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: "ids array required" });
+    let approved = 0;
+    for (const id of ids) {
+      if (approveForPublication(id, "Bulk-approved via Agent HQ")) approved++;
+    }
+    res.json({ approved, total: ids.length });
   });
 
     // ── ERC-8004 Agent Registration ──────────────────────────────────────────

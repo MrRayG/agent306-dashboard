@@ -1688,3 +1688,138 @@ Return JSON:
     return [];
   }
 }
+
+// ── Autonomy: Auto-Resolve Stale Goals ──────────────────────────────────────
+// Goals with no progress/milestone updates in 7+ days are considered stale.
+// This function marks all stale active goals as "abandoned" with a note.
+
+export function getStaleGoals(thresholdDays = 7): AgentGoal[] {
+  const store = loadGoals();
+  const now = Date.now();
+  const threshold = thresholdDays * 24 * 60 * 60 * 1000;
+  return store.goals.filter(g => {
+    if (g.status !== "active") return false;
+    const lastActivity = g.progressUpdatedAt ?? g.updatedAt ?? g.createdAt;
+    return (now - new Date(lastActivity).getTime()) > threshold;
+  });
+}
+
+export function autoResolveStaleGoals(thresholdDays = 7): { resolved: string[]; count: number } {
+  const store = loadGoals();
+  const now = Date.now();
+  const threshold = thresholdDays * 24 * 60 * 60 * 1000;
+  const resolved: string[] = [];
+
+  for (const g of store.goals) {
+    if (g.status !== "active") continue;
+    const lastActivity = g.progressUpdatedAt ?? g.updatedAt ?? g.createdAt;
+    const staleDays = Math.floor((now - new Date(lastActivity).getTime()) / (24 * 60 * 60 * 1000));
+    if (staleDays >= thresholdDays) {
+      g.status    = "abandoned";
+      g.updatedAt = new Date().toISOString();
+      g.achievementNote = `Auto-resolved: no progress for ${staleDays} days.`;
+      resolved.push(g.title);
+    }
+  }
+
+  if (resolved.length > 0) {
+    saveGoals(store);
+    console.log(`[Goals] Auto-resolved ${resolved.length} stale goals: ${resolved.join(", ")}`);
+  }
+  return { resolved, count: resolved.length };
+}
+
+// ── Autonomy: Auto-Archive Completed Research ───────────────────────────────
+// Research topics at "interpretation" phase AND published get auto-archived.
+// Also flags research stuck at a phase for 14+ days.
+
+export function autoArchiveCompletedResearch(): { archived: string[]; count: number } {
+  const lab = loadLab();
+  const archived: string[] = [];
+
+  for (const t of lab.topics) {
+    if (t.status === "archived") continue;
+    // Archive if published AND reached interpretation
+    if (t.status === "published" && t.researchPhase === "interpretation") {
+      t.status    = "archived";
+      t.updatedAt = new Date().toISOString();
+      archived.push(t.topic);
+    }
+  }
+
+  if (archived.length > 0) {
+    saveLab(lab);
+    console.log(`[Research] Auto-archived ${archived.length} completed topics: ${archived.join(", ")}`);
+  }
+  return { archived, count: archived.length };
+}
+
+export function getStuckResearch(thresholdDays = 14): Array<{ id: string; topic: string; phase: string; stuckDays: number }> {
+  const lab = loadLab();
+  const now = Date.now();
+  const threshold = thresholdDays * 24 * 60 * 60 * 1000;
+  const stuck: Array<{ id: string; topic: string; phase: string; stuckDays: number }> = [];
+
+  for (const t of lab.topics) {
+    if (["archived", "published", "declined", "approved"].includes(t.status)) continue;
+    if (!t.researchPhase) continue;
+    const lastPhaseEntry = (t.phaseHistory ?? []).filter(p => p.phase === t.researchPhase).pop();
+    const enteredAt = lastPhaseEntry?.enteredAt ?? t.updatedAt;
+    const stuckMs = now - new Date(enteredAt).getTime();
+    if (stuckMs > threshold) {
+      stuck.push({
+        id: t.id,
+        topic: t.topic,
+        phase: t.researchPhase,
+        stuckDays: Math.floor(stuckMs / (24 * 60 * 60 * 1000)),
+      });
+    }
+  }
+  return stuck;
+}
+
+// ── Autonomy: Auto-Advance Pipelines ────────────────────────────────────────
+// Research topics that completed a stage with no blockers advance to the next.
+
+const PHASE_ORDER: ResearchPhase[] = [
+  "problem_definition",
+  "literature_review",
+  "hypothesis_formation",
+  "research_design",
+  "data_collection",
+  "analysis",
+  "interpretation",
+];
+
+export function autoAdvanceResearch(): { advanced: Array<{ id: string; topic: string; from: string; to: string }>; count: number } {
+  const lab = loadLab();
+  const advanced: Array<{ id: string; topic: string; from: string; to: string }> = [];
+
+  for (const t of lab.topics) {
+    // Only advance topics that are actively in the pipeline
+    if (!["researching", "synthesizing", "hypothesis"].includes(t.status)) continue;
+    if (t.status === "needs_input") continue;
+    if (!t.researchPhase) continue;
+
+    const currentIdx = PHASE_ORDER.indexOf(t.researchPhase as ResearchPhase);
+    if (currentIdx < 0 || currentIdx >= PHASE_ORDER.length - 1) continue;
+
+    // Check that the current phase has been exited (has data)
+    const lastEntry = (t.phaseHistory ?? []).filter(p => p.phase === t.researchPhase).pop();
+    if (!lastEntry?.exitedAt) continue; // phase still in progress
+
+    const nextPhase = PHASE_ORDER[currentIdx + 1];
+    const fromPhase = t.researchPhase;
+
+    // Advance
+    addPhaseEntry(t, nextPhase, `Auto-advanced from ${fromPhase}`);
+    t.updatedAt = new Date().toISOString();
+    advanced.push({ id: t.id, topic: t.topic, from: fromPhase, to: nextPhase });
+  }
+
+  if (advanced.length > 0) {
+    saveLab(lab);
+    console.log(`[Research] Auto-advanced ${advanced.length} topics: ${advanced.map(a => `${a.topic}: ${a.from}→${a.to}`).join(", ")}`);
+  }
+  return { advanced, count: advanced.length };
+}
