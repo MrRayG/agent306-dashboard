@@ -496,7 +496,7 @@ export function backfillTiers(): { updated: number } {
 export function getKnowledgeTiers(): Record<string, number> {
   const tiers: Record<string, number> = { core: 0, active: 0, operational: 0, archived: 0 };
   for (const e of knowledge.entries) {
-    const tier = e.tier ?? assignTier(e);
+    const tier = e.tier ?? assignTier(e) ?? "operational";
     tiers[tier] = (tiers[tier] ?? 0) + 1;
   }
   return tiers;
@@ -522,7 +522,7 @@ export function addKnowledge(entry: Omit<KnowledgeEntry, "id" | "learnedAt">): v
   const titleScan = scanForInjection(entry.title);
   const summaryScan = scanForInjection(entry.summary ?? "");
   if (!titleScan.safe || !summaryScan.safe) {
-    const allThreats = [...new Set([...titleScan.threats, ...summaryScan.threats])];
+    const allThreats = Array.from(new Set([...titleScan.threats, ...summaryScan.threats]));
     console.warn(`[Memory] Prompt injection detected in knowledge entry: ${allThreats.join(", ")} — sanitizing "${entry.title}"`);
     entry = { ...entry, title: titleScan.sanitized, summary: summaryScan.sanitized };
   }
@@ -828,10 +828,10 @@ export function decayKnowledge(): void {
 
     // Reassign tier based on current weight
     const newTier = assignTier(entry);
-    if (entry.tier !== "core" && newTier !== entry.tier) {
+    if ((entry.tier as string) !== "core" && newTier !== entry.tier) {
       // Only downgrade, never upgrade via decay
       const tierOrder = ["core", "active", "operational", "archived"];
-      if (tierOrder.indexOf(newTier) > tierOrder.indexOf(entry.tier ?? "operational")) {
+      if (tierOrder.indexOf(newTier ?? "operational") > tierOrder.indexOf(entry.tier ?? "operational")) {
         entry.tier = newTier;
         changed = true;
       }

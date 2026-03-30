@@ -231,10 +231,10 @@ function buildSearchIndex(): void {
   for (const [username, convo] of Object.entries(state.conversations)) {
     for (let idx = 0; idx < convo.entries.length; idx++) {
       const tokens = tokenizeForSearch(convo.entries[idx].text);
-      for (const token of new Set(tokens)) { // unique tokens per entry
+      Array.from(new Set(tokens)).forEach(token => { // unique tokens per entry
         if (!searchIndex.has(token)) searchIndex.set(token, []);
         searchIndex.get(token)!.push({ username, idx });
-      }
+      });
     }
   }
   indexBuilt = true;
@@ -244,10 +244,10 @@ function buildSearchIndex(): void {
 function indexMessage(username: string, text: string, idx: number): void {
   const key = username.toLowerCase().replace(/^@/, "");
   const tokens = tokenizeForSearch(text);
-  for (const token of new Set(tokens)) {
+  Array.from(new Set(tokens)).forEach(token => {
     if (!searchIndex.has(token)) searchIndex.set(token, []);
     searchIndex.get(token)!.push({ username: key, idx });
-  }
+  });
 }
 
 /**
@@ -273,7 +273,7 @@ export function searchConversations(query: string, limit = 10): ConversationSear
 
   // Convert to results
   const results: ConversationSearchResult[] = [];
-  for (const [key, score] of scores.entries()) {
+  for (const [key, score] of Array.from(scores.entries())) {
     const [username, idxStr] = key.split("|");
     const idx = parseInt(idxStr, 10);
     const convo = state.conversations[username];

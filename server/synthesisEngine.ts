@@ -167,7 +167,7 @@ ${entriesText}
 CATEGORIES PRESENT: ${Object.keys(byCategory).join(", ")}
 
 EXISTING CONNECTIONS (skip these pairs):
-${[...existingPairs].slice(0, 20).join(", ") || "none yet"}
+${Array.from(existingPairs).slice(0, 20).join(", ") || "none yet"}
 
 Find new connections between these entries. Prioritize cross-category insights.`;
 
@@ -239,7 +239,7 @@ export async function generateSynthesis(entryIds?: string[]): Promise<SynthesisR
     }
 
     // Get the most connected entry
-    const sorted = [...connectionCounts.entries()].sort((a, b) => b[1] - a[1]);
+    const sorted = Array.from(connectionCounts.entries()).sort((a, b) => b[1] - a[1]);
     if (sorted.length === 0) return null;
 
     const hubId = sorted[0][0];
