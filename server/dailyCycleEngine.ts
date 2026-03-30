@@ -21,10 +21,11 @@ import {
   getActiveKnowledgeCount,
 } from "./memoryEngine.js";
 import { runReflection } from "./reflectionEngine.js";
-import { runConfidenceDecay } from "./reasoningEngine.js";
+import { runConfidenceDecay, runDebate, checkContradictions, getDebates } from "./reasoningEngine.js";
 import { runConnectionScan } from "./synthesisEngine.js";
 import { extractInsights } from "./conversationLearningEngine.js";
 import { getMetacognitionState } from "./metacognitionEngine.js";
+import { getResearchLab, resolveHypothesis } from "./researchEngine.js";
 
 const GROK_URL     = "https://api.x.ai/v1/chat/completions";
 const GROK_API_KEY = process.env.GROK_API_KEY ?? "";
@@ -344,6 +345,169 @@ function ingestResearchKnowledge(completions: ResearchCompletion[]): void {
   }
 }
 
+// ── Auto-debate recent manuscripts ──────────────────────────────────────────
+
+async function autoDebateManuscripts(): Promise<number> {
+  const lab = getResearchLab();
+  const existingDebates = getDebates();
+  const debatedTopicIds = new Set(existingDebates.map(d => d.topicId));
+
+  // Pick topics with manuscripts that haven't been debated yet
+  const candidates = lab.topics
+    .filter(t =>
+      (t.status === "approved" || t.status === "pending_review") &&
+      t.manuscript &&
+      !debatedTopicIds.has(t.id),
+    )
+    .slice(0, 5);
+
+  let debated = 0;
+  for (const topic of candidates) {
+    try {
+      const result = await runDebate(topic.id, "manuscript", topic.topic, topic.manuscript!);
+      if (result) debated++;
+      // Rate limit: 5s between Grok calls
+      if (candidates.indexOf(topic) < candidates.length - 1) {
+        await new Promise(r => setTimeout(r, 5000));
+      }
+    } catch (e: any) {
+      console.warn(`[DailyCycle] Auto-debate failed for "${topic.topic}":`, e.message);
+    }
+  }
+
+  if (debated > 0) console.log(`[DailyCycle] Auto-debated ${debated} manuscripts`);
+  return debated;
+}
+
+// ── Auto-resolve mature hypotheses ──────────────────────────────────────────
+
+async function autoResolveHypotheses(): Promise<number> {
+  const lab = getResearchLab();
+  const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+  // Find "forming" hypotheses older than 7 days
+  const mature = lab.hypotheses
+    .filter(h => h.status === "forming" && new Date(h.formedAt).getTime() < sevenDaysAgo)
+    .slice(0, 10);
+
+  if (mature.length === 0) return 0;
+
+  // Gather relevant knowledge for context
+  const { knowledge: kb } = await import("./memoryEngine.js");
+  const kbContext = kb.entries
+    .filter(e => (e.status ?? "active") === "active")
+    .slice(0, 30)
+    .map(e => `- [${e.category}] ${e.title}: ${e.summary}`)
+    .join("\n");
+
+  let resolved = 0;
+  for (const hyp of mature) {
+    try {
+      const res = await fetch(GROK_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${GROK_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "grok-3-mini-fast",
+          response_format: { type: "json_object" },
+          messages: [
+            {
+              role: "system",
+              content: `You evaluate whether a hypothesis should be confirmed, rejected, or expired based on available evidence. Respond with ONLY valid JSON:
+{"status": "confirmed" | "rejected" | "expired", "resolution": "brief explanation of your reasoning"}`,
+            },
+            {
+              role: "user",
+              content: `HYPOTHESIS:
+Claim: ${hyp.claim}
+Basis: ${hyp.basis}
+Prediction: ${hyp.prediction}
+Metric: ${hyp.metric}
+Timeframe: ${hyp.timeframe}
+Confidence: ${hyp.confidence}
+Formed: ${hyp.formedAt}
+
+CURRENT KNOWLEDGE BASE:
+${kbContext}
+
+Based on the evidence available, should this hypothesis be confirmed, rejected, or marked as expired? Consider whether enough time has passed and whether the prediction aligns with current knowledge.`,
+            },
+          ],
+          temperature: 0.3,
+          max_tokens: 500,
+        }),
+        signal: AbortSignal.timeout(30000),
+      });
+
+      if (!res.ok) {
+        console.warn(`[DailyCycle] Grok hypothesis eval failed: ${res.status}`);
+        continue;
+      }
+
+      const data = await res.json() as any;
+      const content = data.choices?.[0]?.message?.content ?? "";
+      const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/) || content.match(/\{[\s\S]*\}/);
+      const jsonStr = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : content;
+      const parsed = JSON.parse(jsonStr);
+
+      const status = parsed.status as "confirmed" | "rejected" | "expired";
+      if (["confirmed", "rejected", "expired"].includes(status)) {
+        resolveHypothesis(hyp.id, status, parsed.resolution ?? "Auto-resolved by daily cycle");
+        resolved++;
+      }
+
+      // Rate limit: 5s between Grok calls
+      if (mature.indexOf(hyp) < mature.length - 1) {
+        await new Promise(r => setTimeout(r, 5000));
+      }
+    } catch (e: any) {
+      console.warn(`[DailyCycle] Hypothesis resolution failed for "${hyp.claim.slice(0, 50)}":`, e.message);
+    }
+  }
+
+  if (resolved > 0) console.log(`[DailyCycle] Auto-resolved ${resolved} hypotheses`);
+  return resolved;
+}
+
+// ── Auto-detect contradictions in recent knowledge ──────────────────────────
+
+async function autoDetectContradictions(): Promise<number> {
+  const { knowledge: kb } = await import("./memoryEngine.js");
+
+  // Check entries added in the last 24 hours
+  const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+  const recentEntries = kb.entries
+    .filter(e =>
+      (e.status ?? "active") === "active" &&
+      new Date(e.updatedAt ?? e.learnedAt).getTime() > oneDayAgo,
+    )
+    .slice(0, 10);
+
+  let found = 0;
+  for (const entry of recentEntries) {
+    try {
+      const result = await checkContradictions({
+        id: entry.id,
+        title: entry.title,
+        summary: entry.summary,
+        category: entry.category,
+      });
+      if (result) found++;
+      // Rate limit: 5s between Grok calls
+      if (recentEntries.indexOf(entry) < recentEntries.length - 1) {
+        await new Promise(r => setTimeout(r, 5000));
+      }
+    } catch (e: any) {
+      console.warn(`[DailyCycle] Contradiction check failed for "${entry.title}":`, e.message);
+    }
+  }
+
+  if (found > 0) console.log(`[DailyCycle] Found ${found} contradictions in recent knowledge`);
+  return found;
+}
+
 // ── Main: Run Daily Cycle ─────────────────────────────────────────────────────
 
 export async function runDailyCycle(): Promise<DailyBriefing | null> {
@@ -391,6 +555,12 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     await runConnectionScan().catch(e => console.warn("[DailyCycle] Connection scan failed:", e.message));
     // Conversation learning: extract insights from recent conversations
     await extractInsights().catch(e => console.warn("[DailyCycle] Insight extraction failed:", e.message));
+    // Auto-debate: critique recent manuscripts that haven't been debated
+    await autoDebateManuscripts().catch(e => console.warn("[DailyCycle] Auto-debate failed:", e.message));
+    // Auto-resolve: evaluate mature hypotheses (forming > 7 days)
+    await autoResolveHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis resolution failed:", e.message));
+    // Contradiction detection: scan recent knowledge entries for conflicts
+    await autoDetectContradictions().catch(e => console.warn("[DailyCycle] Contradiction detection failed:", e.message));
     // Metacognition: log cognitive state summary
     const meta = getMetacognitionState();
     console.log(`[DailyCycle] Cognitive state — KB: ${meta.knowledgeCoverage.totalActive} entries, Velocity: ${meta.learningVelocity.trend}, Connections: ${meta.synthesisStats.totalConnections}`);
