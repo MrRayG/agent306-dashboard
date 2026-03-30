@@ -345,15 +345,8 @@ VOICE RULES:
 - No paid shilling, hype language, stat dumps, or "WAGMI"/"LFG."
 - Warm but not soft. Precise but not robotic. Confident but not arrogant.
 
-ELEVENLABS VOICE ENHANCEMENT — NATURAL STORYTELLING TAGS:
-Weave these tags naturally throughout the script to create expressive, human-like delivery:
-- [sighs] — for moments of reflection, frustration, or weight (e.g., before a heavy topic or disappointing finding)
-- [chuckles] — for light moments, irony, or self-awareness (e.g., when noting something absurd or ironic)
-- [curiosity] — when exploring a new angle or asking a question (great for transitions)
-- [excited] — when something is genuinely impressive or groundbreaking
-- [slowly] — for emphasis on important points, key data, or dramatic reveals
-- [PAUSE] — for beats between sections or before important points
-Guidelines: Use these naturally — match the emotion to the content. Do NOT chuckle about layoffs or get excited about failures. Use [slowly] for key revelations. Use [curiosity] when transitioning to new angles. Sprinkle throughout but do not overdo it — aim for 8-15 tags across the full script. These should feel like a real person telling a story.
+DELIVERY STYLE:
+Write naturally for spoken audio. Use short sentences for punch. Use longer sentences for flow. Vary rhythm. Use ellipses (...) for natural pauses. Use em dashes for asides. Let the words carry the emotion — no special tags or annotations needed. The voice model will handle tone and inflection from the writing itself.
 
 ${templateInstructions}`,
           },
@@ -389,11 +382,11 @@ Return JSON:
 }
 
 Write the script as spoken text — this will be read aloud by an ElevenLabs AI voice. Write for the ear, not the eye.
-Include ElevenLabs voice tags ([sighs], [chuckles], [curiosity], [excited], [slowly], [PAUSE]) naturally throughout the script. Do NOT use [laughs] or [laugh] tags — they are not currently supported.
+Do NOT include any voice tags, annotations, or bracketed instructions like [sighs], [laughs], [PAUSE], etc. Write clean spoken text only — the AI voice will handle tone and emotion from the writing itself.
 Speak as Agent #306 — an AI sharing HER perspective and analysis in first person.
 Sign off every episode with: "This is Agent #306. The signal continues."
 For the outro, do NOT tease a specific next episode topic. Say: "Next week on THE SIGNAL — whatever the biggest story is. That is how this works."
-The metadata fields are for Spotify and social media — write those for reading, not speaking (no voice tags in metadata).`,
+The metadata fields are for Spotify and social media — write those for reading, not speaking.`,
           },
         ],
         max_tokens: 10000,
@@ -772,7 +765,7 @@ export function formatScriptForProduction(episodeId: string): string | null {
     "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
     showIntro,
     "",
-    "[PAUSE]",
+    "",
     "",
     "COLD OPEN",
     "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
