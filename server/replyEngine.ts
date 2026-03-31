@@ -10,9 +10,10 @@ import { dataPath } from "./dataPaths.js";
 import { getSlimAgentContext } from "./memoryEngine.js"; // slim = soul + top 3 knowledge (~600 tokens vs 2,550)
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
 import { getModel } from "./modelRouter.js";
+import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 
-const GROK_KEY   = process.env.GROK_API_KEY ?? "";
-const GROK_URL   = "https://api.x.ai/v1/chat/completions";
+const GROK_KEY   = LLM_API_KEY;
+const GROK_URL   = LLM_BASE_URL;
 const STATE_FILE = dataPath("reply_engine.json");
 
 // ── Cultural bridge categories for Agent 306 ────────────────────────────────
@@ -63,7 +64,7 @@ function randomBridge(): string {
 async function researchTopicForReply(topic: string): Promise<string> {
   if (!GROK_KEY) return "";
   try {
-    const res = await fetch("https://api.x.ai/v1/responses", {
+    const res = await fetch(LLM_RESPONSE_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${GROK_KEY}` },
       body: JSON.stringify({

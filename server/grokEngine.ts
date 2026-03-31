@@ -5,10 +5,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { getModel } from "./modelRouter.js";
+import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 
-const GROK_API_KEY = process.env.GROK_API_KEY ?? "";
+const GROK_API_KEY = LLM_API_KEY;
 const GROK_MODEL   = "grok-4-1-fast";
-const GROK_URL     = "https://api.x.ai/v1/chat/completions";
+const GROK_URL     = LLM_BASE_URL;
 // on-chain API removed
 
 // ── Grok Community Pulse — reads social energy to shape the story ────
@@ -86,7 +87,7 @@ function parseGrokSocialResponse(data: any): Array<{
 
 // ── Run a single Grok x_search with a specific query ─────────────────────────
 async function runGrokSearch(query: string): Promise<typeof communitySignalCache> {
-  const res = await fetch("https://api.x.ai/v1/responses", {
+  const res = await fetch(LLM_RESPONSE_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${GROK_API_KEY}` },
     body: JSON.stringify({

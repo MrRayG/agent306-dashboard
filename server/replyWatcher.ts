@@ -10,11 +10,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import * as fs from "fs";
+import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 
 import { dataPath } from "./dataPaths.js";
 import { getModel } from "./modelRouter.js";
 const REPLY_STATE_FILE = dataPath("replies.json");
-const GROK_KEY = process.env.GROK_API_KEY ?? "";
+const GROK_KEY = LLM_API_KEY;
 
 // Twitter client reference — set via initReplyWatcher()
 let xClient: any = null;
@@ -200,7 +201,7 @@ async function fetchMentionsViaGrok(): Promise<CommunityReply[]> {
   if (!GROK_KEY) return [];
 
   try {
-    const res = await fetch("https://api.x.ai/v1/responses", {
+    const res = await fetch(LLM_RESPONSE_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -304,7 +305,7 @@ Return JSON array (max 10):
 async function fetchMrRayGMentions(): Promise<CommunityReply[]> {
   if (!GROK_KEY) return [];
   try {
-    const res = await fetch("https://api.x.ai/v1/responses", {
+    const res = await fetch(LLM_RESPONSE_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${GROK_KEY}` },
       body: JSON.stringify({

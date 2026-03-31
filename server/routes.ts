@@ -9,6 +9,7 @@ import * as fs from "fs";
 import { collectAllSignals, updateFeaturedTokens, bumpEpisodeCount, markSignalsUsed, filterFreshSignals } from "./signalCollector";
 import { generateEpisodeWithGrok, type EpisodeMemory } from "./grokEngine";
 import { saveEpisodeCard } from "./imageCard";
+import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 // Burns, community, and catalog imports removed (removed)
 // import { checkForNewBurns, processBurnReceipt, getReceiptState } from "./burnReceiptEngine";
 // import { getCommunitySignalCache, searchCommunitySocial, resetCommunityCache } from "./grokEngine";
@@ -402,10 +403,10 @@ ${replyContext}`
 
     // ── 6. Quality gate — would a real reader stop scrolling for this? ──
     let finalTweetText = grokResult.tweet;
-    const grokKeyQ = process.env.GROK_API_KEY;
+    const grokKeyQ = LLM_API_KEY;
     if (grokKeyQ) {
       try {
-        const qualityCheck = await fetch("https://api.x.ai/v1/chat/completions", {
+        const qualityCheck = await fetch(LLM_BASE_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKeyQ}` },
           body: JSON.stringify({
@@ -565,7 +566,7 @@ setTimeout(() => {
 let lastNewsDispatchDate: string | null = null;
 
 async function postDailyNewsDispatch() {
-  const grokKey = process.env.GROK_API_KEY;
+  const grokKey = LLM_API_KEY;
   if (!grokKey) return;
 
   // Disk-based lock — prevents duplicates during Railway deploy overlap
@@ -604,7 +605,7 @@ async function postDailyNewsDispatch() {
     });
 
     // ── 2. Ask Grok to write a full 4-tweet thread ───────────────────────────
-    const grokResp = await fetch("https://api.x.ai/v1/chat/completions", {
+    const grokResp = await fetch(LLM_BASE_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
       body: JSON.stringify({
@@ -772,12 +773,12 @@ setTimeout(() => {
 
 // ── THE SPOTLIGHT — Weekly holder feature, Sunday 11am ET ─────────────────
 setTimeout(() => {
-  scheduleSpotlight(xWrite, process.env.GROK_API_KEY ?? "");
+  scheduleSpotlight(xWrite, LLM_API_KEY);
 }, 20_000);
 
 // ── THE RACE — Weekly State of the Arena, Sunday 12pm ET ─────────────────
 setTimeout(() => {
-  scheduleRace(xWrite, process.env.GROK_API_KEY ?? "");
+  scheduleRace(xWrite, LLM_API_KEY);
 }, 25_000);
 
 // ── PODCAST KNOWLEDGE v2 — Seed on boot ──────────────────────────────
@@ -809,7 +810,7 @@ for (const k of podcastKnowledge) addKnowledge(k);
 // Agent 306 reads her knowledge base, finds gaps, queues research topics.
 // MrRayG reviews and approves in Agent HQ -> Research Queue.
 {
-  const grokKey = process.env.GROK_API_KEY ?? "";
+  const grokKey = LLM_API_KEY;
   if (grokKey) scheduleResearchScan(grokKey);
 }
 
@@ -828,12 +829,12 @@ setTimeout(() => {
 
 // ── SIGNAL BRIEF — Mon/Wed/Fri 12pm ET ────────────────────────────────────
 setTimeout(() => {
-  scheduleSignalBrief(xWrite, process.env.GROK_API_KEY ?? "");
+  scheduleSignalBrief(xWrite, LLM_API_KEY);
 }, 40_000);
 
 // ── AGENT 306 DEEP READ — Every Monday 5:00 PM ET ─────────────────────────
 setTimeout(() => {
-  scheduleWeeklyArticle(xWrite, process.env.GROK_API_KEY ?? "");
+  scheduleWeeklyArticle(xWrite, LLM_API_KEY);
 }, 45_000);
 
 // ── DAILY CYCLE — 6am ET (10:00 UTC) daily ──────────────────────────────────
@@ -880,7 +881,7 @@ async function refreshEditorialSummaryAsync(posts: any[], grokKey: string) {
       `@${p.username} [${p.signal_type ?? "general"}, ${p.likes ?? 0} likes]: "${p.text?.slice(0, 160)}"`
     ).join("\n");
 
-    const resp = await fetch("https://api.x.ai/v1/chat/completions", {
+    const resp = await fetch(LLM_BASE_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
       body: JSON.stringify({
@@ -1368,7 +1369,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
   });
 
   app.post("/api/spotlight/preview", async (_req, res) => {
-    const grokKey = process.env.GROK_API_KEY;
+    const grokKey = LLM_API_KEY;
     if (!grokKey) return res.status(500).json({ error: "No Grok key" });
     const spotlight = await generateSpotlight(grokKey);
     if (!spotlight) return res.status(404).json({ error: "No eligible holders yet — catalog needs more signals" });
@@ -1376,7 +1377,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
   });
 
   app.post("/api/spotlight/post", async (_req, res) => {
-    const grokKey = process.env.GROK_API_KEY;
+    const grokKey = LLM_API_KEY;
     if (!grokKey) return res.status(500).json({ error: "No Grok key" });
     const tweetUrl = await postSpotlight(xWrite, grokKey);
     if (!tweetUrl) return res.status(500).json({ error: "Failed to post spotlight" });
@@ -1389,7 +1390,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
   });
 
   app.post("/api/race/preview", async (_req, res) => {
-    const grokKey = process.env.GROK_API_KEY;
+    const grokKey = LLM_API_KEY;
     if (!grokKey) return res.status(500).json({ error: "No Grok key" });
     const race = await generateRace(grokKey);
     if (!race) return res.status(500).json({ error: "Failed to generate race" });
@@ -1397,7 +1398,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
   });
 
   app.post("/api/race/post", async (_req, res) => {
-    const grokKey = process.env.GROK_API_KEY;
+    const grokKey = LLM_API_KEY;
     if (!grokKey) return res.status(500).json({ error: "No Grok key" });
     const tweetUrl = await postRace(xWrite, grokKey);
     if (!tweetUrl) return res.status(500).json({ error: "Failed to post race" });
@@ -1455,7 +1456,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
   });
 
   app.post("/api/podcast/episodes/:id/generate-script", async (req, res) => {
-    const grokKey = process.env.GROK_API_KEY ?? "";
+    const grokKey = LLM_API_KEY;
     const { researchContent } = req.body;
     const ok = await generateEpisodeScript(req.params.id, grokKey, researchContent);
     if (!ok) return res.status(500).json({ error: "Failed to generate script" });
@@ -1464,7 +1465,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
   });
 
   app.post("/api/podcast/episodes/:id/regenerate-script", async (req, res) => {
-    const grokKey = process.env.GROK_API_KEY ?? "";
+    const grokKey = LLM_API_KEY;
     const { researchContent } = req.body;
     const ok = await regenerateEpisodeScript(req.params.id, grokKey, researchContent);
     if (!ok) return res.status(500).json({ error: "Failed to regenerate script — episode may not be in a regeneratable state" });
@@ -1523,7 +1524,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
   });
 
   app.post("/api/podcast/guests/:id/generate-questions", async (req, res) => {
-    const grokKey = process.env.GROK_API_KEY ?? "";
+    const grokKey = LLM_API_KEY;
     const questions = await generateInterviewQuestions(req.params.id, grokKey);
     if (!questions) return res.status(500).json({ error: "Failed to generate questions" });
     res.json({ ok: true, questions });
@@ -1551,12 +1552,12 @@ export function registerRoutes(httpServer: Server, app: Express) {
   // ── PODCAST: Topic Scanner ───────────────────────────────────────────
   // Agent 306 scans for noteworthy AI/Web3/NFT/Blockchain developments
   app.post("/api/podcast/scan-topics", async (_req, res) => {
-    const grokKey = process.env.GROK_API_KEY ?? "";
+    const grokKey = LLM_API_KEY;
     if (!grokKey) return res.status(500).json({ error: "No GROK_API_KEY configured" });
 
     try {
       const agentCtx = getOptimizedContext("podcast topic scanning research community");
-      const scanRes = await fetch("https://api.x.ai/v1/chat/completions", {
+      const scanRes = await fetch(LLM_BASE_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${grokKey}` },
         body: JSON.stringify({
@@ -1599,7 +1600,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
   app.post("/api/signal-brief/post", async (_req, res) => {
     resetCooldown("signal_brief");
     res.json({ ok: true, message: "Signal brief triggered" });
-    postSignalBrief(xWrite, process.env.GROK_API_KEY ?? "").catch(console.error);
+    postSignalBrief(xWrite, LLM_API_KEY).catch(console.error);
   });
 
   // Manual trigger for daily news dispatch — bypasses both in-memory date and coordinator
@@ -1680,7 +1681,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       return res.status(400).json({ error: "url is required" });
     }
     try {
-      const draft = await generateBoost(url.trim(), process.env.GROK_API_KEY ?? "", context);
+      const draft = await generateBoost(url.trim(), LLM_API_KEY, context);
       res.json(draft);
     } catch (err: any) {
       console.error("[CommunityBoost] Error:", err.message);
@@ -1779,7 +1780,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
   // Generate a new CYOA episode
   app.post("/api/cyoa/generate", async (req, res) => {
     const { trigger, tokenId, tokenCount, pixelTotal, level, rivalTokenId } = req.body;
-    const grokKey = process.env.GROK_API_KEY;
+    const grokKey = LLM_API_KEY;
     if (!grokKey) return res.status(500).json({ error: "No Grok key" });
 
     const episode = await generateCYOAEpisode({
@@ -1949,10 +1950,10 @@ export function registerRoutes(httpServer: Server, app: Express) {
       // ── Grok x_search: hot NFT / Web3 news ───────────────
       // CACHED 6h — was firing on every page visit = credit drain
       let grokNews: string | null = grokNewsCache;
-      const grokKey = process.env.GROK_API_KEY;
+      const grokKey = LLM_API_KEY;
       if (grokKey && (!grokNewsCache || Date.now() - grokNewsFetchedAt > GROK_NEWS_TTL)) {
         try {
-          const grokResp = await fetch("https://api.x.ai/v1/responses", {
+          const grokResp = await fetch(LLM_RESPONSE_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
             body: JSON.stringify({
@@ -2110,7 +2111,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
   });
 
   app.post("/api/article/preview", async (req, res) => {
-    const apiKey = process.env.GROK_API_KEY ?? "";
+    const apiKey = LLM_API_KEY;
     if (!apiKey) return res.status(500).json({ error: "GROK_API_KEY not set" });
     const overrideUrl: string | undefined = req.body?.url?.trim() || undefined;
     try {
@@ -2170,7 +2171,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       .join("\n\n");
 
     try {
-      const res = await fetch("https://api.x.ai/v1/chat/completions", {
+      const res = await fetch(LLM_BASE_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
         body: JSON.stringify({
@@ -2273,7 +2274,7 @@ If nothing worth extracting, return: {"entries": []}`,
     const { text, sessionId } = req.body ?? {};
     if (!text?.trim()) return res.status(400).json({ error: "text required" });
 
-    const apiKey = process.env.GROK_API_KEY ?? "";
+    const apiKey = LLM_API_KEY;
     if (!apiKey) return res.status(500).json({ error: "GROK_API_KEY not set" });
 
     const history = loadChatHistory();
@@ -2289,7 +2290,7 @@ If nothing worth extracting, return: {"entries": []}`,
     const agentCtx = getOptimizedContext("chat conversation community");
 
     try {
-      const response = await fetch("https://api.x.ai/v1/chat/completions", {
+      const response = await fetch(LLM_BASE_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
         body: JSON.stringify({
@@ -2387,7 +2388,7 @@ needsHelp: true only when you genuinely need his direction or information`,
   // Call this to immediately extract knowledge from the full chat history.
   // Useful after a long session to make sure insights are captured.
   app.post("/api/chat/extract-memory", async (req, res) => {
-    const apiKey = process.env.GROK_API_KEY ?? "";
+    const apiKey = LLM_API_KEY;
     if (!apiKey) return res.status(500).json({ error: "GROK_API_KEY not set" });
     const history = loadChatHistory();
     if (history.messages.length < 4) {
@@ -2421,7 +2422,7 @@ needsHelp: true only when you genuinely need his direction or information`,
   });
 
   app.post("/api/exploration/run", async (req, res) => {
-    const apiKey = process.env.GROK_API_KEY ?? "";
+    const apiKey = LLM_API_KEY;
     if (!apiKey) return res.status(500).json({ error: "GROK_API_KEY not set" });
     // Non-blocking — start exploration and return immediately
     res.json({ started: true, message: "Agent 306 is exploring the world. Check /api/exploration/state for progress." });
@@ -2600,7 +2601,7 @@ needsHelp: true only when you genuinely need his direction or information`,
 
   app.post("/api/research/run/:id", async (req, res) => {
     const { id } = req.params;
-    const grokKey = process.env.GROK_API_KEY ?? "";
+    const grokKey = LLM_API_KEY;
     const pplxKey = process.env.PERPLEXITY_API_KEY;
     if (!grokKey) return res.status(500).json({ error: "GROK_API_KEY not set" });
     res.json({ started: true, topicId: id });
@@ -2665,7 +2666,7 @@ needsHelp: true only when you genuinely need his direction or information`,
     const ok = provideInput(id, input);
     if (!ok) return res.status(404).json({ error: "Topic not found or not in needs_input status" });
     // Re-enter the pipeline
-    const grokKey = process.env.GROK_API_KEY ?? "";
+    const grokKey = LLM_API_KEY;
     const pplxKey = process.env.PERPLEXITY_API_KEY;
     if (grokKey) {
       runResearchCycle(id, grokKey, pplxKey)
@@ -2681,7 +2682,7 @@ needsHelp: true only when you genuinely need his direction or information`,
     const ok = skipInput(id);
     if (!ok) return res.status(404).json({ error: "Topic not found or not in needs_input status" });
     // Re-enter the pipeline
-    const grokKey = process.env.GROK_API_KEY ?? "";
+    const grokKey = LLM_API_KEY;
     const pplxKey = process.env.PERPLEXITY_API_KEY;
     if (grokKey) {
       runResearchCycle(id, grokKey, pplxKey)
@@ -2707,7 +2708,7 @@ needsHelp: true only when you genuinely need his direction or information`,
 
   // POST trigger a scan — Agent 306 scans her KB for gaps and queues topics
   app.post("/api/research/scan", async (_req, res) => {
-    const grokKey = process.env.GROK_API_KEY ?? "";
+    const grokKey = LLM_API_KEY;
     if (!grokKey) return res.status(503).json({ error: "GROK_API_KEY not set" });
     const state = getScannerState();
     // Debounce: don't run more than once per 30 minutes
@@ -2724,7 +2725,7 @@ needsHelp: true only when you genuinely need his direction or information`,
 
   // POST scan active goals — propose research topics for each active goal
   app.post("/api/research/scan-goals", async (_req, res) => {
-    const grokKey = process.env.GROK_API_KEY ?? "";
+    const grokKey = LLM_API_KEY;
     if (!grokKey) return res.status(503).json({ error: "GROK_API_KEY not set" });
     res.json({ started: true, message: "Goal scan running — research topics will appear shortly" });
     scanGoalsForResearch(grokKey)
@@ -2819,7 +2820,7 @@ needsHelp: true only when you genuinely need his direction or information`,
   });
 
   app.post("/api/goals/generate", async (_req, res) => {
-    const grokKey = process.env.GROK_API_KEY ?? "";
+    const grokKey = LLM_API_KEY;
     if (!grokKey) return res.status(503).json({ error: "GROK_API_KEY not set" });
     const goals = await generateInitialGoals(grokKey);
     res.json({ goals, count: goals.length });
@@ -2831,7 +2832,7 @@ needsHelp: true only when you genuinely need his direction or information`,
   app.post("/api/goals/evaluate/:id", async (req, res) => {
     const { id } = req.params;
     const { topicId } = req.body ?? {};
-    const grokKey = process.env.GROK_API_KEY ?? "";
+    const grokKey = LLM_API_KEY;
     if (!grokKey) return res.status(503).json({ error: "GROK_API_KEY not set" });
 
     // If no topicId provided, find the most recent linked research topic

@@ -21,6 +21,7 @@ import * as http from "http";
 import { generateBurnVideo } from "./videoEngine.js";
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
 import { getModel } from "./modelRouter.js";
+import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 
 const ONCHAIN_API  = ""; // removed — on-chain API disabled
 import { dataPath } from "./dataPaths.js";
@@ -423,7 +424,7 @@ export async function generateBurnNarrative(opts: {
   actionPoints: number;
 }): Promise<string> {
   const { receiverTokenId, burnedTokenIds, tokenCount, pixelTotal, level, actionPoints } = opts;
-  const grokKey = process.env.GROK_API_KEY;
+  const grokKey = LLM_API_KEY;
 
   // Scale the narrative length by burn size
   const scale = tokenCount >= 50 ? "LEGENDARY" : tokenCount >= 10 ? "MAJOR" : tokenCount >= 4 ? "significant" : "small";
@@ -440,7 +441,7 @@ export async function generateBurnNarrative(opts: {
   }
 
   try {
-    const resp = await fetch("https://api.x.ai/v1/chat/completions", {
+    const resp = await fetch(LLM_BASE_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
       body: JSON.stringify({

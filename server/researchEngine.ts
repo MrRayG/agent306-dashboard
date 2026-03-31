@@ -20,8 +20,9 @@ import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { addKnowledge } from "./memoryEngine.js";
 import { getModel } from "./modelRouter.js";
+import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 
-const GROK_CHAT_API    = "https://api.x.ai/v1/chat/completions";
+const GROK_CHAT_API    = LLM_BASE_URL;
 const PERPLEXITY_API   = "https://api.perplexity.ai";
 const RESEARCH_FILE    = dataPath("research_lab.json");
 
@@ -267,7 +268,7 @@ export function updateTopicStatus(id: string, status: ResearchStatus, updates?: 
         //    Fire async — evaluates research against milestones semantically
         //    High-confidence matches auto-approve; others wait for MrRayG
         if (["pending_review", "approved", "published"].includes(status)) {
-          const grokKey = process.env.GROK_API_KEY ?? "";
+          const grokKey = LLM_API_KEY;
           if (grokKey) {
             evaluateMilestonesWithGrok(goal.id, topic.id, grokKey)
               .then(evals => {
@@ -1146,7 +1147,7 @@ export function approveForPublication(topicId: string, note?: string): boolean {
   console.log(`[Research] APPROVED for publication: "${topic.topic}"`);
 
   // Auto-generate content suggestions (fire async)
-  const grokKey = process.env.GROK_API_KEY ?? "";
+  const grokKey = LLM_API_KEY;
   if (grokKey && topic.manuscript) {
     generateContentSuggestions(topicId, grokKey).catch(e =>
       console.error("[Research] Content suggestion generation failed:", e)

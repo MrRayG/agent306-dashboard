@@ -24,9 +24,10 @@ import { getFullAgentContext } from "./memoryEngine.js";
 import { getOptimizedContext } from "./contextWindow.js";
 import { getModel } from "./modelRouter.js";
 import { TwitterApi } from "twitter-api-v2";
+import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 
-const GROK_CHAT_API     = "https://api.x.ai/v1/chat/completions";
-const GROK_RESPONSE_API = "https://api.x.ai/v1/responses";
+const GROK_CHAT_API     = LLM_BASE_URL;
+const GROK_RESPONSE_API = LLM_RESPONSE_URL;
 const ARTICLE_STATE_FILE = dataPath("article_state.json");
 
 // ── State tracking ─────────────────────────────────────────────────────────────

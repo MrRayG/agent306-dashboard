@@ -26,8 +26,9 @@ import { getFullAgentContext } from "./memoryEngine.js";
 import { getOptimizedContext } from "./contextWindow.js";
 import { getModel } from "./modelRouter.js";
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
+import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 
-const GROK_URL = "https://api.x.ai/v1/chat/completions";
+const GROK_URL = LLM_BASE_URL;
 const ACADEMY_STATE_FILE = dataPath("academy_state.json");
 const ARENA_DATE = new Date("2026-05-15T00:00:00Z");
 
@@ -209,7 +210,7 @@ async function generateAcademyEpisode(topic: typeof CURRICULUM[0]): Promise<{
   dashboardNarrative: string;
   headline: string;
 } | null> {
-  const grokKey = process.env.GROK_API_KEY;
+  const grokKey = LLM_API_KEY;
   if (!grokKey) return null;
 
   const agentCtx = getOptimizedContext("academy education on-chain mechanics agents economy arena");

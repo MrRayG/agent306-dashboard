@@ -9,6 +9,7 @@ import { requestPost, registerPost } from "./postCoordinator.js";
 import * as fs from "fs";
 import * as https from "https";
 import { getModel } from "./modelRouter.js";
+import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 
 const ONCHAIN_API = ""; // removed — on-chain API disabled
 import { dataPath } from "./dataPaths.js";
@@ -439,7 +440,7 @@ RULES:
 
 Return JSON: {"t1": "...", "t2": "...", "t3": "..."}`;
 
-        const grokResp = await fetch("https://api.x.ai/v1/chat/completions", {
+        const grokResp = await fetch(LLM_BASE_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
           body: JSON.stringify({

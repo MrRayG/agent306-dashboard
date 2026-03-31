@@ -17,6 +17,7 @@ import { generateSpotlightCard } from "./imageCard.js";
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
 import fs from "fs";
 import { getModel } from "./modelRouter.js";
+import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 
 const ONCHAIN_API = ""; // removed — on-chain API disabled
 
@@ -160,7 +161,7 @@ export async function generateSpotlight(grokKey: string): Promise<{
   const prompt = buildSpotlightPrompt({ ...holder, onChainContext });
 
   try {
-    const res = await fetch("https://api.x.ai/v1/chat/completions", {
+    const res = await fetch(LLM_BASE_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
       body: JSON.stringify({

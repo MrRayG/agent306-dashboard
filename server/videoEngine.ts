@@ -15,8 +15,9 @@ import fs from "fs";
 import path from "path";
 import https from "https";
 import { dataPath } from "./dataPaths.js";
+import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 
-const XAI_API_KEY  = process.env.GROK_API_KEY ?? "";
+const XAI_API_KEY  = LLM_API_KEY;
 const VIDEO_API    = "https://api.x.ai/v1/videos/generations";
 const POLL_URL     = "https://api.x.ai/v1/videos";
 const ONCHAIN_API  = ""; // removed — on-chain API disabled

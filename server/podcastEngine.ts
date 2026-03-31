@@ -27,8 +27,9 @@ import { getFullAgentContext } from "./memoryEngine.js";
 import { getOptimizedContext } from "./contextWindow.js";
 import { getModel } from "./modelRouter.js";
 import { formatSkillsForPrompt } from "./skillEngine.js";
+import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 
-const GROK_URL = "https://api.x.ai/v1/chat/completions";
+const GROK_URL = LLM_BASE_URL;
 const PODCAST_FILE = dataPath("podcast_state.json");
 
 // ── Types ─────────────────────────────────────────────────────────────────────

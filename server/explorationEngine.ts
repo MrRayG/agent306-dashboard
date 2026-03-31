@@ -22,9 +22,10 @@ import { dataPath } from "./dataPaths.js";
 import { addKnowledge, getKnowledgeDigestForExploration } from "./memoryEngine.js";
 import { fetchTwitterFeed, fetchYouTubeTranscripts, fetchRSSFeeds, isAgentReachEnabled } from "./agentReachEngine.js";
 import { getModel } from "./modelRouter.js";
+import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 
-const GROK_CHAT_API      = "https://api.x.ai/v1/chat/completions";
-const GROK_RESPONSE_API  = "https://api.x.ai/v1/responses";
+const GROK_CHAT_API      = LLM_BASE_URL;
+const GROK_RESPONSE_API  = LLM_RESPONSE_URL;
 const PERPLEXITY_API     = "https://api.perplexity.ai";
 const EXPLORATION_FILE   = dataPath("exploration_state.json");
 
@@ -283,7 +284,7 @@ async function fetchAcademicResearch(grokKey: string, existingKBDigest?: string)
     if (papers.length === 0) return { findings: [], knowledge: [] };
     console.log("[Exploration] arXiv: " + papers.length + " papers fetched");
 
-    const res = await fetch("https://api.x.ai/v1/chat/completions", {
+    const res = await fetch(LLM_BASE_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + grokKey },
       body: JSON.stringify({

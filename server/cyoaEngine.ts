@@ -16,6 +16,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import * as fs from "fs";
+import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 
 import { dataPath } from "./dataPaths.js";
 import { getModel } from "./modelRouter.js";
@@ -181,7 +182,7 @@ YOU MUST RETURN EXACTLY THIS JSON — use these exact field names, nothing else:
 
 
   try {
-    const resp = await fetch("https://api.x.ai/v1/chat/completions", {
+    const resp = await fetch(LLM_BASE_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
       body: JSON.stringify({

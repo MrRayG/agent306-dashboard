@@ -32,9 +32,10 @@
 
 import { getSlimAgentContext } from "./memoryEngine.js";
 import { getModel } from "./modelRouter.js";
+import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 
-const GROK_CHAT_API     = "https://api.x.ai/v1/chat/completions";
-const GROK_RESPONSE_API = "https://api.x.ai/v1/responses";
+const GROK_CHAT_API     = LLM_BASE_URL;
+const GROK_RESPONSE_API = LLM_RESPONSE_URL;
 
 export interface BoostContext {
   url:             string;

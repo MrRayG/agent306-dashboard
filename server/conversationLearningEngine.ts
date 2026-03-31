@@ -10,9 +10,10 @@ import { dataPath } from "./dataPaths.js";
 import { addKnowledge, getFullAgentContext, scanForInjection } from "./memoryEngine.js";
 import { getOptimizedContext } from "./contextWindow.js";
 import { getModel } from "./modelRouter.js";
+import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 
-const GROK_URL = "https://api.x.ai/v1/chat/completions";
-const GROK_API_KEY = process.env.GROK_API_KEY ?? "";
+const GROK_URL = LLM_BASE_URL;
+const GROK_API_KEY = LLM_API_KEY;
 const INSIGHTS_FILE = dataPath("conversation-insights.json");
 const RELATIONSHIPS_FILE = dataPath("relationships.json");
 const CONVERSATION_MEMORY_FILE = dataPath("conversation_memory.json");

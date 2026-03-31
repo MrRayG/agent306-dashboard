@@ -16,6 +16,7 @@ import { fetchLiveLeaderboard } from "./leaderboardEngine.js";
 import { generateRaceCard } from "./imageCard.js";
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
 import fs from "fs";
+import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 
 const RACE_STATE_FILE = dataPath("race_state.json");
 const ARENA_DATE = new Date("2026-05-15T00:00:00Z");
@@ -162,7 +163,7 @@ export async function generateRace(grokKey: string): Promise<{
   const ctx = await buildRaceContext();
 
   try {
-    const res = await fetch("https://api.x.ai/v1/chat/completions", {
+    const res = await fetch(LLM_BASE_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
       body: JSON.stringify({

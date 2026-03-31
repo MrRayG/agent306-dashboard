@@ -12,9 +12,10 @@
 import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { getModel } from "./modelRouter.js";
+import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 
-const GROK_URL = "https://api.x.ai/v1/chat/completions";
-const GROK_API_KEY = process.env.GROK_API_KEY ?? "";
+const GROK_URL = LLM_BASE_URL;
+const GROK_API_KEY = LLM_API_KEY;
 const SKILLS_FILE = dataPath("skills.json");
 
 // ── Types ─────────────────────────────────────────────────────────────────────
