@@ -65,7 +65,7 @@ import { getInsights, getRelationships, extractInsights, analyzeRelationships } 
 import { getMetacognitionState } from "./metacognitionEngine.js";
 import { searchConversations } from "./conversationMemory.js";
 import { getKnowledgeTiers, scanForInjection } from "./memoryEngine.js";
-import { getModel, getModelRouterStats } from "./modelRouter.js";
+import { getModel, getModelConfig as getModelRouterStats } from "./modelRouter.js";
 import { getCoreIdentity, getRelevantContext, getOptimizedContext } from "./contextWindow.js";
 import { getSkills, getSkillById, deleteSkill, extractSkill, getSkillsState, checkAndExtractSkills } from "./skillEngine.js";
 
