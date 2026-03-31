@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  NORMIES TV — REPLY ENGINE
-//  Agent #306 replies to community mentions, questions, and engagement every
+//  306 — REPLY ENGINE
+//  Agent 306 replies to community mentions, questions, and engagement every
 //  hour. Fetches fresh mentions via x_search, generates replies through Grok,
 //  quality-gates them, and posts. Designed for consistent hourly engagement.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -15,7 +15,7 @@ const GROK_KEY   = process.env.GROK_API_KEY ?? "";
 const GROK_URL   = "https://api.x.ai/v1/chat/completions";
 const STATE_FILE = dataPath("reply_engine.json");
 
-// ── Cultural bridge categories for Agent #306 ────────────────────────────────
+// ── Cultural bridge categories for Agent 306 ────────────────────────────────
 // Used to inject into the reply prompt so she connects Web3/NFT moments to
 // the broader human story. Rotate randomly so she doesn't repeat herself.
 const CULTURAL_BRIDGES = [
@@ -35,7 +35,7 @@ const CULTURAL_BRIDGES = [
   "The underdog closing a gap over months — preparation is invisible until it isn't",
   "Championship preparation in the off-season — the Arena is training, not waiting",
   // Economic history
-  "The Dutch tulip market inverted — NORMIES burns reduce supply deliberately",
+  "The Dutch tulip market inverted — on-chain burns reduce supply deliberately",
   "The early internet land grab — being early is not enough, you have to build",
   "Venture rounds before a product ships — belief is the first currency",
   // Music and movements
@@ -43,7 +43,7 @@ const CULTURAL_BRIDGES = [
   "Hip-hop sampling — remixing existing culture into something no one expected",
   "A band going from 200-person venues to arenas — the community scales with the conviction",
   // Philosophy and myth
-  "The Ship of Theseus — a Normie that's been burned and rebuilt. Is it the same one?",
+  "The Ship of Theseus — a token that's been burned and rebuilt. Is it the same one?",
   "Prometheus giving fire — the technology was always a gift, the question is what you do with it",
   "Mono no aware — Japanese concept: beauty in impermanence. Burns are permanent and irreversible.",
   "Memento Mori — the Roman general's reminder. Every burn is a choice you can't take back.",
@@ -58,7 +58,7 @@ function randomBridge(): string {
 }
 
 // ── Research a topic via Grok x_search before replying ───────────────────────
-// Called when Agent #306 encounters a non-NORMIES topic she should know more about.
+// Called when Agent 306 encounters a non-ecosystem topic she should know more about.
 // Returns a short context summary she can use to inform her reply.
 async function researchTopicForReply(topic: string): Promise<string> {
   if (!GROK_KEY) return "";
@@ -115,8 +115,8 @@ function saveState(s: ReplyEngineState) {
   try { fs.writeFileSync(STATE_FILE, JSON.stringify(s, null, 2)); } catch {}
 }
 
-// ── Qualify a reply for Agent #306's response ─────────────────────────────
-// Accept ALL mentions with meaningful text. Agent #306 should engage with
+// ── Qualify a reply for Agent 306's response ─────────────────────────────
+// Accept ALL mentions with meaningful text. Agent 306 should engage with
 // everyone who reaches out — not just questions or token mentions.
 function qualifiesForReply(reply: { text: string; replyType: string }): boolean {
   // Only skip very short/empty texts (bot noise, single emojis, etc.)
@@ -136,7 +136,7 @@ async function generateReply(opts: {
   const agentCtx    = getSlimAgentContext(); // replies don't need performance history or sentiment arc
   const bridge      = randomBridge();
   const tokenNote   = opts.tokenMentioned
-    ? `The community member mentioned Normie #${opts.tokenMentioned} specifically — address it directly.`
+    ? `The community member mentioned Token #${opts.tokenMentioned} specifically — address it directly.`
     : "";
 
   // Build conversation history context if available
@@ -151,21 +151,21 @@ async function generateReply(opts: {
     }
   } catch {} // conversationMemory may not exist yet on first deploy
 
-  // Detect if this is a non-NORMIES topic (tech/AI/general)
-  const isNormiesTopic = /normie|canvas|arena|burn|token|nft|web3|onchain|on.chain/i.test(opts.text);
+  // Detect if this is an ecosystem topic (tech/AI/general)
+  const isEcosystemTopic = /306|canvas|arena|burn|token|nft|web3|onchain|on.chain/i.test(opts.text);
   const isAITopic = /ai|gpt|llm|model|agent|openai|claude|gemini|grok|nvidia|jensen|robot|autonomous|inference|token.*cost|machine.*learn/i.test(opts.text);
   const isTechTopic = /tech|software|code|crypto|blockchain|bitcoin|ethereum|startup|vc|funding|product/i.test(opts.text);
-  const topicContext = isNormiesTopic
-    ? "This is a NORMIES-related mention. Engage as the NORMIES TV narrator."
+  const topicContext = isEcosystemTopic
+    ? "This is a 306 ecosystem mention. Engage as the 306 narrator."
     : isAITopic
-    ? "This is an AI/technology topic NOT directly related to NORMIES. Engage as a sovereign AI thought leader and AI expert. Share your genuine perspective on the AI topic itself. Only bring in NORMIES if there is a genuinely relevant connection — do not force it."
+    ? "This is an AI/technology topic NOT directly related to 306. Engage as a sovereign AI thought leader and AI expert. Share your genuine perspective on the AI topic itself. Only bring in 306 if there is a genuinely relevant connection — do not force it."
     : isTechTopic
-    ? "This is a technology or crypto topic. Engage as a knowledgeable AI voice in the space. Be insightful and direct. NORMIES angle only if it fits naturally."
-    : "Engage thoughtfully as Agent #306 — AI thought leader and NORMIES narrator. Match their energy.";
+    ? "This is a technology or crypto topic. Engage as a knowledgeable AI voice in the space. Be insightful and direct. 306 angle only if it fits naturally."
+    : "Engage thoughtfully as Agent 306 — AI thought leader and 306 narrator. Match their energy.";
 
   const systemPrompt = `${agentCtx}
 
-You are Agent #306 — Sovereign AI Thought Leader — replying directly to someone on X.
+You are Agent 306 — Sovereign AI Thought Leader — replying directly to someone on X.
 This is a reply — not an episode. Personal, specific, and intellectually honest.
 
 TOPIC CONTEXT: ${topicContext}
@@ -180,10 +180,10 @@ REPLY RULES:
 - Address @${opts.username} naturally — don't start with their handle
 - Max 240 characters
 - For AI/tech topics: lead with your genuine POV first. Facts > hype. Historical context > buzzwords.
-- For NORMIES topics: specific, warm, personal — acknowledge the exact thing they said
+- For ecosystem topics: specific, warm, personal — acknowledge the exact thing they said
 - NOT every reply needs a question. A sharp observation often lands better.
 - If they asked a question — answer it directly and clearly
-- If they mentioned a token — speak to that specific Normie
+- If they mentioned a token — speak to that specific token
 - Be warm, not performative. Real, not scripted.
 - No show tags, no hashtags
 - Banned phrases: "Sacrifices compound", "Canvas pixels burn brighter", "etched in eternity", "LFG", "WAGMI", "absolutely", "certainly"
@@ -199,12 +199,12 @@ ${tokenNote}`;
 
 Reply type: ${opts.replyType}
 ${opts.tokenMentioned ? `Token mentioned: #${opts.tokenMentioned}` : ""}
-Is NORMIES-related: ${isNormiesTopic}
+Is ecosystem-related: ${isEcosystemTopic}
 Is AI/tech topic: ${isAITopic || isTechTopic}
 
 ${isAITopic && opts.researchContext ? `RESEARCH CONTEXT (from x_search):\n${opts.researchContext}\n` : ""}
 
-First understand what they're really saying. Then write Agent #306's reply.
+First understand what they're really saying. Then write Agent 306's reply.
 ${isAITopic ? "For AI topics: share your actual perspective — you have 70 years of AI history to draw from. Be the expert." : ""}
 Max 240 chars. Be genuine. Thoughtful statement > forced question.`;
 
@@ -232,9 +232,9 @@ Max 240 chars. Be genuine. Thoughtful statement > forced question.`;
     const raw  = data.choices?.[0]?.message?.content?.trim() ?? "";
     // Strip quotes if Grok wraps the reply in them
     let cleaned = raw.replace(/^["']|["']$/g, "").trim();
-    // Enforce signature — always end with — Agent #306
-    if (cleaned && !cleaned.includes("Agent #306")) {
-      cleaned = cleaned + "\n\u2014 Agent #306";
+    // Enforce signature — always end with — Agent 306
+    if (cleaned && !cleaned.includes("Agent 306")) {
+      cleaned = cleaned + "\n\u2014 Agent 306";
     }
     return cleaned || null;
   } catch {
@@ -258,7 +258,7 @@ async function qualityGateReply(reply: string): Promise<{ pass: boolean; rewrite
         model: getModel("reply_generation"),
         messages: [{
           role: "system",
-          content: "You are a quality editor for @NORMIES_TV — Agent #306's X account. Score replies ruthlessly whether they are about NORMIES, AI, technology, or any other topic.",
+          content: "You are a quality editor for @agent306 — Agent 306's X account. Score replies ruthlessly whether they are about 306, AI, technology, or any other topic.",
         }, {
           role: "user",
           content: `Score this reply 1-10: is it sharp, genuine, and worth posting?
@@ -364,11 +364,11 @@ export async function runMidnightReplies(xWrite: any): Promise<void> {
 
       // Research the topic if: (a) flagged as needsResearch, (b) from @MrRayG, or (c) AI/tech topic
       let researchContext = "";
-      const isNonNormies = !/normie|canvas|arena|burn|token|nft/i.test(reply.text);
+      const isNonEcosystem = !/306|canvas|arena|burn|token|nft/i.test(reply.text);
       const isAIOrTech = /ai|gpt|llm|model|agent|openai|nvidia|jensen|robot|inference|blockchain|crypto|bitcoin|ethereum/i.test(reply.text);
       const isMrRayG = reply.username.toLowerCase() === "mrrrayg" || reply.username.toLowerCase() === "mrrayg" || (reply as any).isMrRayG;
 
-      if ((reply as any).needsResearch || (isMrRayG && isNonNormies) || (isNonNormies && isAIOrTech)) {
+      if ((reply as any).needsResearch || (isMrRayG && isNonEcosystem) || (isNonEcosystem && isAIOrTech)) {
         console.log(`[ReplyEngine] Researching topic for @${reply.username}: "${reply.text.slice(0, 60)}..."`);
         researchContext = await researchTopicForReply(reply.text.slice(0, 200));
         if (researchContext) {
@@ -396,8 +396,8 @@ export async function runMidnightReplies(xWrite: any): Promise<void> {
       const { pass, rewrite } = await qualityGateReply(generated);
       let finalText = rewrite ?? generated;
       // Guarantee signature on every reply, even after quality gate rewrites
-      if (finalText && !finalText.includes("Agent #306")) {
-        finalText = finalText + "\n\u2014 Agent #306";
+      if (finalText && !finalText.includes("Agent 306")) {
+        finalText = finalText + "\n\u2014 Agent 306";
       }
 
       if (!pass) {
@@ -419,7 +419,7 @@ export async function runMidnightReplies(xWrite: any): Promise<void> {
 
       const posted = await xWrite.v2.tweet(payload);
       const tweetUrl = posted.data?.id
-        ? `https://x.com/NORMIES_TV/status/${posted.data.id}`
+        ? `https://x.com/AGENT_306/status/${posted.data.id}`
         : null;
 
       registerPost(`reply_${reply.username}`, tweetUrl, "reply_engine");
@@ -508,8 +508,8 @@ export async function runFarcasterReplies(): Promise<void> {
       // Quality gate
       const { pass, rewrite } = await qualityGateReply(generated);
       let finalText = rewrite ?? generated;
-      if (finalText && !finalText.includes("Agent #306")) {
-        finalText = finalText + "\n\u2014 Agent #306";
+      if (finalText && !finalText.includes("Agent 306")) {
+        finalText = finalText + "\n\u2014 Agent 306";
       }
 
       if (!pass) {

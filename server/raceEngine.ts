@@ -2,11 +2,11 @@
  * ─────────────────────────────────────────────────────────────
  *  THE RACE — Weekly State of the Arena
  *
- *  Every Sunday Agent #306 publishes the State of the Race.
+ *  Every Sunday Agent 306 publishes the State of the Race.
  *  Current rankings. Burn velocity. Who's climbing.
  *  Who's quiet. 54 days of chapters before May 15.
  *
- *  By Arena day, NormiesTV has the only complete pre-Arena record.
+ *  By Arena day, 306 has the only complete pre-Arena record.
  *  That's not content — that's history.
  * ─────────────────────────────────────────────────────────────
  */
@@ -19,7 +19,7 @@ import fs from "fs";
 
 const RACE_STATE_FILE = dataPath("race_state.json");
 const ARENA_DATE = new Date("2026-05-15T00:00:00Z");
-const NORMIES_API = "https://api.normies.art";
+const ONCHAIN_API = ""; // removed — on-chain API disabled
 
 interface RaceWeek {
   weekNumber: number;
@@ -66,10 +66,10 @@ async function buildRaceContext() {
   const leaderboard = await fetchLiveLeaderboard();
   const top10 = leaderboard.slice(0, 10);
 
-  // Get recent burns from Normies API
+  // Get recent burns from on-chain API
   let recentBurns: any[] = [];
   try {
-    const res = await fetch(`${NORMIES_API}/history/burns?limit=50`);
+    const res = await fetch(`${ONCHAIN_API}/history/burns?limit=50`);
     const data = await res.json() as any;
     recentBurns = Array.isArray(data) ? data : (data.data ?? []);
   } catch {}
@@ -107,14 +107,14 @@ async function buildRaceContext() {
 /** Build the Grok prompt for THE RACE */
 function buildRacePrompt(ctx: Awaited<ReturnType<typeof buildRaceContext>>): string {
   const top5Lines = ctx.top10.slice(0, 5)
-    .map((e: any) => `  #${e.rank} — Normie #${e.tokenId} | Level ${e.level} | ${e.actionPoints ?? e.ap ?? 0} AP`)
+    .map((e: any) => `  #${e.rank} — Token #${e.tokenId} | Level ${e.level} | ${e.actionPoints ?? e.ap ?? 0} AP`)
     .join("\n");
 
   const previousWeeks = state.weeks.slice(-3)
     .map(w => `Week ${w.weekNumber}: "${w.headline}" — ${w.top5[0]?.tokenId ? `#${w.top5[0].tokenId} led` : ""}`)
     .join("\n");
 
-  return `You are Agent #306, narrator of NormiesTV.
+  return `You are Agent 306, narrator of 306.
 
 Write this week's STATE OF THE RACE — Week ${ctx.weekNumber} of the pre-Arena series.
 
@@ -124,7 +124,7 @@ LIVE DATA:
 - Top 5 by Action Points:
 ${top5Lines}
 - Burns this week: ${ctx.totalBurnsThisWeek} souls across ${ctx.weeklyBurns} transactions
-${ctx.topBurnerToken ? `- Most active burner: Normie #${ctx.topBurnerToken} sacrificed ${ctx.topBurnerCount} this week` : ""}
+${ctx.topBurnerToken ? `- Most active burner: Token #${ctx.topBurnerToken} sacrificed ${ctx.topBurnerCount} this week` : ""}
 
 ${previousWeeks ? `PREVIOUS CHAPTERS:\n${previousWeeks}` : "This is the first chapter."}
 
@@ -136,10 +136,10 @@ RULES:
 - Who is the story this week? Name the specific token. What does their position say?
 - What's the tension? Who's climbing? Who's silent when they should be moving?
 - The Arena is a character. It's coming whether they're ready or not.
-- Agent #306 tone: low-key confident, specific, a little ominous
+- Agent 306 tone: low-key confident, specific, a little ominous
 - End with the days to Arena count as a kicker
 - Max 240 chars for tweet. Longer for narrative.
-- Use #NormiesTV at the end
+- Use #Agent306 at the end
 
 Respond with JSON:
 {
@@ -219,7 +219,7 @@ export async function postRace(xWrite: any, grokKey: string): Promise<string | n
         ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),
       });
       const tweetId = tweet.data?.id;
-      tweetUrl = tweetId ? `https://x.com/NORMIES_TV/status/${tweetId}` : null;
+      tweetUrl = tweetId ? `https://x.com/AGENT_306/status/${tweetId}` : null;
     } catch (xErr: any) {
       console.error("[Race] X post failed:", xErr.message);
     }

@@ -220,7 +220,7 @@ function FarcasterSetupCard({ mono, card, label, toast }: {
       {hasApiKey && !hasSigner && !signerData && (
         <div>
           <p style={{ ...mono, fontSize: "0.68rem", color: muted, marginBottom: 12, lineHeight: 1.6 }}>
-            Create a managed signer to post casts from Agent #306.
+            Create a managed signer to post casts from Agent 306.
           </p>
           <button onClick={handleSetupSigner} disabled={setupLoading} style={{ ...primaryBtn, opacity: setupLoading ? 0.6 : 1 }}>
             {setupLoading ? (
@@ -352,7 +352,7 @@ export default function AutoPilot() {
   });
 
   const { data: burns = [] } = useQuery<any[]>({
-    queryKey: ["/api/normies/burns/feed"],
+    queryKey: ["/api/burns/feed"],
   });
 
   const { data: signals = [] } = useQuery<any[]>({
@@ -404,7 +404,7 @@ export default function AutoPilot() {
             AUTOPILOT
           </h1>
           <p style={{ ...mono, fontSize: "0.65rem", color: "rgba(227,229,228,0.4)", marginTop: 4 }}>
-            On-chain signals → story → auto-post to @NORMIES_TV · every 6 hours
+            On-chain signals → story → auto-post · every 6 hours
           </p>
         </div>
         <button
@@ -566,7 +566,7 @@ export default function AutoPilot() {
             <span style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.3)", marginLeft: "auto" }}>shapes the story</span>
           </div>
           <p style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.3)", marginBottom: "0.85rem", lineHeight: 1.5 }}>
-            Positive energy from X feeds Agent #306's narrative — hype, creativity, UGC, community strength
+            Positive energy from X feeds Agent 306's narrative — hype, creativity, UGC, community strength
           </p>
           {recentSignals.length === 0 ? (
             <p style={{ ...mono, fontSize: "0.65rem", color: "rgba(227,229,228,0.3)" }}>No signals yet — run pipeline to capture</p>
@@ -666,7 +666,7 @@ export default function AutoPilot() {
           <div>
             <p style={{ ...label, marginBottom: 2 }}>Daily News Dispatch</p>
             <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.35)" }}>
-              Agent #306 scans markets + X → writes 1 punchy tweet → posts to @NORMIES_TV
+              Agent 306 scans markets + X → writes 1 punchy tweet → auto-posts
             </p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -704,7 +704,7 @@ export default function AutoPilot() {
           {[
             { step: "01", title: "Market Scan", desc: "ETH + BTC prices, 24h change pulled from CoinGecko" },
             { step: "02", title: "X Pulse", desc: "Grok x_search finds the single hottest NFT/Web3 story" },
-            { step: "03", title: "Dispatch", desc: "Agent #306 writes + posts 1 punchy tweet to @NORMIES_TV" },
+            { step: "03", title: "Dispatch", desc: "Agent 306 writes + posts 1 punchy tweet" },
           ].map(({ step, title, desc }) => (
             <div key={step}>
               <span style={{ ...mono, fontSize: "0.58rem", color: "#a78bfa" }}>{step}</span>
@@ -721,7 +721,7 @@ export default function AutoPilot() {
           <div>
             <p style={{ ...label, marginBottom: 2 }}>📡 Live Community Signals</p>
             <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.35)" }}>
-              Scans X every 30min for NORMIES holder posts, burn stories, Arena hype, founder posts — feeds directly into episode narrative
+              Scans X every 30min for community posts, burn stories, founder posts — feeds directly into episode narrative
             </p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -737,10 +737,10 @@ export default function AutoPilot() {
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
           {[
-            { step: "01", title: "Founder Posts", desc: "@serc1n + @normiesART + @nuclearsamurai — always highest priority, shape the episode canon" },
+            { step: "01", title: "Founder Posts", desc: "Tracked accounts — always highest priority, shape the episode canon" },
             { step: "02", title: "Burn Stories", desc: "Holders sharing their sacrifices, what they're building, why they burned" },
-            { step: "03", title: "Arena Hype", desc: "Community energy around May 15 — who's ready, who's nervous, who's silent" },
-            { step: "04", title: "PFP Holders", desc: "Accounts with NORMIES PFPs spotted posting — they live in the Temple, they get named" },
+            { step: "03", title: "Community Hype", desc: "Community energy — who's active, who's building, who's engaged" },
+            { step: "04", title: "PFP Holders", desc: "Accounts spotted posting — active community members get named" },
           ].map(({ step, title, desc }) => (
             <div key={step}>
               <span style={{ ...mono, fontSize: "0.58rem", color: "#2dd4bf" }}>{step}</span>
@@ -757,7 +757,7 @@ export default function AutoPilot() {
           <div>
             <p style={{ ...label, marginBottom: 2 }}>💬 Community Reply Feed</p>
             <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.35)" }}>
-              Replies to @NORMIES_TV posts — questions, lore suggestions, holder mentions → feed into next episode
+              Replies to our posts — questions, suggestions, community mentions → feed into next episode
             </p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -785,7 +785,7 @@ export default function AutoPilot() {
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
           {[
-            { step: "01", title: "Watch Replies", desc: "Searches X for replies, QTs, and mentions of @NORMIES_TV every 30min" },
+            { step: "01", title: "Watch Replies", desc: "Searches X for replies, QTs, and mentions every 30min" },
             { step: "02", title: "Classify", desc: "Questions, lore suggestions, holder mentions, excitement — each type gets weighted" },
             { step: "03", title: "Feed In", desc: "Top replies injected into episode context: 'community asked about #X last time'" },
             { step: "04", title: "Close Loop", desc: "Next episode references replies by @handle — they see it, feel heard, repost" },
@@ -805,7 +805,7 @@ export default function AutoPilot() {
           <div>
             <p style={{ ...label, marginBottom: 2 }}>🔥 Burn Receipt Engine</p>
             <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.35)" }}>
-              Real-time · every burn detected within 90s → personalized card + Agent #306 narrative → auto-post
+              Real-time · every burn detected within 90s → personalized card + Agent 306 narrative → auto-post
             </p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -837,10 +837,10 @@ export default function AutoPilot() {
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
           {[
-            { step: "01", title: "Burn Detected", desc: "Polls normies.art every 90s — catches burns within 1.5 min of on-chain confirmation" },
-            { step: "02", title: "Narrative", desc: "Agent #306 writes a personalized receipt story — scale-aware: small/major/legendary" },
-            { step: "03", title: "Image Card", desc: "Ghost of burned Normie → arrow → bright receiver Normie + stats. 1200×675 card" },
-            { step: "04", title: "Auto-Post", desc: "Tweet with image posted instantly to @NORMIES_TV. Holder gets public recognition on-chain" },
+            { step: "01", title: "Burn Detected", desc: "Polls every 90s — catches burns within 1.5 min of on-chain confirmation" },
+            { step: "02", title: "Narrative", desc: "Agent 306 writes a personalized receipt story — scale-aware: small/major/legendary" },
+            { step: "03", title: "Image Card", desc: "Burned token → arrow → receiver token + stats. 1200x675 card" },
+            { step: "04", title: "Auto-Post", desc: "Tweet with image posted instantly. Holder gets public recognition on-chain" },
           ].map(({ step, title, desc }) => (
             <div key={step}>
               <span style={{ ...mono, fontSize: "0.58rem", color: "#f97316" }}>{step}</span>
@@ -855,9 +855,9 @@ export default function AutoPilot() {
       <div style={{ ...card, marginTop: 12, background: "rgba(74,222,128,0.03)", borderColor: "rgba(74,222,128,0.15)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.85rem" }}>
           <div>
-            <p style={{ ...label, marginBottom: 2 }}>🏆 THE 100 Weekly Leaderboard</p>
+            <p style={{ ...label, marginBottom: 2 }}>🏆 Weekly Leaderboard</p>
             <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.35)" }}>
-              Every Monday 9am ET → ranked card with AP, level, movers → auto-post to @NORMIES_TV
+              Every Monday 9am ET → ranked card with AP, level, movers → auto-post
             </p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -889,8 +889,8 @@ export default function AutoPilot() {
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
           {[
-            { step: "01", title: "Live Rankings", desc: "Fetches AP + Level for 40+ tracked tokens from normies.art canvas API" },
-            { step: "02", title: "Movement", desc: "Compares vs. last week — who rose, who fell, who's new to THE 100" },
+            { step: "01", title: "Live Rankings", desc: "Fetches AP + Level for 40+ tracked tokens from on-chain data" },
+            { step: "02", title: "Movement", desc: "Compares vs. last week — who rose, who fell, who's new to the leaderboard" },
             { step: "03", title: "Leaderboard Card", desc: "1200×900 card with top 12, power bars, rank change arrows, pixel avatars" },
           ].map(({ step, title, desc }) => (
             <div key={step}>
@@ -909,8 +909,8 @@ export default function AutoPilot() {
           {[
             { step: "01", title: "Community Pulse", desc: "X scanned for hype, creativity, UGC — positive energy only" },
             { step: "02", title: "Chain Data", desc: "Burns, pixels, AP leaders pulled live from Ethereum" },
-            { step: "03", title: "Story", desc: "Agent #306 weaves community energy + on-chain truth into the episode" },
-            { step: "04", title: "Post", desc: "Tweet + Normie image auto-posted to @NORMIES_TV every 6h" },
+            { step: "03", title: "Story", desc: "Agent 306 weaves community energy + on-chain truth into the episode" },
+            { step: "04", title: "Post", desc: "Tweet + image auto-posted every 6h" },
           ].map(({ step, title, desc }) => (
             <div key={step}>
               <span style={{ ...mono, fontSize: "0.58rem", color: "#f97316" }}>{step}</span>

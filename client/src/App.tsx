@@ -4,19 +4,10 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import StoryEngine from "@/pages/StoryEngine";
-import RenderStudio from "@/pages/RenderStudio";
 import EpisodeQueue from "@/pages/EpisodeQueue";
-import UniverseMap from "@/pages/UniverseMap";
-import LiveStats from "@/pages/LiveStats";
 import VideoStudio from "@/pages/VideoStudio";
-import VoxelClip from "@/pages/VoxelClip";
-import CinematicClip from "@/pages/CinematicClip";
 import AutoPilot from "@/pages/AutoPilot";
-import CommunityTools from "@/pages/CommunityTools";
 import NewsEngine from "@/pages/NewsEngine";
-import CommunityIntel from "@/pages/CommunityIntel";
-import CYOALore from "@/pages/CYOALore";
-import CommunityBoost from "@/pages/CommunityBoost";
 import PodcastStudio from "@/pages/PodcastStudio";
 import ArticleStudio from "@/pages/ArticleStudio";
 import CommandChat from "@/pages/CommandChat";
@@ -32,27 +23,18 @@ import PerplexityAttribution from "@/components/PerplexityAttribution";
 const nav = [
   { href: "/briefing", label: "Morning Brief", desc: "Daily intelligence"  },
   { href: "/",        label: "Story Engine",  desc: "Narrative AI"       },
-  { href: "/render",  label: "Render Studio", desc: "3D pipeline"        },
   { href: "/episodes",label: "Episodes",      desc: "Queue & post"       },
   { href: "/video",   label: "Video Studio",  desc: "Generate clips"     },
-  { href: "/voxel",   label: "3D Voxel Clip", desc: "On-chain render"    },
-  { href: "/cinematic",label: "Cinematic Clip",desc: "3D bust · THE 100"  },
   { href: "/autopilot", label: "Autopilot",     desc: "Auto-post engine"   },
-  { href: "/news",     label: "News Engine",   desc: "What's hot · rugs"  },
-  { href: "/community", label: "Community Intel", desc: "Holder pulse · edit" },
-  { href: "/boost",     label: "Community Boost",  desc: "Amplify co-creators" },
+  { href: "/news",     label: "News Engine",   desc: "What's hot"         },
   { href: "/podcast",   label: "Podcast Studio",   desc: "Guest queue + interviews" },
   { href: "/article",   label: "Article Studio",   desc: "The Deep Read · weekly AI" },
   { href: "/command",   label: "Command Center",    desc: "All engines · Status" },
   { href: "/status",    label: "Agent Status",      desc: "Evolution · Exploration" },
-  { href: "/chat",      label: "Talk to #306",      desc: "Direct line · MrRayG" },
+  { href: "/chat",      label: "Talk to 306",       desc: "Direct line"            },
   { href: "/weekly",    label: "Weekly Engines",    desc: "Spotlight · Race" },
   { href: "/house",     label: "Agent HQ",          desc: "Research · Lab · Status" },
-  { href: "/voice",     label: "Voice Studio",      desc: "Agent #306 speaks" },
-  { href: "/lore",      label: "Normies Lore",    desc: "Choose Your Own" },
-  { href: "/culture",   label: "The Culture",   desc: "Community builds"   },
-  { href: "/universe",label: "Universe Map",  desc: "Phase roadmap"      },
-  { href: "/stats",   label: "Live Stats",    desc: "Chain + social"     },
+  { href: "/voice",     label: "Voice Studio",      desc: "Agent 306 speaks" },
 ];
 
 function Sidebar() {
@@ -76,14 +58,8 @@ function Sidebar() {
         borderBottom: "1px solid rgba(227,229,228,0.10)",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.25rem" }}>
-          {/* Pixel normie favicon */}
-          <img
-            src="https://api.normies.art/normie/306/image.png"
-            alt="#306"
-            style={{ width: 28, height: 28, imageRendering: "pixelated", borderRadius: 2, border: "1px solid rgba(227,229,228,0.15)" }}
-          />
           <span className="pixel" style={{ fontSize: "1.05rem", color: "#e3e5e4", letterSpacing: "0.04em" }}>
-            NORMIES TV
+            306
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.4rem" }}>
@@ -99,7 +75,7 @@ function Sidebar() {
             textTransform: "uppercase",
             letterSpacing: "0.18em",
             color: "rgba(227,229,228,0.4)",
-          }}>Producer Dashboard</span>
+          }}>Agent Dashboard</span>
         </div>
       </div>
 
@@ -145,35 +121,7 @@ function Sidebar() {
         })}
       </nav>
 
-      {/* Phase status */}
-      <div style={{
-        padding: "0.75rem 1.25rem",
-        borderTop: "1px solid rgba(227,229,228,0.10)",
-      }}>
-        <p style={{ fontFamily: "'Courier New', monospace", fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "0.15em", color: "rgba(227,229,228,0.3)", marginBottom: "0.5rem" }}>Active Phases</p>
-        {[
-          { label: "P1 · Canvas",          color: "#f97316", active: true  },
-          { label: "P2 · Arena + Zombies",  color: "#a78bfa", active: false },
-          { label: "P3 · Pixel Market",     color: "#4ade80", active: false },
-        ].map(p => (
-          <div key={p.label} style={{
-            fontFamily: "'Courier New', monospace",
-            fontSize: "0.6rem",
-            textTransform: "uppercase",
-            letterSpacing: "0.1em",
-            color: p.active ? p.color : "rgba(227,229,228,0.25)",
-            marginBottom: 4,
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-          }}>
-            <span style={{ width: 4, height: 4, borderRadius: "50%", background: p.active ? p.color : "rgba(227,229,228,0.2)", display: "inline-block" }} />
-            {p.label}
-          </div>
-        ))}
-      </div>
-
-      <div style={{ padding: "0.6rem 1.25rem", borderTop: "1px solid rgba(227,229,228,0.08)" }}>
+      <div style={{ padding: "0.6rem 1.25rem", borderTop: "1px solid rgba(227,229,228,0.10)" }}>
         <PerplexityAttribution />
       </div>
     </aside>
@@ -199,15 +147,10 @@ function App() {
           <Switch>
             <Route path="/briefing" component={MorningBriefing} />
             <Route path="/"         component={StoryEngine}  />
-            <Route path="/render"   component={RenderStudio} />
             <Route path="/episodes" component={EpisodeQueue} />
             <Route path="/video"    component={VideoStudio}  />
-            <Route path="/voxel"    component={VoxelClip}    />
-            <Route path="/cinematic" component={CinematicClip} />
             <Route path="/autopilot" component={AutoPilot} />
             <Route path="/news"      component={NewsEngine}    />
-            <Route path="/community" component={CommunityIntel} />
-            <Route path="/boost"     component={CommunityBoost}  />
             <Route path="/podcast"  component={PodcastStudio}   />
             <Route path="/article"  component={ArticleStudio}   />
             <Route path="/command"   component={CommandCenter}     />
@@ -216,10 +159,6 @@ function App() {
             <Route path="/weekly"    component={WeeklyEngines}    />
             <Route path="/house"     component={AgentHQ}          />
             <Route path="/voice"     component={VoiceStudio}     />
-            <Route path="/lore"      component={CYOALore}       />
-            <Route path="/culture"   component={CommunityTools} />
-            <Route path="/universe" component={UniverseMap}  />
-            <Route path="/stats"    component={LiveStats}    />
             <Route component={NotFound} />
           </Switch>
         </Layout>

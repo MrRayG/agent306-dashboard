@@ -1,8 +1,8 @@
 /**
  * ─────────────────────────────────────────────────────────────
- *  NORMIESTV — xAI VIDEO ENGINE
+ *  306 — xAI VIDEO ENGINE
  *
- *  Animates Normie pixel art using grok-imagine-video.
+ *  Animates token pixel art using grok-imagine-video.
  *  $0.0639/video. Used selectively — burns ≥2 souls, weekly
  *  Race and Spotlight posts.
  *
@@ -19,7 +19,7 @@ import { dataPath } from "./dataPaths.js";
 const XAI_API_KEY  = process.env.GROK_API_KEY ?? "";
 const VIDEO_API    = "https://api.x.ai/v1/videos/generations";
 const POLL_URL     = "https://api.x.ai/v1/videos";
-const NORMIES_API  = "https://api.normies.art";
+const ONCHAIN_API  = ""; // removed — on-chain API disabled
 
 // Track video generation stats
 const STATS_FILE = dataPath("video_stats.json");
@@ -55,7 +55,7 @@ function saveStats(s: VideoStats) {
 
 let stats = loadStats();
 
-// ── Build a cinematic prompt for a Normie ────────────────────────────────────
+// ── Build a cinematic prompt for a token ─────────────────────────────────────
 function buildBurnPrompt(opts: {
   tokenId: number;
   tokenCount: number;
@@ -65,8 +65,8 @@ function buildBurnPrompt(opts: {
 }): string {
   const { tokenId, tokenCount, level, ap, scale } = opts;
 
-  // NORMIES visual identity:
-  // - Pixel art PFP characters (40×40 grid, black #48494b pixels on light background)
+  // 306 visual identity:
+  // - Pixel art PFP characters (40x40 grid, black #48494b pixels on light background)
   // - The Canvas is the on-chain ritual space — sacred, permanent
   // - Orange (#f97316) is the color of sacrifice and transformation
   // - The vibe: low-key, deliberate, builder energy. NOT horror, NOT skull imagery.
@@ -107,7 +107,7 @@ Epic scale, calm execution. 9:16 vertical. No text. No skulls. No flames. No hor
   return prompts[scale];
 }
 
-// ── Generate a video from a Normie image ─────────────────────────────────────
+// ── Generate a video from a token image ──────────────────────────────────────
 export async function generateBurnVideo(opts: {
   tokenId: number;
   tokenCount: number;
@@ -122,7 +122,7 @@ export async function generateBurnVideo(opts: {
               : "small";
 
   const prompt = buildBurnPrompt({ tokenId, tokenCount, level, ap, scale });
-  const imageUrl = `${NORMIES_API}/normie/${tokenId}/image.png`;
+  const imageUrl = `${ONCHAIN_API}/token/${tokenId}/image.png`;
 
   console.log(`[Video] Generating ${scale} burn video for #${tokenId} (${tokenCount} souls)...`);
 
@@ -137,7 +137,7 @@ export async function generateBurnVideo(opts: {
       body: JSON.stringify({
         model: "grok-imagine-video",
         prompt,
-        image_url: imageUrl,  // animate from the actual Normie image
+        image_url: imageUrl,  // animate from the actual token image
         duration: 8,
         aspect_ratio: "9:16", // vertical — best for X/Twitter
         resolution: "720p",
@@ -180,7 +180,7 @@ export async function generateBurnVideo(opts: {
         saveStats(stats);
 
         // Download video to /tmp for X upload
-        const videoPath = `/tmp/normiestv_burn_${tokenId}_${Date.now()}.mp4`;
+        const videoPath = `/tmp/agent306_burn_${tokenId}_${Date.now()}.mp4`;
         await downloadFile(data.video.url, videoPath);
         return videoPath;
 

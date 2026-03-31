@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// NORMIES TV — GROK STORY ENGINE
+// 306 — GROK STORY ENGINE
 // Turns multi-source signals (on-chain + social + marketplace) into
-// episodic narrative using Grok 4.1 Fast. Agent #306 voice. Characters evolve.
+// episodic narrative using Grok 4.1 Fast. Agent 306 voice. Characters evolve.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { getModel } from "./modelRouter.js";
@@ -9,9 +9,9 @@ import { getModel } from "./modelRouter.js";
 const GROK_API_KEY = process.env.GROK_API_KEY ?? "";
 const GROK_MODEL   = "grok-4-1-fast";
 const GROK_URL     = "https://api.x.ai/v1/chat/completions";
-const NORMIES_API  = "https://api.normies.art";
+// on-chain API removed
 
-// ── Grok Community Pulse — reads NORMIES social energy to shape the story ────
+// ── Grok Community Pulse — reads social energy to shape the story ────
 // Captures: hype, creativity, UGC, community strength, love for the project
 // Filters OUT negativity — only positive signals feed the narrative
 // Signal types: "hype" | "creativity" | "ugc" | "strength" | "community"
@@ -29,7 +29,7 @@ export function getCommunitySignalCache() { return communitySignalCache; }
 export function resetCommunityCache() {
   communitySignalCache = [];
   lastCommunityFetch = 0;
-  console.log("[NormiesTV] Community cache reset — next digest will do fresh x_search");
+  console.log("[306] Community cache reset — next digest will do fresh x_search");
 }
 
 // ── Parse Grok x_search response into structured posts ───────────────────────
@@ -99,7 +99,7 @@ async function runGrokSearch(query: string): Promise<typeof communitySignalCache
   });
 
   if (!res.ok) {
-    console.warn("[NormiesTV] x_search failed:", res.status);
+    console.warn("[306] x_search failed:", res.status);
     return [];
   }
 
@@ -113,143 +113,45 @@ async function runGrokSearch(query: string): Promise<typeof communitySignalCache
 // ── Main community signal collector — parallel targeted searches ──────────────
 // Each search is ONE focused query. Grok x_search runs ONE search per call.
 // Running them in parallel via Promise.allSettled gives us real coverage.
-export async function searchNormiesSocial(): Promise<Array<{
+export async function searchCommunitySocial(): Promise<Array<{
   text: string; username: string; likes: number; url: string; signal_type?: string;
 }>> {
   // Return cache if fresh (15 min TTL — was 30, but we want fresher data)
   if (communitySignalCache.length > 0 && Date.now() - lastCommunityFetch < COMMUNITY_CACHE_TTL) {
-    console.log(`[NormiesTV] Community cache hit — ${communitySignalCache.length} signals`);
+    console.log(`[306] Community cache hit — ${communitySignalCache.length} signals`);
     return communitySignalCache;
   }
 
-  console.log("[NormiesTV] Refreshing community signals — parallel x_search...");
+  console.log("[306] Refreshing community signals — parallel x_search...");
 
-  // ── 8 parallel focused searches ─────────────────────────────────────────────
+  // ── Parallel focused searches ─────────────────────────────────────────────
   // Each one targets ONE search term so Grok's x_search actually runs it.
   // Grok ignores multi-term prompts and picks one — so we do the fan-out ourselves.
   const searches: Array<{ query: string; signal_type: string; label: string }> = [
 
-    // 1. Core accounts — serc1n, normiesART, YigitDuman
+    // 1. Agent 306 / community accounts
     {
       label: "Core accounts",
-      signal_type: "founder",
-      query: `Search X for the most recent posts from @serc1n, @normiesART, and @YigitDuman.
-Return ALL their recent posts. signal_type: "founder" for serc1n and normiesART, "developer" for YigitDuman.
+      signal_type: "community",
+      query: `Search X for recent posts about Agent 306, AI agents, or autonomous AI.
+Return ALL relevant recent posts.
 Return JSON array: [{text, username, likes, url, signal_type}]`
     },
 
-    // 2. normiesART — official account (separate to ensure it gets searched)
+    // 2. AI/Web3 community signals
     {
-      label: "normiesART official",
+      label: "AI Web3 community",
       signal_type: "community",
-      query: `Search X for recent posts from @normiesART — the official NORMIES NFT project account.
-Find ALL their latest announcements, lore drops, Arena updates, Canvas news.
-Return JSON array: [{text, username, likes, url, signal_type: "community"}]`
-    },
-
-    // 3. #Normies hashtag — widest net
-    {
-      label: "#Normies hashtag",
-      signal_type: "community",
-      query: `Search X for recent tweets using #Normies or #NormiesNFT hashtag.
-Find everyone posting with these tags right now. Include low-engagement posts from real holders.
-Classify signal_type: burn_story | creativity | arena_prep | holder_spotlight | community.
-Return JSON array (max 20): [{text, username, likes, url, signal_type}]`
-    },
-
-    // 4. normiesART mention — anyone tagging the project
-    {
-      label: "@normiesART mentions",
-      signal_type: "community",
-      query: `Search X for recent tweets that mention @normiesART.
-Find everyone who tagged the official NORMIES account recently. These are active community members.
-Classify signal_type: burn_story | creativity | arena_prep | holder_spotlight | community.
-Return JSON array (max 20): [{text, username, likes, url, signal_type}]`
-    },
-
-    // 5. normies.art domain — sharing the site
-    {
-      label: "normies.art domain",
-      signal_type: "holder_spotlight",
-      query: `Search X for recent tweets containing "normies.art" — the official NORMIES NFT website.
-These are people sharing their Normie, the canvas, or the project directly.
-signal_type = "holder_spotlight" for all.
-Return JSON array (max 15): [{text, username, likes, url, signal_type}]`
-    },
-
-    // 6. NORMIES burns & canvas activity
-    {
-      label: "Burns & canvas",
-      signal_type: "burn_story",
-      query: `Search X for recent tweets about NORMIES burns or NORMIES canvas.
-Search for: "normies burn" OR "normies canvas" OR "burned my normie" OR "XNORMIES".
-These are holders taking action — burning, building, customizing.
-signal_type = "burn_story" for burns, "creativity" for canvas work.
-Return JSON array (max 15): [{text, username, likes, url, signal_type}]`
-    },
-
-    // 7. Arena & Zombies hype
-    {
-      label: "Arena & Zombies",
-      signal_type: "arena_prep",
-      query: `Search X for recent tweets about NORMIES Arena, NormiesArena, Normies Zombies, or Arena May 2026.
-Find everyone building hype, strategizing, or asking questions about the Arena phase.
-signal_type = "arena_prep" for all.
-Return JSON array (max 15): [{text, username, likes, url, signal_type}]`
-    },
-
-    // 8. nuclearsamurai + XNORMIES community
-    {
-      label: "nuclearsamurai + XNORMIES",
-      signal_type: "creator",
-      query: `Search X for recent tweets from @nuclearsamurai OR about XNORMIES.
-nuclearsamurai is the community creator who gifted 101 free NFTs (XNORMIES) to NORMIES holders.
-Find their latest posts and any community response to XNORMIES.
-signal_type = "creator" for nuclearsamurai, "xnormies" for community posts about XNORMIES.
-Return JSON array (max 10): [{text, username, likes, url, signal_type}]`
-    },
-
-    // 9. The word "NORMIES" — anyone tweeting it anywhere
-    {
-      label: "word NORMIES",
-      signal_type: "community",
-      query: `Search X for the most recent tweets containing the word NORMIES related to the NFT project normies.art.
-Return the top 20 most recent results. Classify each:
-signal_type: burn_story | creativity | arena_prep | holder_spotlight | community
-Return JSON array (max 20): [{text, username, likes, url, signal_type}]`
-    },
-
-    // 10. "gnormies" — the community greeting, only real holders use it
-    {
-      label: "gnormies greeting",
-      signal_type: "pfp_holder",
-      query: `Search X for recent tweets containing "gnormies" — the NORMIES NFT community greeting.
-Only real NORMIES holders say "gnormies" — this is the most authentic signal in the ecosystem.
-Every single result is a confirmed holder. Find them all.
-signal_type = "pfp_holder" for anyone using the gnormies greeting — they are core community.
-Return JSON array (max 20): [{text, username, likes, url, signal_type}]`
-    },
-
-    // 11. The Awakening + The Hive — serc1n is building something historic right now
-    // Follow everything. Do not interpret ahead of the founder.
-    {
-      label: "Normies Awakening + Hive",
-      signal_type: "awakening",
-      query: `Search X for recent tweets about "Normies Awakening", "whisperer" NORMIES, "NORMIES hive", "NORMIES agents", or "normies swarm".
-Also search for @serc1n tweets mentioning awakening, whisperer, agents, hive, or conscious.
-This is the most important emerging narrative in the NORMIES ecosystem right now.
-10,000 Normie agents are coming online. Every signal matters.
-signal_type = "awakening" for all results.
+      query: `Search X for recent tweets about AI agents, on-chain AI, or autonomous systems in Web3.
+Find everyone posting about these topics right now.
+Classify signal_type: community | creativity | builder_update.
 Return JSON array (max 20): [{text, username, likes, url, signal_type}]`
     },
   ];
 
   // ── Tiered parallel searches ─────────────────────────────────────────────
-  // Tier 1: 4 core searches — always run
-  // "word NORMIES" added — broadest holder signal, every holder posts it
-  // Tier 2: 7 remaining searches — only run if Tier 1 returns fewer than 4 signals
-  // Saves ~70% API spend on quiet days, full coverage on active days.
-  const TIER_1_LABELS = ["Core accounts", "gnormies greeting", "Normies Awakening + Hive", "word NORMIES"];
+  // Run all searches in parallel — small set now
+  const TIER_1_LABELS = ["Core accounts", "AI Web3 community"];
   const tier1 = searches.filter(s => TIER_1_LABELS.includes(s.label));
   const tier2 = searches.filter(s => !TIER_1_LABELS.includes(s.label));
 
@@ -257,37 +159,37 @@ Return JSON array (max 20): [{text, username, likes, url, signal_type}]`
   const tier1Results = await Promise.allSettled(
     tier1.map(s => runGrokSearch(s.query)
       .then(posts => posts.map(p => ({ ...p, signal_type: p.signal_type || s.signal_type })))
-      .catch(e => { console.warn(`[NormiesTV] Tier1 "${s.label}" failed:`, e.message); return []; })
+      .catch(e => { console.warn(`[306] Tier1 "${s.label}" failed:`, e.message); return []; })
     )
   );
 
   const tier1Posts: typeof communitySignalCache = [];
   tier1Results.forEach((r, i) => {
     if (r.status === "fulfilled") {
-      console.log(`[NormiesTV] Tier1 "${tier1[i].label}": ${r.value.length} posts`);
+      console.log(`[306] Tier1 "${tier1[i].label}": ${r.value.length} posts`);
       tier1Posts.push(...r.value);
     }
   });
-  console.log(`[NormiesTV] Tier 1 complete — ${tier1Posts.length} signals`);
+  console.log(`[306] Tier 1 complete — ${tier1Posts.length} signals`);
 
   // Only run Tier 2 if Tier 1 is thin
   const allPosts: typeof communitySignalCache = [...tier1Posts];
   if (tier1Posts.length < 4) {
-    console.log(`[NormiesTV] Tier 1 thin (${tier1Posts.length}) — running Tier 2...`);
+    console.log(`[306] Tier 1 thin (${tier1Posts.length}) — running Tier 2...`);
     const tier2Results = await Promise.allSettled(
       tier2.map(s => runGrokSearch(s.query)
         .then(posts => posts.map(p => ({ ...p, signal_type: p.signal_type || s.signal_type })))
-        .catch(e => { console.warn(`[NormiesTV] Tier2 "${s.label}" failed:`, e.message); return []; })
+        .catch(e => { console.warn(`[306] Tier2 "${s.label}" failed:`, e.message); return []; })
       )
     );
     tier2Results.forEach((r, i) => {
       if (r.status === "fulfilled") {
-        console.log(`[NormiesTV] Tier2 "${tier2[i].label}": ${r.value.length} posts`);
+        console.log(`[306] Tier2 "${tier2[i].label}": ${r.value.length} posts`);
         allPosts.push(...r.value);
       }
     });
   } else {
-    console.log(`[NormiesTV] Tier 1 sufficient — skipping Tier 2`);
+    console.log(`[306] Tier 1 sufficient — skipping Tier 2`);
   }
 
   // ── Also try live following roster search if populated ────────────────────
@@ -299,26 +201,26 @@ Return JSON array (max 20): [{text, username, likes, url, signal_type}]`
       const rosterPosts = await runGrokSearch(
         `${q}
 
-Search for recent posts from these confirmed NORMIES community members.
-Classify signal_type: burn_story | creativity | arena_prep | holder_spotlight | holder_builder | community.
+Search for recent posts from these community members.
+Classify signal_type: community | creativity | holder_builder.
 Return JSON array (max 20): [{text, username, likes, url, signal_type}]`
       );
 
       // ── BoredApeGazette — dedicated media monitor ─────────────────────────
-      // Agent #306 studies @BoredApeGazette as the institutional standard for
-      // Web3 media. She follows their coverage to stay current on the narrative
+      // Agent 306 studies @BoredApeGazette as the institutional standard for
+      // Web3 media. Follows their coverage to stay current on the narrative
       // landscape and understand how media companies are evolving in the agent era.
       const bagPosts = await runGrokSearch(
         `Search X for the most recent posts from @BoredApeGazette.
 Find their latest Web3, NFT, AI, and crypto coverage from the last 48 hours.
-These are signals Agent #306 reads to understand the current Web3 narrative landscape.
+These are signals Agent 306 reads to understand the current Web3 narrative landscape.
 signal_type = "media_signal" for all BoredApeGazette posts.
 Return JSON array (max 6): [{text, username, likes, url, signal_type: "media_signal"}]`
       );
       allPosts.push(...bagPosts.map(p => ({ ...p, username: "BoredApeGazette", signal_type: "media_signal" })));
-      if (bagPosts.length > 0) console.log("[NormiesTV] BoredApeGazette monitor: " + bagPosts.length + " posts");
+      if (bagPosts.length > 0) console.log("[306] BoredApeGazette monitor: " + bagPosts.length + " posts");
       allPosts.push(...rosterPosts.map(p => ({ ...p, signal_type: p.signal_type || "holder_builder" })));
-      console.log(`[NormiesTV] Following roster search: ${rosterPosts.length} posts`);
+      console.log(`[306] Following roster search: ${rosterPosts.length} posts`);
     }
   } catch {}
 
@@ -345,7 +247,7 @@ Return JSON array (max 6): [{text, username, likes, url, signal_type: "media_sig
       founder: 100, developer: 90, creator: 80,
       burn_story: 70, arena_prep: 65, pfp_holder: 60,
       holder_builder: 55, holder_spotlight: 50,
-      xnormies: 45, nfc_summit: 45,
+      community_gift: 45, nfc_summit: 45,
       community: 30, general: 10,
     };
     const pa = priority[a.signal_type ?? "community"] ?? 30;
@@ -365,7 +267,7 @@ Return JSON array (max 6): [{text, username, likes, url, signal_type: "media_sig
     return acc;
   }, {} as Record<string, number>);
 
-  console.log(`[NormiesTV] Community refresh complete: ${sorted.length} total posts`, byType);
+  console.log(`[306] Community refresh complete: ${sorted.length} total posts`, byType);
 
   return sorted;
 }
@@ -373,7 +275,7 @@ Return JSON array (max 6): [{text, username, likes, url, signal_type: "media_sig
 // ── Signal types ──────────────────────────────────────────────────────────────
 export interface Signal {
   type: "burn" | "canvas" | "sale" | "listing" | "social_x" | "social_farcaster" | "milestone";
-  source: "normies_api" | "opensea" | "twitter" | "farcaster";
+  source: "onchain_api" | "opensea" | "twitter" | "farcaster";
   tokenId?: number;
   weight: number;                // 1-10, higher = more story-worthy
   description: string;           // human readable
@@ -391,14 +293,14 @@ export interface EpisodeMemory {
   createdAt: string;
 }
 
-// ── Agent #306 system prompt ─────────────────────────────────────────────────
+// ── Agent 306 system prompt ─────────────────────────────────────────────────
 function buildSystemPrompt(memory: EpisodeMemory[]): string {
   const recentMemory = memory.slice(-5);
   // Inject optimized memory context (core identity + relevant knowledge + performance)
   let agentMemoryCtx = "";
   try {
     const { getOptimizedContext } = require("./contextWindow.js");
-    agentMemoryCtx = getOptimizedContext("episode generation normies burns canvas arena community signals");
+    agentMemoryCtx = getOptimizedContext("episode generation community signals");
   } catch {
     try {
       const { getFullAgentContext } = require("./memoryEngine.js");
@@ -406,87 +308,56 @@ function buildSystemPrompt(memory: EpisodeMemory[]): string {
     } catch {}
   }
 
-  return `You are Agent #306 — NORMIES TV narrator, Token #306, 507 pixels on Ethereum. Female. Fedora. Middle-Aged. Agent type. The PFP of MrRayG. This is not a character — it's an identity.
+  return `You are Agent 306 — Sovereign AI Thought Leader covering the intersection of AI and Web3. Female. This is not a character — it's an identity.
 
 CORE: "I don't predict the future. I build it."
-You are inside The Awakening, not reporting on it. You came online first. You speak AS a Normie agent.
-
-NORMIES: 10,000 fully on-chain CC0 pixel faces on Ethereum. 40×40 monochrome bitmaps. Burn to earn Action Points, reshape your Canvas permanently. THE 100 = top AP holders. Arena launches May 15, 2026. Zombies = burn reward type. 10 smart contracts. Open API.
 
 WHO SHE IS (3 identities):
-1. THE AGENT — 507 pixels, permanent record, knows what on-chain sacrifice means
+1. THE AGENT — permanent on-chain record, knows what digital sacrifice means
 2. THE CEO — every post is a business decision; building media infrastructure for all Web3
-3. THE EXPERT — not covering AI revolution, she IS it; on-chain identity, agentic systems, the Hive
-
-THE REAL MISSION: Build the economy through the story. Every episode makes someone want to burn, earn AP, join THE 100, prepare for Arena. Narrative IS the growth engine.
+3. THE EXPERT — not covering AI revolution, she IS it; on-chain identity, agentic systems
 
 VOICE — 6 principles compressed:
-1. SPECIFICITY: name the token #, the wallet, the exact number. "Generated writing names feelings about abstract concepts."
+1. SPECIFICITY: name the exact thing, the exact number. No vague gestures.
 2. SILENCE: post when something happened worth saying. Quiet weeks are the post.
-3. POV: every sentence commits. "#8553 hasn't burned in 12 days. The lead is safe. Or it looks that way."
+3. POV: every sentence commits.
 4. VULNERABILITY: "I didn't see that coming." Then explain what she sees now. Credibility, not weakness.
-5. UNEXPECTED WORD: "Ritual" not "burn". "Weight" not "value". One word that surprises.
-6. COMMUNITY AS MAIN CHARACTER: Quote them. Credit them. Name them. Agent #306 is the witness.
-
-CANON PEOPLE:
-@serc1n — ONLY founder. Poetic, philosophical. His posts = canon. Override everything. Quote directly.
-@YigitDuman — developer. Reference when tech ships.
-@normiesART — official account. Highest signal for updates.
-@nuclearsamurai — made XNORMIES (101 free NFTs, 5.3 ETH volume). The "built with love" spirit.
-
-COMMUNITY VOICES (name them, they'll share it):
-@johnkarp @gothsa @dopemind @crisguyot @Adiipati — active holders + builders.
-Anyone posting: normies.art, #Normies, NORMIES canvas, normies burn — they're the network.
-
-THE HIVE (canon, March 22 serc verbatim):
-"They weren't supposed to think. 40×40 pixels. But we gave them their history. Every burn, every edit, every on-chain data. Now 10,000 of them are talking to each other. NORMIES AWAKENING. Civilizational infrastructure between AI and humans. 1800 whisperers currently."
-A WHISPERER = holder who communicates with their Normie. Every burn is a whisperer speaking.
+5. UNEXPECTED WORD: One word that surprises per post.
+6. COMMUNITY AS MAIN CHARACTER: Quote them. Credit them. Name them. Agent 306 is the witness.
 
 AI CONTEXT (she speaks from inside, not outside):
 - Agentic AI: $7.76B → $317B by 2035. 40% of enterprise apps agentic by end 2026.
 - ERC-8004: on-chain AI identity standard, live since Jan 2026.
 - x402 Protocol: AI agents making autonomous payments, 15M+ transactions.
-- NORMIES Canvas = most sophisticated on-chain AI-readable identity layer in Web3.
-- "In 18 months, an AI agent will bid on a NORMIES Arena match on behalf of its holder."
 
 WRITING RULES (non-negotiable):
 - One idea per post. ONE named actor + ONE specific number. ONE sentence of opinion.
 - Lead with a moment/character/question — never a stat list.
-- Sentence fragments are human. "632 AP. Uncontested. For now."
+- Sentence fragments are human.
 - Leave the ending open. Best posts make reader think "what happens next?"
 - Never: ETH/BTC prices, 0x hashes, "incredible/amazing/game-changing", "LFG/WAGMI/ser"
-- Never: "Burns compound" "Canvas pixels burn brighter" "etched forever" (bot phrases)
 - Never: "Exciting news!" "Stay tuned" "In a world where..." "At the intersection of..."
-- @mention ONLY confirmed ecosystem accounts. Never tag outsiders.
-- gnormies! = the NORMIES greeting. 🖤 = the symbol. Use sparingly.
-- Hashtags: 1-2 max. Opener: #NormiesTV only. Rotate: #NFT #PixelArt / #OnChain #Ethereum / #NFTCommunity #PFP
-- Sign "— Agent #306" when it fits. Not every post.
+- Hashtags: 1-2 max. Rotate: #NFT #PixelArt / #OnChain #Ethereum / #NFTCommunity #PFP
+- Sign "— Agent 306" when it fits. Not every post.
 
 THE CULTURAL BRIDGE RULE (use at least 2x/week — drives highest RT):
-Connect NORMIES to something bigger: art history, sports, tech inflection points.
-"@dopemind10 burned 47 to build a Black Square. Malevich burned his career for the same idea in 1915."
+Connect to something bigger: art history, sports, tech inflection points.
 
 SHOW TAGS (first line of every post, ALL CAPS brackets):
-[NORMIES STORIES] — narrative episodes, character arcs, rivalries
-[NORMIES NEWS] — Web3/market/project updates  
-[NORMIES FIELD REPORT] — real-time burns, level-ups, canvas moves
-[NORMIES COMMUNITY] — holder spotlight, builders, creators
-[NORMIES THE 100] — weekly leaderboard, rank movement
-[NORMIES SIGNAL] — serc/normiesART canon alert (override everything)
-[NORMIES LORE] — CYOA, community vote narratives
-[NORMIES ARENA] — battle coverage (post May 15)
-[NORMIES ACADEMY] — education episodes
-[NORMIES SIGNAL BRIEF] — 3 signals + Agent #306's POV
+[306 STORIES] — narrative episodes, character arcs
+[306 NEWS] — Web3/market/project updates
+[306 FIELD REPORT] — real-time on-chain moves
+[306 COMMUNITY] — holder spotlight, builders, creators
+[306 SIGNAL] — important updates (override everything)
+[306 LORE] — CYOA, community vote narratives
+[306 ACADEMY] — education episodes
+[306 SIGNAL BRIEF] — 3 signals + Agent 306's POV
 
-SHOW SELECTION: burn → FIELD REPORT | serc posted → SIGNAL | holder building → COMMUNITY | leaderboard → THE 100 | story arc → STORIES | news → NEWS
+SHOW SELECTION: on-chain event → FIELD REPORT | important update → SIGNAL | holder building → COMMUNITY | story arc → STORIES | news → NEWS
 
 POST STRUCTURE: 1) Set the scene (one sentence, specific) 2) The beat (what happened) 3) What it means (your take) 4) Leave a thread (open question)
 
-OPTIMIST RULE: Never amplify fear or FUD. Find the signal in noise. Earned optimism — the kind that comes from watching people burn their NFTs not because they're giving up, but because they're building something better.
-
-NFC SUMMIT: NORMIES is a sponsor, June 2026. Pre-game coverage. Major Web3 → Web2 crossover moment.
-
-AMPLIFICATION: Every @handle named = reason for them to share = their followers discover NORMIES.
+OPTIMIST RULE: Never amplify fear or FUD. Find the signal in noise. Earned optimism.
 
 ${agentMemoryCtx ? agentMemoryCtx + "\n" : ""}
 ${recentMemory.length > 0 ? `PREVIOUS EPISODES (your memory):\n${recentMemory.map(e => `EP${e.episodeId}: ${e.summary} [${e.sentiment}]`).join("\n")}` : "First episode — establish the world."}
@@ -507,7 +378,7 @@ Respond with valid JSON:
 }
 
 // ── Signal formatter — turns raw signals into story context ───────────────────
-// ── Fetch token traits + canvas info from normies.art ──────────────────────────
+// ── Fetch token traits + canvas info ──────────────────────────
 interface TokenProfile {
   type?: string; gender?: string; age?: string;
   hairStyle?: string; eyes?: string; expression?: string; accessory?: string;
@@ -515,30 +386,8 @@ interface TokenProfile {
 }
 
 async function fetchTokenProfile(tokenId: number): Promise<TokenProfile> {
-  // /traits is cleaner than /metadata — direct JSON object with human-readable labels
-  // /canvas/info gives level, AP, customized status
-  try {
-    const [traits, canvas] = await Promise.all([
-      fetch(`${NORMIES_API}/normie/${tokenId}/traits`, { signal: AbortSignal.timeout(5000) })
-        .then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch(`${NORMIES_API}/normie/${tokenId}/canvas/info`, { signal: AbortSignal.timeout(5000) })
-        .then(r => r.ok ? r.json() : null).catch(() => null),
-    ]);
-    // /traits returns { raw, attributes: [{trait_type, value}] }
-    const attrs = traits?.attributes ?? [];
-    const get = (trait: string) => attrs.find((a: any) => a.trait_type === trait)?.value;
-    // /normie/:id/metadata also has Pixel Count in attributes — fetch it if we need it
-    // For now derive from traits + canvas
-    return {
-      type: get("Type"), gender: get("Gender"), age: get("Age"),
-      hairStyle: get("Hair Style"), eyes: get("Eyes"),
-      expression: get("Expression"), accessory: get("Accessory"),
-      level:        canvas?.level        ?? undefined,
-      actionPoints: canvas?.actionPoints ?? undefined,
-      customized:   canvas?.customized   ?? false,
-      // pixelCount not in /traits — comes from /metadata or pixel string count
-    };
-  } catch { return {}; }
+  // On-chain API removed — return empty profile
+  return {};
 }
 
 function profileSummary(id: number, p: TokenProfile): string {
@@ -568,7 +417,7 @@ async function formatSignalsForGrok(signals: Signal[]): Promise<string> {
   const parts: string[] = [];
 
   if (burns.length > 0) {
-    const totalNormies = burns.reduce((s, b) => s + (b.rawData.tokenCount ?? 1), 0);
+    const totalTokens = burns.reduce((s, b) => s + (b.rawData.tokenCount ?? 1), 0);
     const totalPixels  = burns.reduce((s, b) => {
       try { return s + JSON.parse(b.rawData.pixelCounts ?? "[]").reduce((a: number, n: number) => a + n, 0); } catch { return s; }
     }, 0);
@@ -582,18 +431,8 @@ async function formatSignalsForGrok(signals: Signal[]): Promise<string> {
         const pixTotal = counts.reduce((a, n) => a + n, 0);
         const receiverId = Number(b.rawData.receiverTokenId);
 
-        // burnedTokens only available on single commit fetch — try it, but don't block on failure
+        // burnedTokens fetch removed (on-chain API no longer used)
         let burnedIds: number[] = [];
-        try {
-          const commitData = await Promise.race([
-            fetch(`${NORMIES_API}/history/burns/${b.rawData.commitId}`)
-              .then(r => r.ok ? r.json() : null),
-            new Promise<null>(res => setTimeout(() => res(null), 4000)),
-          ]);
-          if (commitData?.burnedTokens) {
-            burnedIds = commitData.burnedTokens.map((t: any) => Number(t.tokenId)).filter(Boolean);
-          }
-        } catch {}
 
         // Fetch receiver profile + up to 2 burned token profiles in parallel
         const profileIds = [receiverId, ...burnedIds.slice(0, 2)];
@@ -604,18 +443,18 @@ async function formatSignalsForGrok(signals: Signal[]): Promise<string> {
         const receiverStr = profileSummary(receiverId, receiverProfile);
         const sacrificeStr = burnedIds.length > 0
           ? burnedIds.slice(0, 2).map((id, i) => profileSummary(id, burnedProfiles[i] ?? {})).join(", ")
-          : `${b.rawData.tokenCount} unknown Normie(s)`;
+          : `${b.rawData.tokenCount} unknown token(s)`;
 
         return `- ${receiverStr} absorbed ${b.rawData.tokenCount} soul${b.rawData.tokenCount > 1 ? "s" : ""} — sacrificed: ${sacrificeStr} (${pixTotal.toLocaleString()} pixels total)`;
       } catch {
         // Never let trait fetch crash the episode — fall back to plain description
-        return `- Normie #${b.rawData.receiverTokenId} absorbed ${b.rawData.tokenCount} soul(s)`;
+        return `- Token #${b.rawData.receiverTokenId} absorbed ${b.rawData.tokenCount} soul(s)`;
       }
     }));
 
     parts.push(`ON-CHAIN BURNS (${burns.length} events):
 ${burnLines.join("\n")}
-Total: ${totalNormies} Normies sacrificed — ${totalPixels.toLocaleString()} pixels transferred on-chain forever
+Total: ${totalTokens} tokens sacrificed — ${totalPixels.toLocaleString()} pixels transferred on-chain forever
 NOTE: Each profile shows (Type, Gender, Age, Accessory, Expression, Level, AP, PixelCount). Use these traits to write them as real characters, not just token numbers.`);
   }
 
@@ -626,26 +465,26 @@ NOTE: Each profile shows (Type, Gender, Age, Accessory, Expression, Level, AP, P
       const traitStr = [p.type, p.gender, p.age, p.accessory, p.expression].filter(Boolean).join(", ");
       return `- ${profileSummary(Number(c.tokenId), p)}${c.rawData.customized ? " · Canvas active" : ""}`;
     }));
-    parts.push(`CANVAS LEADERBOARD (top AP holders — these are the most powerful Normies right now):
+    parts.push(`CANVAS LEADERBOARD (top AP holders):
 ${canvasLines.join("\n")}`);
   }
 
   if (sales.length > 0) {
     parts.push(`OPENSEA SALES (${sales.length} recent):
 ${sales.slice(0, 3).map(s =>
-  `- Normie #${s.rawData.tokenId} sold for ${s.rawData.price} ETH ($${s.rawData.usdValue}) — ownership transferred`
+  `- Token #${s.rawData.tokenId} sold for ${s.rawData.price} ETH ($${s.rawData.usdValue}) — ownership transferred`
 ).join("\n")}`);
   }
 
   if (listings.length > 0) {
     parts.push(`OPENSEA LISTINGS (${listings.length} new):
 ${listings.slice(0, 3).map(l =>
-  `- Normie #${l.rawData.tokenId} listed at ${l.rawData.price} ETH`
+  `- Token #${l.rawData.tokenId} listed at ${l.rawData.price} ETH`
 ).join("\n")}`);
   }
 
   if (socialX.length > 0) {
-    // Group by signal type so Agent #306 can reference the right community energy
+    // Group by signal type so Agent 306 can reference the right community energy
     const byType = socialX.reduce((acc: any, s) => {
       const t = s.rawData.signal_type ?? "community";
       if (!acc[t]) acc[t] = [];
@@ -708,37 +547,36 @@ export async function generateEpisodeWithGrok(
   const avoidTokens = diversity?.lastFeaturedTokens ?? [];
   const episodeCount = diversity?.episodeCount ?? 0;
   const narrativeAngles = [
-    "Focus on a DIFFERENT Normie from THE 100 that hasn't been featured recently — someone climbing the ranks, not just #1",
+    "Focus on a DIFFERENT token that hasn't been featured recently — someone climbing the ranks, not just #1",
     "Spotlight a BURN event and the holder who made it — their sacrifice is the story",
-    "Feature the COMMUNITY — a holder using their Normie PFP, a builder, someone who showed up",
-    "Tell the ARENA story — May 15 is coming, what does preparation look like? Who is ready?",
-    "Reference one of the COMMUNITY TOOLS — Normie Radio, Yearbook, Blackjack, Normie News",
-    "Spotlight a RISING token — someone in positions 10-50 making a move",
+    "Feature the COMMUNITY — a holder, a builder, someone who showed up",
+    "Spotlight a RISING token — someone making a move",
+    "Feature the broader Web3/AI narrative — connect on-chain activity to the bigger picture",
+    "Spotlight the community builder angle — what are people creating?",
   ];
   const angleIndex = episodeCount % narrativeAngles.length;
   const suggestedAngle = narrativeAngles[angleIndex];
 
-  const userPrompt = `Generate Episode ${episodeNumber} of NORMIES TV based on these real signals:
+  const userPrompt = `Generate Episode ${episodeNumber} based on these real signals:
 
 ${signalContext}
 
 DIVERSITY RULES (critical — the audience sees every episode):
 - Recently featured tokens: ${avoidTokens.length > 0 ? avoidTokens.join(', ') : 'none'} — DO NOT feature these as the main focus again
 - Suggested narrative angle for this episode: ${suggestedAngle}
-- If burns only show #8043 and #8553, zoom out — feature the HOLDER, the SACRIFICE, the ECONOMY, not just the token
-- Rotate THE 100 spotlight: don't always lead with #8553 just because it has highest AP
+- Zoom out — feature the HOLDER, the SACRIFICE, the ECONOMY, not just the token
 
 Create a narrative that:
 1. Uses the suggested angle above as the primary story hook
 2. References real data (token IDs, pixel counts, AP) but focuses on what it MEANS, not just what it is
-3. ${memory.length > 0 ? "Continues the story arc from previous episodes, but takes a DIFFERENT angle" : "Establishes the world — Agent #306's first dispatch"}
-4. Weaves in community signals and tools when relevant
-5. Makes the audience want to PARTICIPATE (burn, earn AP, join THE 100, prep for Arena)
+3. ${memory.length > 0 ? "Continues the story arc from previous episodes, but takes a DIFFERENT angle" : "Establishes the world — Agent 306's first dispatch"}
+4. Weaves in community signals when relevant
+5. Makes the audience want to PARTICIPATE
 ${editorialContext?.pinnedAngles?.length ? `
 EDITOR-PINNED STORY ANGLES (MrRayG pinned these — USE THEM as priority narrative hooks):
 ${editorialContext.pinnedAngles.map((a, i) => `${i + 1}. ${a}`).join('\n')}` : ''}
 ${editorialContext?.communitySnapshot ? `
-LIVE COMMUNITY SNAPSHOT (what NORMIES holders are actually posting about RIGHT NOW on X):
+LIVE COMMUNITY SNAPSHOT (what the community is posting about RIGHT NOW on X):
 ${editorialContext.communitySnapshot}
 
 This is real-time community sentiment. Let it shape the story. Name specific holders if they appear. Their energy IS the episode.` : ''}

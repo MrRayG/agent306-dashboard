@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// NORMIES TV — VOICE ENGINE
-// Agent #306 speaks. Every burn narration, every episode post, every dispatch
+// 306 — VOICE ENGINE
+// Agent 306 speaks. Every burn narration, every episode post, every dispatch
 // gets a voice. ElevenLabs TTS — Matilda voice (American, measured, narrator).
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -10,7 +10,7 @@ import * as crypto from "crypto";
 
 const ELEVENLABS_API  = "https://api.elevenlabs.io/v1";
 const VOICE_ID        = "XrExE9yKIg1WjnnlVkGX"; // Matilda — American, friendly, middle-aged, narration
-const AUDIO_DIR       = "/tmp/normiestv_audio";
+const AUDIO_DIR       = "/tmp/agent306_audio";
 const MAX_CHARS       = 2500; // safety cap per request
 
 export interface VoiceClip {
@@ -45,7 +45,7 @@ export function getRecentClips(limit = 10): VoiceClip[] {
 function cleanForSpeech(text: string): string {
   return text
     .replace(/#\w+/g, "")            // remove hashtags
-    .replace(/\[NORMIES \w+\]/g, "") // remove show tags
+    .replace(/\[306 \w+\]/g, "") // remove show tags
     .replace(/→|🖤|🔥|⚡|📺/g, "")  // remove emojis that read weird
     .replace(/\n\n+/g, ". ")         // double newlines → pause
     .replace(/\n/g, " ")             // single newlines → space

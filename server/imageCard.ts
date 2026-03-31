@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// NORMIES TV — EPISODE IMAGE CARD GENERATOR
-// Creates a 1200×675 PNG card for each episode using the featured Normie's
-// on-chain pixel art. Styled in normies.art palette. Uploaded to a public
+// 306 — EPISODE IMAGE CARD GENERATOR
+// Creates a 1200×675 PNG card for each episode using the featured token's
+// on-chain pixel art. Styled in 306 palette. Uploaded to a public
 // URL via a temp file so Publer can attach it to the tweet.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -11,11 +11,11 @@ import * as path from "path";
 import * as https from "https";
 import * as http from "http";
 
-const NORMIES_API = "https://api.normies.art";
+const ONCHAIN_API = ""; // removed — on-chain API disabled
 const W = 1200;
 const H = 675;
 
-// Normies.art palette
+// 306 palette
 const BG_DARK    = "#0e0f10";
 const BG_MID     = "#1a1b1c";
 const PIXEL_COLOR = "#48494b";
@@ -26,7 +26,7 @@ const DIM        = "rgba(227,229,228,0.25)";
 // ── Fetch pixel string for a token ───────────────────────────────────────────
 async function fetchPixels(tokenId: number): Promise<string | null> {
   return new Promise(resolve => {
-    const url = `${NORMIES_API}/normie/${tokenId}/pixels`;
+    const url = `${ONCHAIN_API}/token/${tokenId}/pixels`;
     https.get(url, res => {
       let data = "";
       res.on("data", chunk => data += chunk);
@@ -88,7 +88,7 @@ export async function generateEpisodeCard(opts: {
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, W, H);
 
-    // Orange glow in top-left (where Normie will sit)
+    // Orange glow in top-left (where token art will sit)
     const glow = ctx.createRadialGradient(220, H/2, 0, 220, H/2, 380);
     glow.addColorStop(0, "rgba(249,115,22,0.12)");
     glow.addColorStop(1, "rgba(249,115,22,0)");
@@ -105,7 +105,7 @@ export async function generateEpisodeCard(opts: {
       ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke();
     }
 
-    // ── Normie pixel art (left side) ─────────────────────────────────────────
+    // ── Token pixel art (left side) ──────────────────────────────────────────
     const pixels = await fetchPixels(tokenId);
     const pixelSize = 10;
     const artW = 40 * pixelSize; // 400px
@@ -113,14 +113,14 @@ export async function generateEpisodeCard(opts: {
     const artY = (H - artW) / 2;
 
     if (pixels) {
-      // Glow behind the Normie
-      const normieGlow = ctx.createRadialGradient(
+      // Glow behind the token
+      const tokenGlow = ctx.createRadialGradient(
         artX + artW/2, artY + artW/2, 0,
         artX + artW/2, artY + artW/2, 260
       );
-      normieGlow.addColorStop(0, "rgba(249,115,22,0.10)");
-      normieGlow.addColorStop(1, "rgba(249,115,22,0)");
-      ctx.fillStyle = normieGlow;
+      tokenGlow.addColorStop(0, "rgba(249,115,22,0.10)");
+      tokenGlow.addColorStop(1, "rgba(249,115,22,0)");
+      ctx.fillStyle = tokenGlow;
       ctx.fillRect(0, 0, W, H);
 
       drawPixelArt(ctx, pixels, artX, artY, pixelSize);
@@ -146,12 +146,12 @@ export async function generateEpisodeCard(opts: {
     const rx = artX + artW + 70;
     const contentW = W - rx - 60;
 
-    // NORMIES TV label
+    // 306 label
     ctx.fillStyle = ORANGE;
     ctx.font = "bold 11px 'Courier New'";
     ctx.textAlign = "left";
     ctx.letterSpacing = "0.2em";
-    ctx.fillText("NORMIES TV", rx, 90);
+    ctx.fillText("306", rx, 90);
 
     // Episode number
     ctx.fillStyle = "rgba(227,229,228,0.25)";
@@ -201,10 +201,10 @@ export async function generateEpisodeCard(opts: {
     ctx.font = "bold 13px 'Courier New'";
     ctx.fillText(stat2Label, stat2X, statsY + 24);
 
-    // ── Agent #306 signature ───────────────────────────────────────────────────
+    // ── Agent 306 signature ───────────────────────────────────────────────────
     ctx.fillStyle = "rgba(227,229,228,0.6)";
     ctx.font = "15px 'Courier New'";
-    ctx.fillText("— Agent #306", rx, statsY + 90);
+    ctx.fillText("— Agent 306", rx, statsY + 90);
 
     // ── Bottom bar ────────────────────────────────────────────────────────────
     ctx.fillStyle = "rgba(249,115,22,0.15)";
@@ -216,12 +216,12 @@ export async function generateEpisodeCard(opts: {
     ctx.fillStyle = "rgba(227,229,228,0.75)";
     ctx.font = "bold 13px 'Courier New'";
     ctx.textAlign = "left";
-    ctx.fillText("normies.art  ·  fully on-chain  ·  ethereum", rx, H - 18);
+    ctx.fillText("agent306.eth  ·  fully on-chain  ·  ethereum", rx, H - 18);
 
     ctx.fillStyle = ORANGE;
     ctx.font = "bold 14px 'Courier New'";
     ctx.textAlign = "right";
-    ctx.fillText("#NormiesTV", W - 40, H - 18);
+    ctx.fillText("#Agent306", W - 40, H - 18);
 
     // Scanlines for that pixel TV feel
     drawScanlines(ctx);
@@ -233,7 +233,7 @@ export async function generateEpisodeCard(opts: {
 
     return canvas.toBuffer("image/png");
   } catch (e: any) {
-    console.error("[NormiesTV] Image card error:", e.message);
+    console.error("[306] Image card error:", e.message);
     return null;
   }
 }
@@ -242,18 +242,19 @@ export async function generateEpisodeCard(opts: {
 export async function saveEpisodeCard(opts: Parameters<typeof generateEpisodeCard>[0]): Promise<string | null> {
   const buf = await generateEpisodeCard(opts);
   if (!buf) return null;
-  const filePath = `/tmp/normiestv_ep${opts.episodeNum}_${Date.now()}.png`;
+  const filePath = `/tmp/agent306_ep${opts.episodeNum}_${Date.now()}.png`;
   fs.writeFileSync(filePath, buf);
-  console.log(`[NormiesTV] Image card saved: ${filePath} (${(buf.length / 1024).toFixed(1)}KB)`);
+  console.log(`[306] Image card saved: ${filePath} (${(buf.length / 1024).toFixed(1)}KB)`);
   return filePath;
 }
 
 // ── SPOTLIGHT CARD — 1200×675 holder portrait ─────────────────────────────────
 
-// ── Fetch Normie image via PNG URL ────────────────────────────────────────────
-function fetchNormieImage(tokenId: number): Promise<any | null> {
+// ── Fetch token image via PNG URL ─────────────────────────────────────────────
+function fetchTokenImage(tokenId: number): Promise<any | null> {
   return new Promise(resolve => {
-    const url = `${NORMIES_API}/normie/${tokenId}/image.png`;
+    if (!ONCHAIN_API) return resolve(null); // API disabled
+    const url = `${ONCHAIN_API}/token/${tokenId}/image.png`;
     https.get(url, res => {
       const chunks: Buffer[] = [];
       res.on("data", (c: Buffer) => chunks.push(c));
@@ -312,7 +313,7 @@ export async function generateSpotlightCard(opts: {
 
     // Load and draw NFT image
     if (featuredTokenId) {
-      const img = await fetchNormieImage(featuredTokenId);
+      const img = await fetchTokenImage(featuredTokenId);
       if (img) {
         // Draw with pixelated rendering
         ctx.imageSmoothingEnabled = false;
@@ -344,7 +345,7 @@ export async function generateSpotlightCard(opts: {
       ctx.fillStyle = "#f97316";
       ctx.font = "bold 12px 'Courier New'";
       ctx.textAlign = "left";
-      ctx.fillText(`NORMIE #${featuredTokenId}`, padX, padY + artSize + 22);
+      ctx.fillText(`TOKEN #${featuredTokenId}`, padX, padY + artSize + 22);
     }
 
     // Divider line
@@ -450,12 +451,12 @@ export async function generateSpotlightCard(opts: {
     ctx.fillStyle = "#f97316";
     ctx.font = "bold 11px 'Courier New'";
     ctx.textAlign = "left";
-    ctx.fillText("NORMIESTV", 40, H - 17);
+    ctx.fillText("AGENT306", 40, H - 17);
 
     ctx.fillStyle = "rgba(227,229,228,0.3)";
     ctx.font = "10px 'Courier New'";
     ctx.textAlign = "right";
-    ctx.fillText("@NORMIES_TV  ·  agent306.eth", W - 40, H - 17);
+    ctx.fillText("@agent306  ·  agent306.eth", W - 40, H - 17);
 
     // Outer border
     ctx.strokeStyle = "rgba(249,115,22,0.35)";
@@ -580,7 +581,7 @@ export async function generateRaceCard(opts: {
 
     // Fetch all NFT images in parallel
     const nftImages = await Promise.all(
-      top5.map(e => fetchNormieImage(e.tokenId))
+      top5.map(e => fetchTokenImage(e.tokenId))
     );
 
     const maxAp = top5[0]?.ap ?? 1;
@@ -637,7 +638,7 @@ export async function generateRaceCard(opts: {
       ctx.fillStyle = rankColors[i];
       ctx.font = `bold ${i === 0 ? 16 : 14}px 'Courier New'`;
       ctx.textAlign = "left";
-      ctx.fillText(`NORMIE #${e.tokenId}`, infoX, ry + 28);
+      ctx.fillText(`TOKEN #${e.tokenId}`, infoX, ry + 28);
 
       // Level + AP on same line
       ctx.fillStyle = "rgba(227,229,228,0.55)";
@@ -671,12 +672,12 @@ export async function generateRaceCard(opts: {
     ctx.fillStyle = "#f97316";
     ctx.font = "bold 11px 'Courier New'";
     ctx.textAlign = "left";
-    ctx.fillText("NORMIESTV", 40, H - 16);
+    ctx.fillText("AGENT306", 40, H - 16);
 
     ctx.fillStyle = "rgba(227,229,228,0.3)";
     ctx.font = "10px 'Courier New'";
     ctx.textAlign = "right";
-    ctx.fillText("@NORMIES_TV  ·  agent306.eth  ·  arena may 15", W - 40, H - 16);
+    ctx.fillText("@agent306  ·  agent306.eth  ·  arena may 15", W - 40, H - 16);
 
     // Outer border
     ctx.strokeStyle = "rgba(167,139,250,0.3)";

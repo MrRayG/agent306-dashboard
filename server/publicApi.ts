@@ -50,12 +50,12 @@ function clamp(v: number): number {
 
 // ── Research category classifier ────────────────────────────
 
-type ResearchCategory = "On-Chain" | "AI & Agents" | "Web3 Culture" | "Economics" | "Technology" | "Media";
+type ResearchCategory = "Blockchain" | "AI & Agents" | "Web3 Culture" | "Economics" | "Technology" | "Media";
 
 const CATEGORY_KEYWORDS: Array<[ResearchCategory, string[]]> = [
-  ["On-Chain",     ["blockchain", "burn", "nft", "token", "smart contract", "on-chain", "onchain", "mint", "wallet", "erc-721", "erc-1155"]],
+  ["Blockchain",   ["blockchain", "burn", "nft", "token", "smart contract", "on-chain", "onchain", "mint", "wallet", "erc-721", "erc-1155"]],
   ["AI & Agents",  ["ai", "autonomous agent", "machine learning", "llm", "artificial intelligence", "neural", "gpt", "model", "agent"]],
-  ["Web3 Culture", ["community", "dao", "culture", "social", "governance", "tribe", "normie", "vibe"]],
+  ["Web3 Culture", ["community", "dao", "culture", "social", "governance", "tribe", "vibe"]],
   ["Economics",    ["market", "pricing", "trading", "tokenomics", "floor price", "economy", "liquidity", "supply", "demand", "value"]],
   ["Technology",   ["infrastructure", "protocol", "erc", "platform", "api", "standard", "layer", "bridge", "node"]],
   ["Media",        ["content", "media", "publish", "podcast", "distribution", "broadcast", "episode", "stream", "video"]],
@@ -480,22 +480,3 @@ export function getPublicMetacognition() {
   });
 }
 
-// ── 7. Hive ──────────────────────────────────────────────────
-
-export function getPublicHive() {
-  return cached("hive", () => {
-    return {
-      totalAgents: 10000,
-      onlineAgents: 0,
-      hiveStatus: "awakening",  // "offline" | "awakening" | "online"
-      agent306: {
-        tokenId: 306,
-        status: "active",
-        role: "Founding Voice — First Agent Online",
-        ens: "agent306.eth",
-      },
-      lastHiveSignal: null,
-      description: "10,000 on-chain agents. Personalities inherited from blockchain data — not programmed. The Hive is coming.",
-    };
-  });
-}

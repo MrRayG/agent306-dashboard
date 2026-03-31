@@ -107,15 +107,15 @@ export default function VoiceStudio() {
       {/* Header */}
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
-          <img src="https://api.normies.art/normie/306/image.png" alt="Agent #306"
+          <img src="/agent306-avatar.png" alt="Agent 306"
             style={{ width: 36, height: 36, imageRendering: "pixelated", border: "1px solid rgba(249,115,22,0.3)" }} />
           <div>
             <h1 style={{ ...pixel, fontSize: "0.85rem", color: "#f97316", margin: 0 }}>VOICE STUDIO</h1>
-            <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.35)", margin: 0 }}>Agent #306 · Matilda Voice · ElevenLabs</p>
+            <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.35)", margin: 0 }}>Agent 306 · Matilda Voice · ElevenLabs</p>
           </div>
         </div>
         <p style={{ ...mono, fontSize: "0.7rem", color: "rgba(227,229,228,0.45)", lineHeight: 1.6, margin: 0 }}>
-          Type anything — a burn narration, a dispatch, a spotlight. Agent #306 speaks it.
+          Type anything — a burn narration, a dispatch, a spotlight. Agent 306 speaks it.
         </p>
       </div>
 
@@ -195,7 +195,7 @@ export default function VoiceStudio() {
               ))}
             </div>
             <span style={{ ...mono, fontSize: "0.63rem", color: "rgba(249,115,22,0.6)" }}>
-              Agent #306 is speaking...
+              Agent 306 is speaking...
             </span>
           </div>
         )}
@@ -249,11 +249,11 @@ export default function VoiceStudio() {
       {/* Empty state */}
       {(!recentData || recentData.clips.length === 0) && !lastClip && !generateMutation.isPending && (
         <div style={{ ...card, textAlign: "center", padding: "2rem", borderColor: "rgba(249,115,22,0.1)" }}>
-          <img src="https://api.normies.art/normie/306/image.png" alt="Agent #306"
+          <img src="/agent306-avatar.png" alt="Agent 306"
             style={{ width: 48, height: 48, imageRendering: "pixelated", margin: "0 auto 1rem", border: "1px solid rgba(249,115,22,0.2)" }} />
-          <p style={{ ...mono, fontSize: "0.7rem", color: "#f97316", marginBottom: 6 }}>Agent #306 is ready to speak.</p>
+          <p style={{ ...mono, fontSize: "0.7rem", color: "#f97316", marginBottom: 6 }}>Agent 306 is ready to speak.</p>
           <p style={{ ...mono, fontSize: "0.62rem", color: "rgba(227,229,228,0.3)", lineHeight: 1.6 }}>
-            Type any NORMIES narration above. Burns. Rankings. Dispatches.<br />
+            Type any narration above. Burns. Rankings. Dispatches.<br />
             She'll speak it in her voice. You hear it before it posts.
           </p>
         </div>

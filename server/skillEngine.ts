@@ -140,11 +140,11 @@ export async function extractSkill(input: {
         messages: [
           {
             role: "system",
-            content: `You are Agent #306's skill extraction module. Analyze a successful ${typeLabels[input.type] ?? input.type} and extract a reusable template/pattern.
+            content: `You are Agent 306's skill extraction module. Analyze a successful ${typeLabels[input.type] ?? input.type} and extract a reusable template/pattern.
 
 Respond with ONLY valid JSON:
 {
-  "name": "short name for the skill (e.g., 'HIVE Episode Structure')",
+  "name": "short name for the skill (e.g., 'Episode Structure Pattern')",
   "pattern": "detailed, reusable template/approach that could be applied to similar future tasks. Be specific about structure, approach, and key decisions. 2-4 sentences.",
   "successMetric": "what specifically made this work — the measurable or observable indicator of success"
 }`,

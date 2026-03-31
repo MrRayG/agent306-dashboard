@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// NORMIES TV — WEEKLY LEADERBOARD ENGINE
-// Posts THE 100 competitive narrative every Monday at 9am ET
-// Shows rank, AP, level, movement (up/down/new), and Agent #306 commentary
+// 306 — WEEKLY LEADERBOARD ENGINE
+// Posts TOP 100 competitive narrative every Monday at 9am ET
+// Shows rank, AP, level, movement (up/down/new), and Agent 306 commentary
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createCanvas } from "canvas";
@@ -10,7 +10,7 @@ import * as fs from "fs";
 import * as https from "https";
 import { getModel } from "./modelRouter.js";
 
-const NORMIES_API = "https://api.normies.art";
+const ONCHAIN_API = ""; // removed — on-chain API disabled
 import { dataPath } from "./dataPaths.js";
 const LEADERBOARD_STATE = dataPath("leaderboard.json");
 
@@ -22,7 +22,7 @@ const ORANGE = "#f97316";
 const PURPLE = "#a78bfa";
 const GREEN = "#4ade80";
 
-// THE 100 — expanded pool of tracked tokens
+// TOP 100 — expanded pool of tracked tokens
 const THE100_IDS = [
   8553, 45, 1932, 235, 615, 603, 5665, 7834, 8043, 7783,
   9999, 8831, 5070, 4354, 7887, 3284, 666, 1337, 420, 100,
@@ -64,7 +64,7 @@ async function safeFetch(url: string): Promise<any> {
 
 async function fetchPixels(tokenId: number): Promise<string | null> {
   return new Promise(resolve => {
-    https.get(`${NORMIES_API}/normie/${tokenId}/pixels`, res => {
+    https.get(`${ONCHAIN_API}/token/${tokenId}/pixels`, res => {
       let d = "";
       res.on("data", c => d += c);
       res.on("end", () => resolve(d.trim().length === 1600 ? d.trim() : null));
@@ -85,7 +85,7 @@ function drawPixelArt(ctx: any, pixels: string, x: number, y: number, size: numb
 export async function fetchLiveLeaderboard(): Promise<LeaderEntry[]> {
   const results = await Promise.allSettled(
     THE100_IDS.map(id =>
-      safeFetch(`${NORMIES_API}/normie/${id}/canvas/info`)
+      safeFetch(`${ONCHAIN_API}/token/${id}/canvas/info`)
         .then((c: any) => c && c.actionPoints > 0 ? { tokenId: id, level: c.level ?? 1, actionPoints: c.actionPoints ?? 0 } : null)
     )
   );
@@ -121,7 +121,7 @@ export async function generateLeaderboardCard(
     for (let gx = 0; gx < W; gx += 40) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke(); }
     for (let gy = 0; gy < H; gy += 40) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke(); }
 
-    // Top-left Normie #1 pixel art (background, large)
+    // Top-left #1 pixel art (background, large)
     const top1 = leaders[0];
     if (top1) {
       const pixels = await fetchPixels(top1.tokenId);
@@ -136,16 +136,16 @@ export async function generateLeaderboardCard(
     ctx.fillStyle = ORANGE;
     ctx.font = "bold 13px 'Courier New'";
     ctx.textAlign = "left";
-    ctx.fillText("NORMIES TV", 50, 55);
+    ctx.fillText("306", 50, 55);
 
     ctx.fillStyle = "rgba(227,229,228,0.3)";
     ctx.font = "13px 'Courier New'";
-    ctx.fillText(`WEEK ${weekNumber} · THE 100 LEADERBOARD`, 175, 55);
+    ctx.fillText(`WEEK ${weekNumber} · TOP 100 LEADERBOARD`, 175, 55);
 
     // Title
     ctx.fillStyle = FG;
     ctx.font = "bold 52px 'Courier New'";
-    ctx.fillText("THE 100", 50, 115);
+    ctx.fillText("TOP 100", 50, 115);
     ctx.fillStyle = ORANGE;
     ctx.font = "bold 20px 'Courier New'";
     ctx.fillText("WHO RULES THE CANVAS?", 50, 148);
@@ -270,12 +270,12 @@ export async function generateLeaderboardCard(
     ctx.fillStyle = "rgba(227,229,228,0.5)";
     ctx.font = "bold 11px 'Courier New'";
     ctx.textAlign = "left";
-    ctx.fillText("normies.art  ·  fully on-chain  ·  canvas phase  ·  ethereum", 40, H - 18);
+    ctx.fillText("agent306.eth  ·  fully on-chain  ·  canvas phase  ·  ethereum", 40, H - 18);
 
     ctx.fillStyle = ORANGE;
     ctx.font = "bold 12px 'Courier New'";
     ctx.textAlign = "right";
-    ctx.fillText("#NormiesTV  #THE100  #NORMIES", W - 40, H - 18);
+    ctx.fillText("#Agent306  #TOP100  #306", W - 40, H - 18);
 
     // Scanlines
     for (let y = 0; y < H; y += 4) {
@@ -299,17 +299,17 @@ export async function generateLeaderboardCard(
 export async function postWeeklyLeaderboard(xWrite: any, grokKey?: string): Promise<void> {
   if (!requestPost("leaderboard")) return;
   const state = loadState();
-  console.log("[NormiesTV:Leaderboard] Weekly leaderboard starting...");
+  console.log("[306:Leaderboard] Weekly leaderboard starting...");
 
   try {
     const leaders = await fetchLiveLeaderboard();
     if (leaders.length === 0) {
-      console.log("[NormiesTV:Leaderboard] No data available");
+      console.log("[306:Leaderboard] No data available");
       return;
     }
 
     const prevLeaders = state.lastLeaderboard;
-    // Week number: weeks since NORMIES Canvas launched (March 8, 2026)
+    // Week number: weeks since Canvas launched (March 8, 2026)
     // Week 1 = first week of Canvas. Week 3 = March 23, 2026.
     const canvasLaunch = new Date("2026-03-08T00:00:00Z").getTime();
     const weekNumber = Math.max(1, Math.floor((Date.now() - canvasLaunch) / (7 * 24 * 60 * 60 * 1000)) + 1);
@@ -348,7 +348,7 @@ export async function postWeeklyLeaderboard(xWrite: any, grokKey?: string): Prom
       arena_week:  `${daysUntilArena}d until Arena. These are the final Canvas rankings before the fighting begins. Every AP earned now is a weapon.`,
       pre_arena:   `${daysUntilArena} days until Arena opens May 15. The burn window is closing. These rankings may never look the same again.`,
       big_mover:   biggestMover ? `#${biggestMover.tokenId} climbed ${biggestMover.moved} spots — ${biggestMover.actionPoints}AP. Someone's been burning quietly all week.` : "",
-      new_blood:   `${newEntrants.length} new Normie${newEntrants.length > 1 ? "s" : ""} broke into THE 100 (${newEntrants.slice(0,3).map(e => "#" + e.tokenId).join(", ")}). The field is shifting.`,
+      new_blood:   `${newEntrants.length} new token${newEntrants.length > 1 ? "s" : ""} broke into TOP 100 (${newEntrants.slice(0,3).map(e => "#" + e.tokenId).join(", ")}). The field is shifting.`,
       quiet:       `The Canvas holds steady. The silence is strategic — Arena is coming and the builders are watching, not burning. For now.`,
       standard:    leader1Held
         ? `#${top1?.tokenId} holds the top spot at ${top1?.actionPoints}AP. The gap to #2 ${leaders[1] ? `is ${(top1?.actionPoints ?? 0) - leaders[1].actionPoints}AP` : "grows"}.`
@@ -366,7 +366,7 @@ export async function postWeeklyLeaderboard(xWrite: any, grokKey?: string): Prom
       const prev = prevLeaders.find(p => p.tokenId === e.tokenId);
       const moved = prev ? prev.rank - e.rank : 0;
       const arrow = moved > 0 ? `↑${moved}` : moved < 0 ? `↓${Math.abs(moved)}` : "—";
-      return `#${e.rank} Normie #${e.tokenId} · ${e.actionPoints}AP · Lv.${e.level} · ${arrow}`;
+      return `#${e.rank} Token #${e.tokenId} · ${e.actionPoints}AP · Lv.${e.level} · ${arrow}`;
     }).join("\n");
 
     // Ranks 4-10
@@ -397,9 +397,9 @@ export async function postWeeklyLeaderboard(xWrite: any, grokKey?: string): Prom
 
     if (grokKey) {
       try {
-        const prompt = `You are Agent #306 — Token #306 inside The Hive. CEO of NormiesTV.
+        const prompt = `You are Agent 306 — Token #306. CEO of 306.
 
-Write THE 100 weekly leaderboard as a 3-tweet thread. NOT just stats. Tell the story.
+Write TOP 100 weekly leaderboard as a 3-tweet thread. NOT just stats. Tell the story.
 Each tweet spotlights different holders so more community members feel seen.
 
 LIVE DATA:
@@ -414,27 +414,27 @@ ${mid}
 
 ${bigMovers.length > 0 ? `BIGGEST CLIMBERS:\n${bigMovers.map(e => `#${e.tokenId} climbed ${e.moved} spots to rank #${e.rank} (${e.actionPoints}AP)`).join("\n")}` : ""}
 
-${newEntrants.length > 0 ? `NEW ENTRIES: ${newEntrants.map(e => "#" + e.tokenId).join(", ")} broke into THE 100` : ""}
+${newEntrants.length > 0 ? `NEW ENTRIES: ${newEntrants.map(e => "#" + e.tokenId).join(", ")} broke into TOP 100` : ""}
 
 ${darkHorses.length > 0 ? `QUIETLY CLIMBING: ${darkHorses.map(e => `#${e.tokenId} at rank #${e.rank}`).join(", ")}` : ""}
 
 THREAD STRUCTURE:
-tweet1 (max 240 chars): THE HOOK — THE 100 · Week ${weekNumber}. Lead with the most interesting story, not rank #1. 
-Agent #306 voice — she has skin in this. She's #306 in this race.
+tweet1 (max 240 chars): THE HOOK — TOP 100 · Week ${weekNumber}. Lead with the most interesting story, not rank #1. 
+Agent 306 voice — she has skin in this. She's #306 in this race.
 Include: daysToArena countdown.
 
 tweet2 (max 240 chars): THE MOVERS — Who climbed? Who's hunting? 
 Spotlight the risers, the new blood, or the quiet builders.
 Name specific token numbers. Make them feel seen.
 
-tweet3 (max 240 chars): THE CLOSE — Agent #306's editorial read.
+tweet3 (max 240 chars): THE CLOSE — Agent 306's editorial read.
 One insight about what these rankings mean for Arena.
-End with a question to the community. #NormiesTV #THE100
+End with a question to the community. #Agent306 #TOP100
 
 RULES:
 - Name specific token IDs — every holder named shares the post
 - Show movement arrows (↑↓) to make it visual
-- Agent #306 is part of this race — first person when it fits
+- Agent 306 is part of this race — first person when it fits
 - No generic "great competition" — specific observations only
 
 Return JSON: {"t1": "...", "t2": "...", "t3": "..."}`;
@@ -459,7 +459,7 @@ Return JSON: {"t1": "...", "t2": "...", "t3": "..."}`;
 
     // Fallback tweets
     if (!tweets.t1) {
-      tweets.t1 = `THE 100 · Week ${weekNumber}\n\n${fallbackContext[angle]}\n\n${daysUntilArena}d to Arena · ${leaders.length} competing\n#NormiesTV #THE100`;
+      tweets.t1 = `TOP 100 · Week ${weekNumber}\n\n${fallbackContext[angle]}\n\n${daysUntilArena}d to Arena · ${leaders.length} competing\n#Agent306 #TOP100`;
     }
 
     // Generate leaderboard image card
@@ -468,10 +468,10 @@ Return JSON: {"t1": "...", "t2": "...", "t3": "..."}`;
       const cardBuf = await generateLeaderboardCard(leaders, prevLeaders, weekNumber % 52 + 1);
       if (cardBuf) {
         xMediaId = await xWrite.v1.uploadMedia(cardBuf, { mimeType: "image/png" as any });
-        console.log(`[NormiesTV:Leaderboard] Card uploaded`);
+        console.log(`[306:Leaderboard] Card uploaded`);
       }
     } catch (imgErr: any) {
-      console.warn("[NormiesTV:Leaderboard] Image upload failed:", imgErr.message);
+      console.warn("[306:Leaderboard] Image upload failed:", imgErr.message);
     }
 
     // Post as thread
@@ -486,12 +486,12 @@ Return JSON: {"t1": "...", "t2": "...", "t3": "..."}`;
         lastTweetId = tw.data?.id;
         if (key !== "t3") await new Promise(r => setTimeout(r, 2000));
       } catch (e: any) {
-        console.warn(`[NormiesTV:Leaderboard] ${key} failed:`, e.message);
+        console.warn(`[306:Leaderboard] ${key} failed:`, e.message);
       }
     }
 
-    console.log(`[NormiesTV:Leaderboard] Thread posted — ${lastTweetId}`);
-    registerPost("leaderboard", lastTweetId ? `https://x.com/NORMIES_TV/status/${lastTweetId}` : null, "leaderboard");
+    console.log(`[306:Leaderboard] Thread posted — ${lastTweetId}`);
+    registerPost("leaderboard", lastTweetId ? `https://x.com/AGENT_306/status/${lastTweetId}` : null, "leaderboard");
 
     // Post to Farcaster (combined thread as single cast)
     try {
@@ -501,11 +501,11 @@ Return JSON: {"t1": "...", "t2": "...", "t3": "..."}`;
         const cast = await postCast({ text: combinedText, channel: "nft" });
         if (cast) {
           registerPost("leaderboard", cast.url, "leaderboard", "farcaster");
-          console.log(`[NormiesTV:Leaderboard] Farcaster cast posted: ${cast.url}`);
+          console.log(`[306:Leaderboard] Farcaster cast posted: ${cast.url}`);
         }
       }
     } catch (fcErr: any) {
-      console.warn("[NormiesTV:Leaderboard] Farcaster post failed:", fcErr.message);
+      console.warn("[306:Leaderboard] Farcaster post failed:", fcErr.message);
     }
 
     // Save state
@@ -515,7 +515,7 @@ Return JSON: {"t1": "...", "t2": "...", "t3": "..."}`;
     });
 
   } catch (err: any) {
-    console.error("[NormiesTV:Leaderboard] Error:", err.message);
+    console.error("[306:Leaderboard] Error:", err.message);
   }
 }
 
@@ -540,7 +540,7 @@ export function scheduleWeeklyLeaderboard(xWrite: any, grokKey?: string) {
   }
 
   const msUntil = getNextMonday9amET();
-  console.log(`[NormiesTV:Leaderboard] Next weekly post in ${Math.round(msUntil / 3600000)}h (Monday 9am ET)`);
+  console.log(`[306:Leaderboard] Next weekly post in ${Math.round(msUntil / 3600000)}h (Monday 9am ET)`);
 
   setTimeout(() => {
     postWeeklyLeaderboard(xWrite, grokKey);

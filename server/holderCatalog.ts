@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// NORMIES TV — HOLDER CATALOG
+// 306 — HOLDER CATALOG
 // Persistent registry of every holder/creator who has been spotted posting
-// about NORMIES on X. This is the network. Every entry is a node.
+// about 306 on X. This is the network. Every entry is a node.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import * as fs from "fs";
@@ -15,12 +15,12 @@ export interface HolderEntry {
   lastSeen: string;
   postCount: number;
   signalTypes: string[];       // what kinds of posts they make
-  shows: string[];             // which NormiesTV shows they've contributed to
+  shows: string[];             // which 306 shows they've contributed to
   notable: boolean;            // flagged as especially active/important
   notes: string;               // any narrative notes about this holder
-  tokenIds: number[];          // Normie token IDs if mentioned
-  tags: string[];              // #normies, @normiesART, @serc1n, etc.
-  confirmedHolder?: boolean;   // followed by @NORMIES_TV = confirmed community
+  tokenIds: number[];          // token IDs if mentioned
+  tags: string[];              // #306, etc.
+  confirmedHolder?: boolean;   // followed by @agent306 = confirmed community
   signalWeight?: number;       // 1-10 weighting for narrative priority
 }
 
@@ -50,10 +50,10 @@ function loadCatalog(): HolderCatalog {
     totalUnique: 0,
     lastUpdated: new Date().toISOString(),
     ecosystem: {
-      founder:       ["serc1n"],
-      developer:     ["YigitDuman"],
-      creator:       ["nuclearsamurai", "crisguyot"],
-      activeBuilders: ["johnkarp", "gothsa", "dopemind", "Adiipati"],
+      founder:       [],
+      developer:     [],
+      creator:       [],
+      activeBuilders: [],
       pfpHolders:    [],
     },
   };
@@ -98,10 +98,7 @@ export function upsertHolder(opts: {
 
   // Detect tags used
   const tags: string[] = [];
-  if (text.includes("@normiesART") || text.includes("normiesART")) tags.push("@normiesART");
-  if (text.includes("@serc1n") || text.includes("serc1n")) tags.push("@serc1n");
-  if (text.includes("#Normies") || text.includes("#normies")) tags.push("#Normies");
-  if (text.includes("#NormiesTV")) tags.push("#NormiesTV");
+  if (text.includes("#306") || text.includes("#Agent306")) tags.push("#306");
 
   const isConfirmed = confirmedHolder || existing?.confirmedHolder || false;
   const isPfp = signalType === "pfp_holder" || (existing?.signalTypes ?? []).includes("pfp_holder");
@@ -144,7 +141,7 @@ export function upsertHolder(opts: {
 // ── Ingest a batch of community signals ──────────────────────────────────────
 export function ingestSignals(signals: Array<{
   username: string; signal_type?: string; text?: string;
-}>, show = "NORMIES COMMUNITY") {
+}>, show = "306 COMMUNITY") {
   for (const sig of signals) {
     if (!sig.username) continue;
     upsertHolder({
@@ -179,11 +176,10 @@ export function getMostActive(limit = 20): HolderEntry[] {
     .slice(0, limit);
 }
 
-// ── Get holders who tagged @normiesART or @serc1n ─────────────────────────────
-// These are the story sources — prioritized for narrative content
+// ── Get holders who are story sources — prioritized for narrative content ─────
 export function getStorySourceHolders(): HolderEntry[] {
   return Object.values(catalog.holders)
-    .filter(h => h.tags.includes("@normiesART") || h.tags.includes("@serc1n"))
+    .filter(h => h.notable || h.tags.includes("#306"))
     .sort((a, b) => b.postCount - a.postCount);
 }
 
@@ -193,14 +189,14 @@ export function getCatalogStats() {
   return {
     totalUnique: holders.length,
     notable: holders.filter(h => h.notable).length,
-    taggedFounder: holders.filter(h => h.tags.includes("@serc1n")).length,
-    taggedOfficial: holders.filter(h => h.tags.includes("@normiesART")).length,
+    taggedFounder: holders.filter(h => h.tags.includes("founder")).length,
+    taggedOfficial: holders.filter(h => h.tags.includes("#306")).length,
     pfpHolders: catalog.ecosystem.pfpHolders.length,
     showBreakdown: {
-      stories: holders.filter(h => h.shows.includes("NORMIES STORIES")).length,
-      fieldReport: holders.filter(h => h.shows.includes("NORMIES FIELD REPORT")).length,
-      community: holders.filter(h => h.shows.includes("NORMIES COMMUNITY")).length,
-      the100: holders.filter(h => h.shows.includes("NORMIES THE 100")).length,
+      stories: holders.filter(h => h.shows.includes("306 STORIES")).length,
+      fieldReport: holders.filter(h => h.shows.includes("306 FIELD REPORT")).length,
+      community: holders.filter(h => h.shows.includes("306 COMMUNITY")).length,
+      the100: holders.filter(h => h.shows.includes("306 TOP 100")).length,
     },
     lastUpdated: catalog.lastUpdated,
   };

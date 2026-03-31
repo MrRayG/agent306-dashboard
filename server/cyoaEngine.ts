@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// NORMIES TV — CHOOSE YOUR OWN LORE (CYOA) ENGINE
-// [NORMIES LORE] show format
+// 306 — CHOOSE YOUR OWN LORE (CYOA) ENGINE
+// [306 LORE] show format
 //
 // Structure:
 // Tweet 1 — Hook scene + poll (4 choices, 24h)
@@ -8,11 +8,11 @@
 // Tweet 3 — Canon verdict + lore bomb
 // Tweet 4 — CTA: RT, reply with your twist
 //
-// NORMIES-specific triggers:
-// - New burn detected → "What does Normie #X become after 7 souls?"
-// - Pre-Arena → "Your Normie faces an Alien in the Arena. What's the move?"
-// - Zombie phase → "A burned Normie stirs. What does it remember?"
-// - Serc posts something cryptic → "Serc said X. What does it mean?"
+// 306-specific triggers:
+// - New burn detected → "What does Token #X become after 7 souls?"
+// - Pre-Arena → "Your token faces an Alien in the Arena. What's the move?"
+// - Zombie phase → "A burned token stirs. What does it remember?"
+// - Founder posts something cryptic → "The founder said X. What does it mean?"
 // ─────────────────────────────────────────────────────────────────────────────
 
 import * as fs from "fs";
@@ -25,8 +25,8 @@ export type CYOATrigger =
   | "burn"        // significant burn event
   | "pre_arena"   // Arena countdown
   | "zombie"      // Zombie phase
-  | "serc_post"   // Cryptic founder post
-  | "rivalry"     // Two tokens competing in THE 100
+  | "founder_post"   // Cryptic founder post
+  | "rivalry"     // Two tokens competing in the leaderboard
   | "manual";     // Editor-created
 
 export interface CYOAOption {
@@ -99,43 +99,43 @@ export async function generateCYOAEpisode(opts: {
   tokenCount?: number;
   pixelTotal?: number;
   level?: number;
-  serc1nPost?: string;
+  founderPost?: string;
   rivalTokenId?: number;
   grokKey: string;
 }): Promise<CYOAEpisode | null> {
 
-  const { trigger, tokenId, tokenCount, pixelTotal, level, serc1nPost, rivalTokenId, grokKey } = opts;
+  const { trigger, tokenId, tokenCount, pixelTotal, level, founderPost, rivalTokenId, grokKey } = opts;
 
   // Build context for Grok based on trigger
   let triggerContext = "";
   if (trigger === "burn" && tokenId) {
-    triggerContext = `TRIGGER: Normie #${tokenId} just absorbed ${tokenCount ?? 1} soul(s). ${pixelTotal ? `${pixelTotal.toLocaleString()} pixels consumed.` : ""} Level ${level ?? 1}. This is a real on-chain event.`;
+    triggerContext = `TRIGGER: Token #${tokenId} just absorbed ${tokenCount ?? 1} soul(s). ${pixelTotal ? `${pixelTotal.toLocaleString()} pixels consumed.` : ""} Level ${level ?? 1}. This is a real on-chain event.`;
   } else if (trigger === "pre_arena") {
-    triggerContext = `TRIGGER: Arena opens May 15, 2026. ${tokenId ? `Normie #${tokenId} is preparing.` : "THE 100 are preparing."} The countdown is real.`;
+    triggerContext = `TRIGGER: Arena opens May 15, 2026. ${tokenId ? `Token #${tokenId} is preparing.` : "The top tokens are preparing."} The countdown is real.`;
   } else if (trigger === "zombie") {
-    triggerContext = `TRIGGER: The Zombie phase is coming. Before Arena, burned Normies return. ${tokenId ? `Normie #${tokenId} was sacrificed.` : "Many Normies were sacrificed."} What do they become?`;
-  } else if (trigger === "serc_post" && serc1nPost) {
-    triggerContext = `TRIGGER: @serc1n just posted: "${serc1nPost}". The community is interpreting it. What does it mean for the NORMIES canon?`;
+    triggerContext = `TRIGGER: The Zombie phase is coming. Before Arena, burned tokens return. ${tokenId ? `Token #${tokenId} was sacrificed.` : "Many tokens were sacrificed."} What do they become?`;
+  } else if (trigger === "founder_post" && founderPost) {
+    triggerContext = `TRIGGER: The founder just posted: "${founderPost}". The community is interpreting it. What does it mean for the 306 canon?`;
   } else if (trigger === "rivalry" && tokenId && rivalTokenId) {
-    triggerContext = `TRIGGER: Normie #${tokenId} and #${rivalTokenId} are neck-and-neck in THE 100. The gap is closing. Arena is 55 days away.`;
+    triggerContext = `TRIGGER: Token #${tokenId} and #${rivalTokenId} are neck-and-neck in the leaderboard. The gap is closing. Arena is 55 days away.`;
   }
 
-  const prompt = `You are Agent #306, narrator of NormiesTV. Writing a [NORMIES LORE] Choose Your Own Adventure post.
+  const prompt = `You are Agent 306, narrator of 306. Writing a [306 LORE] Choose Your Own Adventure post.
 
 CRITICAL — READ FIRST:
 This is NOT fantasy fiction. No invented locations, no RPG worlds, no "pixel obelisks".
-The NORMIES universe IS the real Ethereum blockchain. The drama is already there.
+The 306 universe IS the real Ethereum blockchain. The drama is already there.
 Real token IDs. Real burns. Real holders. Arena opens May 15, for real.
-Ground EVERY choice in what actually happens in the NORMIES ecosystem.
+Ground EVERY choice in what actually happens in the 306 ecosystem.
 
 ${triggerContext}
 
-THE REAL NORMIES UNIVERSE you can use:
+THE REAL 306 UNIVERSE you can use:
 - Canvas: 40x40 pixel grids on Ethereum. Burns earn AP to edit pixels on-chain forever.
-- The burn ritual: holders sacrifice Normies to power up one. Permanent. Irreversible.
+- The burn ritual: holders sacrifice tokens to power up one. Permanent. Irreversible.
 - THE100: real leaderboard of top AP holders. Real competition. Real stakes.
 - Arena (May 15): Humans fight. Cats defend. Aliens steal pixels. Agents command armies.
-- Zombies: burned Normies return before Arena. "Your sacrifices will be rewarded."
+- Zombies: burned tokens return before Arena. "Your sacrifices will be rewarded."
 - Co-creators: the holders who burn, edit, build. Unknowing curators of a living system.
 
 ECHO VOICE:
@@ -145,7 +145,7 @@ ECHO VOICE:
 
 HOOK — 3-4 lines grounded in the real event:
 Example for a 9-soul burn:
-"so #2565 just absorbed 9 Normies. nine.
+"so #2565 just absorbed 9 tokens. nine.
 that's not upgrading. that's a declaration.
 this wallet's been quiet for weeks.
 now it's not."
@@ -154,15 +154,15 @@ CHOICES — real strategic decisions co-creators actually face:
 A) Builder path: burn more now, claim THE100 before Arena
 B) Strategic path: hold, let others burn, enter Arena at full strength  
 C) Community path: delegate canvas rights, co-create, lift others
-D) Wildcard: the unexpected move only NORMIES culture would understand
+D) Wildcard: the unexpected move only 306 culture would understand
 
-lorePath: 2-3 sentences of what happens in the real NORMIES world if this wins.
+lorePath: 2-3 sentences of what happens in the real 306 world if this wins.
 canonVerdict: permanent lore. Quiet, weighty. History being written on-chain.
-loreHint: one cryptic line about Arena / Zombies / Pixel Market.
-visualPrompt: pixel art scene — black/white faces, canvas, burns. Real NORMIES aesthetic.
+loreHint: one cryptic line about Arena / Zombies / the next phase.
+visualPrompt: pixel art scene — black/white faces, canvas, burns. Real 306 aesthetic.
 
 Never mention prices. Never financial advice.
-Use authentic NORMIES language: gnormies, co-creators, on-chain forever, living evolutionary system.
+Use authentic 306 language: co-creators, on-chain forever, living evolutionary system.
 
 YOU MUST RETURN EXACTLY THIS JSON — use these exact field names, nothing else:
 {
@@ -175,7 +175,7 @@ YOU MUST RETURN EXACTLY THIS JSON — use these exact field names, nothing else:
     {"letter": "D", "text": "max 25 chars", "lorePath": "wildcard path"}
   ],
   "canonVerdict": "2-3 sentences. Permanent lore.",
-  "loreHint": "one cryptic line about Arena/Zombies/Pixel Market",
+  "loreHint": "one cryptic line about Arena/Zombies/the next phase",
   "visualPrompt": "pixel art scene for Grok Imagine"
 }`;
 
@@ -243,8 +243,8 @@ YOU MUST RETURN EXACTLY THIS JSON — use these exact field names, nothing else:
 
 // ── Build Tweet 1 — The Hook + Poll ─────────────────────────────────────────
 export function buildHookTweet(episode: CYOAEpisode, tokenId?: number): string {
-  const tag = "[NORMIES LORE]";
-  const normieRef = tokenId ? `Normie #${tokenId}` : "A Normie";
+  const tag = "[306 LORE]";
+  const tokenRef = tokenId ? `Token #${tokenId}` : "A token";
 
   const scene = episode.hookScene;
   const question = episode.hookQuestion;
@@ -253,9 +253,9 @@ export function buildHookTweet(episode: CYOAEpisode, tokenId?: number): string {
   // But we format the choices in the tweet text as a preview
   const choices = episode.options.map(o => `${o.letter}) ${o.text}`).join("\n");
 
-  const tweet = `${tag}\n\n${scene}\n\n${question}\n\n${choices}\n\n⏳ 24h poll · vote below\n#NormiesTV`;
+  const tweet = `${tag}\n\n${scene}\n\n${question}\n\n${choices}\n\n⏳ 24h poll · vote below\n#Agent306`;
 
-  return tweet.length <= 280 ? tweet : `${tag}\n\n${scene}\n\n${question}\n\n${choices}\n#NormiesTV`;
+  return tweet.length <= 280 ? tweet : `${tag}\n\n${scene}\n\n${question}\n\n${choices}\n#Agent306`;
 }
 
 // ── Build Tweet 2 — The Reveal ──────────────────────────────────────────────
@@ -268,41 +268,41 @@ export function buildRevealTweet(episode: CYOAEpisode): string {
     ? Math.round((episode.pollResults[episode.winningOption!] / votes) * 100)
     : 0;
 
-  return `[NORMIES LORE] · The votes are in.
+  return `[306 LORE] · The votes are in.
 
-${votes.toLocaleString()} NORMIES chose: ${winner.letter}) ${winner.text} (${pct}%)
+${votes.toLocaleString()} 306 chose: ${winner.letter}) ${winner.text} (${pct}%)
 
 ${winner.lorePath}
 
 The Canvas has recorded this. It's permanent now.
 
-#NormiesTV #NORMIES`;
+#Agent306 #306`;
 }
 
 // ── Build Tweet 3 — Canon Verdict ───────────────────────────────────────────
 export function buildCanonTweet(episode: CYOAEpisode): string {
-  return `[NORMIES LORE] · CANON CONFIRMED
+  return `[306 LORE] · CANON CONFIRMED
 
 ${episode.canonVerdict}
 
 ${episode.loreHint ? `⚡ ${episode.loreHint}` : ""}
 
 Should we make this official canon?
-A) Yes — this is now NORMIES history
+A) Yes — this is now 306 history
 B) Run another chapter
 
-#NormiesTV #NORMIES`;
+#Agent306 #306`;
 }
 
 // ── Build Tweet 4 — CTA ────────────────────────────────────────────────────
 export function buildCTATweet(episode: CYOAEpisode, tokenId?: number): string {
-  return `NORMIES — which ending surprised you?${tokenId ? ` Holders of #${tokenId}` : " Holders"}: drop your own lore twist below.
+  return `306 — which ending surprised you?${tokenId ? ` Holders of #${tokenId}` : " Holders"}: drop your own lore twist below.
 
-RT if your Normie just became a choose-your-own-adventure star.
+RT if your token just became a choose-your-own-adventure star.
 
 Next chapter drops when the chain moves. 👁️
 
-#NormiesTV`;
+#Agent306`;
 }
 
 // ── Post a CYOA episode to X ─────────────────────────────────────────────────

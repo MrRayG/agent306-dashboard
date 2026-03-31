@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// NORMIES TV — EVOLUTION TRACKER
+// 306 — EVOLUTION TRACKER
 //
-// Every day at midnight, takes a snapshot of Agent #306's current state.
+// Every day at midnight, takes a snapshot of Agent 306's current state.
 // These snapshots become the growth timeline — showing how she evolves
 // from today to tomorrow to 3 months from now.
 //
@@ -111,7 +111,7 @@ function computeMood(avgScore: number, knowledgeTotal: number, recentExploration
 }
 
 function detectMilestone(current: DailySnapshot, previous?: DailySnapshot): string | null {
-  if (!previous) return "First snapshot — Agent #306 evolution tracking begins";
+  if (!previous) return "First snapshot — Agent 306 evolution tracking begins";
 
   const milestones = [];
 

@@ -1,8 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// NORMIES TV — FOLLOWING SYNC
-// @NORMIES_TV follows = confirmed NORMIES community.
+// 306 — FOLLOWING SYNC
+// @AGENT_306 follows = confirmed 306 community.
 // Pulls the full following list every 6 hours and seeds the holder catalog.
-// Their tweets shape the narrative — every PFP rocker is a node in the network.
+// Their tweets shape the narrative — every PFP holder is a node in the network.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { TwitterApi } from "twitter-api-v2";
@@ -11,7 +11,7 @@ import { upsertHolder, getCatalog, type HolderEntry } from "./holderCatalog";
 
 import { dataPath } from "./dataPaths.js";
 const FOLLOWING_FILE  = dataPath("following.json");
-const NORMIES_TV_ID   = "2035048299808661507";
+const AGENT_306_ID   = "2035048299808661507";
 
 // Interval: sync every 6 hours
 const SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -24,7 +24,7 @@ export interface FollowingEntry {
   syncedAt:    string;
   // detected from bio
   isPfpHolder: boolean;
-  normieTokenIds: number[];
+  detectedTokenIds: number[];
 }
 
 export interface FollowingState {
@@ -52,12 +52,12 @@ let followingState = loadState();
 
 export function getFollowingState(): FollowingState { return followingState; }
 
-// ── Detect Normie tokens from bio/description ─────────────────────────────────
-function detectNormieTokens(text: string): number[] {
-  // Matches "Normie #4354", "#4354", "normie 4354"
+// ── Detect token IDs from bio/description ─────────────────────────────────────
+function detectTokenIds(text: string): number[] {
+  // Matches "Token #4354", "#4354", "token 4354"
   const patterns = [
-    /[Nn]ormie\s*#(\d{1,4})\b/g,
-    /@normiesART.*?#(\d{1,4})\b/g,
+    /[Tt]oken\s*#(\d{1,4})\b/g,
+    /#(\d{1,4})\b/g,
   ];
   const tokens = new Set<number>();
   for (const pat of patterns) {
@@ -72,17 +72,16 @@ function detectNormieTokens(text: string): number[] {
 function isPfpHolder(description: string): boolean {
   const d = description.toLowerCase();
   return (
-    d.includes("normie") ||
-    d.includes("normiesart") ||
-    d.includes("@normiesart") ||
-    d.includes("serc") ||
-    detectNormieTokens(description).length > 0
+    d.includes("306") ||
+    d.includes("agent306") ||
+    d.includes("on-chain") ||
+    detectTokenIds(description).length > 0
   );
 }
 
 // ── Pull full following list (paginates automatically) ─────────────────────────
 export async function syncFollowing(xClient: TwitterApi): Promise<FollowingState> {
-  console.log("[FollowingSync] Starting @NORMIES_TV following sync...");
+  console.log("[FollowingSync] Starting @AGENT_306 following sync...");
 
   const entries: FollowingEntry[] = [];
 
@@ -99,13 +98,13 @@ export async function syncFollowing(xClient: TwitterApi): Promise<FollowingState
       };
       if (nextToken) params.pagination_token = nextToken;
 
-      const res = await xClient.v2.following(NORMIES_TV_ID, params);
+      const res = await xClient.v2.following(AGENT_306_ID, params);
       const users = res.data ?? [];
       nextToken = (res as any).meta?.next_token;
 
       for (const u of users) {
         const desc    = u.description ?? "";
-        const tokens  = detectNormieTokens(desc);
+        const tokens  = detectTokenIds(desc);
         const pfp     = isPfpHolder(desc);
 
         entries.push({
@@ -115,7 +114,7 @@ export async function syncFollowing(xClient: TwitterApi): Promise<FollowingState
           description:    desc,
           syncedAt:       new Date().toISOString(),
           isPfpHolder:    pfp,
-          normieTokenIds: tokens,
+          detectedTokenIds: tokens,
         });
       }
 
@@ -148,14 +147,14 @@ export async function syncFollowing(xClient: TwitterApi): Promise<FollowingState
   let seeded = 0;
   for (const entry of entries) {
     // Skip the account itself and known bots
-    if (entry.username.toLowerCase() === "normies_tv") continue;
+    if (entry.username.toLowerCase() === "agent_306") continue;
 
     upsertHolder({
       username:    entry.username,
       signalType:  entry.isPfpHolder ? "pfp_holder" : "community",
-      show:        "[NORMIES COMMUNITY]",
+      show:        "[306 COMMUNITY]",
       text:        entry.description,
-      tokenIds:    entry.normieTokenIds,
+      tokenIds:    entry.detectedTokenIds,
       confirmedHolder: true,
     });
     seeded++;
@@ -181,7 +180,7 @@ export function getPfpHolderUsernames(): string[] {
 }
 
 // ── Build an x_search query from the following list ───────────────────────────
-// Returns a "from:" query targeting the most NORMIES-relevant followers
+// Returns a "from:" query targeting the most relevant followers
 export function buildFollowingQuery(limit = 20): string {
   const pfp     = getPfpHolderUsernames().slice(0, 10);
   const all     = getFollowingUsernames()
@@ -189,11 +188,11 @@ export function buildFollowingQuery(limit = 20): string {
     .slice(0, limit - pfp.length);
 
   const handles = [...pfp, ...all];
-  if (handles.length === 0) return "(normies OR #normies OR normiesART)";
+  if (handles.length === 0) return "(Agent306 OR #306 OR #Agent306)";
 
-  // X search: (from:user1 OR from:user2 OR ...) normies
+  // X search: (from:user1 OR from:user2 OR ...) 306
   const fromClause = handles.map(u => `from:${u}`).join(" OR ");
-  return `(${fromClause}) (normies OR @normiesART OR #normies OR "normie #")`;
+  return `(${fromClause}) (Agent306 OR #306 OR #Agent306 OR "token #")`;
 }
 
 // ── Schedule recurring sync ────────────────────────────────────────────────────
@@ -210,5 +209,5 @@ export function scheduleFollowingSync(xClient: TwitterApi) {
     );
   }, SYNC_INTERVAL_MS);
 
-  console.log("[FollowingSync] Scheduled — syncing @NORMIES_TV following every 6h");
+  console.log("[FollowingSync] Scheduled — syncing @AGENT_306 following every 6h");
 }

@@ -2,7 +2,7 @@ import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Episodes table — generated NormiesTV clips
+// Episodes table — generated clips
 export const episodes = sqliteTable("episodes", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   tokenId: integer("token_id").notNull(),

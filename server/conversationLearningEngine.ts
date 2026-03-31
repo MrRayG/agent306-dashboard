@@ -164,7 +164,7 @@ export async function extractInsights(): Promise<ConversationInsight[]> {
 
   const systemPrompt = `${getOptimizedContext("community conversation insights knowledge extraction")}
 
-You extract knowledge insights from Agent #306's community conversations.
+You extract knowledge insights from Agent 306's community conversations.
 Respond with ONLY valid JSON:
 {
   "insights": [
@@ -188,7 +188,7 @@ Rules:
 
 ${recentConvos.slice(0, 15).join("\n\n")}
 
-What new facts, corrections, or perspectives did Agent #306 learn from these interactions?`;
+What new facts, corrections, or perspectives did Agent 306 learn from these interactions?`;
 
   const result = await callGrok(systemPrompt, userPrompt);
   if (!result?.insights) return [];
@@ -258,7 +258,7 @@ export async function analyzeRelationships(): Promise<Relationship[]> {
     })
     .join("\n");
 
-  const systemPrompt = `Analyze community relationships for Agent #306.
+  const systemPrompt = `Analyze community relationships for Agent 306.
 Respond with ONLY valid JSON:
 {
   "relationships": [
@@ -273,7 +273,7 @@ Respond with ONLY valid JSON:
 
 Tags:
 - power_user: high engagement, frequent interactor
-- critic: asks tough questions, challenges Agent #306
+- critic: asks tough questions, challenges Agent 306
 - ally: supportive, amplifies content
 - new_voice: recent first interaction
 - contributor: provides useful information
@@ -283,7 +283,7 @@ Tags:
 
 ${userSummaries}
 
-Classify each member's relationship with Agent #306.`;
+Classify each member's relationship with Agent 306.`;
 
   const result = await callGrok(systemPrompt, userPrompt);
   if (!result?.relationships) return [];

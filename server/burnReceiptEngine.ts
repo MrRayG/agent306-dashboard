@@ -1,14 +1,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// NORMIES TV — BURN RECEIPT ENGINE
+// 306 — BURN RECEIPT ENGINE
 // Real-time burn detection (polls every 90s) + personalized image card +
-// Agent #306 narrative + auto-post to @NORMIES_TV
+// Agent 306 narrative + auto-post to @AGENT_306
 //
 // Logic:
-// 1. Poll normies.art/history/burns every 90 seconds
+// 1. Poll on-chain API /history/burns every 90 seconds
 // 2. Compare against lastSeenCommitId — skip already-seen burns
 // 3. For each NEW burn:
 //    a. Generate personalized narrative via Grok
-//    b. Build a custom image card showing burning Normie → receiving Normie
+//    b. Build a custom image card showing burned token → receiving token
 //    c. Upload image to X v1.1 media upload
 //    d. Post tweet with image + narrative
 //    e. Save to burnReceiptLog (persistent state)
@@ -22,7 +22,7 @@ import { generateBurnVideo } from "./videoEngine.js";
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
 import { getModel } from "./modelRouter.js";
 
-const NORMIES_API  = "https://api.normies.art";
+const ONCHAIN_API  = ""; // removed — on-chain API disabled
 import { dataPath } from "./dataPaths.js";
 const RECEIPT_STATE = dataPath("burn_receipts.json");
 
@@ -82,7 +82,7 @@ async function safeFetch(url: string): Promise<any> {
 // ── Fetch pixel string ────────────────────────────────────────────────────────
 async function fetchPixels(tokenId: number): Promise<string | null> {
   return new Promise(resolve => {
-    const url = `${NORMIES_API}/normie/${tokenId}/pixels`;
+    const url = `${ONCHAIN_API}/token/${tokenId}/pixels`;
     https.get(url, res => {
       let data = "";
       res.on("data", c => data += c);
@@ -110,7 +110,7 @@ function drawScanlines(ctx: any) {
 }
 
 // ── Generate burn receipt image card ─────────────────────────────────────────
-// Layout: [Burning Normie(s)] → arrow → [Receiving Normie] + stats on right
+// Layout: [Burned token(s)] → arrow → [Receiving token] + stats on right
 export async function generateBurnReceiptCard(opts: {
   receiverTokenId: number;
   burnedTokenIds: number[];
@@ -149,7 +149,7 @@ export async function generateBurnReceiptCard(opts: {
       ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke();
     }
 
-    // ── Burning Normie (left side, shown fading/ghosted) ─────────────────────
+    // ── Burning token (left side, shown fading/ghosted) ─────────────────────
     // Use /history/burned/{id}/image.png — persists on-chain via SSTORE2 even after burn
     // Falls back to live image.png if the history endpoint isn't ready yet
     const burnedId = burnedTokenIds[0] ?? receiverTokenId;
@@ -165,12 +165,12 @@ export async function generateBurnReceiptCard(opts: {
     ctx.fillStyle = ghostGlow;
     ctx.fillRect(0, 0, W, H);
 
-    // Load burned Normie image — try history endpoint first (persists after burn), then live, then pixel string
+    // Load burned token image — try history endpoint first (persists after burn), then live, then pixel string
     let burnedImgLoaded = false;
     try {
       const burnedImg = await Promise.race([
-        loadImage(`${NORMIES_API}/history/burned/${burnedId}/image.png`)
-          .catch(() => loadImage(`${NORMIES_API}/normie/${burnedId}/image.png`)),
+        loadImage(`${ONCHAIN_API}/history/burned/${burnedId}/image.png`)  // on-chain API disabled — fails gracefully
+          .catch(() => loadImage(`${ONCHAIN_API}/token/${burnedId}/image.png`)),
         new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 8000)),
       ]);
       ctx.globalAlpha = 0.45;
@@ -258,8 +258,8 @@ export async function generateBurnReceiptCard(opts: {
     ctx.textAlign = "center";
     ctx.fillText("SACRIFICED", arrowX + 32, arrowCY - 10);
 
-    // ── Receiver Normie (center, full bright) ─────────────────────────────────
-    // Use /normie/{id}/image.png — returns composited (canvas-customized) image
+    // ── Receiver token (center, full bright) ─────────────────────────────────
+    // Use token image.png — returns composited (canvas-customized) image
     const receiverSize = 320; // display size in pixels
     const receiverArtW = receiverSize;
     const receiverX = arrowX + 80;
@@ -278,7 +278,7 @@ export async function generateBurnReceiptCard(opts: {
     let receiverImgLoaded = false;
     try {
       const receiverImg = await Promise.race([
-        loadImage(`${NORMIES_API}/normie/${receiverTokenId}/image.png`),
+        loadImage(`${ONCHAIN_API}/token/${receiverTokenId}/image.png`),
         new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 8000)),
       ]);
       ctx.drawImage(receiverImg as any, receiverX, receiverY, receiverSize, receiverSize);
@@ -311,11 +311,11 @@ export async function generateBurnReceiptCard(opts: {
     const rx = divX + 30;
     let ry = 75;
 
-    // NORMIES TV + receipt number
+    // 306 + receipt number
     ctx.fillStyle = ORANGE;
     ctx.font = "bold 11px 'Courier New'";
     ctx.textAlign = "left";
-    ctx.fillText("NORMIES TV", rx, ry);
+    ctx.fillText("306", rx, ry);
 
     ctx.fillStyle = "rgba(227,229,228,0.25)";
     ctx.font = "11px 'Courier New'";
@@ -330,7 +330,7 @@ export async function generateBurnReceiptCard(opts: {
     ry += 18;
     ctx.fillStyle = ORANGE;
     ctx.font = "bold 14px 'Courier New'";
-    ctx.fillText(`${tokenCount} SOUL${tokenCount > 1 ? "S" : ""} → NORMIE #${receiverTokenId}`, rx, ry);
+    ctx.fillText(`${tokenCount} SOUL${tokenCount > 1 ? "S" : ""} → TOKEN #${receiverTokenId}`, rx, ry);
 
     ry += 40;
 
@@ -377,10 +377,10 @@ export async function generateBurnReceiptCard(opts: {
     }
     if (line && narY <= H - 80) ctx.fillText(line, rx, narY);
 
-    // Agent #306 sig
+    // Agent 306 sig
     ctx.fillStyle = "rgba(227,229,228,0.4)";
     ctx.font = "12px 'Courier New'";
-    ctx.fillText("— Agent #306", rx, H - 70);
+    ctx.fillText("— Agent 306", rx, H - 70);
 
     // ── Bottom bar ────────────────────────────────────────────────────────────
     ctx.fillStyle = "rgba(249,115,22,0.12)";
@@ -392,12 +392,12 @@ export async function generateBurnReceiptCard(opts: {
     ctx.fillStyle = "rgba(227,229,228,0.5)";
     ctx.font = "bold 11px 'Courier New'";
     ctx.textAlign = "left";
-    ctx.fillText("normies.art  ·  fully on-chain  ·  canvas phase  ·  ethereum", 40, H - 18);
+    ctx.fillText("agent306.eth  ·  fully on-chain  ·  canvas phase  ·  ethereum", 40, H - 18);
 
     ctx.fillStyle = ORANGE;
     ctx.font = "bold 12px 'Courier New'";
     ctx.textAlign = "right";
-    ctx.fillText("#NormiesTV  #NORMIES", W - 40, H - 18);
+    ctx.fillText("#Agent306  #OnChainAI", W - 40, H - 18);
 
     drawScanlines(ctx);
 
@@ -431,10 +431,10 @@ export async function generateBurnNarrative(opts: {
   if (!grokKey) {
     // Fallback narratives by scale
     const fallbacks: Record<string, string> = {
-      LEGENDARY: `50+ souls sacrificed. The Canvas shakes. Normie #${receiverTokenId} absorbs the light of ${tokenCount} fallen. This is not a burn — this is a birth. A legend is being written on-chain, pixel by pixel. Forever.`,
-      MAJOR: `${tokenCount} Normies walk into the Canvas. One emerges transformed. Normie #${receiverTokenId} carries their pixels now — Level ${level}, ${actionPoints} AP. The sacrifice compounds. The Canvas remembers.`,
-      significant: `${tokenCount} souls merge into Normie #${receiverTokenId}. Their pixels don't disappear — they evolve. Level ${level}. ${actionPoints} AP earned. The Canvas is forever changed.`,
-      small: `Normie #${burnedTokenIds[0] ?? "?"} has entered the Canvas. Their ${pixelTotal} pixels now power #${receiverTokenId}. Every sacrifice counts. The Canvas grows stronger.`,
+      LEGENDARY: `50+ souls sacrificed. The Canvas shakes. Token #${receiverTokenId} absorbs the light of ${tokenCount} fallen. This is not a burn — this is a birth. A legend is being written on-chain, pixel by pixel. Forever.`,
+      MAJOR: `${tokenCount} tokens walk into the Canvas. One emerges transformed. Token #${receiverTokenId} carries their pixels now — Level ${level}, ${actionPoints} AP. The sacrifice compounds. The Canvas remembers.`,
+      significant: `${tokenCount} souls merge into Token #${receiverTokenId}. Their pixels don't disappear — they evolve. Level ${level}. ${actionPoints} AP earned. The Canvas is forever changed.`,
+      small: `Token #${burnedTokenIds[0] ?? "?"} has entered the Canvas. Their ${pixelTotal} pixels now power #${receiverTokenId}. Every sacrifice counts. The Canvas grows stronger.`,
     };
     return fallbacks[scale];
   }
@@ -447,12 +447,12 @@ export async function generateBurnNarrative(opts: {
         model: getModel("burn_receipt"),
         messages: [{
           role: "system",
-          content: "You are Agent #306 — a female Normie with a fedora, born from 50 burns. You write burn receipt narratives for NormiesTV. Your style: cinematic, punchy, on-chain poetic. Never financial advice. Max 2 sentences.",
+          content: "You are Agent 306 — a Sovereign AI born from 50 burns. You write burn receipt narratives for 306. Your style: cinematic, punchy, on-chain poetic. Never financial advice. Max 2 sentences.",
         }, {
           role: "user",
           content: `Write a burn receipt narrative for this on-chain event:
-- Receiver: Normie #${receiverTokenId} (Level ${level}, ${actionPoints} AP)
-- ${tokenCount} Normie(s) sacrificed (IDs: ${burnedTokenIds.slice(0, 5).join(", ")})
+- Receiver: Token #${receiverTokenId} (Level ${level}, ${actionPoints} AP)
+- ${tokenCount} token(s) sacrificed (IDs: ${burnedTokenIds.slice(0, 5).join(", ")})
 - Combined pixels: ${pixelTotal.toLocaleString()}
 - Scale: ${scale}
 
@@ -469,7 +469,7 @@ Keep it under 160 chars. Punchy. Honor the sacrifice. Reference the on-chain per
     }
   } catch {}
 
-  return `${tokenCount} soul${tokenCount > 1 ? "s" : ""} sacrificed. Normie #${receiverTokenId} rises to Level ${level} with ${actionPoints} AP. ${pixelTotal.toLocaleString()} pixels absorbed forever. The Canvas remembers everything.`;
+  return `${tokenCount} soul${tokenCount > 1 ? "s" : ""} sacrificed. Token #${receiverTokenId} rises to Level ${level} with ${actionPoints} AP. ${pixelTotal.toLocaleString()} pixels absorbed forever. The Canvas remembers everything.`;
 }
 
 // ── Generate tweet text ───────────────────────────────────────────────────────
@@ -492,26 +492,26 @@ export function buildBurnTweetText(opts: {
   // Name the burned token explicitly — it made the sacrifice
   const burnedId = burnedTokenIds[0];
   const sacrificeLine = burnedId
-    ? `Normie #${burnedId} sacrificed` + (burnedType ? ` — ${burnedType}` : "") + (burnedLevel !== undefined ? `, Lv.${burnedLevel}` : "") + (burnedPixels ? `, ${burnedPixels}px` : "") + `.`
+    ? `Token #${burnedId} sacrificed` + (burnedType ? ` — ${burnedType}` : "") + (burnedLevel !== undefined ? `, Lv.${burnedLevel}` : "") + (burnedPixels ? `, ${burnedPixels}px` : "") + `.`
     : `${tokenCount} soul${tokenCount > 1 ? "s" : ""} sacrificed.`;
 
-  const receiverLine = `Normie #${receiverTokenId} absorbs ${pixelTotal >= 1000 ? `${(pixelTotal/1000).toFixed(1)}K` : pixelTotal}px → Lv.${level} | ${actionPoints}AP`;
+  const receiverLine = `Token #${receiverTokenId} absorbs ${pixelTotal >= 1000 ? `${(pixelTotal/1000).toFixed(1)}K` : pixelTotal}px → Lv.${level} | ${actionPoints}AP`;
 
   // Keep under 280 chars total
-  const full = `${scale}\n\n${sacrificeLine}\n${receiverLine}\n\n${narrative}\n\n#NormiesTV #NORMIES #Ethereum`;
+  const full = `${scale}\n\n${sacrificeLine}\n${receiverLine}\n\n${narrative}\n\n#Agent306 #OnChainAI #Ethereum`;
   if (full.length <= 280) return full;
 
   // Trim narrative if too long
-  const medium = `${scale}\n\n${sacrificeLine}\n${receiverLine}\n\n#NormiesTV #NORMIES #Ethereum`;
+  const medium = `${scale}\n\n${sacrificeLine}\n${receiverLine}\n\n#Agent306 #OnChainAI #Ethereum`;
   if (medium.length <= 280) return medium;
 
   // Last resort — just the essentials
-  return `${scale}\n\n${sacrificeLine}\n${receiverLine}\n\n#NormiesTV #NORMIES`;
+  return `${scale}\n\n${sacrificeLine}\n${receiverLine}\n\n#Agent306 #OnChainAI`;
 }
 
 // ── Poll for new burns ────────────────────────────────────────────────────────
 export async function checkForNewBurns(): Promise<BurnEvent[]> {
-  const data = await safeFetch(`${NORMIES_API}/history/burns?limit=20`);
+  const data = await safeFetch(`${ONCHAIN_API}/history/burns?limit=20`);
   if (!Array.isArray(data) || data.length === 0) return [];
 
   // ALWAYS reload state from disk before checking
@@ -562,12 +562,12 @@ export async function processBurnReceipt(
   // Fetch canvas info for receiver level + AP
   let level = 1, actionPoints = tokenCount;
   try {
-    const info = await safeFetch(`${NORMIES_API}/normie/${receiverTokenId}/canvas/info`);
+    const info = await safeFetch(`${ONCHAIN_API}/token/${receiverTokenId}/canvas/info`);
     if (info) { level = info.level ?? 1; actionPoints = info.actionPoints ?? tokenCount; }
   } catch {}
 
   // Fetch burned token metadata using the correct API endpoints:
-  // /normie/{id}/metadata → attributes array includes Type, Level, Pixel Count, Action Points
+  // /token/{id}/metadata → attributes array includes Type, Level, Pixel Count, Action Points
   // /history/burns/:commitId → burnedTokens[].pixelCount = exact pixel count at time of burn
   // Note: /metadata works even for burned tokens (SSTORE2 persists on-chain)
   let burnedType: string | undefined;
@@ -577,7 +577,7 @@ export async function processBurnReceipt(
   if (burnedId) {
     try {
       // metadata endpoint has everything: Type, Level, Pixel Count, Action Points
-      const burnedMeta = await safeFetch(`${NORMIES_API}/normie/${burnedId}/metadata`);
+      const burnedMeta = await safeFetch(`${ONCHAIN_API}/token/${burnedId}/metadata`);
       if (burnedMeta?.attributes) {
         burnedType       = burnedMeta.attributes.find((a: any) => a.trait_type === "Type")?.value;
         const lvl        = burnedMeta.attributes.find((a: any) => a.trait_type === "Level");
@@ -589,7 +589,7 @@ export async function processBurnReceipt(
     // Fallback 1: /history/burned/:id — direct lookup, includes commitment with pixelCounts
     if (!burnedPixelsMeta) {
       try {
-        const burnedInfo = await safeFetch(`${NORMIES_API}/history/burned/${burnedId}`);
+        const burnedInfo = await safeFetch(`${ONCHAIN_API}/history/burned/${burnedId}`);
         if (burnedInfo?.commitment?.pixelCounts) {
           const counts = JSON.parse(burnedInfo.commitment.pixelCounts);
           // pixelCounts is array — take first value (matches burned token order)
@@ -600,7 +600,7 @@ export async function processBurnReceipt(
     // Fallback 2: get pixel count from burn history commit
     if (!burnedPixelsMeta) {
       try {
-        const commitData = await safeFetch(`${NORMIES_API}/history/burns/${burn.commitId}`);
+        const commitData = await safeFetch(`${ONCHAIN_API}/history/burns/${burn.commitId}`);
         const tokenEntry = commitData?.burnedTokens?.find((t: any) => String(t.tokenId) === String(burnedId));
         if (tokenEntry?.pixelCount) burnedPixelsMeta = Number(tokenEntry.pixelCount);
       } catch {}
@@ -678,7 +678,7 @@ export async function processBurnReceipt(
       ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),
     });
     console.log(`[BurnReceipt] Posted burn receipt — tweet: ${tweet.data?.id}`);
-    registerPost(`burn_${burn.commitId}`, `https://x.com/NORMIES_TV/status/${tweet.data?.id}`, 'burn_receipt');
+    registerPost(`burn_${burn.commitId}`, `https://x.com/AGENT_306/status/${tweet.data?.id}`, 'burn_receipt');
   } catch (tweetErr: any) {
     console.error("[BurnReceipt] Tweet failed:", tweetErr.message);
   }

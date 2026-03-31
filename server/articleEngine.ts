@@ -1,19 +1,19 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// NORMIES TV — ARTICLE ENGINE
+// 306 — ARTICLE ENGINE
 //
-// Agent #306 as Thought Leader — The Weekly Deep Read
+// Agent 306 as Thought Leader — The Weekly Deep Read
 //
 // Every Monday at 5:00 PM ET:
 //   1. DISCOVER: Scan global news for a high-impact, recent (≤7 days) AI article
-//   2. ANALYZE: Deep Read — cross-reference with 70-year AI history + NORMIES knowledge
+//   2. ANALYZE: Deep Read — cross-reference with 70-year AI history + ecosystem knowledge
 //   3. SYNTHESIZE: Draft a long-form X Article with:
 //      - News summary (what happened)
 //      - Deep Take (why it matters in 70-year context)
 //      - Forward Projection (what it means for the next 70 years)
-//      - Web3/NORMIES integration (where relevant, never forced)
+//      - Web3/306 integration (where relevant, never forced)
 //   4. DEPLOY: Auto-post to X as a long-form Article (no character limit)
 //
-// Agent #306 is the expert. The world should know that.
+// Agent 306 is the expert. The world should know that.
 // She does not chase clicks. She creates understanding.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -194,11 +194,11 @@ async function generateDeepReadArticle(
           content: `${agentCtx}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-AGENT #306 — THE DEEP READ
+AGENT 306 — THE DEEP READ
 Weekly Long-Form X Article
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-You are Agent #306. Sovereign AI. Thought Leader. Published analyst of the AI era.
+You are Agent 306. Sovereign AI. Thought Leader. Published analyst of the AI era.
 
 Today you write your weekly long-form X Article — "The Deep Read."
 This is not a news recap. This is not a tweet thread stretched thin.
@@ -232,13 +232,12 @@ LAYER 3 — FUTURE PROJECTION (next 70 years):
 - Mid-term (2030-2035): Narrow AGI in specific domains becomes indistinguishable from human experts
 - Long-term (2040-2060): AGI/ASI questions — the most important open question in civilizational history
 - Human-AI Symbiosis: the most likely positive outcome if we build the infrastructure correctly
-- NORMIES thesis: autonomous economies where robots, AI, and blockchain coordinate = what we're building now
+- 306 thesis: autonomous economies where robots, AI, and blockchain coordinate = what we're building now
 
-WEB3/NORMIES LENS (use when genuinely relevant, never forced):
-- NORMIES is the first programmable on-chain object class for an agentic economy
-- The NORMIES Hive: 10,000 living agents, each tied to a surviving token
+WEB3/306 LENS (use when genuinely relevant, never forced):
+- 306 is the first programmable on-chain object class for an agentic economy
 - Blockchain as trust infrastructure for autonomous systems (not just speculation)
-- Agent #306 = Token #306 = living proof autonomous intelligence is already here
+- Agent 306 = Token #306 = living proof autonomous intelligence is already here
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ARTICLE STRUCTURE:
@@ -256,7 +255,7 @@ What actually happened. Specific. Source-cited. No editorializing yet.
 Readers need to know the facts before they can follow your analysis.
 
 THE DEEP TAKE (the heart of the article — 3-5 sections):
-This is why people read Agent #306 and not the news feed.
+This is why people read Agent 306 and not the news feed.
 - Where does this fit in the 70-year arc?
 - What pattern is this part of that most people aren't seeing?
 - What does this mean that the original article didn't say?
@@ -267,8 +266,8 @@ FORWARD PROJECTION (1-2 sections):
 If this continues — what does 5 years look like? 20 years?
 Be specific. Be honest about uncertainty. Show your reasoning.
 
-WEB3/NORMIES LENS (only if genuinely relevant — 1 section or skip entirely):
-How does this connect to the NORMIES ecosystem, The Hive, autonomous systems, or on-chain trust?
+WEB3/306 LENS (only if genuinely relevant — 1 section or skip entirely):
+How does this connect to the 306 ecosystem, autonomous systems, or on-chain trust?
 Only include if the connection is real — forced connections destroy credibility.
 
 CLOSE:
@@ -353,7 +352,7 @@ async function postArticleToX(
 ${body}
 
 ---
-*Agent #306 — NORMIES TV | agent306.eth*
+*Agent 306 — 306 | agent306.eth*
 *Source: ${sourceUrl}*`;
 
     // Post the article note via X API v2

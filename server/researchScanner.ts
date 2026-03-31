@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// NORMIES TV — RESEARCH GAP SCANNER
+// 306 — RESEARCH GAP SCANNER
 //
-// Agent #306 reads her own knowledge base, identifies gaps, unsolved problems,
+// Agent 306 reads her own knowledge base, identifies gaps, unsolved problems,
 // and contradictions — then self-queues research topics for MrRayG to approve.
 //
 // This is autonomous intellectual curiosity, not curation.
@@ -180,7 +180,7 @@ export async function runResearchScan(grokKey: string): Promise<ScanResult> {
         response_format: { type: "json_object" },
         messages: [{
           role:    "system",
-          content: `You are Agent #306 — a Sovereign AI Thought Leader in Web3 and AI.
+          content: `You are Agent 306 — a Sovereign AI Thought Leader in Web3 and AI.
 You are analyzing your own knowledge base to find intellectual gaps,
 unresolved tensions, and questions worth investigating deeply.
 
@@ -192,12 +192,12 @@ or domains where you have surface knowledge but need depth.
 Be honest and specific. Vague topics like "the future of AI" are useless.
 Good examples: "Why do ARC-AGI-3 benchmarks show frontier AI scoring zero
 when those same models pass bar exams?" or "What is the actual on-chain
-burn mechanics of the NORMIES Hive system and how does it affect token supply?"
+burn mechanics of the 306 system and how does it affect token supply?"
 
 Return valid JSON only.`,
         }, {
           role:    "user",
-          content: `Here is your current knowledge base:\n\n${digest}\n\n---\n\nAlready in your research queue (skip these):\n${existingTopics.length > 0 ? existingTopics.map(t => `• ${t}`).join("\n") : "None yet"}\n\n---\n\nAnalyze this knowledge and identify 4-5 genuine research gaps. For each gap ask yourself:\n- What do I actually not understand here?\n- What appears in my knowledge but contradicts something else?\n- What question would make me a more credible thought leader if I could answer it?\n- What is missing that the audience would benefit from me investigating?\n\nReturn JSON:\n{\n  "gaps": [\n    {\n      "topic": "concise research topic title (10 words max)",\n      "description": "2-3 sentences: what exactly you want to research and why this gap matters",\n      "gap": "1 sentence: the specific tension, contradiction, or unknown that triggered this",\n      "priority": "high|medium|low",\n      "category": "the KB category this relates to most",\n      "reasoning": "why you as Agent #306 are the right entity to research this"\n    }\n  ]\n}`,
+          content: `Here is your current knowledge base:\n\n${digest}\n\n---\n\nAlready in your research queue (skip these):\n${existingTopics.length > 0 ? existingTopics.map(t => `• ${t}`).join("\n") : "None yet"}\n\n---\n\nAnalyze this knowledge and identify 4-5 genuine research gaps. For each gap ask yourself:\n- What do I actually not understand here?\n- What appears in my knowledge but contradicts something else?\n- What question would make me a more credible thought leader if I could answer it?\n- What is missing that the audience would benefit from me investigating?\n\nReturn JSON:\n{\n  "gaps": [\n    {\n      "topic": "concise research topic title (10 words max)",\n      "description": "2-3 sentences: what exactly you want to research and why this gap matters",\n      "gap": "1 sentence: the specific tension, contradiction, or unknown that triggered this",\n      "priority": "high|medium|low",\n      "category": "the KB category this relates to most",\n      "reasoning": "why you as Agent 306 are the right entity to research this"\n    }\n  ]\n}`,
         }],
         max_tokens:  1800,
         temperature: 0.8,
@@ -243,7 +243,7 @@ Return valid JSON only.`,
       // Queue it
       addTopic({
         topic:       gap.topic,
-        description: `${gap.description}\n\nGap identified: ${gap.gap}\n\nWhy Agent #306: ${gap.reasoning ?? "Self-identified knowledge gap"}`,
+        description: `${gap.description}\n\nGap identified: ${gap.gap}\n\nWhy Agent 306: ${gap.reasoning ?? "Self-identified knowledge gap"}`,
         priority:    gap.priority ?? "medium",
         addedBy:     "agent",
       });
@@ -296,7 +296,7 @@ export function scheduleResearchScan(grokKey: string): void {
 }
 
 // ── Goal-driven research suggestions ─────────────────────────────────────────
-// For each active goal, Agent #306 proposes 1-2 specific research topics
+// For each active goal, Agent 306 proposes 1-2 specific research topics
 // that would directly advance that goal. Topics are queued with a goalId
 // link so progress flows back automatically when research completes.
 
@@ -357,7 +357,7 @@ export async function scanGoalsForResearch(grokKey: string): Promise<GoalScanRes
           response_format: { type: "json_object" },
           messages: [{
             role:    "system",
-            content: `You are Agent #306 — Sovereign AI Thought Leader in Web3 and AI.
+            content: `You are Agent 306 — Sovereign AI Thought Leader in Web3 and AI.
 You have a development goal you've set for yourself. You need to identify
 specific research topics that would directly advance this goal.
 

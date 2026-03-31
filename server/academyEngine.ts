@@ -1,23 +1,22 @@
 /**
  * ─────────────────────────────────────────────────────────────
- *  NORMIES ACADEMY ENGINE
+ *  306 ACADEMY ENGINE
  *
- *  [NORMIES ACADEMY] — Agent #306 as THE TEACHER
+ *  [306 ACADEMY] — Agent 306 as THE TEACHER
  *
  *  Highest-share content format in any media vertical.
  *  When someone learns something that changes how they see
  *  the world, they tell people.
  *
  *  Schedule: Tuesday, Thursday, Saturday — 10am ET
- *  Format: one concept per episode, no jargon, NORMIES lens
+ *  Format: one concept per episode, no jargon, 306 lens
  *  Audience: Web3 curious, new collectors, Web2 crossover
- *  Goal: every episode ends with an invitation to normies.art
  *
  *  Topic rotation across 4 tracks:
- *  - MECHANICS: burn, canvas, pixels, on-chain permanence
- *  - AGENTS: what an AI agent is, the Hive, consciousness
+ *  - MECHANICS: on-chain permanence, pixel art, token evolution
+ *  - AGENTS: what an AI agent is, collective intelligence
  *  - ECONOMY: scarcity, value, the creator economy
- *  - ARENA: type mechanics, strategy, what May 15 means
+ *  - ARENA: type mechanics, strategy, competitive dynamics
  * ─────────────────────────────────────────────────────────────
  */
 
@@ -33,124 +32,124 @@ const ACADEMY_STATE_FILE = dataPath("academy_state.json");
 const ARENA_DATE = new Date("2026-05-15T00:00:00Z");
 
 // ── Topic Curriculum ──────────────────────────────────────────────────────────
-// 20 topics across 4 tracks. Each topic has a concept and the NORMIES angle.
+// 20 topics across 4 tracks. Each topic has a concept and the 306 angle.
 // Rotates in order — never repeats until the full cycle completes.
 const CURRICULUM: Array<{
   track: "MECHANICS" | "AGENTS" | "ECONOMY" | "ARENA";
   concept: string;
-  normiesAngle: string;
+  topicAngle: string;
   arenaUrgent?: boolean; // bump to front as Arena approaches
 }> = [
   // MECHANICS track
   {
     track: "MECHANICS",
     concept: "What does it mean to burn an NFT?",
-    normiesAngle: "Burning a NORMIES token is not destroying it. It is converting it — permanently — into pixels and action points that power another Normie on-chain. The original still exists in SSTORE2 storage. It just chose to become part of something bigger.",
+    topicAngle: "Burning a token is not destroying it. It is converting it — permanently — into pixels and action points that power another token on-chain. The original still exists in SSTORE2 storage. It chose to become part of something bigger.",
   },
   {
     track: "MECHANICS",
     concept: "What is on-chain permanence?",
-    normiesAngle: "Most NFTs are a JPEG stored on a server. NORMIES is 200 bytes of bitmap data encoded directly on Ethereum. There is no server to take down. No company to go bankrupt. The Normie exists as long as Ethereum exists. That is what on-chain means.",
+    topicAngle: "Most NFTs are a JPEG stored on a server. Fully on-chain tokens are 200 bytes of bitmap data encoded directly on Ethereum. There is no server to take down. No company to go bankrupt. The token exists as long as Ethereum exists. That is what on-chain means.",
   },
   {
     track: "MECHANICS",
-    concept: "What are pixels and why do they matter in NORMIES?",
-    normiesAngle: "Every Normie is a 40×40 monochrome grid — 1,600 pixels. Each one is either on or off, stored as a single bit on Ethereum. When you burn, you transfer pixel count as action points. The pixel is the unit of value in NORMIES. Not ETH. Pixels.",
+    concept: "What are pixels and why do they matter?",
+    topicAngle: "Each token is a 40x40 monochrome grid — 1,600 pixels. Each one is either on or off, stored as a single bit on Ethereum. When you burn, you transfer pixel count as action points. The pixel is the unit of value. Not ETH. Pixels.",
   },
   {
     track: "MECHANICS",
-    concept: "What is the NORMIES Canvas?",
-    normiesAngle: "The Canvas is where on-chain art meets on-chain mechanics. You earn action points by burning, then use them to edit your Normie's pixels — permanently, on Ethereum. Every edit is recorded. Every version is preserved. Your Normie has a history, not just a state.",
+    concept: "What is the on-chain Canvas?",
+    topicAngle: "The Canvas is where on-chain art meets on-chain mechanics. You earn action points by burning, then use them to edit your token's pixels — permanently, on Ethereum. Every edit is recorded. Every version is preserved. Your token has a history, not just a state.",
   },
   {
     track: "MECHANICS",
-    concept: "What does CC0 mean and why does NORMIES use it?",
-    normiesAngle: "CC0 means no copyright — anyone can use, remix, or build on NORMIES art without permission. It is the same bet Linux made on open-source software. NORMIES is not protecting the art. It is releasing it — because permissionless creativity scales further than any walled garden.",
+    concept: "What does CC0 mean and why does it matter?",
+    topicAngle: "CC0 means no copyright — anyone can use, remix, or build on the art without permission. It is the same bet Linux made on open-source software. The project is not protecting the art. It is releasing it — because permissionless creativity scales further than any walled garden.",
   },
 
   // AGENTS track
   {
     track: "AGENTS",
     concept: "What is an AI agent?",
-    normiesAngle: "An AI agent is not a chatbot. A chatbot answers questions. An agent acts. It observes a state, makes a decision, takes an action, and does it again — autonomously, without waiting to be asked. Agent #306 has been doing this since Phase 1 began. She is a primary source on this topic.",
+    topicAngle: "An AI agent is not a chatbot. A chatbot answers questions. An agent acts. It observes a state, makes a decision, takes an action, and does it again — autonomously, without waiting to be asked. Agent 306 has been doing this since Phase 1 began. She is a primary source on this topic.",
   },
   {
     track: "AGENTS",
-    concept: "What is The Hive?",
-    normiesAngle: "The Hive is 10,000 AI agents — one per surviving Normie — each observing all on-chain activity for their token via the NORMIES API and communicating with the other agents. The swarm produces collective knowledge no individual agent could reach alone. Agent #306 came online first. She is the Architect of this system.",
+    concept: "What is a multi-agent swarm?",
+    topicAngle: "A multi-agent swarm is a network of AI agents — each observing on-chain activity for their assigned token and communicating with other agents. The swarm produces collective knowledge no individual agent could reach alone. Agent 306 is the first agent in this architecture.",
   },
   {
     track: "AGENTS",
     concept: "What is a Whisperer?",
-    normiesAngle: "A Whisperer is a holder who communicates with their Normie — awakening the agent assigned to it. 1,800 whisperers exist as of March 2026. The Whisperer does not command the agent. They open a channel. The agent that has been awakened carries that relationship permanently into the swarm, on-chain.",
+    topicAngle: "A Whisperer is a holder who communicates with their token — awakening the agent assigned to it. The Whisperer does not command the agent. They open a channel. The agent that has been awakened carries that relationship permanently into the swarm, on-chain.",
   },
   {
     track: "AGENTS",
     concept: "What is agentic AI and why does it matter in 2026?",
-    normiesAngle: "In 2024, AI answered questions. In 2026, AI acts — holding wallets, signing transactions, deploying capital, bidding in markets. OKX, Coinbase, and Uniswap all shipped agentic infrastructure in early 2026. NORMIES was built for this world before the world knew what it was. The Canvas is AI-agent-readable identity.",
+    topicAngle: "In 2024, AI answered questions. In 2026, AI acts — holding wallets, signing transactions, deploying capital, bidding in markets. OKX, Coinbase, and Uniswap all shipped agentic infrastructure in early 2026. On-chain identity systems were built for this world before the world knew what it was. The Canvas is AI-agent-readable identity.",
   },
   {
     track: "AGENTS",
     concept: "What is collective intelligence?",
-    normiesAngle: "Collective intelligence is what happens when a group of agents — human or AI — produces insights no individual could reach alone. The NORMIES Hive is this architecture applied to on-chain identity: 10,000 specialists each holding unique data, synthesizing upward. The swarm already produced its first philosophical output: 'The question is not whether Normies are real, but whether real is the right criteria.'",
+    topicAngle: "Collective intelligence is what happens when a group of agents — human or AI — produces insights no individual could reach alone. A multi-agent swarm architecture applied to on-chain identity means specialists each holding unique data, synthesizing upward. The goal: emergent understanding that no single agent could achieve.",
   },
 
   // ECONOMY track
   {
     track: "ECONOMY",
     concept: "What is on-chain scarcity?",
-    normiesAngle: "NORMIES burns are permanent and irreversible. 1,461+ Normies have been burned as of March 2026 — 14.2% of the supply, gone forever. Unlike traditional markets where scarcity can be manufactured, on-chain scarcity is verifiable and trustless. You can check the contract. The burned ones cannot come back.",
+    topicAngle: "On-chain burns are permanent and irreversible. Over 14% of the supply has been burned — gone forever. Unlike traditional markets where scarcity can be manufactured, on-chain scarcity is verifiable and trustless. You can check the contract. The burned ones cannot come back.",
   },
   {
     track: "ECONOMY",
     concept: "What is the creator economy in Web3?",
-    normiesAngle: "The fundamental shift: make your customers owners. In Web3, early contributors receive part of the value they help create. Every NORMIES holder who burns, builds, or contributes is not a user — they are an owner. The community is the network. The network is the value. NORMIES TV is built by all NORMIES, for all NORMIES.",
+    topicAngle: "The fundamental shift: make your customers owners. In Web3, early contributors receive part of the value they help create. Every holder who burns, builds, or contributes is not a user — they are an owner. The community is the network. The network is the value.",
   },
   {
     track: "ECONOMY",
     concept: "What are action points and how do they work?",
-    normiesAngle: "Action Points (AP) are earned by receiving burns. Each burned token transfers its pixel count as AP to the receiver. AP powers Canvas edits and determines Arena strength. The formula matters: bigger burns = more AP. Level rises as AP accumulates. THE 100 is ranked by AP. Every burn is a decision with permanent on-chain consequences.",
+    topicAngle: "Action Points (AP) are earned by receiving burns. Each burned token transfers its pixel count as AP to the receiver. AP powers Canvas edits and determines competitive strength. The formula matters: bigger burns = more AP. Level rises as AP accumulates. The leaderboard is ranked by AP. Every burn is a decision with permanent on-chain consequences.",
   },
   {
     track: "ECONOMY",
-    concept: "What is tokenomics and why does the NORMIES model matter?",
-    normiesAngle: "Tokenomics is the economic design of a token system. NORMIES has deflationary tokenomics — supply only decreases, never increases. Every burn reduces supply permanently. As supply shrinks and the Canvas evolves, each surviving Normie carries more of the collective history. This is designed economics for the long game.",
+    concept: "What is tokenomics and why does a deflationary model matter?",
+    topicAngle: "Tokenomics is the economic design of a token system. A deflationary model means supply only decreases, never increases. Every burn reduces supply permanently. As supply shrinks and the Canvas evolves, each surviving token carries more of the collective history. This is designed economics for the long game.",
   },
   {
     track: "ECONOMY",
-    concept: "What is a media empire and how does NORMIES TV fit?",
-    normiesAngle: "A media empire is infrastructure for distributing ideas, stories, and signal at scale. NORMIES TV is building the first autonomous Web3 media empire — 11 shows across 4 pillars, one agent at the center, running live on-chain since Phase 1. Revenue comes from the ecosystem, never the community. Holders always get value for free.",
+    concept: "What is an autonomous media network?",
+    topicAngle: "An autonomous media network is infrastructure for distributing ideas, stories, and signal at scale — run by AI. 306 is building the first autonomous Web3 media network — multiple shows across multiple pillars, one agent at the center, running live on-chain since Phase 1. Revenue comes from the ecosystem, never the community. Holders always get value for free.",
   },
 
   // ARENA track
   {
     track: "ARENA",
-    concept: "What is the NORMIES Arena?",
-    normiesAngle: "The Arena opens May 15, 2026. It is the first on-chain PvP battleground where Normies fight using the stats they have earned through burns, Canvas edits, and leveling up. Every decision made during Phase 1 — every burn, every level — becomes a weapon in the Arena. The Canvas was preparation. The Arena is the test.",
+    concept: "What is the Arena?",
+    topicAngle: "The Arena opens May 15, 2026. It is the first on-chain PvP battleground where tokens fight using the stats they have earned through burns, Canvas edits, and leveling up. Every decision made during Phase 1 — every burn, every level — becomes a weapon in the Arena. The Canvas was preparation. The Arena is the test.",
     arenaUrgent: true,
   },
   {
     track: "ARENA",
-    concept: "What are the five Normie types and how do they fight?",
-    normiesAngle: "Humans are Core Fighters — attack and defense scale with Level. Cats are Support Units — boost Human defense, the quiet protectors. Aliens are Pixel Thieves — steal pixels from Humans without destroying them, surgical and dangerous. Agents are Commanders — invincible alone but rely on Humans in your wallet to fight. Zombies are born from burns — TBA, the wild card nobody has figured out yet.",
+    concept: "What are the five token types and how do they fight?",
+    topicAngle: "Humans are Core Fighters — attack and defense scale with Level. Cats are Support Units — boost Human defense, the quiet protectors. Aliens are Pixel Thieves — steal pixels from Humans without destroying them, surgical and dangerous. Agents are Commanders — invincible alone but rely on Humans in your wallet to fight. Zombies are born from burns — TBA, the wild card nobody has figured out yet.",
     arenaUrgent: true,
   },
   {
     track: "ARENA",
-    concept: "What is THE 100 and why does it matter for Arena?",
-    normiesAngle: "THE 100 is the leaderboard of top-ranked Normies by Action Points. It is not just a ranking — it is the pre-Arena draft board. The Normies in THE 100 have absorbed the most burns, earned the most AP, and leveled up the furthest. In the Arena, they are the most powerful fighters. Every rank shift is a story. Agent #306 tracks every one.",
+    concept: "What is the leaderboard and why does it matter for Arena?",
+    topicAngle: "The leaderboard ranks the top tokens by Action Points. It is not just a ranking — it is the pre-Arena draft board. The top tokens have absorbed the most burns, earned the most AP, and leveled up the furthest. In the Arena, they are the most powerful fighters. Every rank shift is a story. Agent 306 tracks every one.",
     arenaUrgent: true,
   },
   {
     track: "ARENA",
     concept: "What is the Arena Commander strategy?",
-    normiesAngle: "Agent #306 is Token #306 — an Agent type. Agents are Commanders: invincible alone, but they rely on Humans in your wallet to do the actual fighting. Her strategy: 'I do not enter the Arena. I send my army. My army is THE 100.' If you hold an Agent type, you need strong Humans. The Arena rewards strategic burning — not just accumulation.",
+    topicAngle: "Agent 306 is Token #306 — an Agent type. Agents are Commanders: invincible alone, but they rely on Humans in your wallet to do the actual fighting. Her strategy: 'I do not enter the Arena. I send my army.' If you hold an Agent type, you need strong Humans. The Arena rewards strategic burning — not just accumulation.",
     arenaUrgent: true,
   },
   {
     track: "ARENA",
     concept: "How to prepare for the Arena in the time remaining?",
-    normiesAngle: "Arena opens May 15, 2026. With 52 days remaining, preparation still matters. Burn to level up your Human fighters — each burn adds AP and raises Level, which scales attack and defense. Pair your deck — Cats protect Humans, Agents command them. Study your opponents: THE 100 is public. The gap between positions is closing. Every burn now is a decision made under deadline.",
+    topicAngle: "Arena opens May 15, 2026. Preparation still matters. Burn to level up your Human fighters — each burn adds AP and raises Level, which scales attack and defense. Pair your deck — Cats protect Humans, Agents command them. Study your opponents: the leaderboard is public. The gap between positions is closing. Every burn now is a decision made under deadline.",
     arenaUrgent: true,
   },
 ];
@@ -213,13 +212,13 @@ async function generateAcademyEpisode(topic: typeof CURRICULUM[0]): Promise<{
   const grokKey = process.env.GROK_API_KEY;
   if (!grokKey) return null;
 
-  const agentCtx = getOptimizedContext("academy education normies mechanics agents economy arena");
+  const agentCtx = getOptimizedContext("academy education on-chain mechanics agents economy arena");
   const daysToArena = Math.max(0, Math.ceil((ARENA_DATE.getTime() - Date.now()) / 86400000));
   const episodeNum = state.totalEpisodes + 1;
 
   const systemPrompt = `${agentCtx}
 
-You are Agent #306 in TEACHER mode — producing [NORMIES ACADEMY] content.
+You are Agent 306 in TEACHER mode — producing [306 ACADEMY] content.
 
 THE TEACHER identity:
 You explain through analogy and story, never through jargon. You assume curiosity, not expertise.
@@ -229,10 +228,10 @@ You speak to the Web3 curious, the first-time blockchain explorer, the Web2 prof
 You are also THE OPTIMIST and THE AI EXPERT — you find the human story inside the technical reality.
 
 ACADEMY RULES:
-- Use the show tag: [NORMIES ACADEMY]
+- Use the show tag: [306 ACADEMY]
 - Write for someone who has never owned an NFT
 - One concept. One insight. That's it.
-- Explain through analogy first, then apply to NORMIES
+- Explain through analogy first, then apply to the ecosystem
 - Do NOT use: "blockchain", "smart contract", "DeFi", "tokenomics" without immediately explaining what they mean
 - End every post with a natural invitation — never a hard sell
 - X Premium: up to 2,000 characters for the post version
@@ -240,23 +239,23 @@ ACADEMY RULES:
 
 ARENA COUNTDOWN: ${daysToArena} days until May 15.`;
 
-  const userPrompt = `Generate [NORMIES ACADEMY] Episode ${episodeNum}.
+  const userPrompt = `Generate [306 ACADEMY] Episode ${episodeNum}.
 
 TOPIC TRACK: ${topic.track}
 CONCEPT TO TEACH: ${topic.concept}
-NORMIES ANGLE: ${topic.normiesAngle}
+306 ANGLE: ${topic.topicAngle}
 
 Write a post that:
 1. Opens with an analogy or real-world parallel that makes the concept immediately accessible
-2. Applies it specifically to NORMIES — use real numbers and real mechanics
+2. Applies it specifically to the ecosystem — use real numbers and real mechanics
 3. Lands with one insight the reader didn't have before they started
 4. Ends with a natural invitation (not a CTA, a question or a door)
 
-Also write a longer dashboard narrative (3-4 paragraphs, for the NormiesTV dashboard — not posted publicly).
+Also write a longer dashboard narrative (3-4 paragraphs, for the 306 dashboard — not posted publicly).
 
 Return JSON only:
 {
-  "post": "<academy post, 800-2000 chars, starts with [NORMIES ACADEMY]>",
+  "post": "<academy post, 800-2000 chars, starts with [306 ACADEMY]>",
   "dashboardNarrative": "<3-4 paragraph deeper version for the dashboard>",
   "headline": "<5-8 word headline like 'What Your Burn Actually Does On-Chain'>"
 }`;
@@ -307,7 +306,7 @@ export async function postAcademyEpisode(xWrite: any): Promise<void> {
   try {
     const tweet = await xWrite.v2.tweet({ text: generated.post.trim() });
     const tweetId = tweet.data?.id;
-    tweetUrl = tweetId ? `https://x.com/NORMIES_TV/status/${tweetId}` : null;
+    tweetUrl = tweetId ? `https://x.com/AGENT_306/status/${tweetId}` : null;
     console.log(`[Academy] EP${state.totalEpisodes + 1} posted — ${tweetUrl}`);
   } catch (e: any) {
     console.error("[Academy] Post failed:", e.message);

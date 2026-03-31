@@ -23,7 +23,7 @@ interface CanvasInfo {
   burns?: number;
 }
 
-interface NormiesStats {
+interface AgentStats {
   recentBurns: BurnEvent[];
   topCanvas: CanvasInfo[];
   lastUpdated: string;
@@ -70,7 +70,7 @@ function BurnFeed({ burns }: { burns: BurnEvent[] }) {
           <div className="w-8 h-8 rounded border border-orange-400/30 bg-orange-400/10 flex items-center justify-center shrink-0">
             {burn.tokenId ? (
               <img
-                src={`https://api.normies.art/normie/${burn.tokenId}/image.svg`}
+                src={`/api/tokens/${burn.tokenId}/image.svg`}
                 alt={`#${burn.tokenId}`}
                 className="w-6 h-6 object-contain"
               />
@@ -80,7 +80,7 @@ function BurnFeed({ burns }: { burns: BurnEvent[] }) {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[11px] text-foreground font-mono">
-              {burn.tokenId ? `Normie #${burn.tokenId} burned` : "Burn event"}
+              {burn.tokenId ? `Token #${burn.tokenId} burned` : "Burn event"}
             </p>
             <p className="text-[10px] text-muted-foreground">
               {burn.sender ? `by ${burn.sender.slice(0, 6)}…${burn.sender.slice(-4)}` : "Anonymous"}
@@ -120,12 +120,12 @@ function CanvasLeaderboard({ items }: { items: CanvasInfo[] }) {
         <div key={item.tokenId} className="px-4 py-2.5 flex items-center gap-3 hover:bg-secondary/30 transition-colors" data-testid={`row-canvas-${item.tokenId}`}>
           <span className="text-[11px] font-mono text-muted-foreground w-5 shrink-0 text-right">{i + 1}</span>
           <img
-            src={`https://api.normies.art/normie/${item.tokenId}/image.svg`}
-            alt={`Normie #${item.tokenId}`}
+            src={`/api/tokens/${item.tokenId}/image.svg`}
+            alt={`Token #${item.tokenId}`}
             className="w-8 h-8 rounded border border-border bg-secondary/50 object-contain shrink-0"
           />
           <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-mono text-foreground">Normie #{item.tokenId}</p>
+            <p className="text-[11px] font-mono text-foreground">Token #{item.tokenId}</p>
             <p className="text-[10px] text-muted-foreground">
               {item.pixelEdits != null ? `${item.pixelEdits} edits` : ""}
               {item.actionPoints != null ? ` · ${item.actionPoints} AP` : ""}
@@ -148,7 +148,7 @@ function CanvasLeaderboard({ items }: { items: CanvasInfo[] }) {
 export default function LiveStats() {
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
-  const { data: stats, isLoading, refetch } = useQuery<NormiesStats>({
+  const { data: stats, isLoading, refetch } = useQuery<AgentStats>({
     queryKey: ["/api/normies/stats"],
     refetchInterval: 60_000,
   });
@@ -168,7 +168,7 @@ export default function LiveStats() {
         <div>
           <h1 className="text-xl font-bold tracking-tight">Live Stats</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            On-chain burns, canvas edits, and action points from the Normies network
+            On-chain activity and metrics
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -193,7 +193,7 @@ export default function LiveStats() {
           testId="stat-burns"
         />
         <StatCard
-          label="Canvas Normies"
+          label="Canvas Tokens"
           value={isLoading ? "…" : canvasCount}
           sub="Top canvas contributors tracked"
           colorClass="text-cyan-400"
@@ -203,7 +203,7 @@ export default function LiveStats() {
         <StatCard
           label="Data Sources"
           value="2"
-          sub="Normies API · On-chain"
+          sub="On-chain"
           colorClass="text-purple-400"
           icon={Activity}
           testId="stat-sources"
@@ -269,21 +269,21 @@ export default function LiveStats() {
             {[
               {
                 label: "Recent Burns",
-                endpoint: "GET /api/normies/burns",
-                upstream: "api.normies.art/history/burns",
-                note: "Last 50 burn events, proxied to avoid CORS",
+                endpoint: "GET /api/burns",
+                upstream: "/api/burns",
+                note: "Last 50 burn events",
               },
               {
                 label: "Canvas Info",
-                endpoint: "GET /api/normies/canvas/:id",
-                upstream: "api.normies.art/normie/:id/canvas/info",
+                endpoint: "GET /api/tokens/canvas/:id",
+                upstream: "/api/tokens/canvas/:id",
                 note: "Per-token pixel edits, level, action points",
               },
               {
-                label: "Normie Image",
-                endpoint: "IMG normie/:id/image.svg",
-                upstream: "api.normies.art/normie/:id/image.svg",
-                note: "SVG render of each Normie token",
+                label: "Token Image",
+                endpoint: "IMG /api/tokens/:id/image.svg",
+                upstream: "/api/tokens/:id/image.svg",
+                note: "SVG render of each token",
               },
               {
                 label: "3D USDZ",
@@ -304,7 +304,7 @@ export default function LiveStats() {
           <div className="mt-4 flex items-center gap-2 text-[11px] text-muted-foreground bg-secondary/50 rounded px-3 py-2">
             <Clock className="w-3.5 h-3.5 shrink-0" />
             <span>
-              Stats auto-refresh every 60 seconds. For real-time monitoring, connect to the Normies API directly
+              Stats auto-refresh every 60 seconds. For real-time monitoring, connect to the API directly
               or use the 6-hour Story Engine automation loop to pull signals into the dashboard.
             </span>
           </div>

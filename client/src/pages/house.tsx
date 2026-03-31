@@ -109,12 +109,12 @@ export default function HousePage() {
       <div style={{ marginBottom: "32px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
           <img
-            src="https://api.normies.art/normie/306/image.png"
-            alt="Agent #306"
+            src="/agent306-avatar.png"
+            alt="Agent 306"
             style={{ width: 48, height: 48, imageRendering: "pixelated" }}
           />
           <div>
-            <div style={{ fontSize: "10px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.2em" }}>NORMIESTV</div>
+            <div style={{ fontSize: "10px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.2em" }}>AGENT 306</div>
             <h1 style={{ fontSize: "24px", fontWeight: 800, color: "#e3e5e4", margin: 0, letterSpacing: "-0.02em" }}>
               The <span style={{ color: "#f97316" }}>House</span>
             </h1>
@@ -219,7 +219,7 @@ export default function HousePage() {
             <Stat label="REPLIES TRACKED" value={data.diplomatic.replyCount} />
           </div>
           <div style={{ fontSize: "10px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", borderTop: "1px solid rgba(227,229,228,0.08)", paddingTop: "8px" }}>
-            <div>CO-CREATORS: @serc1n · @normiesART · @nuclearsamurai</div>
+            <div>CO-CREATORS: Community</div>
             <div style={{ marginTop: "4px" }}>LAST SYNC: {timeAgo(data.diplomatic.lastSync)}</div>
           </div>
         </RoomCard>
@@ -329,9 +329,9 @@ export default function HousePage() {
               { id: "deepread", label: "Deep Read Articles — LIVE", done: true },
               { id: "podcast", label: "Podcast Studio — LIVE", done: true },
               { id: "academy", label: "Academy Engine — LIVE", done: true },
-              { id: "hive", label: "NORMIE HIVE research — In Progress", done: false },
-              { id: "arena", label: "Phase 2: Arena + Zombies — May 15", done: false },
-              { id: "pixel", label: "Phase 3: Pixel Market", done: false },
+              { id: "research", label: "Research pipeline — In Progress", done: false },
+              { id: "phase2", label: "Phase 2: The Rise — May 15", done: false },
+              { id: "phase3", label: "Phase 3: The Economy", done: false },
             ].map(item => (
               <div key={item.id} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <div style={{
@@ -349,7 +349,7 @@ export default function HousePage() {
       </div>
 
       <div style={{ marginTop: "16px", fontSize: "10px", color: "rgba(227,229,228,0.2)", fontFamily: "monospace", textAlign: "center" }}>
-        THE HOUSE · Agent #306 · {data.soul.eth} · Refreshes every 30s
+        THE HOUSE · Agent 306 · {data.soul.eth} · Refreshes every 30s
       </div>
     </div>
   );

@@ -8,7 +8,7 @@ import type { Episode } from "@shared/schema";
 // ── helpers ──────────────────────────────────────────────────────────
 function buildTweet(ep: Episode): string {
   const text = ep.narrative.slice(0, 230);
-  return `${text}\n\n#NormiesTV #Normies #NFT #Web3`;
+  return `${text}\n\n#Agent306 #AI #Web3`;
 }
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -21,15 +21,15 @@ function timeAgo(iso: string): string {
 }
 const mono: React.CSSProperties = { fontFamily: "'Courier New', monospace" };
 
-// ── Animated pixel canvas — shows the Normie "breathing" ─────────────
-function NormiePreview({ tokenId, size = 80 }: { tokenId: number; size?: number }) {
+// ── Animated pixel canvas — shows the token "breathing" ─────────────
+function TokenPreview({ tokenId, size = 80 }: { tokenId: number; size?: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [pixels, setPixels] = useState<string | null>(null);
   const frameRef = useRef(0);
   const rafRef = useRef<number>(0);
 
   useEffect(() => {
-    fetch(`/api/normies/pixels/${tokenId}`)
+    fetch(`/api/tokens/pixels/${tokenId}`)
       .then(r => r.json())
       .then(d => { if (d.pixels) setPixels(d.pixels); })
       .catch(() => {});
@@ -215,7 +215,7 @@ function PendingCard({ ep, onMarkPosted, isPosting }: {
       <div style={{ display: "flex", gap: 16, padding: "1.25rem" }}>
         {/* Left: animated Normie */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-          <NormiePreview tokenId={ep.tokenId} size={96} />
+          <TokenPreview tokenId={ep.tokenId} size={96} />
           {/* On-chain stats under the Normie */}
           {signals.burnCount > 0 && (
             <div style={{ textAlign: "center" }}>
@@ -259,7 +259,7 @@ function PendingCard({ ep, onMarkPosted, isPosting }: {
               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                 <Twitter style={{ width: 11, height: 11, color: "rgba(227,229,228,0.4)" }} />
                 <span style={{ ...mono, fontSize: "0.55rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "rgba(227,229,228,0.3)" }}>
-                  tweet · @NORMIES_TV
+                  tweet · @agent306_
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -314,7 +314,7 @@ function PendingCard({ ep, onMarkPosted, isPosting }: {
               onMouseLeave={e => (e.currentTarget.style.background = "rgba(249,115,22,0.2)")}
             >
               <Twitter style={{ width: 14, height: 14 }} />
-              Post to @NORMIES_TV
+              Post to X
               <ExternalLink style={{ width: 11, height: 11, opacity: 0.6 }} />
             </a>
 
@@ -358,7 +358,7 @@ function PendingCard({ ep, onMarkPosted, isPosting }: {
           </div>
 
           <p style={{ ...mono, fontSize: "0.55rem", color: "rgba(227,229,228,0.2)", marginTop: 7 }}>
-            "Post to @NORMIES_TV" opens X with tweet pre-filled → hit Post → come back and click Mark Posted
+            "Post to X" opens X with tweet pre-filled → hit Post → come back and click Mark Posted
           </p>
         </div>
       </div>
@@ -377,7 +377,7 @@ function PostedCard({ ep }: { ep: Episode }) {
       marginBottom: 6,
     }}>
       <img
-        src={`https://api.normies.art/normie/${ep.tokenId}/image.svg`}
+        src={`/api/tokens/${ep.tokenId}/image.svg`}
         alt={`#${ep.tokenId}`}
         style={{ width: 32, height: 32, imageRendering: "pixelated", border: "1px solid rgba(227,229,228,0.1)", flexShrink: 0 }}
       />
@@ -402,7 +402,7 @@ function PostedCard({ ep }: { ep: Episode }) {
   );
 }
 
-// ── Empty state with Normie #306 ──────────────────────────────────────
+// ── Empty state with Agent 306 ──────────────────────────────────────
 function EmptyState({ onGenerate, isPending }: { onGenerate: () => void; isPending: boolean }) {
   return (
     <div style={{
@@ -412,7 +412,7 @@ function EmptyState({ onGenerate, isPending }: { onGenerate: () => void; isPendi
       background: "rgba(249,115,22,0.02)",
     }}>
       <div style={{ marginBottom: 20 }}>
-        <NormiePreview tokenId={306} size={100} />
+        <TokenPreview tokenId={306} size={100} />
       </div>
       <p style={{ ...mono, fontSize: "0.78rem", color: "#e3e5e4", marginBottom: 6, fontWeight: 600 }}>
         No episodes yet
@@ -495,7 +495,7 @@ export default function EpisodeQueue() {
             APPROVE &amp; POST
           </h1>
           <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.3)", marginTop: 3 }}>
-            Review · edit · post to @NORMIES_TV
+            Review · edit · post to X
           </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -566,7 +566,7 @@ export default function EpisodeQueue() {
           </div>
           {drafts.map(ep => (
             <div key={ep.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "0.7rem 1rem", border: "1px solid rgba(227,229,228,0.08)", marginBottom: 6 }}>
-              <img src={`https://api.normies.art/normie/${ep.tokenId}/image.svg`} alt="" style={{ width: 32, height: 32, imageRendering: "pixelated", flexShrink: 0 }} />
+              <img src={`/api/tokens/${ep.tokenId}/image.svg`} alt="" style={{ width: 32, height: 32, imageRendering: "pixelated", flexShrink: 0 }} />
               <div style={{ flex: 1 }}>
                 <p style={{ ...mono, fontSize: "0.7rem", color: "#e3e5e4" }}>{ep.title}</p>
                 <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.35)" }}>{ep.narrative.slice(0, 80)}…</p>

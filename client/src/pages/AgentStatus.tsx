@@ -169,7 +169,7 @@ export default function AgentStatus() {
   const exploreMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/exploration/run", {}).then(r => r.json()),
     onSuccess: () => {
-      toast({ title: "Agent #306 is exploring the world", description: "She'll return with new knowledge in ~5 minutes." });
+      toast({ title: "Agent 306 is exploring the world", description: "She'll return with new knowledge in ~5 minutes." });
       setTimeout(() => { refetchExploration(); refetchEvolution(); }, 10000);
     },
     onError: (e: any) => toast({ title: "Exploration failed", description: e.message, variant: "destructive" }),
@@ -215,7 +215,7 @@ export default function AgentStatus() {
           <ScoreRing score={snapshot?.overallScore ?? 0} />
           <div>
             <h1 style={{ ...mono, fontSize: "0.85rem", color: "#f97316", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: 0, marginBottom: 4 }}>
-              Agent #306 — Evolution Status
+              Agent 306 — Evolution Status
             </h1>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const, alignItems: "center" }}>
               {snapshot && <GrowthBadge vector={snapshot.growthVector} />}
@@ -350,7 +350,7 @@ export default function AgentStatus() {
       {tab === "vitals" && !snapshot && (
         <div style={{ padding: "2rem", border: "1px solid rgba(227,229,228,0.07)", textAlign: "center" as const }}>
           <p style={{ ...mono, fontSize: "0.7rem", color: "rgba(227,229,228,0.3)", margin: 0 }}>
-            No snapshot yet. Click "Snapshot" to take the first baseline reading of Agent #306.
+            No snapshot yet. Click "Snapshot" to take the first baseline reading of Agent 306.
           </p>
         </div>
       )}
@@ -383,7 +383,7 @@ export default function AgentStatus() {
           <div style={{ border: "1px solid rgba(167,139,250,0.15)", background: "rgba(167,139,250,0.02)", padding: "1.25rem", marginBottom: "1.25rem" }}>
             <p style={{ ...mono, fontSize: "0.55rem", color: "rgba(167,139,250,0.5)", textTransform: "uppercase" as const, letterSpacing: "0.15em", marginBottom: "0.75rem" }}>Autonomous Exploration</p>
             <p style={{ ...mono, fontSize: "0.7rem", color: "rgba(227,229,228,0.6)", margin: 0, lineHeight: 1.7 }}>
-              Agent #306 explores 4 territories + 3 Agent-Reach channels every day at 3am ET.
+              Agent 306 explores 4 territories + 3 Agent-Reach channels every day at 3am ET.
               Core territories: AI World, Web3 World, Media Landscape, Global Context.
               Agent-Reach channels: Twitter Pulse, Video Intelligence, RSS Wire.
               Everything she finds gets extracted into her permanent knowledge base.
@@ -446,7 +446,7 @@ export default function AgentStatus() {
           {explorationState?.isRunning && (
             <div style={{ padding: "1rem", background: "rgba(167,139,250,0.06)", border: "1px solid rgba(167,139,250,0.2)", marginBottom: "1rem", display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#a78bfa", animation: "explore-pulse 1.2s infinite" }} />
-              <span style={{ ...mono, fontSize: "0.68rem", color: "#a78bfa" }}>Agent #306 is currently exploring the world...</span>
+              <span style={{ ...mono, fontSize: "0.68rem", color: "#a78bfa" }}>Agent 306 is currently exploring the world...</span>
             </div>
           )}
 
@@ -455,7 +455,7 @@ export default function AgentStatus() {
               <p style={{ ...mono, fontSize: "0.7rem", color: "rgba(227,229,228,0.3)", margin: "0 0 1rem" }}>No explorations yet. Let her loose.</p>
               <button onClick={() => exploreMutation.mutate()} disabled={exploreMutation.isPending}
                 style={{ background: "#a78bfa", color: "#1a1b1c", border: "none", ...mono, fontSize: "0.68rem", fontWeight: 700, padding: "0.7rem 1.5rem", cursor: "pointer", textTransform: "uppercase" as const }}>
-                🌍 Send Agent #306 into the World
+                🌍 Send Agent 306 into the World
               </button>
             </div>
           ) : (

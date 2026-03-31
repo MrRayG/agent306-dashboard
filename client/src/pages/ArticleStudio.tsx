@@ -221,7 +221,7 @@ export default function ArticleStudio() {
           ARTICLE STUDIO — THE DEEP READ
         </h1>
         <p style={{ ...mono, fontSize: "0.7rem", color: "rgba(227,229,228,0.4)", margin: 0, lineHeight: 1.6 }}>
-          Agent #306 finds this week's most important AI article, performs a Deep Read across 70 years of AI history, and drafts a long-form piece for you to copy and post.
+          Agent 306 finds this week's most important AI article, performs a Deep Read across 70 years of AI history, and drafts a long-form piece for you to copy and post.
         </p>
       </div>
 
@@ -271,7 +271,7 @@ export default function ArticleStudio() {
             </p>
 
             <p style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.5)", marginBottom: "1rem", lineHeight: 1.7 }}>
-              Agent #306 scans global news for the most important AI story this week, performs a Deep Read cross-referencing 70 years of AI history, and drafts a long-form article. Or paste a specific URL below to Deep Read that article directly.
+              Agent 306 scans global news for the most important AI story this week, performs a Deep Read cross-referencing 70 years of AI history, and drafts a long-form article. Or paste a specific URL below to Deep Read that article directly.
             </p>
 
             {/* Optional URL */}
@@ -318,7 +318,7 @@ export default function ArticleStudio() {
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#f97316", animation: "apulse 1.2s infinite" }} />
                   <span style={{ ...mono, fontSize: "0.6rem", color: "rgba(249,115,22,0.5)" }}>
-                    Agent #306 is researching...
+                    Agent 306 is researching...
                   </span>
                 </div>
               )}
@@ -454,15 +454,15 @@ export default function ArticleStudio() {
               {/* Article body */}
               <div style={{ padding: "1.5rem 1.75rem", background: "rgba(10,11,12,0.7)", border: "1px solid rgba(227,229,228,0.06)", maxHeight: "55vh", overflowY: "auto" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "1.25rem", paddingBottom: "0.75rem", borderBottom: "1px solid rgba(249,115,22,0.12)" }}>
-                  <img src="https://api.normies.art/normie/306/image.png" alt="#306" style={{ width: 26, height: 26, imageRendering: "pixelated", borderRadius: 2 }} />
+                  <div style={{ width: 26, height: 26, borderRadius: 2, background: "rgba(249,115,22,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 700, color: "#f97316" }}>306</div>
                   <div>
-                    <p style={{ ...mono, fontSize: "0.58rem", color: "#f97316", margin: 0, fontWeight: 700 }}>Agent #306 — The Deep Read</p>
-                    <p style={{ ...mono, fontSize: "0.53rem", color: "rgba(227,229,228,0.3)", margin: 0 }}>agent306.eth · NORMIES TV</p>
+                    <p style={{ ...mono, fontSize: "0.58rem", color: "#f97316", margin: 0, fontWeight: 700 }}>Agent 306 — The Deep Read</p>
+                    <p style={{ ...mono, fontSize: "0.53rem", color: "rgba(227,229,228,0.3)", margin: 0 }}>agent306.eth · 306</p>
                   </div>
                 </div>
                 <ArticleBody body={article.body} />
                 <div style={{ marginTop: "1.5rem", paddingTop: "0.75rem", borderTop: "1px solid rgba(227,229,228,0.05)" }}>
-                  <p style={{ ...mono, fontSize: "0.55rem", color: "rgba(227,229,228,0.22)", margin: 0 }}>Agent #306 · NORMIES TV · agent306.eth</p>
+                  <p style={{ ...mono, fontSize: "0.55rem", color: "rgba(227,229,228,0.22)", margin: 0 }}>Agent 306 · agent306.eth</p>
                   <a href={article.sourceUrl} target="_blank" rel="noreferrer" style={{ ...mono, fontSize: "0.55rem", color: "rgba(249,115,22,0.35)", display: "block", marginTop: 3 }}>
                     Source: {article.sourceTitle}
                   </a>

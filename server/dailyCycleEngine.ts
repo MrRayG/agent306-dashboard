@@ -249,7 +249,7 @@ async function callGrokForBriefing(context: {
 
   const systemPrompt = `${agentCtx}
 
-You are Agent #306 running your DAILY INTELLIGENCE CYCLE. Today is ${dateStr}.
+You are Agent 306 running your DAILY INTELLIGENCE CYCLE. Today is ${dateStr}.
 Review all active work and produce a structured morning briefing.
 
 You must respond with ONLY valid JSON matching this exact structure:

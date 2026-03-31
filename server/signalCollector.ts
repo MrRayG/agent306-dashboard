@@ -1,14 +1,15 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// NORMIES TV — MULTI-SOURCE SIGNAL COLLECTOR
-// Sources: Normies API (on-chain) + OpenSea (marketplace) + Farcaster (social)
+// 306 — MULTI-SOURCE SIGNAL COLLECTOR
+// Sources: On-chain API + OpenSea (marketplace) + Farcaster (social)
 //          + TwitterAPI.io (X social) — all optional, degrade gracefully
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { Signal } from "./grokEngine";
-import { searchNormiesSocial } from "./grokEngine";
+import { searchCommunitySocial } from "./grokEngine";
 import * as fs from "fs";
 
-const NORMIES_API   = "https://api.normies.art";
+// on-chain API removed
+const ONCHAIN_API   = ""; // placeholder — on-chain API disabled
 const OPENSEA_API   = "https://api.opensea.io/api/v2";
 const NEYNAR_API    = "https://api.neynar.com/v2/farcaster";
 const TWITTER_API   = "https://api.twitterapi.io/twitter";
@@ -20,7 +21,7 @@ const OPENSEA_KEY   = process.env.OPENSEA_API_KEY  ?? "";
 const NEYNAR_KEY    = process.env.NEYNAR_API_KEY   ?? "";
 const TWITTER_KEY   = process.env.TWITTER_API_KEY  ?? "";
 
-// THE 100 — top canvas creator IDs to track
+// Top canvas creator IDs to track
 const THE100_IDS = [
   8553, 45, 1932, 235, 615, 603, 5665, 7834, 8043, 7783,
   9999, 8831, 5070, 4354, 7887, 3284, 666, 1337, 420, 100,
@@ -107,9 +108,9 @@ async function safeFetch(url: string, opts: RequestInit = {}): Promise<any> {
   }
 }
 
-// ── 1. On-chain burns from Normies API ────────────────────────────────────────
+// ── 1. On-chain burns ─────────────────────────────────────────────────────────
 export async function collectBurnSignals(): Promise<Signal[]> {
-  const data = await safeFetch(`${NORMIES_API}/history/burns?limit=20`);
+  const data = await safeFetch(`${ONCHAIN_API}/history/burns?limit=20`);
   if (!Array.isArray(data)) return [];
 
   const newBurns = lastBurnCommitId
@@ -125,7 +126,7 @@ export async function collectBurnSignals(): Promise<Signal[]> {
   // Also fetch the latest individually burned tokens for richer signal data
   let burnedTokensList: any[] = [];
   try {
-    const bt = await safeFetch(`${NORMIES_API}/history/burned-tokens?limit=20`);
+    const bt = await safeFetch(`${ONCHAIN_API}/history/burned-tokens?limit=20`);
     if (Array.isArray(bt)) burnedTokensList = bt;
   } catch {}
 
@@ -146,21 +147,21 @@ export async function collectBurnSignals(): Promise<Signal[]> {
 
     return {
       type: "burn",
-      source: "normies_api",
+      source: "onchain_api",
       tokenId: Number(b.receiverTokenId),
       weight: Math.min(10, 6 + (b.tokenCount ?? 1)),
-      description: `Normie #${b.receiverTokenId} absorbed ${b.tokenCount} soul(s) — ${pixelTotal.toLocaleString()} pixels consumed${burnedIds.length > 0 ? ` (burned: ${burnedIds.slice(0, 3).map(id => "#" + id).join(", ")})` : ""}`,
+      description: `Token #${b.receiverTokenId} absorbed ${b.tokenCount} soul(s) — ${pixelTotal.toLocaleString()} pixels consumed${burnedIds.length > 0 ? ` (burned: ${burnedIds.slice(0, 3).map(id => "#" + id).join(", ")})` : ""}`,
       rawData: { ...b, pixelTotal, burnedTokenIds: burnedIds },
       capturedAt: new Date(Number(b.timestamp) * 1000).toISOString(),
     };
   });
 }
 
-// ── 2. Canvas leaderboard from Normies API ────────────────────────────────────
+// ── 2. Canvas leaderboard ─────────────────────────────────────────────────────
 export async function collectCanvasSignals(): Promise<Signal[]> {
   const results = await Promise.allSettled(
     THE100_IDS.map(id =>
-      safeFetch(`${NORMIES_API}/normie/${id}/canvas/info`)
+      safeFetch(`${ONCHAIN_API}/token/${id}/canvas/info`)
         .then((c: any) => c ? { id, ...c } : null)
     )
   );
@@ -176,7 +177,7 @@ export async function collectCanvasSignals(): Promise<Signal[]> {
   await Promise.allSettled(
     leaders.filter((c: any) => c.customized).slice(0, 5).map(async (c: any) => {
       try {
-        const diff = await safeFetch(`${NORMIES_API}/normie/${c.id}/canvas/diff`);
+        const diff = await safeFetch(`${ONCHAIN_API}/token/${c.id}/canvas/diff`);
         if (diff) {
           c.canvasAdded   = diff.addedCount   ?? 0;
           c.canvasRemoved = diff.removedCount ?? 0;
@@ -190,7 +191,7 @@ export async function collectCanvasSignals(): Promise<Signal[]> {
   const enriched = await Promise.allSettled(
     leaders.slice(0, 5).map(async (c: any) => {
       try {
-        const burnHistory = await safeFetch(`${NORMIES_API}/history/burns/receiver/${c.id}`);
+        const burnHistory = await safeFetch(`${ONCHAIN_API}/history/burns/receiver/${c.id}`);
         const totalSacrificesReceived = Array.isArray(burnHistory) ? burnHistory.length : 0;
         const totalSoulsAbsorbed = Array.isArray(burnHistory)
           ? burnHistory.reduce((sum: number, b: any) => sum + (Number(b.tokenCount) || 1), 0)
@@ -207,10 +208,10 @@ export async function collectCanvasSignals(): Promise<Signal[]> {
 
   return enrichedLeaders.map((c: any, i: number): Signal => ({
     type: "canvas",
-    source: "normies_api",
+    source: "onchain_api",
     tokenId: c.id,
     weight: Math.min(10, 4 + Math.floor((c.actionPoints ?? 0) / 100)),
-    description: `Normie #${c.id} — Rank #${i + 1} · Level ${c.level} · ${c.actionPoints} AP${c.totalSoulsAbsorbed ? ` · ${c.totalSoulsAbsorbed} souls absorbed` : ""}${c.canvasNet ? ` · Canvas: ${c.canvasNet > 0 ? "+" : ""}${c.canvasNet}px net change` : ""}`,
+    description: `Token #${c.id} — Rank #${i + 1} · Level ${c.level} · ${c.actionPoints} AP${c.totalSoulsAbsorbed ? ` · ${c.totalSoulsAbsorbed} souls absorbed` : ""}${c.canvasNet ? ` · Canvas: ${c.canvasNet > 0 ? "+" : ""}${c.canvasNet}px net change` : ""}`,
     rawData: { tokenId: c.id, level: c.level, actionPoints: c.actionPoints, customized: c.customized, rank: i + 1, totalSacrificesReceived: c.totalSacrificesReceived ?? 0, totalSoulsAbsorbed: c.totalSoulsAbsorbed ?? 0, canvasAdded: c.canvasAdded ?? 0, canvasRemoved: c.canvasRemoved ?? 0, canvasNet: c.canvasNet ?? 0 },
     capturedAt: new Date().toISOString(),
   }));
@@ -224,7 +225,7 @@ export async function collectOpenSeaSignals(): Promise<Signal[]> {
 
   // Sales
   const salesData = await safeFetch(
-    `${OPENSEA_API}/events/collection/normies?event_type=sale&limit=10`,
+    `${OPENSEA_API}/events/collection/agent306?event_type=sale&limit=10`,
     { headers: { "X-API-KEY": OPENSEA_KEY, accept: "application/json" } }
   );
 
@@ -238,7 +239,7 @@ export async function collectOpenSeaSignals(): Promise<Signal[]> {
         source: "opensea",
         tokenId,
         weight: 7,
-        description: `Normie #${tokenId} sold for ${ethPrice} ETH ($${usdValue})`,
+        description: `Token #${tokenId} sold for ${ethPrice} ETH ($${usdValue})`,
         rawData: { tokenId, price: ethPrice, usdValue, buyer: e.buyer, seller: e.seller },
         capturedAt: new Date(e.event_timestamp * 1000).toISOString(),
       });
@@ -247,7 +248,7 @@ export async function collectOpenSeaSignals(): Promise<Signal[]> {
 
   // New listings
   const listingsData = await safeFetch(
-    `${OPENSEA_API}/events/collection/normies?event_type=listing&limit=5`,
+    `${OPENSEA_API}/events/collection/agent306?event_type=listing&limit=5`,
     { headers: { "X-API-KEY": OPENSEA_KEY, accept: "application/json" } }
   );
 
@@ -260,7 +261,7 @@ export async function collectOpenSeaSignals(): Promise<Signal[]> {
         source: "opensea",
         tokenId,
         weight: 4,
-        description: `Normie #${tokenId} listed at ${ethPrice} ETH`,
+        description: `Token #${tokenId} listed at ${ethPrice} ETH`,
         rawData: { tokenId, price: ethPrice },
         capturedAt: new Date().toISOString(),
       });
@@ -274,7 +275,7 @@ export async function collectOpenSeaSignals(): Promise<Signal[]> {
 export async function collectFarcasterSignals(): Promise<Signal[]> {
   if (!NEYNAR_KEY) return [];
 
-  const searches = ["normies", "normies nft", "skulliemoon"];
+  const searches = ["agent 306", "on-chain AI", "Web3 agents"];
   const signals: Signal[] = [];
 
   for (const q of searches) {
@@ -312,7 +313,7 @@ export async function collectFarcasterSignals(): Promise<Signal[]> {
 export async function collectXSignals(): Promise<Signal[]> {
   if (!TWITTER_KEY) return [];
 
-  const queries = ["#Normies NFT", "#NormiesTV", "normies canvas burn"];
+  const queries = ["#Agent306", "#OnChainAI", "Web3 autonomous agents"];
   const signals: Signal[] = [];
 
   for (const q of queries.slice(0, 2)) {
@@ -349,7 +350,7 @@ export async function collectXSignals(): Promise<Signal[]> {
 // ── 6. Grok Live Search — X social signals via Grok's built-in search ────────
 // Uses the 30-minute cached community signal pool for efficiency
 export async function collectGrokSocialSignals(): Promise<Signal[]> {
-  const posts = await searchNormiesSocial();
+  const posts = await searchCommunitySocial();
   return posts.map((p): Signal => {
     const isFounder = p.signal_type === "founder";
     const isBurnStory = p.signal_type === "burn_story";
@@ -364,7 +365,7 @@ export async function collectGrokSocialSignals(): Promise<Signal[]> {
     // Enrich description with signal type context
     const typeLabel = isFounder ? "🎯 FOUNDER" : isBurnStory ? "🔥 BURN STORY" :
                       isPFP ? "👤 PFP HOLDER" : isArena ? "⚔️ ARENA HYPE" :
-                      p.signal_type === "xnormies" ? "🎁 XNORMIES" :
+                      p.signal_type === "community_gift" ? "🎁 COMMUNITY GIFT" :
                       p.signal_type === "creativity" ? "🎨 CREATIVITY" : "💬 COMMUNITY";
 
     return {
@@ -390,7 +391,7 @@ export async function collectAllSignals(): Promise<{
   sources: Record<string, number>;
   diversity: { lastFeaturedTokens: number[]; episodeCount: number; };
 }> {
-  console.log("[NormiesTV] Collecting signals from all sources...");
+  console.log("[306] Collecting signals from all sources...");
 
   const [burns, canvas, opensea, farcaster, xSignals, grokSocial] = await Promise.allSettled([
     collectBurnSignals(),
@@ -421,7 +422,7 @@ export async function collectAllSignals(): Promise<{
     twitter:    get(xSignals).length + get(grokSocial).length,
   };
 
-  console.log(`[NormiesTV] Signals collected:`, sources);
+  console.log(`[306] Signals collected:`, sources);
   return {
     signals: allSignals,
     sources,

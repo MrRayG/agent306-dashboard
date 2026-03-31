@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// AGENT #306 — METACOGNITION ENGINE (The Mind)
+// AGENT 306 — METACOGNITION ENGINE (The Mind)
 //
 // Aggregation endpoint showing cognitive state at a glance: knowledge coverage,
 // reasoning quality, learning velocity, confidence calibration.

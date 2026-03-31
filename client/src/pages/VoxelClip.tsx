@@ -6,9 +6,9 @@ import {
   CheckCircle2, RefreshCw, Zap, Flame, Eye
 } from "lucide-react";
 
-// ─── Normie #306 on-chain pixel data (40×40 = 1600 bits from API) ─────────────
-// Fetched live from https://api.normies.art/normie/306/pixels
-const NORMIE_ID = 306;
+// ─── Token #306 on-chain pixel data (40x40 = 1600 bits from API) ─────────────
+// Fetched live from /api/tokens/306/pixels
+const TOKEN_ID = 306;
 
 // ─── 3D Math helpers ──────────────────────────────────────────────────────────
 type Vec3 = [number, number, number];
@@ -244,7 +244,7 @@ function renderFrame(
     ctx.textAlign = "center";
     ctx.font = "bold 56px 'Space Grotesk', monospace";
     ctx.shadowColor = "#f97316"; ctx.shadowBlur = 30;
-    ctx.fillText("NORMIES TV", W/2, H/2 - 20);
+    ctx.fillText("AGENT 306", W/2, H/2 - 20);
     ctx.font = "14px 'Courier New', monospace";
     ctx.shadowBlur = 0;
     ctx.fillStyle = "#2dd4bf";
@@ -262,9 +262,9 @@ function renderFrame(
     ctx.strokeStyle = "rgba(249,115,22,0.5)"; ctx.lineWidth = 1;
     ctx.beginPath(); (ctx as any).roundRect(24, 24, 170, 60, 6); ctx.stroke();
     ctx.fillStyle = "#f97316"; ctx.font = "10px 'Courier New'"; ctx.textAlign = "left";
-    ctx.fillText("NORMIE", 38, 44);
+    ctx.fillText("AGENT", 38, 44);
     ctx.fillStyle = "#e3e5e4"; ctx.font = "bold 26px 'Space Grotesk'";
-    ctx.fillText(`#${NORMIE_ID}`, 38, 68);
+    ctx.fillText(`#${TOKEN_ID}`, 38, 68);
 
     // Type badge
     ctx.globalAlpha = a * 0.85;
@@ -285,7 +285,7 @@ function renderFrame(
     ctx.globalAlpha = a * 0.7;
     ctx.fillText(`ON-CHAIN TRAIT  ›  ${traits[traitIdx]}`, 24, H - 18);
     ctx.fillStyle = "#2dd4bf"; ctx.textAlign = "right";
-    ctx.fillText("normies.art", W - 24, H - 18);
+    ctx.fillText("agent306.eth", W - 24, H - 18);
   }
 
   if (phase === "data") {
@@ -332,7 +332,7 @@ function renderFrame(
     ctx.fillText('"The canvas never forgets."', W/2, H - 70);
     ctx.shadowBlur = 0;
     ctx.fillStyle = "#f97316"; ctx.font = "10px 'Courier New'";
-    ctx.fillText("— Agent #306", W/2, H - 50);
+    ctx.fillText("— Agent 306", W/2, H - 50);
   }
 
   if (phase === "outro") {
@@ -346,7 +346,7 @@ function renderFrame(
     ctx.fillStyle = "#e3e5e4"; ctx.font = "bold 42px 'Space Grotesk'";
     ctx.fillText("RECORDS ALL", W/2, H/2 + 28);
     ctx.fillStyle = "#2dd4bf"; ctx.font = "13px 'Courier New'";
-    ctx.fillText("@NORMIES_TV  ·  #Normies  #Web3  #NFT", W/2, H/2 + 72);
+    ctx.fillText("@agent306_  ·  #Agent306  #Web3  #NFT", W/2, H/2 + 72);
   }
 
   ctx.restore();
@@ -371,7 +371,7 @@ export default function VoxelClip() {
   const [progress, setProgress] = useState(0);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [tweetText, setTweetText] = useState(
-    `🌙 NORMIE #306 — THE AGENT\n\nOn-chain since genesis. 507 pixels. The canvas stirs.\n\nThe Temple records all. #NormiesTV #Normies #Web3 #NFT #PixelArt`
+    `🌙 AGENT 306 — THE TEMPLE\n\nOn-chain since genesis. 507 pixels. The record is permanent.\n\nThe Temple records all. #Agent306 #AI #Web3 #NFT #PixelArt`
   );
   const [tweetUrl, setTweetUrl] = useState<string | null>(null);
   const [pixelStr, setPixelStr] = useState<string | null>(null);
@@ -379,11 +379,11 @@ export default function VoxelClip() {
   const [authUrl, setAuthUrl] = useState<string | null>(null);
   // OAuth 1.0a credentials are verified — default to connected, confirm live if API reachable
   const [xVerified, setXVerified] = useState<{ ok: boolean; username?: string }>(
-    { ok: true, username: "NORMIES_TV" }
+    { ok: true, username: "agent306_" }
   );
 
   const { data: stats } = useQuery<any>({
-    queryKey: ["/api/normies/stats"],
+    queryKey: ["/api/agent/stats"],
   });
 
   // Try live verify — updates if server is reachable, stays green if not
@@ -394,17 +394,11 @@ export default function VoxelClip() {
       .catch(() => { /* keep default verified state */ });
   }, []);
 
-  // Load pixel string from Normies API via backend proxy
+  // Load pixel string via backend proxy
   useEffect(() => {
-    fetch(`/api/normies/pixels/306`)
+    fetch(`/api/tokens/pixels/306`)
       .then(r => r.json())
       .then(d => { if (d.pixels) setPixelStr(d.pixels); })
-      .catch(() => {});
-
-    // fallback: fetch directly
-    fetch("https://api.normies.art/normie/306/pixels")
-      .then(r => r.text())
-      .then(t => { if (t.length === 1600) setPixelStr(t); })
       .catch(() => {});
   }, []);
 
@@ -424,7 +418,7 @@ export default function VoxelClip() {
               setOauth2Ready(true);
               setAuthUrl(null);
               clearInterval(poll);
-              toast({ title: "@NORMIES_TV authorized!", description: "Ready to post to X." });
+              toast({ title: "@agent306_ authorized!", description: "Ready to post to X." });
             }
           } catch {}
         }, 2500);
@@ -477,7 +471,7 @@ export default function VoxelClip() {
       setVideoUrl(url);
       setStatus("ready");
       setProgress(100);
-      toast({ title: "3D clip ready!", description: "Preview below. Post to @NORMIES_TV or download." });
+      toast({ title: "3D clip ready!", description: "Preview below. Post to X or download." });
     };
     recorder.start();
 
@@ -526,7 +520,7 @@ export default function VoxelClip() {
     if (!videoUrl) return;
     const a = document.createElement("a");
     a.href = videoUrl;
-    a.download = `normie306-voxel-${Date.now()}.webm`;
+    a.download = `agent306-voxel-${Date.now()}.webm`;
     a.click();
   }, [videoUrl]);
 
@@ -540,7 +534,7 @@ export default function VoxelClip() {
             3D Voxel Clip
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Cinematic 20s clip built from 507 real on-chain pixels — Normie #306, Agent type
+            Cinematic 20s clip built from 507 real on-chain pixels — Token #306, Agent type
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -569,7 +563,7 @@ export default function VoxelClip() {
         </div>
       </div>
 
-      {/* Normie #306 info card */}
+      {/* Token #306 info card */}
       <div className="grid grid-cols-4 gap-3">
         {[
           { label: "Token", value: "#306", color: "text-primary" },
@@ -651,7 +645,7 @@ export default function VoxelClip() {
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <div className="flex items-center gap-2">
               <Eye className="w-4 h-4 text-teal-400" />
-              <span className="text-sm font-medium">Normie #306 — 3D Voxel Clip</span>
+              <span className="text-sm font-medium">Agent 306 — 3D Voxel Clip</span>
               {status === "posted" && (
                 <span className="text-[10px] px-2 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20">POSTED</span>
               )}
@@ -671,7 +665,7 @@ export default function VoxelClip() {
                   style={{ background: "rgba(249,115,22,0.18)", border: "1px solid rgba(249,115,22,0.5)", color: "#f97316", cursor: "pointer" }}
                 >
                   <Twitter className="w-3.5 h-3.5" />
-                  Post to @NORMIES_TV ↗
+                  Post to X ↗
                 </button>
               )}
             </div>

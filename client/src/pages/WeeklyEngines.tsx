@@ -52,7 +52,7 @@ function PreviewBox({ content, onPost, posting }: { content: string; onPost: () 
           letterSpacing: "0.1em", cursor: posting ? "not-allowed" : "pointer",
         }}
       >
-        {posting ? "POSTING..." : "→ POST TO @NORMIES_TV"}
+        {posting ? "POSTING..." : "→ POST TO X"}
       </button>
     </div>
   );
@@ -164,8 +164,8 @@ export default function WeeklyEngines() {
         </div>
 
         <div style={{ fontSize: "11px", color: "rgba(227,229,228,0.5)", lineHeight: 1.6, marginBottom: "16px", borderLeft: "2px solid #f97316", paddingLeft: "12px" }}>
-          Agent #306 picks one co-creator each week and writes their story — not a stat dump, a human portrait.
-          Who they are. What they've built. The holder shares it. Their network finds NormiesTV.
+          Agent 306 picks one co-creator each week and writes their story — not a stat dump, a human portrait.
+          Who they are. What they've built. The holder shares it. Their network discovers us.
         </div>
 
         {spotlightResult ? (
@@ -216,7 +216,7 @@ export default function WeeklyEngines() {
 
         <div style={{ fontSize: "11px", color: "rgba(227,229,228,0.5)", lineHeight: 1.6, marginBottom: "16px", borderLeft: "2px solid #a78bfa", paddingLeft: "12px" }}>
           Every Sunday between now and May 15 is a chapter. Live rankings. Burn velocity. Who's climbing silently.
-          By Arena day, NormiesTV is the only place with the complete pre-Arena record.
+          By launch day, 306 is the only place with the complete pre-launch record.
         </div>
 
         {rs?.weeks?.length > 0 && (

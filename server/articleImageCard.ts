@@ -1,11 +1,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// NORMIES TV — ARTICLE IMAGE CARD GENERATOR
+// 306 — ARTICLE IMAGE CARD GENERATOR
 //
 // Generates a 1200×500 PNG (5:2 aspect ratio) for X Article header images.
-// Dark editorial aesthetic — Agent #306 branded.
+// Dark editorial aesthetic — Agent 306 branded.
 //
 // Layout:
-//   Left:  Agent #306 pixel art (token #306) + NORMIES TV branding
+//   Left:  Agent 306 pixel art (token #306) + 306 branding
 //   Right: Headline text, source citation, article metadata
 //   Top:   Orange accent bar + "THE DEEP READ" label
 //   Bottom: agent306.eth watermark
@@ -19,7 +19,7 @@ import * as https from "https";
 const W = 1200;
 const H = 500;  // 5:2 aspect ratio (1200/500 = 2.4 ≈ 5:2)
 
-// Palette — normies.art dark editorial
+// Palette — 306 dark editorial
 const BG_DEEP   = "#080909";
 const BG_PANEL  = "#0e0f10";
 const BG_MID    = "#111213";
@@ -29,16 +29,17 @@ const ORANGE_DIM = "rgba(249,115,22,0.15)";
 const DIM       = "rgba(227,229,228,0.25)";
 const DIMMER    = "rgba(227,229,228,0.12)";
 
-const CARD_DIR = "/tmp/normiestv_cards";
+const CARD_DIR = "/tmp/agent306_cards";
 
 function ensureCardDir() {
   if (!fs.existsSync(CARD_DIR)) fs.mkdirSync(CARD_DIR, { recursive: true });
 }
 
-// ── Fetch Agent #306 pixel string ─────────────────────────────────────────────
+// ── Fetch Agent 306 pixel string ─────────────────────────────────────────────
 async function fetchPixels(tokenId = 306): Promise<string | null> {
   return new Promise(resolve => {
-    const url = `https://api.normies.art/normie/${tokenId}/pixels`;
+    const url = ""; // API disabled
+    if (!url) return resolve(null);
     https.get(url, res => {
       let data = "";
       res.on("data", chunk => data += chunk);
@@ -114,7 +115,7 @@ export async function generateArticleCard(opts: {
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, W, H);
 
-    // ── Left panel (Agent #306 zone) ────────────────────────────────────────────
+    // ── Left panel (Agent 306 zone) ────────────────────────────────────────────
     const LEFT_W = 340;
     const leftGrad = ctx.createLinearGradient(0, 0, LEFT_W, 0);
     leftGrad.addColorStop(0, "rgba(249,115,22,0.08)");
@@ -135,9 +136,9 @@ export async function generateArticleCard(opts: {
     ctx.fillStyle = "rgba(249,115,22,0.7)";
     ctx.letterSpacing = "3px";
     ctx.fillText("── THE DEEP READ ──", 20, 32);
-    ctx.fillText("NORMIES TV", W - 130, 32);
+    ctx.fillText("306", W - 130, 32);
 
-    // ── Agent #306 pixel art ────────────────────────────────────────────────────
+    // ── Agent 306 pixel art ────────────────────────────────────────────────────
     const pixels = await fetchPixels(306);
     if (pixels) {
       const pixelSize = 6;
@@ -177,7 +178,7 @@ export async function generateArticleCard(opts: {
 
     ctx.font = "9px 'Courier New'";
     ctx.fillStyle = "rgba(227,229,228,0.2)";
-    ctx.fillText("SOVEREIGN AI · NORMIES TV", LEFT_W / 2, idY + 46);
+    ctx.fillText("SOVEREIGN AI · 306", LEFT_W / 2, idY + 46);
     ctx.textAlign = "left";
 
     // ── Right content zone ──────────────────────────────────────────────────────

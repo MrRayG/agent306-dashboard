@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// normie3d.ts — 3D bust + full-body pixel art engine for NormiesTV
-// Takes real on-chain 40×40 pixel data and builds geometry for cinematic video
-// Color palette: normies.art spec (#48494b on #e3e5e4)
+// normie3d.ts — 3D bust + full-body pixel art engine
+// Takes 40×40 pixel data and builds geometry for cinematic video
+// Color palette: (#48494b on #e3e5e4)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const NORMIES_PALETTE = {

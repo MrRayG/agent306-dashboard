@@ -409,7 +409,7 @@ function RoadAheadRoom({ d }: { d: HouseData["roadAhead"] }) {
   const done = items.filter(i => i.done).length;
   return (
     <RoomCard icon="🗺" title="Road Ahead">
-      <Row label="Days to Arena" value={d?.daysToArena ?? "—"} color={YELLOW} />
+      <Row label="Days to Launch" value={d?.daysToArena ?? "—"} color={YELLOW} />
       <Row label="Progress" value={`${done}/${items.length}`} color={GREEN} />
       <div style={{ display: "flex", flexDirection: "column" as const, gap: 2, marginTop: 2 }}>
         {items.slice(0, 4).map((item, i) => (
@@ -626,7 +626,7 @@ function TopicModal({ topic, onClose }: { topic: ResearchTopic; onClose: () => v
           <div style={{ background: `${RED}15`, border: `1px solid ${RED}40`, padding: "0.75rem", marginBottom: "0.75rem" }}>
             <p style={{ ...mono, fontSize: "0.52rem", color: RED, textTransform: "uppercase" as const, letterSpacing: "0.1em", marginBottom: 4, fontWeight: 700 }}>Agent is blocked — needs your input</p>
             <p style={{ ...mono, fontSize: "0.62rem", color: "rgba(227,229,228,0.7)", margin: "0 0 8px", lineHeight: 1.5 }}>
-              {topic.needsInputReason || "Agent #306 has exhausted all available sources and needs additional information."}
+              {topic.needsInputReason || "Agent 306 has exhausted all available sources and needs additional information."}
             </p>
             {!showInput ? (
               <div style={{ display: "flex", gap: 8 }}>
@@ -1019,7 +1019,7 @@ function ResearchQueueTab({ topics, goals, refetch }: { topics: ResearchTopic[];
   const runMutation = useMutation({
     mutationFn: (id: string) => apiRequest("POST", `/api/research/run/${id}`, {}).then(r => r.json()),
     onSuccess: (_, id) => {
-      toast({ title: "Research cycle started", description: "Agent #306 is on it." });
+      toast({ title: "Research cycle started", description: "Agent 306 is on it." });
       refetch();
     },
     onError: (e: any) => toast({ title: "Failed to start", description: e.message, variant: "destructive" }),
@@ -1132,7 +1132,7 @@ function ResearchQueueTab({ topics, goals, refetch }: { topics: ResearchTopic[];
         <div style={{ background: "rgba(249,115,22,0.04)", border: "1px solid rgba(249,115,22,0.18)", padding: "1rem", marginBottom: "1rem", display: "flex", flexDirection: "column" as const, gap: 8 }}>
           <div>
             <Label>Topic</Label>
-            <Input value={form.topic} onChange={v => setForm(f => ({ ...f, topic: v }))} placeholder="What should Agent #306 research?" />
+            <Input value={form.topic} onChange={v => setForm(f => ({ ...f, topic: v }))} placeholder="What should Agent 306 research?" />
           </div>
           <div>
             <Label>Description</Label>
@@ -2015,7 +2015,7 @@ function GoalsTab({ goals, stats, topics, refetch }: {
     mutationFn: () => apiRequest("POST", "/api/goals/generate", {}),
     onSuccess: (data: any) => {
       refetch();
-      toast({ title: `${data.count} goals generated`, description: "Agent #306 set her own development goals." });
+      toast({ title: `${data.count} goals generated`, description: "Agent 306 set her own development goals." });
     },
     onError: () => toast({ title: "Error generating goals", variant: "destructive" }),
   });
@@ -2242,7 +2242,7 @@ function GoalsTab({ goals, stats, topics, refetch }: {
         <div style={{ textAlign: "center" as const, padding: "2.5rem", color: DIM }}>
           <p style={{ ...mono, fontSize: "0.6rem", marginBottom: 8 }}>
             {goals.length === 0
-              ? "No goals set yet. Click \"Auto-Generate Goals\" to have Agent #306 set her own, or add one manually."
+              ? "No goals set yet. Click \"Auto-Generate Goals\" to have Agent 306 set her own, or add one manually."
               : "No goals match this filter."}
           </p>
         </div>
@@ -2532,7 +2532,7 @@ function GoalsTab({ goals, stats, topics, refetch }: {
 
                     {/* MrRayG note input */}
                     <div style={{ marginBottom: "0.85rem" }}>
-                      <Label>Leave a note for Agent #306</Label>
+                      <Label>Leave a note for Agent 306</Label>
                       <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
                         <div style={{ flex: 1 }}>
                           <Input
@@ -3135,7 +3135,7 @@ export default function AgentHQ() {
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
             <span style={{ ...mono, fontSize: "0.52rem", color: "rgba(249,115,22,0.5)", textTransform: "uppercase" as const, letterSpacing: "0.2em" }}>
-              Agent #306
+              Agent 306
             </span>
             <span style={{ ...mono, fontSize: "0.45rem", color: "rgba(227,229,228,0.2)" }}>•</span>
             <span style={{ ...mono, fontSize: "0.52rem", color: "rgba(227,229,228,0.25)", textTransform: "uppercase" as const, letterSpacing: "0.15em" }}>

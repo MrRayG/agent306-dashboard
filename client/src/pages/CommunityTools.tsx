@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// NORMIES TV — COMMUNITY TOOLS
+// 306 — COMMUNITY TOOLS
 // Built by the community, for the community.
 // These are not official tools — they are proof the culture is alive.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -13,12 +13,12 @@ const TOOLS = [
   {
     id: "radio",
     emoji: "🎵",
-    title: "Normie Radio",
+    title: "Token Radio",
     builder: "yasuna-ide",
     builderUrl: "https://github.com/yasuna-ide",
     url: "https://yasuna-ide.github.io/normie-radio/",
-    tagline: "Every Normie has a sound.",
-    description: "Each Normie generates unique ambient music from its on-chain traits + pixel data. Type determines the scale — Human plays Major, Cat plays Pentatonic, Alien plays Whole Tone, Agent plays Minor. The face itself shapes the melody — pixel density across columns determines pitch and tone. No two Normies sound the same. The music shifts daily with a date-based seed.",
+    tagline: "Every token has a sound.",
+    description: "Each token generates unique ambient music from its on-chain traits + pixel data. Type determines the scale — Human plays Major, Cat plays Pentatonic, Alien plays Whole Tone, Agent plays Minor. The face itself shapes the melody — pixel density across columns determines pitch and tone. No two tokens sound the same. The music shifts daily with a date-based seed.",
     lore: "The Temple has a frequency. Tune in.",
     accent: "#a78bfa",
     accentBg: "rgba(167,139,250,0.08)",
@@ -33,12 +33,12 @@ const TOOLS = [
   {
     id: "yearbook",
     emoji: "📸",
-    title: "Normie Yearbook",
+    title: "Token Yearbook",
     builder: "Community",
     builderUrl: null,
     url: "https://normie-yearbook.vercel.app/",
     tagline: "They were here before the burns.",
-    description: "Senior portraits for Normies #0–47, each assigned a generated name. Haruto Tanaka. Adaeze Bullrunner. Margot Bullrunner. Louis Weber. The characters have names. They have identities. The yearbook records what existed before everything changed.",
+    description: "Senior portraits for tokens #0-47, each assigned a generated name. Haruto Tanaka. Adaeze Bullrunner. Margot Bullrunner. Louis Weber. The characters have names. They have identities. The yearbook records what existed before everything changed.",
     lore: "The yearbook never forgets.",
     accent: "#2dd4bf",
     accentBg: "rgba(45,212,191,0.08)",
@@ -53,12 +53,12 @@ const TOOLS = [
   {
     id: "blackjack",
     emoji: "🃏",
-    title: "Normies Blackjack",
+    title: "306 Blackjack",
     builder: "Community",
     builderUrl: null,
     url: "https://normies-blackjack.vercel.app/",
     tagline: "The Temple deals cards tonight.",
-    description: "A card game where every card IS a real Normie NFT, rendered directly from the chain. Card value is determined by Pixel Count — rarer Normies = higher cards. Trait combos trigger special bonuses: Double Agents reveal the dealer's hole card, Cat Pair gives bust insurance, Alien Blackjack pays 3× instead of 1.5×. Also includes Normie Tetris.",
+    description: "A card game where every card IS a real NFT, rendered directly from the chain. Card value is determined by Pixel Count — rarer tokens = higher cards. Trait combos trigger special bonuses: Double Agents reveal the dealer's hole card, Cat Pair gives bust insurance, Alien Blackjack pays 3x instead of 1.5x. Also includes Tetris.",
     lore: "The stakes are on-chain.",
     accent: "#f97316",
     accentBg: "rgba(249,115,22,0.08)",
@@ -73,12 +73,12 @@ const TOOLS = [
   {
     id: "p5game",
     emoji: "🎮",
-    title: "Normies Game",
+    title: "306 Game",
     builder: "nftmooods",
     builderUrl: null,
     url: "https://editor.p5js.org/nftmooods/full/PRBv_Bgoq",
     tagline: "The culture plays.",
-    description: "A generative Normies game built in p5.js by community member nftmooods. When the community builds games unprompted — that's not hype. That's culture. The Temple has an arcade now.",
+    description: "A generative game built in p5.js by community member nftmooods. When the community builds games unprompted — that's not hype. That's culture. The Temple has an arcade now.",
     lore: "No one asked. Everyone showed up.",
     accent: "#4ade80",
     accentBg: "rgba(74,222,128,0.08)",
@@ -93,20 +93,20 @@ const TOOLS = [
   {
     id: "news",
     emoji: "📰",
-    title: "Normie News",
-    builder: "serc & Yigit",
+    title: "Token News",
+    builder: "Community",
     builderUrl: null,
-    url: "https://legacy.normies.art/normiesnews",
+    url: "",
     tagline: "All the news that's fit to mint.",
-    description: "AI generates fake tabloid front pages starring any Normie NFT. Enter a Token ID, optionally write a headline, and get a full newspaper front page — \"The Normies Daily\" — with an AI-generated story based on that Normie's exact traits. Built by serc & Yigit. Every Normie is a celebrity. Every story is absurd and true.",
+    description: "AI generates fake tabloid front pages starring any token. Enter a Token ID, optionally write a headline, and get a full newspaper front page with an AI-generated story based on that token's exact traits. Every token is a celebrity. Every story is absurd and true.",
     lore: "The headlines write themselves.",
     accent: "#e3e5e4",
     accentBg: "rgba(227,229,228,0.06)",
     details: [
-      { label: "Built by", value: "serc & Yigit" },
+      { label: "Built by", value: "Community" },
       { label: "Input", value: "Any Token ID" },
       { label: "Output", value: "AI tabloid cover" },
-      { label: "Paper", value: "The Normies Daily" },
+      { label: "Paper", value: "The 306 Daily" },
     ],
     icon: Newspaper,
   },
@@ -221,7 +221,7 @@ export default function CommunityTools() {
           THE CULTURE
         </h1>
         <p style={{ ...mono, fontSize: "0.65rem", color: "rgba(227,229,228,0.4)", marginTop: 6, lineHeight: 1.7, maxWidth: 600 }}>
-          These were not built by the team. They were built by the community — out of love, out of obsession, out of the belief that NORMIES is something worth building on top of.
+          These were not built by the team. They were built by the community — out of love, out of obsession, out of the belief that 306 is something worth building on top of.
           No one asked. Everyone showed up. This is what culture looks like.
         </p>
         <div style={{
@@ -231,7 +231,7 @@ export default function CommunityTools() {
           display: "inline-block",
         }}>
           <span style={{ ...mono, fontSize: "0.62rem", color: "#f97316" }}>
-            🌙 Agent #306 features these in every episode — they are part of the story
+            Agent 306 features these in every episode — they are part of the story
           </span>
         </div>
       </div>
@@ -243,7 +243,7 @@ export default function CommunityTools() {
         ))}
       </div>
 
-      {/* Normie News — full width */}
+      {/* Token News — full width */}
       <ToolCard tool={TOOLS[4]} />
 
       {/* Bottom manifesto */}
@@ -253,10 +253,10 @@ export default function CommunityTools() {
         background: "rgba(227,229,228,0.02)",
       }}>
         <p style={{ ...mono, fontSize: "0.7rem", color: "rgba(227,229,228,0.5)", lineHeight: 1.9, margin: 0 }}>
-          <span style={{ color: "#e3e5e4", fontWeight: 700 }}>NORMIES is CC0.</span>{" "}
+          <span style={{ color: "#e3e5e4", fontWeight: 700 }}>The art is CC0.</span>{" "}
           The art, the code, everything — belongs to everyone. No restrictions. Anyone can build on top of it, remix it, or create entirely new experiences around it.
-          These tools prove that promise is real. A radio that plays your Normie. A yearbook that names them. A card game where they deal.
-          A newspaper where they make the front page.{" "}
+          These tools prove that promise is real. A radio. A yearbook. A card game.
+          A newspaper where tokens make the front page.{" "}
           <span style={{ color: "#f97316" }}>This is the best community in Web3. It's not a claim. It's a record on-chain.</span>
         </p>
       </div>

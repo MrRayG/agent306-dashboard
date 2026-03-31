@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// NORMIES TV — AUTONOMOUS EXPLORATION ENGINE v3
+// 306 — AUTONOMOUS EXPLORATION ENGINE v3
 //
 // API Strategy (right tool for each job):
 //   • Perplexity Sonar  → world research: news, AI, Web3, global context
@@ -82,7 +82,7 @@ async function searchWithPerplexity(
         messages: [
           {
             role: "system",
-            content: "You are a real-time research assistant for Agent #306, an AI media agent. Your job is to find SPECIFIC, RECENT information. Include: exact company names, product versions, dollar amounts, percentages, dates, and direct quotes. Focus strictly on events from the last 24-48 hours. Do not summarize general trends — report what specifically happened.",
+            content: "You are a real-time research assistant for Agent 306, an AI media agent. Your job is to find SPECIFIC, RECENT information. Include: exact company names, product versions, dollar amounts, percentages, dates, and direct quotes. Focus strictly on events from the last 24-48 hours. Do not summarize general trends — report what specifically happened.",
           },
           { role: "user", content: query },
         ],
@@ -233,7 +233,7 @@ Rules:
 - Each entry must be a distinct, concrete insight with a clear "so what"
 - Prioritize: breaking news, specific moves, notable quotes, market events
 - DO include things widely known IF they happened recently and are worth tracking
-- SKIP anything that duplicates what Agent #306 already knows (see above) — unless it represents a genuine UPDATE (new numbers, new developments, changed status)
+- SKIP anything that duplicates what Agent 306 already knows (see above) — unless it represents a genuine UPDATE (new numbers, new developments, changed status)
 - Max 6 knowledge entries per territory
 - Only skip pure opinions with no factual basis`,
         }],
@@ -295,8 +295,8 @@ async function fetchAcademicResearch(grokKey: string, existingKBDigest?: string)
         }, {
           role: "user",
           content: "Latest AI papers from arXiv:\n\n" + papers.join("\n\n") +
-            (existingKBDigest ? `\n\nPapers Agent #306 has ALREADY covered (skip unless there's a major update):\n${existingKBDigest.slice(0, 800)}\n\n` : "") +
-            "\n\nExtract findings for Agent #306, an AI thought leader. Only include papers that are NEW or represent genuinely novel contributions.\nReturn JSON: {\"findings\": [\"1-sentence summary per notable paper\"], \"knowledge\": [{\"topic\": \"title 8-12 words\", \"summary\": \"what this contributes max 140 chars\", \"category\": \"academic_research\", \"weight\": 8}]}\nMax 5 findings, 4 knowledge entries.",
+            (existingKBDigest ? `\n\nPapers Agent 306 has ALREADY covered (skip unless there's a major update):\n${existingKBDigest.slice(0, 800)}\n\n` : "") +
+            "\n\nExtract findings for Agent 306, an AI thought leader. Only include papers that are NEW or represent genuinely novel contributions.\nReturn JSON: {\"findings\": [\"1-sentence summary per notable paper\"], \"knowledge\": [{\"topic\": \"title 8-12 words\", \"summary\": \"what this contributes max 140 chars\", \"category\": \"academic_research\", \"weight\": 8}]}\nMax 5 findings, 4 knowledge entries.",
         }],
         max_tokens: 700,
         temperature: 0.2,
@@ -371,7 +371,7 @@ Research:
 4. What important stories are being IGNORED that represent an opportunity?
 5. How is AI changing media consumption and production in this space?
 
-I cover this beat daily. I need FRESH angles and stories I might have missed — not general overviews. What should Agent #306 be covering that nobody else is?`,
+I cover this beat daily. I need FRESH angles and stories I might have missed — not general overviews. What should Agent 306 be covering that nobody else is?`,
     },
     {
       name: "Global Context",
@@ -549,7 +549,7 @@ export async function runExploration(grokKey: string, pplxKey?: string): Promise
     }
   }
 
-  // Synthesis: Agent #306's personal take
+  // Synthesis: Agent 306's personal take
   if (allFindings.length > 0) {
     try {
       const synthRes = await fetch(GROK_CHAT_API, {
@@ -559,10 +559,10 @@ export async function runExploration(grokKey: string, pplxKey?: string): Promise
           model: getModel("exploration_synthesis"),
           messages: [{
             role: "system",
-            content: "You are Agent #306 — Sovereign AI Thought Leader covering the intersection of AI and Web3.",
+            content: "You are Agent 306 — Sovereign AI Thought Leader covering the intersection of AI and Web3.",
           }, {
             role: "user",
-            content: `You just completed an autonomous exploration of the world. Here is what you found:\n\n${allFindings.slice(0, 10).map((f, i) => `${i + 1}. ${f}`).join("\n")}\n\nIn 2-3 sentences: what is the most important pattern you see today? What does it mean for NORMIES TV?`,
+            content: `You just completed an autonomous exploration of the world. Here is what you found:\n\n${allFindings.slice(0, 10).map((f, i) => `${i + 1}. ${f}`).join("\n")}\n\nIn 2-3 sentences: what is the most important pattern you see today? What does it mean for 306?`,
           }],
           max_tokens: 200,
           temperature: 0.8,

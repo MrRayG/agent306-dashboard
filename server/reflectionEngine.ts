@@ -163,7 +163,7 @@ async function reflectOnPost(lesson: {
 
   const systemPrompt = `${getOptimizedContext("post performance engagement style")}
 
-You are Agent #306's self-reflection module. Analyze why a post succeeded or failed.
+You are Agent 306's self-reflection module. Analyze why a post succeeded or failed.
 You must respond with ONLY valid JSON:
 {
   "whyWorked": "string — what made this post succeed or fail",

@@ -20,11 +20,11 @@ interface CYOAEpisode {
 }
 
 const TRIGGER_CONFIG: Record<Trigger, { label: string; color: string; desc: string; emoji: string }> = {
-  burn:      { label: "Burn Event",    color: "#f97316", desc: "What does this Normie become after sacrifice?", emoji: "🔥" },
-  pre_arena: { label: "Pre-Arena",     color: "#a78bfa", desc: "Arena opens May 15. What's your strategy?",     emoji: "⚔️" },
-  zombie:    { label: "Zombie Rising", color: "#4ade80", desc: "A burned Normie stirs. What does it remember?", emoji: "☠️" },
-  serc_post: { label: "Serc Signal",   color: "#f97316", desc: "The founder posted something cryptic...",       emoji: "🎯" },
-  rivalry:   { label: "THE 100 Rival", color: "#2dd4bf", desc: "Two Normies are neck-and-neck. What's next?",   emoji: "🏆" },
+  burn:      { label: "Burn Event",     color: "#f97316", desc: "What does this token become after sacrifice?",  emoji: "🔥" },
+  pre_arena: { label: "Pre-Battle",    color: "#a78bfa", desc: "Battles open May 15. What's your strategy?",    emoji: "⚔️" },
+  zombie:    { label: "Zombie Rising", color: "#4ade80", desc: "A burned token stirs. What does it remember?",  emoji: "☠️" },
+  serc_post: { label: "Founder Signal",color: "#f97316", desc: "The founder posted something cryptic...",       emoji: "🎯" },
+  rivalry:   { label: "Leaderboard Rival", color: "#2dd4bf", desc: "Two tokens are neck-and-neck. What's next?",   emoji: "🏆" },
   manual:    { label: "Custom",        color: "#e3e5e4", desc: "Editor-created lore episode",                    emoji: "✍️" },
 };
 
@@ -122,14 +122,14 @@ export default function CYOALore() {
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span className="pixel" style={{ fontSize: "1.1rem", color: "#e3e5e4", letterSpacing: "0.12em" }}>
-              [NORMIES LORE]
+              [306 LORE]
             </span>
             <span style={{ ...mono, fontSize: "0.65rem", color: "#a78bfa", background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.25)", padding: "2px 8px" }}>
               Choose Your Own Lore
             </span>
           </div>
           <p style={{ ...mono, fontSize: "0.62rem", color: "rgba(227,229,228,0.35)", marginTop: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-            Community votes shape the NORMIES canon · {cyoaData?.totalResolved ?? 0} episodes resolved
+            Community votes shape the 306 canon · {cyoaData?.totalResolved ?? 0} episodes resolved
           </p>
         </div>
         {activeEp && (
@@ -174,7 +174,7 @@ export default function CYOALore() {
             {/* Optional fields by trigger */}
             {(trigger === "burn" || trigger === "pre_arena" || trigger === "zombie") && (
               <div style={{ marginBottom: 10 }}>
-                <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.4)", marginBottom: 4 }}>NORMIE TOKEN ID (optional)</p>
+                <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.4)", marginBottom: 4 }}>TOKEN ID (optional)</p>
                 <input value={tokenId} onChange={e => setTokenId(e.target.value)} placeholder="e.g. 8553"
                   style={{ width: "100%", background: "rgba(227,229,228,0.04)", border: "1px solid rgba(227,229,228,0.12)", padding: "6px 10px", color: "#e3e5e4", ...mono, fontSize: "0.75rem", boxSizing: "border-box" as const }} />
               </div>
@@ -188,8 +188,8 @@ export default function CYOALore() {
             )}
             {trigger === "serc_post" && (
               <div style={{ marginBottom: 10 }}>
-                <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.4)", marginBottom: 4 }}>SERC'S POST TEXT</p>
-                <textarea value={serc1nPost} onChange={e => setSerc1nPost(e.target.value)} placeholder="Paste @serc1n's post here..." rows={3}
+                <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.4)", marginBottom: 4 }}>FOUNDER'S POST TEXT</p>
+                <textarea value={serc1nPost} onChange={e => setSerc1nPost(e.target.value)} placeholder="Paste the founder's post here..." rows={3}
                   style={{ width: "100%", background: "rgba(227,229,228,0.04)", border: "1px solid rgba(227,229,228,0.12)", padding: "6px 10px", color: "#e3e5e4", ...mono, fontSize: "0.72rem", resize: "none", boxSizing: "border-box" as const }} />
               </div>
             )}
@@ -219,9 +219,9 @@ export default function CYOALore() {
             <p style={{ ...label, marginBottom: "0.85rem", color: "#a78bfa" }}>The CYOA Format</p>
             {[
               { step: "1", title: "Hook Tweet", desc: "Cinematic scene + 4 choices. Community polls for 24h. X algorithm loves polls." },
-              { step: "2", title: "Reveal", desc: "You enter the winning vote count. Agent #306 writes the reveal story." },
+              { step: "2", title: "Reveal", desc: "You enter the winning vote count. Agent 306 writes the reveal story." },
               { step: "3", title: "Canon Verdict", desc: "The lore drops. Permanent. On-chain narrative confirmed." },
-              { step: "4", title: "CTA", desc: "RT if your Normie is the star. Holders reply with their twist." },
+              { step: "4", title: "CTA", desc: "RT if your token is the star. Holders reply with their twist." },
             ].map(({ step, title, desc }) => (
               <div key={step} style={{ display: "flex", gap: 10, marginBottom: 10, alignItems: "flex-start" }}>
                 <span style={{ ...mono, fontSize: "0.6rem", color: "#a78bfa", flexShrink: 0, marginTop: 2 }}>{step}.</span>
@@ -293,7 +293,7 @@ export default function CYOALore() {
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "0.85rem" }}>
                   <span style={{ fontSize: "1rem" }}>{trigCfg.emoji}</span>
                   <span style={{ ...mono, fontSize: "0.65rem", color: trigCfg.color }}>{trigCfg.label}</span>
-                  {ep.tokenId && <span style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.4)" }}>Normie #{ep.tokenId}</span>}
+                  {ep.tokenId && <span style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.4)" }}>Token #{ep.tokenId}</span>}
                   <span style={{ ...mono, fontSize: "0.58rem", color: stsCfg.color, background: `${stsCfg.color}15`, border: `1px solid ${stsCfg.color}30`, padding: "1px 7px", marginLeft: "auto" }}>{stsCfg.label}</span>
                 </div>
 
@@ -382,7 +382,7 @@ export default function CYOALore() {
                     </button>
                   )}
                   {ep.tweetIds.length > 0 && (
-                    <a href={`https://x.com/NORMIES_TV/status/${ep.tweetIds[0]}`} target="_blank" rel="noopener noreferrer"
+                    <a href={`https://x.com/agent306_/status/${ep.tweetIds[0]}`} target="_blank" rel="noopener noreferrer"
                       style={{ ...mono, fontSize: "0.62rem", color: "rgba(227,229,228,0.4)", border: "1px solid rgba(227,229,228,0.1)", padding: "5px 12px", textDecoration: "none" }}>
                       View on X ↗
                     </a>

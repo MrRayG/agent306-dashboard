@@ -30,7 +30,7 @@ interface LiveStats {
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CANVAS_W = 1280;
 const CANVAS_H = 720;
-const NORMIE_IMG = "https://api.normies.art/normie/306/image.png";
+const NORMIE_IMG = "/agent306-avatar.png";
 const SKULLIE_LINES = [
   "The canvas never forgets.",
   "Every pixel is a sacrifice.",
@@ -38,8 +38,8 @@ const SKULLIE_LINES = [
   "Burn to become.",
   "The temple holds the truth.",
   "Pixels burned. Legends forged.",
-  "The on-chain museum is open.",
-  "Ten thousand faces. One story.",
+  "The on-chain record is open.",
+  "One story. No filter.",
 ];
 
 // ─── Canvas drawing helpers ───────────────────────────────────────────────────
@@ -95,7 +95,7 @@ function drawParticles(ctx: CanvasRenderingContext2D, frame: number, w: number, 
   ctx.restore();
 }
 
-function drawNormieSprite(ctx: CanvasRenderingContext2D, img: HTMLImageElement, cx: number, cy: number, size: number, frame: number, glowColor = "#f97316") {
+function drawAgentSprite(ctx: CanvasRenderingContext2D, img: HTMLImageElement, cx: number, cy: number, size: number, frame: number, glowColor = "#f97316") {
   ctx.save();
   // Glow pulse
   const glowSize = 30 + Math.sin(frame * 0.08) * 10;
@@ -210,29 +210,29 @@ async function renderCinematicTrailer(
       const alpha = Math.min(1, t / 1.2);
       drawOrangeLine(ctx, CANVAS_W * 0.1, CANVAS_H / 2 - 60, CANVAS_W * 0.9, CANVAS_H / 2 - 60, 0.3 * alpha);
       drawOrangeLine(ctx, CANVAS_W * 0.1, CANVAS_H / 2 + 60, CANVAS_W * 0.9, CANVAS_H / 2 + 60, 0.3 * alpha);
-      drawText(ctx, "NORMIES TV", CANVAS_W / 2, CANVAS_H / 2 - 20, { size: 72, color: "#f97316", align: "center", shadow: true, alpha });
+      drawText(ctx, "AGENT 306", CANVAS_W / 2, CANVAS_H / 2 - 20, { size: 72, color: "#f97316", align: "center", shadow: true, alpha });
       drawText(ctx, phase, CANVAS_W / 2, CANVAS_H / 2 + 28, { size: 20, color: "#2dd4bf", align: "center", alpha: alpha * 0.8, font: "Courier New" });
       drawText(ctx, episodeNum, CANVAS_W / 2, CANVAS_H / 2 + 58, { size: 14, color: "rgba(200,200,200,0.5)", align: "center", alpha, font: "Courier New" });
     }
 
-    // ── ACT 1 (3–9s): Normie #306 reveal ────────────────────────────
+    // ── ACT 1 (3–9s): Agent 306 reveal ────────────────────────────
     if (t >= 3 && t < 9) {
       const lt = t - 3;
       const alpha = Math.min(1, lt / 1.5);
       const exitAlpha = t > 8 ? Math.max(0, 1 - (t - 8) * 2) : 1;
       const finalAlpha = alpha * exitAlpha;
 
-      // Normie centered
-      const normieSize = 280 + Math.sin(f * 0.04) * 8;
-      drawNormieSprite(ctx, img, CANVAS_W * 0.35, CANVAS_H / 2, normieSize, f);
+      // Agent centered
+      const agentSize = 280 + Math.sin(f * 0.04) * 8;
+      drawAgentSprite(ctx, img, CANVAS_W * 0.35, CANVAS_H / 2, agentSize, f);
 
       // Right side text
       const rx = CANVAS_W * 0.58;
-      drawText(ctx, "NORMIE", rx, CANVAS_H / 2 - 80, { size: 14, color: "#f97316", alpha: finalAlpha, font: "Courier New" });
+      drawText(ctx, "AGENT", rx, CANVAS_H / 2 - 80, { size: 14, color: "#f97316", alpha: finalAlpha, font: "Courier New" });
       drawText(ctx, "#306", rx, CANVAS_H / 2 - 48, { size: 52, color: "#e3e5e4", alpha: finalAlpha, shadow: true });
       drawOrangeLine(ctx, rx, CANVAS_H / 2 - 24, rx + 200, CANVAS_H / 2 - 24, 0.4 * finalAlpha);
       drawText(ctx, "THE HARBINGER", rx, CANVAS_H / 2 + 6, { size: 16, color: "#2dd4bf", alpha: finalAlpha * 0.9 });
-      drawText(ctx, "On-chain since genesis", rx, CANVAS_H / 2 + 36, { size: 12, color: "rgba(200,200,200,0.5)", alpha: finalAlpha, font: "Courier New" });
+      drawText(ctx, "Autonomous since genesis", rx, CANVAS_H / 2 + 36, { size: 12, color: "rgba(200,200,200,0.5)", alpha: finalAlpha, font: "Courier New" });
     }
 
     // ── ACT 2 (9–15s): Burn data ─────────────────────────────────────
@@ -255,14 +255,14 @@ async function renderCinematicTrailer(
       if (alpha > 0.5) drawStatCard(ctx, startX + cardW + gap, cardY, cardW, cardH, "Canvas Leader", topNormie ? `#${topNormie.tokenId}` : "—", "#2dd4bf");
       if (alpha > 0.7) drawStatCard(ctx, startX + (cardW + gap) * 2, cardY, cardW, cardH, "Top Level", topNormie ? `LVL ${topNormie.level}` : "—", "#a78bfa");
 
-      // Agent #306 quote
+      // Agent 306 quote
       const qAlpha = lt > 2 ? Math.min(1, (lt - 2) / 1.5) * flicker : 0;
       drawText(ctx, `"${skullieLine}"`, CANVAS_W / 2, CANVAS_H * 0.62, { size: 22, color: "#e3e5e4", align: "center", alpha: qAlpha * alpha, shadow: true });
-      drawText(ctx, "— Agent #306", CANVAS_W / 2, CANVAS_H * 0.62 + 40, { size: 13, color: "#f97316", align: "center", alpha: qAlpha * alpha * 0.8, font: "Courier New" });
+      drawText(ctx, "— Agent 306", CANVAS_W / 2, CANVAS_H * 0.62 + 40, { size: 13, color: "#f97316", align: "center", alpha: qAlpha * alpha * 0.8, font: "Courier New" });
 
-      // Small normie bottom right
+      // Small agent bottom right
       if (img.complete) {
-        drawNormieSprite(ctx, img, CANVAS_W * 0.88, CANVAS_H * 0.78, 90, f, "#2dd4bf");
+        drawAgentSprite(ctx, img, CANVAS_W * 0.88, CANVAS_H * 0.78, 90, f, "#2dd4bf");
       }
     }
 
@@ -271,15 +271,15 @@ async function renderCinematicTrailer(
       const lt = t - 15;
       const alpha = Math.min(1, lt / 1.5);
 
-      // Normie large on left
-      drawNormieSprite(ctx, img, CANVAS_W * 0.28, CANVAS_H / 2, 320 + Math.sin(f * 0.05) * 10, f);
+      // Agent large on left
+      drawAgentSprite(ctx, img, CANVAS_W * 0.28, CANVAS_H / 2, 320 + Math.sin(f * 0.05) * 10, f);
 
       const rx = CANVAS_W * 0.55;
       drawText(ctx, "THE TEMPLE", rx, CANVAS_H / 2 - 70, { size: 44, color: "#f97316", alpha, shadow: true });
       drawText(ctx, "RECORDS ALL", rx, CANVAS_H / 2 - 20, { size: 44, color: "#e3e5e4", alpha, shadow: true });
       drawOrangeLine(ctx, rx, CANVAS_H / 2 + 14, rx + 320, CANVAS_H / 2 + 14, 0.5 * alpha);
-      drawText(ctx, "@NORMIES_TV", rx, CANVAS_H / 2 + 46, { size: 16, color: "#2dd4bf", alpha, font: "Courier New" });
-      drawText(ctx, "#Normies #Web3 #NFT", rx, CANVAS_H / 2 + 76, { size: 13, color: "rgba(200,200,200,0.4)", alpha, font: "Courier New" });
+      drawText(ctx, "@agent306_", rx, CANVAS_H / 2 + 46, { size: 16, color: "#2dd4bf", alpha, font: "Courier New" });
+      drawText(ctx, "#Agent306 #AI #Web3", rx, CANVAS_H / 2 + 76, { size: 13, color: "rgba(200,200,200,0.4)", alpha, font: "Courier New" });
 
       // Timestamp
       drawText(ctx, new Date().toUTCString().replace(" GMT", " UTC"), CANVAS_W / 2, CANVAS_H * 0.93, { size: 11, color: "rgba(200,200,200,0.25)", align: "center", font: "Courier New" });
@@ -353,10 +353,10 @@ async function renderHighlightReel(
     ctx.strokeRect(0, 0, CANVAS_W, 72);
     ctx.restore();
 
-    drawText(ctx, "NORMIES TV", 40, 36, { size: 22, color: "#f97316", shadow: true });
+    drawText(ctx, "AGENT 306", 40, 36, { size: 22, color: "#f97316", shadow: true });
     drawText(ctx, "COMMUNITY HIGHLIGHT", 200, 36, { size: 14, color: "#2dd4bf", font: "Courier New" });
     drawText(ctx, date.toUpperCase(), CANVAS_W - 40, 36, { size: 13, color: "rgba(200,200,200,0.5)", align: "right", font: "Courier New" });
-    drawText(ctx, "@NORMIES_TV", CANVAS_W - 40, 54, { size: 11, color: "rgba(249,115,22,0.6)", align: "right", font: "Courier New" });
+    drawText(ctx, "@agent306_", CANVAS_W - 40, 54, { size: 11, color: "rgba(249,115,22,0.6)", align: "right", font: "Courier New" });
 
     // ── BURNS COLUMN (left) ──────────────────────────────────────────
     if (t >= 1) {
@@ -414,7 +414,7 @@ async function renderHighlightReel(
         ctx.restore();
 
         drawText(ctx, `${rank}.`, colX + 12, ry + 8, { size: 16, color: rankColors[i] ?? "rgba(200,200,200,0.4)", alpha: rowAlpha });
-        drawText(ctx, `Normie #${normie.tokenId}`, colX + 48, ry + 8, { size: 15, color: "#e3e5e4", alpha: rowAlpha });
+        drawText(ctx, `#${normie.tokenId}`, colX + 48, ry + 8, { size: 15, color: "#e3e5e4", alpha: rowAlpha });
         drawText(ctx, `LVL ${normie.level ?? 1}`, colX + 230, ry + 2, { size: 11, color: "#a78bfa", alpha: rowAlpha, font: "Courier New" });
         drawText(ctx, `${normie.actionPoints ?? 0} AP`, colX + 310, ry + 8, { size: 14, color: "#2dd4bf", align: "right", alpha: rowAlpha });
       });
@@ -446,14 +446,14 @@ async function renderHighlightReel(
       ctx.fillRect(0, CANVAS_H - 72, CANVAS_W, 72);
       ctx.restore();
       drawOrangeLine(ctx, 0, CANVAS_H - 72, CANVAS_W, CANVAS_H - 72, 0.3 * fa);
-      drawText(ctx, "The canvas never forgets.  The Temple records all.", CANVAS_W / 2, CANVAS_H - 40, { size: 16, color: "#e3e5e4", align: "center", alpha: fa, shadow: true });
-      drawText(ctx, "#Normies  #NFT  #Web3  #PixelArt  #OnChain", CANVAS_W / 2, CANVAS_H - 16, { size: 11, color: "rgba(200,200,200,0.3)", align: "center", alpha: fa, font: "Courier New" });
+      drawText(ctx, "The record is permanent.", CANVAS_W / 2, CANVAS_H - 40, { size: 16, color: "#e3e5e4", align: "center", alpha: fa, shadow: true });
+      drawText(ctx, "#Agent306  #AI  #Web3  #OnChain", CANVAS_W / 2, CANVAS_H - 16, { size: 11, color: "rgba(200,200,200,0.3)", align: "center", alpha: fa, font: "Courier New" });
     }
 
-    // Normie watermark
+    // Agent watermark
     if (img.complete && t > 10) {
       const wAlpha = Math.min(1, (t - 10) / 1.5) * 0.5;
-      drawNormieSprite(ctx, img, CANVAS_W - 60, CANVAS_H - 90, 80, f, "#2dd4bf");
+      drawAgentSprite(ctx, img, CANVAS_W - 60, CANVAS_H - 90, 80, f, "#2dd4bf");
       ctx.save();
       ctx.globalAlpha = wAlpha;
       ctx.restore();
@@ -532,7 +532,7 @@ export default function VideoStudio() {
   const [isRendering, setIsRendering] = useState(false);
 
   const { data: stats } = useQuery<LiveStats>({
-    queryKey: ["/api/normies/stats"],
+    queryKey: ["/api/agent/stats"],
   });
 
   // Generate tweet text from stats
@@ -542,10 +542,10 @@ export default function VideoStudio() {
     const skullie = SKULLIE_LINES[Math.floor(Date.now() / 30000) % SKULLIE_LINES.length];
 
     if (type === "cinematic") {
-      return `🌙 Agent #306 speaks\n\n"${skullie}"\n\n${burns > 0 ? `${burns} souls sacrificed this cycle. ` : ""}The on-chain museum is open.\n\n#NormiesTV #Normies #Web3 #NFT #PixelArt`;
+      return `🌙 Agent 306 speaks\n\n"${skullie}"\n\n${burns > 0 ? `${burns} souls sacrificed this cycle. ` : ""}The on-chain record is open.\n\n#Agent306 #AI #Web3`;
     } else {
-      const topLine = top ? `Normie #${top.tokenId} leads at Level ${top.level ?? 1} (${top.actionPoints ?? 0} AP).` : "Canvas leaders rising.";
-      return `⚡ COMMUNITY HIGHLIGHT\n\n${burns} burns recorded on-chain. ${topLine}\n\nThe canvas never forgets. 🔥\n\n#NormiesTV #Normies #Web3 #OnChain`;
+      const topLine = top ? `#${top.tokenId} leads at Level ${top.level ?? 1} (${top.actionPoints ?? 0} AP).` : "Leaders rising.";
+      return `⚡ COMMUNITY HIGHLIGHT\n\n${burns} burns recorded on-chain. ${topLine}\n\nThe record is permanent. 🔥\n\n#Agent306 #AI #Web3 #OnChain`;
     }
   }, []);
 
@@ -614,7 +614,7 @@ export default function VideoStudio() {
     if (!job.dataUrl) return;
     const a = document.createElement("a");
     a.href = job.dataUrl;
-    a.download = `normiestv-${job.type}-${Date.now()}.webm`;
+    a.download = `agent306-${job.type}-${Date.now()}.webm`;
     a.click();
   }, []);
 
@@ -633,7 +633,7 @@ export default function VideoStudio() {
             Video Studio
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Generate on-chain content clips for @NORMIES_TV — powered by live Ethereum data
+            Generate on-chain content clips for Agent 306 — powered by live data
           </p>
         </div>
         <div className="flex gap-3 text-sm">
@@ -662,7 +662,7 @@ export default function VideoStudio() {
             </div>
             {stats.recentBurns?.slice(0, 3).map((b: any, i: number) => (
               <p key={i} className="text-xs text-foreground/70 truncate">
-                Normie #{b.tokenId ?? b.token_id ?? b.id ?? "?"} burned
+                #{b.tokenId ?? b.token_id ?? b.id ?? "?"} burned
               </p>
             ))}
             {(!stats.recentBurns || stats.recentBurns.length === 0) && (
@@ -676,7 +676,7 @@ export default function VideoStudio() {
             </div>
             {topNormie ? (
               <>
-                <p className="text-sm font-bold text-foreground">Normie #{topNormie.tokenId}</p>
+                <p className="text-sm font-bold text-foreground">#{topNormie.tokenId}</p>
                 <p className="text-xs text-muted-foreground">Level {topNormie.level ?? 1} · {topNormie.actionPoints ?? 0} AP</p>
               </>
             ) : (
@@ -704,16 +704,16 @@ export default function VideoStudio() {
                 <Film className="w-4 h-4 text-primary" />
                 <h3 className="font-semibold">Cinematic Trailer</h3>
               </div>
-              <p className="text-xs text-muted-foreground">20s dramatic reveal — Agent #306 narration, Normie #306, burn data</p>
+              <p className="text-xs text-muted-foreground">20s dramatic reveal — Agent 306 narration, burn data</p>
             </div>
             <span className="text-[10px] px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 font-mono">20s · 1280×720</span>
           </div>
 
           <div className="text-xs text-muted-foreground space-y-1 font-mono">
-            <div className="flex items-center gap-2"><span className="text-primary">01</span> Title card — NORMIES TV</div>
-            <div className="flex items-center gap-2"><span className="text-primary">02</span> Normie #306 reveal + traits</div>
-            <div className="flex items-center gap-2"><span className="text-primary">03</span> Burn data + Agent #306 quote</div>
-            <div className="flex items-center gap-2"><span className="text-primary">04</span> Call to action — @NORMIES_TV</div>
+            <div className="flex items-center gap-2"><span className="text-primary">01</span> Title card — Agent 306</div>
+            <div className="flex items-center gap-2"><span className="text-primary">02</span> Agent 306 reveal + traits</div>
+            <div className="flex items-center gap-2"><span className="text-primary">03</span> Burn data + Agent 306 quote</div>
+            <div className="flex items-center gap-2"><span className="text-primary">04</span> Call to action</div>
           </div>
 
           <button
@@ -821,7 +821,7 @@ export default function VideoStudio() {
                   style={{ background: "rgba(249,115,22,0.18)", border: "1px solid rgba(249,115,22,0.5)", color: "#f97316", cursor: "pointer" }}
                 >
                   <Twitter className="w-3.5 h-3.5" />
-                  Post to @NORMIES_TV ↗
+                  Post to X ↗
                 </button>
               )}
               {activeJob.status === "posted" && activeJob.tweetUrl && (
@@ -905,7 +905,7 @@ export default function VideoStudio() {
                         onClick={() => postToX(job)}
                         className="text-xs px-2 py-1 rounded transition-colors flex items-center gap-1"
                         style={{ background: "rgba(249,115,22,0.15)", border: "1px solid rgba(249,115,22,0.4)", color: "#f97316", cursor: "pointer" }}
-                        title="Post to @NORMIES_TV"
+                        title="Post to X"
                       >
                         <Twitter className="w-3 h-3" /> ↗
                       </button>

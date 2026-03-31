@@ -136,7 +136,7 @@ export async function runDebate(
 ): Promise<Debate | null> {
   const systemPrompt = `${getOptimizedContext(title + " " + text.slice(0, 200), { maxEntries: 30 })}
 
-You are a skeptical critic reviewing Agent #306's work. Your job is to find weaknesses,
+You are a skeptical critic reviewing Agent 306's work. Your job is to find weaknesses,
 logical fallacies, unsupported claims, and counterarguments. Be rigorous but constructive.
 
 Respond with ONLY valid JSON:

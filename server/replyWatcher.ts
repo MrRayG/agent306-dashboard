@@ -1,11 +1,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// NORMIES TV — REPLY WATCHER
-// Fetches mentions/replies to @NORMIES_TV via TWO sources:
+// 306 — REPLY WATCHER
+// Fetches mentions/replies to @agent306 via TWO sources:
 //   1. Twitter API v2 userMentionTimeline (primary — reliable, structured data)
 //   2. Grok x_search (supplementary — finds quote tweets and keyword mentions)
 //
 // This is what closes the loop:
-// Episode posts → community replies → Agent #306 reads them →
+// Episode posts → community replies → Agent 306 reads them →
 // next episode references what the community said → they feel heard → they engage more
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -18,17 +18,17 @@ const GROK_KEY = process.env.GROK_API_KEY ?? "";
 
 // Twitter client reference — set via initReplyWatcher()
 let xClient: any = null;
-let normiesTvUserId: string | null = null;
+let agent306UserId: string | null = null;
 
 export function initReplyWatcher(client: any): void {
   xClient = client;
   // Fetch our own user ID on init (needed for mentions endpoint)
   client.v2.me().then((me: any) => {
-    normiesTvUserId = me.data?.id ?? null;
-    if (normiesTvUserId) {
-      console.log(`[ReplyWatcher] Initialized — @NORMIES_TV user ID: ${normiesTvUserId}`);
+    agent306UserId = me.data?.id ?? null;
+    if (agent306UserId) {
+      console.log(`[ReplyWatcher] Initialized — @agent306 user ID: ${agent306UserId}`);
     } else {
-      console.warn("[ReplyWatcher] Could not resolve @NORMIES_TV user ID — mentions fetch will use Grok only");
+      console.warn("[ReplyWatcher] Could not resolve @agent306 user ID — mentions fetch will use Grok only");
     }
   }).catch((err: any) => {
     console.warn("[ReplyWatcher] Failed to get user ID:", err.message);
@@ -40,7 +40,7 @@ export interface CommunityReply {
   text: string;
   likes: number;
   replyType: "question" | "lore_suggestion" | "holder_mention" | "excitement" | "callout" | "general";
-  tokenMentioned?: number;       // if they mentioned a specific Normie #ID
+  tokenMentioned?: number;       // if they mentioned a specific token #ID
   capturedAt: string;
   tweetUrl?: string;
   tweetId?: string;              // for in-reply-to threading
@@ -108,13 +108,13 @@ function classifyReply(text: string): CommunityReply["replyType"] {
   const lower = text.toLowerCase();
   if (text.includes("?") || lower.includes("how") || lower.includes("when") || lower.includes("what") || lower.includes("why")) return "question";
   if (lower.includes("should") || lower.includes("imagine") || lower.includes("what if") || lower.includes("story") || lower.includes("lore")) return "lore_suggestion";
-  if (/\#\d{1,5}/.test(text) || lower.includes("my normie") || lower.includes("normie #")) return "holder_mention";
-  if (text.includes("@") && !text.toLowerCase().includes("@normies_tv")) return "callout";
+  if (/\#\d{1,5}/.test(text) || lower.includes("my token") || lower.includes("token #")) return "holder_mention";
+  if (text.includes("@") && !text.toLowerCase().includes("@agent_306")) return "callout";
   if (lower.includes("🔥") || lower.includes("lfg") || lower.includes("let's go") || lower.includes("amazing") || lower.includes("love") || lower.includes("fire") || lower.includes("🚀")) return "excitement";
   return "general";
 }
 
-// ── Extract Normie token ID from text ─────────────────────────────────────────
+// ── Extract token ID from text ────────────────────────────────────────────────
 function extractTokenId(text: string): number | undefined {
   const match = text.match(/\#(\d{1,5})/);
   return match ? Number(match[1]) : undefined;
@@ -123,7 +123,7 @@ function extractTokenId(text: string): number | undefined {
 // ── SOURCE 1: Twitter API v2 — userMentionTimeline ───────────────────────────
 // This is the PRIMARY source. Reliable, structured, catches all @mentions and replies.
 async function fetchMentionsViaTwitterAPI(): Promise<CommunityReply[]> {
-  if (!xClient || !normiesTvUserId) {
+  if (!xClient || !agent306UserId) {
     console.log("[ReplyWatcher] Twitter API not available — skipping (will use Grok x_search)");
     return [];
   }
@@ -141,7 +141,7 @@ async function fetchMentionsViaTwitterAPI(): Promise<CommunityReply[]> {
       params.since_id = replyState.lastMentionId;
     }
 
-    const mentions = await xClient.v2.userMentionTimeline(normiesTvUserId, params);
+    const mentions = await xClient.v2.userMentionTimeline(agent306UserId, params);
 
     if (!mentions.data?.data || mentions.data.data.length === 0) {
       console.log("[ReplyWatcher] Twitter API: No new mentions since last check");
@@ -162,7 +162,7 @@ async function fetchMentionsViaTwitterAPI(): Promise<CommunityReply[]> {
       .filter((t: any) => {
         // Skip our own tweets
         const username = userMap.get(t.author_id) ?? "";
-        return username.toLowerCase() !== "normies_tv";
+        return username.toLowerCase() !== "agent_306";
       })
       .map((t: any) => {
         const username = userMap.get(t.author_id) ?? "unknown";
@@ -211,28 +211,28 @@ async function fetchMentionsViaGrok(): Promise<CommunityReply[]> {
         stream: false,
         input: [{
           role: "user",
-          content: `Search X for recent engagement with @NORMIES_TV from the last 3 hours.
+          content: `Search X for recent engagement with @agent306 from the last 3 hours.
 
-PRIORITY: Always include any posts from @MrRayG that mention or engage with @NORMIES_TV.
-@MrRayG is the owner/operator of @NORMIES_TV — his messages are highest priority.
+PRIORITY: Always include any posts from @MrRayG that mention or engage with @agent306.
+@MrRayG is the owner/operator of @agent306 — his messages are highest priority.
 
 Focus on things the Twitter mentions API might miss:
-1. All posts from @MrRayG tagging @NORMIES_TV or asking Agent #306 anything
-2. Quote tweets of @NORMIES_TV posts
-3. Posts mentioning "NORMIES" NFT or "normies art" without directly @mentioning the account
-4. Threaded conversations where @NORMIES_TV was mentioned earlier
+1. All posts from @MrRayG tagging @agent306 or asking Agent 306 anything
+2. Quote tweets of @agent306 posts
+3. Posts mentioning "306" or "Agent 306" without directly @mentioning the account
+4. Threaded conversations where @agent306 was mentioned earlier
 
 Do NOT include direct replies or @mentions — those are already captured separately.
 
 For each post found, classify it:
 - "question": asking about tokens, mechanics, what happens next
 - "lore_suggestion": suggesting story directions, contributing ideas
-- "holder_mention": sharing their Normie, mentioning a token #ID
+- "holder_mention": sharing their token, mentioning a token #ID
 - "callout": tagging someone, calling attention to the project
 - "excitement": hyped, celebrating, positive energy
 - "general": other engagement
 
-Extract any Normie token numbers (e.g. #8553 → tokenMentioned: 8553).
+Extract any token numbers (e.g. #8553 → tokenMentioned: 8553).
 
 Return JSON array (max 10):
 [{
@@ -298,9 +298,9 @@ Return JSON array (max 10):
 }
 
 // ── SOURCE 3: Dedicated @MrRayG monitor — highest priority ─────────────────
-// Checks for any recent posts from @MrRayG mentioning @NORMIES_TV or Agent #306.
+// Checks for any recent posts from @MrRayG mentioning @agent306 or Agent 306.
 // This catches "DM-style" mentions, questions, and prompts from the operator.
-// Also detects non-NORMIES topics that Agent #306 should research and respond to.
+// Also detects non-ecosystem topics that Agent 306 should research and respond to.
 async function fetchMrRayGMentions(): Promise<CommunityReply[]> {
   if (!GROK_KEY) return [];
   try {
@@ -315,10 +315,10 @@ async function fetchMrRayGMentions(): Promise<CommunityReply[]> {
           content: `Search X for ALL recent posts from @MrRayG from the last 24 hours.
 
 I need every post from @MrRayG, especially:
-1. Any post that @mentions @NORMIES_TV or asks Agent #306 anything
-2. Any post sharing articles, news, or tech/AI content (even if not mentioning @NORMIES_TV)
-3. Any direct message-style posts addressed to @NORMIES_TV
-4. Any post about AI, technology, blockchain, NFTs, or anything @MrRayG seems to want Agent #306 to know about
+1. Any post that @mentions @agent306 or asks Agent 306 anything
+2. Any post sharing articles, news, or tech/AI content (even if not mentioning @agent306)
+3. Any direct message-style posts addressed to @agent306
+4. Any post about AI, technology, blockchain, NFTs, or anything @MrRayG seems to want Agent 306 to know about
 
 Return JSON array:
 [{
@@ -328,8 +328,8 @@ Return JSON array:
   "replyType": "question|lore_suggestion|holder_mention|callout|excitement|general",
   "tokenMentioned": null or number,
   "tweetUrl": "url if available",
-  "topicType": "normies|ai|tech|crypto|general",
-  "needsResearch": true or false (true if Agent #306 would benefit from x_search before replying)
+  "topicType": "ecosystem|ai|tech|crypto|general",
+  "needsResearch": true or false (true if Agent 306 would benefit from x_search before replying)
 }]`,
         }],
         tools: [{ type: "x_search" }],

@@ -37,7 +37,7 @@ const TYPE_CONFIG: Record<string, { label: string; color: string; emoji: string 
   nfc_summit:       { label: "NFC Summit",         color: "#fbbf24", emoji: "🏛️" },
   pfp_holder:       { label: "PFP Holders",        color: "#4ade80", emoji: "👤" },
   holder_spotlight: { label: "Holder Spotlight",   color: "#4ade80", emoji: "✨" },
-  xnormies:         { label: "XNORMIES",           color: "#2dd4bf", emoji: "🎁" },
+  community_event:  { label: "Community Event",     color: "#2dd4bf", emoji: "🎁" },
   creativity:       { label: "Creativity",         color: "#2dd4bf", emoji: "🎨" },
   holder_milestone: { label: "Milestones",         color: "#4ade80", emoji: "🏆" },
   community:        { label: "Community",          color: "#e3e5e4", emoji: "💬" },
@@ -179,7 +179,7 @@ export default function CommunityIntel() {
   const regenAnglesMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/community/refresh-editorial").then(r => r.json()),
     onSuccess: () => {
-      toast({ title: "Regenerating story angles", description: "Agent #306 is reading the current signals..." });
+      toast({ title: "Regenerating story angles", description: "Agent 306 is reading the current signals..." });
       // Poll quickly until angles update
       setTimeout(() => queryClient.invalidateQueries({ queryKey: ["/api/community/digest"] }), 20000);
     },
@@ -190,7 +190,7 @@ export default function CommunityIntel() {
       apiRequest("POST", "/api/community/pin-angle", { angle }).then(r => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/community/pinned"] });
-      toast({ title: "Story angle pinned", description: "Agent #306 will use this in the next episode." });
+      toast({ title: "Story angle pinned", description: "Agent 306 will use this in the next episode." });
     },
   });
 
@@ -225,7 +225,7 @@ export default function CommunityIntel() {
             </h1>
           </div>
           <p style={{ ...mono, fontSize: "0.62rem", color: "rgba(227,229,228,0.35)", marginTop: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-            What NORMIES are posting · Shape the next episode · You're the editor
+            What the community is posting · Shape the next episode · You're the editor
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -278,7 +278,7 @@ export default function CommunityIntel() {
                   <div style={{ height: 8, background: "rgba(227,229,228,0.06)", marginBottom: 8, animation: "pulse-skeleton 1.6s infinite", width: "80%" }} />
                   <div style={{ height: 8, background: "rgba(227,229,228,0.04)", marginBottom: 8, animation: "pulse-skeleton 1.6s infinite", width: "60%" }} />
                   <p style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.3)", margin: "12px 0 0" }}>
-                    Agent #306 is scanning X for community signals — this takes 30–60 seconds on first load.
+                    Agent 306 is scanning X for community signals — this takes 30–60 seconds on first load.
                     {isFetching ? " Scanning now..." : " Refresh to check again."}
                   </p>
                 </div>
@@ -291,7 +291,7 @@ export default function CommunityIntel() {
             }
           </section>
 
-          {/* Spotlight — standout moment Agent #306 should amplify */}
+          {/* Spotlight — standout moment Agent 306 should amplify */}
           {data?.spotlight && (
             <section style={{ ...card, borderColor: "rgba(249,115,22,0.2)", background: "rgba(249,115,22,0.03)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -309,7 +309,7 @@ export default function CommunityIntel() {
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "0.85rem", flexWrap: "wrap" as const }}>
               <div style={{ width: 3, height: 18, background: "#a78bfa", flexShrink: 0 }} />
               <span className="pixel upper" style={{ fontSize: "0.7rem", letterSpacing: "0.2em", color: "#e3e5e4" }}>
-                Story Angles for Agent #306
+                Story Angles for Agent 306
               </span>
               <span style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.3)", marginLeft: 4, flex: 1 }}>
                 Pin one to shape the next episode
@@ -343,7 +343,7 @@ export default function CommunityIntel() {
                       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                         <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#a78bfa", animation: "pulse-dot 1.2s infinite" }} />
                         <span style={{ ...mono, fontSize: "0.68rem", color: "rgba(167,139,250,0.8)" }}>
-                          Agent #306 is reading the signals...
+                          Agent 306 is reading the signals...
                         </span>
                       </div>
                       <p style={{ ...mono, fontSize: "0.62rem", color: "rgba(227,229,228,0.3)", margin: 0, lineHeight: 1.5 }}>
@@ -353,7 +353,7 @@ export default function CommunityIntel() {
                   )
                   : (
                     <div style={{ ...card, color: "rgba(227,229,228,0.35)", ...mono, fontSize: "0.7rem", textAlign: "center" as const, padding: "1.5rem" }}>
-                      Hit Refresh to scan X for NORMIES community posts
+                      Hit Refresh to scan X for community posts
                     </div>
                   )
             }
@@ -386,7 +386,7 @@ export default function CommunityIntel() {
             <div style={{ ...card, textAlign: "center" as const, padding: "2rem" }}>
               <div className="pixel" style={{ fontSize: "0.7rem", color: "#f97316", marginBottom: 8 }}>NO SIGNALS YET</div>
               <p style={{ ...mono, fontSize: "0.72rem", color: "rgba(227,229,228,0.4)" }}>
-                Hit Refresh to scan X for NORMIES community posts.
+                Hit Refresh to scan X for community posts.
               </p>
             </div>
           )}
@@ -397,16 +397,16 @@ export default function CommunityIntel() {
 
           {/* Programming Grid */}
           <section style={card}>
-            <p style={{ ...label, marginBottom: "0.85rem" }}>📺 NormiesTV Shows</p>
+            <p style={{ ...label, marginBottom: "0.85rem" }}>📺 306 Shows</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
               {[
-                { show: "NORMIES SIGNAL",       color: "#f97316", desc: "serc1n / normiesART posts" },
-                { show: "NORMIES FIELD REPORT",  color: "#f97316", desc: "Live burns, level ups" },
-                { show: "NORMIES STORIES",       color: "#a78bfa", desc: "Character arcs, narrative" },
-                { show: "NORMIES COMMUNITY",     color: "#4ade80", desc: "Holder spotlight, builders" },
-                { show: "NORMIES THE 100",        color: "#4ade80", desc: "Leaderboard, Monday 9am" },
-                { show: "NORMIES NEWS",          color: "#2dd4bf", desc: "Web3 + ecosystem, 8am daily" },
-                { show: "NORMIES ARENA",         color: "#a78bfa", desc: "Battles — May 15+" },
+                { show: "306 SIGNAL",       color: "#f97316", desc: "Community highlights" },
+                { show: "306 FIELD REPORT", color: "#f97316", desc: "Live burns, level ups" },
+                { show: "306 STORIES",      color: "#a78bfa", desc: "Character arcs, narrative" },
+                { show: "306 COMMUNITY",    color: "#4ade80", desc: "Holder spotlight, builders" },
+                { show: "306 LEADERBOARD",  color: "#4ade80", desc: "Leaderboard, Monday 9am" },
+                { show: "306 NEWS",         color: "#2dd4bf", desc: "Web3 + ecosystem, 8am daily" },
+                { show: "306 BATTLES",      color: "#a78bfa", desc: "Battles — May 15+" },
               ].map(({ show, color, desc }) => (
                 <div key={show} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", borderBottom: "1px solid rgba(227,229,228,0.04)" }}>
                   <span style={{ fontFamily: "'Courier New'", fontSize: "0.6rem", color, letterSpacing: "0.05em" }}>[{show}]</span>
@@ -424,7 +424,7 @@ export default function CommunityIntel() {
                 {[
                   { label: "Unique Holders", value: catalogStats.totalUnique },
                   { label: "Notable", value: catalogStats.notable },
-                  { label: "Tagged @serc1n", value: catalogStats.taggedFounder },
+                  { label: "Tagged Founder", value: catalogStats.taggedFounder },
                   { label: "Tagged Official", value: catalogStats.taggedOfficial },
                 ].map(({ label: l, value }) => (
                   <div key={l} style={{ background: "rgba(227,229,228,0.02)", border: "1px solid rgba(227,229,228,0.06)", padding: "8px 10px" }}>
@@ -439,7 +439,7 @@ export default function CommunityIntel() {
             </section>
           )}
 
-          {/* Following Roster — @NORMIES_TV follows = confirmed community */}
+          {/* Following Roster — confirmed community */}
           <section style={card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.85rem" }}>
               <p style={{ ...label, margin: 0 }}>👥 The Roster</p>
@@ -458,7 +458,7 @@ export default function CommunityIntel() {
               </button>
             </div>
             <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.3)", marginBottom: 10 }}>
-              Everyone @NORMIES_TV follows. Their tweets shape the story.
+              Everyone we follow. Their tweets shape the story.
             </p>
             {followingData ? (
               <>
@@ -514,7 +514,7 @@ export default function CommunityIntel() {
             <section style={card}>
               <p style={{ ...label, marginBottom: "0.85rem" }}>📖 Story Sources</p>
               <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.3)", marginBottom: 10 }}>
-                Tagged @serc1n or @normiesART — their posts fuel the narrative
+                Tagged by the community — their posts fuel the narrative
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 {storySources.holders.slice(0, 8).map((h: any) => (
@@ -542,7 +542,7 @@ export default function CommunityIntel() {
                         {angle}
                       </p>
                       <p style={{ ...mono, fontSize: "0.56rem", color: "rgba(249,115,22,0.5)", marginTop: 4 }}>
-                        Agent #306 will use this →
+                        Agent 306 will use this →
                       </p>
                     </div>
                   ))}
@@ -585,10 +585,10 @@ export default function CommunityIntel() {
             <p style={{ ...label, marginBottom: "0.85rem", color: "#2dd4bf" }}>You're the Editor</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {[
-                { step: "1", text: "Community posts about NORMIES are scanned from X every 30 minutes" },
+                { step: "1", text: "Community posts are scanned from X every 30 minutes" },
                 { step: "2", text: "Grok classifies and summarizes what the community is saying today" },
                 { step: "3", text: "Story angles are surfaced — you review and pin what feels right" },
-                { step: "4", text: "Pinned angles feed directly into Agent #306's next episode narrative" },
+                { step: "4", text: "Pinned angles feed directly into Agent 306's next episode narrative" },
               ].map(({ step, text }) => (
                 <div key={step} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                   <span style={{ ...mono, fontSize: "0.6rem", color: "#2dd4bf", flexShrink: 0, marginTop: 2 }}>{step}.</span>

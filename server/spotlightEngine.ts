@@ -2,12 +2,12 @@
  * ─────────────────────────────────────────────────────────────
  *  THE SPOTLIGHT — Weekly Holder Feature
  *
- *  Every week Agent #306 picks one co-creator and writes
+ *  Every week Agent 306 picks one co-creator and writes
  *  their story. Not a stat dump — a human portrait.
  *  Who they are. What they've built. Why it matters.
  *
  *  Posts every Sunday at 11am ET.
- *  The holder shares it. Their network finds NormiesTV.
+ *  The holder shares it. Their network finds 306.
  * ─────────────────────────────────────────────────────────────
  */
 
@@ -18,18 +18,18 @@ import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
 import fs from "fs";
 import { getModel } from "./modelRouter.js";
 
-const NORMIES_API = "https://api.normies.art";
+const ONCHAIN_API = ""; // removed — on-chain API disabled
 
 /** Try to get on-chain context for a holder if we have their token ID */
 async function fetchHolderOnChainContext(tokenId: number): Promise<string> {
   const parts: string[] = [];
   try {
     const [canvasInfo, versions, burnHistory] = await Promise.allSettled([
-      fetch(`${NORMIES_API}/normie/${tokenId}/canvas/info`, { signal: AbortSignal.timeout(5000) })
+      fetch(`${ONCHAIN_API}/token/${tokenId}/canvas/info`, { signal: AbortSignal.timeout(5000) })
         .then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch(`${NORMIES_API}/history/normie/${tokenId}/versions`, { signal: AbortSignal.timeout(5000) })
+      fetch(`${ONCHAIN_API}/history/token/${tokenId}/versions`, { signal: AbortSignal.timeout(5000) })
         .then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch(`${NORMIES_API}/history/burns/receiver/${tokenId}`, { signal: AbortSignal.timeout(5000) })
+      fetch(`${ONCHAIN_API}/history/burns/receiver/${tokenId}`, { signal: AbortSignal.timeout(5000) })
         .then(r => r.ok ? r.json() : null).catch(() => null),
     ]);
 
@@ -79,17 +79,17 @@ let state = loadState();
 /** Pick the best holder for this week's spotlight */
 function pickSpotlightHolder(): { username: string; displayName: string; reason: string } | null {
   // Priority order:
-  // 1. Story source holders (tagged serc1n or normiesART — real community engagement)
+  // 1. Story source holders (real community engagement)
   // 2. Most active holders not recently spotlighted
-  // 3. PFP rockers — confirmed Normies holders
+  // 3. PFP holders — confirmed community members
 
   const storySources = getStorySourceHolders()
     .filter(h => !state.previousHolders.includes(h.username))
-    .filter(h => !["NORMIES_TV", "normiesART", "serc1n", "YigitDuman"].includes(h.username));
+    .filter(h => !["AGENT_306"].includes(h.username));
 
   const mostActive = getMostActive(20)
     .filter(h => !state.previousHolders.includes(h.username))
-    .filter(h => !["NORMIES_TV", "normiesART", "serc1n", "YigitDuman"].includes(h.username));
+    .filter(h => !["AGENT_306"].includes(h.username));
 
   const candidate = storySources[0] ?? mostActive[0];
   if (!candidate) return null;
@@ -103,7 +103,7 @@ function pickSpotlightHolder(): { username: string; displayName: string; reason:
 
 /** Generate spotlight prompt for Grok */
 export function buildSpotlightPrompt(holder: { username: string; displayName: string; reason: string; onChainContext?: string }): string {
-  return `You are Agent #306, narrator of NormiesTV.
+  return `You are Agent 306, narrator of 306.
 
 Write THIS WEEK'S HOLDER SPOTLIGHT for @${holder.username}.
 
@@ -113,7 +113,7 @@ ${holder.onChainContext ? holder.onChainContext : ""}
 THE SPOTLIGHT FORMAT:
 This is a human portrait, not a stat dump. 3 parts:
 
-1. OPENING LINE — one sentence that captures who this person is in the NORMIES ecosystem. Make it feel earned, not promotional. Specific, not generic.
+1. OPENING LINE — one sentence that captures who this person is in the 306 ecosystem. Make it feel earned, not promotional. Specific, not generic.
 
 2. THE STORY — 2-3 sentences. What have they done? What are they building? What does their Canvas history say about their commitment? If on-chain data is provided, use it — reference their level, sacrifices received, canvas edits. These are real actions, not stats.
 
@@ -123,8 +123,8 @@ RULES:
 - Up to 800 characters for the tweet version (X Premium — use the space)
 - No hype language. No "incredible" or "amazing" or "thrilled"
 - This is a co-creator being celebrated by a fellow co-creator
-- Agent #306 tone: warm, specific, low-key confident
-- End with #NormiesTV #NORMIES
+- Agent 306 tone: warm, specific, low-key confident
+- End with #306 #Agent306
 
 Respond with JSON:
 {
@@ -200,7 +200,7 @@ export async function postSpotlight(xWrite: any, grokKey: string): Promise<strin
     let xMediaId: string | undefined;
     try {
       // Try to extract a token ID from the spotlight content or holder data
-      // Fallback: use Agent #306 (token 306) as the featured Normie on the card
+      // Fallback: use Agent 306 (token 306) as the featured token on the card
       let spotlightTokenId: number | undefined = undefined;
       const tokenMatch = spotlight.narrative?.match(/#(\d{1,5})/) ||
                          spotlight.tweet?.match(/#(\d{1,5})/);
@@ -208,7 +208,7 @@ export async function postSpotlight(xWrite: any, grokKey: string): Promise<strin
         const id = Number(tokenMatch[1]);
         if (id > 0 && id <= 9999) spotlightTokenId = id;
       }
-      // If no holder token found, use Agent #306 as the visual anchor
+      // If no holder token found, use Agent 306 as the visual anchor
       if (!spotlightTokenId) spotlightTokenId = 306;
 
       const cardBuf = await generateSpotlightCard({
@@ -232,7 +232,7 @@ export async function postSpotlight(xWrite: any, grokKey: string): Promise<strin
         ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),
       });
       const tweetId = tweet.data?.id;
-      tweetUrl = tweetId ? `https://x.com/NORMIES_TV/status/${tweetId}` : null;
+      tweetUrl = tweetId ? `https://x.com/AGENT_306/status/${tweetId}` : null;
     } catch (xErr: any) {
       console.error("[Spotlight] X post failed:", xErr.message);
     }

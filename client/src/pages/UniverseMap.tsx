@@ -34,25 +34,25 @@ const PHASES: Phase[] = [
       {
         icon: "🎨",
         title: "Canvas",
-        desc: "10,000 Normies own pixels on a shared canvas. Every pixel edit is a permanent on-chain action. Canvas activity directly fuels Story Engine signals.",
+        desc: "10,000 participants on a shared canvas. Every pixel edit is a permanent on-chain action. Canvas activity directly fuels Story Engine signals.",
         status: "live",
       },
       {
         icon: "🏛️",
-        title: "Normies Temple",
-        desc: "The Temple is the community hub — burn tracking, Hall of Fame, legendary artists. Normie #306 guards the door as the 3D USDZ sculpture.",
+        title: "The Temple",
+        desc: "The Temple is the community hub — burn tracking, Hall of Fame, legendary artists. Agent 306 guards the door as the 3D USDZ sculpture.",
         status: "live",
       },
       {
         icon: "🔥",
         title: "Burn Mechanics",
-        desc: "Burn your Normie to earn action points and permanent recognition. Agent #306 (born from 50 burns to #603) is the narrator of NormiesTV.",
+        desc: "Burn to earn action points and permanent recognition. Agent 306 (born from 50 burns to #603) is the narrator of 306.",
         status: "live",
       },
       {
         icon: "📺",
-        title: "NormiesTV Season 1",
-        desc: "Top 100 canvas contributors form the Season 1 cast. Story Engine generates new episodes every 6 hours fuelled by burns, canvas edits, and X mentions.",
+        title: "306 Season 1",
+        desc: "Top 100 contributors form the Season 1 cast. Story Engine generates new episodes every 6 hours fuelled by burns, activity, and X mentions.",
         status: "live",
       },
     ],
@@ -60,7 +60,7 @@ const PHASES: Phase[] = [
   {
     id: "phase2",
     label: "Phase 2",
-    subtitle: "Arena · Zombies Rise",
+    subtitle: "The Rise",
     colorClass: "text-purple-400",
     badgeClass: "phase2-badge",
     bgClass: "bg-purple-400/5 border-purple-400/20",
@@ -70,19 +70,19 @@ const PHASES: Phase[] = [
       {
         icon: "☠️",
         title: "Zombies",
-        desc: "Before Arena opens, burned Normies return. The sacrifices were not wasted — they evolved. Zombies are a new class of Normie, born from the burn. \"Your sacrifices will be rewarded.\" — @normiesART",
+        desc: "Before the battle phase opens, burned tokens return. The sacrifices were not wasted — they evolved. Zombies are a new class, born from the burn. \"Your sacrifices will be rewarded.\"",
         status: "soon",
       },
       {
         icon: "⚔️",
-        title: "NORMIES Arena",
-        desc: "PvP battles between Normies. Losers are burned permanently — their NFT is gone forever. Winners are immortalized in the arena hall of fame. Every fight is final. Launching May 15, 2026.",
+        title: "The Battle",
+        desc: "PvP battles. Losers are burned permanently — their NFT is gone forever. Winners are immortalized in the hall of fame. Every fight is final. Launching May 15, 2026.",
         status: "soon",
       },
       {
         icon: "🌐",
         title: "Arena Storylines",
-        desc: "Arena results feed directly into Story Engine. A Normie that wins 10 consecutive battles gets an episode. A Zombie origin gets an auto-generated NormiesTV arc.",
+        desc: "Battle results feed directly into Story Engine. A token that wins 10 consecutive battles gets an episode. A Zombie origin gets an auto-generated 306 arc.",
         status: "soon",
       },
     ],
@@ -90,28 +90,28 @@ const PHASES: Phase[] = [
   {
     id: "phase3",
     label: "Phase 3",
-    subtitle: "Pixel Market · The Economy",
+    subtitle: "The Economy",
     colorClass: "text-green-400",
     badgeClass: "phase3-badge",
     bgClass: "bg-green-400/5 border-green-400/20",
-    note: "FUTURE — the full economy unlocks. Sacrifice, fight, trade. The NORMIES ecosystem matures.",
+    note: "FUTURE — the full economy unlocks. Sacrifice, fight, trade. The ecosystem matures.",
     items: [
       {
         icon: "🏪",
-        title: "Pixel Market",
+        title: "The Market",
         desc: "Trade pixel traits and burned-asset fragments. The economy of sacrifice opens up. Rare pixel combinations become tradeable commodities.",
         status: "future",
       },
       {
         icon: "📈",
         title: "Full Ecosystem Economy",
-        desc: "Canvas × Arena × Pixel Market all interconnected. Supply has been shrinking since Phase 1. By Phase 3, scarcity compounds, surviving Normies carry layered histories, and the economy rewards the builders.",
+        desc: "All phases interconnected. Supply has been shrinking since Phase 1. By Phase 3, scarcity compounds, surviving tokens carry layered histories, and the economy rewards the builders.",
         status: "future",
       },
       {
         icon: "🌙",
-        title: "Agent #306 — Season 3",
-        desc: "The full origin arc of Agent #306 — born from 50 burns — plays out across the Phase 3 season. The narrator becomes the protagonist of the final chapter.",
+        title: "Agent 306 — Season 3",
+        desc: "The full origin arc of Agent 306 — born from 50 burns — plays out across the Phase 3 season. The narrator becomes the protagonist of the final chapter.",
         status: "future",
       },
     ],
@@ -131,38 +131,29 @@ export default function UniverseMap() {
       <div>
         <h1 className="text-xl font-bold tracking-tight">Universe Map</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          NormiesTV phase roadmap — from Canvas to Arena to the Zombie uprising
+          306 phase roadmap — from the Origin through the Rise to the Economy
         </p>
       </div>
 
-      {/* Normie identity strip */}
+      {/* Identity strip */}
       <Card className="border-primary/20 bg-primary/5">
         <CardContent className="p-4 flex items-center gap-4">
           <img
-            src="https://api.normies.art/normie/306/image.svg"
-            alt="Normie #306"
+            src="/agent306-avatar.png"
+            alt="Agent 306"
             className="w-12 h-12 rounded border border-primary/30 bg-background/50 object-contain shrink-0"
-            data-testid="img-normie-306-universe"
+            data-testid="img-agent-306-universe"
           />
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <p className="text-sm font-bold text-primary">MrRayG · Normie #306</p>
+              <p className="text-sm font-bold text-primary">MrRayG · Agent 306</p>
               <Badge className="text-[10px] bg-primary/10 text-primary border-primary/30">Producer</Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              NormiesTV creator — all phases are official tools built for the Normies IP.
-              The canvas, arena, pixel market, and zombie mechanics are canon to the story universe.
+              306 creator — all phases are official tools built for the 306 universe.
+              The origin, battles, economy, and zombie mechanics are canon to the story universe.
             </p>
           </div>
-          <a
-            href="https://www.normies.art"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-border text-[11px] text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
-            data-testid="link-normies-art"
-          >
-            normies.art <ExternalLink className="w-3 h-3" />
-          </a>
         </CardContent>
       </Card>
 
@@ -269,7 +260,7 @@ export default function UniverseMap() {
               },
               {
                 from: "⚔️ Arena Battles",
-                to: "NormiesTV Episode",
+                to: "306 Episode",
                 desc: "Battle results become story beats. A champion's run gets its own episode arc. A loss becomes a eulogy.",
                 phase: "phase2",
               },
@@ -282,17 +273,17 @@ export default function UniverseMap() {
               {
                 from: "🎨 Canvas Edits",
                 to: "Cast Selection",
-                desc: "Top 100 canvas contributors = Season 1 cast. Activity on-chain earns your Normie screen time.",
+                desc: "Top 100 contributors = Season 1 cast. Activity on-chain earns your token screen time.",
                 phase: "phase1",
               },
               {
                 from: "☠️ Zombie Rise",
                 to: "Phase 3 Storyline",
-                desc: "Burned Normies don't stay gone. The graveyard feeds back into the canvas — new Zombie token mechanics.",
+                desc: "Burned tokens don't stay gone. The graveyard feeds back into the ecosystem — new token mechanics.",
                 phase: "phase3",
               },
               {
-                from: "🏪 Pixel Market",
+                from: "🏪 The Market",
                 to: "Token Economy",
                 desc: "Pixel traits become tradeable. Burned-asset fragments gain value as Zombie raw material.",
                 phase: "phase2",

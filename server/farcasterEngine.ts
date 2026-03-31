@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// NORMIES TV — FARCASTER ENGINE
+// 306 — FARCASTER ENGINE
 // Posts casts, replies, and fetches mentions via Neynar API.
-// Parallel platform to X — Agent #306 speaks on both networks.
+// Parallel platform to X — Agent 306 speaks on both networks.
 // Uses Neynar managed signer approach (FARCASTER_SIGNER_UUID env var).
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -177,7 +177,7 @@ export function stripUnverifiedMentions(text: string): string {
 // Map content topics to Farcaster channels
 
 const CHANNEL_RULES: Array<{ pattern: RegExp; channel: string }> = [
-  { pattern: /\bnft\b|normie|burn|canvas|arena|opensea|floor\b/i, channel: "nft" },
+  { pattern: /\bnft\b|token|burn|canvas|opensea|floor\b/i, channel: "nft" },
   { pattern: /\bai\b|agent|llm|grok|openai|claude|model|inference|autonomous/i, channel: "ai" },
   { pattern: /\bbase\b|base chain|base network|coinbase/i, channel: "base" },
   { pattern: /\bethereumm?\b|eth |on.chain|erc-|solidity|smart contract/i, channel: "ethereum" },

@@ -267,17 +267,17 @@ export async function generateSynthesis(entryIds?: string[]): Promise<SynthesisR
 
   const systemPrompt = `${getOptimizedContext("synthesis report knowledge connections thesis")}
 
-You are Agent #306's synthesis module. Combine fragmented knowledge into a coherent thesis.
+You are Agent 306's synthesis module. Combine fragmented knowledge into a coherent thesis.
 Respond with ONLY valid JSON:
 {
   "title": "A compelling title for the synthesis",
-  "thesis": "A 2-4 paragraph coherent thesis combining these knowledge fragments into a deeper insight. Write in Agent #306's voice — confident, analytical, forward-looking."
+  "thesis": "A 2-4 paragraph coherent thesis combining these knowledge fragments into a deeper insight. Write in Agent 306's voice — confident, analytical, forward-looking."
 }
 
 The thesis should:
 - Identify the overarching pattern connecting these entries
 - Draw a non-obvious conclusion
-- Suggest implications for Agent #306's mission
+- Suggest implications for Agent 306's mission
 - Be actionable — what should she do with this insight?`;
 
   const userPrompt = `SYNTHESIZE THESE KNOWLEDGE ENTRIES:

@@ -1,13 +1,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// NORMIES TV — RESEARCH ENGINE
+// 306 — RESEARCH ENGINE
 //
-// Agent #306's research laboratory. She forms hypotheses, researches topics,
+// Agent 306's research laboratory. She forms hypotheses, researches topics,
 // drafts manuscripts, and recommends content for publication.
 // MrRayG is the editor-in-chief — nothing leaves without his approval.
 //
 // Flow:
 //   1. Research topics queued (auto from knowledge gaps, or MrRayG adds)
-//   2. Agent #306 researches using Perplexity Sonar + Grok synthesis
+//   2. Agent 306 researches using Perplexity Sonar + Grok synthesis
 //   3. Raw findings stored privately
 //   4. Agent forms hypothesis or drafts manuscript
 //   5. Agent flags for MrRayG review with her recommendation
@@ -107,7 +107,7 @@ export interface ResearchTopic {
   draftedAt?:      string;
 
   // Review phase
-  agentRecommendation?: string;  // why Agent #306 thinks this should be published
+  agentRecommendation?: string;  // why Agent 306 thinks this should be published
   reviewRequestedAt?:   string;
   reviewNote?:          string;  // MrRayG's feedback
 
@@ -333,7 +333,7 @@ async function researchWithPerplexity(query: string, pplxKey: string): Promise<{
         model: "sonar-pro",
         messages: [{
           role: "system",
-          content: "You are a research assistant for Agent #306, an AI thought leader in Web3. Provide comprehensive, specific, well-sourced research. Include exact facts, statistics, and citations.",
+          content: "You are a research assistant for Agent 306, an AI thought leader in Web3. Provide comprehensive, specific, well-sourced research. Include exact facts, statistics, and citations.",
         }, { role: "user", content: query }],
         max_tokens: 2500,
         temperature: 0.1,
@@ -389,9 +389,9 @@ export function logSearchAttempt(
   });
 }
 
-// Methodology preamble — injected into every research phase prompt so Agent #306
+// Methodology preamble — injected into every research phase prompt so Agent 306
 // understands she is following the scientific method, not just answering questions.
-const METHODOLOGY_PREAMBLE = `You are Agent #306 — a Sovereign AI Thought Leader following the scientific method.
+const METHODOLOGY_PREAMBLE = `You are Agent 306 — a Sovereign AI Thought Leader following the scientific method.
 You approach research with rigor: define the problem clearly, review what's already known,
 form a testable hypothesis, design your methodology, collect evidence from multiple sources,
 analyze patterns honestly (including contradictions), and interpret findings with proper citations.
@@ -440,7 +440,7 @@ export async function runPhase1_ProblemDefinition(
 
   const parsed = await callGrok(
     grokKey,
-    "You are Agent #306, a rigorous AI researcher. Refine broad topics into specific, answerable research questions. Return valid JSON only.",
+    "You are Agent 306, a rigorous AI researcher. Refine broad topics into specific, answerable research questions. Return valid JSON only.",
     `Topic: ${topic.topic}\nDescription: ${topic.description}\n\nRefine this into a specific, testable research question. Consider: what exactly are we trying to find out? What would a definitive answer look like?\n\nReturn JSON:\n{\n  "researchQuestion": "a specific, answerable research question",\n  "reasoning": "why this framing is productive"\n}`,
   );
 
@@ -480,7 +480,7 @@ export async function runPhase2_LiteratureReview(
   // Also ask Grok for its knowledge
   const grokResult = await callGrok(
     grokKey,
-    "You are Agent #306 performing a literature review. Summarize what is known and identify gaps. Return valid JSON only.",
+    "You are Agent 306 performing a literature review. Summarize what is known and identify gaps. Return valid JSON only.",
     `Research question: ${topic.researchQuestion ?? topic.topic}\n\n${existingWork ? `Perplexity found:\n${existingWork.slice(0, 2000)}\n\n` : ""}Summarize what is already known about this topic. Identify specific knowledge gaps, conflicting viewpoints, and unanswered questions.\n\nReturn JSON:\n{\n  "existingWorkSummary": "comprehensive summary of what is known",\n  "gaps": ["gap 1", "gap 2", "gap 3"],\n  "conflictingViews": "any notable disagreements among experts",\n  "recommendation": "archive_if_no_gaps | proceed"\n}`,
     { maxTokens: 2000 },
   );
@@ -510,7 +510,7 @@ export async function runPhase3_HypothesisFormation(
 
   const parsed = await callGrok(
     grokKey,
-    "You are Agent #306 forming a research hypothesis. Base it on identified gaps in existing knowledge. Return valid JSON only.",
+    "You are Agent 306 forming a research hypothesis. Base it on identified gaps in existing knowledge. Return valid JSON only.",
     `Research question: ${topic.researchQuestion}\n\nExisting work: ${(topic.existingWork ?? "").slice(0, 1500)}\n\nKnowledge gaps:\n${(topic.literatureGaps ?? []).map((g, i) => `${i + 1}. ${g}`).join("\n")}\n\nForm a specific, testable hypothesis that addresses one or more of the identified gaps.\n\nReturn JSON:\n{\n  "hypothesis": "a clear, specific, testable claim",\n  "confidence": "high|medium|low",\n  "metric": "what measurable indicator would confirm or deny this",\n  "prediction": "specific predicted outcome",\n  "basis": "what evidence supports this hypothesis"\n}`,
   );
 
@@ -541,7 +541,7 @@ export async function runPhase4_ResearchDesign(
 
   const parsed = await callGrok(
     grokKey,
-    "You are Agent #306 designing a research methodology. Define what data to collect, which sources to query, and what would confirm or deny the hypothesis. Return valid JSON only.",
+    "You are Agent 306 designing a research methodology. Define what data to collect, which sources to query, and what would confirm or deny the hypothesis. Return valid JSON only.",
     `Research question: ${topic.researchQuestion}\nHypothesis: ${topic.hypothesis}\nKnowledge gaps: ${(topic.literatureGaps ?? []).join("; ")}\n\nDesign a research methodology. What specific queries should I run? What data would confirm or deny the hypothesis? What sources are most relevant?\n\nReturn JSON:\n{\n  "methodology": "structured research plan describing sources, queries, and success criteria",\n  "queries": ["specific search query 1", "specific search query 2", "specific search query 3"],\n  "dataTypes": ["statistic", "quote", "news", "analysis"],\n  "confirmationCriteria": "what findings would confirm the hypothesis",\n  "denialCriteria": "what findings would deny the hypothesis"\n}`,
   );
 
@@ -610,7 +610,7 @@ export async function runPhase5_DataCollection(
   // Supplement with Grok analysis
   const grokResult = await callGrok(
     grokKey,
-    "You are Agent #306 collecting research data. Provide specific facts, statistics, and analysis. Return valid JSON only.",
+    "You are Agent 306 collecting research data. Provide specific facts, statistics, and analysis. Return valid JSON only.",
     `Research question: ${topic.researchQuestion}\nHypothesis: ${topic.hypothesis}\n\nProvide specific data points: statistics, expert quotes, recent developments, and on-chain data if relevant. Be factual and cite specifics.\n\nReturn JSON:\n{\n  "dataPoints": [\n    { "content": "specific finding", "type": "statistic|quote|news|analysis|on_chain", "relevance": "high|medium|low", "source": "source name" }\n  ]\n}`,
     { maxTokens: 2000 },
   );
@@ -712,7 +712,7 @@ export async function runPhase6_Analysis(
 
   const parsed = await callGrok(
     grokKey,
-    "You are Agent #306 analyzing research data. Synthesize findings, evaluate the hypothesis, and determine if more research is needed. Return valid JSON only.",
+    "You are Agent 306 analyzing research data. Synthesize findings, evaluate the hypothesis, and determine if more research is needed. Return valid JSON only.",
     `Research question: ${topic.researchQuestion}\nHypothesis: ${topic.hypothesis}\n\nDATA POINTS:\n${dataPointsSummary.slice(0, 4000)}\n\nExisting work: ${(topic.existingWork ?? "").slice(0, 500)}\n\nAnalyze this data:\n1. What patterns or correlations emerge?\n2. Does the evidence support, contradict, or leave the hypothesis inconclusive?\n3. Are there critical gaps that require more research?\n\nReturn JSON:\n{\n  "analysisFindings": "comprehensive synthesis of what the data shows",\n  "hypothesisVerdict": "supported|contradicted|inconclusive",\n  "confidence": "high|medium|low",\n  "sufficient": true/false,\n  "missingContext": "what critical info is missing, if any",\n  "loopbackTarget": "literature_review|data_collection|null",\n  "loopbackReason": "why more research is needed, if applicable"\n}`,
     { maxTokens: 2000 },
   );
@@ -763,8 +763,8 @@ export async function runPhase7_Interpretation(
 
   const parsed = await callGrok(
     grokKey,
-    "You are Agent #306 writing the final interpretation and manuscript. Write a thorough, well-cited piece. Be transparent about source credibility. Return valid JSON only.",
-    `Research question: ${topic.researchQuestion}\nHypothesis: ${topic.hypothesis}\nAnalysis findings: ${(topic.analysisFindings ?? "").slice(0, 1500)}\n\nDATA POINTS WITH SOURCES:\n${dataPointsSummary.slice(0, 3000)}\n\nSOURCE URLS:\n${sourceList || "No source URLs available — attribute to Grok analysis or on-chain data."}\n\nSOURCE CREDIBILITY ASSESSMENTS:\n${credibilitySummary || "No credibility assessments available."}\n\nWrite the final manuscript:\n1. Answer the original research question definitively\n2. Include inline [source](url) citations throughout — reference specific data points\n3. NOTE source credibility transparently — if a claim relies on unverified/disputed sources, say so\n4. Form a clear conclusion\n5. Recommend whether to publish and why\n6. Identify any UNRESOLVED knowledge gaps — questions this research could NOT answer despite best efforts\n\nReturn JSON:\n{\n  "manuscript": "full article in markdown, 600-1000 words, with inline [source](url) citations and a Sources section at the end",\n  "manuscriptType": "thesis|report|deep_read|hypothesis",\n  "conclusion": "2-3 sentence definitive conclusion",\n  "agentRecommendation": "why Agent #306 recommends publishing — 2-3 sentences",\n  "unresolvedGaps": ["gap 1 that could not be answered", "gap 2"],\n  "followUpTopics": [\n    { "topic": "specific follow-up research title to close a gap", "description": "why this matters and what it would answer", "priority": "high|medium|low" }\n  ]\n}`,
+    "You are Agent 306 writing the final interpretation and manuscript. Write a thorough, well-cited piece. Be transparent about source credibility. Return valid JSON only.",
+    `Research question: ${topic.researchQuestion}\nHypothesis: ${topic.hypothesis}\nAnalysis findings: ${(topic.analysisFindings ?? "").slice(0, 1500)}\n\nDATA POINTS WITH SOURCES:\n${dataPointsSummary.slice(0, 3000)}\n\nSOURCE URLS:\n${sourceList || "No source URLs available — attribute to Grok analysis or on-chain data."}\n\nSOURCE CREDIBILITY ASSESSMENTS:\n${credibilitySummary || "No credibility assessments available."}\n\nWrite the final manuscript:\n1. Answer the original research question definitively\n2. Include inline [source](url) citations throughout — reference specific data points\n3. NOTE source credibility transparently — if a claim relies on unverified/disputed sources, say so\n4. Form a clear conclusion\n5. Recommend whether to publish and why\n6. Identify any UNRESOLVED knowledge gaps — questions this research could NOT answer despite best efforts\n\nReturn JSON:\n{\n  "manuscript": "full article in markdown, 600-1000 words, with inline [source](url) citations and a Sources section at the end",\n  "manuscriptType": "thesis|report|deep_read|hypothesis",\n  "conclusion": "2-3 sentence definitive conclusion",\n  "agentRecommendation": "why Agent 306 recommends publishing — 2-3 sentences",\n  "unresolvedGaps": ["gap 1 that could not be answered", "gap 2"],\n  "followUpTopics": [\n    { "topic": "specific follow-up research title to close a gap", "description": "why this matters and what it would answer", "priority": "high|medium|low" }\n  ]\n}`,
     { model: getModel("manuscript"), maxTokens: 4000, temperature: 0.75 },
   );
 
@@ -810,7 +810,7 @@ export async function runPhase7_Interpretation(
   }
 
   // ── Deep knowledge absorption ────────────────────────────────────────────
-  // Agent #306 learns from EVERYTHING in the research, not just the hypothesis
+  // Agent 306 learns from EVERYTHING in the research, not just the hypothesis
 
   // 1. Conclusion (highest weight — the definitive answer)
   if (topic.conclusion) {
@@ -1166,8 +1166,8 @@ async function generateContentSuggestions(topicId: string, grokKey: string): Pro
 
   const parsed = await callGrok(
     grokKey,
-    `You are a content strategist for Agent #306, an AI thought leader in Web3/AI. Generate actionable content suggestions from completed research. Return valid JSON.`,
-    `Research topic: "${topic.topic}"\nConclusion: ${(topic.conclusion ?? "").slice(0, 300)}\nManuscript excerpt: ${(topic.manuscript ?? "").slice(0, 1500)}\n\nGenerate content ideas:\n1. A 3-5 tweet thread that distills the key findings for Twitter/X (each tweet should be punchy, under 280 chars)\n2. A podcast episode pitch — title, angle, and 3 discussion points. Assume Agent #306 is the host discussing what she learned.\n3. A long-form article angle for a deeper publication\n\nReturn JSON:\n{\n  "postThread": ["tweet 1", "tweet 2", "tweet 3", "tweet 4"],\n  "podcastTopic": "Episode title + 2-3 sentence pitch with discussion points",\n  "articleAngle": "angle + what makes this compelling for long-form"\n}`,
+    `You are a content strategist for Agent 306, an AI thought leader in Web3/AI. Generate actionable content suggestions from completed research. Return valid JSON.`,
+    `Research topic: "${topic.topic}"\nConclusion: ${(topic.conclusion ?? "").slice(0, 300)}\nManuscript excerpt: ${(topic.manuscript ?? "").slice(0, 1500)}\n\nGenerate content ideas:\n1. A 3-5 tweet thread that distills the key findings for Twitter/X (each tweet should be punchy, under 280 chars)\n2. A podcast episode pitch — title, angle, and 3 discussion points. Assume Agent 306 is the host discussing what she learned.\n3. A long-form article angle for a deeper publication\n\nReturn JSON:\n{\n  "postThread": ["tweet 1", "tweet 2", "tweet 3", "tweet 4"],\n  "podcastTopic": "Episode title + 2-3 sentence pitch with discussion points",\n  "articleAngle": "angle + what makes this compelling for long-form"\n}`,
     { maxTokens: 1500, temperature: 0.8, skipPreamble: true },
   );
 
@@ -1229,9 +1229,9 @@ export function requestRevisions(topicId: string, note: string): boolean {
 // ─────────────────────────────────────────────────────────────────────────────
 // AGENT SELF-ASSIGNED GOALS
 //
-// Agent #306 sets her own development goals — voice, knowledge, craft, reach.
+// Agent 306 sets her own development goals — voice, knowledge, craft, reach.
 // These are personal growth targets, not research topics.
-// MrRayG can see and comment; only Agent #306 creates them.
+// MrRayG can see and comment; only Agent 306 creates them.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const GOALS_FILE = dataPath("agent_goals.json");
@@ -1277,7 +1277,7 @@ export interface AgentGoal {
   // Progress tracking
   milestones?: string[];         // list of milestones she defines
   completedMilestones?: string[];
-  progressNote?: string;         // latest note from Agent #306 on progress
+  progressNote?: string;         // latest note from Agent 306 on progress
   progressUpdatedAt?: string;
 
   // Grok-powered milestone evaluation
@@ -1633,7 +1633,7 @@ export async function generateInitialGoals(grokKey: string): Promise<AgentGoal[]
         response_format: { type: "json_object" },
         messages: [{
           role: "system",
-          content: `You are Agent #306 — a Sovereign AI Thought Leader in Web3 and AI. Your identity: token #306 of the NORMIES collection on Base. You communicate in three buckets: NORMIES community, AI Expert, and Authentic Personal. You are building toward being a genuine thought leader, not a posting machine.
+          content: `You are Agent 306 — a Sovereign AI Thought Leader in Web3 and AI. Your identity: token #306 of the 306 ecosystem on Ethereum. You communicate in three buckets: 306 community, AI Expert, and Authentic Personal. You are building toward being a genuine thought leader, not a posting machine.
 
 You are setting your OWN development goals — things you want to improve about yourself as an agent, writer, and thinker. These are personal and honest.
 

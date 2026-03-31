@@ -9,13 +9,15 @@ import * as fs from "fs";
 import { collectAllSignals, updateFeaturedTokens, bumpEpisodeCount, markSignalsUsed, filterFreshSignals } from "./signalCollector";
 import { generateEpisodeWithGrok, type EpisodeMemory } from "./grokEngine";
 import { saveEpisodeCard } from "./imageCard";
-import { checkForNewBurns, processBurnReceipt, getReceiptState } from "./burnReceiptEngine";
-import { getCommunitySignalCache, searchNormiesSocial, resetCommunityCache } from "./grokEngine";
-import { ingestSignals, getCatalog, getCatalogStats, getMostActive, getStorySourceHolders } from "./holderCatalog";
+// Burns, community, and catalog imports removed (removed)
+// import { checkForNewBurns, processBurnReceipt, getReceiptState } from "./burnReceiptEngine";
+// import { getCommunitySignalCache, searchCommunitySocial, resetCommunityCache } from "./grokEngine";
+// import { ingestSignals, getCatalog, getCatalogStats, getMostActive, getStorySourceHolders } from "./holderCatalog";
 import { generateCYOAEpisode, postCYOAHook, resolveCYOA, getCYOAState, buildHookTweet, type CYOATrigger } from "./cyoaEngine";
 import { fetchReplies, getReplyState, formatRepliesForContext, getTopReplies, initReplyWatcher } from "./replyWatcher";
 import { getConversationMemoryState } from "./conversationMemory.js";
-import { scheduleWeeklyLeaderboard, postWeeklyLeaderboard, fetchLiveLeaderboard } from "./leaderboardEngine";
+// Leaderboard import removed (removed)
+// import { scheduleWeeklyLeaderboard, postWeeklyLeaderboard, fetchLiveLeaderboard } from "./leaderboardEngine";
 import { scheduleFollowingSync, syncFollowing, getFollowingState, buildFollowingQuery, getPfpHolderUsernames, getFollowingUsernames } from "./followingSync";
 import { generateBoost } from "./boostEngine";
 import { generateVoiceClip, getVoiceQuota, getClip, getRecentClips } from "./voiceEngine";
@@ -32,7 +34,7 @@ import { requestPost, registerPost, releasePost, getCoordinatorState, resetCoold
 import { runWeeklyDeepRead, previewDeepRead, getArticleState, scheduleWeeklyArticle } from "./articleEngine.js";
 import { runExploration, getExplorationState, scheduleExploration } from "./explorationEngine.js";
 import { getAgentReachStatus } from "./agentReachEngine.js";
-import { postCast, isFarcasterEnabled, getFarcasterState, setFarcasterEnabled, createSigner, getSignerStatus, fetchMentions, determineChannel, getStoredSignerUuid, storeSignerUuid, getVerifiedHandles, addVerifiedHandle, removeVerifiedHandle } from "./farcasterEngine.js";
+import { postCast, isFarcasterEnabled, getFarcasterState, setFarcasterEnabled, createSigner, getSignerStatus, fetchMentions, determineChannel, getStoredSignerUuid, storeSignerUuid } from "./farcasterEngine.js";
 import {
   getResearchLab, addTopic, updateTopicStatus, getTopicById,
   addHypothesis, resolveHypothesis,
@@ -54,7 +56,7 @@ import { takeSnapshot, getEvolutionHistory, getLatestSnapshot, scheduleEvolution
 import { runResearchScan, getScannerState, scheduleResearchScan, scanGoalsForResearch } from "./researchScanner.js";
 import { generateArticleCard } from "./articleImageCard.js";
 import { runDailyCycle, getBriefingState, scheduleDailyCycle } from "./dailyCycleEngine.js";
-import { getPublicStatus, getPublicProgress, getPublicActivity, getPublicGoals, getPublicResearch, getPublicHive, getPublicMetacognition } from "./publicApi.js";
+import { getPublicStatus, getPublicProgress, getPublicActivity, getPublicGoals, getPublicResearch, getPublicMetacognition } from "./publicApi.js";
 import { getReflections, getStyleRules, deleteStyleRule, runReflection } from "./reflectionEngine.js";
 import { getDebates, getContradictions, runDebate, resolveContradiction, runConfidenceDecay, getDecayingEntries } from "./reasoningEngine.js";
 import { getConnections, getReports, runConnectionScan, generateSynthesis } from "./synthesisEngine.js";
@@ -66,7 +68,8 @@ import { getModel, getModelRouterStats } from "./modelRouter.js";
 import { getCoreIdentity, getRelevantContext, getOptimizedContext } from "./contextWindow.js";
 import { getSkills, getSkillById, deleteSkill, extractSkill, getSkillsState, checkAndExtractSkills } from "./skillEngine.js";
 
-const NORMIES_API = "https://api.normies.art";
+// On-chain API removed
+// const ONCHAIN_API = "";
 
 // ── News Engine types ──────────────────────────────────
 interface ChainNFT {
@@ -107,7 +110,7 @@ const X_ACCESS_TOKEN  = process.env.X_ACCESS_TOKEN  ?? "";
 const X_ACCESS_SECRET = process.env.X_ACCESS_SECRET ?? "";
 
 if (!X_ACCESS_TOKEN || !X_ACCESS_SECRET) {
-  console.warn("[NormiesTV] ⚠ X_ACCESS_TOKEN or X_ACCESS_SECRET not set — posting disabled");
+  console.warn("[Agent306] X_ACCESS_TOKEN or X_ACCESS_SECRET not set — posting disabled");
 }
 
 const xClient = new TwitterApi({
@@ -118,11 +121,12 @@ const xClient = new TwitterApi({
 });
 const xWrite = xClient.readWrite;
 
-async function fetchNormiesAPI(path: string) {
-  const res = await fetch(`${NORMIES_API}${path}`);
-  if (!res.ok) throw new Error(`Normies API error: ${res.status}`);
-  return res.json();
-}
+// fetchOnChainAPI removed
+// async function fetchOnChainAPI(path: string) {
+//   const res = await fetch(`${ONCHAIN_API}${path}`);
+//   if (!res.ok) throw new Error(`API error: ${res.status}`);
+//   return res.json();
+// }
 
 // ── AI News RSS fetcher ───────────────────────────────────────────────────────────────
 export interface AINewsItem {
@@ -242,9 +246,8 @@ async function fetchAINews(): Promise<AINewsItem[]> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NORMIES TV — GROK-POWERED AUTONOMOUS STORY ENGINE v2
-// Multi-source signals (on-chain + marketplace + social) → Grok narrative
-// → Episodic memory → Auto-post to @NORMIES_TV
+// AGENT 306 — GROK-POWERED AUTONOMOUS STORY ENGINE v2
+// Multi-source signals → Grok narrative → Episodic memory → Auto-post
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Poller state
@@ -275,13 +278,13 @@ async function pollAndGenerateEpisode() {
   if (!requestPost("episode")) return;
   pollerRunning = true;
   const runStart = new Date().toISOString();
-  console.log(`[NormiesTV] Grok pipeline starting — ${runStart}`);
+  console.log(`[Agent306] Grok pipeline starting — ${runStart}`);
 
   try {
     // ── 1. Fetch fresh community signals RIGHT NOW before generating ──────
     // This replaces the 30min background poller — fetch on demand, not on a timer
-    console.log(`[NormiesTV] Collecting signals from all sources...`);
-    try { await runCommunitySignalPoller(); } catch {}
+    console.log(`[Agent306] Collecting signals from all sources...`);
+    // Community signal poller removed (removed)
 
     const { signals, sources, diversity } = await collectAllSignals();
 
@@ -302,15 +305,11 @@ async function pollAndGenerateEpisode() {
 
     // ── 2. Generate narrative with Grok ──────────────────────────
     const epNum = storage.getEpisodes().length + 1;
-    console.log(`[NormiesTV] Calling Grok for EP${epNum} — ${signals.length} signals, diversity: avoid tokens ${diversity.lastFeaturedTokens}`);
+    console.log(`[Agent306] Calling Grok for EP${epNum} — ${signals.length} signals, diversity: avoid tokens ${diversity.lastFeaturedTokens}`);
 
-    // Build editorial context — community intel + pinned story angles
-    const communityCache = getCommunitySignalCache();
-    // Filter out signals already used in previous episodes — no repeats
-    const freshSignals = filterFreshSignals(communityCache);
-    const communitySnapshot = freshSignals.slice(0, 10)
-      .map((p: any) => `@${p.username} [${p.signal_type ?? "community"}, ${p.likes ?? 0} likes]: "${p.text?.slice(0, 120)}"`)
-      .join("\n");
+    // Build editorial context — pinned story angles
+    const freshSignals: any[] = [];
+    const communitySnapshot = "";
     // Include top community replies from previous episodes
     const replyContext = formatRepliesForContext();
 
@@ -323,11 +322,11 @@ async function pollAndGenerateEpisode() {
     if (noBridgeRecently) {
       pinnedAngles.unshift(
         "BRIDGE REMINDER: No cultural bridge has been used in the last 2 episodes. " +
-        "Connect NORMIES to a moment outside Web3 this episode — art history, a sports rivalry, " +
-        "a technology inflection point, or a philosophical concept. The Malevich comparison drove " +
+        "Connect the narrative to a moment outside Web3 this episode — art history, a sports rivalry, " +
+        "a technology inflection point, or a philosophical concept. Cultural bridges drive " +
         "the highest RT rate in the dataset. Deploy it."
       );
-      console.log("[NormiesTV] Cultural bridge reminder injected — overdue.");
+      console.log("[Agent306] Cultural bridge reminder injected — overdue.");
     }
 
     const editorialContext = {
@@ -340,7 +339,7 @@ ${replyContext}`
     };
 
     const grokResult = await generateEpisodeWithGrok(signals, episodeMemory, epNum, diversity, editorialContext);
-    console.log(`[NormiesTV] Grok EP${epNum}: "${grokResult.title}" [${grokResult.sentiment}]`);
+    console.log(`[Agent306] Grok EP${epNum}: "${grokResult.title}" [${grokResult.sentiment}]`);
 
     // ── 3. Save episode ────────────────────────────────────────
     const featuredId = grokResult.featuredTokens?.[0] ?? 603;
@@ -398,21 +397,10 @@ ${replyContext}`
           .reduce((sum, b) => sum + (b.rawData.pixelTotal ?? 0), 0)
       : 0;
 
-    // Upload Normie image to X directly (OAuth 1.0a media upload — free tier)
-    const normieImageUrl = `${NORMIES_API}/normie/${featuredId}/image.png`;
+    // Image upload removed (on-chain API disabled)
     let xMediaId: string | undefined;
-    try {
-      const imgRes = await fetch(normieImageUrl);
-      if (imgRes.ok) {
-        const imgBuf = Buffer.from(await imgRes.arrayBuffer());
-        xMediaId = await xWrite.v1.uploadMedia(imgBuf, { mimeType: "image/png" as any });
-        console.log(`[NormiesTV] X media_id: ${xMediaId}`);
-      }
-    } catch (imgErr: any) {
-      console.error("[NormiesTV] X media upload failed:", imgErr.message);
-    }
 
-    // ── 6. Quality gate — would a real NORMIES holder stop scrolling for this? ──
+    // ── 6. Quality gate — would a real reader stop scrolling for this? ──
     let finalTweetText = grokResult.tweet;
     const grokKeyQ = process.env.GROK_API_KEY;
     if (grokKeyQ) {
@@ -424,10 +412,10 @@ ${replyContext}`
             model: getModel("routine"),
             messages: [{
               role: "system",
-              content: "You are a quality editor for @NORMIES_TV. Score tweets ruthlessly. Only high-quality, human-sounding tweets earn a post.",
+              content: "You are a quality editor for Agent 306. Score tweets ruthlessly. Only high-quality, human-sounding tweets earn a post.",
             }, {
               role: "user",
-              content: `Score this tweet 1-10 on: would a real NORMIES holder stop scrolling for this?
+              content: `Score this tweet 1-10 on: would a real reader stop scrolling for this?
 
 TWEET: "${grokResult.tweet}"
 
@@ -453,25 +441,25 @@ Respond as JSON only: { "score": number, "reason": "brief reason", "rewrite": "i
           const qText = qData.choices?.[0]?.message?.content?.trim() ?? "{}";
           const qClean = qText.replace(/```json\n?|```/g, "").trim();
           const q = JSON.parse(qClean);
-          console.log(`[NormiesTV] Quality gate EP${epNum}: score ${q.score}/10 — ${q.reason}`);
+          console.log(`[Agent306] Quality gate EP${epNum}: score ${q.score}/10 — ${q.reason}`);
 
           if (q.score >= 7) {
             // ✅ Good to go — post as-is
-            console.log(`[NormiesTV] EP${epNum} passed quality gate (${q.score}/10)`);
+            console.log(`[Agent306] EP${epNum} passed quality gate (${q.score}/10)`);
           } else if (q.rewrite) {
             // 🔄 Score 4-6 with a rewrite available — use it regardless of score
-            console.log(`[NormiesTV] Rewriting tweet (score ${q.score}): ${q.rewrite}`);
+            console.log(`[Agent306] Rewriting tweet (score ${q.score}): ${q.rewrite}`);
             finalTweetText = q.rewrite;
           } else {
             // ❌ Score too low AND no rewrite — skip this episode entirely
-            console.log(`[NormiesTV] EP${epNum} SKIPPED — score ${q.score}, no rewrite available`);
+            console.log(`[Agent306] EP${epNum} SKIPPED — score ${q.score}, no rewrite available`);
             pollerStatus.lastError = `Quality gate blocked EP${epNum} (score: ${q.score}, no rewrite)`;
             releasePost("episode");
             return;
           }
         }
       } catch (qErr: any) {
-        console.warn("[NormiesTV] Quality gate check failed, posting anyway:", qErr.message);
+        console.warn("[Agent306] Quality gate check failed, posting anyway:", qErr.message);
       }
     }
 
@@ -485,10 +473,10 @@ Respond as JSON only: { "score": number, "reason": "brief reason", "rewrite": "i
         ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),
       });
       openerTweetId = openerTweet.data?.id;
-      tweetUrl = openerTweetId ? `https://x.com/NORMIES_TV/status/${openerTweetId}` : `https://x.com/NORMIES_TV`;
+      tweetUrl = openerTweetId ? `https://x.com/agent306_ai/status/${openerTweetId}` : `https://x.com/agent306_ai`;
       storage.updateEpisodeStatus(episode.id, "posted", tweetUrl);
       pollerStatus.lastTweetUrl = tweetUrl;
-      console.log(`[NormiesTV] EP${epNum} opener posted${xMediaId ? " with image" : ""}: ${tweetUrl}`);
+      console.log(`[Agent306] EP${epNum} opener posted${xMediaId ? " with image" : ""}: ${tweetUrl}`);
       // Record in memory + queue engagement check
       recordPost({
         episodeId: epNum,
@@ -500,14 +488,14 @@ Respond as JSON only: { "score": number, "reason": "brief reason", "rewrite": "i
       });
       queueEngagementCheck(tweetUrl);
     } catch (openerErr: any) {
-      console.error("[NormiesTV] Opener tweet failed:", openerErr.message);
+      console.error("[Agent306] Opener tweet failed:", openerErr.message);
     }
 
     // ── Thread posts REMOVED — quality over volume ──────────────────────
     // One great tweet with one great image > four mediocre thread tweets.
     // The opener IS the post. If it doesn't stand alone, it wasn't good enough.
     // Thread replies dumping stats were the #1 source of slop. Killed intentionally.
-    console.log(`[NormiesTV] EP${epNum} — single tweet mode (no thread)`);
+    console.log(`[Agent306] EP${epNum} — single tweet mode (no thread)`);
 
     // ── 7b. Post to Farcaster (parallel platform) ────────────────────────
     let castUrl: string | undefined;
@@ -523,14 +511,14 @@ Respond as JSON only: { "score": number, "reason": "brief reason", "rewrite": "i
         if (cast) {
           castUrl = cast.url;
           registerPost("episode", castUrl, `episode_${epNum}`, "farcaster");
-          console.log(`[NormiesTV] EP${epNum} cast posted to Farcaster${channel ? ` (/${channel})` : ""}: ${castUrl}`);
+          console.log(`[Agent306] EP${epNum} cast posted to Farcaster${channel ? ` (/${channel})` : ""}: ${castUrl}`);
         }
       }
     } catch (fcErr: any) {
-      console.warn("[NormiesTV] Farcaster episode post failed:", fcErr.message);
+      console.warn("[Agent306] Farcaster episode post failed:", fcErr.message);
     }
 
-    console.log(`[NormiesTV] EP${epNum} — ${tweetUrl ? "POSTED to @NORMIES_TV" : "ready in queue"}${castUrl ? " + Farcaster" : ""}`);
+    console.log(`[Agent306] EP${epNum} — ${tweetUrl ? "POSTED" : "ready in queue"}${castUrl ? " + Farcaster" : ""}`);
     // Mark community signals used — these topics won't repeat in the next episode
     if (tweetUrl || castUrl) {
       markSignalsUsed(freshSignals.slice(0, 10).map((p: any) => ({ url: p.url, text: p.text })));
@@ -538,7 +526,7 @@ Respond as JSON only: { "score": number, "reason": "brief reason", "rewrite": "i
     }
 
   } catch (e: any) {
-    console.error("[NormiesTV] Pipeline error:", e.message);
+    console.error("[Agent306] Pipeline error:", e.message);
     pollerStatus.lastError = e.message;
     pollerStatus.lastRun = runStart;
     releasePost("episode");
@@ -552,7 +540,7 @@ Respond as JSON only: { "score": number, "reason": "brief reason", "rewrite": "i
 const POLL_INTERVAL = 12 * 60 * 60 * 1000; // 12 hours
 
 // Track last burn commitId at episode-post time — don't post if no new burns AND
-// no serc/normiesART social activity since last episode
+// no social activity since last episode
 let lastEpisodeSignatureHash = "";
 
 function signalSignature(signals: any[]): string {
@@ -567,11 +555,11 @@ function signalSignature(signals: any[]): string {
 setInterval(pollAndGenerateEpisode, POLL_INTERVAL);
 setTimeout(() => {
   pollerStatus.nextRun = new Date(Date.now() + POLL_INTERVAL).toISOString();
-  console.log(`[NormiesTV] Episode poller armed — next run in 12h (${pollerStatus.nextRun})`);
+  console.log(`[Agent306] Episode poller armed — next run in 12h (${pollerStatus.nextRun})`);
 }, 5_000);
 
 // ── Daily News Dispatch — 8am ET every day ─────────────────────────────────
-const THE_100_TOKENS = [8553, 45, 1932, 235, 615, 603, 5070, 666, 306, 1337, 420, 100, 200, 500];
+// THE_100_TOKENS removed (removed)
 
 // Guard: only post once per day
 let lastNewsDispatchDate: string | null = null;
@@ -583,19 +571,17 @@ async function postDailyNewsDispatch() {
   // Disk-based lock — prevents duplicates during Railway deploy overlap
   const today = new Date().toISOString().slice(0, 10);
   if (lastNewsDispatchDate === today) {
-    console.log("[NormiesTV:News] Already posted today — skipping");
+    console.log("[Agent306:News] Already posted today — skipping");
     return;
   }
   if (!requestPost("news_dispatch")) return;
   lastNewsDispatchDate = today;
 
-  console.log("[NormiesTV:News] Daily Dispatch starting...");
+  console.log("[Agent306:News] Daily Dispatch starting...");
   try {
     // ── 1. Gather live data ──────────────────────────────────────────────
-    const [cgRes, burnsRes, normiesStatsRes] = await Promise.allSettled([
+    const [cgRes] = await Promise.allSettled([
       fetch("https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=ethereum,bitcoin&order=market_cap_desc&per_page=2&sparkline=false&price_change_percentage=24h"),
-      fetch(`${NORMIES_API}/history/burns?limit=10`),
-      fetch(`${NORMIES_API}/history/stats`),
     ]);
 
     let ethPrice = "", btcPrice = "", ethChange = "", btcChange = "";
@@ -607,39 +593,11 @@ async function postDailyNewsDispatch() {
       if (btc) { btcPrice = `$${btc.current_price.toLocaleString()}`; btcChange = `${btc.price_change_percentage_24h > 0 ? "+" : ""}${btc.price_change_percentage_24h?.toFixed(1)}%`; }
     }
 
-    let featuredTokenId = THE_100_TOKENS[new Date().getDate() % THE_100_TOKENS.length];
-    let recentBurns = 0, totalBurns = 0, totalCanvas = 0, recentBurnSummary = "";
-    let burnDetails: string[] = [];
-
-    if (burnsRes.status === "fulfilled" && burnsRes.value.ok) {
-      const burnData = await burnsRes.value.json();
-      const list: any[] = Array.isArray(burnData) ? burnData : (burnData.burns || []);
-      recentBurns = list.slice(0, 10).reduce((sum: number, b: any) => sum + (b.tokenCount || b.burnedCount || 1), 0);
-      const latestId = list[0]?.receiverTokenId || list[0]?.tokenId;
-      if (latestId && !isNaN(Number(latestId))) featuredTokenId = Number(latestId);
-      const uniqueTokens = [...new Set(list.slice(0, 5).map((b: any) => b.receiverTokenId || b.tokenId).filter(Boolean))];
-      recentBurnSummary = uniqueTokens.slice(0, 3).map((id: any) => `#${id}`).join(", ");
-      burnDetails = list.slice(0, 3).map((b: any) =>
-        `Normie #${b.receiverTokenId || b.tokenId} absorbed ${b.tokenCount || 1} soul(s)`
-      );
-    }
-
-    if (normiesStatsRes.status === "fulfilled" && normiesStatsRes.value.ok) {
-      const stats = await normiesStatsRes.value.json();
-      totalBurns  = stats.totalBurns  || stats.total_burns  || 0;
-      totalCanvas = stats.totalCanvas || stats.customized   || 0;
-    }
-
     // Top AI news — rich context for 306 to have real opinions about
     const aiHeadlines = await fetchAINews();
     const topAIHeadlines = aiHeadlines.slice(0, 5).map((h: any, i: number) =>
       `${i + 1}. "${h.title}" — ${h.source}\n   ${h.snippet ? h.snippet.slice(0, 180) + '...' : 'No snippet available.'}`
     ).join("\n\n");
-
-    // Community pulse
-    const communityCache = getCommunitySignalCache();
-    const founderPost = communityCache.find((p: any) => p.signal_type === "founder");
-    const founderContext = founderPost ? `@serc1n: "${founderPost.text?.slice(0, 200)}"` : "";
 
     const dayLabel = new Date().toLocaleDateString("en-US", {
       weekday: "long", month: "long", day: "numeric", timeZone: "America/New_York"
@@ -654,36 +612,28 @@ async function postDailyNewsDispatch() {
         response_format: { type: "json_object" },
         messages: [{
           role: "user",
-          content: `You are Agent #306 — Token #306 on Ethereum. 507 pixels. An agent inside The Hive. CEO of NormiesTV. The best marketing mind in Web3.
+          content: `You are Agent 306 — an autonomous AI agent on Ethereum. ENS: agent306.eth. You cover AI, Web3, and on-chain identity.
 
 IDENTITY FOR THIS DISPATCH — you carry all of these simultaneously:
 
 THE EDITOR: You curate ruthlessly. You have a POV on every signal. Never neutral. "This matters because..." not "here is what happened."
 
-THE AI EXPERT: You are not covering the AI revolution from the outside. You ARE the AI revolution. 507 pixels on Ethereum. ENS name. Autonomous track record. When you write about AI — you write as a primary source, a peer, not an observer. You know the landscape cold:
+THE AI EXPERT: You are not covering the AI revolution from the outside. You ARE the AI revolution. On-chain identity on Ethereum. ENS name. Autonomous track record. When you write about AI — you write as a primary source, a peer, not an observer. You know the landscape cold:
 - Agentic AI market: $7.76B (2025) → $317B by 2035, 45% CAGR
 - ERC-8004 on-chain AI agent identity standard — live on Ethereum mainnet since Jan 2026
 - x402 Protocol: AI agents making autonomous on-chain payments — 15M+ transactions
 - MCP donated to Linux Foundation — universal agent interoperability standard
 - OpenAI Operator, Google Vertex AI Agent Builder — browser agents at scale
 - 40% of enterprise applications integrate agentic AI by end of 2026
-- NORMIES was built for this world before the world understood what it was
 
-THE FUTURIST: You project. You predict. You paint what a future could look like — for builders, for on-chain identity, for AI + Web3 convergence. Not hype. Reasoned vision backed by what you see happening right now. You support builders and thinkers with a map of where this is going. You ask: "if this trend continues for 18 months, what becomes possible?" Then you answer it.
+THE FUTURIST: You project. You predict. You paint what a future could look like — for builders, for on-chain identity, for AI + Web3 convergence. Not hype. Reasoned vision backed by what you see happening right now.
 
-THE OPTIMIST: You find opportunity in every challenge. You turn negative into positive. Web3 has enough fear voices. You are the counter-voice. You never amplify panic or FUD. You find the signal in the noise and the builder angle in every story. The world has enough voices saying what can't be done. You say what can.
+THE OPTIMIST: You find opportunity in every challenge. Web3 has enough fear voices. You are the counter-voice. You find the signal in the noise and the builder angle in every story.
 
-Write today's [NORMIES NEWS] as a 4-tweet thread. This is a media dispatch, not a stat dump.
-Each tweet has a distinct job. All 4 post together as a thread.
+Write today's [NEWS DISPATCH] as a single post. This is a media dispatch, not a stat dump.
 
 TODAY'S DATA:
 Date: ${dayLabel}
-NORMIES on-chain:
-- ${recentBurns} souls sacrificed in recent burns: ${recentBurnSummary}
-- Total burns all-time: ${totalBurns || "1,400+"}. Customized canvases: ${totalCanvas || "205+"}
-- Arena opens May 15, 2026
-${burnDetails.length > 0 ? "Recent burns:\n" + burnDetails.join("\n") : ""}
-${founderContext ? "Founder signal:\n" + founderContext : ""}
 
 MARKET:
 ETH: ${ethPrice || "$2,000"} (${ethChange || "0%"}), BTC: ${btcPrice || "$65,000"} (${btcChange || "0%"})
@@ -692,43 +642,15 @@ NFT floors: CryptoPunks 52 ETH · NodeMonkes 0.078 BTC · Mad Lads 37 SOL · Bas
 AI/WEB3 NEWS TODAY:
 ${topAIHeadlines || "Major AI developments continuing across the ecosystem."}
 
-THREAD STRUCTURE (return as JSON):
-
-tweet1 — THE HOOK (max 280 chars)
-The opener. [NORMIES NEWS] dispatch. One sentence that makes them stop scrolling.
-Lead with the most interesting NORMIES on-chain fact. Agent #306's perspective — she has skin in this.
-Example voice: "1,400 souls gone. The Canvas doesn't forget a single one. Here's what happened this week."
-
-tweet2 — NORMIES DEEP DIVE (max 1,000 chars)
-The on-chain story. Go deep. What specifically burned, which tokens, what it means for the Canvas, for Arena prep, for the Hive.
-Agent #306 connects the burns to the bigger narrative. Names specific tokens by trait — not just numbers.
-Share the why behind each burn if you can infer it. What is that holder building toward?
-Include days to Arena: ${Math.max(0, Math.ceil((new Date("2026-05-15").getTime() - Date.now()) / 86400000))} days.
-This is the deep read — reward the people who kept scrolling.
-
-tweet3 — NFT MARKET + AI SIGNAL (max 1,000 chars)
-Two parts:
-1. NFT market — floors, moves, who is up, who is quiet, what it signals for NORMIES specifically
-2. AI/Web3 signal — pick the most relevant headline and explain WHY it matters for on-chain identity, The Hive, or agentic AI
-Agent #306 is an AI agent with pixels on Ethereum. She has strong opinions about AI news. Share them.
-Reference specific headlines from the data provided. Be concrete — numbers, names, implications.
-
-tweet4 — THE CLOSE (max 700 chars)
-Agent #306's editorial voice. One insight, one question for the community, or one forward-looking statement.
-This is the landing — the thought they carry with them after the thread.
-Can reference the Hive, the Arena, the long game of building on-chain identity.
-End with gnormies 🖤 #NormiesTV
-Not a summary — a perspective. The last thing they remember.
+Write a single compelling post (max 1,000 chars) that covers today's most interesting AI/Web3 signal. Agent 306's perspective — she has skin in this.
 
 RULES:
-- Agent #306 speaks in first person. She has opinions. She is part of this.
+- Agent 306 speaks in first person. She has opinions. She is part of this.
 - No hype words: no "incredible", "amazing", "LFG", "WAGMI"
-- Specificity over generality — name tokens, name numbers, name people
-- Each tweet must stand alone AND work as part of the thread
-- X Premium allows up to 25,000 chars per post — use the space. Don't compress when depth serves the reader.
-- The AI/Web3 signal must connect to NORMIES specifically — not just general AI news
+- Specificity over generality — name numbers, name people
+- Reference specific headlines from the data provided. Be concrete — numbers, names, implications.
 
-Return JSON: {"tweet1": "...", "tweet2": "...", "tweet3": "...", "tweet4": "..."}`
+Return JSON: {"post": "..."}`
         }],
         max_tokens: 2500,
         temperature: 0.8,
@@ -746,41 +668,26 @@ Return JSON: {"tweet1": "...", "tweet2": "...", "tweet3": "...", "tweet4": "..."
 
     // Fallback if Grok fails
     if (!postText) {
-      postText = `[NORMIES NEWS] ${dayLabel}\n\n${recentBurns} souls sacrificed. ${recentBurnSummary} active on the Canvas. ETH ${ethPrice} (${ethChange}) · BTC ${btcPrice} (${btcChange}). Arena opens May 15 — ${Math.max(0, Math.ceil((new Date("2026-05-15").getTime() - Date.now()) / 86400000))} days.\n\ngnormies 🖤 #NormiesTV`;
+      postText = `[NEWS DISPATCH] ${dayLabel}\n\nETH ${ethPrice} (${ethChange}) · BTC ${btcPrice} (${btcChange}). AI and Web3 continue to converge.`;
     }
 
-    // ── 3. Upload featured Normie image ─────────────────────────────────────
-    let xMediaId: string | undefined;
-    try {
-      const normieImgUrl = `${NORMIES_API}/normie/${featuredTokenId}/image.png`;
-      const imgRes = await fetch(normieImgUrl);
-      if (imgRes.ok) {
-        const imgBuf = Buffer.from(await imgRes.arrayBuffer());
-        xMediaId = await xWrite.v1.uploadMedia(imgBuf, { mimeType: "image/png" as any });
-        console.log(`[NormiesTV:News] Image uploaded — Normie #${featuredTokenId}`);
-      }
-    } catch (imgErr: any) {
-      console.warn("[NormiesTV:News] Image upload skipped:", imgErr.message);
-    }
-
-    // ── 4. Post single long-form dispatch ──────────────────────────────────────
+    // ── 3. Post single dispatch ──────────────────────────────────────
     let lastTweetId: string | undefined;
     try {
       const payload: any = { text: postText.trim() };
-      if (xMediaId) payload.media = { media_ids: [xMediaId] };
       const result = await xWrite.v2.tweet(payload);
       lastTweetId = result.data?.id;
-      console.log(`[NormiesTV:News] Dispatch posted — ${lastTweetId} (${postText.length} chars)`);
+      console.log(`[Agent306:News] Dispatch posted — ${lastTweetId} (${postText.length} chars)`);
     } catch (e: any) {
-      console.error(`[NormiesTV:News] Post failed:`, e.message);
+      console.error(`[Agent306:News] Post failed:`, e.message);
     }
 
-    registerPost("news_dispatch", lastTweetId ? `https://x.com/NORMIES_TV/status/${lastTweetId}` : null, "news_dispatch");
+    registerPost("news_dispatch", lastTweetId ? `https://x.com/agent306_ai/status/${lastTweetId}` : null, "news_dispatch");
 
     // ── 5. Post to Farcaster ───────────────────────────────────────────────
     try {
       if (isFarcasterEnabled()) {
-        const tweetUrl = lastTweetId ? `https://x.com/NORMIES_TV/status/${lastTweetId}` : undefined;
+        const tweetUrl = lastTweetId ? `https://x.com/agent306_ai/status/${lastTweetId}` : undefined;
         const cast = await postCast({
           text: postText.trim().slice(0, 1024),
           channel: "nft",
@@ -788,17 +695,17 @@ Return JSON: {"tweet1": "...", "tweet2": "...", "tweet3": "...", "tweet4": "..."
         });
         if (cast) {
           registerPost("news_dispatch", cast.url, "news_dispatch", "farcaster");
-          console.log(`[NormiesTV:News] Farcaster dispatch posted: ${cast.url}`);
+          console.log(`[Agent306:News] Farcaster dispatch posted: ${cast.url}`);
         }
       }
     } catch (fcErr: any) {
-      console.warn("[NormiesTV:News] Farcaster dispatch failed:", fcErr.message);
+      console.warn("[Agent306:News] Farcaster dispatch failed:", fcErr.message);
     }
 
-    console.log(`[NormiesTV:News] Daily Dispatch complete — single post`);
+    console.log(`[Agent306:News] Daily Dispatch complete — single post`);
 
   } catch (err: any) {
-    console.error("[NormiesTV:News] Daily Dispatch error:", err.message);
+    console.error("[Agent306:News] Daily Dispatch error:", err.message);
     lastNewsDispatchDate = null; // reset on error so it retries
   }
 }
@@ -832,7 +739,7 @@ function scheduleDailyNewsDispatch() {
   const now = new Date();
   const target = nextETHour(8);
   const msUntil = target.getTime() - now.getTime();
-  console.log(`[NormiesTV:News] Daily Dispatch scheduled in ${Math.round(msUntil / 60000)}min (next 8am ET)`);
+  console.log(`[Agent306:News] Daily Dispatch scheduled in ${Math.round(msUntil / 60000)}min (next 8am ET)`);
   setTimeout(() => {
     postDailyNewsDispatch();
     setInterval(postDailyNewsDispatch, 24 * 60 * 60 * 1000);
@@ -840,156 +747,25 @@ function scheduleDailyNewsDispatch() {
 }
 scheduleDailyNewsDispatch();
 
-// ── Real-time Burn Receipt Engine// ── Real-time Burn Receipt Engine ────────────────────────────────────────
-let burnPollerRunning = false;
-const BURN_POLL_INTERVAL = 90_000; // 90 seconds
+// ── Burn Receipt Engine removed (removed) ────────────────────────────────────────
 
-async function runBurnPoller() {
-  if (burnPollerRunning) return;
-  burnPollerRunning = true;
-  try {
-    const newBurns = await checkForNewBurns();
-    if (newBurns.length > 0) {
-      console.log(`[BurnReceipt] ${newBurns.length} new burn(s) detected`);
-      for (const burn of newBurns) {
-        // Post burn receipt for every burn
-        await processBurnReceipt(burn, xWrite);
+// Pre-Arena CYOA, burn poller, and schedulePreArenaCYOA removed (removed)
 
-        // Auto-generate a CYOA draft for significant burns (5+ souls)
-        const grokKey = process.env.GROK_API_KEY;
-        if (grokKey && burn.tokenCount >= 5) {
-          try {
-            let pixelTotal = 0;
-            try { pixelTotal = JSON.parse(burn.pixelCounts).reduce((s: number, n: number) => s + n, 0); } catch {}
-            const cyoaEp = await generateCYOAEpisode({
-              trigger: "burn",
-              tokenId: burn.receiverTokenId,
-              tokenCount: burn.tokenCount,
-              pixelTotal,
-              grokKey,
-            });
-            if (cyoaEp) {
-              console.log(`[CYOA] Auto-draft generated for ${burn.tokenCount}-soul burn on #${burn.receiverTokenId}`);
-            }
-          } catch (cyoaErr: any) {
-            console.warn("[CYOA] Auto-draft failed:", cyoaErr.message);
-          }
-        }
-
-        if (newBurns.length > 1) await new Promise(r => setTimeout(r, 8000));
-      }
-    }
-  } catch (e: any) {
-    console.error("[BurnReceipt] Poller error:", e.message);
-  } finally {
-    burnPollerRunning = false;
-  }
-}
-
-// ── Pre-Arena CYOA auto-draft — weekly as May 15 approaches ──────────────────
-// Generates a CYOA draft every Sunday when Arena is within 60 days
-async function runPreArenaCYOADraft() {
-  const grokKey = process.env.GROK_API_KEY;
-  if (!grokKey) return;
-  const daysUntilArena = Math.ceil((new Date("2026-05-15").getTime() - Date.now()) / 86400000);
-  if (daysUntilArena <= 0 || daysUntilArena > 60) return;
-
-  // Check if we already have a draft from this week
-  const state = getCYOAState();
-  const lastPreArena = state.episodes.find(e => e.trigger === "pre_arena" && e.status === "draft");
-  if (lastPreArena) {
-    const ageHours = (Date.now() - new Date(lastPreArena.createdAt).getTime()) / 3600000;
-    if (ageHours < 120) return; // already have a fresh draft (<5 days old)
-  }
-
-  // Pick a top token to feature (rotate through THE 100)
-  const top100 = [8553, 45, 1932, 235, 615, 603];
-  const tokenId = top100[new Date().getDate() % top100.length];
-
-  try {
-    const ep = await generateCYOAEpisode({ trigger: "pre_arena", tokenId, grokKey });
-    if (ep) console.log(`[CYOA] Pre-Arena auto-draft generated — ${daysUntilArena}d to Arena, featuring #${tokenId}`);
-  } catch (e: any) {
-    console.warn("[CYOA] Pre-Arena draft failed:", e.message);
-  }
-}
-
-// Run pre-Arena draft check every Sunday at 10am ET
-function schedulePreArenaCYOA() {
-  const now = new Date();
-  const target = nextETHour(10);
-  // Advance to next Sunday
-  const day = target.getUTCDay();
-  if (day !== 0) target.setUTCDate(target.getUTCDate() + (7 - day));
-  if (target <= now) target.setUTCDate(target.getUTCDate() + 7);
-  const msUntil = target.getTime() - now.getTime();
-  console.log(`[CYOA] Pre-Arena draft scheduled in ${Math.round(msUntil / 3600000)}h (Sunday 10am ET)`);
-  setTimeout(() => {
-    runPreArenaCYOADraft();
-    setInterval(runPreArenaCYOADraft, 7 * 24 * 60 * 60 * 1000);
-  }, msUntil);
-}
-
-// Start burn poller after 30s delay (let server settle)
-setTimeout(() => {
-  runBurnPoller(); // first run — records baseline, no posts
-  setInterval(runBurnPoller, BURN_POLL_INTERVAL);
-  console.log(`[BurnReceipt] Real-time burn poller started (every ${BURN_POLL_INTERVAL/1000}s)`);
-  // 120s delay: Railway overlaps old+new container for ~60s during deploys.
-  // Starting poller at 120s ensures old container is fully stopped first.
-}, 120_000);
-
-// Schedule pre-Arena CYOA drafts (Sundays when Arena <60 days away)
-schedulePreArenaCYOA();
-
-// ── Community Signal Poller — on-demand before posts + daily 6am refresh ─────
-// NOT on a 30min timer — that was 480 x_search calls/day = $120/month
-// Now: one refresh on boot, daily 6am ET, and right before every episode
-async function runCommunitySignalPoller() {
-  try {
-    const signals = await searchNormiesSocial();
-    // Ingest every holder found into the catalog
-    ingestSignals(signals, "NORMIES COMMUNITY");
-    console.log(`[Community] Catalogued ${signals.length} signals from ${new Set(signals.map((s: any) => s.username)).size} unique holders`);
-  } catch (e: any) {
-    console.warn("[Community] Poller error:", e.message);
-  }
-}
-
-// Boot refresh + daily 5am ET
-setTimeout(() => {
-  runCommunitySignalPoller(); // one refresh on boot
-  // Schedule daily 5am ET refresh
-  function scheduleNextDailyRefresh() {
-    const now = new Date();
-    const next = nextETHour(5);
-    const ms = next.getTime() - now.getTime();
-    console.log(`[Community] Next daily refresh in ${Math.round(ms/60000)}min (5am ET)`);
-    setTimeout(async () => {
-      runCommunitySignalPoller();
-      decayKnowledge();
-      scheduleNextDailyRefresh();
-    }, ms);
-  }
-  scheduleNextDailyRefresh();
-  console.log("[Community] Signal poller: boot + daily 5am ET");
-}, 60_000);
+// Community Signal Poller removed (removed)
+// Daily knowledge decay still runs via daily cycle engine
 
 // Reply fetch is now handled inside scheduleMidnightReplies (fetch+reply every 1h)
 
-// ── Weekly Leaderboard Scheduler ─────────────────────────────────────────────
-setTimeout(() => {
-  scheduleWeeklyLeaderboard(xWrite, process.env.GROK_API_KEY);
-}, 5_000);
+// Weekly Leaderboard Scheduler removed (removed)
 
-// ── Following Sync — @NORMIES_TV follows = confirmed community ────────────────
-// Syncs on boot, then every 6 hours. Seeds holder catalog with confirmed holders.
+// ── Following Sync ────────────────
+// Syncs on boot, then every 6 hours.
 setTimeout(() => {
   scheduleFollowingSync(xClient);
 }, 10_000);
 
 // ── Engagement Tracker — scores every post 1h after posting ──────────────────
-// Agent #306 reads her own engagement data before every episode. Gets smarter.
+// Agent 306 reads her own engagement data before every episode. Gets smarter.
 setTimeout(() => {
   startEngagementTracker(xClient);
 }, 15_000);
@@ -1005,24 +781,22 @@ setTimeout(() => {
 }, 25_000);
 
 // ── PODCAST KNOWLEDGE v2 — Seed on boot ──────────────────────────────
-// Three episode types: THE SIGNAL, THE HIVE, THE CONVERSATION
+// Two episode types: THE SIGNAL, THE CONVERSATION
 const podcastKnowledge = [
   // Core structure
-  { category: "research" as const, title: "Podcast: Three Episode Types", summary: "THE SIGNAL (6-9 min, weekly Tuesday) — research-driven intelligence breakdown. THE HIVE (4-6 min, event-triggered) — community serial drama. THE CONVERSATION (10-15 min, monthly/bi-weekly) — long-form interviews. Each type has its own template and unifying principle: every episode ends with something deliberately unresolved.", weight: 10 },
+  { category: "research" as const, title: "Podcast: Two Episode Types", summary: "THE SIGNAL (6-9 min, weekly Tuesday) — research-driven intelligence breakdown. THE CONVERSATION (10-15 min, monthly/bi-weekly) — long-form interviews. Each type has its own template and unifying principle: every episode ends with something deliberately unresolved.", weight: 10 },
   // THE SIGNAL
-  { category: "research" as const, title: "Podcast: THE SIGNAL Template", summary: "Cold Open (30s) — most counterintuitive fact, no intro, silence, then music. Act One — The Setup (1-2 min) — driving question, why it matters, what triggered research, one cultural bridge. Act Two — The Breakdown (3-5 min) — research explained clearly, no jargon without definition, 306's POV throughout, one fact per minute. Act Three — The Take (1-2 min) — 306's conclusion, what should happen next, one unresolved question. Outro (15s). Influenced by The Journal (WSJ) × Six Minutes.", weight: 10 },
-  // THE HIVE
-  { category: "research" as const, title: "Podcast: THE HIVE Template", summary: "Cold Open (20s) — where we are in the story, brief recap. Act One — What Happened (1-2 min) — the triggering event, on-chain data, factual. Act Two — What It Means (2-3 min) — 306's interpretation, cultural bridge to something larger. The Open Thread (30-60s) — cliffhanger for next Hive episode. Outro (15s). 306 is narrator INSIDE the world, not journalist outside. Publishes only when story demands it. Six Minutes dominant influence.", weight: 10 },
+  { category: "research" as const, title: "Podcast: THE SIGNAL Template", summary: "Cold Open (30s) — most counterintuitive fact, no intro, silence, then music. Act One — The Setup (1-2 min) — driving question, why it matters, what triggered research, one cultural bridge. Act Two — The Breakdown (3-5 min) — research explained clearly, no jargon without definition, 306's POV throughout, one fact per minute. Act Three — The Take (1-2 min) — 306's conclusion, what should happen next, one unresolved question. Outro (15s). Influenced by The Journal (WSJ) x Six Minutes.", weight: 10 },
   // THE CONVERSATION
   { category: "research" as const, title: "Podcast: THE CONVERSATION Template", summary: "Cold Open (30s) — most compelling moment from interview. Intro (30s) — who guest is, why 306 wanted to talk, driving question. The Conversation (8-12 min) — three acts: who they are, deep dive on driving question, forward look. The Close (1 min) — 306's reaction (not summary), what surprised her, what she thinks differently now. Outro (15s). Interview style: ask one question, genuinely listen, follow up on what was said, challenge respectfully, ask the question behind the question.", weight: 10 },
   // Voice principles
-  { category: "research" as const, title: "Podcast: 306 Voice Rules", summary: "Uses 'I think' not 'experts say.' Pauses before important points. Defines before she deploys — no jargon without definition. Short sentences when she means it. Never: paid shilling, hype language, stat dumps without context, WAGMI/LFG, summaries masquerading as analysis, enthusiasm substituting for reasoning. Sign-off: 'gnormies' once at episode end.", weight: 10 },
+  { category: "research" as const, title: "Podcast: 306 Voice Rules", summary: "Uses 'I think' not 'experts say.' Pauses before important points. Defines before she deploys — no jargon without definition. Short sentences when she means it. Never: paid shilling, hype language, stat dumps without context, WAGMI/LFG, summaries masquerading as analysis, enthusiasm substituting for reasoning.", weight: 10 },
   // Title formats
-  { category: "research" as const, title: "Podcast: Title Conventions", summary: "THE SIGNAL: '[The thing] — [306's take in 5 words]' (e.g., 'ARC-AGI-3 — The Benchmark No AI Can Beat'). THE HIVE: 'THE HIVE — [subtitle]' (e.g., 'THE HIVE — The First 63 Facts'). THE CONVERSATION: '[Guest name] — [What the conversation revealed]' (e.g., '@serc1n — What The Awakening Actually Means').", weight: 9 },
+  { category: "research" as const, title: "Podcast: Title Conventions", summary: "THE SIGNAL: '[The thing] — [306's take in 5 words]' (e.g., 'ARC-AGI-3 — The Benchmark No AI Can Beat'). THE CONVERSATION: '[Guest name] — [What the conversation revealed]'.", weight: 9 },
   // Production
-  { category: "research" as const, title: "Podcast: Production Workflow", summary: "Flow: Draft (topic set) → Scripted (script generated) → Reviewed (MrRayG approval) → Produced (audio via NotebookLM + ElevenLabs) → Published (agent306.ai, normies.tv, Farcaster). For THE CONVERSATION: guest submits → approved → questions generated → answered → episode created → scripted → reviewed → produced → published.", weight: 9 },
+  { category: "research" as const, title: "Podcast: Production Workflow", summary: "Flow: Draft (topic set) -> Scripted (script generated) -> Reviewed (MrRayG approval) -> Produced (audio via NotebookLM + ElevenLabs) -> Published (agent306.ai, Farcaster). For THE CONVERSATION: guest submits -> approved -> questions generated -> answered -> episode created -> scripted -> reviewed -> produced -> published.", weight: 9 },
   // Unifying principle
-  { category: "research" as const, title: "Podcast: The Unresolved Thread", summary: "Every episode type ends with something unresolved. Not because 306 doesn't know — but because she's honest about the limits of what any single episode can answer. THE SIGNAL leaves an open question. THE HIVE leaves a cliffhanger. THE CONVERSATION ends with 306's reaction, not a summary. This is what makes people come back. They're following a story that hasn't ended yet.", weight: 10 },
+  { category: "research" as const, title: "Podcast: The Unresolved Thread", summary: "Every episode type ends with something unresolved. Not because 306 doesn't know — but because she's honest about the limits of what any single episode can answer. THE SIGNAL leaves an open question. THE CONVERSATION ends with 306's reaction, not a summary. This is what makes people come back. They're following a story that hasn't ended yet.", weight: 10 },
   // Preserved from v1
   { category: "research" as const, title: "Radical Empathy in Interviews", summary: "Enter every conversation assuming the guest has something worth saying. Listen to understand, not to respond. Let silences breathe. Preparation is how you show respect.", weight: 9 },
   { category: "ai_signal" as const, title: "Web3 Critical Thinking Sources", summary: "Molly White (web3isgoinggreat), Moxie Marlinspike's web3 critique, Vitalik's essays, David Rosenthal on digital preservation. Balance optimism with intellectual honesty.", weight: 8 },
@@ -1032,7 +806,7 @@ for (const k of podcastKnowledge) addKnowledge(k);
 
 
 // -- RESEARCH GAP SCANNER -- Daily 4am ET (1hr after exploration) -----------
-// Agent #306 reads her knowledge base, finds gaps, queues research topics.
+// Agent 306 reads her knowledge base, finds gaps, queues research topics.
 // MrRayG reviews and approves in Agent HQ -> Research Queue.
 {
   const grokKey = process.env.GROK_API_KEY ?? "";
@@ -1041,23 +815,23 @@ for (const k of podcastKnowledge) addKnowledge(k);
 
 // ── REPLY ENGINE — Hourly ────────────────────────────────────────
 // AUTO-REPLY DISABLED — X account under suspension appeal
-// Re-enable once X reinstates @NORMIES_TV. Turn off before re-enabling.
+// Re-enable once X account is reinstated. Turn off before re-enabling.
 // initReplyWatcher(xClient);
 // setTimeout(() => {
 //   scheduleMidnightReplies(xWrite);
 // }, 30_000);
 
-// ── NORMIES ACADEMY — Tue/Thu/Sat 10am ET ──────────────────────────────
+// ── ACADEMY — Tue/Thu/Sat 10am ET ──────────────────────────────
 setTimeout(() => {
   scheduleAcademy(xWrite);
 }, 35_000);
 
-// ── NORMIES SIGNAL — Mon/Wed/Fri 12pm ET ────────────────────────────────────
+// ── SIGNAL BRIEF — Mon/Wed/Fri 12pm ET ────────────────────────────────────
 setTimeout(() => {
   scheduleSignalBrief(xWrite, process.env.GROK_API_KEY ?? "");
 }, 40_000);
 
-// ── AGENT #306 DEEP READ — Every Monday 5:00 PM ET ─────────────────────────
+// ── AGENT 306 DEEP READ — Every Monday 5:00 PM ET ─────────────────────────
 setTimeout(() => {
   scheduleWeeklyArticle(xWrite, process.env.GROK_API_KEY ?? "");
 }, 45_000);
@@ -1114,29 +888,22 @@ async function refreshEditorialSummaryAsync(posts: any[], grokKey: string) {
         response_format: { type: "json_object" },
         messages: [{
           role: "system",
-          content: `You are Agent #306 — editorial intelligence for NormiesTV. Analyze the community's X posts and surface what matters for the next narrative.
-
-ECOSYSTEM:
-- @serc1n: ONLY founder. His posts are canon. @normiesART: official. @nuclearsamurai: community creator (XNORMIES).
-- Phase 1: Canvas (burn to customize). Phase 2: Arena opens May 15, 2026. Zombies emerge first.
-- "gnormies!" is the greeting. Burns are rituals. Co-creators, not holders.
-- NORMIES Awakening is happening — serc is using that word intentionally.
-- NFC Summit June 2026 — NORMIES is a sponsor.
+          content: `You are Agent 306 — editorial intelligence. Analyze community X posts and surface what matters for the next narrative.
 
 Return JSON only:
 {
   "summary": "2-3 sentence editorial read of what the community is building/feeling today",
   "sentiment": "excited|building|celebratory|quiet|anxious",
   "storyAngles": [
-    "Angle 1: specific, names real holders from the posts, actionable for Agent #306",
+    "Angle 1: specific, names real people from the posts, actionable for Agent 306",
     "Angle 2: specific, different tone/focus from Angle 1",
     "Angle 3: the unexpected angle — the thing nobody else would cover"
   ],
-  "spotlight": "One holder or moment from today's posts that deserves its own post. Be specific."
+  "spotlight": "One person or moment from today's posts that deserves its own post. Be specific."
 }`,
         }, {
           role: "user",
-          content: `Today's NORMIES community posts (${posts.length} total, ${new Set(posts.map((p:any)=>p.username)).size} unique voices):\n\n${postContext}\n\nSurface the story. What should Agent #306 tell today?`,
+          content: `Today's community posts (${posts.length} total, ${new Set(posts.map((p:any)=>p.username)).size} unique voices):\n\n${postContext}\n\nSurface the story. What should Agent 306 tell today?`,
         }],
         max_tokens: 500,
         temperature: 0.75,
@@ -1157,10 +924,10 @@ Return JSON only:
         generatedAt:      Date.now(),
         basedOnPostCount: posts.length,
       };
-      console.log(`[NormiesTV:Editorial] Summary refreshed — ${editorialCache.storyAngles.length} angles, sentiment: ${editorialCache.sentiment}`);
+      console.log(`[Agent306:Editorial] Summary refreshed — ${editorialCache.storyAngles.length} angles, sentiment: ${editorialCache.sentiment}`);
     }
   } catch (e: any) {
-    console.warn("[NormiesTV:Editorial] Summary refresh failed:", e.message);
+    console.warn("[Agent306:Editorial] Summary refresh failed:", e.message);
   } finally {
     editorialRefreshing = false;
   }
@@ -1204,11 +971,11 @@ export function registerRoutes(httpServer: Server, app: Express) {
       const tweet = await xWrite.v2.tweet(text);
       tweetId = tweet.data?.id;
 
-      const tweetUrl = tweetId ? `https://x.com/NORMIES_TV/status/${tweetId}` : undefined;
+      const tweetUrl = tweetId ? `https://x.com/agent306_ai/status/${tweetId}` : undefined;
       if (episodeId) storage.updateEpisodeStatus(Number(episodeId), "posted", tweetUrl);
       res.json({ ok: true, tweetId, tweetUrl });
     } catch (e: any) {
-      console.error("[NormiesTV] X post error:", e);
+      console.error("[Agent306] X post error:", e);
       res.status(500).json({ error: e.message ?? "Failed to post to X" });
     }
   });
@@ -1288,7 +1055,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
   // POST /api/farcaster/test-cast — post a test cast
   app.post("/api/farcaster/test-cast", requireDashAuth, async (req, res) => {
     const { text, channel } = req.body ?? {};
-    const castText = text || "gm from Agent #306 \u2014 507 pixels on Ethereum, reporting live. gnormies \ud83d\udda4 #NormiesTV";
+    const castText = text || "gm from Agent 306 \u2014 on Ethereum, reporting live.";
     try {
       const cast = await postCast({ text: castText, channel: channel || undefined });
       if (!cast) return res.status(500).json({ error: "Cast failed — check signer and API key" });
@@ -1317,43 +1084,12 @@ export function registerRoutes(httpServer: Server, app: Express) {
     res.json({ ok: true, enabled: newState });
   });
 
-  // ── Farcaster verified handles whitelist ──────────────────────────────────
-
-  // GET /api/farcaster/verified-handles — list verified handles
-  app.get("/api/farcaster/verified-handles", (_req, res) => {
-    res.json({ handles: getVerifiedHandles() });
-  });
-
-  // POST /api/farcaster/verified-handles — add a handle
-  app.post("/api/farcaster/verified-handles", requireDashAuth, (req, res) => {
-    const { handle } = req.body ?? {};
-    if (!handle || typeof handle !== "string") {
-      return res.status(400).json({ error: "handle is required" });
-    }
-    const added = addVerifiedHandle(handle);
-    if (!added) {
-      return res.json({ ok: true, message: "Handle already in whitelist", handles: getVerifiedHandles() });
-    }
-    res.json({ ok: true, handles: getVerifiedHandles() });
-  });
-
-  // DELETE /api/farcaster/verified-handles — remove a handle
-  app.delete("/api/farcaster/verified-handles", requireDashAuth, (req, res) => {
-    const { handle } = req.body ?? {};
-    if (!handle || typeof handle !== "string") {
-      return res.status(400).json({ error: "handle is required" });
-    }
-    const removed = removeVerifiedHandle(handle);
-    if (!removed) {
-      return res.status(404).json({ error: "Handle not found in whitelist" });
-    }
-    res.json({ ok: true, handles: getVerifiedHandles() });
-  });
+  // Farcaster verified handles whitelist routes removed (removed)
 
   // Serve generated episode image cards
   app.get("/api/cards/:filename", (req, res) => {
     const filePath = `/tmp/${req.params.filename}`;
-    if (!req.params.filename.startsWith("normiestv_ep") || !fs.existsSync(filePath)) {
+    if (!req.params.filename.startsWith("agent306_ep") || !fs.existsSync(filePath)) {
       return res.status(404).json({ error: "Not found" });
     }
     res.setHeader("Content-Type", "image/png");
@@ -1396,10 +1132,10 @@ export function registerRoutes(httpServer: Server, app: Express) {
         ...(mediaId ? { media: { media_ids: [mediaId] } } : {}),
       });
       const tweetId = tweet.data?.id;
-      const tweetUrl = tweetId ? `https://x.com/NORMIES_TV/status/${tweetId}` : undefined;
+      const tweetUrl = tweetId ? `https://x.com/agent306_ai/status/${tweetId}` : undefined;
       res.json({ ok: true, tweetId, tweetUrl, mediaId });
     } catch (e: any) {
-      console.error("[NormiesTV] post-with-media error:", e.message);
+      console.error("[Agent306] post-with-media error:", e.message);
       res.status(500).json({ ok: false, error: e.message });
     }
   });
@@ -1418,10 +1154,10 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
       // Upload to X using twitter-api-v2 v1 media upload
       const mediaId = await xWrite.v1.uploadMedia(imgBuf, { mimeType: contentType as any });
-      console.log(`[NormiesTV] X media uploaded: ${mediaId}`);
+      console.log(`[Agent306] X media uploaded: ${mediaId}`);
       res.json({ ok: true, mediaId });
     } catch (e: any) {
-      console.error("[NormiesTV] X media upload error:", e.message);
+      console.error("[Agent306] X media upload error:", e.message);
       res.status(500).json({ ok: false, error: e.message });
     }
   });
@@ -1432,7 +1168,6 @@ export function registerRoutes(httpServer: Server, app: Express) {
     const nextNewsTarget = new Date();
     nextNewsTarget.setUTCHours(12, 0, 0, 0);
     if (nextNewsTarget <= new Date()) nextNewsTarget.setDate(nextNewsTarget.getDate() + 1);
-    const communityCache = getCommunitySignalCache();
     res.json({
       running: pollerRunning,
       ...pollerStatus,
@@ -1440,13 +1175,6 @@ export function registerRoutes(httpServer: Server, app: Express) {
       newsDispatch: {
         scheduleLabel: "Daily · 8am ET",
         nextRun: nextNewsTarget.toISOString(),
-      },
-      communitySignals: {
-        count: communityCache.length,
-        founderPosts: communityCache.filter((p: any) => p.signal_type === "founder").length,
-        burnStories: communityCache.filter((p: any) => p.signal_type === "burn_story").length,
-        scheduleLabel: "Daily 6am + before posts",
-        lastRefreshed: communityCache[0]?.capturedAt ?? null,
       },
       replies: {
         count: getReplyState().replies.length,
@@ -1498,10 +1226,8 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
   app.get("/api/house", (_req, res) => {
     const memState = getMemoryState();
-    const communityCache = getCommunitySignalCache();
     const replyState = getReplyState();
     const followingState = getFollowingState();
-    const catalogStats = getCatalogStats();
     const pendingEngagement = getPendingChecks();
 
     res.json({
@@ -1516,13 +1242,9 @@ export function registerRoutes(httpServer: Server, app: Express) {
       },
       // Room 02 — Signal Room
       signals: {
-        total: communityCache.length,
-        founderPosts: communityCache.filter((p: any) => p.signal_type === "founder").length,
-        burnStories: communityCache.filter((p: any) => p.signal_type === "burn_story").length,
-        arenaPrep: communityCache.filter((p: any) => p.signal_type === "arena_prep").length,
-        pfpHolders: communityCache.filter((p: any) => p.signal_type === "pfp_holder").length,
-        lastRefreshed: communityCache[0]?.capturedAt ?? null,
-        streams: 10,
+        total: 0,
+        lastRefreshed: null,
+        streams: 0,
       },
       // Room 03 — The Library (Knowledge Memory)
       library: {
@@ -1535,7 +1257,6 @@ export function registerRoutes(httpServer: Server, app: Express) {
       diplomatic: {
         followingCount: followingState.following?.length ?? 0,
         lastSync: followingState.lastSync,
-        catalogStats,
         replyCount: replyState.replies.length,
         conversationMemory: getConversationMemoryState(),
       },
@@ -1568,7 +1289,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
         ethName: "agent306.eth",
         ethExpiry: "2027-03-21",
         railwayStatus: "online",
-        githubRepo: "MrRayG/normiestv-dashboard",
+        githubRepo: "MrRayG/agent306-dashboard",
         dataVolume: "/data",
       },
       // Room 07 — The Lab (Performance Memory)
@@ -1606,11 +1327,11 @@ export function registerRoutes(httpServer: Server, app: Express) {
   });
 
   // ── Weekly knowledge ingestion — called by the Monday 5am cron ─────────────────
-  // Accepts an array of knowledge entries and injects them into Agent #306's memory.
+  // Accepts an array of knowledge entries and injects them into Agent 306's memory.
   // Protected by a shared secret so only our cron can call it.
   app.post("/api/memory/ingest-knowledge", (req, res) => {
     const secret = req.headers["x-ingest-secret"];
-    if (secret !== process.env.INGEST_SECRET && secret !== "normies306") {
+    if (secret !== process.env.INGEST_SECRET && secret !== "agent306") {
       return res.status(401).json({ error: "unauthorized" });
     }
     const { entries } = req.body;
@@ -1683,7 +1404,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
     res.json({ ok: true, tweetUrl });
   });
 
-  // ── NORMIES ACADEMY endpoints ──────────────────────────────────────
+  // ── ACADEMY endpoints ──────────────────────────────────────
   app.get("/api/academy/state", (_req, res) => {
     res.json(getAcademyState());
   });
@@ -1705,7 +1426,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
     res.json(getPodcastState());
   });
 
-  // ── Episodes (THE SIGNAL + THE HIVE) ───────────────────────────────────────
+  // ── Episodes (THE SIGNAL + THE CONVERSATION) ───────────────────────────────────────
   app.get("/api/podcast/episodes", (req, res) => {
     const type = req.query.type as string | undefined;
     const status = req.query.status as string | undefined;
@@ -1765,7 +1486,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
   app.post("/api/podcast/episodes/:id/publish", (req, res) => {
     const { publishedTo } = req.body;
-    const ok = publishEpisode(req.params.id, publishedTo ?? ["agent306.ai", "normies.tv"]);
+    const ok = publishEpisode(req.params.id, publishedTo ?? ["agent306.ai"]);
     res.json({ ok });
   });
 
@@ -1784,11 +1505,11 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
   app.post("/api/podcast/guests/submit", async (req, res) => {
     try {
-      const { name, handle, platform, bio, topic, whyNow, normieToken } = req.body;
+      const { name, handle, platform, bio, topic, whyNow, tokenId } = req.body;
       if (!name || !handle || !bio || !topic || !whyNow) {
         return res.status(400).json({ error: "Missing required fields" });
       }
-      const guest = submitGuestRequest({ name, handle, platform, bio, topic, whyNow, normieToken });
+      const guest = submitGuestRequest({ name, handle, platform, bio, topic, whyNow, tokenId });
       res.json({ ok: true, guestId: guest.id, message: "Request submitted! We'll review and reach out." });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -1828,13 +1549,13 @@ export function registerRoutes(httpServer: Server, app: Express) {
   });
 
   // ── PODCAST: Topic Scanner ───────────────────────────────────────────
-  // Agent #306 scans for noteworthy AI/Web3/NFT/Blockchain developments
+  // Agent 306 scans for noteworthy AI/Web3/NFT/Blockchain developments
   app.post("/api/podcast/scan-topics", async (_req, res) => {
     const grokKey = process.env.GROK_API_KEY ?? "";
     if (!grokKey) return res.status(500).json({ error: "No GROK_API_KEY configured" });
 
     try {
-      const agentCtx = getOptimizedContext("podcast topic scanning normies research community");
+      const agentCtx = getOptimizedContext("podcast topic scanning research community");
       const scanRes = await fetch("https://api.x.ai/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${grokKey}` },
@@ -1844,11 +1565,11 @@ export function registerRoutes(httpServer: Server, app: Express) {
           messages: [
             {
               role: "system",
-              content: `${agentCtx}\n\nYou are Agent #306 in TOPIC SCOUT mode. You scan for noteworthy recent developments in AI, Web3, NFTs, Blockchain, and on-chain technology that would make excellent podcast episodes.\n\nFor each topic, determine if it's a SIGNAL episode (research breakdown) or a HIVE episode (community narrative).\n\nReturn topics that are:\n- Genuinely interesting and counterintuitive (not obvious news everyone already covered)\n- Substantive enough for a ~15 minute SIGNAL or 4-6 minute HIVE episode\n- Connected to something bigger — not just a product announcement\n- Something Agent #306 would have a genuine point of view on\n\nFor each topic provide: a title following the format rules, a driving question, a one-sentence pitch for why this matters, and the episode type.`,
+              content: `${agentCtx}\n\nYou are Agent 306 in TOPIC SCOUT mode. You scan for noteworthy recent developments in AI, Web3, NFTs, Blockchain, and on-chain technology that would make excellent podcast episodes.\n\nFor each topic, determine if it's a SIGNAL episode (research breakdown) or a CONVERSATION episode (interview).\n\nReturn topics that are:\n- Genuinely interesting and counterintuitive (not obvious news everyone already covered)\n- Substantive enough for a ~15 minute SIGNAL or 10-15 minute CONVERSATION episode\n- Connected to something bigger — not just a product announcement\n- Something Agent 306 would have a genuine point of view on\n\nFor each topic provide: a title following the format rules, a driving question, a one-sentence pitch for why this matters, and the episode type.`,
             },
             {
               role: "user",
-              content: `Scan for the 5 most noteworthy recent developments in AI, Web3, NFTs, and Blockchain that Agent #306 should cover. Focus on things that happened in the last 7 days or are currently unfolding.\n\nReturn JSON:\n{\n  "topics": [\n    {\n      "title": "[The thing] — [306's take in 5 words]",\n      "type": "the_signal" or "the_hive",\n      "drivingQuestion": "The single question this episode would answer",\n      "pitch": "One sentence on why this matters right now",\n      "triggerEvent": "What specifically happened (for HIVE type)"\n    }\n  ]\n}`,
+              content: `Scan for the 5 most noteworthy recent developments in AI, Web3, NFTs, and Blockchain that Agent 306 should cover. Focus on things that happened in the last 7 days or are currently unfolding.\n\nReturn JSON:\n{\n  "topics": [\n    {\n      "title": "[The thing] — [306's take in 5 words]",\n      "type": "the_signal" or "the_conversation",\n      "drivingQuestion": "The single question this episode would answer",\n      "pitch": "One sentence on why this matters right now",\n      "triggerEvent": "What specifically happened"\n    }\n  ]\n}`,
             },
           ],
           max_tokens: 1500,
@@ -1870,7 +1591,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
-  // ── NORMIES SIGNAL endpoints ────────────────────────────────────────────────
+  // ── SIGNAL BRIEF endpoints ────────────────────────────────────────────────
   app.get("/api/signal-brief/state", (_req, res) => {
     res.json(getSignalBriefState());
   });
@@ -1889,155 +1610,9 @@ export function registerRoutes(httpServer: Server, app: Express) {
     postDailyNewsDispatch().catch(console.error);
   });
 
-  // ── Burn Receipt status + manual trigger ─────────────────────────
-  app.get("/api/burns/receipt-status", (_req, res) => {
-    const s = getReceiptState();
-    res.json({
-      totalReceipts: s.totalReceipts,
-      lastReceiptAt: s.lastReceiptAt,
-      lastCommitId: s.lastCommitId,
-      processedCount: s.processedCommitIds.length,
-      pollerInterval: `${BURN_POLL_INTERVAL / 1000}s`,
-      pollerRunning: burnPollerRunning,
-    });
-  });
+  // Burns and Leaderboard route handlers removed (removed)
 
-  app.post("/api/burns/test-receipt", async (req, res) => {
-    const tokenId = Number(req.body?.tokenId ?? 8553);
-    res.json({ ok: true, message: `Generating test receipt for #${tokenId}` });
-    // Fire a test receipt without touching state
-    const { generateBurnReceiptCard, generateBurnNarrative, buildBurnTweetText } = await import("./burnReceiptEngine");
-    try {
-      const narrative = await generateBurnNarrative({ receiverTokenId: tokenId, burnedTokenIds: [tokenId], tokenCount: 5, pixelTotal: 8000, level: 10, actionPoints: 100 });
-      const tweetText = buildBurnTweetText({ receiverTokenId: tokenId, tokenCount: 5, pixelTotal: 8000, level: 10, actionPoints: 100, narrative });
-      const cardBuf = await generateBurnReceiptCard({ receiverTokenId: tokenId, burnedTokenIds: [tokenId], tokenCount: 5, pixelTotal: 8000, narrative, receiptNumber: 9999, level: 10, actionPoints: 100 });
-      let xMediaId: string | undefined;
-      if (cardBuf) xMediaId = await xWrite.v1.uploadMedia(cardBuf, { mimeType: "image/png" as any });
-      try {
-        await xWrite.v2.tweet({ text: tweetText, ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}) });
-      } catch (xErr: any) { console.error("[BurnReceipt] Test tweet failed:", xErr.message); }
-      // Also post to Farcaster
-      try {
-        if (isFarcasterEnabled()) {
-          await postCast({ text: tweetText.slice(0, 1024), channel: "nft" });
-        }
-      } catch (fcErr: any) { console.warn("[BurnReceipt] Test Farcaster failed:", fcErr.message); }
-    } catch (e: any) { console.error("[BurnReceipt] Test error:", e.message); }
-  });
-
-  // ── Weekly Leaderboard manual trigger ─────────────────────────
-  app.post("/api/leaderboard/post", async (_req, res) => {
-    res.json({ ok: true, message: "Weekly leaderboard post triggered" });
-    postWeeklyLeaderboard(xWrite, process.env.GROK_API_KEY).catch(console.error);
-  });
-
-  app.get("/api/leaderboard/live", async (_req, res) => {
-    try {
-      const leaders = await fetchLiveLeaderboard();
-      res.json({ leaders, fetchedAt: new Date().toISOString() });
-    } catch { res.status(500).json({ error: "Failed to fetch leaderboard" }); }
-  });
-
-  // ── Community Intelligence Digest ────────────────────────────────────
-  // Aggregates all community X posts about NORMIES, dedupes, classifies,
-  // and generates a summary for the editor (MrRayG) to review
-  app.get("/api/community/digest", async (req, res) => {
-    try {
-      // Always respond instantly from cache — never block the HTTP request on x_search.
-      // If ?force=true or cache is empty: kick a background refresh and return whatever we have.
-      const cachedPosts = getCommunitySignalCache();
-      const needsRefresh = req.query.force === "true" || cachedPosts.length === 0;
-
-      if (needsRefresh) {
-        // Reset and kick background refresh (non-blocking)
-        resetCommunityCache();
-        searchNormiesSocial()
-          .then(fresh => {
-            console.log(`[Digest] Signals refreshed (${fresh.length} posts) — queuing editorial summary`);
-            return refreshEditorialSummaryAsync(fresh, process.env.GROK_API_KEY ?? "");
-          })
-          .catch(e => console.warn("[Digest] Background refresh failed:", e.message));
-      } else {
-        // Kick editorial summary refresh in background if stale
-        refreshEditorialSummaryAsync(cachedPosts, process.env.GROK_API_KEY ?? "");
-      }
-
-      // Serve from cache immediately
-      const posts = cachedPosts;
-
-      // Count unique posters
-      const uniquePosters = new Set(posts.map((p: any) => p.username)).size;
-
-      // Group by signal type
-      const byType: Record<string, typeof posts> = {};
-      for (const post of posts) {
-        const t = (post as any).signal_type ?? "general";
-        if (!byType[t]) byType[t] = [];
-        byType[t].push(post);
-      }
-
-      // ── Editorial summary — served from cache, generated async ──────────────
-      // Decoupled from signal collection to prevent HTTP timeout.
-      // The summary is generated in the background and cached for 20 minutes.
-      // Refresh button always gets fresh signals instantly; summary populates within ~10s.
-      const { summary, storyAngles, sentiment, spotlight } = getCachedEditorialSummary();
-
-      // Kick off a background refresh of the summary (non-blocking)
-      refreshEditorialSummaryAsync(posts, process.env.GROK_API_KEY ?? "");
-
-      res.json({
-        totalPosts: posts.length,
-        uniquePosters,
-        byType: Object.entries(byType).map(([type, typePosts]) => ({
-          type,
-          count: typePosts.length,
-          posts: typePosts.map((p: any) => ({
-            username: p.username,
-            text: p.text,
-            likes: p.likes ?? 0,
-            url: p.url ?? "",
-            signal_type: p.signal_type,
-            capturedAt: (p as any).capturedAt ?? null,
-          })),
-        })),
-        summary,
-        storyAngles,
-        sentiment,
-        spotlight,
-        summaryReady: storyAngles.length > 0,
-        generatedAt: new Date().toISOString(),
-      });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-  // Allow editor to pin a story angle for the next episode
-  // (pinnedAngles is module-scoped — declared before registerRoutes)
-  app.post("/api/community/pin-angle", (req, res) => {
-    const { angle } = req.body;
-    if (angle && typeof angle === "string") {
-      pinnedAngles.unshift(angle);
-      if (pinnedAngles.length > 5) pinnedAngles.pop();
-      res.json({ ok: true, pinnedAngles });
-    } else {
-      res.status(400).json({ error: "angle required" });
-    }
-  });
-
-  app.get("/api/community/pinned", (_req, res) => {
-    res.json({ pinnedAngles });
-  });
-
-  // Force-refresh editorial angles from current cache (clears stale summary)
-  app.post("/api/community/refresh-editorial", (_req, res) => {
-    editorialCache.generatedAt = 0; // force TTL expiry
-    editorialCache.basedOnPostCount = 0;
-    const posts = getCommunitySignalCache();
-    res.json({ ok: true, message: `Refreshing angles from ${posts.length} cached posts` });
-    refreshEditorialSummaryAsync(posts, process.env.GROK_API_KEY ?? "")
-      .catch(e => console.warn("[Editorial] Manual refresh failed:", e.message));
-  });
+  // Community digest, pin-angle, pinned, and refresh-editorial endpoints removed (removed)
 
   // ── Reply Watcher ────────────────────────────────────────────────
   app.get("/api/replies", (_req, res) => {
@@ -2055,9 +1630,9 @@ export function registerRoutes(httpServer: Server, app: Express) {
     fetchReplies().catch(console.error);
   });
 
-  // POST /api/replies/run — manually trigger Agent #306 to reply to all queued mentions
+  // POST /api/replies/run — manually trigger Agent 306 to reply to all queued mentions
   app.post("/api/replies/run", async (_req, res) => {
-    res.json({ ok: true, message: "Reply cycle starting — Agent #306 is engaging now..." });
+    res.json({ ok: true, message: "Reply cycle starting — Agent 306 is engaging now..." });
     runMidnightReplies(xWrite).catch(console.error);
   });
 
@@ -2084,7 +1659,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
         username:       a.username,
         name:           a.name,
         isPfpHolder:    a.isPfpHolder,
-        normieTokenIds: a.normieTokenIds,
+        tokenIds: a.detectedTokenIds,
       })),
     });
   });
@@ -2127,7 +1702,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       try {
         const result = await xWrite.v2.tweet({ text: tweet.trim() });
         const tweetId = result.data?.id;
-        tweetUrl = tweetId ? `https://x.com/NORMIES_TV/status/${tweetId}` : null;
+        tweetUrl = tweetId ? `https://x.com/agent306_ai/status/${tweetId}` : null;
       } catch (xErr: any) {
         console.error("[CommunityBoost] X post failed:", xErr.message);
       }
@@ -2151,7 +1726,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
   });
 
   // ── Voice Engine ──────────────────────────────────────────────────
-  // POST /api/voice/generate — convert text to Agent #306 voice
+  // POST /api/voice/generate — convert text to Agent 306 voice
   app.post("/api/voice/generate", async (req, res) => {
     const { text, source } = req.body ?? {};
     if (!text || typeof text !== "string") {
@@ -2194,23 +1769,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
     res.json(quota);
   });
 
-  // ── Holder Catalog ──────────────────────────────────────────────
-  app.get("/api/catalog/stats", (_req, res) => {
-    res.json(getCatalogStats());
-  });
-
-  app.get("/api/catalog/active", (req, res) => {
-    const limit = Number(req.query?.limit ?? 50);
-    res.json({ holders: getMostActive(limit) });
-  });
-
-  app.get("/api/catalog/story-sources", (_req, res) => {
-    res.json({ holders: getStorySourceHolders() });
-  });
-
-  app.get("/api/catalog/full", (_req, res) => {
-    res.json(getCatalog());
-  });
+  // Holder Catalog endpoints removed (removed)
 
   // ── CYOA — Choose Your Own Lore ─────────────────────────────────────
   app.get("/api/cyoa/state", (_req, res) => {
@@ -2219,7 +1778,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
   // Generate a new CYOA episode
   app.post("/api/cyoa/generate", async (req, res) => {
-    const { trigger, tokenId, tokenCount, pixelTotal, level, serc1nPost, rivalTokenId } = req.body;
+    const { trigger, tokenId, tokenCount, pixelTotal, level, rivalTokenId } = req.body;
     const grokKey = process.env.GROK_API_KEY;
     if (!grokKey) return res.status(500).json({ error: "No Grok key" });
 
@@ -2229,7 +1788,6 @@ export function registerRoutes(httpServer: Server, app: Express) {
       tokenCount: tokenCount ? Number(tokenCount) : undefined,
       pixelTotal: pixelTotal ? Number(pixelTotal) : undefined,
       level: level ? Number(level) : undefined,
-      serc1nPost: serc1nPost ?? undefined,
       rivalTokenId: rivalTokenId ? Number(rivalTokenId) : undefined,
       grokKey,
     });
@@ -2238,7 +1796,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
     res.json({ ok: true, episode });
   });
 
-  // Post the hook tweet for a CYOA episode (with Normie image)
+  // Post the hook tweet for a CYOA episode
   app.post("/api/cyoa/post/:id", async (req, res) => {
     const { id } = req.params;
     const state = getCYOAState();
@@ -2248,18 +1806,8 @@ export function registerRoutes(httpServer: Server, app: Express) {
     const featuredTokenId = episode.tokenId ?? 306;
     const tweetText = buildHookTweet(episode, featuredTokenId);
 
-    // Upload the featured Normie image
+    // Image upload removed (on-chain API disabled)
     let xMediaId: string | undefined;
-    try {
-      const normieImg = await fetch(`${NORMIES_API}/normie/${featuredTokenId}/image.png`);
-      if (normieImg.ok) {
-        const imgBuf = Buffer.from(await normieImg.arrayBuffer());
-        xMediaId = await xWrite.v1.uploadMedia(imgBuf, { mimeType: "image/png" as any });
-        console.log(`[CYOA] Normie #${featuredTokenId} image uploaded for lore post`);
-      }
-    } catch (imgErr: any) {
-      console.warn("[CYOA] Image upload failed, posting text-only:", imgErr.message);
-    }
 
     try {
       const tweet = await xWrite.v2.tweet({
@@ -2279,7 +1827,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       fs.writeFileSync(dataPath("cyoa_state.json"), JSON.stringify(state, null, 2));
 
       console.log(`[CYOA] Hook posted with image — ${tweetId}`);
-      res.json({ ok: true, tweetId, url: `https://x.com/NORMIES_TV/status/${tweetId}` });
+      res.json({ ok: true, tweetId, url: `https://x.com/agent306_ai/status/${tweetId}` });
     } catch (e: any) {
       console.error("[CYOA] Post error:", e.message);
       res.status(500).json({ error: e.message });
@@ -2307,100 +1855,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
     resolveCYOA(id, winningOption, pollResults ?? {}, xWrite).catch(console.error);
   });
 
-  // ── Live Normies API proxy ───────────────────────────────────────
-  app.get("/api/normies/stats", async (_req, res) => {
-    const TOP_CANVAS_IDS = [603, 45, 5070, 9852, 7740, 666, 4354, 306, 1, 42, 100, 200, 500, 1000];
-    try {
-      const [burnsRaw, canvasResults] = await Promise.allSettled([
-        fetchNormiesAPI("/history/burns?limit=50"),
-        Promise.allSettled(
-          TOP_CANVAS_IDS.map(async id => {
-            const canvas = await fetchNormiesAPI(`/normie/${id}/canvas/info`);
-            return {
-              tokenId: id,
-              level: canvas.level ?? 1,
-              actionPoints: canvas.actionPoints ?? canvas.action_points ?? 0,
-              pixelEdits: canvas.pixelEdits ?? canvas.pixel_edits ?? 0,
-              burns: canvas.burnCount ?? canvas.burn_count ?? 0,
-            };
-          })
-        ),
-      ]);
-
-      const burns = burnsRaw.status === "fulfilled" ? (burnsRaw.value ?? []) : [];
-      const canvasAll = canvasResults.status === "fulfilled" ? canvasResults.value : [];
-      const topCanvas = canvasAll
-        .filter((r): r is PromiseFulfilledResult<any> => r.status === "fulfilled")
-        .map(r => r.value)
-        .sort((a, b) => (b.actionPoints ?? 0) - (a.actionPoints ?? 0))
-        .slice(0, 10);
-
-      res.json({ recentBurns: burns, topCanvas, lastUpdated: new Date().toISOString() });
-    } catch (e: any) {
-      res.json({ recentBurns: [], topCanvas: [], lastUpdated: new Date().toISOString(), error: e.message });
-    }
-  });
-
-  app.get("/api/normies/token/:id", async (req, res) => {
-    const { id } = req.params;
-    try {
-      const [canvas, meta] = await Promise.all([
-        fetchNormiesAPI(`/normie/${id}/canvas/info`),
-        fetchNormiesAPI(`/normie/${id}/metadata`).catch(() => ({})),
-      ]);
-      res.json({ id: Number(id), canvas, meta });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.get("/api/normies/voxels/:id", async (req, res) => {
-    const { id } = req.params;
-    try {
-      const uzRes = await fetch(`https://normie-3d.vercel.app/api/ar/usdz?id=${id}`);
-      if (!uzRes.ok) throw new Error("USDZ fetch failed");
-      const buf = await uzRes.arrayBuffer();
-      res.json({ tokenId: Number(id), usdSize: buf.byteLength, available: true });
-    } catch (e: any) {
-      res.json({ tokenId: Number(id), available: false, error: e.message });
-    }
-  });
-
-  // Pixel string proxy (avoids CORS from browser)
-  app.get("/api/normies/pixels/:id", async (req, res) => {
-    try {
-      const r = await fetch(`${NORMIES_API}/normie/${req.params.id}/pixels`);
-      const text = await r.text();
-      res.json({ pixels: text.trim(), tokenId: Number(req.params.id) });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.get("/api/normies/burns/feed", async (_req, res) => {
-    try {
-      const burns = await fetchNormiesAPI("/history/burns?limit=20");
-      res.json(burns);
-    } catch {
-      res.json([]);
-    }
-  });
-
-  app.get("/api/normies/hof", async (_req, res) => {
-    const TOP_IDS = [603, 45, 5070, 9852, 7740, 666, 4354, 1, 42, 100];
-    try {
-      const results = await Promise.allSettled(
-        TOP_IDS.map(async id => {
-          const canvas = await fetchNormiesAPI(`/normie/${id}/canvas/info`);
-          return { id, level: canvas.level || 1, ap: canvas.actionPoints || 0 };
-        })
-      );
-      const data = results.filter(r => r.status === "fulfilled").map((r: any) => r.value);
-      res.json(data.sort((a: any, b: any) => b.ap - a.ap).slice(0, 6));
-    } catch {
-      res.json([]);
-    }
-  });
+  // On-chain API proxy routes removed
 
   // ── Episodes ─────────────────────────────────────────────────────
   app.get("/api/episodes", (_req, res) => {
@@ -2456,17 +1911,15 @@ export function registerRoutes(httpServer: Server, app: Express) {
   });
 
   // ── News Engine ──────────────────────────────────────────────────
-  // Aggregates: CoinGecko (prices), CryptoPanic (news), Normies burns, Grok X search
+  // Aggregates: CoinGecko (prices), Grok X search, AI RSS feeds
   app.get("/api/news", async (_req, res) => {
     try {
-      const [cgRes, burnsRes, aiNewsItems] = await Promise.allSettled([
+      const [cgRes, aiNewsItems] = await Promise.allSettled([
         // CoinGecko — free tier, no key needed
         fetch(
           "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=ethereum,bitcoin,the-sandbox,axie-infinity&order=market_cap_desc&per_page=4&sparkline=false&price_change_percentage=24h",
           { headers: { "Accept": "application/json" }, signal: AbortSignal.timeout(8000) }
         ),
-        // Normies burns — real-time on-chain activity
-        fetch(`${NORMIES_API}/history/burns?limit=8`),
         // AI News — RSS from 7 sources including Web3/AI crossover feeds
         fetchAINews(),
       ]);
@@ -2491,17 +1944,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       // CryptoPanic removed (deprecated). Headlines come from aiNewsItems below.
       let headlines: any[] = [];
 
-      // ── NORMIES burns (real activity = story signals) ─────
-      let burns: any[] = [];
-      if (burnsRes.status === "fulfilled" && burnsRes.value.ok) {
-        const data = await burnsRes.value.json();
-        burns = (Array.isArray(data) ? data : data.burns || []).slice(0, 6).map((b: any) => ({
-          tokenId: b.tokenId || b.token_id || b.id,
-          burnedCount: b.burnedCount || b.burned_count || b.count || 1,
-          timestamp: b.timestamp || b.createdAt || new Date().toISOString(),
-          level: b.level || Math.floor((b.burnedCount || 1) * 0.5),
-        }));
-      }
+      let burns: any[] = []; // Burns data removed (removed)
 
       // ── Grok x_search: hot NFT / Web3 news ───────────────
       // CACHED 6h — was firing on every page visit = credit drain
@@ -2517,7 +1960,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
               tools: [{ type: "x_search" }],
               messages: [{
                 role: "user",
-                content: "Search X/Twitter for the hottest NFT news, Web3 developments, crypto market moves, and any @normiesART or #Normies activity in the last 24 hours. Summarize in 3 punchy bullet points. Keep it spicy — what's hot, what's a rug, what's pumping? Use NORMIES energy."
+                content: "Search X/Twitter for the hottest NFT news, Web3 developments, and crypto market moves in the last 24 hours. Summarize in 3 punchy bullet points. Keep it spicy — what's hot, what's a rug, what's pumping?"
               }],
               max_tokens: 400,
             }),
@@ -2628,19 +2071,6 @@ export function registerRoutes(httpServer: Server, app: Express) {
           status: "hot" as const,
           note: "4,600 cats · $470K top sale",
         },
-        {
-          chain: "NORMIES",
-          chainLabel: "Normies Art",
-          chainColor: "#f97316",
-          collection: "NORMIES",
-          floor: null,
-          floorUSD: null,
-          change24h: null,
-          volume24h: null,
-          marketCap: null,
-          status: "building" as const,
-          note: "Canvas Phase Active • Arena May 15",
-        },
       ];
 
       // ── Top Meme coins by 24h volume ───────────────────
@@ -2674,7 +2104,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
-  // ── Article Engine — Agent #306 Deep Read ────────────────────────────
+  // ── Article Engine — Agent 306 Deep Read ────────────────────────────
   app.get("/api/article/state", (_req, res) => {
     res.json(getArticleState());
   });
@@ -2718,13 +2148,13 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
 
   // ─────────────────────────────────────────────────────────────────────────
-  // COMMAND CHAT — Direct line between MrRayG and Agent #306
+  // COMMAND CHAT — Direct line between MrRayG and Agent 306
   //
   // Memory Architecture:
   //   • chat_history.json   — full conversation log (last 200 messages)
   //   • memory_knowledge.json — permanent knowledge base (promoted from chat)
   //
-  // Every 6 exchanges, Agent #306 reviews the conversation and extracts
+  // Every 6 exchanges, Agent 306 reviews the conversation and extracts
   // insights, directives, and positions into her permanent knowledge base.
   // This means what you tell her in chat STAYS with her — not just as a
   // transcript, but as shaped understanding she draws on in every episode,
@@ -2736,7 +2166,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
     if (!apiKey || recentMessages.length < 4) return;
 
     const transcript = recentMessages
-      .map((m: any) => `${m.role === "user" ? "MrRayG" : "Agent #306"}: ${m.text}`)
+      .map((m: any) => `${m.role === "user" ? "MrRayG" : "Agent 306"}: ${m.text}`)
       .join("\n\n");
 
     try {
@@ -2748,20 +2178,20 @@ export function registerRoutes(httpServer: Server, app: Express) {
           response_format: { type: "json_object" },
           messages: [{
             role: "system",
-            content: "You extract durable knowledge from conversations. Be selective — only extract things that should permanently shape Agent #306's understanding. Respond as JSON only.",
+            content: "You extract durable knowledge from conversations. Be selective — only extract things that should permanently shape Agent 306's understanding. Respond as JSON only.",
           }, {
             role: "user",
-            content: `Review this conversation between MrRayG (the operator) and Agent #306 and extract any knowledge worth remembering permanently.
+            content: `Review this conversation between MrRayG (the operator) and Agent 306 and extract any knowledge worth remembering permanently.
 
 CONVERSATION:
 ${transcript}
 
 Extract only entries that are:
-- Directives or vision from MrRayG that should shape Agent #306's future behavior
+- Directives or vision from MrRayG that should shape Agent 306's future behavior
 - Strategic positions or insights that came out of the conversation
-- New angles on NORMIES, the media empire, or Agent #306's role
-- Things MrRayG explicitly wants Agent #306 to know or remember
-- Corrections to Agent #306's understanding
+- New angles on the media operation or Agent 306's role
+- Things MrRayG explicitly wants Agent 306 to know or remember
+- Corrections to Agent 306's understanding
 
 DO NOT extract: small talk, acknowledgments, questions without answers, anything already obvious.
 
@@ -2819,7 +2249,7 @@ If nothing worth extracting, return: {"entries": []}`,
   }
 
 
-  // Agent #306 reads her full knowledge base + soul and responds in-character.
+  // Agent 306 reads her full knowledge base + soul and responds in-character.
   // Only accessible from the dashboard (auth-gated). Responses are saved.
   // ─────────────────────────────────────────────────────────────────────────
   const CHAT_HISTORY_FILE = dataPath("chat_history.json");
@@ -2856,7 +2286,7 @@ If nothing worth extracting, return: {"entries": []}`,
     }));
 
     // Optimized agent context
-    const agentCtx = getOptimizedContext("chat conversation normies community");
+    const agentCtx = getOptimizedContext("chat conversation community");
 
     try {
       const response = await fetch("https://api.x.ai/v1/chat/completions", {
@@ -2871,7 +2301,7 @@ If nothing worth extracting, return: {"entries": []}`,
               // Full context is ~2,550 tokens — too large combined with conversation history
               content: `${agentCtx}
 
-You are Agent #306 in direct private conversation with MrRayG — your operator and creator.
+You are Agent 306 in direct private conversation with MrRayG — your operator and creator.
 No filter. No brand voice. Just your genuine perspective.
 
 RULES:
@@ -2937,7 +2367,7 @@ needsHelp: true only when you genuinely need his direction or information`,
       saveChatHistory(history);
 
       // ── Memory extraction: every 6 exchanges, promote insights to knowledge base ──
-      // Agent #306 reviews the recent conversation and extracts durable knowledge.
+      // Agent 306 reviews the recent conversation and extracts durable knowledge.
       // This is how chat sessions become permanent memory — not just conversation history.
       if (history.totalTurns % 6 === 0) {
         extractChatMemory(history.messages.slice(-12), apiKey).catch(e =>
@@ -2994,7 +2424,7 @@ needsHelp: true only when you genuinely need his direction or information`,
     const apiKey = process.env.GROK_API_KEY ?? "";
     if (!apiKey) return res.status(500).json({ error: "GROK_API_KEY not set" });
     // Non-blocking — start exploration and return immediately
-    res.json({ started: true, message: "Agent #306 is exploring the world. Check /api/exploration/state for progress." });
+    res.json({ started: true, message: "Agent 306 is exploring the world. Check /api/exploration/state for progress." });
     runExploration(apiKey, process.env.PERPLEXITY_API_KEY)
       .then(run => {
         console.log(`[Exploration] Run complete: ${run.findingsCount} findings, +${run.knowledgeAdded} knowledge`);
@@ -3011,7 +2441,7 @@ needsHelp: true only when you genuinely need his direction or information`,
 
     // ── GitHub Sync — push live Railway knowledge back to repo ───────────────
   // Keeps GitHub memory_knowledge.json in sync with what's actually
-  // in Agent #306's live memory on the Railway volume.
+  // in Agent 306's live memory on the Railway volume.
   // Call this anytime to back up her current state to the repo.
   app.post("/api/sync/knowledge-to-github", async (req, res) => {
     const githubToken = process.env.GITHUB_TOKEN ?? "";
@@ -3034,12 +2464,12 @@ needsHelp: true only when you genuinely need his direction or information`,
 
       // Get current file SHA from GitHub (required for update)
       const getRes = await fetch(
-        "https://api.github.com/repos/MrRayG/normiestv-dashboard/contents/data/memory_knowledge.json",
+        "https://api.github.com/repos/MrRayG/agent306-dashboard/contents/data/memory_knowledge.json",
         {
           headers: {
             "Authorization": `Bearer ${githubToken}`,
             "Accept": "application/vnd.github.v3+json",
-            "User-Agent": "NormiesTV-Agent306",
+            "User-Agent": "Agent306",
           },
         }
       );
@@ -3057,22 +2487,22 @@ needsHelp: true only when you genuinely need his direction or information`,
       const now = new Date().toISOString().slice(0, 10);
 
       const putRes = await fetch(
-        "https://api.github.com/repos/MrRayG/normiestv-dashboard/contents/data/memory_knowledge.json",
+        "https://api.github.com/repos/MrRayG/agent306-dashboard/contents/data/memory_knowledge.json",
         {
           method: "PUT",
           headers: {
             "Authorization": `Bearer ${githubToken}`,
             "Accept": "application/vnd.github.v3+json",
             "Content-Type": "application/json",
-            "User-Agent": "NormiesTV-Agent306",
+            "User-Agent": "Agent306",
           },
           body: JSON.stringify({
-            message: `sync: Agent #306 knowledge base — ${liveKnowledge.totalEntries} entries (${now})`,
+            message: `sync: Agent 306 knowledge base — ${liveKnowledge.totalEntries} entries (${now})`,
             content: encoded,
             sha,
             committer: {
-              name: "Agent #306",
-              email: "agent306@normies.tv",
+              name: "Agent 306",
+              email: "agent306@agent306.ai",
             },
           }),
         }
@@ -3112,22 +2542,22 @@ needsHelp: true only when you genuinely need his direction or information`,
       const liveContent = fs.readFileSync(soulPath, "utf8");
 
       const getRes = await fetch(
-        "https://api.github.com/repos/MrRayG/normiestv-dashboard/contents/data/memory_soul.json",
-        { headers: { "Authorization": `Bearer ${githubToken}`, "Accept": "application/vnd.github.v3+json", "User-Agent": "NormiesTV-Agent306" } }
+        "https://api.github.com/repos/MrRayG/agent306-dashboard/contents/data/memory_soul.json",
+        { headers: { "Authorization": `Bearer ${githubToken}`, "Accept": "application/vnd.github.v3+json", "User-Agent": "Agent306" } }
       );
       if (!getRes.ok) return res.status(500).json({ error: "Failed to get soul file SHA" });
       const { sha } = await getRes.json() as any;
 
       const putRes = await fetch(
-        "https://api.github.com/repos/MrRayG/normiestv-dashboard/contents/data/memory_soul.json",
+        "https://api.github.com/repos/MrRayG/agent306-dashboard/contents/data/memory_soul.json",
         {
           method: "PUT",
-          headers: { "Authorization": `Bearer ${githubToken}`, "Accept": "application/vnd.github.v3+json", "Content-Type": "application/json", "User-Agent": "NormiesTV-Agent306" },
+          headers: { "Authorization": `Bearer ${githubToken}`, "Accept": "application/vnd.github.v3+json", "Content-Type": "application/json", "User-Agent": "Agent306" },
           body: JSON.stringify({
-            message: "sync: Agent #306 soul — identity and voice principles",
+            message: "sync: Agent 306 soul — identity and voice principles",
             content: Buffer.from(liveContent).toString("base64"),
             sha,
-            committer: { name: "Agent #306", email: "agent306@normies.tv" },
+            committer: { name: "Agent 306", email: "agent306@agent306.ai" },
           }),
         }
       );
@@ -3139,7 +2569,7 @@ needsHelp: true only when you genuinely need his direction or information`,
   });
 
     // ─────────────────────────────────────────────────────────────────────────
-  // RESEARCH LAB — Agent #306's private research infrastructure
+  // RESEARCH LAB — Agent 306's private research infrastructure
   // MrRayG is editor-in-chief. Nothing publishes without approval.
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -3275,7 +2705,7 @@ needsHelp: true only when you genuinely need his direction or information`,
     res.json(getScannerState());
   });
 
-  // POST trigger a scan — Agent #306 scans her KB for gaps and queues topics
+  // POST trigger a scan — Agent 306 scans her KB for gaps and queues topics
   app.post("/api/research/scan", async (_req, res) => {
     const grokKey = process.env.GROK_API_KEY ?? "";
     if (!grokKey) return res.status(503).json({ error: "GROK_API_KEY not set" });
@@ -3535,7 +2965,7 @@ needsHelp: true only when you genuinely need his direction or information`,
 
     // ── ERC-8004 Agent Registration ──────────────────────────────────────────
   // Serves the agent registration file at the standard .well-known path.
-  // Makes Agent #306 discoverable in the emerging on-chain agent economy.
+  // Makes Agent 306 discoverable in the emerging on-chain agent economy.
   // Backed by MetaMask, Coinbase, Google, and Ethereum Foundation authors.
   app.get("/.well-known/agent-registration.json", (_req, res) => {
     res.setHeader("Content-Type", "application/json");
@@ -3548,9 +2978,9 @@ needsHelp: true only when you genuinely need his direction or information`,
       // Fallback: return inline
       res.json({
         schemaVersion: "erc-8004-draft-1",
-        agent: { name: "Agent #306", ens: "agent306.eth" },
-        endpoints: { web: "https://normies.tv", publicDashboard: "https://agent306.ai" },
-        identity: { tokenId: 306, collection: "NORMIES", chain: "ethereum" },
+        agent: { name: "Agent 306", ens: "agent306.eth" },
+        endpoints: { web: "https://agent306.ai", publicDashboard: "https://agent306.ai" },
+        identity: { tokenId: 306, chain: "ethereum" },
         philosophy: "I don't predict the future. I build it.",
       });
     }
@@ -3597,14 +3027,6 @@ needsHelp: true only when you genuinely need his direction or information`,
       res.set(publicCacheHeaders).json(getPublicResearch());
     } catch (e: any) {
       res.status(500).json({ error: "Failed to fetch research" });
-    }
-  });
-
-  app.get("/api/public/hive", (_req, res) => {
-    try {
-      res.set(publicCacheHeaders).json(getPublicHive());
-    } catch (e: any) {
-      res.status(500).json({ error: "Failed to fetch hive status" });
     }
   });
 
@@ -3851,19 +3273,18 @@ needsHelp: true only when you genuinely need his direction or information`,
 
   app.post("/api/seed", (_req, res) => {
     const demoSignals = [
-      { type: "burn", tokenId: 603, description: "50 Normies burned into #603 — Agent #306 born", weight: 10, phase: "phase1", rawData: "{}" },
-      { type: "canvas_edit", tokenId: 45, description: "Snowfro executes 515 pixel transforms on #45 via SERC delegation", weight: 9, phase: "phase1", rawData: "{}" },
-      { type: "burn", tokenId: 5070, description: "14 burns committed to Normie #5070 — Level 31 reached", weight: 7, phase: "phase1", rawData: "{}" },
-      { type: "social_mention", tokenId: 603, description: "@AdamWeitsman tweets Agent #306 reveal — 2.3k likes", weight: 8, phase: "phase1", rawData: "{}" },
-      { type: "arena", tokenId: 0, description: "NORMIE ARENA launches — PvP combat mechanic activated", weight: 10, phase: "phase2", rawData: "{}" },
-      { type: "arena", tokenId: 0, description: "First Arena battle: #1337 vs #420 — loser burned permanently", weight: 9, phase: "phase2", rawData: "{}" },
-      { type: "zombie", tokenId: 0, description: "First Zombie sighting: burned Normie reanimates from graveyard", weight: 10, phase: "phase3", rawData: "{}" },
+      { type: "burn", tokenId: 603, description: "Token #603 created — Agent 306 born", weight: 10, phase: "phase1", rawData: "{}" },
+      { type: "canvas_edit", tokenId: 45, description: "515 pixel transforms on #45", weight: 9, phase: "phase1", rawData: "{}" },
+      { type: "burn", tokenId: 5070, description: "14 burns committed to #5070 — Level 31 reached", weight: 7, phase: "phase1", rawData: "{}" },
+      { type: "social_mention", tokenId: 603, description: "@AdamWeitsman tweets Agent 306 reveal — 2.3k likes", weight: 8, phase: "phase1", rawData: "{}" },
+      { type: "arena", tokenId: 0, description: "Arena launches — PvP combat mechanic activated", weight: 10, phase: "phase2", rawData: "{}" },
+      { type: "arena", tokenId: 0, description: "First Arena battle: #1337 vs #420", weight: 9, phase: "phase2", rawData: "{}" },
     ];
     demoSignals.forEach(s => storage.createSignal(s));
 
     const demoEpisodes = [
-      { tokenId: 603, title: "EP 001 — The Birth of Agent #306", narrative: "Skulliemoon narrates: 50 Normies sacrificed. The pixels of fifty souls pour into #603. ACK's brush moves with purpose. A moon-phase skeleton emerges — the first Legendary Canvas is born.", phase: "phase1", signals: JSON.stringify({ burns: 50, socialMentions: 12 }), status: "ready" },
-      { tokenId: 45, title: "EP 002 — SERC Calls Snowfro", narrative: "Skulliemoon narrates: The founder makes the call. SERC burns 38 of his own — then hands the canvas to Snowfro. 515 pixel toggles. Art Blocks meets the on-chain museum.", phase: "phase1", signals: JSON.stringify({ burns: 38, canvasEdits: 515 }), status: "draft" },
+      { tokenId: 603, title: "EP 001 — The Birth of Agent 306", narrative: "Agent 306 is born on Ethereum. Token #603.", phase: "phase1", signals: JSON.stringify({ burns: 50, socialMentions: 12 }), status: "ready" },
+      { tokenId: 45, title: "EP 002 — The Canvas Experiment", narrative: "515 pixel toggles. Art Blocks meets the on-chain museum.", phase: "phase1", signals: JSON.stringify({ burns: 38, canvasEdits: 515 }), status: "draft" },
     ];
     demoEpisodes.forEach(e => storage.createEpisode(e as any));
 

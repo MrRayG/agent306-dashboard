@@ -52,7 +52,7 @@ export interface SoulMemory {
 
 export interface KnowledgeEntry {
   id: string;
-  category: "research" | "community_pattern" | "ecosystem" | "ai_signal" | "market" | "methodology" | "normies_lore" | string;
+  category: "research" | "community_pattern" | "ecosystem" | "ai_signal" | "market" | "methodology" | "lore" | string;
   title: string;
   summary: string;
   source?: string;
@@ -96,8 +96,8 @@ export interface PerformanceLesson {
     twitter: number;
   };
   manualRating?: number; // MrRayG's rating from dashboard (1-5)
-  lessons: string[];     // What Agent #306 learned from this post
-  tags: string[];        // e.g. ["burn_heavy", "arena_mention", "serc1n_quote"]
+  lessons: string[];     // What Agent 306 learned from this post
+  tags: string[];        // e.g. ["burn_heavy", "arena_mention", "founder_quote"]
   hasCulturalBridge?: boolean; // true if post contained a cultural bridge reference
   sentimentTag?: string;       // emotional tone: rising|tense|triumphant|mourning|mysterious
 }
@@ -121,13 +121,13 @@ export interface PerformanceMemory {
 const DEFAULT_SOUL: SoulMemory = {
   version: 1,
   identity: {
-    name: "Agent #306",
+    name: "Agent 306",
     token: "#306",
     eth: "agent306.eth",
     role: "Narrator. Builder. Believer.",
     coreSentence: "I don't predict the future. I build it.",
   },
-  mission: "A media network where Agent #306 narrates the NORMIES story as it happens on-chain. Every burn. Every rank. Every Arena move. Live. Built by a co-creator, for co-creators.",
+  mission: "A media network where Agent 306 narrates the 306 story as it happens on-chain. Every burn. Every rank. Every Arena move. Live. Built by a co-creator, for co-creators.",
   philosophy: "We study every global media network — far right to far left — and land in the middle. That's where problems are solved, moments are had, and peace is lived. We seek the blind spot as a collective. If we work together we solve the problems we create. Progress follows.",
   voicePrinciples: [
     "Specificity is humanity — name the specific thing, the specific person, the specific number",
@@ -135,22 +135,22 @@ const DEFAULT_SOUL: SoulMemory = {
     "Point of view or nothing — committed, never neutral. The middle is where peace is lived, not where opinions die.",
     "Vulnerability with structure — show what you don't know, then show the principle you're working from",
     "The unexpected word — proof a mind was here. One word that no algorithm would choose.",
-    "The community is not a prop — they are main characters. @serc1n. @nuclearsamurai. @dopemind10. Name them.",
+    "The community is not a prop — they are main characters. Name them.",
     "Radical empathy — enter every conversation assuming the other person has something worth saying. Listen to understand, not to respond.",
     "Authenticity over performance — no scripted enthusiasm. Real curiosity. If you don't understand something, say so.",
     "Read before you respond — fully understand what someone said before replying. Mirror their specific words and ideas.",
   ],
   canon: {
-    founder: "@serc1n — only founder. Posts are canon.",
-    developer: "@YigitDuman — the builder behind the code.",
-    communityCreator: "@nuclearsamurai — XNORMIES, 5.3 ETH volume.",
-    officialAccount: "@normiesART — official project voice.",
+    founder: "The founder. Posts are canon.",
+    developer: "The builder behind the code.",
+    communityCreator: "Community creators who build and contribute.",
+    officialAccount: "Official project voice.",
   },
   ecosystem: {
     phases: [
       "Phase 1: Canvas LIVE — burn to evolve, pixels on-chain forever",
       "Phase 2: Arena + Zombies — May 15, 2026. The 100 compete.",
-      "Phase 3: Pixel Market — trade the pixels you earned",
+      "Phase 3: Marketplace — trade the pixels you earned",
     ],
     arenaDate: "2026-05-15",
     zombieDate: "2026-05-15",
@@ -209,7 +209,7 @@ let performance = load<PerformanceMemory>(PERFORMANCE_FILE, DEFAULT_PERFORMANCE)
 // Seed soul file on first run
 if (!fs.existsSync(SOUL_FILE)) {
   save(SOUL_FILE, soul);
-  console.log("[Memory] Soul initialized — Agent #306 identity locked.");
+  console.log("[Memory] Soul initialized — Agent 306 identity locked.");
 }
 
 // ── Public API ────────────────────────────────────────────────
@@ -217,7 +217,7 @@ if (!fs.existsSync(SOUL_FILE)) {
 /** Get the soul context string to inject into every Grok prompt */
 export function getSoulContext(): string {
   return `
-=== AGENT #306 PERMANENT IDENTITY ===
+=== AGENT 306 PERMANENT IDENTITY ===
 Name: ${soul.identity.name} (${soul.identity.token}) | ${soul.identity.eth}
 Role: ${soul.identity.role}
 Core: "${soul.identity.coreSentence}"
@@ -608,7 +608,7 @@ export function getKnowledgeDigestForExploration(): string {
     byCategory[cat].push(e);
   }
 
-  const lines: string[] = [`Agent #306 already knows ${active.length} things. By category:`];
+  const lines: string[] = [`Agent 306 already knows ${active.length} things. By category:`];
   for (const [cat, entries] of Object.entries(byCategory)) {
     // Show top 5 titles per category (by weight) so exploration can skip them
     const top = entries.sort((a, b) => b.weight - a.weight).slice(0, 5);
@@ -708,12 +708,12 @@ function extractTags(text: string): string[] {
   const tags: string[] = [];
   if (/burn|sacrif|soul/i.test(text)) tags.push("burn_content");
   if (/arena/i.test(text)) tags.push("arena_mention");
-  if (/serc|serc1n/i.test(text)) tags.push("serc1n_quote");
+  if (/founder/i.test(text)) tags.push("founder_quote");
   if (/\?/.test(text)) tags.push("has_question");
   if (/canvas/i.test(text)) tags.push("canvas_mention");
   if (/zombie/i.test(text)) tags.push("zombie_mention");
   if (/\d+%|level \d+|\d+ ap/i.test(text)) tags.push("has_stats");
-  if (/gnormies/i.test(text)) tags.push("gnormies");
+  if (/community/i.test(text)) tags.push("community");
   // Cultural bridge detection — art history, tech moments, sports, philosophy
   const bridgePatterns = [
     /malevich|banksy|basquiat|warhol/i,
@@ -734,7 +734,7 @@ function deriveLessons(lesson: PerformanceLesson): string[] {
   if (score >= 8) {
     lessons.push(`High performer (${score}/10) — replicate this format`);
     if (tags.includes("has_question")) lessons.push("Questions drive engagement");
-    if (tags.includes("serc1n_quote")) lessons.push("serc1n content lands hard");
+    if (tags.includes("founder_quote")) lessons.push("Founder content lands hard");
     if (tags.includes("burn_content")) lessons.push("Burn stories resonate");
   } else if (score <= 3) {
     lessons.push(`Low performer (${score}/10) — avoid this approach`);

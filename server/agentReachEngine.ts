@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// NORMIES TV — AGENT-REACH EXPLORATION CHANNELS
+// 306 — AGENT-REACH EXPLORATION CHANNELS
 //
 // Node.js native implementations inspired by Agent-Reach's architecture.
 // Three channels:
@@ -47,9 +47,7 @@ const DEFAULT_TWITTER_ACCOUNTS = [
   "BoredApeGazette",
   "punk6529",
   "ai16zdao",
-  // ── NORMIES Ecosystem ──
-  "serc1n",
-  "normiesART",
+  // ── 306 Ecosystem ──
 ];
 
 const DEFAULT_YOUTUBE_CHANNELS: { name: string; channelId: string }[] = [

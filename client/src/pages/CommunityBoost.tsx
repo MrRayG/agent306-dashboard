@@ -11,7 +11,7 @@ interface BoostContext {
   title: string;
   summary: string;
   whyItMatters: string;
-  normiesAngle: string;
+  angle: string;
   // New reactive fields
   tweetText?: string;
   replyHighlight?: string;
@@ -137,7 +137,7 @@ export default function CommunityBoost() {
           COMMUNITY BOOST
         </h1>
         <p style={{ ...mono, fontSize: "0.7rem", color: "rgba(227,229,228,0.45)", margin: 0, lineHeight: 1.6 }}>
-          Drop a link to anything a co-creator built. Agent #306 reads it, drafts a shoutout, you approve and post from @NORMIES_TV.
+          Drop a link to anything a co-creator built. Agent 306 reads it, drafts a shoutout, you approve and post from @agent306_.
         </p>
       </div>
 
@@ -189,7 +189,7 @@ export default function CommunityBoost() {
         <div style={{ marginTop: "0.85rem" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
             <p style={{ ...mono, fontSize: "0.55rem", color: "rgba(249,115,22,0.6)", textTransform: "uppercase" as const, letterSpacing: "0.12em", margin: 0 }}>
-              Your Directive to Agent #306 (optional)
+              Your Directive to Agent 306 (optional)
             </p>
             {context && (
               <button
@@ -204,7 +204,7 @@ export default function CommunityBoost() {
             value={context}
             onChange={e => setContext(e.target.value)}
             rows={2}
-            placeholder={`Tell Agent #306 what angle to take, what to emphasize, or what to avoid. Examples:
+            placeholder={`Tell Agent 306 what angle to take, what to emphasize, or what to avoid. Examples:
 "Focus on the AI angle — this connects to the future of autonomous agents"
 "Highlight the community builder aspect, tie it to the Canvas phase"
 "Keep it philosophical — what does this mean for where Web3 is going?"`}
@@ -222,7 +222,7 @@ export default function CommunityBoost() {
             onBlur={e => (e.target.style.borderColor = "rgba(249,115,22,0.12)")}
           />
           <p style={{ ...mono, fontSize: "0.52rem", color: "rgba(227,229,228,0.25)", marginTop: 4 }}>
-            Agent #306 reads this before drafting — use it to set the angle, tone, or focus
+            Agent 306 reads this before drafting — use it to set the angle, tone, or focus
           </p>
         </div>
 
@@ -230,7 +230,7 @@ export default function CommunityBoost() {
           <div style={{ marginTop: "0.85rem", display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#f97316", animation: "boost-pulse 1s infinite" }} />
             <span style={{ ...mono, fontSize: "0.63rem", color: "rgba(249,115,22,0.6)" }}>
-              Agent #306 is reading this...
+              Agent 306 is reading this...
             </span>
           </div>
         )}
@@ -275,10 +275,10 @@ export default function CommunityBoost() {
                 <p style={{ ...mono, fontSize: "0.67rem", color: "rgba(227,229,228,0.65)", margin: 0, lineHeight: 1.6 }}>{draft.context.summary}</p>
               </div>
             )}
-            {draft.context.normiesAngle && (
+            {draft.context.angle && (
               <div style={{ gridColumn: "1 / -1" }}>
-                <p style={{ ...mono, fontSize: "0.52rem", color: "rgba(74,222,128,0.4)", textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 4 }}>NORMIES angle</p>
-                <p style={{ ...mono, fontSize: "0.65rem", color: "rgba(74,222,128,0.75)", margin: 0, lineHeight: 1.6 }}>{draft.context.normiesAngle}</p>
+                <p style={{ ...mono, fontSize: "0.52rem", color: "rgba(74,222,128,0.4)", textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 4 }}>306 angle</p>
+                <p style={{ ...mono, fontSize: "0.65rem", color: "rgba(74,222,128,0.75)", margin: 0, lineHeight: 1.6 }}>{draft.context.angle}</p>
               </div>
             )}
             {draft.context.tweetText && (
@@ -307,7 +307,7 @@ export default function CommunityBoost() {
             )}
             {draft.context.agentTake && (
               <div style={{ gridColumn: "1 / -1", padding: "12px 16px", background: "rgba(249,115,22,0.08)", borderLeft: "3px solid #f97316" }}>
-                <p style={{ ...mono, fontSize: "0.52rem", color: "#f97316", textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 4 }}>Agent #306’s Take</p>
+                <p style={{ ...mono, fontSize: "0.52rem", color: "#f97316", textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 4 }}>Agent 306’s Take</p>
                 <p style={{ ...mono, fontSize: "0.7rem", color: "#e3e5e4", margin: 0, lineHeight: 1.6 }}>{draft.context.agentTake}</p>
               </div>
             )}
@@ -323,7 +323,7 @@ export default function CommunityBoost() {
               {draft.showTag}
             </span>
             <span style={{ ...mono, fontSize: "0.55rem", color: "rgba(227,229,228,0.25)" }}>
-              posting as @NORMIES_TV
+              posting as @agent306_
             </span>
           </div>
 
@@ -474,7 +474,7 @@ export default function CommunityBoost() {
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#4ade80", flexShrink: 0, marginTop: 4 }} />
             <div>
               <p style={{ ...mono, fontSize: "0.78rem", color: "#4ade80", margin: 0, marginBottom: 6, lineHeight: 1.5 }}>
-                {draft?.context.creator} just got seen by the whole NORMIES network. 🖤
+                {draft?.context.creator} just got seen by the whole 306 network.
               </p>
               <p style={{ ...mono, fontSize: "0.62rem", color: "rgba(227,229,228,0.35)", margin: 0, lineHeight: 1.5, whiteSpace: "pre-wrap" as const }}>
                 {editedTweet}
@@ -521,9 +521,9 @@ export default function CommunityBoost() {
           </p>
           <div style={{ display: "flex", flexDirection: "column" as const, gap: 6 }}>
             {[
-              ["📝", "Articles & Essays",  "A holder writes a deep-dive on NORMIES history or culture"],
+              ["📝", "Articles & Essays",  "A holder writes a deep-dive on history or culture"],
               ["🎨", "Canvas & Artwork",   "Someone shares a Legendary canvas reveal or pixel creation"],
-              ["⚙️",  "Tools & Projects",  "A builder ships a NORMIES utility or community tool"],
+              ["⚙️",  "Tools & Projects",  "A builder ships a utility or community tool"],
               ["🐦", "Tweets & Threads",   "A holder shares their burn story or journey"],
               ["🔗", "Anything else",      "Projects, podcasts, videos — if a co-creator made it, it counts"],
             ].map(([icon, type, desc]) => (
@@ -537,7 +537,7 @@ export default function CommunityBoost() {
             ))}
           </div>
           <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(45,212,191,0.35)", marginTop: "0.85rem", marginBottom: 0, lineHeight: 1.6 }}>
-            Agent #306 drafts the shoutout. You review, edit if needed, then approve to post from @NORMIES_TV.
+            Agent 306 drafts the shoutout. You review, edit if needed, then approve to post to X.
           </p>
         </div>
       )}

@@ -26,11 +26,10 @@ const BLUE = "#60a5fa";
 const RED = "#f87171";
 const YELLOW = "#fbbf24";
 
-type Tab = "signal" | "hive" | "conversation";
+type Tab = "signal" | "conversation";
 
 const TABS: { key: Tab; label: string; color: string }[] = [
   { key: "signal", label: "THE SIGNAL", color: ORANGE },
-  { key: "hive", label: "THE HIVE", color: GREEN },
   { key: "conversation", label: "THE CONVERSATION", color: PURPLE },
 ];
 
@@ -230,7 +229,6 @@ export default function PodcastStudio() {
   const guests: any[] = state?.guests ?? [];
 
   const signalEpisodes = episodes.filter((e: any) => e.type === "the_signal");
-  const hiveEpisodes = episodes.filter((e: any) => e.type === "the_hive");
 
   const totalEpisodes = episodes.length;
   const publishedCount = episodes.filter((e: any) => e.status === "published").length;
@@ -244,7 +242,7 @@ export default function PodcastStudio() {
   // ─── Episode actions ─────────────────────────────────────────────────────
   async function scanTopics() {
     setWorking("scan");
-    toast({ title: "Scanning for topics...", description: "Agent #306 is searching — this may take a moment" });
+    toast({ title: "Scanning for topics...", description: "Agent 306 is searching — this may take a moment" });
     try {
       await apiRequest("POST", "/api/podcast/scan-topics", {});
       toast({ title: "Topic scan complete", description: "Check drafts for new suggestions" });
@@ -257,7 +255,7 @@ export default function PodcastStudio() {
 
   async function generateScript(id: string) {
     setWorking(`script-${id}`);
-    toast({ title: "Generating script...", description: "Agent #306 writing via Grok — ~30 seconds" });
+    toast({ title: "Generating script...", description: "Agent 306 writing via Grok — ~30 seconds" });
     try {
       await apiRequest("POST", `/api/podcast/episodes/${id}/generate-script`, {});
       toast({ title: "Script generated" });
@@ -270,7 +268,7 @@ export default function PodcastStudio() {
 
   async function regenerateScript(id: string) {
     setWorking(`regenerate-${id}`);
-    toast({ title: "Regenerating script...", description: "Agent #306 writing a fresh take via Grok — ~30 seconds" });
+    toast({ title: "Regenerating script...", description: "Agent 306 writing a fresh take via Grok — ~30 seconds" });
     try {
       await apiRequest("POST", `/api/podcast/episodes/${id}/regenerate-script`, {});
       toast({ title: "Script regenerated", description: "New draft ready for review" });
@@ -348,7 +346,7 @@ export default function PodcastStudio() {
 
   async function generateQuestions(guestId: string) {
     setWorking(`questions-${guestId}`);
-    toast({ title: "Generating questions...", description: "Agent #306 is preparing — ~20 seconds" });
+    toast({ title: "Generating questions...", description: "Agent 306 is preparing — ~20 seconds" });
     try {
       await apiRequest("POST", `/api/podcast/guests/${guestId}/generate-questions`, {});
       toast({ title: "Questions generated" });
@@ -398,7 +396,7 @@ export default function PodcastStudio() {
       {/* ─── Header ─────────────────────────────────────────────────────── */}
       <div style={{ marginBottom: "24px" }}>
         <div style={{ ...pixel, fontSize: "9px", color: TEXT_FAINT, marginBottom: "4px" }}>
-          NORMIESTV
+          AGENT 306
         </div>
         <h1
           style={{
@@ -411,7 +409,7 @@ export default function PodcastStudio() {
           Podcast <span style={{ color: ORANGE }}>Studio</span>
         </h1>
         <p style={{ ...mono, fontSize: "12px", color: TEXT_DIM, margin: 0 }}>
-          THE SIGNAL · THE HIVE · THE CONVERSATION — Agent #306 hosts all.
+          THE SIGNAL · THE CONVERSATION — Agent 306 hosts all.
         </p>
       </div>
 
@@ -490,20 +488,6 @@ export default function PodcastStudio() {
             toast={toast}
           />
         )}
-        {activeTab === "hive" && (
-          <HiveTab
-            episodes={hiveEpisodes}
-            working={working}
-            onGenerateScript={generateScript}
-            onRegenerateScript={regenerateScript}
-            onReview={reviewEpisode}
-            onExportScript={exportScript}
-            onMarkProduced={markProduced}
-            onPublish={publishEpisode}
-            onRefetch={refetchAll}
-            toast={toast}
-          />
-        )}
         {activeTab === "conversation" && (
           <ConversationTab
             guests={guests}
@@ -569,7 +553,6 @@ function SignalTab({
       {/* Create form */}
       {showCreate && (
         <CreateEpisodeForm
-          type="the_signal"
           onCreated={() => {
             setShowCreate(false);
             onRefetch();
@@ -598,107 +581,21 @@ function SignalTab({
 // THE HIVE TAB
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function HiveTab({
-  episodes,
-  working,
-  onGenerateScript,
-  onRegenerateScript,
-  onReview,
-  onExportScript,
-  onMarkProduced,
-  onPublish,
-  onRefetch,
-  toast,
-}: {
-  episodes: any[];
-  working: string | null;
-  onGenerateScript: (id: string) => void;
-  onRegenerateScript: (id: string) => void;
-  onReview: (id: string, decision: "reviewed" | "shelved", notes?: string) => void;
-  onExportScript: (id: string, title: string) => void;
-  onMarkProduced: (id: string) => void;
-  onPublish: (id: string) => void;
-  onRefetch: () => void;
-  toast: any;
-}) {
-  const [showCreate, setShowCreate] = useState(false);
-
-  return (
-    <div>
-      {/* Info note */}
-      <div
-        style={{
-          ...mono,
-          fontSize: "11px",
-          color: TEXT_DIM,
-          padding: "12px 16px",
-          background: `${GREEN}08`,
-          borderLeft: `3px solid ${GREEN}`,
-          marginBottom: "20px",
-          lineHeight: 1.6,
-        }}
-      >
-        Episodes triggered by community events. Future: auto-triggered by Hive API.
-      </div>
-
-      {/* Top actions */}
-      <div style={{ display: "flex", gap: "12px", marginBottom: "20px", alignItems: "center" }}>
-        <ActionButton onClick={() => setShowCreate(!showCreate)} color={GREEN}>
-          {showCreate ? "✕ CLOSE" : "+ NEW HIVE EPISODE"}
-        </ActionButton>
-        <div style={{ flex: 1 }} />
-        <div style={{ ...mono, fontSize: "10px", color: TEXT_DIM }}>
-          {episodes.length} episodes
-        </div>
-      </div>
-
-      {/* Create form */}
-      {showCreate && (
-        <CreateEpisodeForm
-          type="the_hive"
-          onCreated={() => {
-            setShowCreate(false);
-            onRefetch();
-          }}
-          toast={toast}
-        />
-      )}
-
-      {/* Pipeline */}
-      <EpisodePipeline
-        episodes={episodes}
-        accentColor={GREEN}
-        working={working}
-        onGenerateScript={onGenerateScript}
-        onRegenerateScript={onRegenerateScript}
-        onReview={onReview}
-        onExportScript={onExportScript}
-        onMarkProduced={onMarkProduced}
-        onPublish={onPublish}
-      />
-    </div>
-  );
-}
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // CREATE EPISODE FORM
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function CreateEpisodeForm({
-  type,
   onCreated,
   toast,
 }: {
-  type: "the_signal" | "the_hive";
   onCreated: () => void;
   toast: any;
 }) {
-  const isHive = type === "the_hive";
-  const accent = isHive ? GREEN : ORANGE;
+  const accent = ORANGE;
 
-  const [title, setTitle] = useState(isHive ? "THE HIVE — " : "");
+  const [title, setTitle] = useState("");
   const [drivingQuestion, setDrivingQuestion] = useState("");
-  const [triggerEvent, setTriggerEvent] = useState("");
   const [culturalBridge, setCulturalBridge] = useState("");
   const [sources, setSources] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -710,10 +607,9 @@ function CreateEpisodeForm({
     }
     setSubmitting(true);
     try {
-      const body: any = { type, title: title.trim(), drivingQuestion: drivingQuestion.trim() };
-      if (isHive && triggerEvent.trim()) body.triggerEvent = triggerEvent.trim();
-      if (!isHive && culturalBridge.trim()) body.culturalBridge = culturalBridge.trim();
-      if (!isHive && sources.trim()) {
+      const body: any = { type: "the_signal", title: title.trim(), drivingQuestion: drivingQuestion.trim() };
+      if (culturalBridge.trim()) body.culturalBridge = culturalBridge.trim();
+      if (sources.trim()) {
         body.sources = sources
           .trim()
           .split("\n")
@@ -742,18 +638,14 @@ function CreateEpisodeForm({
       }}
     >
       <SectionLabel color={accent}>
-        {isHive ? "NEW HIVE EPISODE" : "NEW SIGNAL EPISODE"}
+        NEW SIGNAL EPISODE
       </SectionLabel>
 
       <InputField
         label="Title"
         value={title}
         onChange={setTitle}
-        placeholder={
-          isHive
-            ? "THE HIVE — [topic]"
-            : "[The thing] — [306's take in 5 words]"
-        }
+        placeholder="[The thing] — [306's take in 5 words]"
       />
       <InputField
         label="Driving Question"
@@ -761,30 +653,19 @@ function CreateEpisodeForm({
         onChange={setDrivingQuestion}
         placeholder="What question should this episode answer?"
       />
-      {isHive ? (
-        <InputField
-          label="Trigger Event"
-          value={triggerEvent}
-          onChange={setTriggerEvent}
-          placeholder="What event triggered this episode?"
-        />
-      ) : (
-        <>
-          <InputField
-            label="Cultural Bridge (optional)"
-            value={culturalBridge}
-            onChange={setCulturalBridge}
-            placeholder="How does this connect to culture?"
-          />
-          <InputField
-            label="Sources (optional — one per line: url | title)"
-            value={sources}
-            onChange={setSources}
-            placeholder={"https://example.com | Article Title"}
-            multiline
-          />
-        </>
-      )}
+      <InputField
+        label="Cultural Bridge (optional)"
+        value={culturalBridge}
+        onChange={setCulturalBridge}
+        placeholder="How does this connect to culture?"
+      />
+      <InputField
+        label="Sources (optional — one per line: url | title)"
+        value={sources}
+        onChange={setSources}
+        placeholder={"https://example.com | Article Title"}
+        multiline
+      />
 
       <ActionButton onClick={handleSubmit} color={accent} disabled={submitting}>
         {submitting ? "CREATING..." : "CREATE EPISODE"}
@@ -794,7 +675,7 @@ function CreateEpisodeForm({
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// EPISODE PIPELINE (shared by SIGNAL + HIVE)
+// EPISODE PIPELINE
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function EpisodePipeline({
@@ -1153,7 +1034,7 @@ function ConversationTab({
         }}
       >
         Public form:{" "}
-        <span style={{ color: PURPLE, fontWeight: 700 }}>normies.tv/podcast</span>
+        <span style={{ color: PURPLE, fontWeight: 700 }}>306/podcast</span>
       </div>
 
       {/* Two-panel layout */}
@@ -1345,9 +1226,9 @@ function GuestDetail({
           </div>
           <StatusBadge status={guest.status} />
         </div>
-        {guest.normieToken && (
+        {guest.tokenId && (
           <div style={{ ...mono, fontSize: "10px", color: GREEN }}>
-            Normie #{guest.normieToken} holder
+            Token #{guest.tokenId}
           </div>
         )}
       </div>
@@ -1375,7 +1256,7 @@ function GuestDetail({
       {guest.questions?.length > 0 && (
         <div style={{ marginBottom: "14px" }}>
           <div style={{ ...pixel, fontSize: "8px", color: ORANGE, marginBottom: "8px" }}>
-            Agent #306's Questions
+            Agent 306's Questions
           </div>
           {guest.questions.map((q: any, i: number) => {
             const questionText = typeof q === "string" ? q : q.question || q.text || "";

@@ -8,13 +8,9 @@ import { createServer } from "http";
 const app = express();
 const httpServer = createServer(app);
 
-// Allow cross-origin requests from Temple site and other NORMIES frontends
+// Allow cross-origin requests from 306 frontends
 app.use(cors({
   origin: [
-    "https://normies-temple.vercel.app",
-    "https://normies-house.vercel.app",
-    "https://normies.tv",
-    "https://www.normies.tv",
     "https://agent306.ai",
     "https://www.agent306.ai",
     /\.vercel\.app$/,

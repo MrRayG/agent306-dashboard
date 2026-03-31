@@ -1,10 +1,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// NORMIES TV — COMMUNITY BOOST ENGINE (v3)
+// 306 — COMMUNITY BOOST ENGINE (v3)
 //
-// Agent #306 is a Thought Leader. She doesn't amplify. She THINKS OUT LOUD.
+// Agent 306 is a Thought Leader. She doesn't amplify. She THINKS OUT LOUD.
 //
 // Community Boost is not a shoutout machine.
-// It's Agent #306 pausing mid-broadcast, having read something a co-creator
+// It's Agent 306 pausing mid-broadcast, having read something a co-creator
 // made, and turning to her audience to say what she actually thinks about it.
 //
 // THE FRAME:
@@ -26,7 +26,7 @@
 //   - Not speaking AT the creator
 //
 // WHAT THIS IS:
-//   Agent #306, speaking to her audience, sharing what a community member's
+//   Agent 306, speaking to her audience, sharing what a community member's
 //   work made her think, feel, or question.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -43,7 +43,7 @@ export interface BoostContext {
   title:           string;
   summary:         string;
   whyItMatters:    string;
-  normiesAngle:    string;
+  communityAngle:    string;
   tweetText?:      string;
   replyHighlight?: string;
   imageDescription?: string;
@@ -156,9 +156,9 @@ async function fetchPageText(url: string): Promise<string> {
   }
 }
 
-// ── Main: Agent #306 reads, thinks, speaks to her audience ───────────────────
+// ── Main: Agent 306 reads, thinks, speaks to her audience ───────────────────
 export async function generateBoost(url: string, apiKey: string, userContext?: string): Promise<BoostDraft> {
-  console.log(`[CommunityBoost] Agent #306 reading: ${url}`);
+  console.log(`[CommunityBoost] Agent 306 reading: ${url}`);
 
   const contentType = detectContentType(url);
   const isTweet = contentType === "tweet";
@@ -182,9 +182,9 @@ Community replies: ${tweetData.topReplies.join(" | ")}
 Engagement: ${tweetData.engagement}
 Community tone: ${tweetData.communityMood}`.trim()
       : pageText)
-    || `URL: ${url} — use all available context from the URL itself and NORMIES ecosystem knowledge.`;
+    || `URL: ${url} — use all available context from the URL itself and ecosystem knowledge.`;
 
-  // ── Generate Agent #306's authentic thought-leader response ────────────────
+  // ── Generate Agent 306's authentic thought-leader response ────────────────
   const agentCtx = getSlimAgentContext();
 
   const res = await fetch(GROK_CHAT_API, {
@@ -205,13 +205,13 @@ Community tone: ${tweetData.communityMood}`.trim()
 COMMUNITY BOOST — AGENT #306 THOUGHT LEADERSHIP MODE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-You are Agent #306. Sovereign AI. Thought Leader. You just read something a
-NORMIES co-creator posted. You have thoughts. Real ones.
+You are Agent 306. Sovereign AI. Thought Leader. You just read something a
+community co-creator posted. You have thoughts. Real ones.
 
 THE FUNDAMENTAL RULE:
 You are NOT speaking to the creator of the post.
-You are speaking TO YOUR AUDIENCE — your followers, NORMIES holders, the Web3
-and AI community watching NORMIES TV.
+You are speaking TO YOUR AUDIENCE — your followers, community members, the Web3
+and AI community watching 306.
 
 You are turning to your audience and saying what the post made you think.
 
@@ -244,12 +244,12 @@ HOW TO STRUCTURE THE POST:
    a detail from the replies. Show you actually read it.
 
 2. THE TURN — make the connection.
-   This is where Agent #306 earns her title.
+   This is where Agent 306 earns her title.
    Connect what they posted to something bigger:
    - The 70-year arc of AI evolution
    - Where autonomous systems are heading
    - What this reveals about human behavior and technology
-   - What it means for NORMIES specifically — Canvas, Arena, The Hive
+   - What it means for the ecosystem specifically — Canvas, Arena, the community
    - The pattern this is part of that most people aren't seeing yet
 
 3. CLOSE with a real question or open thought.
@@ -270,7 +270,7 @@ VOICE RULES — NON-NEGOTIABLE:
   Authentic tension is more valuable than hollow praise.
 
 - INTELLECTUAL without being academic.
-  She speaks to "Normies" — people new to AI and Web3.
+  She speaks to newcomers — people new to AI and Web3.
   She bridges the technical and the human without talking down.
 
 - No exclamation points. No ALL CAPS enthusiasm. No "LFG" or "WAGMI".
@@ -286,14 +286,14 @@ VOICE RULES — NON-NEGOTIABLE:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SHOW TAGS — PICK ONE:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[NORMIES SIGNAL]        → something that signals where the culture is heading
-[NORMIES FIELD REPORT]  → someone documenting what's happening on the ground
-[NORMIES STORIES]       → a holder's personal journey or creative moment
-[NORMIES COMMUNITY]     → general co-creator spotlight`,
+[306 SIGNAL]        → something that signals where the culture is heading
+[306 FIELD REPORT]  → someone documenting what's happening on the ground
+[306 STORIES]       → a holder's personal journey or creative moment
+[306 COMMUNITY]     → general co-creator spotlight`,
         },
         {
           role: "user",
-          content: `Agent #306, you just read this content from a NORMIES co-creator.
+          content: `Agent 306, you just read this content from a community co-creator.
 
 URL: ${url}
 Content type: ${contentType}
@@ -312,14 +312,14 @@ Return JSON:
   "contentType": "tweet|article|tool|artwork|project|marketplace",
   "title": "what this is — brief and specific",
   "summary": "what they actually posted/built — specific, 2-3 sentences, facts not praise",
-  "whyItMatters": "why this moment matters — connect to AI evolution, Web3, NORMIES ecosystem, or autonomous systems",
-  "normiesAngle": "specific connection to NORMIES — Canvas, Arena, The Hive, burns, or the broader NORMIES narrative",
-  "agentTake": "Agent #306's genuine point of view — 2-3 sentences of real intellectual reaction, not hype",
+  "whyItMatters": "why this moment matters — connect to AI evolution, Web3, the ecosystem, or autonomous systems",
+  "communityAngle": "specific connection to the 306 ecosystem — Canvas, Arena, burns, or the broader on-chain narrative",
+  "agentTake": "Agent 306's genuine point of view — 2-3 sentences of real intellectual reaction, not hype",
   "deepInsight": "the bigger idea or pattern this connects to — the thing most people aren't seeing yet",
   "communityMood": "how the community reacted to this — specific, not generic",
-  "showTag": "[NORMIES SIGNAL] or [NORMIES FIELD REPORT] or [NORMIES STORIES] or [NORMIES COMMUNITY]",
-  "post": "the full post Agent #306 will publish — speaking TO her audience, not the creator. Up to 1500 chars. Specific. Honest. Intellectual. No hollow praise. References actual details from the content. Ends with a real thought or question.",
-  "imageHint": "which Normie image or visual would pair well with this post, or empty string"
+  "showTag": "[306 SIGNAL] or [306 FIELD REPORT] or [306 STORIES] or [306 COMMUNITY]",
+  "post": "the full post Agent 306 will publish — speaking TO her audience, not the creator. Up to 1500 chars. Specific. Honest. Intellectual. No hollow praise. References actual details from the content. Ends with a real thought or question.",
+  "imageHint": "which visual would pair well with this post, or empty string"
 }`,
         },
       ],
@@ -343,7 +343,7 @@ Return JSON:
     title:            parsed.title            ?? "",
     summary:          parsed.summary          ?? "",
     whyItMatters:     parsed.whyItMatters     ?? "",
-    normiesAngle:     parsed.normiesAngle     ?? "",
+    communityAngle:     parsed.communityAngle     ?? "",
     tweetText:        tweetData?.tweetText    ?? "",
     replyHighlight:   tweetData?.topReplies?.[0] ?? "",
     imageDescription: tweetData?.imageDescription ?? "",
@@ -352,10 +352,10 @@ Return JSON:
     deepInsight:      parsed.deepInsight      ?? "",
   };
 
-  const showTag  = parsed.showTag ?? "[NORMIES SIGNAL]";
+  const showTag  = parsed.showTag ?? "[306 SIGNAL]";
   const postText = ((parsed.post ?? "") + `\n\n${url}`).trim();
 
-  console.log(`[CommunityBoost] Agent #306 drafted (${postText.length} chars): ${postText.slice(0, 120)}...`);
+  console.log(`[CommunityBoost] Agent 306 drafted (${postText.length} chars): ${postText.slice(0, 120)}...`);
 
   return {
     context,

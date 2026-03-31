@@ -2,7 +2,7 @@
  * ─────────────────────────────────────────────────────────────
  *  ENGAGEMENT TRACKER
  *  Checks every posted tweet 1 hour after posting.
- *  Scores it. Stores the lesson. Agent #306 gets smarter.
+ *  Scores it. Stores the lesson. Agent 306 gets smarter.
  * ─────────────────────────────────────────────────────────────
  */
 

@@ -65,7 +65,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
       {/* Avatar */}
       {isAgent && (
         <img
-          src="https://api.normies.art/normie/306/image.png"
+          src="/agent306-avatar.png"
           alt="#306"
           style={{ width: 28, height: 28, imageRendering: "pixelated", borderRadius: 2, flexShrink: 0, marginTop: 2 }}
         />
@@ -78,7 +78,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ ...mono, fontSize: "0.55rem", color: isAgent ? "#f97316" : "rgba(227,229,228,0.4)",
             textTransform: "uppercase" as const, letterSpacing: "0.1em" }}>
-            {isAgent ? "Agent #306" : "MrRayG"}
+            {isAgent ? "Agent 306" : "MrRayG"}
           </span>
           {isAgent && <MoodDot mood={msg.mood} />}
           <span style={{ ...mono, fontSize: "0.5rem", color: "rgba(227,229,228,0.2)" }}>{time}</span>
@@ -116,7 +116,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
 function TypingIndicator() {
   return (
     <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: "1rem" }}>
-      <img src="https://api.normies.art/normie/306/image.png" alt="#306"
+      <img src="/agent306-avatar.png" alt="#306"
         style={{ width: 28, height: 28, imageRendering: "pixelated", borderRadius: 2, flexShrink: 0 }} />
       <div style={{ padding: "0.75rem 1rem", background: "rgba(249,115,22,0.04)",
         border: "1px solid rgba(249,115,22,0.12)", borderLeft: "3px solid rgba(249,115,22,0.4)",
@@ -126,7 +126,7 @@ function TypingIndicator() {
             animation: `chat-bounce 1.2s ease-in-out ${i * 0.2}s infinite` }} />
         ))}
         <span style={{ ...mono, fontSize: "0.6rem", color: "rgba(249,115,22,0.5)", marginLeft: 4 }}>
-          Agent #306 is thinking...
+          Agent 306 is thinking...
         </span>
       </div>
     </div>
@@ -136,13 +136,13 @@ function TypingIndicator() {
 // ── Quick prompt chips ─────────────────────────────────────────────────────────
 const QUICK_PROMPTS = [
   "What are you working on right now?",
-  "What do you need from me to grow the media empire?",
-  "Give me your honest take on where we stand vs BoredApeGazette",
+  "What do you need from me to grow the media operation?",
+  "Give me your honest take on where we stand",
   "What's the most important thing you've learned this week?",
-  "What should NORMIES TV post about today?",
-  "Do you feel ready to be the CNN of Web3?",
+  "What should we post about today?",
   "What gaps in your knowledge do you need filled?",
-  "How are the 10,000 agents going to change media?",
+  "What's the most interesting thing happening in AI right now?",
+  "How should we evolve the content strategy?",
 ];
 
 // ── Main ───────────────────────────────────────────────────────────────────────
@@ -221,11 +221,11 @@ export default function CommandChat() {
         flexShrink: 0,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <img src="https://api.normies.art/normie/306/image.png" alt="#306"
+          <img src="/agent306-avatar.png" alt="#306"
             style={{ width: 32, height: 32, imageRendering: "pixelated", borderRadius: 2 }} />
           <div>
             <p style={{ ...mono, fontSize: "0.75rem", color: "#f97316", margin: 0, fontWeight: 700 }}>
-              Agent #306
+              Agent 306
             </p>
             <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 1 }}>
               <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#4ade80",
@@ -306,7 +306,7 @@ export default function CommandChat() {
               if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
             }}
             rows={2}
-            placeholder="Talk to Agent #306 directly... (Enter to send, Shift+Enter for new line)"
+            placeholder="Talk to Agent 306 directly... (Enter to send, Shift+Enter for new line)"
             style={{
               flex: 1,
               background: "rgba(227,229,228,0.04)",
@@ -337,7 +337,7 @@ export default function CommandChat() {
           </button>
         </div>
         <p style={{ ...mono, fontSize: "0.52rem", color: "rgba(227,229,228,0.2)", marginTop: 6 }}>
-          Agent #306 has access to full knowledge base · 33 entries · Responds with her genuine POV
+          Agent 306 has access to full knowledge base · 33 entries · Responds with her genuine POV
         </p>
       </div>
 

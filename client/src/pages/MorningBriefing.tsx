@@ -137,7 +137,7 @@ export default function MorningBriefing() {
             Morning Briefing
           </h1>
           <p style={{ ...mono, fontSize: "0.6rem", color: DIM, marginTop: 4, letterSpacing: "0.1em" }}>
-            Agent #306 Daily Intelligence Cycle
+            Agent 306 Daily Intelligence Cycle
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>

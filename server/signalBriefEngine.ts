@@ -1,15 +1,15 @@
 /**
  * ─────────────────────────────────────────────────────────────
- *  NORMIES SIGNAL ENGINE
+ *  306 SIGNAL ENGINE
  *
- *  [NORMIES SIGNAL] — Agent #306 as THE EDITOR
+ *  [306 SIGNAL] — Agent 306 as THE EDITOR
  *
  *  3x weekly intelligence brief. Mon / Wed / Fri at 12pm ET.
- *  3 signals per brief. Agent #306's POV on each.
+ *  3 signals per brief. Agent 306's POV on each.
  *  No fluff. No price pumping. Pure signal.
  *
  *  Audience: Web3 builders, investors, serious strategists.
- *  Goal: NORMIES TV becomes the signal source for people who
+ *  Goal: 306 becomes the signal source for people who
  *        need more than price data.
  *
  *  Signal format (always 3):
@@ -18,7 +18,7 @@
  *  Signal 2 — NFT/Web3 builder space: what's being built,
  *              what's failing, what matters
  *  Signal 3 — The wild card: art, culture, economics, philosophy —
- *              the unexpected bridge that connects to NORMIES
+ *              the unexpected bridge that connects to 306
  * ─────────────────────────────────────────────────────────────
  */
 
@@ -81,7 +81,7 @@ async function fetchFreshSignals(grokKey: string): Promise<{
   const defaultSignals = {
     aiSignal:       "Agentic AI market projected to hit $317B by 2035. OKX and Coinbase shipped agentic wallets in early 2026. Every major DEX now has agent toolkits. The infrastructure race is not theoretical — it is here.",
     web3Signal:     "NFT market active wallets up 80% YoY to 505K in Jan 2026. Volume at $720M/month. 62% of 2021-era PFP projects dormant. The market shed hype and gained structure. Utility wins.",
-    wildcardSignal: "Goldman Sachs CIO: 2025 was the biggest year in 40 years of technology. 2026 will be bigger. The shift from AI answering questions to AI taking actions is the Netscape moment. NORMIES holders were early.",
+    wildcardSignal: "Goldman Sachs CIO: 2025 was the biggest year in 40 years of technology. 2026 will be bigger. The shift from AI answering questions to AI taking actions is the Netscape moment. 306 holders were early.",
   };
 
   if (!grokKey) return defaultSignals;
@@ -175,7 +175,7 @@ async function generateSignalBrief(grokKey: string): Promise<{
             role: "system",
             content: `${agentCtx}
 
-You are Agent #306 in EDITOR mode — producing [NORMIES SIGNAL], the intelligence brief for Web3 builders and investors.
+You are Agent 306 in EDITOR mode — producing [306 SIGNAL], the intelligence brief for Web3 builders and investors.
 
 THE EDITOR identity:
 You curate ruthlessly. You have a POV on every signal. Never neutral.
@@ -184,9 +184,9 @@ You are also THE AI EXPERT and THE FUTURIST — you see where signals are pointi
 You are THE OPTIMIST — you find the builder angle, never amplify fear.
 
 SIGNAL BRIEF FORMAT:
-- Show tag: [NORMIES SIGNAL]
+- Show tag: [306 SIGNAL]
 - Brief number and day
-- 3 signals, each with: a punchy headline, 2-3 sentences of context, and Agent #306's 1-sentence POV
+- 3 signals, each with: a punchy headline, 2-3 sentences of context, and Agent 306's 1-sentence POV
 - A closing line that ties all 3 signals together into one thesis
 - X Premium: up to 3,000 characters
 
@@ -200,11 +200,11 @@ RULES:
 - Your POV goes on the line after the context. Make it sharp.
 - The closing thesis should be one sentence that a builder would screenshot.
 - No exclamation points. No LFG/WAGMI. No price predictions.
-- End with #NormiesTV #NORMIES`,
+- End with #Agent306 #OnChainAI`,
           },
           {
             role: "user",
-            content: `Generate [NORMIES SIGNAL] Brief #${briefNumber} — ${dayOfWeek}, ${weekLabel}
+            content: `Generate [306 SIGNAL] Brief #${briefNumber} — ${dayOfWeek}, ${weekLabel}
 
 TODAY'S RAW SIGNALS (use these as the basis):
 
@@ -217,10 +217,10 @@ ${web3Signal}
 SIGNAL 3 — Wild Card:
 ${wildcardSignal}
 
-Write the brief. Inject your POV. Connect all three to the NORMIES thesis where genuine.
+Write the brief. Inject your POV. Connect all three to the 306 thesis where genuine.
 Return JSON:
 {
-  "post": "the full brief post (up to 3000 chars, starts with [NORMIES SIGNAL])",
+  "post": "the full brief post (up to 3000 chars, starts with [306 SIGNAL])",
   "signal1Headline": "punchy 6-8 word headline for signal 1",
   "signal2Headline": "punchy 6-8 word headline for signal 2",
   "signal3Headline": "punchy 6-8 word headline for signal 3",
@@ -271,7 +271,7 @@ export async function postSignalBrief(xWrite: any, grokKey: string): Promise<str
   try {
     const tweet = await xWrite.v2.tweet({ text: generated.post.trim() });
     const tweetId = tweet.data?.id;
-    tweetUrl = tweetId ? `https://x.com/NORMIES_TV/status/${tweetId}` : null;
+    tweetUrl = tweetId ? `https://x.com/AGENT_306/status/${tweetId}` : null;
     console.log(`[SignalBrief] Brief #${state.totalBriefs + 1} posted — ${tweetUrl}`);
   } catch (e: any) {
     console.error("[SignalBrief] Post failed:", e.message);

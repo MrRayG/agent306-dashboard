@@ -22,14 +22,14 @@ function timeUntil(iso: string | null): string {
 }
 
 const ENGINE_LABELS: Record<string, { label: string; color: string; schedule: string; show: string }> = {
-  episode:       { label: "Episode",        color: "#f97316", schedule: "Every 12h",          show: "[NORMIES STORIES]"    },
-  news_dispatch: { label: "News Dispatch",  color: "#4ade80", schedule: "Daily 8am ET",        show: "[NORMIES NEWS]"       },
-  academy:       { label: "Academy",        color: "#60a5fa", schedule: "Tue/Thu/Sat 10am ET", show: "[NORMIES ACADEMY]"   },
-  leaderboard:   { label: "THE 100",        color: "#e3e5e4", schedule: "Monday 9am ET",        show: "[NORMIES THE 100]"   },
-  spotlight:     { label: "Spotlight",      color: "#fb923c", schedule: "Sunday 11am ET",      show: "[NORMIES SPOTLIGHT]" },
-  race:          { label: "THE RACE",       color: "#a78bfa", schedule: "Sunday 12pm ET",      show: "[NORMIES ARENA]"     },
-  cyoa:          { label: "CYOA Draft",     color: "#2dd4bf", schedule: "Sunday 10am ET",      show: "[NORMIES LORE]"      },
-  signal_brief:  { label: "Signal Brief",   color: "#fbbf24", schedule: "Mon/Wed/Fri 12pm ET", show: "[NORMIES SIGNAL]"  },
+  episode:       { label: "Episode",        color: "#f97316", schedule: "Every 12h",          show: "[306 STORIES]"    },
+  news_dispatch: { label: "News Dispatch",  color: "#4ade80", schedule: "Daily 8am ET",        show: "[306 NEWS]"       },
+  academy:       { label: "Academy",        color: "#60a5fa", schedule: "Tue/Thu/Sat 10am ET", show: "[306 ACADEMY]"   },
+  leaderboard:   { label: "Leaderboard",    color: "#e3e5e4", schedule: "Monday 9am ET",        show: "[306 LEADERBOARD]"   },
+  spotlight:     { label: "Spotlight",      color: "#fb923c", schedule: "Sunday 11am ET",      show: "[306 SPOTLIGHT]" },
+  race:          { label: "THE RACE",       color: "#a78bfa", schedule: "Sunday 12pm ET",      show: "[306 ARENA]"     },
+  cyoa:          { label: "CYOA Draft",     color: "#2dd4bf", schedule: "Sunday 10am ET",      show: "[306 LORE]"      },
+  signal_brief:  { label: "Signal Brief",   color: "#fbbf24", schedule: "Mon/Wed/Fri 12pm ET", show: "[306 SIGNAL]"  },
 };
 
 // Generate the 7-day programming calendar
@@ -39,34 +39,34 @@ function buildWeekCalendar(): Array<{ day: string; date: string; shows: Array<{ 
   const dayNames = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   const schedule: Record<number, Array<{ show: string; time: string; color: string; engine: string }>> = {
     0: [ // Sunday
-      { show: "[NORMIES LORE]",      time: "10am ET", color: "#2dd4bf", engine: "cyoa"      },
-      { show: "[NORMIES SPOTLIGHT]", time: "11am ET", color: "#fb923c", engine: "spotlight" },
-      { show: "[NORMIES ARENA]",     time: "12pm ET", color: "#a78bfa", engine: "race"      },
+      { show: "[306 LORE]",      time: "10am ET", color: "#2dd4bf", engine: "cyoa"      },
+      { show: "[306 SPOTLIGHT]", time: "11am ET", color: "#fb923c", engine: "spotlight" },
+      { show: "[306 ARENA]",     time: "12pm ET", color: "#a78bfa", engine: "race"      },
     ],
     1: [ // Monday
-      { show: "[NORMIES THE 100]",   time: "9am ET",  color: "#e3e5e4", engine: "leaderboard" },
-      { show: "[NORMIES SIGNAL]",    time: "12pm ET", color: "#fbbf24", engine: "signal_brief" },
+      { show: "[306 LEADERBOARD]",   time: "9am ET",  color: "#e3e5e4", engine: "leaderboard" },
+      { show: "[306 SIGNAL]",    time: "12pm ET", color: "#fbbf24", engine: "signal_brief" },
     ],
     2: [ // Tuesday
-      { show: "[NORMIES ACADEMY]",   time: "10am ET", color: "#60a5fa", engine: "academy" },
+      { show: "[306 ACADEMY]",   time: "10am ET", color: "#60a5fa", engine: "academy" },
     ],
     3: [ // Wednesday
-      { show: "[NORMIES SIGNAL]",    time: "12pm ET", color: "#fbbf24", engine: "signal_brief" },
+      { show: "[306 SIGNAL]",    time: "12pm ET", color: "#fbbf24", engine: "signal_brief" },
     ],
     4: [ // Thursday
-      { show: "[NORMIES ACADEMY]",   time: "10am ET", color: "#60a5fa", engine: "academy" },
+      { show: "[306 ACADEMY]",   time: "10am ET", color: "#60a5fa", engine: "academy" },
     ],
     5: [ // Friday
-      { show: "[NORMIES SIGNAL]",    time: "12pm ET", color: "#fbbf24", engine: "signal_brief" },
+      { show: "[306 SIGNAL]",    time: "12pm ET", color: "#fbbf24", engine: "signal_brief" },
     ],
     6: [ // Saturday
-      { show: "[NORMIES ACADEMY]",   time: "10am ET", color: "#60a5fa", engine: "academy" },
+      { show: "[306 ACADEMY]",   time: "10am ET", color: "#60a5fa", engine: "academy" },
     ],
   };
   // Daily shows appear every day
   const daily = [
-    { show: "[NORMIES NEWS]",    time: "8am ET",  color: "#4ade80", engine: "news_dispatch" },
-    { show: "[NORMIES STORIES]", time: "12h cycle", color: "#f97316", engine: "episode"     },
+    { show: "[306 NEWS]",    time: "8am ET",  color: "#4ade80", engine: "news_dispatch" },
+    { show: "[306 STORIES]", time: "12h cycle", color: "#f97316", engine: "episode"     },
   ];
   for (let i = 0; i < 7; i++) {
     const d = new Date(today);
@@ -124,7 +124,7 @@ export default function CommandCenter() {
 
       {/* Header */}
       <div style={{ marginBottom: "28px" }}>
-        <div style={{ fontSize: "10px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.2em", marginBottom: "4px" }}>NORMIESTV</div>
+        <div style={{ fontSize: "10px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.2em", marginBottom: "4px" }}>AGENT 306</div>
         <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#e3e5e4", margin: "0 0 6px", letterSpacing: "-0.02em" }}>
           Command <span style={{ color: "#f97316" }}>Center</span>
         </h1>
@@ -242,7 +242,7 @@ export default function CommandCenter() {
 
       {/* 7-Day Programming Calendar */}
       <div style={{ marginBottom: "24px" }}>
-        <div style={{ fontSize: "9px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.15em", marginBottom: "10px" }}>THIS WEEK ON NORMIES TV</div>
+        <div style={{ fontSize: "9px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.15em", marginBottom: "10px" }}>THIS WEEK ON 306</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "1px", background: "rgba(227,229,228,0.06)" }}>
           {buildWeekCalendar().map((day, i) => (
             <div key={i} style={{

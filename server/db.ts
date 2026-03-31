@@ -4,8 +4,8 @@ import * as schema from "@shared/schema";
 import path from "path";
 import { dataPath } from "./dataPaths.js";
 
-// DB_PATH env var overrides everything (Railway volume: /data/normiestv.db)
-const DB_PATH = process.env.DB_PATH ?? dataPath("normiestv.db");
+// DB_PATH env var overrides everything (Railway volume: /data/agent306.db)
+const DB_PATH = process.env.DB_PATH ?? dataPath("agent306.db");
 
 const sqlite = new Database(DB_PATH);
 

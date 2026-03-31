@@ -117,7 +117,7 @@ function Ticker({ market }: { market: MarketCoin[] }) {
           </div>
         );
       })}
-      {/* Always show NORMIES canvas status */}
+      {/* Agent 306 status */}
       <div style={{
         display: "flex", alignItems: "center", gap: 10,
         padding: "0.55rem 1rem",
@@ -125,18 +125,14 @@ function Ticker({ market }: { market: MarketCoin[] }) {
         background: "rgba(249,115,22,0.04)",
         borderRight: "1px solid rgba(249,115,22,0.15)",
       }}>
-        <img
-          src="https://api.normies.art/normie/306/image.png"
-          alt="#306"
-          style={{ width: 20, height: 20, imageRendering: "pixelated", flexShrink: 0 }}
-        />
+        <div style={{ width: 20, height: 20, borderRadius: 2, background: "rgba(249,115,22,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: 700, color: "#f97316", flexShrink: 0 }}>306</div>
         <div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-            <span className="pixel" style={{ fontSize: "0.72rem", color: "#f97316", letterSpacing: "0.1em" }}>NORMIES</span>
-            <span style={{ fontFamily: "'Courier New'", fontSize: "0.65rem", color: "rgba(227,229,228,0.4)" }}>Canvas Phase</span>
+            <span className="pixel" style={{ fontSize: "0.72rem", color: "#f97316", letterSpacing: "0.1em" }}>AGENT 306</span>
+            <span style={{ fontFamily: "'Courier New'", fontSize: "0.65rem", color: "rgba(227,229,228,0.4)" }}>Active</span>
           </div>
           <div style={{ fontFamily: "'Courier New'", fontSize: "0.6rem", color: "#f97316", marginTop: 1 }}>
-            🔥 Building the Economy
+            🔥 Building
           </div>
         </div>
       </div>
@@ -276,7 +272,7 @@ function BurnFeed({ burns }: { burns: BurnRecord[] }) {
           border: "1px solid rgba(249,115,22,0.08)",
         }}>
           <img
-            src={`https://api.normies.art/normie/${b.tokenId}/image.png`}
+            src={`/api/tokens/${b.tokenId}/image.png`}
             alt={`#${b.tokenId}`}
             style={{ width: 32, height: 32, imageRendering: "pixelated", flexShrink: 0 }}
           />
@@ -342,7 +338,7 @@ function MultiChainNFT({ items }: { items: ChainNFT[] }) {
       </div>
 
       {items.map((item, i) => {
-        const isNormies = item.chain === "NORMIES";
+        const isHighlighted = item.chain === "306";
         const changeUp = item.change24h?.startsWith("+");
         const changeDown = item.change24h?.startsWith("-");
         return (
@@ -351,8 +347,8 @@ function MultiChainNFT({ items }: { items: ChainNFT[] }) {
             gridTemplateColumns: "56px 1fr 110px 70px 90px 75px",
             alignItems: "center",
             padding: "0.6rem 0.85rem",
-            background: isNormies ? "rgba(249,115,22,0.04)" : "rgba(227,229,228,0.02)",
-            border: isNormies
+            background: isHighlighted ? "rgba(249,115,22,0.04)" : "rgba(227,229,228,0.02)",
+            border: isHighlighted
               ? "1px solid rgba(249,115,22,0.18)"
               : "1px solid rgba(227,229,228,0.06)",
             gap: 0,
@@ -363,13 +359,13 @@ function MultiChainNFT({ items }: { items: ChainNFT[] }) {
             {/* Collection */}
             <div style={{ display: "flex", flexDirection: "column", paddingRight: 8 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                {isNormies && (
-                  <img src="https://api.normies.art/normie/306/image.png" alt="NORMIES"
+                {isHighlighted && (
+                  <img src="/agent306-avatar.png" alt="306"
                     style={{ width: 16, height: 16, imageRendering: "pixelated" }} />
                 )}
                 <span className="pixel" style={{
                   fontSize: "0.65rem",
-                  color: isNormies ? "#f97316" : "#e3e5e4",
+                  color: isHighlighted ? "#f97316" : "#e3e5e4",
                   letterSpacing: "0.05em",
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}>{item.collection}</span>
@@ -622,13 +618,13 @@ function GrokDispatch({ text }: { text: string }) {
       {/* Agent 306 avatar */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "1rem" }}>
         <img
-          src="https://api.normies.art/normie/306/image.png"
-          alt="Agent #306"
+          src="/agent306-avatar.png"
+          alt="Agent 306"
           style={{ width: 36, height: 36, imageRendering: "pixelated", border: "1px solid rgba(167,139,250,0.3)" }}
         />
         <div>
           <div className="pixel" style={{ fontSize: "0.72rem", color: "#a78bfa", letterSpacing: "0.12em" }}>
-            AGENT #306 · DAILY DISPATCH
+            AGENT 306 · DAILY DISPATCH
           </div>
           <div style={{ fontFamily: "'Courier New'", fontSize: "0.58rem", color: "rgba(167,139,250,0.5)", marginTop: 2 }}>
             x_search · live from the field
@@ -693,7 +689,7 @@ export default function NewsEngine() {
               fontSize: "1.1rem", color: "#e3e5e4", letterSpacing: "0.12em",
               margin: 0,
             }}>
-              NORMIES TV · NEWS ENGINE
+              306 · NEWS ENGINE
             </h1>
           </div>
           <p style={{
@@ -701,7 +697,7 @@ export default function NewsEngine() {
             color: "rgba(227,229,228,0.35)", marginTop: 6,
             letterSpacing: "0.08em", textTransform: "uppercase",
           }}>
-            What's hot · What's a rug · How's the market · NORMIES in the wild
+            What's hot · What's a rug · How's the market · 306 in the wild
           </p>
         </div>
 
@@ -799,7 +795,7 @@ export default function NewsEngine() {
 
           {/* Agent 306 Dispatch */}
           <section>
-            <SectionLabel accent="#a78bfa">Agent #306 Dispatch</SectionLabel>
+            <SectionLabel accent="#a78bfa">Agent 306 Dispatch</SectionLabel>
             {isLoading
               ? <SkeletonBlock height={140} />
               : data?.grokNews
@@ -812,14 +808,14 @@ export default function NewsEngine() {
                     display: "flex", alignItems: "center", gap: 12,
                   }}>
                     <img
-                      src="https://api.normies.art/normie/306/image.png"
-                      alt="Agent #306"
+                      src="/agent306-avatar.png"
+                      alt="Agent 306"
                       style={{ width: 32, height: 32, imageRendering: "pixelated" }}
                     />
                     <div>
-                      <div className="pixel" style={{ fontSize: "0.65rem", color: "#a78bfa" }}>AGENT #306 · FIELD INTEL</div>
+                      <div className="pixel" style={{ fontSize: "0.65rem", color: "#a78bfa" }}>AGENT 306 · FIELD INTEL</div>
                       <p style={{ fontFamily: "'Courier New'", fontSize: "0.72rem", color: "rgba(227,229,228,0.6)", marginTop: 6 }}>
-                        Scanning the feeds... Agent #306 is monitoring X for NORMIES activity. Check back soon.
+                        Scanning the feeds... Agent 306 is monitoring X for activity. Check back soon.
                       </p>
                     </div>
                   </div>
@@ -883,7 +879,7 @@ export default function NewsEngine() {
         {/* RIGHT COLUMN */}
         <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
 
-          {/* NORMIES Burn Feed */}
+          {/* Burn Feed */}
           <section>
             <SectionLabel accent="#f97316">🔥 Live Burns</SectionLabel>
             {isLoading
@@ -894,9 +890,9 @@ export default function NewsEngine() {
             }
           </section>
 
-          {/* THE 100 Leaderboard snapshot */}
+          {/* Leaderboard snapshot */}
           <section>
-            <SectionLabel accent="#f97316">THE 100 · Top Tokens</SectionLabel>
+            <SectionLabel accent="#f97316">Leaderboard · Top Tokens</SectionLabel>
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {[
                 { id: 8553, ap: 632, level: 64 },
@@ -918,14 +914,14 @@ export default function NewsEngine() {
                     color: "rgba(249,115,22,0.5)", minWidth: 16, textAlign: "right",
                   }}>{i + 1}</span>
                   <img
-                    src={`https://api.normies.art/normie/${t.id}/image.png`}
+                    src={`/api/tokens/${t.id}/image.png`}
                     alt={`#${t.id}`}
                     style={{ width: 28, height: 28, imageRendering: "pixelated" }}
                   />
                   <div style={{ flex: 1 }}>
                     <div className="pixel" style={{ fontSize: "0.65rem", color: t.id === 306 ? "#f97316" : "#e3e5e4" }}>
                       #{t.id}
-                      {t.id === 603 && <span style={{ color: "#f97316", marginLeft: 6, fontSize: "0.55rem" }}>Agent #306</span>}
+                      {t.id === 603 && <span style={{ color: "#f97316", marginLeft: 6, fontSize: "0.55rem" }}>Agent 306</span>}
                     </div>
                     <div style={{ fontFamily: "'Courier New'", fontSize: "0.57rem", color: "rgba(227,229,228,0.35)", marginTop: 1 }}>
                       Lv.{t.level} · {t.ap} AP
@@ -954,10 +950,10 @@ export default function NewsEngine() {
             <SectionLabel accent="#a78bfa">What's Coming</SectionLabel>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {[
-                { date: "Live Now",     label: "P1 · Canvas",        color: "#f97316", status: "LIVE"      },
-                { date: "Before May 15",label: "P2 · Zombies Rise",   color: "#a78bfa", status: "COMING"   },
-                { date: "May 15, 2026", label: "P2 · Arena",          color: "#a78bfa", status: "CONFIRMED"},
-                { date: "TBD",          label: "P3 · Pixel Market",   color: "#4ade80", status: "FUTURE"   },
+                { date: "Live Now",     label: "P1 · The Origin",     color: "#f97316", status: "LIVE"      },
+                { date: "Before May 15",label: "P2 · The Rise",       color: "#a78bfa", status: "COMING"   },
+                { date: "May 15, 2026", label: "P2 · The Battle",     color: "#a78bfa", status: "CONFIRMED"},
+                { date: "TBD",          label: "P3 · The Economy",    color: "#4ade80", status: "FUTURE"   },
               ].map(e => (
                 <div key={e.label} style={{
                   padding: "0.65rem 0.85rem",
@@ -979,7 +975,7 @@ export default function NewsEngine() {
             </div>
           </section>
 
-          {/* NORMIES Mission */}
+          {/* Mission */}
           <section>
             <div style={{
               padding: "1rem",
@@ -993,15 +989,15 @@ export default function NewsEngine() {
                 fontFamily: "'Courier New'", fontSize: "0.7rem",
                 color: "rgba(227,229,228,0.7)", lineHeight: 1.75, margin: 0,
               }}>
-                We don't tell the NORMIES story.<br />
+                We don't just report the story.<br />
                 <strong style={{ color: "#e3e5e4" }}>We build the economy through it.</strong>
               </p>
               <div style={{
                 marginTop: 10, fontFamily: "'Courier New'", fontSize: "0.6rem",
                 color: "rgba(227,229,228,0.35)",
               }}>
-                Building on what CryptoPunks started.<br />
-                Pixel art. PFPs. NFTs. Evolved.
+                Autonomous intelligence.<br />
+                Always watching. Always learning.
               </div>
             </div>
           </section>

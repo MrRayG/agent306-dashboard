@@ -39,7 +39,7 @@ function VoxelPreview({ tokenId }: { tokenId: number }) {
         className={`w-full h-full border-0 transition-opacity duration-300 ${loaded && !error ? "opacity-100" : "opacity-0"}`}
         onLoad={() => setLoaded(true)}
         onError={() => setError(true)}
-        title={`Normie #${tokenId} 3D preview`}
+        title={`Token #${tokenId} 3D preview`}
         data-testid={`iframe-3d-preview-${tokenId}`}
         allow="accelerometer; autoplay"
         sandbox="allow-scripts allow-same-origin allow-popups"
@@ -71,7 +71,7 @@ export default function RenderStudio() {
     mutationFn: (tokenId: number) => apiRequest("POST", "/api/renders", { tokenId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/renders"] });
-      toast({ title: "Render queued", description: `Normie #${tokenInput} added to render queue` });
+      toast({ title: "Render queued", description: `Token #${tokenInput} added to render queue` });
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to queue render", variant: "destructive" });
@@ -106,7 +106,7 @@ export default function RenderStudio() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Render Studio</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">3D voxel pipeline — preview and queue Normie renders</p>
+          <p className="text-sm text-muted-foreground mt-0.5">3D voxel pipeline — preview and queue token renders</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => refetch()} data-testid="button-refresh-renders">
           <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Refresh
@@ -141,7 +141,7 @@ export default function RenderStudio() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="space-y-1.5">
-                <label className="text-xs text-muted-foreground uppercase tracking-wider">Normie Token ID</label>
+                <label className="text-xs text-muted-foreground uppercase tracking-wider">Token ID</label>
                 <input
                   type="number"
                   value={tokenInput}
@@ -219,19 +219,19 @@ export default function RenderStudio() {
             </CardContent>
           </Card>
 
-          {/* Normie SVG preview */}
+          {/* Token SVG preview */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <Tv2 className="w-4 h-4 text-cyan-400" /> Normie #{previewToken} — 2D
+                <Tv2 className="w-4 h-4 text-cyan-400" /> Token #{previewToken} — 2D
               </CardTitle>
             </CardHeader>
             <CardContent>
               <img
-                src={`https://api.normies.art/normie/${previewToken}/image.svg`}
-                alt={`Normie #${previewToken}`}
+                src={`/api/tokens/${previewToken}/image.svg`}
+                alt={`Token #${previewToken}`}
                 className="w-full aspect-square rounded border border-border object-contain bg-secondary/30"
-                data-testid={`img-normie-${previewToken}`}
+                data-testid={`img-token-${previewToken}`}
               />
             </CardContent>
           </Card>
@@ -243,7 +243,7 @@ export default function RenderStudio() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <Box className="w-4 h-4 text-primary" /> 3D Preview — Normie #{previewToken}
+                  <Box className="w-4 h-4 text-primary" /> 3D Preview — Token #{previewToken}
                   <Badge className="text-[10px] bg-primary/10 text-primary border-primary/30">Live</Badge>
                 </CardTitle>
               </div>
@@ -286,12 +286,12 @@ export default function RenderStudio() {
                 return (
                   <div key={job.id} className="px-4 py-3 flex items-center gap-4 hover:bg-secondary/30 transition-colors" data-testid={`row-render-${job.id}`}>
                     <img
-                      src={`https://api.normies.art/normie/${job.tokenId}/image.svg`}
-                      alt={`Normie #${job.tokenId}`}
+                      src={`/api/tokens/${job.tokenId}/image.svg`}
+                      alt={`Token #${job.tokenId}`}
                       className="w-10 h-10 rounded border border-border bg-secondary/50 object-contain"
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium font-mono">Normie #{job.tokenId}</p>
+                      <p className="text-sm font-medium font-mono">Token #{job.tokenId}</p>
                       <p className="text-[10px] text-muted-foreground">
                         {job.voxelCount ? `${job.voxelCount} voxels` : "Voxel count pending"} · Job #{job.id}
                       </p>

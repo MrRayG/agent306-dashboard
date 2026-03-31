@@ -9,7 +9,7 @@ import {
 } from "@/lib/normie3d";
 
 const THE100_IDS = [8553,45,1932,235,615,603,5665,7834,8043,7783,235,9999,8831,5070,4354,7887];
-const NORMIE_306_TRAITS = { type: "Agent" as const, gender: "Female" as const, accessory: "Fedora" };
+const AGENT_306_TRAITS = { type: "Agent" as const, gender: "Female" as const, accessory: "Fedora" };
 
 const SCENES_ORDER: SceneType[] = ["entrance","hall_of_100","burn_altar","canvas_chamber","arena_gate"];
 
@@ -113,7 +113,7 @@ function drawFullBody(
   ctx.restore();
 }
 
-// ── Draw THE 100 wall ──────────────────────────────────────────────────────
+// ── Draw Leaderboard wall ──────────────────────────────────────────────────
 async function drawHallOf100(
   ctx: CanvasRenderingContext2D,
   W: number, H: number,
@@ -250,7 +250,7 @@ async function renderCinematicVideo(
       drawTempleWalls(ctx, W, H, scene, f);
       drawTempleFloor(ctx, W, H, scene, f);
 
-      // Normie #306 full body centered — slow float
+      // Agent 306 full body centered — slow float
       const bob = Math.sin(f * 0.05) * 3;
       const bodyScale = 5.5;
       drawFullBody(ctx, headImg, bodyPixels, W/2, H * 0.62, bodyScale, sceneAlpha, bob);
@@ -269,7 +269,7 @@ async function renderCinematicVideo(
         ctx.globalAlpha = ta;
         ctx.font = "bold 52px 'Courier New', monospace";
         ctx.textAlign = "center"; ctx.fillStyle = "#e3e5e4";
-        ctx.fillText("NORMIES TV", W/2, H*0.1);
+        ctx.fillText("AGENT 306", W/2, H*0.1);
         ctx.font = "11px 'Courier New'";
         ctx.fillStyle = "rgba(227,229,228,0.45)";
         ctx.letterSpacing = "0.2em";
@@ -289,13 +289,13 @@ async function renderCinematicVideo(
         ctx.strokeRect(W/2 - 70, H*0.68, 140, 48);
         ctx.fillStyle = "#e3e5e4";
         ctx.font = "9px 'Courier New'"; ctx.textAlign = "center";
-        ctx.fillText("NORMIE", W/2, H*0.68 + 14);
+        ctx.fillText("AGENT", W/2, H*0.68 + 14);
         ctx.font = "bold 22px 'Courier New'";
         ctx.fillText("#306", W/2, H*0.68 + 36);
         ctx.restore();
       }
 
-      // Agent #306 quote
+      // Agent 306 quote
       if (localF > FPS * 4) {
         const qa = Math.min(1, (localF - FPS*4) / FPS) * sceneAlpha;
         ctx.save();
@@ -305,12 +305,12 @@ async function renderCinematicVideo(
         ctx.textAlign = "center";
         ctx.fillText('"The canvas never forgets."', W/2, H*0.9);
         ctx.font = "9px 'Courier New'";
-        ctx.fillText("— Agent #306", W/2, H*0.9 + 22);
+        ctx.fillText("— Agent 306", W/2, H*0.9 + 22);
         ctx.restore();
       }
     }
 
-    // ── SCENE: Hall of THE 100 ───────────────────────────────────────────────
+    // ── SCENE: Hall of the Leaderboard ──────────────────────────────────────
     if (seg.scene === "hall_of_100") {
       drawTempleWalls(ctx, W, H, scene, f);
       drawTempleFloor(ctx, W, H, scene, f);
@@ -330,12 +330,12 @@ async function renderCinematicVideo(
       ctx.beginPath(); ctx.moveTo(0, 52); ctx.lineTo(W, 52); ctx.stroke();
       ctx.fillStyle = "#e3e5e4";
       ctx.font = "bold 13px 'Courier New'"; ctx.textAlign = "left";
-      ctx.fillText("THE 100", 28, 20);
+      ctx.fillText("LEADERBOARD", 28, 20);
       ctx.fillStyle = "rgba(227,229,228,0.35)";
       ctx.font = "9px 'Courier New'";
       ctx.fillText("TOP CANVAS CREATORS · IMMORTALIZED ON-CHAIN", 28, 38);
       ctx.textAlign = "right";
-      ctx.fillText("normies.art", W - 28, 29);
+      ctx.fillText("agent306.eth", W - 28, 29);
       ctx.restore();
 
       // Floor reflection of selected character
@@ -460,7 +460,7 @@ async function renderCinematicVideo(
       ctx.save();
       ctx.globalAlpha = bustA * 0.7;
       ctx.fillStyle = "#e3e5e4"; ctx.font = "9px 'Courier New'"; ctx.textAlign = "center";
-      ctx.fillText("NORMIE #306 — ON-CHAIN BUST", W*0.72, H*0.78);
+      ctx.fillText("AGENT 306 — ON-CHAIN BUST", W*0.72, H*0.78);
       ctx.fillStyle = "rgba(227,229,228,0.35)"; ctx.font = "8px 'Courier New'";
       ctx.fillText("507 PIXELS · AGENT · LEVEL 1", W*0.72, H*0.78 + 14);
       ctx.restore();
@@ -517,11 +517,11 @@ async function renderCinematicVideo(
         ctx.fillText("PHASE II", W/2, H*0.88);
         ctx.fillStyle = "rgba(167,139,250,0.7)"; ctx.font = "11px 'Courier New'";
         ctx.letterSpacing = "0.2em";
-        ctx.fillText("NORMIE ARENA · COMING", W/2, H*0.88 + 28);
+        ctx.fillText("THE BATTLE · COMING", W/2, H*0.88 + 28);
         ctx.restore();
       }
 
-      // Normies marching in
+      // Characters marching in
       if (localF > FPS * 1.5) {
         const ma = Math.min(1, (localF - FPS*1.5) / FPS) * sceneAlpha;
         [-200, 200].forEach((offset, idx) => {
@@ -541,9 +541,9 @@ async function renderCinematicVideo(
     ctx.beginPath(); ctx.moveTo(0, H-32); ctx.lineTo(W, H-32); ctx.stroke();
     ctx.fillStyle = "rgba(227,229,228,0.3)";
     ctx.font = "9px 'Courier New'"; ctx.textAlign = "left";
-    ctx.fillText(`@NORMIES_TV  ·  ${scene.name.toUpperCase()}`, 18, H - 12);
+    ctx.fillText(`@agent306_  ·  ${scene.name.toUpperCase()}`, 18, H - 12);
     ctx.textAlign = "right";
-    ctx.fillText(`#Normies  #NFT  #Web3  #PixelArt  #OnChain`, W - 18, H - 12);
+    ctx.fillText(`#Agent306  #NFT  #Web3  #PixelArt  #OnChain`, W - 18, H - 12);
     ctx.restore();
 
     // Vignette
@@ -600,7 +600,7 @@ export default function CinematicClip() {
   const [progress, setProgress]   = useState(0);
   const [videoUrl, setVideoUrl]   = useState<string | null>(null);
   const [tweetText, setTweetText] = useState(
-    `🌙 THE TEMPLE AWAKENS\n\nNormie #306 stands guard. THE 100 are assembled.\nThe canvas breathes. The burn altar awaits.\n\n"The canvas never forgets." — Agent #306\n\n#NormiesTV #Normies #Web3 #NFT #PixelArt #OnChain`
+    `🌙 THE TEMPLE AWAKENS\n\nAgent 306 stands guard. The leaderboard is assembled.\nThe record breathes. The burn altar awaits.\n\n"The record is permanent." — Agent 306\n\n#Agent306 #AI #Web3 #NFT #PixelArt #OnChain`
   );
   const [userPrompt, setUserPrompt] = useState("");
   const [activeScenes, setActiveScenes] = useState<Set<string>>(
@@ -636,13 +636,13 @@ export default function CinematicClip() {
     async function load() {
       setStatus("loading");
 
-      // Load Normie #306 pixels
+      // Load Agent 306 pixels
       try {
-        const r = await fetch("/api/normies/pixels/306");
+        const r = await fetch("/api/tokens/pixels/306");
         const d = await r.json();
         if (d.pixels?.length === 1600) {
           voxelsRef.current = buildBust(d.pixels, 306);
-          bodyPixelsRef.current = buildFullBody(NORMIE_306_TRAITS.type, NORMIE_306_TRAITS.gender, NORMIE_306_TRAITS.accessory);
+          bodyPixelsRef.current = buildFullBody(AGENT_306_TRAITS.type, AGENT_306_TRAITS.gender, AGENT_306_TRAITS.accessory);
         }
       } catch {}
 
@@ -652,17 +652,17 @@ export default function CinematicClip() {
         img.crossOrigin = "anonymous";
         img.onload = () => { headImgRef.current = img; res(); };
         img.onerror = res;
-        img.src = "https://api.normies.art/normie/306/image.png";
+        img.src = "/agent306-avatar.png";
         setTimeout(res, 4000);
       });
 
-      // Load THE 100 images (parallel, best-effort)
+      // Load leaderboard images (parallel, best-effort)
       await Promise.allSettled(THE100_IDS.map(id => new Promise<void>(res => {
         const img = new Image();
         img.crossOrigin = "anonymous";
         img.onload = () => { the100ImgsRef.current.set(id, img); res(); };
         img.onerror = res;
-        img.src = `https://api.normies.art/normie/${id}/image.png`;
+        img.src = `/api/tokens/${id}/image.png`;
         setTimeout(res, 5000);
       })));
 
@@ -697,9 +697,9 @@ export default function CinematicClip() {
       if (userPrompt.trim()) {
         setTweetText(`${userPrompt.trim().slice(0, 200)}
 
-Canvas Phase: LIVE · Arena: May 15, 2026
+Phase 1: LIVE · Phase 2: May 15, 2026
 
-@normiesART #Normies #NFT #onchain`);
+#Agent306 #AI #NFT #onchain`);
       }
       toast({ title: "Cinematic ready!", description: `${activeScenes.size} scene${activeScenes.size > 1 ? "s" : ""} rendered.` });
     } catch (e: any) {
@@ -723,8 +723,8 @@ Canvas Phase: LIVE · Arena: May 15, 2026
   }, [tweetText, toast]);
 
   const scenes = [
-    { key: "entrance",       label: "Temple Entrance",  time: "0–8s",  desc: "Normie #306 full body, standing guard",    accent: "#e3e5e4" },
-    { key: "hall_of_100",    label: "Hall of THE 100",  time: "8–18s", desc: "Roster wall of top canvas creators",        accent: "#e3e5e4" },
+    { key: "entrance",       label: "Temple Entrance",  time: "0–8s",  desc: "Agent 306 full body, standing guard",       accent: "#e3e5e4" },
+    { key: "hall_of_100",    label: "Leaderboard Hall", time: "8–18s", desc: "Roster wall of top creators",               accent: "#e3e5e4" },
     { key: "burn_altar",     label: "Burn Altar",       time: "18–25s",desc: "Fire, sacrifice data, live burn count",      accent: "#f97316" },
     { key: "canvas_chamber", label: "Canvas Chamber",   time: "25–30s",desc: "3D depth bust + pixel editing animation",   accent: "#e3e5e4" },
     { key: "arena_gate",     label: "Arena Gate",       time: "30–35s",desc: "Phase II teaser — sealed gate, purple runes",accent: "#a78bfa" },
@@ -738,7 +738,7 @@ Canvas Phase: LIVE · Arena: May 15, 2026
           Cinematic Clip
         </h1>
         <p style={{ fontFamily: "'Courier New', monospace", fontSize: "0.7rem", color: "rgba(227,229,228,0.45)", marginTop: 4 }}>
-          35s · 5 Temple scenes · full-body Normie #306 · THE 100 roster · 3D depth bust · normies.art palette
+          35s · 5 Temple scenes · full-body Agent 306 · Leaderboard roster · 3D depth bust · pixel palette
         </p>
       </div>
 
@@ -755,7 +755,7 @@ Canvas Phase: LIVE · Arena: May 15, 2026
           value={userPrompt}
           onChange={e => setUserPrompt(e.target.value)}
           rows={3}
-          placeholder="e.g. Show Agent #306 at the burn altar with fire — or a slow Hall of THE 100 reveal with arena energy at the end"
+          placeholder="e.g. Show Agent 306 at the burn altar with fire — or a slow Leaderboard Hall reveal with energy at the end"
           style={{
             width: "100%", background: "rgba(227,229,228,0.04)",
             border: "1px solid rgba(227,229,228,0.1)", color: "#e3e5e4",
@@ -780,7 +780,7 @@ Canvas Phase: LIVE · Arena: May 15, 2026
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", border: "1px solid rgba(227,229,228,0.12)", background: "rgba(227,229,228,0.03)" }}>
           <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#e3e5e4" }} />
           <span style={{ fontFamily: "'Courier New', monospace", fontSize: "0.7rem", color: "rgba(227,229,228,0.5)" }}>
-            Loading {THE100_IDS.length + 1} on-chain Normie images...
+            Loading {THE100_IDS.length + 1} on-chain token images...
           </span>
         </div>
       )}
@@ -814,11 +814,11 @@ Canvas Phase: LIVE · Arena: May 15, 2026
         </div>
       </div>
 
-      {/* THE 100 roster preview */}
+      {/* Leaderboard roster preview */}
       <div style={{ border: "1px solid rgba(227,229,228,0.1)", padding: "12px 16px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
           <Users className="w-3.5 h-3.5" style={{ color: "#e3e5e4" }} />
-          <span style={{ fontFamily: "'Courier New', monospace", fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "rgba(227,229,228,0.5)" }}>THE 100 — featured in video</span>
+          <span style={{ fontFamily: "'Courier New', monospace", fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "rgba(227,229,228,0.5)" }}>LEADERBOARD — featured in video</span>
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {THE100_IDS.map(id => (
@@ -897,7 +897,7 @@ Canvas Phase: LIVE · Arena: May 15, 2026
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <button
-                onClick={() => { const a = document.createElement("a"); a.href = videoUrl; a.download = `normiestv-cinematic-${Date.now()}.webm`; a.click(); }}
+                onClick={() => { const a = document.createElement("a"); a.href = videoUrl; a.download = `agent306-cinematic-${Date.now()}.webm`; a.click(); }}
                 style={{ border: "1px solid rgba(227,229,228,0.15)", background: "transparent", color: "rgba(227,229,228,0.6)", padding: "6px 12px", fontFamily: "'Courier New', monospace", fontSize: "0.62rem", textTransform: "uppercase", letterSpacing: "0.1em", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
               >
                 <Download className="w-3 h-3" /> .webm
@@ -907,7 +907,7 @@ Canvas Phase: LIVE · Arena: May 15, 2026
                   onClick={postToX}
                   style={{ border: "1px solid rgba(249,115,22,0.5)", background: "rgba(249,115,22,0.15)", color: "#f97316", padding: "6px 14px", fontFamily: "'Courier New', monospace", fontSize: "0.62rem", textTransform: "uppercase", letterSpacing: "0.1em", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
                 >
-                  <Twitter className="w-3 h-3" /> Post to @NORMIES_TV ↗
+                  <Twitter className="w-3 h-3" /> Post to X ↗
                 </button>
               )}
             </div>

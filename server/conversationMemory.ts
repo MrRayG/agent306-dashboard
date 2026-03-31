@@ -1,6 +1,6 @@
 /**
  * ─────────────────────────────────────────────────────────────
- *  CONVERSATION MEMORY — Agent #306 remembers who she talks to
+ *  CONVERSATION MEMORY — Agent 306 remembers who she talks to
  *
  *  Tracks per-user interaction history so replies can reference
  *  past conversations. Stored on /data volume, survives restarts.
@@ -93,7 +93,7 @@ export function recordIncoming(username: string, text: string, tweetUrl?: string
 }
 
 /**
- * Record that Agent #306 replied to someone.
+ * Record that Agent 306 replied to someone.
  */
 export function recordOutgoing(username: string, text: string, tweetUrl?: string): void {
   const key = username.toLowerCase().replace(/^@/, "");
@@ -195,7 +195,7 @@ export function getConversationMemoryState() {
 
 // ── In-Memory Full-Text Search Index ─────────────────────────
 // Option A from spec: inverted index built from conversation JSON.
-// No SQLite dependency — manageable in memory for Agent #306's volume.
+// No SQLite dependency — manageable in memory for Agent 306's volume.
 
 export interface ConversationSearchResult {
   username: string;
