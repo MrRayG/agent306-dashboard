@@ -17,6 +17,8 @@ import AgentHQ from "@/pages/AgentHQ";
 import WeeklyEngines from "@/pages/WeeklyEngines";
 import CommandCenter from "@/pages/CommandCenter";
 import MorningBriefing from "@/pages/MorningBriefing";
+import DataIntake from "@/pages/DataIntake";
+import KnowledgeGraph from "@/pages/KnowledgeGraph";
 import NotFound from "@/pages/not-found";
 import PerplexityAttribution from "@/components/PerplexityAttribution";
 
@@ -35,6 +37,8 @@ const nav = [
   { href: "/weekly",    label: "Weekly Engines",    desc: "Spotlight · Race" },
   { href: "/house",     label: "Agent HQ",          desc: "Research · Lab · Status" },
   { href: "/voice",     label: "Voice Studio",      desc: "Agent 306 speaks" },
+  { href: "/intake",    label: "Data Intake",       desc: "AI source feeds" },
+  { href: "/knowledge", label: "Knowledge Graph",   desc: "Connected intelligence" },
 ];
 
 function Sidebar() {
@@ -159,6 +163,8 @@ function App() {
             <Route path="/weekly"    component={WeeklyEngines}    />
             <Route path="/house"     component={AgentHQ}          />
             <Route path="/voice"     component={VoiceStudio}     />
+            <Route path="/intake"    component={DataIntake}      />
+            <Route path="/knowledge" component={KnowledgeGraph}  />
             <Route component={NotFound} />
           </Switch>
         </Layout>
