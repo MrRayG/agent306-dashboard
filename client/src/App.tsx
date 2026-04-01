@@ -19,6 +19,7 @@ import CommandCenter from "@/pages/CommandCenter";
 import MorningBriefing from "@/pages/MorningBriefing";
 import DataIntake from "@/pages/DataIntake";
 import KnowledgeGraph from "@/pages/KnowledgeGraph";
+import ResearchAgenda from "@/pages/ResearchAgenda";
 import NotFound from "@/pages/not-found";
 import PerplexityAttribution from "@/components/PerplexityAttribution";
 
@@ -39,6 +40,7 @@ const nav = [
   { href: "/voice",     label: "Voice Studio",      desc: "Agent 306 speaks" },
   { href: "/intake",    label: "Data Intake",       desc: "AI source feeds" },
   { href: "/knowledge", label: "Knowledge Graph",   desc: "Connected intelligence" },
+  { href: "/agenda",    label: "Research Agenda",   desc: "Active investigations" },
 ];
 
 function Sidebar() {
@@ -165,6 +167,7 @@ function App() {
             <Route path="/voice"     component={VoiceStudio}     />
             <Route path="/intake"    component={DataIntake}      />
             <Route path="/knowledge" component={KnowledgeGraph}  />
+            <Route path="/agenda"    component={ResearchAgenda}  />
             <Route component={NotFound} />
           </Switch>
         </Layout>
