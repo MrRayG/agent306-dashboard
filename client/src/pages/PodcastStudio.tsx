@@ -225,6 +225,16 @@ export default function PodcastStudio() {
     refetchInterval: 30_000,
   });
 
+  const { data: pipelineStatus } = useQuery<any>({
+    queryKey: ["/api/podcast/pipeline-status"],
+    refetchInterval: 60_000,
+  });
+
+  const { data: threadCandidates } = useQuery<any>({
+    queryKey: ["/api/research/podcast-candidates"],
+    refetchInterval: 60_000,
+  });
+
   const episodes: any[] = state?.episodes ?? [];
   const guests: any[] = state?.guests ?? [];
 
@@ -440,6 +450,9 @@ export default function PodcastStudio() {
         ))}
       </div>
 
+      {/* ─── Pipeline Status Bar ──────────────────────────────────────── */}
+      <PipelineStatusBar status={pipelineStatus} />
+
       {/* ─── Tab bar ────────────────────────────────────────────────────── */}
       <div
         style={{
@@ -477,6 +490,7 @@ export default function PodcastStudio() {
           <SignalTab
             episodes={signalEpisodes}
             working={working}
+            threadCandidates={threadCandidates}
             onScanTopics={scanTopics}
             onGenerateScript={generateScript}
             onRegenerateScript={regenerateScript}
@@ -510,6 +524,7 @@ export default function PodcastStudio() {
 function SignalTab({
   episodes,
   working,
+  threadCandidates,
   onScanTopics,
   onGenerateScript,
   onRegenerateScript,
@@ -522,6 +537,7 @@ function SignalTab({
 }: {
   episodes: any[];
   working: string | null;
+  threadCandidates: any;
   onScanTopics: () => void;
   onGenerateScript: (id: string) => void;
   onRegenerateScript: (id: string) => void;
@@ -536,6 +552,9 @@ function SignalTab({
 
   return (
     <div>
+      {/* Research Thread Candidates */}
+      <ResearchThreadCandidates candidates={threadCandidates} toast={toast} onRefetch={onRefetch} />
+
       {/* Top actions */}
       <div style={{ display: "flex", gap: "12px", marginBottom: "20px", alignItems: "center" }}>
         <ActionButton onClick={onScanTopics} color={ORANGE} disabled={working === "scan"}>
@@ -578,8 +597,129 @@ function SignalTab({
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// THE HIVE TAB
+// PIPELINE STATUS BAR
 // ═══════════════════════════════════════════════════════════════════════════════
+
+function PipelineStatusBar({ status }: { status: any }) {
+  const s = status ?? {};
+
+  const metrics = [
+    { label: "Ingested Today", value: s.itemsIngestedToday ?? s.ingestedToday ?? "—", color: BLUE },
+    { label: "Active Threads", value: s.activeResearchThreads ?? s.activeThreads ?? "—", color: ORANGE },
+    { label: "Candidates Ready", value: s.podcastCandidatesReady ?? s.candidatesReady ?? "—", color: PURPLE },
+    { label: "Latest Reflection", value: s.latestReflectionScore != null ? `${(s.latestReflectionScore * 100).toFixed(0)}%` : "—", color: GREEN },
+    { label: "Dream Progress", value: s.dreamProgress ?? s.dreamsExploring ?? "—", color: "#2dd4bf" },
+  ];
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: `repeat(${metrics.length}, 1fr)`,
+        gap: "1px",
+        background: "rgba(227,229,228,0.06)",
+        marginBottom: "16px",
+      }}
+    >
+      {metrics.map((m, i) => (
+        <div key={i} style={{ background: SURFACE, padding: "10px 14px" }}>
+          <div style={{ ...pixel, fontSize: "7px", color: TEXT_FAINT, marginBottom: "3px" }}>
+            {m.label}
+          </div>
+          <div style={{ ...mono, fontSize: "18px", fontWeight: 800, color: m.color }}>
+            {m.value}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RESEARCH THREAD CANDIDATES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function ResearchThreadCandidates({
+  candidates,
+  toast,
+  onRefetch,
+}: {
+  candidates: any;
+  toast: any;
+  onRefetch: () => void;
+}) {
+  const [generating, setGenerating] = useState<string | null>(null);
+
+  const threads: any[] = Array.isArray(candidates) ? candidates : candidates?.threads ?? candidates?.candidates ?? [];
+
+  if (threads.length === 0) return null;
+
+  async function generateFromThread(threadId: string) {
+    setGenerating(threadId);
+    toast({ title: "Generating episode...", description: "Creating episode from research thread" });
+    try {
+      await apiRequest("POST", `/api/podcast/generate-from-thread/${threadId}`, {});
+      toast({ title: "Episode generated from thread" });
+      onRefetch();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message || "Failed to generate episode", variant: "destructive" });
+    }
+    setGenerating(null);
+  }
+
+  return (
+    <div style={{ marginBottom: "20px" }}>
+      <SectionLabel color={PURPLE}>RESEARCH THREAD CANDIDATES</SectionLabel>
+      <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "rgba(227,229,228,0.06)" }}>
+        {threads.map((thread: any) => (
+          <div
+            key={thread.id}
+            style={{
+              background: BG,
+              padding: "12px 16px",
+              borderLeft: `3px solid ${PURPLE}`,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              gap: "12px",
+            }}
+          >
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ ...mono, fontSize: "12px", fontWeight: 700, color: TEXT, marginBottom: "3px" }}>
+                {thread.title || thread.question || thread.topic || thread.id}
+              </div>
+              {(thread.summary || thread.description) && (
+                <div style={{ ...mono, fontSize: "10px", color: TEXT_DIM, lineHeight: 1.5 }}>
+                  {(thread.summary || thread.description).slice(0, 120)}
+                  {(thread.summary || thread.description).length > 120 ? "..." : ""}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                {thread.status && (
+                  <span style={{ ...pixel, fontSize: "7px", color: GREEN, background: `${GREEN}20`, padding: "2px 6px" }}>
+                    {thread.status}
+                  </span>
+                )}
+                {thread.evidenceCount != null && (
+                  <span style={{ ...mono, fontSize: "9px", color: TEXT_FAINT }}>
+                    {thread.evidenceCount} evidence
+                  </span>
+                )}
+              </div>
+            </div>
+            <ActionButton
+              onClick={() => generateFromThread(thread.id)}
+              color={ORANGE}
+              disabled={generating === thread.id}
+            >
+              {generating === thread.id ? "GENERATING..." : "GENERATE EPISODE"}
+            </ActionButton>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CREATE EPISODE FORM
