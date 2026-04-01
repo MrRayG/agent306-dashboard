@@ -32,6 +32,7 @@ import { extractInsights } from "./conversationLearningEngine.js";
 import { getMetacognitionState } from "./metacognitionEngine.js";
 import { getResearchLab, resolveHypothesis } from "./researchEngine.js";
 import { clusterKnowledge, detectContradictions as detectGraphContradictions } from "./knowledge-graph.js";
+import { runResearchAgendaCycle } from "./research-agenda.js";
 
 const GROK_URL     = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
@@ -538,6 +539,15 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
 
   // 2. Auto-resolve expired hypotheses
   const resolvedNames = autoResolveExpired(expiredHypotheses);
+
+  // 2b. Proactive Research Agenda (Layer 3) — generate threads, advance top 3, prune stale
+  try {
+    console.log("[DailyCycle] Running research agenda cycle...");
+    const agendaResult = await runResearchAgendaCycle();
+    console.log(`[DailyCycle] Research agenda: ${agendaResult.newThreads} new threads, ${agendaResult.advanced.length} advanced, ${agendaResult.pruned} pruned, ${agendaResult.podcastCandidates} podcast candidates`);
+  } catch (e: any) {
+    console.warn("[DailyCycle] Research agenda cycle failed (non-fatal):", e.message);
+  }
 
   // 3. Make ONE Grok call
   const result = await callGrokForBriefing({

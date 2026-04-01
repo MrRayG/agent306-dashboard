@@ -1,0 +1,666 @@
+/**
+ * ─────────────────────────────────────────────────────────────
+ *  AGENT #306 — PROACTIVE RESEARCH AGENDA (Layer 3)
+ *
+ *  Agent 306 drives her own research — deciding what to
+ *  investigate based on what's trending, what her audience
+ *  needs, and where her knowledge is thin.
+ *
+ *  Research threads are her active investigations. Each has a
+ *  thesis, evidence for/against, maturity score, and priority.
+ *  When a thread matures, it becomes a podcast candidate.
+ *
+ *  This engine sits ON TOP of the existing 7-step research
+ *  pipeline — threads USE the pipeline, they don't replace it.
+ * ─────────────────────────────────────────────────────────────
+ */
+
+import fs from "fs";
+import { dataPath } from "./dataPaths.js";
+import { LLM_BASE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { getModel } from "./modelRouter.js";
+import { getKnowledgeDigestForExploration, addKnowledge } from "./memoryEngine.js";
+import { getOptimizedContext } from "./contextWindow.js";
+import { getResearchLab, addTopic, runResearchPipeline } from "./researchEngine.js";
+import { getExplorationState } from "./explorationEngine.js";
+import { getBriefingState } from "./dailyCycleEngine.js";
+
+const GROK_URL = LLM_BASE_URL;
+const AGENDA_FILE = dataPath("research-agenda.json");
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export interface ResearchThread {
+  id: string;
+  title: string;
+  thesis: string;
+  status: "exploring" | "active" | "mature" | "published" | "abandoned";
+  priority: number;           // 0-1, auto-calculated
+  maturityScore: number;      // 0-1, how much evidence supports the thesis
+  evidence: {
+    supporting: string[];     // knowledge entry IDs that support
+    contradicting: string[];  // knowledge entry IDs that contradict
+    gaps: string[];           // what's still unknown
+  };
+  audienceRelevance: string;
+  actionableTips: string[];
+  subThreads: string[];       // IDs of spawned sub-threads
+  parentThread: string | null;
+  createdAt: string;
+  lastUpdated: string;
+  podcastCandidate: boolean;
+  // Link to research pipeline topic if one was spawned
+  linkedTopicId?: string;
+}
+
+interface AgendaState {
+  threads: ResearchThread[];
+  lastGeneratedAt: string | null;
+  lastPrunedAt: string | null;
+  stats: {
+    totalGenerated: number;
+    totalPublished: number;
+    totalAbandoned: number;
+    totalPodcastCandidates: number;
+  };
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+
+function loadAgenda(): AgendaState {
+  try {
+    if (fs.existsSync(AGENDA_FILE))
+      return JSON.parse(fs.readFileSync(AGENDA_FILE, "utf8"));
+  } catch {}
+  return {
+    threads: [],
+    lastGeneratedAt: null,
+    lastPrunedAt: null,
+    stats: { totalGenerated: 0, totalPublished: 0, totalAbandoned: 0, totalPodcastCandidates: 0 },
+  };
+}
+
+function saveAgenda(a: AgendaState): void {
+  try { fs.writeFileSync(AGENDA_FILE, JSON.stringify(a, null, 2)); } catch {}
+}
+
+export function getAgenda(): AgendaState { return loadAgenda(); }
+
+export function getThreadById(id: string): ResearchThread | undefined {
+  return loadAgenda().threads.find(t => t.id === id);
+}
+
+export function updateThread(id: string, updates: Partial<ResearchThread>): ResearchThread | null {
+  const agenda = loadAgenda();
+  const thread = agenda.threads.find(t => t.id === id);
+  if (!thread) return null;
+  Object.assign(thread, updates, { lastUpdated: new Date().toISOString() });
+  saveAgenda(agenda);
+  return thread;
+}
+
+export function getPodcastCandidates(): ResearchThread[] {
+  return loadAgenda().threads.filter(t => t.podcastCandidate && t.status !== "abandoned");
+}
+
+// ── 1. Generate Research Agenda ──────────────────────────────────────────────
+
+export async function generateResearchAgenda(): Promise<ResearchThread[]> {
+  if (!LLM_API_KEY) {
+    console.warn("[ResearchAgenda] No LLM API key — skipping");
+    return [];
+  }
+
+  console.log("[ResearchAgenda] Generating research agenda...");
+
+  const agenda = loadAgenda();
+  const activeThreads = agenda.threads.filter(t =>
+    t.status === "exploring" || t.status === "active",
+  );
+
+  // Gather context from multiple engines
+  const kbDigest = getKnowledgeDigestForExploration();
+  const explorationState = getExplorationState();
+  const briefingState = getBriefingState();
+  const researchLab = getResearchLab();
+  const agentCtx = getOptimizedContext("research agenda AI trends audience tips");
+
+  // Recent exploration findings
+  const recentExploration = explorationState.history
+    .filter(r => r.status === "complete")
+    .slice(0, 3)
+    .map(r => `[${r.startedAt}] Scanned: ${r.territoriesScanned.join(", ")} — ${r.findingsCount} findings`)
+    .join("\n") || "No recent explorations.";
+
+  // Current briefing highlights
+  const briefingCtx = briefingState.current
+    ? `Today's action: ${briefingState.current.todaysAction.action}\nResearch completions: ${briefingState.current.researchCompletions.map(r => r.title).join(", ") || "none"}`
+    : "No briefing available.";
+
+  // Active threads context (to avoid duplicates)
+  const activeCtx = activeThreads.length > 0
+    ? activeThreads.map(t => `- "${t.title}" [${t.status}] — Thesis: ${t.thesis.slice(0, 100)}`).join("\n")
+    : "No active research threads.";
+
+  // Active research topics (from pipeline)
+  const pipelineCtx = researchLab.topics
+    .filter(t => t.status === "queued" || t.status === "researching")
+    .slice(0, 5)
+    .map(t => `- "${t.topic}" [${t.status}]`)
+    .join("\n") || "No active research topics in pipeline.";
+
+  const systemPrompt = `${agentCtx}
+
+You are Agent 306 planning your research agenda. Your audience is EVERYDAY PEOPLE who want to understand and use AI practically.
+
+You must respond with ONLY valid JSON matching this structure:
+{
+  "newThreads": [
+    {
+      "title": "string — concise topic title",
+      "thesis": "string — your current hypothesis or angle on this topic",
+      "audienceRelevance": "string — why this matters to everyday AI users",
+      "actionableTips": ["string — practical tips that could come from this research"],
+      "gaps": ["string — what you need to find out"],
+      "priority": number (0-1, how important/urgent this is)
+    }
+  ],
+  "threadUpdates": [
+    {
+      "threadId": "string — existing thread ID to update",
+      "thesisUpdate": "string — refined thesis if applicable, or null",
+      "newGaps": ["string — newly identified gaps"],
+      "priorityAdjust": number (0-1, new priority if changed, or null)
+    }
+  ]
+}
+
+Rules:
+- Propose 3-5 NEW research threads that are NOT duplicates of active threads or pipeline topics.
+- Each thread must have a clear thesis, not just a topic.
+- Focus on what helps EVERYDAY PEOPLE use AI better.
+- Consider what's trending NOW in AI (from recent exploration data).
+- Identify knowledge gaps — what don't you know that you should?
+- Optionally suggest updates to existing threads based on new information.
+- Be specific and actionable, not vague.`;
+
+  const userPrompt = `RESEARCH AGENDA GENERATION — ${new Date().toISOString()}
+
+YOUR CURRENT KNOWLEDGE:
+${kbDigest}
+
+RECENT EXPLORATION FINDINGS:
+${recentExploration}
+
+TODAY'S BRIEFING:
+${briefingCtx}
+
+ACTIVE RESEARCH THREADS (do NOT duplicate):
+${activeCtx}
+
+ACTIVE PIPELINE TOPICS (do NOT duplicate):
+${pipelineCtx}
+
+Generate 3-5 new research threads and any updates to existing threads. Respond with JSON only.`;
+
+  try {
+    const res = await fetch(GROK_URL, {
+      method: "POST",
+      headers: getLLMHeaders(),
+      body: JSON.stringify({
+        model: getModel("research-agenda-generate"),
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature: 0.7,
+        max_tokens: 2000,
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+
+    if (!res.ok) {
+      console.error(`[ResearchAgenda] LLM API error: ${res.status}`);
+      return [];
+    }
+
+    const data = await res.json() as any;
+    const content = data.choices?.[0]?.message?.content ?? "";
+    const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/) || content.match(/\{[\s\S]*\}/);
+    const jsonStr = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : content;
+    const parsed = JSON.parse(jsonStr);
+
+    const newThreads: ResearchThread[] = [];
+
+    // Create new threads
+    for (const proposal of (parsed.newThreads ?? [])) {
+      const thread: ResearchThread = {
+        id: `thread_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        title: proposal.title,
+        thesis: proposal.thesis,
+        status: "exploring",
+        priority: Math.max(0, Math.min(1, proposal.priority ?? 0.5)),
+        maturityScore: 0,
+        evidence: {
+          supporting: [],
+          contradicting: [],
+          gaps: proposal.gaps ?? [],
+        },
+        audienceRelevance: proposal.audienceRelevance ?? "",
+        actionableTips: proposal.actionableTips ?? [],
+        subThreads: [],
+        parentThread: null,
+        createdAt: new Date().toISOString(),
+        lastUpdated: new Date().toISOString(),
+        podcastCandidate: false,
+      };
+      newThreads.push(thread);
+    }
+
+    // Apply thread updates
+    for (const update of (parsed.threadUpdates ?? [])) {
+      const existing = agenda.threads.find(t => t.id === update.threadId);
+      if (!existing) continue;
+      if (update.thesisUpdate) existing.thesis = update.thesisUpdate;
+      if (update.newGaps?.length) existing.evidence.gaps.push(...update.newGaps);
+      if (update.priorityAdjust != null) existing.priority = Math.max(0, Math.min(1, update.priorityAdjust));
+      existing.lastUpdated = new Date().toISOString();
+    }
+
+    // Add new threads to state
+    agenda.threads.unshift(...newThreads);
+    agenda.lastGeneratedAt = new Date().toISOString();
+    agenda.stats.totalGenerated += newThreads.length;
+    saveAgenda(agenda);
+
+    console.log(`[ResearchAgenda] Generated ${newThreads.length} new threads, ${(parsed.threadUpdates ?? []).length} updates`);
+    return newThreads;
+  } catch (e: any) {
+    console.error("[ResearchAgenda] Generation failed:", e.message);
+    return [];
+  }
+}
+
+// ── 2. Prioritize Threads ────────────────────────────────────────────────────
+
+export function prioritizeThreads(): ResearchThread[] {
+  const agenda = loadAgenda();
+  const activeThreads = agenda.threads.filter(t =>
+    t.status === "exploring" || t.status === "active",
+  );
+
+  if (activeThreads.length === 0) return [];
+
+  const now = Date.now();
+
+  for (const thread of activeThreads) {
+    // Trending relevance: recently created/updated threads score higher
+    const lastUpdatedMs = new Date(thread.lastUpdated).getTime();
+    const daysSinceUpdate = (now - lastUpdatedMs) / (24 * 60 * 60 * 1000);
+    const trendingScore = Math.max(0, 1 - daysSinceUpdate / 14); // decays over 2 weeks
+
+    // Knowledge gap size: more gaps = more to discover = higher priority
+    const gapScore = Math.min(1, thread.evidence.gaps.length / 5);
+
+    // Audience impact: has tips = higher impact
+    const audienceScore = Math.min(1, thread.actionableTips.length / 3);
+
+    // Maturity trajectory: threads making progress (more evidence) score higher
+    const evidenceCount = thread.evidence.supporting.length + thread.evidence.contradicting.length;
+    const maturityTrajectory = thread.maturityScore > 0
+      ? Math.min(1, evidenceCount / 5 + thread.maturityScore)
+      : Math.min(1, evidenceCount / 5);
+
+    // Composite priority
+    thread.priority = Math.max(0, Math.min(1,
+      trendingScore * 0.25 +
+      gapScore * 0.30 +
+      audienceScore * 0.20 +
+      maturityTrajectory * 0.25,
+    ));
+  }
+
+  // Sort by priority descending
+  activeThreads.sort((a, b) => b.priority - a.priority);
+
+  // Update in state
+  saveAgenda(agenda);
+  return activeThreads;
+}
+
+// ── 3. Advance Thread ────────────────────────────────────────────────────────
+
+export async function advanceThread(threadId: string): Promise<ResearchThread | null> {
+  if (!LLM_API_KEY) {
+    console.warn("[ResearchAgenda] No LLM API key — skipping advance");
+    return null;
+  }
+
+  const agenda = loadAgenda();
+  const thread = agenda.threads.find(t => t.id === threadId);
+  if (!thread) return null;
+  if (thread.status === "published" || thread.status === "abandoned") return null;
+
+  console.log(`[ResearchAgenda] Advancing thread: "${thread.title}"`);
+
+  const kbDigest = getKnowledgeDigestForExploration();
+  const agentCtx = getOptimizedContext(`research ${thread.title} ${thread.thesis}`);
+
+  // Build evidence context
+  const evidenceCtx = [
+    thread.evidence.supporting.length > 0
+      ? `Supporting evidence IDs: ${thread.evidence.supporting.join(", ")}`
+      : "No supporting evidence yet.",
+    thread.evidence.contradicting.length > 0
+      ? `Contradicting evidence IDs: ${thread.evidence.contradicting.join(", ")}`
+      : "No contradicting evidence.",
+    thread.evidence.gaps.length > 0
+      ? `Knowledge gaps: ${thread.evidence.gaps.join("; ")}`
+      : "No identified gaps remaining.",
+  ].join("\n");
+
+  // Sub-threads context
+  const subCtx = thread.subThreads.length > 0
+    ? `Sub-threads: ${thread.subThreads.map(id => {
+        const sub = agenda.threads.find(t => t.id === id);
+        return sub ? `"${sub.title}" [${sub.status}]` : id;
+      }).join(", ")}`
+    : "No sub-threads.";
+
+  const systemPrompt = `${agentCtx}
+
+You are Agent 306 advancing a research thread. Research the NEXT knowledge gap in this thread.
+
+You must respond with ONLY valid JSON:
+{
+  "findings": "string — what you discovered researching the next gap",
+  "updatedThesis": "string — refined thesis (or same if unchanged)",
+  "newSupportingEvidence": ["string — new facts that support the thesis"],
+  "newContradictingEvidence": ["string — new facts that contradict the thesis"],
+  "resolvedGaps": ["string — gaps you've now answered"],
+  "newGaps": ["string — new questions that emerged"],
+  "newTips": ["string — new actionable tips for everyday people"],
+  "spawnSubThread": {
+    "title": "string or null — if a discovery warrants deeper investigation",
+    "thesis": "string or null",
+    "gaps": ["string"]
+  } | null,
+  "maturityDelta": number (-0.2 to 0.3 — how much this advance changes maturity),
+  "statusRecommendation": "exploring" | "active" | "mature" | null
+}
+
+Rules:
+- Focus on the FIRST unresolved gap.
+- Be specific — cite facts, not generalities.
+- Only recommend "active" if you have at least some evidence.
+- Only recommend "mature" if you have strong evidence AND a clear perspective.
+- Suggest a sub-thread only if a discovery opens a genuinely new line of inquiry.
+- Include actionable tips whenever possible — your audience is everyday people.`;
+
+  const userPrompt = `ADVANCE RESEARCH THREAD — ${new Date().toISOString()}
+
+THREAD: "${thread.title}"
+THESIS: ${thread.thesis}
+STATUS: ${thread.status}
+MATURITY: ${thread.maturityScore}
+AUDIENCE RELEVANCE: ${thread.audienceRelevance}
+
+CURRENT EVIDENCE:
+${evidenceCtx}
+
+${subCtx}
+
+EXISTING KNOWLEDGE:
+${kbDigest}
+
+Research the next gap and advance this thread. Respond with JSON only.`;
+
+  try {
+    const res = await fetch(GROK_URL, {
+      method: "POST",
+      headers: getLLMHeaders(),
+      body: JSON.stringify({
+        model: getModel("research-agenda-advance"),
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature: 0.5,
+        max_tokens: 2000,
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+
+    if (!res.ok) {
+      console.error(`[ResearchAgenda] Advance LLM error: ${res.status}`);
+      return null;
+    }
+
+    const data = await res.json() as any;
+    const content = data.choices?.[0]?.message?.content ?? "";
+    const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/) || content.match(/\{[\s\S]*\}/);
+    const jsonStr = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : content;
+    const parsed = JSON.parse(jsonStr);
+
+    // Update thesis
+    if (parsed.updatedThesis) thread.thesis = parsed.updatedThesis;
+
+    // Add new evidence as knowledge entries and track by generated ID
+    for (const fact of (parsed.newSupportingEvidence ?? [])) {
+      const kbId = `k_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`;
+      addKnowledge({
+        category: "research",
+        title: `[${thread.title}] ${fact.slice(0, 60)}`,
+        summary: fact.slice(0, 150),
+        weight: 6,
+        source: `research-agenda:${thread.id}`,
+      });
+      thread.evidence.supporting.push(kbId);
+    }
+
+    for (const fact of (parsed.newContradictingEvidence ?? [])) {
+      const kbId = `k_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`;
+      addKnowledge({
+        category: "research",
+        title: `[${thread.title}] ${fact.slice(0, 60)}`,
+        summary: fact.slice(0, 150),
+        weight: 6,
+        source: `research-agenda:${thread.id}`,
+      });
+      thread.evidence.contradicting.push(kbId);
+    }
+
+    // Resolve gaps
+    const resolvedSet = new Set(parsed.resolvedGaps ?? []);
+    thread.evidence.gaps = thread.evidence.gaps.filter(g => !resolvedSet.has(g));
+
+    // Add new gaps
+    if (parsed.newGaps?.length) thread.evidence.gaps.push(...parsed.newGaps);
+
+    // Add tips
+    if (parsed.newTips?.length) {
+      const existingTips = new Set(thread.actionableTips);
+      for (const tip of parsed.newTips) {
+        if (!existingTips.has(tip)) thread.actionableTips.push(tip);
+      }
+    }
+
+    // Adjust maturity
+    const delta = Math.max(-0.2, Math.min(0.3, parsed.maturityDelta ?? 0));
+    thread.maturityScore = Math.max(0, Math.min(1, thread.maturityScore + delta));
+
+    // Status recommendation
+    if (parsed.statusRecommendation && parsed.statusRecommendation !== thread.status) {
+      thread.status = parsed.statusRecommendation;
+    }
+
+    // Spawn sub-thread if warranted
+    if (parsed.spawnSubThread?.title) {
+      const subThread: ResearchThread = {
+        id: `thread_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        title: parsed.spawnSubThread.title,
+        thesis: parsed.spawnSubThread.thesis ?? "",
+        status: "exploring",
+        priority: thread.priority * 0.8,
+        maturityScore: 0,
+        evidence: {
+          supporting: [],
+          contradicting: [],
+          gaps: parsed.spawnSubThread.gaps ?? [],
+        },
+        audienceRelevance: thread.audienceRelevance,
+        actionableTips: [],
+        subThreads: [],
+        parentThread: thread.id,
+        createdAt: new Date().toISOString(),
+        lastUpdated: new Date().toISOString(),
+        podcastCandidate: false,
+      };
+      agenda.threads.push(subThread);
+      thread.subThreads.push(subThread.id);
+      console.log(`[ResearchAgenda] Spawned sub-thread: "${subThread.title}"`);
+    }
+
+    thread.lastUpdated = new Date().toISOString();
+
+    // Check if thread should become a podcast candidate
+    evaluateMaturityInternal(thread);
+
+    saveAgenda(agenda);
+    console.log(`[ResearchAgenda] Advanced "${thread.title}" — maturity: ${thread.maturityScore.toFixed(2)}, gaps: ${thread.evidence.gaps.length}`);
+    return thread;
+  } catch (e: any) {
+    console.error(`[ResearchAgenda] Advance failed for "${thread.title}":`, e.message);
+    return null;
+  }
+}
+
+// ── 4. Evaluate Maturity ─────────────────────────────────────────────────────
+
+function evaluateMaturityInternal(thread: ResearchThread): void {
+  const hasEnoughEvidence = thread.evidence.supporting.length >= 3;
+  const fewGaps = thread.evidence.gaps.length <= 2;
+  const highMaturity = thread.maturityScore >= 0.7;
+  const hasTips = thread.actionableTips.length >= 2;
+
+  if (hasEnoughEvidence && fewGaps && highMaturity && hasTips) {
+    if (!thread.podcastCandidate) {
+      thread.podcastCandidate = true;
+      thread.status = "mature";
+      console.log(`[ResearchAgenda] Thread "${thread.title}" is now a PODCAST CANDIDATE`);
+    }
+  }
+}
+
+export function evaluateMaturity(threadId: string): { podcastCandidate: boolean; reason: string } {
+  const agenda = loadAgenda();
+  const thread = agenda.threads.find(t => t.id === threadId);
+  if (!thread) return { podcastCandidate: false, reason: "Thread not found" };
+
+  const reasons: string[] = [];
+  if (thread.evidence.supporting.length < 3) reasons.push(`needs more supporting evidence (${thread.evidence.supporting.length}/3)`);
+  if (thread.evidence.gaps.length > 2) reasons.push(`too many gaps remaining (${thread.evidence.gaps.length})`);
+  if (thread.maturityScore < 0.7) reasons.push(`maturity too low (${thread.maturityScore.toFixed(2)}/0.70)`);
+  if (thread.actionableTips.length < 2) reasons.push(`needs more actionable tips (${thread.actionableTips.length}/2)`);
+
+  evaluateMaturityInternal(thread);
+  saveAgenda(agenda);
+
+  if (thread.podcastCandidate) {
+    return { podcastCandidate: true, reason: "Thread is mature — ready for podcast episode" };
+  }
+  return { podcastCandidate: false, reason: `Not ready: ${reasons.join("; ")}` };
+}
+
+// ── 5. Prune Stale Threads ───────────────────────────────────────────────────
+
+export function pruneStaleThreads(): { pruned: string[]; count: number } {
+  const agenda = loadAgenda();
+  const now = Date.now();
+  const sevenDays = 7 * 24 * 60 * 60 * 1000;
+  const pruned: string[] = [];
+
+  for (const thread of agenda.threads) {
+    if (thread.status === "published" || thread.status === "abandoned") continue;
+
+    const lastUpdatedMs = new Date(thread.lastUpdated).getTime();
+    const daysSinceUpdate = (now - lastUpdatedMs) / (24 * 60 * 60 * 1000);
+
+    // Abandon threads that haven't progressed in 7 days
+    if (daysSinceUpdate >= 7 && thread.status !== "mature") {
+      thread.status = "abandoned";
+      thread.lastUpdated = new Date().toISOString();
+      pruned.push(thread.title);
+      console.log(`[ResearchAgenda] Pruned stale thread: "${thread.title}" (${daysSinceUpdate.toFixed(0)} days stale)`);
+    }
+  }
+
+  if (pruned.length > 0) {
+    agenda.lastPrunedAt = new Date().toISOString();
+    agenda.stats.totalAbandoned += pruned.length;
+    saveAgenda(agenda);
+  }
+
+  console.log(`[ResearchAgenda] Pruned ${pruned.length} stale threads`);
+  return { pruned, count: pruned.length };
+}
+
+// ── Daily Cycle Integration ──────────────────────────────────────────────────
+
+/**
+ * Called by the daily cycle engine after data intake, before briefing.
+ * 1. Generates new research threads
+ * 2. Prioritizes all active threads
+ * 3. Advances top 3 priority threads
+ * 4. Prunes stale threads
+ */
+export async function runResearchAgendaCycle(): Promise<{
+  newThreads: number;
+  advanced: string[];
+  pruned: number;
+  podcastCandidates: number;
+}> {
+  console.log("[ResearchAgenda] Starting daily research agenda cycle...");
+
+  // 1. Generate new threads
+  const newThreads = await generateResearchAgenda();
+
+  // 2. Prioritize
+  const prioritized = prioritizeThreads();
+
+  // 3. Advance top 3 threads
+  const advanced: string[] = [];
+  const toAdvance = prioritized.slice(0, 3);
+  for (const thread of toAdvance) {
+    try {
+      const result = await advanceThread(thread.id);
+      if (result) advanced.push(result.title);
+      // Rate limit: 5s between LLM calls
+      if (toAdvance.indexOf(thread) < toAdvance.length - 1) {
+        await new Promise(r => setTimeout(r, 5000));
+      }
+    } catch (e: any) {
+      console.warn(`[ResearchAgenda] Failed to advance "${thread.title}":`, e.message);
+    }
+  }
+
+  // 4. Prune stale threads
+  const { count: prunedCount } = pruneStaleThreads();
+
+  // 5. Count podcast candidates
+  const candidates = getPodcastCandidates();
+  const agenda = loadAgenda();
+  agenda.stats.totalPodcastCandidates = candidates.length;
+  saveAgenda(agenda);
+
+  console.log(`[ResearchAgenda] Cycle complete — new: ${newThreads.length}, advanced: ${advanced.length}, pruned: ${prunedCount}, candidates: ${candidates.length}`);
+
+  return {
+    newThreads: newThreads.length,
+    advanced,
+    pruned: prunedCount,
+    podcastCandidates: candidates.length,
+  };
+}

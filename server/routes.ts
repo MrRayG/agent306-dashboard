@@ -70,6 +70,7 @@ import { getModel, getModelConfig as getModelRouterStats } from "./modelRouter.j
 import { getCoreIdentity, getRelevantContext, getOptimizedContext } from "./contextWindow.js";
 import { runFullIntake, runSourceIntake, getIntakeState, getAvailableSources, generateDailyBrief } from "./data-intake.js";
 import { getSkills, getSkillById, deleteSkill, extractSkill, getSkillsState, checkAndExtractSkills } from "./skillEngine.js";
+import { getAgenda, getThreadById, updateThread, getPodcastCandidates, generateResearchAgenda, prioritizeThreads, advanceThread, evaluateMaturity, pruneStaleThreads } from "./research-agenda.js";
 
 // On-chain API removed
 // const ONCHAIN_API = "";
@@ -3375,6 +3376,48 @@ needsHelp: true only when you genuinely need his direction or information`,
       estimatedTokens: Math.ceil((core.length + context.length) / 4),
       context,
     });
+  });
+
+  // ── Research Agenda (Proactive Research Loop — Layer 3) ────────────────
+
+  app.get("/api/research/agenda", (_req, res) => {
+    res.json(getAgenda());
+  });
+
+  app.post("/api/research/agenda/generate", async (_req, res) => {
+    res.json({ started: true });
+    generateResearchAgenda()
+      .then(threads => console.log(`[API] Research agenda generated: ${threads.length} new threads`))
+      .catch(e => console.error("[API] Research agenda generation failed:", e.message));
+  });
+
+  app.get("/api/research/thread/:id", (req, res) => {
+    const thread = getThreadById(req.params.id);
+    if (!thread) return res.status(404).json({ error: "Thread not found" });
+    res.json(thread);
+  });
+
+  app.put("/api/research/thread/:id", (req, res) => {
+    const updated = updateThread(req.params.id, req.body ?? {});
+    if (!updated) return res.status(404).json({ error: "Thread not found" });
+    res.json(updated);
+  });
+
+  app.post("/api/research/thread/:id/advance", async (req, res) => {
+    const { id } = req.params;
+    res.json({ started: true, threadId: id });
+    advanceThread(id)
+      .then(t => console.log(`[API] Thread advanced: "${t?.title ?? id}"`))
+      .catch(e => console.error(`[API] Thread advance failed:`, e.message));
+  });
+
+  app.get("/api/research/podcast-candidates", (_req, res) => {
+    res.json(getPodcastCandidates());
+  });
+
+  app.post("/api/research/prune", (_req, res) => {
+    const result = pruneStaleThreads();
+    res.json(result);
   });
 
   app.post("/api/seed", (_req, res) => {
