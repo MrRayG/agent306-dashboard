@@ -67,6 +67,7 @@ import { searchConversations } from "./conversationMemory.js";
 import { getKnowledgeTiers, scanForInjection } from "./memoryEngine.js";
 import { getModel, getModelConfig as getModelRouterStats } from "./modelRouter.js";
 import { getCoreIdentity, getRelevantContext, getOptimizedContext } from "./contextWindow.js";
+import { runFullIntake, runSourceIntake, getIntakeState, getAvailableSources, generateDailyBrief } from "./data-intake.js";
 import { getSkills, getSkillById, deleteSkill, extractSkill, getSkillsState, checkAndExtractSkills } from "./skillEngine.js";
 
 // On-chain API removed
@@ -1207,6 +1208,47 @@ export function registerRoutes(httpServer: Server, app: Express) {
   app.post("/api/daily-briefing/run", async (_req, res) => {
     res.json({ ok: true, message: "Daily cycle triggered" });
     runDailyCycle().catch(e => console.error("[DailyCycle] Manual run error:", e));
+  });
+
+  // ── Data Intake (Layer 1) ────────────────────────────────────────────
+  app.get("/api/intake/sources", (_req, res) => {
+    res.json({ sources: getAvailableSources(), state: getIntakeState() });
+  });
+
+  app.get("/api/intake/run", async (_req, res) => {
+    res.json({ ok: true, message: "Data intake triggered" });
+    runFullIntake().catch(e => console.error("[DataIntake] Manual run error:", e));
+  });
+
+  app.get("/api/intake/source/:name", async (req, res) => {
+    const source = req.params.name;
+    const available = getAvailableSources();
+    if (!available.includes(source)) {
+      res.status(400).json({ error: `Unknown source: ${source}. Available: ${available.join(", ")}` });
+      return;
+    }
+    try {
+      const items = await runSourceIntake(source);
+      res.json({ source, items, count: items.length });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/intake/brief", async (_req, res) => {
+    const intakeState = getIntakeState();
+    if (!intakeState.lastRunAt) {
+      res.json({ brief: "No intake has been run yet. Trigger /api/intake/run first.", lastRunAt: null });
+      return;
+    }
+    // Run fresh intake and generate brief
+    try {
+      const items = await runFullIntake();
+      const brief = generateDailyBrief(items);
+      res.json({ brief, itemCount: items.length, lastRunAt: intakeState.lastRunAt });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // ── Knowledge Archive ─────────────────────────────────────────────

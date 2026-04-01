@@ -14,6 +14,7 @@
 import fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { runFullIntake } from "./data-intake.js";
 import {
   getFullAgentContext,
   addKnowledge,
@@ -516,6 +517,15 @@ async function autoDetectContradictions(): Promise<number> {
 
 export async function runDailyCycle(): Promise<DailyBriefing | null> {
   console.log("[DailyCycle] Starting daily intelligence cycle...");
+
+  // 0. Run data intake FIRST — pull fresh AI/tech intelligence before reasoning
+  try {
+    console.log("[DailyCycle] Running data intake...");
+    const intakeItems = await runFullIntake();
+    console.log(`[DailyCycle] Data intake complete — ${intakeItems.length} new items ingested`);
+  } catch (e: any) {
+    console.warn("[DailyCycle] Data intake failed (non-fatal):", e.message);
+  }
 
   // 1. Gather all inputs
   const { active: activeHypotheses, expired: expiredHypotheses } = gatherHypotheses();
