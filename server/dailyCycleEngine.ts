@@ -33,6 +33,7 @@ import { getMetacognitionState } from "./metacognitionEngine.js";
 import { getResearchLab, resolveHypothesis } from "./researchEngine.js";
 import { clusterKnowledge, detectContradictions as detectGraphContradictions } from "./knowledge-graph.js";
 import { runResearchAgendaCycle } from "./research-agenda.js";
+import { updateDreams, takeGrowthSnapshot, generateSelfImprovementPlan, seedDreams } from "./dreamEngine.js";
 
 const GROK_URL     = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
@@ -595,6 +596,16 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     // Skill extraction: check for recent successful outcomes and extract patterns
     const skills = await checkAndExtractSkills().catch(e => { console.warn("[DailyCycle] Skill extraction failed:", e.message); return []; });
     if (skills.length > 0) console.log(`[DailyCycle] Extracted ${skills.length} new skill(s)`);
+
+    // Dream engine: ensure dreams are seeded, then update against new knowledge
+    seedDreams(); // no-op if already seeded
+    await updateDreams().catch(e => console.warn("[DailyCycle] Dream update failed:", e.message));
+    // Growth snapshot: aggregate all metrics and generate self-assessment
+    await takeGrowthSnapshot().catch(e => console.warn("[DailyCycle] Growth snapshot failed:", e.message));
+    // Weekly improvement plan: generate every Monday (day 1)
+    if (new Date().getUTCDay() === 1) {
+      await generateSelfImprovementPlan().catch(e => console.warn("[DailyCycle] Improvement plan failed:", e.message));
+    }
   } catch (e: any) {
     console.warn("[DailyCycle] Self-improvement cycle error (non-fatal):", e.message);
   }

@@ -31,6 +31,8 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "tier-assignment": "routine",
   "injection-scan": "routine",
   "cluster-scan": "routine",
+  "dream-update": "routine",
+  "growth-snapshot": "routine",
 
   // Standard — good reasoning, moderate cost
   "research-phase": "standard",
@@ -44,6 +46,7 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "community-boost": "standard",
   "episode-generation": "standard",
   "research-agenda-advance": "standard",
+  "episode-reflection": "standard",
 
   "perspective-generation": "standard",
 
@@ -55,6 +58,7 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "manuscript-generation": "premium",
   "skill-extraction": "premium",
   "daily-briefing": "premium",
+  "improvement-plan": "premium",
 };
 
 /**
