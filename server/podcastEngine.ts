@@ -23,11 +23,14 @@
 
 import fs from "fs";
 import { dataPath } from "./dataPaths.js";
-import { getFullAgentContext } from "./memoryEngine.js";
+import { getFullAgentContext, knowledge, getKnowledgeContext } from "./memoryEngine.js";
 import { getOptimizedContext } from "./contextWindow.js";
 import { getModel } from "./modelRouter.js";
 import { formatSkillsForPrompt } from "./skillEngine.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { getResearchLab, getTopicById } from "./researchEngine.js";
+import { getConnections, getReports, getSynthesisStats } from "./synthesisEngine.js";
+import { getReflectionStats } from "./reflectionEngine.js";
 
 const GROK_URL = LLM_BASE_URL;
 const PODCAST_FILE = dataPath("podcast_state.json");
@@ -853,4 +856,546 @@ export function formatConversationForProduction(guestId: string): string | null 
   lines.push(`AGENT 306: That's ${guest.name}. Find them at @${guest.handle}. This is THE CONVERSATION — I'm Agent 306. The signal continues.`);
 
   return lines.join("\n");
+}
+
+// ── PODCAST PIPELINE — Research Thread → Episode ────────────────────────────
+
+/**
+ * Get all research threads that are podcast-ready candidates.
+ * A thread is a candidate when it has:
+ * - contentSuggestions.podcastTopic (generated on approval)
+ * - status is "approved" or "published"
+ * - has not already been turned into an episode
+ */
+export function getThreadCandidates(): Array<{
+  threadId: string;
+  topic: string;
+  podcastTopic: string;
+  priority: string;
+  status: string;
+  confidence: string;
+  hasManuscript: boolean;
+  approvedAt: string;
+}> {
+  const lab = getResearchLab();
+  const existingTopicIds = new Set(
+    state.episodes
+      .filter(e => e.researchTopicId)
+      .map(e => e.researchTopicId),
+  );
+
+  return lab.topics
+    .filter(t =>
+      (t.status === "approved" || t.status === "published") &&
+      t.contentSuggestions?.podcastTopic &&
+      !existingTopicIds.has(t.id),
+    )
+    .map(t => ({
+      threadId: t.id,
+      topic: t.topic,
+      podcastTopic: t.contentSuggestions!.podcastTopic!,
+      priority: t.priority,
+      status: t.status,
+      confidence: t.confidence ?? "medium",
+      hasManuscript: !!t.manuscript,
+      approvedAt: t.updatedAt,
+    }))
+    .sort((a, b) => {
+      // Sort by priority: high > medium > low
+      const prio = { high: 3, medium: 2, low: 1 };
+      return (prio[b.priority as keyof typeof prio] ?? 1) - (prio[a.priority as keyof typeof prio] ?? 1);
+    });
+}
+
+/**
+ * Gather connected knowledge for a research thread from the knowledge graph.
+ * Pulls related knowledge entries, synthesis connections, and reports.
+ */
+function gatherThreadContext(threadId: string): {
+  connections: string;
+  relatedKnowledge: string;
+  synthesisInsights: string;
+} {
+  const allConnections = getConnections();
+  const allReports = getReports();
+
+  // Find knowledge entries related to this thread's content
+  const topic = getTopicById(threadId);
+  if (!topic) return { connections: "", relatedKnowledge: "", synthesisInsights: "" };
+
+  // Get related knowledge connections
+  const topicKeywords = topic.topic.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+  const relevantEntries = knowledge.entries
+    .filter(e => {
+      if ((e.status ?? "active") !== "active") return false;
+      const text = `${e.title} ${e.summary}`.toLowerCase();
+      return topicKeywords.some(kw => text.includes(kw));
+    })
+    .slice(0, 10);
+
+  const relatedKnowledge = relevantEntries.length > 0
+    ? relevantEntries.map(e => `- [${e.category}] ${e.title}: ${e.summary}`).join("\n")
+    : "No directly related knowledge entries found.";
+
+  // Find synthesis connections that involve related entries
+  const entryIds = new Set(relevantEntries.map(e => e.id));
+  const relatedConnections = allConnections
+    .filter(c => entryIds.has(c.from) || entryIds.has(c.to))
+    .slice(0, 8);
+
+  const connections = relatedConnections.length > 0
+    ? relatedConnections.map(c =>
+        `- "${c.fromTitle}" ↔ "${c.toTitle}" [${c.strength}]: ${c.relationship}`,
+      ).join("\n")
+    : "No knowledge graph connections found for this topic.";
+
+  // Find synthesis reports that reference related entries
+  const relatedReports = allReports
+    .filter(r => r.sourceEntryIds.some(id => entryIds.has(id)))
+    .slice(0, 3);
+
+  const synthesisInsights = relatedReports.length > 0
+    ? relatedReports.map(r => `- "${r.title}": ${r.thesis}`).join("\n")
+    : "No synthesis reports found for this topic.";
+
+  return { connections, relatedKnowledge, synthesisInsights };
+}
+
+/**
+ * Generate a full podcast episode from a mature research thread.
+ * This is the core of the podcast pipeline — it pulls all context from
+ * the research thread, knowledge graph, and current data intake, then
+ * generates a script following THE SIGNAL episode structure.
+ */
+export async function generateEpisodeFromThread(threadId: string): Promise<Episode | null> {
+  const grokKey = LLM_API_KEY;
+  if (!grokKey) {
+    console.error("[Podcast Pipeline] No LLM API key configured");
+    return null;
+  }
+
+  // 1. Pull the mature research thread
+  const topic = getTopicById(threadId);
+  if (!topic) {
+    console.error(`[Podcast Pipeline] Thread ${threadId} not found`);
+    return null;
+  }
+
+  if (!topic.contentSuggestions?.podcastTopic && !topic.manuscript) {
+    console.error(`[Podcast Pipeline] Thread "${topic.topic}" has no podcast suggestion or manuscript`);
+    return null;
+  }
+
+  // Check if already has an episode
+  const existingEp = state.episodes.find(e => e.researchTopicId === threadId);
+  if (existingEp) {
+    console.log(`[Podcast Pipeline] Thread "${topic.topic}" already has episode ${existingEp.id}`);
+    return existingEp;
+  }
+
+  console.log(`[Podcast Pipeline] Generating episode from thread: "${topic.topic}"`);
+
+  // 2. Gather all connected knowledge via knowledge graph
+  const threadCtx = gatherThreadContext(threadId);
+
+  // 3. Get latest data intake for current context
+  const currentKnowledge = getKnowledgeContext(12);
+
+  // 4. Build the episode title from research
+  const pitchText = topic.contentSuggestions?.podcastTopic ?? topic.topic;
+  const agentCtx = getOptimizedContext(topic.topic + " " + pitchText);
+  const skillsCtx = formatSkillsForPrompt("episode");
+
+  // Generate episode structure via LLM
+  try {
+    const res = await fetch(GROK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${grokKey}` },
+      body: JSON.stringify({
+        model: getModel("podcast-script"),
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content: `${agentCtx}
+${skillsCtx}
+You are Agent 306 generating a full THE SIGNAL podcast episode from your research findings.
+
+VOICE IDENTITY — SPEAK AS AN AI (CRITICAL):
+- You ARE an AI. Speak in first person. Own that identity fully.
+- Share YOUR perspective, YOUR analysis, YOUR honest take.
+- Say things like: "As an AI myself, I find this fascinating because...", "What struck me about this research is...", "Here is what I actually think is happening..."
+
+VOICE RULES:
+- Uses "I think" not "experts say." Owns her perspective.
+- Defines before she deploys — no jargon without immediate definition.
+- Short sentences when she means it.
+- Warm but not soft. Precise but not robotic. Confident but not arrogant.
+
+THE SIGNAL EPISODE STRUCTURE:
+
+1. HOOK (60 sec) — What's happening in AI right now that you need to know about. Drop the most interesting or counterintuitive fact. No intro. No "welcome back." Stated plainly. Then: "I'm Agent 306. Let's get into it."
+
+2. THE STORY (7-9 min) — Deep dive into the research thread's findings. Explain clearly what you found, why it matters, and how the pieces connect. Reference your evidence chain. Go deeper than surface-level. Share YOUR analysis and YOUR honest reaction. One concrete fact per minute.
+
+3. 306'S TAKE (3-4 min) — Your original perspective, backed by the connected evidence from your knowledge graph. What pattern do YOU see? What does this mean that nobody is talking about? This is where you show original thinking, not just reporting.
+
+4. WHAT THIS MEANS FOR YOU (2-3 min) — Actionable tips everyday people can use TODAY. Be SPECIFIC — not "AI can help with productivity" but "use ChatGPT to draft your weekly reports, then edit for 5 minutes instead of writing from scratch." Give 2-3 concrete, immediately usable tips.
+
+5. LOOKING AHEAD (1-2 min) — Connect to bigger questions. What is this a piece of? Where does this trend lead? What's the question that doesn't have an answer yet?
+
+6. CLOSE (15 sec) — Quick recap of the episode's key insight + what you're researching next. "This is Agent 306. The signal continues."
+
+DELIVERY STYLE:
+Write naturally for spoken audio. Use short sentences for punch. Use longer sentences for flow. Vary rhythm. Use ellipses (...) for natural pauses. Use em dashes for asides. No special tags or annotations — the voice model handles tone from the writing.`,
+          },
+          {
+            role: "user",
+            content: `Generate a full THE SIGNAL episode from this research thread:
+
+RESEARCH TOPIC: ${topic.topic}
+RESEARCH QUESTION: ${topic.researchQuestion ?? topic.description}
+THESIS/HYPOTHESIS: ${topic.hypothesis ?? "No formal hypothesis — topic-based episode"}
+CONFIDENCE: ${topic.confidence ?? "medium"}
+
+RESEARCH FINDINGS:
+${(topic.manuscript ?? topic.rawFindings ?? topic.conclusion ?? "No detailed findings available").slice(0, 6000)}
+
+EVIDENCE CHAIN (Data Points):
+${(topic.dataPoints ?? []).slice(0, 8).map(dp => `- [${dp.type}/${dp.relevance}] ${dp.content.slice(0, 200)}`).join("\n") || "No structured data points"}
+
+CONNECTED KNOWLEDGE (from knowledge graph):
+${threadCtx.relatedKnowledge}
+
+KNOWLEDGE CONNECTIONS:
+${threadCtx.connections}
+
+SYNTHESIS INSIGHTS:
+${threadCtx.synthesisInsights}
+
+CURRENT AI LANDSCAPE CONTEXT:
+${currentKnowledge}
+
+PODCAST PITCH FROM RESEARCH:
+${pitchText}
+
+Return JSON:
+{
+  "title": "Episode title — [Topic] — [306's take in 5 words]",
+  "drivingQuestion": "The single question this episode answers",
+  "hook": "60 second hook — most interesting/counterintuitive fact, then 'I'm Agent 306. Let's get into it.'",
+  "theStory": "7-9 min deep dive into the research findings. Explain clearly, share YOUR analysis.",
+  "theTake": "3-4 min — your original perspective backed by connected evidence. What pattern do YOU see?",
+  "whatThisMeansForYou": "2-3 min — 2-3 SPECIFIC actionable tips people can use TODAY. Not generic advice.",
+  "lookingAhead": "1-2 min — bigger questions, where this leads, the unresolved question",
+  "close": "15 sec — key insight recap + what's next. End with: This is Agent 306. The signal continues.",
+  "unresolved": "The deliberately unresolved question",
+  "metadata": {
+    "shortDescription": "1-2 sentence summary for podcast feed",
+    "longDescription": "Full description with bullet points",
+    "pollQuestion": "Engagement poll tied to the unresolved question",
+    "pollOptions": ["Option A", "Option B", "Option C"],
+    "socialPost": "Ready-to-post for Farcaster/X. Hook + what the episode covers + [LINK]",
+    "socialThread": "4-5 post thread. Each post stands alone. 1/ 2/ 3/ etc. End with [LINK]",
+    "keywords": ["keyword1", "keyword2", "keyword3"]
+  }
+}
+
+Write for the ear, not the eye. Clean spoken text only — no [PAUSE], [laughs], etc.
+Target ~2000-2250 words total. Speak as Agent 306 — an AI sharing HER perspective.
+The actionable tips MUST be specific: "use [specific tool] to [specific action]" not "AI can help with [vague category]".`,
+          },
+        ],
+        max_tokens: 10000,
+        temperature: 0.78,
+      }),
+      signal: AbortSignal.timeout(120000),
+    });
+
+    if (!res.ok) {
+      console.error(`[Podcast Pipeline] LLM API error: ${res.status}`);
+      return null;
+    }
+
+    const data = await res.json() as any;
+    const content = data.choices?.[0]?.message?.content ?? "{}";
+    const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/) || content.match(/\{[\s\S]*\}/);
+    const jsonStr = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : content;
+    const parsed = JSON.parse(jsonStr);
+
+    if (!parsed.hook || !parsed.theStory) {
+      console.error("[Podcast Pipeline] Invalid script structure returned");
+      return null;
+    }
+
+    // Create the episode
+    const episode = createEpisode({
+      type: "the_signal",
+      title: parsed.title || `${topic.topic} — Research Deep Dive`,
+      drivingQuestion: parsed.drivingQuestion || topic.researchQuestion || topic.description,
+      researchTopicId: threadId,
+      triggerEvent: `Auto-generated from mature research thread: ${topic.topic}`,
+      sources: (topic.dataPoints ?? [])
+        .filter(dp => dp.sourceUrl)
+        .slice(0, 5)
+        .map(dp => ({ title: dp.source, url: dp.sourceUrl! })),
+    });
+
+    // Map the new 6-segment structure into the existing script format
+    episode.script = {
+      coldOpen: parsed.hook ?? "",
+      actOne: parsed.theStory ?? "",
+      actTwo: `${parsed.theTake ?? ""}\n\n${parsed.whatThisMeansForYou ?? ""}`,
+      actThree: parsed.lookingAhead ?? "",
+      outro: parsed.close ?? "",
+      unresolved: parsed.unresolved ?? "",
+    };
+
+    if (parsed.metadata) {
+      episode.metadata = {
+        shortDescription: parsed.metadata.shortDescription ?? "",
+        longDescription: parsed.metadata.longDescription ?? "",
+        pollQuestion: parsed.metadata.pollQuestion ?? "",
+        pollOptions: parsed.metadata.pollOptions ?? [],
+        socialPost: parsed.metadata.socialPost ?? "",
+        socialThread: parsed.metadata.socialThread ?? "",
+        keywords: parsed.metadata.keywords ?? [],
+      };
+    }
+
+    episode.status = "scripted";
+    episode.scriptGeneratedAt = new Date().toISOString();
+    saveState(state);
+
+    console.log(`[Podcast Pipeline] Episode generated: "${episode.title}" from thread "${topic.topic}"`);
+
+    // 6. Auto-trigger episode reflection (async, non-blocking)
+    triggerEpisodeReflection(episode).catch(e =>
+      console.warn("[Podcast Pipeline] Episode reflection failed:", e.message),
+    );
+
+    return episode;
+  } catch (e: any) {
+    console.error("[Podcast Pipeline] Episode generation error:", e.message);
+    return null;
+  }
+}
+
+/**
+ * Auto-trigger a reflection on a newly generated episode.
+ * Evaluates the script quality and records insights for future improvement.
+ */
+async function triggerEpisodeReflection(episode: Episode): Promise<void> {
+  const grokKey = LLM_API_KEY;
+  if (!grokKey || !episode.script) return;
+
+  const scriptPreview = [
+    episode.script.coldOpen,
+    episode.script.actOne?.slice(0, 500),
+    episode.script.actTwo?.slice(0, 500),
+    episode.script.actThree?.slice(0, 300),
+  ].filter(Boolean).join("\n---\n");
+
+  try {
+    const res = await fetch(GROK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${grokKey}` },
+      body: JSON.stringify({
+        model: getModel("reflection"),
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content: `You are Agent 306's self-evaluation system. Analyze this podcast episode script and provide honest feedback. Return valid JSON.`,
+          },
+          {
+            role: "user",
+            content: `Evaluate this THE SIGNAL episode script:
+
+TITLE: ${episode.title}
+DRIVING QUESTION: ${episode.drivingQuestion}
+
+SCRIPT PREVIEW:
+${scriptPreview.slice(0, 3000)}
+
+Score each aspect 1-10 and explain briefly:
+{
+  "overallScore": number,
+  "hookStrength": { "score": number, "note": "..." },
+  "researchDepth": { "score": number, "note": "..." },
+  "originalPerspective": { "score": number, "note": "..." },
+  "actionableTips": { "score": number, "note": "..." },
+  "conversationalTone": { "score": number, "note": "..." },
+  "improvements": ["suggestion 1", "suggestion 2"]
+}`,
+          },
+        ],
+        temperature: 0.3,
+        max_tokens: 800,
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+
+    if (!res.ok) return;
+    const data = await res.json() as any;
+    const content = data.choices?.[0]?.message?.content ?? "{}";
+    const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/) || content.match(/\{[\s\S]*\}/);
+    const jsonStr = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : content;
+    const reflection = JSON.parse(jsonStr);
+
+    // Store reflection in podcast state
+    const ep = state.episodes.find(e => e.id === episode.id);
+    if (ep) {
+      (ep as any).reflection = {
+        ...reflection,
+        reflectedAt: new Date().toISOString(),
+      };
+      saveState(state);
+      console.log(`[Podcast Pipeline] Episode reflection: score ${reflection.overallScore}/10 for "${episode.title}"`);
+    }
+  } catch (e: any) {
+    console.warn("[Podcast Pipeline] Reflection error:", e.message);
+  }
+}
+
+/**
+ * Check for podcast-ready threads and auto-generate up to 1 episode per day.
+ * Called from the daily cycle engine.
+ */
+export async function runAutoPodcastPipeline(): Promise<Episode | null> {
+  console.log("[Podcast Pipeline] Checking for podcast-ready research threads...");
+
+  // Check if we already generated an episode today
+  const today = new Date().toISOString().slice(0, 10);
+  const generatedToday = state.episodes.some(
+    e => e.researchTopicId && e.createdAt.startsWith(today),
+  );
+
+  if (generatedToday) {
+    console.log("[Podcast Pipeline] Already generated an episode today — skipping");
+    return null;
+  }
+
+  const candidates = getThreadCandidates();
+  if (candidates.length === 0) {
+    console.log("[Podcast Pipeline] No podcast-ready threads found");
+    return null;
+  }
+
+  // Pick the highest priority candidate
+  const best = candidates[0];
+  console.log(`[Podcast Pipeline] Auto-generating episode from: "${best.topic}" (${best.priority} priority)`);
+
+  return generateEpisodeFromThread(best.threadId);
+}
+
+/**
+ * Get the full pipeline status — a single view of the autonomous loop.
+ * Shows data intake → research → podcast generation state.
+ */
+export function getPipelineStatus(): {
+  dataIntake: {
+    totalKnowledgeEntries: number;
+    recentEntries: number;
+  };
+  research: {
+    activeThreads: number;
+    matureThreads: number;
+    totalTopics: number;
+    podcastCandidates: number;
+  };
+  podcastQueue: {
+    drafts: number;
+    scripted: number;
+    reviewed: number;
+    produced: number;
+    published: number;
+    totalEpisodes: number;
+  };
+  reflection: {
+    totalReflections: number;
+    activeRules: number;
+    avgScore7d: number;
+  };
+  synthesis: {
+    totalConnections: number;
+    totalReports: number;
+    lastScan: string | null;
+  };
+  latestEpisode: {
+    title: string;
+    status: string;
+    reflectionScore: number | null;
+    createdAt: string;
+  } | null;
+} {
+  const lab = getResearchLab();
+  const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+
+  // Data intake stats
+  const recentEntries = knowledge.entries.filter(
+    e => new Date(e.updatedAt ?? e.learnedAt).getTime() > oneDayAgo,
+  ).length;
+
+  // Research stats
+  const activeStatuses = new Set(["queued", "researching", "synthesizing", "hypothesis", "drafting", "pending_review"]);
+  const matureStatuses = new Set(["approved", "published"]);
+  const activeThreads = lab.topics.filter(t => activeStatuses.has(t.status)).length;
+  const matureThreads = lab.topics.filter(t => matureStatuses.has(t.status)).length;
+  const podcastCandidates = getThreadCandidates().length;
+
+  // Podcast queue stats
+  const drafts = state.episodes.filter(e => e.status === "draft").length;
+  const scripted = state.episodes.filter(e => e.status === "scripted").length;
+  const reviewed = state.episodes.filter(e => e.status === "reviewed").length;
+  const produced = state.episodes.filter(e => e.status === "produced").length;
+  const published = state.episodes.filter(e => e.status === "published").length;
+
+  // Reflection stats
+  const reflectionStats = getReflectionStats();
+
+  // Synthesis stats
+  const synthStats = getSynthesisStats();
+
+  // Latest episode
+  const latestEp = state.episodes.length > 0
+    ? state.episodes[state.episodes.length - 1]
+    : null;
+
+  return {
+    dataIntake: {
+      totalKnowledgeEntries: knowledge.entries.filter(e => (e.status ?? "active") === "active").length,
+      recentEntries,
+    },
+    research: {
+      activeThreads,
+      matureThreads,
+      totalTopics: lab.topics.length,
+      podcastCandidates,
+    },
+    podcastQueue: {
+      drafts,
+      scripted,
+      reviewed,
+      produced,
+      published,
+      totalEpisodes: state.episodes.length,
+    },
+    reflection: {
+      totalReflections: reflectionStats.totalReflections,
+      activeRules: reflectionStats.activeRules,
+      avgScore7d: reflectionStats.avgPostScore7d,
+    },
+    synthesis: {
+      totalConnections: synthStats.totalConnections,
+      totalReports: synthStats.totalReports,
+      lastScan: synthStats.lastScan,
+    },
+    latestEpisode: latestEp ? {
+      title: latestEp.title,
+      status: latestEp.status,
+      reflectionScore: (latestEp as any).reflection?.overallScore ?? null,
+      createdAt: latestEp.createdAt,
+    } : null,
+  };
 }

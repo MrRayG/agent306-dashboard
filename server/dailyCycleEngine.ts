@@ -30,6 +30,7 @@ import { runConnectionScan } from "./synthesisEngine.js";
 import { extractInsights } from "./conversationLearningEngine.js";
 import { getMetacognitionState } from "./metacognitionEngine.js";
 import { getResearchLab, resolveHypothesis } from "./researchEngine.js";
+import { runAutoPodcastPipeline } from "./podcastEngine.js";
 
 const GROK_URL     = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
@@ -573,6 +574,20 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     if (skills.length > 0) console.log(`[DailyCycle] Extracted ${skills.length} new skill(s)`);
   } catch (e: any) {
     console.warn("[DailyCycle] Self-improvement cycle error (non-fatal):", e.message);
+  }
+
+  // 4c. Auto-podcast pipeline: generate episode from mature research threads (max 1/day)
+  try {
+    console.log("[DailyCycle] Checking podcast pipeline for ready threads...");
+    const autoEpisode = await runAutoPodcastPipeline().catch(e => {
+      console.warn("[DailyCycle] Podcast pipeline failed:", e.message);
+      return null;
+    });
+    if (autoEpisode) {
+      console.log(`[DailyCycle] Auto-generated podcast episode: "${autoEpisode.title}"`);
+    }
+  } catch (e: any) {
+    console.warn("[DailyCycle] Podcast pipeline error (non-fatal):", e.message);
   }
 
   // 5. Build briefing

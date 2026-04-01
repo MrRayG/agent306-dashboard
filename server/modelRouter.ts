@@ -45,6 +45,7 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
 
   // Premium — highest quality for public-facing content
   "podcast-script": "premium",
+  "podcast-from-thread": "premium",
   "synthesis-report": "premium",
   "article-draft": "premium",
   "manuscript-generation": "premium",

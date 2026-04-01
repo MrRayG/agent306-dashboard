@@ -29,7 +29,7 @@ import { scheduleRace, generateRace, postRace, getRaceState } from "./raceEngine
 import { scheduleMidnightReplies, runMidnightReplies } from "./replyEngine.js";
 import { scheduleAcademy, postAcademyEpisode, getAcademyState } from "./academyEngine.js";
 import { scheduleSignalBrief, postSignalBrief, getSignalBriefState } from "./signalBriefEngine.js";
-import { getPodcastState, EPISODE_META, createEpisode, generateEpisodeScript, regenerateEpisodeScript, reviewEpisode, markProduced, publishEpisode, submitGuestRequest, reviewGuest, generateInterviewQuestions, submitAnswers, createConversationEpisode, getEpisodesByType, getEpisodesByStatus, getGuestsByStatus, getEpisode, getGuest, formatScriptForProduction, formatConversationForProduction } from "./podcastEngine.js";
+import { getPodcastState, EPISODE_META, createEpisode, generateEpisodeScript, regenerateEpisodeScript, reviewEpisode, markProduced, publishEpisode, submitGuestRequest, reviewGuest, generateInterviewQuestions, submitAnswers, createConversationEpisode, getEpisodesByType, getEpisodesByStatus, getGuestsByStatus, getEpisode, getGuest, formatScriptForProduction, formatConversationForProduction, generateEpisodeFromThread, getThreadCandidates, getPipelineStatus } from "./podcastEngine.js";
 import { getVideoStats } from "./videoEngine.js";
 import { requestPost, registerPost, releasePost, getCoordinatorState, resetCooldown } from "./postCoordinator.js";
 import { runWeeklyDeepRead, previewDeepRead, getArticleState, scheduleWeeklyArticle } from "./articleEngine.js";
@@ -1590,6 +1590,30 @@ export function registerRoutes(httpServer: Server, app: Express) {
       console.error("[Podcast] Topic scan error:", e.message);
       res.status(500).json({ error: e.message });
     }
+  });
+
+  // ── PODCAST PIPELINE — Research Thread → Episode ─────────────────────────
+
+  // Manually trigger episode generation from a specific research thread
+  app.post("/api/podcast/generate-from-thread/:threadId", async (req, res) => {
+    try {
+      const episode = await generateEpisodeFromThread(req.params.threadId);
+      if (!episode) return res.status(500).json({ error: "Failed to generate episode from thread" });
+      res.json({ ok: true, episode });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // List all podcast-ready research threads
+  app.get("/api/podcast/thread-candidates", (_req, res) => {
+    const candidates = getThreadCandidates();
+    res.json({ candidates, count: candidates.length });
+  });
+
+  // Full pipeline status — data intake → research → episode
+  app.get("/api/podcast/pipeline-status", (_req, res) => {
+    res.json(getPipelineStatus());
   });
 
   // ── SIGNAL BRIEF endpoints ────────────────────────────────────────────────
