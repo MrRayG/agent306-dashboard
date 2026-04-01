@@ -30,6 +30,7 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "knowledge-categorization": "routine",
   "tier-assignment": "routine",
   "injection-scan": "routine",
+  "cluster-scan": "routine",
 
   // Standard — good reasoning, moderate cost
   "research-phase": "standard",
@@ -42,6 +43,8 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "reply-generation": "standard",
   "community-boost": "standard",
   "episode-generation": "standard",
+
+  "perspective-generation": "standard",
 
   // Premium — highest quality for public-facing content
   "podcast-script": "premium",

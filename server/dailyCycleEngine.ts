@@ -31,6 +31,7 @@ import { runConnectionScan } from "./synthesisEngine.js";
 import { extractInsights } from "./conversationLearningEngine.js";
 import { getMetacognitionState } from "./metacognitionEngine.js";
 import { getResearchLab, resolveHypothesis } from "./researchEngine.js";
+import { clusterKnowledge, detectContradictions as detectGraphContradictions } from "./knowledge-graph.js";
 
 const GROK_URL     = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
@@ -575,6 +576,9 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     await autoResolveHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis resolution failed:", e.message));
     // Contradiction detection: scan recent knowledge entries for conflicts
     await autoDetectContradictions().catch(e => console.warn("[DailyCycle] Contradiction detection failed:", e.message));
+    // Knowledge graph: cluster knowledge into themes and detect graph-level contradictions
+    await clusterKnowledge().catch(e => console.warn("[DailyCycle] Knowledge clustering failed:", e.message));
+    await detectGraphContradictions().catch(e => console.warn("[DailyCycle] Graph contradiction detection failed:", e.message));
     // Metacognition: log cognitive state summary
     const meta = getMetacognitionState();
     console.log(`[DailyCycle] Cognitive state — KB: ${meta.knowledgeCoverage.totalActive} entries, Velocity: ${meta.learningVelocity.trend}, Connections: ${meta.synthesisStats.totalConnections}`);
