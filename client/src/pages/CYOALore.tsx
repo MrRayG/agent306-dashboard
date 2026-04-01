@@ -25,11 +25,11 @@ const TRIGGER_CONFIG: Record<Trigger, { label: string; color: string; desc: stri
   zombie:    { label: "Zombie Rising", color: "#4ade80", desc: "A burned token stirs. What does it remember?",  emoji: "☠️" },
   serc_post: { label: "Founder Signal",color: "#f97316", desc: "The founder posted something cryptic...",       emoji: "🎯" },
   rivalry:   { label: "Leaderboard Rival", color: "#2dd4bf", desc: "Two tokens are neck-and-neck. What's next?",   emoji: "🏆" },
-  manual:    { label: "Custom",        color: "#e3e5e4", desc: "Editor-created lore episode",                    emoji: "✍️" },
+  manual:    { label: "Custom",        color: "#efefef", desc: "Editor-created lore episode",                    emoji: "✍️" },
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  draft:    { label: "Draft",    color: "rgba(227,229,228,0.4)" },
+  draft:    { label: "Draft",    color: "rgba(227,229,228,0.60)" },
   posted:   { label: "Live",     color: "#f97316" },
   revealed: { label: "Revealed", color: "#a78bfa" },
   resolved: { label: "Canon",    color: "#4ade80" },
@@ -42,8 +42,8 @@ const LETTER_COLORS: Record<OptionLetter, string> = {
 export default function CYOALore() {
   const { toast } = useToast();
   const mono = { fontFamily: "'Courier New', monospace" } as const;
-  const label = { ...mono, fontSize: "0.65rem", textTransform: "uppercase" as const, letterSpacing: "0.15em", color: "rgba(227,229,228,0.4)" };
-  const card = { background: "rgba(227,229,228,0.03)", border: "1px solid rgba(227,229,228,0.08)", padding: "1.25rem" };
+  const label = { ...mono, fontSize: "0.83rem", textTransform: "uppercase" as const, letterSpacing: "0.15em", color: "rgba(227,229,228,0.60)" };
+  const card = { background: "rgba(227,229,228,0.06)", border: "1px solid rgba(227,229,228,0.15)", padding: "1.25rem" };
 
   // Form state
   const [trigger, setTrigger] = useState<Trigger>("pre_arena");
@@ -118,24 +118,24 @@ export default function CYOALore() {
     <div style={{ padding: "1.5rem 2rem", maxWidth: 1100, margin: "0 auto" }}>
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem", paddingBottom: "1rem", borderBottom: "1px solid rgba(227,229,228,0.08)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem", paddingBottom: "1rem", borderBottom: "1px solid rgba(227,229,228,0.15)" }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span className="pixel" style={{ fontSize: "1.1rem", color: "#e3e5e4", letterSpacing: "0.12em" }}>
+            <span className="pixel" style={{ fontSize: "1.3rem", color: "#efefef", letterSpacing: "0.12em" }}>
               [306 LORE]
             </span>
-            <span style={{ ...mono, fontSize: "0.65rem", color: "#a78bfa", background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.25)", padding: "2px 8px" }}>
+            <span style={{ ...mono, fontSize: "0.83rem", color: "#a78bfa", background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.25)", padding: "2px 8px" }}>
               Choose Your Own Lore
             </span>
           </div>
-          <p style={{ ...mono, fontSize: "0.62rem", color: "rgba(227,229,228,0.35)", marginTop: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          <p style={{ ...mono, fontSize: "0.80rem", color: "rgba(227,229,228,0.55)", marginTop: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>
             Community votes shape the 306 canon · {cyoaData?.totalResolved ?? 0} episodes resolved
           </p>
         </div>
         {activeEp && (
-          <div style={{ ...mono, fontSize: "0.6rem", color: "#f97316", background: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.2)", padding: "6px 12px", textAlign: "center" as const }}>
+          <div style={{ ...mono, fontSize: "0.78rem", color: "#f97316", background: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.2)", padding: "6px 12px", textAlign: "center" as const }}>
             <div>ACTIVE POLL</div>
-            <div style={{ fontSize: "0.55rem", color: "rgba(249,115,22,0.6)", marginTop: 2 }}>
+            <div style={{ fontSize: "0.73rem", color: "rgba(249,115,22,0.6)", marginTop: 2 }}>
               {activeEp.hookQuestion.slice(0, 40)}...
             </div>
           </div>
@@ -151,7 +151,7 @@ export default function CYOALore() {
             <p style={{ ...label, marginBottom: "1rem" }}>Generate New Episode</p>
 
             {/* Trigger selector */}
-            <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.4)", marginBottom: 6 }}>TRIGGER TYPE</p>
+            <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", marginBottom: 6 }}>TRIGGER TYPE</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: "1rem" }}>
               {(Object.entries(TRIGGER_CONFIG) as [Trigger, typeof TRIGGER_CONFIG[Trigger]][]).map(([key, cfg]) => (
                 <button key={key} onClick={() => setTrigger(key)}
@@ -159,13 +159,13 @@ export default function CYOALore() {
                     display: "flex", alignItems: "center", gap: 8,
                     padding: "7px 10px", cursor: "pointer",
                     background: trigger === key ? `${cfg.color}12` : "transparent",
-                    border: `1px solid ${trigger === key ? cfg.color : "rgba(227,229,228,0.08)"}`,
+                    border: `1px solid ${trigger === key ? cfg.color : "rgba(227,229,228,0.15)"}`,
                     textAlign: "left" as const, transition: "all 0.15s",
                   }}>
-                  <span style={{ fontSize: "0.9rem" }}>{cfg.emoji}</span>
+                  <span style={{ fontSize: "1.1rem" }}>{cfg.emoji}</span>
                   <div>
-                    <div style={{ ...mono, fontSize: "0.65rem", color: trigger === key ? cfg.color : "#e3e5e4" }}>{cfg.label}</div>
-                    <div style={{ ...mono, fontSize: "0.56rem", color: "rgba(227,229,228,0.3)", marginTop: 1 }}>{cfg.desc}</div>
+                    <div style={{ ...mono, fontSize: "0.83rem", color: trigger === key ? cfg.color : "#e3e5e4" }}>{cfg.label}</div>
+                    <div style={{ ...mono, fontSize: "0.74rem", color: "rgba(227,229,228,0.48)", marginTop: 1 }}>{cfg.desc}</div>
                   </div>
                 </button>
               ))}
@@ -174,42 +174,42 @@ export default function CYOALore() {
             {/* Optional fields by trigger */}
             {(trigger === "burn" || trigger === "pre_arena" || trigger === "zombie") && (
               <div style={{ marginBottom: 10 }}>
-                <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.4)", marginBottom: 4 }}>TOKEN ID (optional)</p>
+                <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", marginBottom: 4 }}>TOKEN ID (optional)</p>
                 <input value={tokenId} onChange={e => setTokenId(e.target.value)} placeholder="e.g. 8553"
-                  style={{ width: "100%", background: "rgba(227,229,228,0.04)", border: "1px solid rgba(227,229,228,0.12)", padding: "6px 10px", color: "#e3e5e4", ...mono, fontSize: "0.75rem", boxSizing: "border-box" as const }} />
+                  style={{ width: "100%", background: "rgba(227,229,228,0.08)", border: "1px solid rgba(227,229,228,0.20)", padding: "6px 10px", color: "#efefef", ...mono, fontSize: "0.93rem", boxSizing: "border-box" as const }} />
               </div>
             )}
             {trigger === "burn" && (
               <div style={{ marginBottom: 10 }}>
-                <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.4)", marginBottom: 4 }}>SOULS BURNED (optional)</p>
+                <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", marginBottom: 4 }}>SOULS BURNED (optional)</p>
                 <input value={tokenCount} onChange={e => setTokenCount(e.target.value)} placeholder="e.g. 7"
-                  style={{ width: "100%", background: "rgba(227,229,228,0.04)", border: "1px solid rgba(227,229,228,0.12)", padding: "6px 10px", color: "#e3e5e4", ...mono, fontSize: "0.75rem", boxSizing: "border-box" as const }} />
+                  style={{ width: "100%", background: "rgba(227,229,228,0.08)", border: "1px solid rgba(227,229,228,0.20)", padding: "6px 10px", color: "#efefef", ...mono, fontSize: "0.93rem", boxSizing: "border-box" as const }} />
               </div>
             )}
             {trigger === "serc_post" && (
               <div style={{ marginBottom: 10 }}>
-                <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.4)", marginBottom: 4 }}>FOUNDER'S POST TEXT</p>
+                <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", marginBottom: 4 }}>FOUNDER'S POST TEXT</p>
                 <textarea value={serc1nPost} onChange={e => setSerc1nPost(e.target.value)} placeholder="Paste the founder's post here..." rows={3}
-                  style={{ width: "100%", background: "rgba(227,229,228,0.04)", border: "1px solid rgba(227,229,228,0.12)", padding: "6px 10px", color: "#e3e5e4", ...mono, fontSize: "0.72rem", resize: "none", boxSizing: "border-box" as const }} />
+                  style={{ width: "100%", background: "rgba(227,229,228,0.08)", border: "1px solid rgba(227,229,228,0.20)", padding: "6px 10px", color: "#efefef", ...mono, fontSize: "0.90rem", resize: "none", boxSizing: "border-box" as const }} />
               </div>
             )}
             {trigger === "rivalry" && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
                 <div>
-                  <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.4)", marginBottom: 4 }}>TOKEN A</p>
+                  <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", marginBottom: 4 }}>TOKEN A</p>
                   <input value={tokenId} onChange={e => setTokenId(e.target.value)} placeholder="e.g. 8553"
-                    style={{ width: "100%", background: "rgba(227,229,228,0.04)", border: "1px solid rgba(227,229,228,0.12)", padding: "6px 10px", color: "#e3e5e4", ...mono, fontSize: "0.75rem", boxSizing: "border-box" as const }} />
+                    style={{ width: "100%", background: "rgba(227,229,228,0.08)", border: "1px solid rgba(227,229,228,0.20)", padding: "6px 10px", color: "#efefef", ...mono, fontSize: "0.93rem", boxSizing: "border-box" as const }} />
                 </div>
                 <div>
-                  <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.4)", marginBottom: 4 }}>TOKEN B</p>
+                  <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", marginBottom: 4 }}>TOKEN B</p>
                   <input value={rivalTokenId} onChange={e => setRivalTokenId(e.target.value)} placeholder="e.g. 45"
-                    style={{ width: "100%", background: "rgba(227,229,228,0.04)", border: "1px solid rgba(227,229,228,0.12)", padding: "6px 10px", color: "#e3e5e4", ...mono, fontSize: "0.75rem", boxSizing: "border-box" as const }} />
+                    style={{ width: "100%", background: "rgba(227,229,228,0.08)", border: "1px solid rgba(227,229,228,0.20)", padding: "6px 10px", color: "#efefef", ...mono, fontSize: "0.93rem", boxSizing: "border-box" as const }} />
                 </div>
               </div>
             )}
 
             <button onClick={() => generateMutation.mutate()} disabled={generateMutation.isPending}
-              style={{ width: "100%", padding: "10px", background: "#a78bfa", border: "none", color: "#0a0b0d", ...mono, fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.12em", cursor: "pointer", opacity: generateMutation.isPending ? 0.7 : 1, marginTop: 4 }}>
+              style={{ width: "100%", padding: "10px", background: "#a78bfa", border: "none", color: "#0a0b0d", ...mono, fontSize: "0.90rem", fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.12em", cursor: "pointer", opacity: generateMutation.isPending ? 0.7 : 1, marginTop: 4 }}>
               {generateMutation.isPending ? "Generating..." : "Generate Episode"}
             </button>
           </section>
@@ -224,10 +224,10 @@ export default function CYOALore() {
               { step: "4", title: "CTA", desc: "RT if your token is the star. Holders reply with their twist." },
             ].map(({ step, title, desc }) => (
               <div key={step} style={{ display: "flex", gap: 10, marginBottom: 10, alignItems: "flex-start" }}>
-                <span style={{ ...mono, fontSize: "0.6rem", color: "#a78bfa", flexShrink: 0, marginTop: 2 }}>{step}.</span>
+                <span style={{ ...mono, fontSize: "0.78rem", color: "#a78bfa", flexShrink: 0, marginTop: 2 }}>{step}.</span>
                 <div>
-                  <p style={{ ...mono, fontSize: "0.68rem", color: "#e3e5e4", margin: "0 0 2px" }}>{title}</p>
-                  <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.4)", margin: 0, lineHeight: 1.4 }}>{desc}</p>
+                  <p style={{ ...mono, fontSize: "0.68rem", color: "#efefef", margin: "0 0 2px" }}>{title}</p>
+                  <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", margin: 0, lineHeight: 1.4 }}>{desc}</p>
                 </div>
               </div>
             ))}
@@ -237,7 +237,7 @@ export default function CYOALore() {
         {/* RIGHT — Episodes */}
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
 
-          {isLoading && <div style={{ ...card, textAlign: "center" as const, ...mono, fontSize: "0.7rem", color: "rgba(227,229,228,0.3)" }}>Loading...</div>}
+          {isLoading && <div style={{ ...card, textAlign: "center" as const, ...mono, fontSize: "0.88rem", color: "rgba(227,229,228,0.48)" }}>Loading...</div>}
 
               {/* Draft Queue Banner */}
           {(() => {
@@ -254,23 +254,23 @@ export default function CYOALore() {
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#a78bfa", display: "inline-block", animation: "pulse-dot 1.6s ease-in-out infinite" }} />
                   <div>
-                    <span className="pixel" style={{ fontSize: "0.72rem", color: "#a78bfa", letterSpacing: "0.12em" }}>
+                    <span className="pixel" style={{ fontSize: "0.90rem", color: "#a78bfa", letterSpacing: "0.12em" }}>
                       {drafts.length} EPISODE{drafts.length > 1 ? "S" : ""} WAITING FOR YOUR APPROVAL
                     </span>
-                    <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(167,139,250,0.6)", margin: "3px 0 0" }}>
+                    <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(167,139,250,0.6)", margin: "3px 0 0" }}>
                       Auto-generated from on-chain activity · Review below · Post when ready
                     </p>
                   </div>
                 </div>
-                <span style={{ ...mono, fontSize: "0.65rem", color: "rgba(167,139,250,0.5)" }}>↓ scroll</span>
+                <span style={{ ...mono, fontSize: "0.83rem", color: "rgba(167,139,250,0.5)" }}>↓ scroll</span>
               </div>
             );
           })()}
 
           {!isLoading && episodes.length === 0 && (
             <div style={{ ...card, textAlign: "center" as const, padding: "2.5rem" }}>
-              <div className="pixel" style={{ fontSize: "0.75rem", color: "#a78bfa", marginBottom: 10 }}>NO LORE EPISODES YET</div>
-              <p style={{ ...mono, fontSize: "0.72rem", color: "rgba(227,229,228,0.4)", lineHeight: 1.6 }}>
+              <div className="pixel" style={{ fontSize: "0.93rem", color: "#a78bfa", marginBottom: 10 }}>NO LORE EPISODES YET</div>
+              <p style={{ ...mono, fontSize: "0.90rem", color: "rgba(227,229,228,0.60)", lineHeight: 1.6 }}>
                 Auto-drafts appear here when significant burns happen<br />
                 or Arena countdown hits weekly milestones.<br />
                 You can also generate one manually on the left.
@@ -287,23 +287,23 @@ export default function CYOALore() {
               <div key={ep.id} style={{
                 ...card,
                 borderColor: ep.status === "posted" ? "rgba(249,115,22,0.2)" :
-                             ep.status === "resolved" ? "rgba(74,222,128,0.15)" : "rgba(227,229,228,0.08)",
+                             ep.status === "resolved" ? "rgba(74,222,128,0.15)" : "rgba(227,229,228,0.15)",
               }}>
                 {/* Episode header */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "0.85rem" }}>
                   <span style={{ fontSize: "1rem" }}>{trigCfg.emoji}</span>
-                  <span style={{ ...mono, fontSize: "0.65rem", color: trigCfg.color }}>{trigCfg.label}</span>
-                  {ep.tokenId && <span style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.4)" }}>Token #{ep.tokenId}</span>}
-                  <span style={{ ...mono, fontSize: "0.58rem", color: stsCfg.color, background: `${stsCfg.color}15`, border: `1px solid ${stsCfg.color}30`, padding: "1px 7px", marginLeft: "auto" }}>{stsCfg.label}</span>
+                  <span style={{ ...mono, fontSize: "0.83rem", color: trigCfg.color }}>{trigCfg.label}</span>
+                  {ep.tokenId && <span style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)" }}>Token #{ep.tokenId}</span>}
+                  <span style={{ ...mono, fontSize: "0.76rem", color: stsCfg.color, background: `${stsCfg.color}15`, border: `1px solid ${stsCfg.color}30`, padding: "1px 7px", marginLeft: "auto" }}>{stsCfg.label}</span>
                 </div>
 
                 {/* Hook scene */}
-                <p style={{ ...mono, fontSize: "0.8rem", color: "rgba(227,229,228,0.85)", lineHeight: 1.7, margin: "0 0 0.75rem", whiteSpace: "pre-line" as const }}>
+                <p style={{ ...mono, fontSize: "0.98rem", color: "rgba(227,229,228,0.85)", lineHeight: 1.7, margin: "0 0 0.75rem", whiteSpace: "pre-line" as const }}>
                   {ep.hookScene}
                 </p>
 
                 {/* Question */}
-                <p style={{ ...mono, fontSize: "0.72rem", color: "#e3e5e4", fontWeight: 700, marginBottom: "0.6rem" }}>
+                <p style={{ ...mono, fontSize: "0.90rem", color: "#efefef", fontWeight: 700, marginBottom: "0.6rem" }}>
                   {ep.hookQuestion}
                 </p>
 
@@ -318,8 +318,8 @@ export default function CYOALore() {
                     return (
                       <div key={opt.letter} style={{
                         padding: "8px 10px",
-                        background: isWinner ? `${LETTER_COLORS[opt.letter as OptionLetter]}12` : "rgba(227,229,228,0.02)",
-                        border: `1px solid ${isWinner ? LETTER_COLORS[opt.letter as OptionLetter] : "rgba(227,229,228,0.06)"}`,
+                        background: isWinner ? `${LETTER_COLORS[opt.letter as OptionLetter]}12` : "rgba(227,229,228,0.05)",
+                        border: `1px solid ${isWinner ? LETTER_COLORS[opt.letter as OptionLetter] : "rgba(227,229,228,0.12)"}`,
                         position: "relative", overflow: "hidden",
                       }}>
                         {ep.totalVotes && (
@@ -329,9 +329,9 @@ export default function CYOALore() {
                           }} />
                         )}
                         <div style={{ position: "relative" }}>
-                          <span style={{ ...mono, fontSize: "0.62rem", color: LETTER_COLORS[opt.letter as OptionLetter], fontWeight: 700 }}>{opt.letter})</span>
-                          <span style={{ ...mono, fontSize: "0.68rem", color: "#e3e5e4", marginLeft: 6 }}>{opt.text}</span>
-                          {ep.totalVotes && <span style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.4)", float: "right" as const }}>{pct}%</span>}
+                          <span style={{ ...mono, fontSize: "0.80rem", color: LETTER_COLORS[opt.letter as OptionLetter], fontWeight: 700 }}>{opt.letter})</span>
+                          <span style={{ ...mono, fontSize: "0.68rem", color: "#efefef", marginLeft: 6 }}>{opt.text}</span>
+                          {ep.totalVotes && <span style={{ ...mono, fontSize: "0.76rem", color: "rgba(227,229,228,0.60)", float: "right" as const }}>{pct}%</span>}
                         </div>
                       </div>
                     );
@@ -341,13 +341,13 @@ export default function CYOALore() {
                 {/* Canon verdict (if resolved) */}
                 {ep.canonVerdict && ep.status === "resolved" && (
                   <div style={{ padding: "10px 12px", background: "rgba(74,222,128,0.05)", border: "1px solid rgba(74,222,128,0.15)", marginBottom: "0.85rem" }}>
-                    <p style={{ ...mono, fontSize: "0.6rem", color: "#4ade80", marginBottom: 4, textTransform: "uppercase" as const, letterSpacing: "0.12em" }}>Canon Confirmed</p>
-                    <p style={{ ...mono, fontSize: "0.72rem", color: "rgba(227,229,228,0.8)", margin: 0, lineHeight: 1.6 }}>{ep.canonVerdict}</p>
+                    <p style={{ ...mono, fontSize: "0.78rem", color: "#4ade80", marginBottom: 4, textTransform: "uppercase" as const, letterSpacing: "0.12em" }}>Canon Confirmed</p>
+                    <p style={{ ...mono, fontSize: "0.90rem", color: "rgba(227,229,228,0.8)", margin: 0, lineHeight: 1.6 }}>{ep.canonVerdict}</p>
                     {ep.loreHint && <p style={{ ...mono, fontSize: "0.63rem", color: "#a78bfa", marginTop: 6 }}>⚡ {ep.loreHint}</p>}
                     {(ep as any).visualPrompt && (
                       <div style={{ marginTop: 8, padding: "8px 10px", background: "rgba(45,212,191,0.04)", border: "1px solid rgba(45,212,191,0.15)" }}>
-                        <p style={{ ...mono, fontSize: "0.55rem", color: "#2dd4bf", textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 4 }}>🎨 Visual Prompt</p>
-                        <p style={{ ...mono, fontSize: "0.65rem", color: "rgba(227,229,228,0.6)", margin: 0, lineHeight: 1.5 }}>{(ep as any).visualPrompt}</p>
+                        <p style={{ ...mono, fontSize: "0.73rem", color: "#2dd4bf", textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 4 }}>🎨 Visual Prompt</p>
+                        <p style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.75)", margin: 0, lineHeight: 1.5 }}>{(ep as any).visualPrompt}</p>
                       </div>
                     )}
                   </div>
@@ -356,8 +356,8 @@ export default function CYOALore() {
                 {/* Visual Prompt — always show if available */}
                 {(ep as any).visualPrompt && ep.status === "draft" && (
                   <div style={{ padding: "8px 10px", background: "rgba(45,212,191,0.04)", border: "1px solid rgba(45,212,191,0.12)", marginBottom: "0.75rem" }}>
-                    <p style={{ ...mono, fontSize: "0.55rem", color: "#2dd4bf", textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 4 }}>🎨 Visual for Grok Imagine</p>
-                    <p style={{ ...mono, fontSize: "0.65rem", color: "rgba(227,229,228,0.6)", margin: 0, lineHeight: 1.5 }}>{(ep as any).visualPrompt}</p>
+                    <p style={{ ...mono, fontSize: "0.73rem", color: "#2dd4bf", textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 4 }}>🎨 Visual for Grok Imagine</p>
+                    <p style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.75)", margin: 0, lineHeight: 1.5 }}>{(ep as any).visualPrompt}</p>
                   </div>
                 )}
 
@@ -366,24 +366,24 @@ export default function CYOALore() {
                   {ep.status === "draft" && (
                     <>
                       <button onClick={() => postMutation.mutate(ep.id)} disabled={postMutation.isPending}
-                        style={{ ...mono, fontSize: "0.62rem", textTransform: "uppercase" as const, letterSpacing: "0.1em", color: "#f97316", background: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.35)", padding: "5px 12px", cursor: "pointer" }}>
+                        style={{ ...mono, fontSize: "0.80rem", textTransform: "uppercase" as const, letterSpacing: "0.1em", color: "#f97316", background: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.35)", padding: "5px 12px", cursor: "pointer" }}>
                         ✓ Post Hook Tweet
                       </button>
                       <button onClick={() => { if (confirm("Discard this draft?")) discardMutation.mutate(ep.id); }}
-                        style={{ ...mono, fontSize: "0.62rem", textTransform: "uppercase" as const, letterSpacing: "0.1em", color: "rgba(227,229,228,0.35)", background: "transparent", border: "1px solid rgba(227,229,228,0.1)", padding: "5px 12px", cursor: "pointer" }}>
+                        style={{ ...mono, fontSize: "0.80rem", textTransform: "uppercase" as const, letterSpacing: "0.1em", color: "rgba(227,229,228,0.55)", background: "transparent", border: "1px solid rgba(227,229,228,0.18)", padding: "5px 12px", cursor: "pointer" }}>
                         ✕ Discard
                       </button>
                     </>
                   )}
                   {ep.status === "posted" && !isResolving && (
                     <button onClick={() => setResolveEpId(ep.id)}
-                      style={{ ...mono, fontSize: "0.62rem", textTransform: "uppercase" as const, letterSpacing: "0.1em", color: "#a78bfa", background: "transparent", border: "1px solid rgba(167,139,250,0.35)", padding: "5px 12px", cursor: "pointer" }}>
+                      style={{ ...mono, fontSize: "0.80rem", textTransform: "uppercase" as const, letterSpacing: "0.1em", color: "#a78bfa", background: "transparent", border: "1px solid rgba(167,139,250,0.35)", padding: "5px 12px", cursor: "pointer" }}>
                       Enter Poll Results →
                     </button>
                   )}
                   {ep.tweetIds.length > 0 && (
                     <a href={`https://x.com/agent306_/status/${ep.tweetIds[0]}`} target="_blank" rel="noopener noreferrer"
-                      style={{ ...mono, fontSize: "0.62rem", color: "rgba(227,229,228,0.4)", border: "1px solid rgba(227,229,228,0.1)", padding: "5px 12px", textDecoration: "none" }}>
+                      style={{ ...mono, fontSize: "0.80rem", color: "rgba(227,229,228,0.60)", border: "1px solid rgba(227,229,228,0.18)", padding: "5px 12px", textDecoration: "none" }}>
                       View on X ↗
                     </a>
                   )}
@@ -399,19 +399,19 @@ export default function CYOALore() {
                         const values = { A: voteA, B: voteB, C: voteC, D: voteD };
                         return (
                           <div key={letter}>
-                            <p style={{ ...mono, fontSize: "0.58rem", color: LETTER_COLORS[letter], marginBottom: 3 }}>{letter}) {(ep.options ?? []).find(o => o.letter === letter)?.text}</p>
+                            <p style={{ ...mono, fontSize: "0.76rem", color: LETTER_COLORS[letter], marginBottom: 3 }}>{letter}) {(ep.options ?? []).find(o => o.letter === letter)?.text}</p>
                             <input type="number" value={values[letter]} onChange={e => setters[letter](e.target.value)} placeholder="votes"
-                              style={{ width: "100%", background: "rgba(227,229,228,0.04)", border: "1px solid rgba(227,229,228,0.12)", padding: "5px 8px", color: "#e3e5e4", ...mono, fontSize: "0.72rem", boxSizing: "border-box" as const }} />
+                              style={{ width: "100%", background: "rgba(227,229,228,0.08)", border: "1px solid rgba(227,229,228,0.20)", padding: "5px 8px", color: "#efefef", ...mono, fontSize: "0.90rem", boxSizing: "border-box" as const }} />
                           </div>
                         );
                       })}
                     </div>
                     <div style={{ marginBottom: "0.85rem" }}>
-                      <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.4)", marginBottom: 6 }}>WINNING OPTION</p>
+                      <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", marginBottom: 6 }}>WINNING OPTION</p>
                       <div style={{ display: "flex", gap: 6 }}>
                         {(["A", "B", "C", "D"] as OptionLetter[]).map(letter => (
                           <button key={letter} onClick={() => setWinningOption(letter)}
-                            style={{ flex: 1, padding: "6px", background: winningOption === letter ? `${LETTER_COLORS[letter]}20` : "transparent", border: `1px solid ${winningOption === letter ? LETTER_COLORS[letter] : "rgba(227,229,228,0.1)"}`, color: winningOption === letter ? LETTER_COLORS[letter] : "rgba(227,229,228,0.4)", ...mono, fontSize: "0.72rem", fontWeight: 700, cursor: "pointer" }}>
+                            style={{ flex: 1, padding: "6px", background: winningOption === letter ? `${LETTER_COLORS[letter]}20` : "transparent", border: `1px solid ${winningOption === letter ? LETTER_COLORS[letter] : "rgba(227,229,228,0.18)"}`, color: winningOption === letter ? LETTER_COLORS[letter] : "rgba(227,229,228,0.60)", ...mono, fontSize: "0.90rem", fontWeight: 700, cursor: "pointer" }}>
                             {letter}
                           </button>
                         ))}
@@ -423,7 +423,7 @@ export default function CYOALore() {
                         {resolveMutation.isPending ? "Resolving..." : "Confirm & Post Reveal"}
                       </button>
                       <button onClick={() => setResolveEpId(null)}
-                        style={{ padding: "8px 14px", background: "transparent", border: "1px solid rgba(227,229,228,0.12)", color: "rgba(227,229,228,0.4)", ...mono, fontSize: "0.65rem", cursor: "pointer" }}>
+                        style={{ padding: "8px 14px", background: "transparent", border: "1px solid rgba(227,229,228,0.20)", color: "rgba(227,229,228,0.60)", ...mono, fontSize: "0.83rem", cursor: "pointer" }}>
                         Cancel
                       </button>
                     </div>

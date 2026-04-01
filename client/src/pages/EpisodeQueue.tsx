@@ -104,7 +104,7 @@ function TokenPreview({ tokenId, size = 80 }: { tokenId: number; size?: number }
       />
       <div style={{
         position: "absolute", bottom: 2, right: 3,
-        ...mono, fontSize: "0.45rem", color: "rgba(249,115,22,0.5)",
+        ...mono, fontSize: "0.63rem", color: "rgba(249,115,22,0.5)",
       }}>#{tokenId}</div>
     </div>
   );
@@ -128,7 +128,7 @@ function AnimatedStat({ value, label, color, icon }: { value: number; label: str
   return (
     <div style={{
       flex: 1, padding: "0.9rem",
-      background: "rgba(227,229,228,0.03)",
+      background: "rgba(227,229,228,0.06)",
       border: `1px solid ${color}22`,
       textAlign: "center",
       position: "relative", overflow: "hidden",
@@ -139,10 +139,10 @@ function AnimatedStat({ value, label, color, icon }: { value: number; label: str
         pointerEvents: "none",
       }} />
       {icon && <div style={{ marginBottom: 4, display: "flex", justifyContent: "center", color }}>{icon}</div>}
-      <p style={{ ...mono, fontSize: "1.6rem", fontWeight: 700, color, margin: 0, letterSpacing: "-0.02em" }}>
+      <p style={{ ...mono, fontSize: "1.85rem", fontWeight: 700, color, margin: 0, letterSpacing: "-0.02em" }}>
         {display}
       </p>
-      <p style={{ ...mono, fontSize: "0.55rem", textTransform: "uppercase", letterSpacing: "0.16em", color: "rgba(227,229,228,0.3)", marginTop: 3 }}>
+      <p style={{ ...mono, fontSize: "0.73rem", textTransform: "uppercase", letterSpacing: "0.16em", color: "rgba(227,229,228,0.48)", marginTop: 3 }}>
         {label}
       </p>
     </div>
@@ -203,10 +203,10 @@ function PendingCard({ ep, onMarkPosted, isPosting }: {
         borderBottom: "1px solid rgba(249,115,22,0.2)",
       }}>
         <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#f97316", display: "inline-block", animation: "pulse-dot 1.4s ease-in-out infinite" }} />
-        <span style={{ ...mono, fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "0.18em", color: "#f97316" }}>
+        <span style={{ ...mono, fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.18em", color: "#f97316" }}>
           Ready to Post
         </span>
-        <span style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.3)", marginLeft: "auto" }}>
+        <span style={{ ...mono, fontSize: "0.76rem", color: "rgba(227,229,228,0.48)", marginLeft: "auto" }}>
           {timeAgo(ep.createdAt)}
         </span>
       </div>
@@ -221,54 +221,54 @@ function PendingCard({ ep, onMarkPosted, isPosting }: {
             <div style={{ textAlign: "center" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "center" }}>
                 <Flame style={{ width: 10, height: 10, color: "#f97316" }} />
-                <span style={{ ...mono, fontSize: "0.65rem", color: "#f97316", fontWeight: 700 }}>
+                <span style={{ ...mono, fontSize: "0.83rem", color: "#f97316", fontWeight: 700 }}>
                   {signals.burnCount}
                 </span>
               </div>
-              <span style={{ ...mono, fontSize: "0.52rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase", letterSpacing: "0.1em" }}>burns</span>
+              <span style={{ ...mono, fontSize: "0.70rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase", letterSpacing: "0.1em" }}>burns</span>
             </div>
           )}
           {signals.topLeader && (
             <div style={{ textAlign: "center" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "center" }}>
                 <TrendingUp style={{ width: 10, height: 10, color: "#a78bfa" }} />
-                <span style={{ ...mono, fontSize: "0.65rem", color: "#a78bfa", fontWeight: 700 }}>
+                <span style={{ ...mono, fontSize: "0.83rem", color: "#a78bfa", fontWeight: 700 }}>
                   {signals.topLeader.ap}AP
                 </span>
               </div>
-              <span style={{ ...mono, fontSize: "0.52rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase", letterSpacing: "0.1em" }}>top canvas</span>
+              <span style={{ ...mono, fontSize: "0.70rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase", letterSpacing: "0.1em" }}>top canvas</span>
             </div>
           )}
         </div>
 
         {/* Right: content */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ ...mono, fontSize: "0.85rem", color: "#e3e5e4", fontWeight: 700, marginBottom: 8, letterSpacing: "0.03em" }}>
+          <p style={{ ...mono, fontSize: "1.03rem", color: "#efefef", fontWeight: 700, marginBottom: 8, letterSpacing: "0.03em" }}>
             {ep.title}
           </p>
 
           {/* Tweet box */}
           <div style={{
-            background: "rgba(227,229,228,0.03)",
-            border: "1px solid rgba(227,229,228,0.1)",
+            background: "rgba(227,229,228,0.06)",
+            border: "1px solid rgba(227,229,228,0.18)",
             padding: "0.85rem",
             marginBottom: 10,
             position: "relative",
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <Twitter style={{ width: 11, height: 11, color: "rgba(227,229,228,0.4)" }} />
-                <span style={{ ...mono, fontSize: "0.55rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "rgba(227,229,228,0.3)" }}>
+                <Twitter style={{ width: 11, height: 11, color: "rgba(227,229,228,0.60)" }} />
+                <span style={{ ...mono, fontSize: "0.73rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "rgba(227,229,228,0.48)" }}>
                   tweet · @agent306_
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ ...mono, fontSize: "0.58rem", color: tweet.length > 280 ? "#ef4444" : "rgba(227,229,228,0.3)" }}>
+                <span style={{ ...mono, fontSize: "0.76rem", color: tweet.length > 280 ? "#ef4444" : "rgba(227,229,228,0.48)" }}>
                   {tweet.length}/280
                 </span>
                 <button onClick={() => setEditing(!editing)} style={{
-                  ...mono, fontSize: "0.55rem", background: "none", border: "none",
-                  cursor: "pointer", color: editing ? "#f97316" : "rgba(227,229,228,0.35)",
+                  ...mono, fontSize: "0.73rem", background: "none", border: "none",
+                  cursor: "pointer", color: editing ? "#f97316" : "rgba(227,229,228,0.55)",
                   display: "flex", alignItems: "center", gap: 3, padding: "2px 4px",
                 }}>
                   <Edit2 style={{ width: 9, height: 9 }} /> {editing ? "Done" : "Edit"}
@@ -281,13 +281,13 @@ function PendingCard({ ep, onMarkPosted, isPosting }: {
                 onChange={e => setTweet(e.target.value)}
                 rows={5}
                 style={{
-                  ...mono, fontSize: "0.7rem", width: "100%", boxSizing: "border-box",
-                  background: "rgba(227,229,228,0.04)", border: "1px solid rgba(227,229,228,0.12)",
-                  color: "#e3e5e4", padding: "0.5rem", resize: "vertical", outline: "none", lineHeight: 1.65,
+                  ...mono, fontSize: "0.88rem", width: "100%", boxSizing: "border-box",
+                  background: "rgba(227,229,228,0.08)", border: "1px solid rgba(227,229,228,0.20)",
+                  color: "#efefef", padding: "0.5rem", resize: "vertical", outline: "none", lineHeight: 1.65,
                 }}
               />
             ) : (
-              <p style={{ ...mono, fontSize: "0.7rem", color: "#e3e5e4", lineHeight: 1.7, whiteSpace: "pre-wrap", margin: 0 }}>
+              <p style={{ ...mono, fontSize: "0.88rem", color: "#efefef", lineHeight: 1.7, whiteSpace: "pre-wrap", margin: 0 }}>
                 {tweet}
               </p>
             )}
@@ -307,7 +307,7 @@ function PendingCard({ ep, onMarkPosted, isPosting }: {
                 background: "rgba(249,115,22,0.2)",
                 border: "1px solid rgba(249,115,22,0.6)",
                 color: "#f97316", textDecoration: "none",
-                ...mono, fontSize: "0.72rem", textTransform: "uppercase" as const, letterSpacing: "0.12em",
+                ...mono, fontSize: "0.90rem", textTransform: "uppercase" as const, letterSpacing: "0.12em",
                 transition: "background 0.15s",
               }}
               onMouseEnter={e => (e.currentTarget.style.background = "rgba(249,115,22,0.3)")}
@@ -324,11 +324,11 @@ function PendingCard({ ep, onMarkPosted, isPosting }: {
               style={{
                 display: "flex", alignItems: "center", gap: 6,
                 padding: "0.7rem 0.9rem",
-                background: copied ? "rgba(74,222,128,0.1)" : "rgba(227,229,228,0.05)",
-                border: `1px solid ${copied ? "rgba(74,222,128,0.4)" : "rgba(227,229,228,0.15)"}`,
-                color: copied ? "#4ade80" : "rgba(227,229,228,0.5)",
+                background: copied ? "rgba(74,222,128,0.1)" : "rgba(227,229,228,0.10)",
+                border: `1px solid ${copied ? "rgba(74,222,128,0.4)" : "rgba(227,229,228,0.22)"}`,
+                color: copied ? "#4ade80" : "rgba(227,229,228,0.68)",
                 cursor: "pointer",
-                ...mono, fontSize: "0.65rem", letterSpacing: "0.08em",
+                ...mono, fontSize: "0.83rem", letterSpacing: "0.08em",
                 transition: "all 0.2s",
               }}
             >
@@ -343,11 +343,11 @@ function PendingCard({ ep, onMarkPosted, isPosting }: {
               style={{
                 display: "flex", alignItems: "center", gap: 6,
                 padding: "0.7rem 0.9rem",
-                background: "rgba(227,229,228,0.03)",
-                border: "1px solid rgba(227,229,228,0.1)",
-                color: "rgba(227,229,228,0.35)",
+                background: "rgba(227,229,228,0.06)",
+                border: "1px solid rgba(227,229,228,0.18)",
+                color: "rgba(227,229,228,0.55)",
                 cursor: isPosting ? "not-allowed" : "pointer",
-                ...mono, fontSize: "0.62rem", letterSpacing: "0.08em",
+                ...mono, fontSize: "0.80rem", letterSpacing: "0.08em",
               }}
             >
               {isPosting
@@ -357,7 +357,7 @@ function PendingCard({ ep, onMarkPosted, isPosting }: {
             </button>
           </div>
 
-          <p style={{ ...mono, fontSize: "0.55rem", color: "rgba(227,229,228,0.2)", marginTop: 7 }}>
+          <p style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.35)", marginTop: 7 }}>
             "Post to X" opens X with tweet pre-filled → hit Post → come back and click Mark Posted
           </p>
         </div>
@@ -379,21 +379,21 @@ function PostedCard({ ep }: { ep: Episode }) {
       <img
         src={`/api/tokens/${ep.tokenId}/image.svg`}
         alt={`#${ep.tokenId}`}
-        style={{ width: 32, height: 32, imageRendering: "pixelated", border: "1px solid rgba(227,229,228,0.1)", flexShrink: 0 }}
+        style={{ width: 32, height: 32, imageRendering: "pixelated", border: "1px solid rgba(227,229,228,0.18)", flexShrink: 0 }}
       />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ ...mono, fontSize: "0.7rem", color: "#e3e5e4", marginBottom: 2 }}>{ep.title}</p>
-        <p style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.3)" }}>
+        <p style={{ ...mono, fontSize: "0.88rem", color: "#efefef", marginBottom: 2 }}>{ep.title}</p>
+        <p style={{ ...mono, fontSize: "0.76rem", color: "rgba(227,229,228,0.48)" }}>
           {ep.postedAt ? timeAgo(ep.postedAt) : ""}
         </p>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ ...mono, fontSize: "0.52rem", padding: "2px 7px", background: "rgba(74,222,128,0.1)", color: "#4ade80", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+        <span style={{ ...mono, fontSize: "0.70rem", padding: "2px 7px", background: "rgba(74,222,128,0.1)", color: "#4ade80", textTransform: "uppercase", letterSpacing: "0.1em" }}>
           Posted
         </span>
         {ep.videoUrl && (
           <a href={ep.videoUrl} target="_blank" rel="noopener noreferrer"
-            style={{ color: "#4ade80", display: "flex", alignItems: "center", gap: 3, textDecoration: "none", ...mono, fontSize: "0.58rem" }}>
+            style={{ color: "#4ade80", display: "flex", alignItems: "center", gap: 3, textDecoration: "none", ...mono, fontSize: "0.76rem" }}>
             <ExternalLink style={{ width: 11, height: 11 }} /> View
           </a>
         )}
@@ -414,10 +414,10 @@ function EmptyState({ onGenerate, isPending }: { onGenerate: () => void; isPendi
       <div style={{ marginBottom: 20 }}>
         <TokenPreview tokenId={306} size={100} />
       </div>
-      <p style={{ ...mono, fontSize: "0.78rem", color: "#e3e5e4", marginBottom: 6, fontWeight: 600 }}>
+      <p style={{ ...mono, fontSize: "0.78rem", color: "#efefef", marginBottom: 6, fontWeight: 600 }}>
         No episodes yet
       </p>
-      <p style={{ ...mono, fontSize: "0.65rem", color: "rgba(227,229,228,0.35)", marginBottom: 20, maxWidth: 320, lineHeight: 1.7 }}>
+      <p style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.55)", marginBottom: 20, maxWidth: 320, lineHeight: 1.7 }}>
         The Temple is waiting. Hit Generate to pull live on-chain burns + canvas activity and create the first episode.
       </p>
       <button
@@ -428,7 +428,7 @@ function EmptyState({ onGenerate, isPending }: { onGenerate: () => void; isPendi
           padding: "0.75rem 1.75rem",
           background: "rgba(249,115,22,0.18)", border: "1px solid rgba(249,115,22,0.5)",
           color: "#f97316", cursor: isPending ? "not-allowed" : "pointer",
-          ...mono, fontSize: "0.72rem", textTransform: "uppercase" as const, letterSpacing: "0.14em",
+          ...mono, fontSize: "0.90rem", textTransform: "uppercase" as const, letterSpacing: "0.14em",
           animation: isPending ? "none" : undefined,
         }}
       >
@@ -487,14 +487,14 @@ export default function EpisodeQueue() {
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#f97316", display: "inline-block", animation: "pulse-dot 1.6s ease-in-out infinite" }} />
-            <span style={{ ...mono, fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "0.18em", color: "rgba(227,229,228,0.4)" }}>
+            <span style={{ ...mono, fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.18em", color: "rgba(227,229,228,0.60)" }}>
               Post Queue
             </span>
           </div>
-          <h1 style={{ ...mono, fontSize: "1.35rem", color: "#e3e5e4", margin: 0, letterSpacing: "0.05em" }}>
+          <h1 style={{ ...mono, fontSize: "1.35rem", color: "#efefef", margin: 0, letterSpacing: "0.05em" }}>
             APPROVE &amp; POST
           </h1>
-          <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.3)", marginTop: 3 }}>
+          <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.48)", marginTop: 3 }}>
             Review · edit · post to X
           </p>
         </div>
@@ -506,7 +506,7 @@ export default function EpisodeQueue() {
               display: "flex", alignItems: "center", gap: 6, padding: "0.55rem 1.1rem",
               background: "rgba(249,115,22,0.14)", border: "1px solid rgba(249,115,22,0.4)",
               color: "#f97316", cursor: "pointer",
-              ...mono, fontSize: "0.65rem", textTransform: "uppercase" as const, letterSpacing: "0.1em",
+              ...mono, fontSize: "0.83rem", textTransform: "uppercase" as const, letterSpacing: "0.1em",
             }}
           >
             {pollerMutation.isPending ? <Loader2 style={{ width: 12, height: 12 }} className="animate-spin" /> : <Zap style={{ width: 12, height: 12 }} />}
@@ -516,8 +516,8 @@ export default function EpisodeQueue() {
             onClick={() => refetch()}
             style={{
               display: "flex", alignItems: "center", gap: 5, padding: "0.55rem 0.75rem",
-              background: "rgba(227,229,228,0.04)", border: "1px solid rgba(227,229,228,0.1)",
-              color: "rgba(227,229,228,0.4)", cursor: "pointer",
+              background: "rgba(227,229,228,0.08)", border: "1px solid rgba(227,229,228,0.18)",
+              color: "rgba(227,229,228,0.60)", cursor: "pointer",
             }}
           >
             <RefreshCw style={{ width: 13, height: 13 }} />
@@ -528,7 +528,7 @@ export default function EpisodeQueue() {
       {/* Stats */}
       <div style={{ display: "flex", gap: 10, marginBottom: "1.75rem" }}>
         <AnimatedStat value={pending.length} label="Pending" color="#f97316" icon={<Flame style={{ width: 13, height: 13 }} />} />
-        <AnimatedStat value={drafts.length}  label="Drafts"  color="rgba(227,229,228,0.5)" />
+        <AnimatedStat value={drafts.length}  label="Drafts"  color="rgba(227,229,228,0.68)" />
         <AnimatedStat value={posted.length}  label="Posted"  color="#4ade80" icon={<CheckCircle2 style={{ width: 13, height: 13 }} />} />
         <AnimatedStat value={episodes.length} label="Total"  color="rgba(167,139,250,0.8)" />
       </div>
@@ -537,18 +537,18 @@ export default function EpisodeQueue() {
       <div style={{ marginBottom: "2rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
           <Flame style={{ width: 13, height: 13, color: "#f97316" }} />
-          <span style={{ ...mono, fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.16em", color: "#f97316" }}>
+          <span style={{ ...mono, fontSize: "0.83rem", textTransform: "uppercase", letterSpacing: "0.16em", color: "#f97316" }}>
             Pending
           </span>
           {pending.length > 0 && (
-            <span style={{ ...mono, fontSize: "0.58rem", padding: "1px 8px", background: "rgba(249,115,22,0.18)", color: "#f97316", borderRadius: 999 }}>
+            <span style={{ ...mono, fontSize: "0.76rem", padding: "1px 8px", background: "rgba(249,115,22,0.18)", color: "#f97316", borderRadius: 999 }}>
               {pending.length}
             </span>
           )}
         </div>
 
         {isLoading ? (
-          <div style={{ height: 160, background: "rgba(227,229,228,0.04)", animation: "pulse 1.5s infinite" }} />
+          <div style={{ height: 160, background: "rgba(227,229,228,0.08)", animation: "pulse 1.5s infinite" }} />
         ) : pending.length === 0 ? (
           <EmptyState onGenerate={() => pollerMutation.mutate()} isPending={pollerMutation.isPending} />
         ) : (
@@ -562,16 +562,16 @@ export default function EpisodeQueue() {
       {drafts.length > 0 && (
         <div style={{ marginBottom: "1.75rem" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-            <span style={{ ...mono, fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.16em", color: "rgba(227,229,228,0.35)" }}>Drafts</span>
+            <span style={{ ...mono, fontSize: "0.83rem", textTransform: "uppercase", letterSpacing: "0.16em", color: "rgba(227,229,228,0.55)" }}>Drafts</span>
           </div>
           {drafts.map(ep => (
-            <div key={ep.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "0.7rem 1rem", border: "1px solid rgba(227,229,228,0.08)", marginBottom: 6 }}>
+            <div key={ep.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "0.7rem 1rem", border: "1px solid rgba(227,229,228,0.15)", marginBottom: 6 }}>
               <img src={`/api/tokens/${ep.tokenId}/image.svg`} alt="" style={{ width: 32, height: 32, imageRendering: "pixelated", flexShrink: 0 }} />
               <div style={{ flex: 1 }}>
-                <p style={{ ...mono, fontSize: "0.7rem", color: "#e3e5e4" }}>{ep.title}</p>
-                <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.35)" }}>{ep.narrative.slice(0, 80)}…</p>
+                <p style={{ ...mono, fontSize: "0.88rem", color: "#efefef" }}>{ep.title}</p>
+                <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.55)" }}>{ep.narrative.slice(0, 80)}…</p>
               </div>
-              <button onClick={() => updateStatusMutation.mutate({ id: ep.id, status: "ready" })} style={{ ...mono, fontSize: "0.6rem", padding: "0.35rem 0.8rem", background: "rgba(227,229,228,0.06)", border: "1px solid rgba(227,229,228,0.15)", color: "rgba(227,229,228,0.6)", cursor: "pointer", textTransform: "uppercase" as const, letterSpacing: "0.1em" }}>
+              <button onClick={() => updateStatusMutation.mutate({ id: ep.id, status: "ready" })} style={{ ...mono, fontSize: "0.78rem", padding: "0.35rem 0.8rem", background: "rgba(227,229,228,0.12)", border: "1px solid rgba(227,229,228,0.22)", color: "rgba(227,229,228,0.75)", cursor: "pointer", textTransform: "uppercase" as const, letterSpacing: "0.1em" }}>
                 Approve
               </button>
             </div>
@@ -584,7 +584,7 @@ export default function EpisodeQueue() {
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
             <CheckCircle2 style={{ width: 13, height: 13, color: "#4ade80" }} />
-            <span style={{ ...mono, fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.16em", color: "#4ade80" }}>Posted</span>
+            <span style={{ ...mono, fontSize: "0.83rem", textTransform: "uppercase", letterSpacing: "0.16em", color: "#4ade80" }}>Posted</span>
           </div>
           {posted.map(ep => <PostedCard key={ep.id} ep={ep} />)}
         </div>

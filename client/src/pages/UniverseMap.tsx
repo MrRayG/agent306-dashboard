@@ -147,7 +147,7 @@ export default function UniverseMap() {
           <div className="flex-1">
             <div className="flex items-center gap-2">
               <p className="text-sm font-bold text-primary">MrRayG · Agent 306</p>
-              <Badge className="text-[10px] bg-primary/10 text-primary border-primary/30">Producer</Badge>
+              <Badge className="text-[13px] bg-primary/10 text-primary border-primary/30">Producer</Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
               306 creator — all phases are official tools built for the 306 universe.
@@ -190,7 +190,7 @@ export default function UniverseMap() {
                             {phase.label}
                           </span>
                           {phase.official && (
-                            <Badge className="text-[10px] bg-purple-400/10 text-purple-400 border-purple-400/30">
+                            <Badge className="text-[13px] bg-purple-400/10 text-purple-400 border-purple-400/30">
                               Official
                             </Badge>
                           )}
@@ -200,11 +200,11 @@ export default function UniverseMap() {
                         </CardTitle>
                       </div>
                     </div>
-                    <span className={`text-[10px] px-2 py-1 rounded ${phase.badgeClass} font-mono`}>
+                    <span className={`text-[13px] px-2 py-1 rounded ${phase.badgeClass} font-mono`}>
                       {phase.id === "phase1" ? "● LIVE" : phase.id === "phase2" ? "◐ SOON" : "○ FUTURE"}
                     </span>
                   </div>
-                  <p className="text-[11px] text-muted-foreground italic mt-1">{phase.note}</p>
+                  <p className="text-[14px] text-muted-foreground italic mt-1">{phase.note}</p>
                 </CardHeader>
 
                 <CardContent>
@@ -221,13 +221,13 @@ export default function UniverseMap() {
                           <span className="text-xl leading-none mt-0.5 shrink-0">{item.icon}</span>
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <p className="text-[12px] font-bold">{item.title}</p>
+                              <p className="text-[15px] font-bold">{item.title}</p>
                               <span className={`text-[9px] px-1.5 py-0.5 rounded flex items-center gap-1 ${statusCfg.cls}`}>
                                 <StatusIcon className="w-2.5 h-2.5" />
                                 {statusCfg.label}
                               </span>
                             </div>
-                            <p className="text-[11px] text-muted-foreground leading-relaxed mt-1">
+                            <p className="text-[14px] text-muted-foreground leading-relaxed mt-1">
                               {item.desc}
                             </p>
                           </div>
@@ -250,7 +250,7 @@ export default function UniverseMap() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-3 gap-4 text-[11px]">
+          <div className="grid grid-cols-3 gap-4 text-[14px]">
             {[
               {
                 from: "🔥 Burns",
@@ -291,9 +291,9 @@ export default function UniverseMap() {
             ].map(flow => (
               <div key={flow.from} className="p-3 rounded bg-secondary/40 border border-border space-y-1.5">
                 <div className="flex items-center gap-2">
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${flow.phase}-badge font-mono`}>{flow.from}</span>
+                  <span className={`text-[13px] px-1.5 py-0.5 rounded ${flow.phase}-badge font-mono`}>{flow.from}</span>
                   <span className="text-muted-foreground">→</span>
-                  <span className="text-[10px] font-semibold text-foreground">{flow.to}</span>
+                  <span className="text-[13px] font-semibold text-foreground">{flow.to}</span>
                 </div>
                 <p className="text-muted-foreground leading-relaxed">{flow.desc}</p>
               </div>

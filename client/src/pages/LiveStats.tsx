@@ -43,11 +43,11 @@ function StatCard({
     <Card className="pixel-hover" data-testid={testId}>
       <CardContent className="p-4 space-y-1">
         <div className="flex items-center justify-between">
-          <p className="text-[11px] text-muted-foreground uppercase tracking-widest">{label}</p>
+          <p className="text-[14px] text-muted-foreground uppercase tracking-widest">{label}</p>
           <Icon className={`w-4 h-4 ${colorClass}`} />
         </div>
         <p className={`text-3xl font-bold font-mono ${colorClass}`}>{value}</p>
-        {sub && <p className="text-[10px] text-muted-foreground">{sub}</p>}
+        {sub && <p className="text-[13px] text-muted-foreground">{sub}</p>}
       </CardContent>
     </Card>
   );
@@ -79,10 +79,10 @@ function BurnFeed({ burns }: { burns: BurnEvent[] }) {
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[11px] text-foreground font-mono">
+            <p className="text-[14px] text-foreground font-mono">
               {burn.tokenId ? `Token #${burn.tokenId} burned` : "Burn event"}
             </p>
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[13px] text-muted-foreground">
               {burn.sender ? `by ${burn.sender.slice(0, 6)}…${burn.sender.slice(-4)}` : "Anonymous"}
               {burn.timestamp ? ` · ${new Date(burn.timestamp).toLocaleTimeString()}` : ""}
             </p>
@@ -118,24 +118,24 @@ function CanvasLeaderboard({ items }: { items: CanvasInfo[] }) {
     <div className="divide-y divide-border max-h-72 overflow-y-auto">
       {items.map((item, i) => (
         <div key={item.tokenId} className="px-4 py-2.5 flex items-center gap-3 hover:bg-secondary/30 transition-colors" data-testid={`row-canvas-${item.tokenId}`}>
-          <span className="text-[11px] font-mono text-muted-foreground w-5 shrink-0 text-right">{i + 1}</span>
+          <span className="text-[14px] font-mono text-muted-foreground w-5 shrink-0 text-right">{i + 1}</span>
           <img
             src={`/api/tokens/${item.tokenId}/image.svg`}
             alt={`Token #${item.tokenId}`}
             className="w-8 h-8 rounded border border-border bg-secondary/50 object-contain shrink-0"
           />
           <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-mono text-foreground">Token #{item.tokenId}</p>
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[14px] font-mono text-foreground">Token #{item.tokenId}</p>
+            <p className="text-[13px] text-muted-foreground">
               {item.pixelEdits != null ? `${item.pixelEdits} edits` : ""}
               {item.actionPoints != null ? ` · ${item.actionPoints} AP` : ""}
             </p>
           </div>
           {item.level != null && (
-            <span className="text-[10px] px-2 py-0.5 rounded phase1-badge font-mono">Lv.{item.level}</span>
+            <span className="text-[13px] px-2 py-0.5 rounded phase1-badge font-mono">Lv.{item.level}</span>
           )}
           {item.burns != null && item.burns > 0 && (
-            <span className="flex items-center gap-1 text-[10px] text-orange-400 font-mono">
+            <span className="flex items-center gap-1 text-[13px] text-orange-400 font-mono">
               <Flame className="w-3 h-3" />{item.burns}
             </span>
           )}
@@ -172,7 +172,7 @@ export default function LiveStats() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <div className="flex items-center gap-1.5 text-[14px] text-muted-foreground">
             <div className="w-1.5 h-1.5 rounded-full bg-primary live-dot" />
             <span>Updated {lastRefresh.toLocaleTimeString()}</span>
           </div>
@@ -220,7 +220,7 @@ export default function LiveStats() {
               </CardTitle>
               <div className="flex items-center gap-1.5">
                 <div className="w-1.5 h-1.5 rounded-full bg-orange-400 live-dot" />
-                <span className="text-[10px] text-muted-foreground uppercase tracking-widest">Live</span>
+                <span className="text-[13px] text-muted-foreground uppercase tracking-widest">Live</span>
               </div>
             </div>
           </CardHeader>
@@ -242,7 +242,7 @@ export default function LiveStats() {
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
                 <TrendingUp className="w-4 h-4 text-cyan-400" /> Canvas Leaderboard
               </CardTitle>
-              <Badge variant="outline" className="text-[10px]">Top 100 cast</Badge>
+              <Badge variant="outline" className="text-[13px]">Top 100 cast</Badge>
             </div>
           </CardHeader>
           <CardContent className="p-0">
@@ -265,7 +265,7 @@ export default function LiveStats() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-3 text-[11px]">
+          <div className="grid grid-cols-2 gap-3 text-[14px]">
             {[
               {
                 label: "Recent Burns",
@@ -294,14 +294,14 @@ export default function LiveStats() {
             ].map(api => (
               <div key={api.label} className="p-3 rounded bg-secondary/40 border border-border space-y-1">
                 <p className="font-semibold text-foreground">{api.label}</p>
-                <code className="text-[10px] text-primary font-mono block">{api.endpoint}</code>
-                <p className="text-[10px] text-muted-foreground">← {api.upstream}</p>
-                <p className="text-[10px] text-muted-foreground/70 italic">{api.note}</p>
+                <code className="text-[13px] text-primary font-mono block">{api.endpoint}</code>
+                <p className="text-[13px] text-muted-foreground">← {api.upstream}</p>
+                <p className="text-[13px] text-muted-foreground/70 italic">{api.note}</p>
               </div>
             ))}
           </div>
 
-          <div className="mt-4 flex items-center gap-2 text-[11px] text-muted-foreground bg-secondary/50 rounded px-3 py-2">
+          <div className="mt-4 flex items-center gap-2 text-[14px] text-muted-foreground bg-secondary/50 rounded px-3 py-2">
             <Clock className="w-3.5 h-3.5 shrink-0" />
             <span>
               Stats auto-refresh every 60 seconds. For real-time monitoring, connect to the API directly

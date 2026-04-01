@@ -12,9 +12,9 @@ const YELLOW = "#fbbf24";
 const RED = "#f87171";
 const TEAL = "#2dd4bf";
 const BLUE = "#60a5fa";
-const DIM = "rgba(227,229,228,0.35)";
-const DIMMER = "rgba(227,229,228,0.18)";
-const DIMMEST = "rgba(227,229,228,0.07)";
+const DIM = "rgba(227,229,228,0.55)";
+const DIMMER = "rgba(227,229,228,0.30)";
+const DIMMEST = "rgba(227,229,228,0.14)";
 const TEXT = "#e3e5e4";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -173,10 +173,10 @@ export default function ResearchAgenda() {
       {/* ── Header ───────────────────────────────────────────────── */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem" }}>
         <div>
-          <h1 style={{ ...mono, fontSize: "1.1rem", color: TEXT, textTransform: "uppercase", letterSpacing: "0.1em", margin: 0 }}>
+          <h1 style={{ ...mono, fontSize: "1.3rem", color: TEXT, textTransform: "uppercase", letterSpacing: "0.1em", margin: 0 }}>
             Research Agenda
           </h1>
-          <p style={{ ...mono, fontSize: "0.6rem", color: DIM, marginTop: 4, letterSpacing: "0.1em" }}>
+          <p style={{ ...mono, fontSize: "0.78rem", color: DIM, marginTop: 4, letterSpacing: "0.1em" }}>
             Self-driven research threads — what Agent 306 is investigating
           </p>
         </div>
@@ -188,7 +188,7 @@ export default function ResearchAgenda() {
             onClick={() => generateMutation.mutate()}
             disabled={generateMutation.isPending}
             style={{
-              ...mono, fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "0.12em",
+              ...mono, fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.12em",
               background: ORANGE, color: "#0e0f10", border: "none",
               padding: "0.5rem 1rem", cursor: generateMutation.isPending ? "wait" : "pointer",
               opacity: generateMutation.isPending ? 0.6 : 1,
@@ -201,23 +201,23 @@ export default function ResearchAgenda() {
 
       {/* ── Loading / Error / Empty ──────────────────────────────── */}
       {isLoading && (
-        <p style={{ ...mono, fontSize: "0.7rem", color: DIM, textAlign: "center", padding: "4rem 0" }}>
+        <p style={{ ...mono, fontSize: "0.88rem", color: DIM, textAlign: "center", padding: "4rem 0" }}>
           Loading research agenda...
         </p>
       )}
 
       {error && (
-        <p style={{ ...mono, fontSize: "0.7rem", color: RED, textAlign: "center", padding: "4rem 0" }}>
+        <p style={{ ...mono, fontSize: "0.88rem", color: RED, textAlign: "center", padding: "4rem 0" }}>
           Failed to load research agenda
         </p>
       )}
 
       {!isLoading && !error && threads.length === 0 && (
         <div style={{ textAlign: "center", padding: "4rem 0" }}>
-          <p style={{ ...mono, fontSize: "0.8rem", color: DIM, marginBottom: "0.5rem" }}>
+          <p style={{ ...mono, fontSize: "0.98rem", color: DIM, marginBottom: "0.5rem" }}>
             No research threads yet.
           </p>
-          <p style={{ ...mono, fontSize: "0.6rem", color: DIMMER }}>
+          <p style={{ ...mono, fontSize: "0.78rem", color: DIMMER }}>
             Click "Generate New Threads" to seed the research agenda.
           </p>
         </div>
@@ -237,7 +237,7 @@ export default function ResearchAgenda() {
           {/* ── Thread Pipeline View ──────────────────────────────── */}
           <section style={{ marginBottom: "1.5rem" }}>
             <div style={{ marginBottom: "0.75rem" }}>
-              <span style={{ ...mono, fontSize: "0.55rem", textTransform: "uppercase", letterSpacing: "0.15em", color: DIMMER }}>
+              <span style={{ ...mono, fontSize: "0.73rem", textTransform: "uppercase", letterSpacing: "0.15em", color: DIMMER }}>
                 Thread Pipeline
               </span>
             </div>
@@ -251,15 +251,15 @@ export default function ResearchAgenda() {
                       flex: 1, border: `1px solid ${DIMMEST}`, padding: "0.75rem 1rem", textAlign: "center",
                       borderLeft: `3px solid ${cfg.color}`,
                     }}>
-                      <p style={{ ...mono, fontSize: "1.3rem", color: cfg.color, margin: 0, fontWeight: 700 }}>
+                      <p style={{ ...mono, fontSize: "1.5rem", color: cfg.color, margin: 0, fontWeight: 700 }}>
                         {count}
                       </p>
-                      <p style={{ ...mono, fontSize: "0.45rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.12em", marginTop: 3 }}>
+                      <p style={{ ...mono, fontSize: "0.63rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.12em", marginTop: 3 }}>
                         {cfg.label}
                       </p>
                     </div>
                     {i < PIPELINE_STAGES.length - 1 && (
-                      <span style={{ ...mono, fontSize: "0.7rem", color: DIMMER, padding: "0 0.3rem" }}>&rarr;</span>
+                      <span style={{ ...mono, fontSize: "0.88rem", color: DIMMER, padding: "0 0.3rem" }}>&rarr;</span>
                     )}
                   </div>
                 );
@@ -269,13 +269,13 @@ export default function ResearchAgenda() {
 
           {/* ── Podcast Candidates Toggle ──────────────────────────── */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-            <span style={{ ...mono, fontSize: "0.55rem", textTransform: "uppercase", letterSpacing: "0.15em", color: DIMMER }}>
+            <span style={{ ...mono, fontSize: "0.73rem", textTransform: "uppercase", letterSpacing: "0.15em", color: DIMMER }}>
               {showPodcastOnly ? "Podcast Candidates" : "All Threads"}
             </span>
             <button
               onClick={() => setShowPodcastOnly(!showPodcastOnly)}
               style={{
-                ...mono, fontSize: "0.5rem", textTransform: "uppercase", letterSpacing: "0.12em",
+                ...mono, fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.12em",
                 background: showPodcastOnly ? `${TEAL}18` : "transparent",
                 color: showPodcastOnly ? TEAL : DIM,
                 border: `1px solid ${showPodcastOnly ? `${TEAL}66` : DIMMEST}`,
@@ -290,7 +290,7 @@ export default function ResearchAgenda() {
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "1.5rem" }}>
             {displayThreads.length === 0 ? (
               <div style={{ border: `1px solid ${DIMMEST}`, padding: "1.5rem", textAlign: "center" }}>
-                <p style={{ ...mono, fontSize: "0.55rem", color: DIMMER }}>
+                <p style={{ ...mono, fontSize: "0.73rem", color: DIMMER }}>
                   {showPodcastOnly ? "No podcast candidates yet." : "No threads to display."}
                 </p>
               </div>
@@ -350,12 +350,12 @@ function ThreadCard({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.3rem" }}>
-              <span style={{ ...mono, fontSize: "0.7rem", color: TEXT, lineHeight: 1.3 }}>
+              <span style={{ ...mono, fontSize: "0.88rem", color: TEXT, lineHeight: 1.3 }}>
                 {thread.title}
               </span>
               {/* Status badge */}
               <span style={{
-                ...mono, fontSize: "0.4rem", textTransform: "uppercase", letterSpacing: "0.1em",
+                ...mono, fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "0.1em",
                 color: cfg.color, background: `${cfg.color}18`, padding: "2px 6px",
                 whiteSpace: "nowrap",
               }}>
@@ -364,7 +364,7 @@ function ThreadCard({
               {/* Podcast candidate badge */}
               {thread.podcastCandidate && (
                 <span style={{
-                  ...mono, fontSize: "0.4rem", textTransform: "uppercase", letterSpacing: "0.1em",
+                  ...mono, fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "0.1em",
                   color: TEAL, background: `${TEAL}18`, padding: "2px 6px",
                   whiteSpace: "nowrap",
                 }}>
@@ -372,11 +372,11 @@ function ThreadCard({
                 </span>
               )}
             </div>
-            <p style={{ ...mono, fontSize: "0.55rem", color: DIM, margin: 0, lineHeight: 1.4 }}>
+            <p style={{ ...mono, fontSize: "0.73rem", color: DIM, margin: 0, lineHeight: 1.4 }}>
               {thread.thesis}
             </p>
           </div>
-          <span style={{ ...mono, fontSize: "0.8rem", color: DIMMER, marginLeft: "0.5rem", flexShrink: 0 }}>
+          <span style={{ ...mono, fontSize: "0.98rem", color: DIMMER, marginLeft: "0.5rem", flexShrink: 0 }}>
             {expanded ? "\u25B4" : "\u25BE"}
           </span>
         </div>
@@ -385,17 +385,17 @@ function ThreadCard({
         <div style={{ display: "flex", gap: "1.5rem", alignItems: "center", flexWrap: "wrap" }}>
           {/* Priority */}
           <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-            <span style={{ ...mono, fontSize: "0.4rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+            <span style={{ ...mono, fontSize: "0.58rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.1em" }}>
               Priority
             </span>
-            <span style={{ ...mono, fontSize: "0.6rem", fontWeight: 700, color: thread.priority >= 0.7 ? ORANGE : thread.priority >= 0.4 ? YELLOW : DIM }}>
+            <span style={{ ...mono, fontSize: "0.78rem", fontWeight: 700, color: thread.priority >= 0.7 ? ORANGE : thread.priority >= 0.4 ? YELLOW : DIM }}>
               {typeof thread.priority === "number" ? (thread.priority * 100).toFixed(0) : thread.priority}
             </span>
           </div>
 
           {/* Maturity progress bar */}
           <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", minWidth: 120 }}>
-            <span style={{ ...mono, fontSize: "0.4rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+            <span style={{ ...mono, fontSize: "0.58rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.1em" }}>
               Maturity
             </span>
             <div style={{ flex: 1, height: 4, background: DIMMEST, minWidth: 60 }}>
@@ -406,26 +406,26 @@ function ThreadCard({
                 transition: "width 0.3s ease",
               }} />
             </div>
-            <span style={{ ...mono, fontSize: "0.45rem", color: DIM }}>
+            <span style={{ ...mono, fontSize: "0.63rem", color: DIM }}>
               {((thread.maturity ?? 0) * 100).toFixed(0)}%
             </span>
           </div>
 
           {/* Evidence summary */}
           <div style={{ display: "flex", gap: "0.5rem" }}>
-            <span style={{ ...mono, fontSize: "0.45rem", color: GREEN }}>
+            <span style={{ ...mono, fontSize: "0.63rem", color: GREEN }}>
               {ev.supporting} supporting
             </span>
-            <span style={{ ...mono, fontSize: "0.45rem", color: RED }}>
+            <span style={{ ...mono, fontSize: "0.63rem", color: RED }}>
               {ev.contradicting} contradicting
             </span>
-            <span style={{ ...mono, fontSize: "0.45rem", color: YELLOW }}>
+            <span style={{ ...mono, fontSize: "0.63rem", color: YELLOW }}>
               {ev.gaps} gaps
             </span>
           </div>
 
           {/* Last updated */}
-          <span style={{ ...mono, fontSize: "0.4rem", color: DIMMER }}>
+          <span style={{ ...mono, fontSize: "0.58rem", color: DIMMER }}>
             {timeAgo(thread.lastUpdated)}
           </span>
         </div>
@@ -441,7 +441,7 @@ function ThreadCard({
             onClick={(e) => { e.stopPropagation(); onAdvance(); }}
             disabled={advancePending}
             style={{
-              ...mono, fontSize: "0.5rem", textTransform: "uppercase", letterSpacing: "0.12em",
+              ...mono, fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.12em",
               background: `${ORANGE}18`, color: ORANGE, border: `1px solid ${ORANGE}66`,
               padding: "0.35rem 0.75rem", cursor: advancePending ? "wait" : "pointer",
               opacity: advancePending ? 0.6 : 1,
@@ -455,7 +455,7 @@ function ThreadCard({
             onClick={(e) => { e.stopPropagation(); onGenerateEpisode(); }}
             disabled={episodePending}
             style={{
-              ...mono, fontSize: "0.5rem", textTransform: "uppercase", letterSpacing: "0.12em",
+              ...mono, fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.12em",
               background: `${TEAL}18`, color: TEAL, border: `1px solid ${TEAL}66`,
               padding: "0.35rem 0.75rem", cursor: episodePending ? "wait" : "pointer",
               opacity: episodePending ? 0.6 : 1,
@@ -472,10 +472,10 @@ function ThreadCard({
           {/* Audience Relevance */}
           {(thread.audienceRelevance || detail?.audienceRelevance) && (
             <div style={{ marginTop: "0.75rem" }}>
-              <span style={{ ...mono, fontSize: "0.45rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+              <span style={{ ...mono, fontSize: "0.63rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.1em" }}>
                 Audience Relevance
               </span>
-              <p style={{ ...mono, fontSize: "0.55rem", color: DIM, margin: "4px 0 0", lineHeight: 1.5 }}>
+              <p style={{ ...mono, fontSize: "0.73rem", color: DIM, margin: "4px 0 0", lineHeight: 1.5 }}>
                 {detail?.audienceRelevance ?? thread.audienceRelevance}
               </p>
             </div>
@@ -484,12 +484,12 @@ function ThreadCard({
           {/* Actionable Tips */}
           {((thread.actionableTips ?? detail?.actionableTips) || []).length > 0 && (
             <div style={{ marginTop: "0.75rem" }}>
-              <span style={{ ...mono, fontSize: "0.45rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+              <span style={{ ...mono, fontSize: "0.63rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.1em" }}>
                 Actionable Tips
               </span>
               <ul style={{ margin: "4px 0 0", paddingLeft: "1rem" }}>
                 {(detail?.actionableTips ?? thread.actionableTips ?? []).map((tip, i) => (
-                  <li key={i} style={{ ...mono, fontSize: "0.5rem", color: DIM, lineHeight: 1.5, marginBottom: 2 }}>
+                  <li key={i} style={{ ...mono, fontSize: "0.68rem", color: DIM, lineHeight: 1.5, marginBottom: 2 }}>
                     {tip}
                   </li>
                 ))}
@@ -500,7 +500,7 @@ function ThreadCard({
           {/* Full Evidence List */}
           {(detail?.evidence ?? thread.evidence ?? []).length > 0 && (
             <div style={{ marginTop: "0.75rem" }}>
-              <span style={{ ...mono, fontSize: "0.45rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+              <span style={{ ...mono, fontSize: "0.63rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.1em" }}>
                 Evidence ({(detail?.evidence ?? thread.evidence).length})
               </span>
               <div style={{ marginTop: "0.5rem" }}>
@@ -513,7 +513,7 @@ function ThreadCard({
                       background: `${evColor}08`,
                     }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ ...mono, fontSize: "0.5rem", color: TEXT }}>{ev.title}</span>
+                        <span style={{ ...mono, fontSize: "0.68rem", color: TEXT }}>{ev.title}</span>
                         <span style={{
                           ...mono, fontSize: "0.35rem", textTransform: "uppercase", letterSpacing: "0.1em",
                           color: evColor,
@@ -522,12 +522,12 @@ function ThreadCard({
                         </span>
                       </div>
                       {ev.summary && (
-                        <p style={{ ...mono, fontSize: "0.45rem", color: DIM, margin: "3px 0 0", lineHeight: 1.4 }}>
+                        <p style={{ ...mono, fontSize: "0.63rem", color: DIM, margin: "3px 0 0", lineHeight: 1.4 }}>
                           {ev.summary}
                         </p>
                       )}
                       {ev.source && (
-                        <p style={{ ...mono, fontSize: "0.4rem", color: DIMMER, margin: "2px 0 0" }}>
+                        <p style={{ ...mono, fontSize: "0.58rem", color: DIMMER, margin: "2px 0 0" }}>
                           Source: {ev.source}
                         </p>
                       )}
@@ -541,12 +541,12 @@ function ThreadCard({
           {/* Gaps */}
           {(detail?.gaps ?? thread.gaps ?? []).length > 0 && (
             <div style={{ marginTop: "0.75rem" }}>
-              <span style={{ ...mono, fontSize: "0.45rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+              <span style={{ ...mono, fontSize: "0.63rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.1em" }}>
                 Knowledge Gaps
               </span>
               <ul style={{ margin: "4px 0 0", paddingLeft: "1rem" }}>
                 {(detail?.gaps ?? thread.gaps ?? []).map((gap, i) => (
-                  <li key={i} style={{ ...mono, fontSize: "0.5rem", color: YELLOW, lineHeight: 1.5, marginBottom: 2 }}>
+                  <li key={i} style={{ ...mono, fontSize: "0.68rem", color: YELLOW, lineHeight: 1.5, marginBottom: 2 }}>
                     {gap}
                   </li>
                 ))}
@@ -557,12 +557,12 @@ function ThreadCard({
           {/* Follow-ups / Sub-threads */}
           {(detail?.followUps ?? thread.followUps ?? []).length > 0 && (
             <div style={{ marginTop: "0.75rem" }}>
-              <span style={{ ...mono, fontSize: "0.45rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+              <span style={{ ...mono, fontSize: "0.63rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.1em" }}>
                 Follow-up Directions
               </span>
               <ul style={{ margin: "4px 0 0", paddingLeft: "1rem" }}>
                 {(detail?.followUps ?? thread.followUps ?? []).map((f, i) => (
-                  <li key={i} style={{ ...mono, fontSize: "0.5rem", color: BLUE, lineHeight: 1.5, marginBottom: 2 }}>
+                  <li key={i} style={{ ...mono, fontSize: "0.68rem", color: BLUE, lineHeight: 1.5, marginBottom: 2 }}>
                     {f}
                   </li>
                 ))}
@@ -573,13 +573,13 @@ function ThreadCard({
           {/* Sub-threads */}
           {(detail?.subThreads ?? thread.subThreads ?? []).length > 0 && (
             <div style={{ marginTop: "0.75rem" }}>
-              <span style={{ ...mono, fontSize: "0.45rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+              <span style={{ ...mono, fontSize: "0.63rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.1em" }}>
                 Sub-Threads
               </span>
               <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginTop: 4 }}>
                 {(detail?.subThreads ?? thread.subThreads ?? []).map((st, i) => (
                   <span key={i} style={{
-                    ...mono, fontSize: "0.45rem", color: PURPLE, background: `${PURPLE}15`,
+                    ...mono, fontSize: "0.63rem", color: PURPLE, background: `${PURPLE}15`,
                     padding: "2px 8px", border: `1px solid ${PURPLE}44`,
                   }}>
                     {st}
@@ -592,11 +592,11 @@ function ThreadCard({
           {/* Parent thread */}
           {(detail?.parentThread ?? thread.parentThread) && (
             <div style={{ marginTop: "0.75rem" }}>
-              <span style={{ ...mono, fontSize: "0.45rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+              <span style={{ ...mono, fontSize: "0.63rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.1em" }}>
                 Parent Thread
               </span>
               <span style={{
-                ...mono, fontSize: "0.45rem", color: BLUE, marginLeft: 8,
+                ...mono, fontSize: "0.63rem", color: BLUE, marginLeft: 8,
               }}>
                 {detail?.parentThread ?? thread.parentThread}
               </span>
@@ -613,10 +613,10 @@ function ThreadCard({
 function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
     <div style={{ border: `1px solid ${DIMMEST}`, padding: "0.75rem 1rem", textAlign: "center" }}>
-      <p style={{ ...mono, fontSize: "1.3rem", color, margin: 0, fontWeight: 700 }}>
+      <p style={{ ...mono, fontSize: "1.5rem", color, margin: 0, fontWeight: 700 }}>
         {value}
       </p>
-      <p style={{ ...mono, fontSize: "0.45rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.12em", marginTop: 3 }}>
+      <p style={{ ...mono, fontSize: "0.63rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.12em", marginTop: 3 }}>
         {label}
       </p>
     </div>
@@ -631,7 +631,7 @@ function ActionButton({ onClick, color, disabled, children }: {
       onClick={onClick}
       disabled={disabled}
       style={{
-        ...mono, fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "0.12em",
+        ...mono, fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.12em",
         background: `${color}18`, color, border: `1px solid ${color}66`,
         padding: "0.5rem 1rem", cursor: disabled ? "wait" : "pointer",
         opacity: disabled ? 0.6 : 1,

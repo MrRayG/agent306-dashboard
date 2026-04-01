@@ -12,9 +12,9 @@ const YELLOW = "#fbbf24";
 const RED = "#f87171";
 const TEAL = "#2dd4bf";
 const BLUE = "#60a5fa";
-const DIM = "rgba(227,229,228,0.35)";
-const DIMMER = "rgba(227,229,228,0.18)";
-const DIMMEST = "rgba(227,229,228,0.07)";
+const DIM = "rgba(227,229,228,0.55)";
+const DIMMER = "rgba(227,229,228,0.30)";
+const DIMMEST = "rgba(227,229,228,0.14)";
 const TEXT = "#e3e5e4";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -131,10 +131,10 @@ export default function KnowledgeGraph() {
       {/* ── Header ───────────────────────────────────────────────── */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem" }}>
         <div>
-          <h1 style={{ ...mono, fontSize: "1.1rem", color: TEXT, textTransform: "uppercase", letterSpacing: "0.1em", margin: 0 }}>
+          <h1 style={{ ...mono, fontSize: "1.3rem", color: TEXT, textTransform: "uppercase", letterSpacing: "0.1em", margin: 0 }}>
             Knowledge Graph
           </h1>
-          <p style={{ ...mono, fontSize: "0.6rem", color: DIM, marginTop: 4, letterSpacing: "0.1em" }}>
+          <p style={{ ...mono, fontSize: "0.78rem", color: DIM, marginTop: 4, letterSpacing: "0.1em" }}>
             Connected intelligence — how Agent 306 thinks
           </p>
         </div>
@@ -157,7 +157,7 @@ export default function KnowledgeGraph() {
             onClick={() => clusterMutation.mutate()}
             disabled={clusterMutation.isPending}
             style={{
-              ...mono, fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "0.12em",
+              ...mono, fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.12em",
               background: ORANGE, color: "#0e0f10", border: "none",
               padding: "0.5rem 1rem", cursor: clusterMutation.isPending ? "wait" : "pointer",
               opacity: clusterMutation.isPending ? 0.6 : 1,
@@ -170,13 +170,13 @@ export default function KnowledgeGraph() {
 
       {/* ── Loading / Error ──────────────────────────────────────── */}
       {isLoading && (
-        <p style={{ ...mono, fontSize: "0.7rem", color: DIM, textAlign: "center", padding: "4rem 0" }}>
+        <p style={{ ...mono, fontSize: "0.88rem", color: DIM, textAlign: "center", padding: "4rem 0" }}>
           Loading knowledge graph...
         </p>
       )}
 
       {error && (
-        <p style={{ ...mono, fontSize: "0.7rem", color: RED, textAlign: "center", padding: "4rem 0" }}>
+        <p style={{ ...mono, fontSize: "0.88rem", color: RED, textAlign: "center", padding: "4rem 0" }}>
           Failed to load knowledge graph
         </p>
       )}
@@ -194,13 +194,13 @@ export default function KnowledgeGraph() {
           {/* ── Clusters Panel ─────────────────────────────────────── */}
           <section style={{ marginBottom: "1.5rem" }}>
             <div style={{ marginBottom: "0.75rem" }}>
-              <span style={{ ...mono, fontSize: "0.55rem", textTransform: "uppercase", letterSpacing: "0.15em", color: DIMMER }}>
+              <span style={{ ...mono, fontSize: "0.73rem", textTransform: "uppercase", letterSpacing: "0.15em", color: DIMMER }}>
                 Knowledge Clusters
               </span>
             </div>
             {clusters.length === 0 ? (
               <div style={{ border: `1px solid ${DIMMEST}`, padding: "1.5rem", textAlign: "center" }}>
-                <p style={{ ...mono, fontSize: "0.55rem", color: DIMMER }}>
+                <p style={{ ...mono, fontSize: "0.73rem", color: DIMMER }}>
                   No clusters yet. Click "Refresh Clusters" to generate.
                 </p>
               </div>
@@ -209,10 +209,10 @@ export default function KnowledgeGraph() {
                 {clusters.map((cluster, i) => (
                   <div key={i} style={{ border: `1px solid ${DIMMEST}`, padding: "1rem 1.25rem" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-                      <span style={{ ...mono, fontSize: "0.65rem", color: TEXT }}>
+                      <span style={{ ...mono, fontSize: "0.83rem", color: TEXT }}>
                         {cluster.theme}
                       </span>
-                      <span style={{ ...mono, fontSize: "0.5rem", color: DIM }}>
+                      <span style={{ ...mono, fontSize: "0.68rem", color: DIM }}>
                         {cluster.entryCount} entries
                       </span>
                     </div>
@@ -220,10 +220,10 @@ export default function KnowledgeGraph() {
                     {/* Maturity progress bar */}
                     <div style={{ marginBottom: "0.5rem" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                        <span style={{ ...mono, fontSize: "0.45rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                        <span style={{ ...mono, fontSize: "0.63rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.1em" }}>
                           Maturity
                         </span>
-                        <span style={{ ...mono, fontSize: "0.45rem", color: DIM }}>
+                        <span style={{ ...mono, fontSize: "0.63rem", color: DIM }}>
                           {(cluster.maturity * 100).toFixed(0)}%
                         </span>
                       </div>
@@ -240,11 +240,11 @@ export default function KnowledgeGraph() {
                     {/* Open questions */}
                     {cluster.openQuestions && cluster.openQuestions.length > 0 && (
                       <div style={{ marginTop: "0.5rem" }}>
-                        <span style={{ ...mono, fontSize: "0.45rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                        <span style={{ ...mono, fontSize: "0.63rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.1em" }}>
                           Open Questions
                         </span>
                         {cluster.openQuestions.slice(0, 3).map((q, qi) => (
-                          <p key={qi} style={{ ...mono, fontSize: "0.5rem", color: DIM, margin: "3px 0 0", lineHeight: 1.4, paddingLeft: 8 }}>
+                          <p key={qi} style={{ ...mono, fontSize: "0.68rem", color: DIM, margin: "3px 0 0", lineHeight: 1.4, paddingLeft: 8 }}>
                             {q}
                           </p>
                         ))}
@@ -252,7 +252,7 @@ export default function KnowledgeGraph() {
                     )}
 
                     {cluster.lastUpdated && (
-                      <p style={{ ...mono, fontSize: "0.4rem", color: DIMMER, marginTop: "0.5rem" }}>
+                      <p style={{ ...mono, fontSize: "0.58rem", color: DIMMER, marginTop: "0.5rem" }}>
                         Updated {timeAgo(cluster.lastUpdated)}
                       </p>
                     )}
@@ -265,16 +265,16 @@ export default function KnowledgeGraph() {
           {/* ── Contradictions Panel ───────────────────────────────── */}
           <section style={{ marginBottom: "1.5rem" }}>
             <div style={{ marginBottom: "0.75rem" }}>
-              <span style={{ ...mono, fontSize: "0.55rem", textTransform: "uppercase", letterSpacing: "0.15em", color: DIMMER }}>
+              <span style={{ ...mono, fontSize: "0.73rem", textTransform: "uppercase", letterSpacing: "0.15em", color: DIMMER }}>
                 Contradictions Detected
               </span>
-              <span style={{ ...mono, fontSize: "0.5rem", color: DIM, marginLeft: 8 }}>
+              <span style={{ ...mono, fontSize: "0.68rem", color: DIM, marginLeft: 8 }}>
                 {contradictions.length}
               </span>
             </div>
             {contradictions.length === 0 ? (
               <div style={{ border: `1px solid ${DIMMEST}`, padding: "1.5rem", textAlign: "center" }}>
-                <p style={{ ...mono, fontSize: "0.55rem", color: DIMMER }}>
+                <p style={{ ...mono, fontSize: "0.73rem", color: DIMMER }}>
                   No contradictions found. Knowledge base is consistent.
                 </p>
               </div>
@@ -287,32 +287,32 @@ export default function KnowledgeGraph() {
                   }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
                       <span style={{
-                        ...mono, fontSize: "0.45rem", textTransform: "uppercase", letterSpacing: "0.1em",
+                        ...mono, fontSize: "0.63rem", textTransform: "uppercase", letterSpacing: "0.1em",
                         color: RED, background: "rgba(248,113,113,0.1)", padding: "2px 6px",
                       }}>
                         {c.type || "contradicts"}
                       </span>
-                      <span style={{ ...mono, fontSize: "0.5rem", color: DIM }}>
+                      <span style={{ ...mono, fontSize: "0.68rem", color: DIM }}>
                         {(c.confidence * 100).toFixed(0)}% confidence
                       </span>
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                       <div>
-                        <p style={{ ...mono, fontSize: "0.55rem", color: TEXT, margin: 0, lineHeight: 1.4 }}>
+                        <p style={{ ...mono, fontSize: "0.73rem", color: TEXT, margin: 0, lineHeight: 1.4 }}>
                           {c.entry1.title}
                         </p>
                         {c.entry1.summary && (
-                          <p style={{ ...mono, fontSize: "0.45rem", color: DIM, marginTop: 3, lineHeight: 1.3 }}>
+                          <p style={{ ...mono, fontSize: "0.63rem", color: DIM, marginTop: 3, lineHeight: 1.3 }}>
                             {c.entry1.summary}
                           </p>
                         )}
                       </div>
                       <div>
-                        <p style={{ ...mono, fontSize: "0.55rem", color: TEXT, margin: 0, lineHeight: 1.4 }}>
+                        <p style={{ ...mono, fontSize: "0.73rem", color: TEXT, margin: 0, lineHeight: 1.4 }}>
                           {c.entry2.title}
                         </p>
                         {c.entry2.summary && (
-                          <p style={{ ...mono, fontSize: "0.45rem", color: DIM, marginTop: 3, lineHeight: 1.3 }}>
+                          <p style={{ ...mono, fontSize: "0.63rem", color: DIM, marginTop: 3, lineHeight: 1.3 }}>
                             {c.entry2.summary}
                           </p>
                         )}
@@ -327,7 +327,7 @@ export default function KnowledgeGraph() {
           {/* ── Perspective Generator ──────────────────────────────── */}
           <section style={{ border: `1px solid ${DIMMEST}`, padding: "1rem 1.25rem" }}>
             <div style={{ marginBottom: "0.75rem" }}>
-              <span style={{ ...mono, fontSize: "0.55rem", textTransform: "uppercase", letterSpacing: "0.15em", color: DIMMER }}>
+              <span style={{ ...mono, fontSize: "0.73rem", textTransform: "uppercase", letterSpacing: "0.15em", color: DIMMER }}>
                 Perspective Generator
               </span>
             </div>
@@ -343,9 +343,9 @@ export default function KnowledgeGraph() {
                   }
                 }}
                 style={{
-                  ...mono, fontSize: "0.6rem", flex: 1,
+                  ...mono, fontSize: "0.78rem", flex: 1,
                   padding: "0.5rem 0.75rem",
-                  background: "rgba(227,229,228,0.04)",
+                  background: "rgba(227,229,228,0.08)",
                   border: `1px solid ${DIMMEST}`,
                   color: TEXT, outline: "none",
                 }}
@@ -358,7 +358,7 @@ export default function KnowledgeGraph() {
                 }}
                 disabled={perspectiveMutation.isPending || !perspectiveTopic.trim()}
                 style={{
-                  ...mono, fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "0.12em",
+                  ...mono, fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.12em",
                   background: `${BLUE}18`, color: BLUE, border: `1px solid ${BLUE}66`,
                   padding: "0.5rem 1rem", cursor: perspectiveMutation.isPending ? "wait" : "pointer",
                   opacity: (perspectiveMutation.isPending || !perspectiveTopic.trim()) ? 0.6 : 1,
@@ -371,18 +371,18 @@ export default function KnowledgeGraph() {
             {perspectiveResult && (
               <div style={{
                 padding: "0.75rem 1rem",
-                background: "rgba(227,229,228,0.03)",
+                background: "rgba(227,229,228,0.06)",
                 borderLeft: `2px solid ${BLUE}`,
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
-                  <span style={{ ...mono, fontSize: "0.55rem", color: BLUE }}>
+                  <span style={{ ...mono, fontSize: "0.73rem", color: BLUE }}>
                     {perspectiveResult.topic}
                   </span>
-                  <span style={{ ...mono, fontSize: "0.45rem", color: DIM }}>
+                  <span style={{ ...mono, fontSize: "0.63rem", color: DIM }}>
                     {perspectiveResult.relatedEntries} related entries
                   </span>
                 </div>
-                <div style={{ ...mono, fontSize: "0.6rem", color: DIM, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                <div style={{ ...mono, fontSize: "0.78rem", color: DIM, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
                   {perspectiveResult.perspective}
                 </div>
               </div>
@@ -399,10 +399,10 @@ export default function KnowledgeGraph() {
 function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
     <div style={{ border: `1px solid ${DIMMEST}`, padding: "0.75rem 1rem", textAlign: "center" }}>
-      <p style={{ ...mono, fontSize: "1.3rem", color, margin: 0, fontWeight: 700 }}>
+      <p style={{ ...mono, fontSize: "1.5rem", color, margin: 0, fontWeight: 700 }}>
         {value}
       </p>
-      <p style={{ ...mono, fontSize: "0.45rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.12em", marginTop: 3 }}>
+      <p style={{ ...mono, fontSize: "0.63rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.12em", marginTop: 3 }}>
         {label}
       </p>
     </div>
@@ -417,7 +417,7 @@ function ActionButton({ onClick, color, disabled, children }: {
       onClick={onClick}
       disabled={disabled}
       style={{
-        ...mono, fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "0.12em",
+        ...mono, fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.12em",
         background: `${color}18`, color, border: `1px solid ${color}66`,
         padding: "0.5rem 1rem", cursor: disabled ? "wait" : "pointer",
         opacity: disabled ? 0.6 : 1,

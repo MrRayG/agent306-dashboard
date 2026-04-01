@@ -40,7 +40,7 @@ function RoomCard({ num, color, title, status, children }: {
   return (
     <div style={{
       background: "#141516",
-      border: "1px solid rgba(227,229,228,0.08)",
+      border: "1px solid rgba(227,229,228,0.15)",
       padding: "20px",
       display: "flex",
       flexDirection: "column",
@@ -51,16 +51,16 @@ function RoomCard({ num, color, title, status, children }: {
       {/* Room header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <div style={{ fontSize: "10px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.15em", marginBottom: "4px" }}>
+          <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.15em", marginBottom: "4px" }}>
             ROOM {num}
           </div>
-          <div style={{ fontSize: "15px", fontWeight: 700, color: color }}>
+          <div style={{ fontSize: "18px", fontWeight: 700, color: color }}>
             {title}
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
           <div style={{ width: 6, height: 6, borderRadius: "50%", background: statusColors[status], animation: status === "online" ? "pulse 2s infinite" : "none" }} />
-          <span style={{ fontSize: "9px", color: statusColors[status], fontFamily: "monospace", letterSpacing: "0.1em" }}>
+          <span style={{ fontSize: "12px", color: statusColors[status], fontFamily: "monospace", letterSpacing: "0.1em" }}>
             {statusLabel[status]}
           </span>
         </div>
@@ -73,9 +73,9 @@ function RoomCard({ num, color, title, status, children }: {
 function Stat({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
     <div>
-      <div style={{ fontSize: "10px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.1em", marginBottom: "2px" }}>{label}</div>
-      <div style={{ fontSize: "18px", fontWeight: 700, color: "#e3e5e4", lineHeight: 1 }}>{value}</div>
-      {sub && <div style={{ fontSize: "10px", color: "rgba(227,229,228,0.4)", marginTop: "2px" }}>{sub}</div>}
+      <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em", marginBottom: "2px" }}>{label}</div>
+      <div style={{ fontSize: "21px", fontWeight: 700, color: "#efefef", lineHeight: 1 }}>{value}</div>
+      {sub && <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.60)", marginTop: "2px" }}>{sub}</div>}
     </div>
   );
 }
@@ -87,8 +87,8 @@ export default function HousePage() {
   });
 
   if (isLoading) return (
-    <div style={{ padding: "40px", color: "#e3e5e4", fontFamily: "monospace", textAlign: "center" }}>
-      <div style={{ color: "#f97316", fontSize: "12px", letterSpacing: "0.2em" }}>LOADING THE HOUSE...</div>
+    <div style={{ padding: "40px", color: "#efefef", fontFamily: "monospace", textAlign: "center" }}>
+      <div style={{ color: "#f97316", fontSize: "15px", letterSpacing: "0.2em" }}>LOADING THE HOUSE...</div>
     </div>
   );
 
@@ -114,19 +114,19 @@ export default function HousePage() {
             style={{ width: 48, height: 48, imageRendering: "pixelated" }}
           />
           <div>
-            <div style={{ fontSize: "10px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.2em" }}>AGENT 306</div>
-            <h1 style={{ fontSize: "24px", fontWeight: 800, color: "#e3e5e4", margin: 0, letterSpacing: "-0.02em" }}>
+            <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.2em" }}>AGENT 306</div>
+            <h1 style={{ fontSize: "28px", fontWeight: 800, color: "#efefef", margin: 0, letterSpacing: "-0.02em" }}>
               The <span style={{ color: "#f97316" }}>House</span>
             </h1>
           </div>
           <div style={{ marginLeft: "auto", textAlign: "right" }}>
-            <div style={{ fontSize: "10px", color: "#4ade80", fontFamily: "monospace", letterSpacing: "0.1em" }}>● LIVE</div>
-            <div style={{ fontSize: "10px", color: "rgba(227,229,228,0.3)", fontFamily: "monospace" }}>
+            <div style={{ fontSize: "13px", color: "#4ade80", fontFamily: "monospace", letterSpacing: "0.1em" }}>● LIVE</div>
+            <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.48)", fontFamily: "monospace" }}>
               {timeAgo(data.generatedAt)}
             </div>
           </div>
         </div>
-        <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.5)", fontFamily: "monospace", fontStyle: "italic" }}>
+        <div style={{ fontSize: "15px", color: "rgba(227,229,228,0.68)", fontFamily: "monospace", fontStyle: "italic" }}>
           "{data.soul.coreSentence}"
         </div>
       </div>
@@ -143,25 +143,25 @@ export default function HousePage() {
         flexWrap: "wrap",
       }}>
         <div>
-          <div style={{ fontSize: "9px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.15em" }}>IDENTITY</div>
-          <div style={{ fontSize: "13px", fontWeight: 600, color: "#f97316" }}>{data.soul.name} · {data.soul.eth}</div>
+          <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.15em" }}>IDENTITY</div>
+          <div style={{ fontSize: "16px", fontWeight: 600, color: "#f97316" }}>{data.soul.name} · {data.soul.eth}</div>
         </div>
         <div>
-          <div style={{ fontSize: "9px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.15em" }}>VOICE PRINCIPLES</div>
-          <div style={{ fontSize: "13px", fontWeight: 600, color: "#e3e5e4" }}>{data.soul.principleCount} locked</div>
+          <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.15em" }}>VOICE PRINCIPLES</div>
+          <div style={{ fontSize: "16px", fontWeight: 600, color: "#efefef" }}>{data.soul.principleCount} locked</div>
         </div>
         <div>
-          <div style={{ fontSize: "9px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.15em" }}>SOUL VERSION</div>
-          <div style={{ fontSize: "13px", fontWeight: 600, color: "#e3e5e4" }}>v1 · permanent</div>
+          <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.15em" }}>SOUL VERSION</div>
+          <div style={{ fontSize: "16px", fontWeight: 600, color: "#efefef" }}>v1 · permanent</div>
         </div>
         <div style={{ marginLeft: "auto" }}>
-          <div style={{ fontSize: "9px", color: "#4ade80", fontFamily: "monospace", letterSpacing: "0.15em" }}>● MEMORY ACTIVE</div>
-          <div style={{ fontSize: "10px", color: "rgba(227,229,228,0.3)", fontFamily: "monospace" }}>Soul + Knowledge + Performance</div>
+          <div style={{ fontSize: "12px", color: "#4ade80", fontFamily: "monospace", letterSpacing: "0.15em" }}>● MEMORY ACTIVE</div>
+          <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.48)", fontFamily: "monospace" }}>Soul + Knowledge + Performance</div>
         </div>
       </div>
 
       {/* Room grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "1px", background: "rgba(227,229,228,0.06)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "1px", background: "rgba(227,229,228,0.12)" }}>
 
         {/* Room 01 — Broadcast */}
         <RoomCard num="01" color="#f97316" title="🎙 The Broadcast Room" status={data.broadcast.isLive ? "online" : "standby"}>
@@ -173,7 +173,7 @@ export default function HousePage() {
           </div>
           {data.broadcast.lastTweetUrl && (
             <a href={data.broadcast.lastTweetUrl} target="_blank" rel="noopener noreferrer"
-              style={{ fontSize: "10px", color: "#f97316", fontFamily: "monospace", textDecoration: "none", borderTop: "1px solid rgba(227,229,228,0.08)", paddingTop: "8px" }}>
+              style={{ fontSize: "13px", color: "#f97316", fontFamily: "monospace", textDecoration: "none", borderTop: "1px solid rgba(227,229,228,0.15)", paddingTop: "8px" }}>
               → VIEW LAST POST ↗
             </a>
           )}
@@ -189,7 +189,7 @@ export default function HousePage() {
             <Stat label="ARENA PREP" value={data.signals.arenaPrep} />
             <Stat label="PFP HOLDERS" value={data.signals.pfpHolders} />
           </div>
-          <div style={{ fontSize: "10px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", borderTop: "1px solid rgba(227,229,228,0.08)", paddingTop: "8px" }}>
+          <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", borderTop: "1px solid rgba(227,229,228,0.15)", paddingTop: "8px" }}>
             LAST REFRESH: {timeAgo(data.signals.lastRefreshed)}
           </div>
         </RoomCard>
@@ -202,12 +202,12 @@ export default function HousePage() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
             {data.library.researchFiles.map(f => (
-              <div key={f} style={{ fontSize: "10px", color: "rgba(227,229,228,0.5)", fontFamily: "monospace" }}>
+              <div key={f} style={{ fontSize: "13px", color: "rgba(227,229,228,0.68)", fontFamily: "monospace" }}>
                 ✓ {f.replace("research_", "").replace(".md", "").replace(/_/g, " ")}
               </div>
             ))}
           </div>
-          <div style={{ fontSize: "10px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", borderTop: "1px solid rgba(227,229,228,0.08)", paddingTop: "8px" }}>
+          <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", borderTop: "1px solid rgba(227,229,228,0.15)", paddingTop: "8px" }}>
             LAST INGESTED: {timeAgo(data.library.lastIngested)}
           </div>
         </RoomCard>
@@ -218,7 +218,7 @@ export default function HousePage() {
             <Stat label="FOLLOWING" value={data.diplomatic.followingCount} sub="confirmed holders" />
             <Stat label="REPLIES TRACKED" value={data.diplomatic.replyCount} />
           </div>
-          <div style={{ fontSize: "10px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", borderTop: "1px solid rgba(227,229,228,0.08)", paddingTop: "8px" }}>
+          <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", borderTop: "1px solid rgba(227,229,228,0.15)", paddingTop: "8px" }}>
             <div>CO-CREATORS: Community</div>
             <div style={{ marginTop: "4px" }}>LAST SYNC: {timeAgo(data.diplomatic.lastSync)}</div>
           </div>
@@ -231,26 +231,26 @@ export default function HousePage() {
             <Stat label="NEWS DISPATCH" value={timeUntil(data.studio.newsDispatchNextRun)} sub="next 8am ET" />
           </div>
           {/* Engine status rows */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "5px", borderTop: "1px solid rgba(227,229,228,0.08)", paddingTop: "8px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "5px", borderTop: "1px solid rgba(227,229,228,0.15)", paddingTop: "8px" }}>
             {[
               { label: "DEEP READ", value: "Mon 5PM ET · Auto", color: "#f97316", dot: true },
               { label: "COMMUNITY BOOST", value: "On-demand · v3", color: "#4ade80", dot: true },
               { label: "PODCAST STUDIO", value: "Guest queue open", color: "#a78bfa", dot: true },
               { label: "EPISODE ENGINE", value: "12h cycle · live", color: "#2dd4bf", dot: true },
               { label: "ACADEMY", value: "Tue/Thu/Sat 10am", color: "#fbbf24", dot: true },
-              { label: "SIGNAL BRIEF", value: "Mon/Wed/Fri 12pm", color: "#e3e5e4", dot: true },
+              { label: "SIGNAL BRIEF", value: "Mon/Wed/Fri 12pm", color: "#efefef", dot: true },
             ].map(e => (
               <div key={e.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                   {e.dot && <div style={{ width: 4, height: 4, borderRadius: "50%", background: e.color }} />}
-                  <span style={{ fontSize: "9px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.1em" }}>{e.label}</span>
+                  <span style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>{e.label}</span>
                 </div>
-                <span style={{ fontSize: "10px", color: e.color, fontFamily: "monospace" }}>{e.value}</span>
+                <span style={{ fontSize: "13px", color: e.color, fontFamily: "monospace" }}>{e.value}</span>
               </div>
             ))}
           </div>
           {data.studio.articlesPublished !== undefined && (
-            <div style={{ borderTop: "1px solid rgba(227,229,228,0.08)", paddingTop: "6px", marginTop: "4px" }}>
+            <div style={{ borderTop: "1px solid rgba(227,229,228,0.15)", paddingTop: "6px", marginTop: "4px" }}>
               <Stat label="ARTICLES PUBLISHED" value={data.studio.articlesPublished} sub={data.studio.lastArticle ? `Last: ${data.studio.lastArticle}` : "None yet"} />
             </div>
           )}
@@ -260,25 +260,25 @@ export default function HousePage() {
         <RoomCard num="06" color="#f87171" title="🔒 The Vault" status="online">
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: "11px", color: "rgba(227,229,228,0.5)", fontFamily: "monospace" }}>ENS</span>
-              <span style={{ fontSize: "12px", color: "#f97316", fontFamily: "monospace" }}>{data.vault.ethName}</span>
+              <span style={{ fontSize: "14px", color: "rgba(227,229,228,0.68)", fontFamily: "monospace" }}>ENS</span>
+              <span style={{ fontSize: "15px", color: "#f97316", fontFamily: "monospace" }}>{data.vault.ethName}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: "11px", color: "rgba(227,229,228,0.5)", fontFamily: "monospace" }}>EXPIRY</span>
-              <span style={{ fontSize: "12px", color: "#e3e5e4", fontFamily: "monospace" }}>{data.vault.ethExpiry}</span>
+              <span style={{ fontSize: "14px", color: "rgba(227,229,228,0.68)", fontFamily: "monospace" }}>EXPIRY</span>
+              <span style={{ fontSize: "15px", color: "#efefef", fontFamily: "monospace" }}>{data.vault.ethExpiry}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: "11px", color: "rgba(227,229,228,0.5)", fontFamily: "monospace" }}>HOSTING</span>
-              <span style={{ fontSize: "12px", color: "#4ade80", fontFamily: "monospace" }}>Railway ● {data.vault.railwayStatus}</span>
+              <span style={{ fontSize: "14px", color: "rgba(227,229,228,0.68)", fontFamily: "monospace" }}>HOSTING</span>
+              <span style={{ fontSize: "15px", color: "#4ade80", fontFamily: "monospace" }}>Railway ● {data.vault.railwayStatus}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: "11px", color: "rgba(227,229,228,0.5)", fontFamily: "monospace" }}>DATA VOLUME</span>
-              <span style={{ fontSize: "12px", color: "#e3e5e4", fontFamily: "monospace" }}>{data.vault.dataVolume}</span>
+              <span style={{ fontSize: "14px", color: "rgba(227,229,228,0.68)", fontFamily: "monospace" }}>DATA VOLUME</span>
+              <span style={{ fontSize: "15px", color: "#efefef", fontFamily: "monospace" }}>{data.vault.dataVolume}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: "11px", color: "rgba(227,229,228,0.5)", fontFamily: "monospace" }}>REPO</span>
+              <span style={{ fontSize: "14px", color: "rgba(227,229,228,0.68)", fontFamily: "monospace" }}>REPO</span>
               <a href={`https://github.com/${data.vault.githubRepo}`} target="_blank" rel="noopener noreferrer"
-                style={{ fontSize: "11px", color: "#a78bfa", fontFamily: "monospace", textDecoration: "none" }}>
+                style={{ fontSize: "14px", color: "#a78bfa", fontFamily: "monospace", textDecoration: "none" }}>
                 {data.vault.githubRepo} ↗
               </a>
             </div>
@@ -293,22 +293,22 @@ export default function HousePage() {
             <Stat label="AVG LIKES" value={data.lab.avgEngagement > 0 ? Math.round(data.lab.avgEngagement) : "—"} />
           </div>
           {data.lab.recentLessons.length > 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: "6px", borderTop: "1px solid rgba(227,229,228,0.08)", paddingTop: "8px" }}>
-              <div style={{ fontSize: "9px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.1em" }}>RECENT LESSONS</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px", borderTop: "1px solid rgba(227,229,228,0.15)", paddingTop: "8px" }}>
+              <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>RECENT LESSONS</div>
               {data.lab.recentLessons.slice(0, 3).map((l: any) => (
-                <div key={l.episodeId} style={{ fontSize: "10px", color: "rgba(227,229,228,0.6)" }}>
+                <div key={l.episodeId} style={{ fontSize: "13px", color: "rgba(227,229,228,0.75)" }}>
                   EP{l.episodeId} · {l.score}/10 · {l.likes} likes
-                  {l.lessons[0] && <span style={{ color: "rgba(227,229,228,0.4)" }}> — {l.lessons[0]}</span>}
+                  {l.lessons[0] && <span style={{ color: "rgba(227,229,228,0.60)" }}> — {l.lessons[0]}</span>}
                 </div>
               ))}
             </div>
           ) : (
-            <div style={{ fontSize: "11px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace" }}>
+            <div style={{ fontSize: "14px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace" }}>
               Tracking begins after first post. Check back in 1h.
             </div>
           )}
           {data.lab.bestTopics.length > 0 && (
-            <div style={{ fontSize: "10px", color: "#4ade80", fontFamily: "monospace" }}>
+            <div style={{ fontSize: "13px", color: "#4ade80", fontFamily: "monospace" }}>
               TOP: {data.lab.bestTopics.slice(0, 3).join(" · ")}
             </div>
           )}
@@ -320,8 +320,8 @@ export default function HousePage() {
             <Stat label="DAYS TO ARENA" value={data.roadAhead.daysToArena} sub={data.roadAhead.arenaDate} />
             <Stat label="NFC SUMMIT" value="June 2026" sub={data.roadAhead.nfcSummit} />
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "5px", borderTop: "1px solid rgba(227,229,228,0.08)", paddingTop: "8px" }}>
-            <div style={{ fontSize: "9px", color: "rgba(227,229,228,0.3)", fontFamily: "monospace", letterSpacing: "0.1em", marginBottom: "4px" }}>PHASE 1 · CANVAS — ACTIVE</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "5px", borderTop: "1px solid rgba(227,229,228,0.15)", paddingTop: "8px" }}>
+            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.48)", fontFamily: "monospace", letterSpacing: "0.1em", marginBottom: "4px" }}>PHASE 1 · CANVAS — ACTIVE</div>
             {[
               { id: "canvas", label: "Canvas Phase — LIVE", done: true },
               { id: "following", label: "Following Sync — LIVE", done: true },
@@ -335,10 +335,10 @@ export default function HousePage() {
             ].map(item => (
               <div key={item.id} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <div style={{
-                  width: 10, height: 10, border: `1px solid ${item.done ? "#4ade80" : "rgba(227,229,228,0.3)"}`,
+                  width: 10, height: 10, border: `1px solid ${item.done ? "#4ade80" : "rgba(227,229,228,0.48)"}`,
                   background: item.done ? "#4ade80" : "transparent", flexShrink: 0,
                 }} />
-                <span style={{ fontSize: "10px", color: item.done ? "#4ade80" : "rgba(227,229,228,0.5)", fontFamily: "monospace" }}>
+                <span style={{ fontSize: "13px", color: item.done ? "#4ade80" : "rgba(227,229,228,0.68)", fontFamily: "monospace" }}>
                   {item.label}
                 </span>
               </div>
@@ -348,7 +348,7 @@ export default function HousePage() {
 
       </div>
 
-      <div style={{ marginTop: "16px", fontSize: "10px", color: "rgba(227,229,228,0.2)", fontFamily: "monospace", textAlign: "center" }}>
+      <div style={{ marginTop: "16px", fontSize: "13px", color: "rgba(227,229,228,0.35)", fontFamily: "monospace", textAlign: "center" }}>
         THE HOUSE · Agent 306 · {data.soul.eth} · Refreshes every 30s
       </div>
     </div>

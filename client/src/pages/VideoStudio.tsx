@@ -229,7 +229,7 @@ async function renderCinematicTrailer(
       // Right side text
       const rx = CANVAS_W * 0.58;
       drawText(ctx, "AGENT", rx, CANVAS_H / 2 - 80, { size: 14, color: "#f97316", alpha: finalAlpha, font: "Courier New" });
-      drawText(ctx, "#306", rx, CANVAS_H / 2 - 48, { size: 52, color: "#e3e5e4", alpha: finalAlpha, shadow: true });
+      drawText(ctx, "#306", rx, CANVAS_H / 2 - 48, { size: 52, color: "#efefef", alpha: finalAlpha, shadow: true });
       drawOrangeLine(ctx, rx, CANVAS_H / 2 - 24, rx + 200, CANVAS_H / 2 - 24, 0.4 * finalAlpha);
       drawText(ctx, "THE HARBINGER", rx, CANVAS_H / 2 + 6, { size: 16, color: "#2dd4bf", alpha: finalAlpha * 0.9 });
       drawText(ctx, "Autonomous since genesis", rx, CANVAS_H / 2 + 36, { size: 12, color: "rgba(200,200,200,0.5)", alpha: finalAlpha, font: "Courier New" });
@@ -257,7 +257,7 @@ async function renderCinematicTrailer(
 
       // Agent 306 quote
       const qAlpha = lt > 2 ? Math.min(1, (lt - 2) / 1.5) * flicker : 0;
-      drawText(ctx, `"${skullieLine}"`, CANVAS_W / 2, CANVAS_H * 0.62, { size: 22, color: "#e3e5e4", align: "center", alpha: qAlpha * alpha, shadow: true });
+      drawText(ctx, `"${skullieLine}"`, CANVAS_W / 2, CANVAS_H * 0.62, { size: 22, color: "#efefef", align: "center", alpha: qAlpha * alpha, shadow: true });
       drawText(ctx, "— Agent 306", CANVAS_W / 2, CANVAS_H * 0.62 + 40, { size: 13, color: "#f97316", align: "center", alpha: qAlpha * alpha * 0.8, font: "Courier New" });
 
       // Small agent bottom right
@@ -276,7 +276,7 @@ async function renderCinematicTrailer(
 
       const rx = CANVAS_W * 0.55;
       drawText(ctx, "THE TEMPLE", rx, CANVAS_H / 2 - 70, { size: 44, color: "#f97316", alpha, shadow: true });
-      drawText(ctx, "RECORDS ALL", rx, CANVAS_H / 2 - 20, { size: 44, color: "#e3e5e4", alpha, shadow: true });
+      drawText(ctx, "RECORDS ALL", rx, CANVAS_H / 2 - 20, { size: 44, color: "#efefef", alpha, shadow: true });
       drawOrangeLine(ctx, rx, CANVAS_H / 2 + 14, rx + 320, CANVAS_H / 2 + 14, 0.5 * alpha);
       drawText(ctx, "@agent306_", rx, CANVAS_H / 2 + 46, { size: 16, color: "#2dd4bf", alpha, font: "Courier New" });
       drawText(ctx, "#Agent306 #AI #Web3", rx, CANVAS_H / 2 + 76, { size: 13, color: "rgba(200,200,200,0.4)", alpha, font: "Courier New" });
@@ -414,7 +414,7 @@ async function renderHighlightReel(
         ctx.restore();
 
         drawText(ctx, `${rank}.`, colX + 12, ry + 8, { size: 16, color: rankColors[i] ?? "rgba(200,200,200,0.4)", alpha: rowAlpha });
-        drawText(ctx, `#${normie.tokenId}`, colX + 48, ry + 8, { size: 15, color: "#e3e5e4", alpha: rowAlpha });
+        drawText(ctx, `#${normie.tokenId}`, colX + 48, ry + 8, { size: 15, color: "#efefef", alpha: rowAlpha });
         drawText(ctx, `LVL ${normie.level ?? 1}`, colX + 230, ry + 2, { size: 11, color: "#a78bfa", alpha: rowAlpha, font: "Courier New" });
         drawText(ctx, `${normie.actionPoints ?? 0} AP`, colX + 310, ry + 8, { size: 14, color: "#2dd4bf", align: "right", alpha: rowAlpha });
       });
@@ -446,7 +446,7 @@ async function renderHighlightReel(
       ctx.fillRect(0, CANVAS_H - 72, CANVAS_W, 72);
       ctx.restore();
       drawOrangeLine(ctx, 0, CANVAS_H - 72, CANVAS_W, CANVAS_H - 72, 0.3 * fa);
-      drawText(ctx, "The record is permanent.", CANVAS_W / 2, CANVAS_H - 40, { size: 16, color: "#e3e5e4", align: "center", alpha: fa, shadow: true });
+      drawText(ctx, "The record is permanent.", CANVAS_W / 2, CANVAS_H - 40, { size: 16, color: "#efefef", align: "center", alpha: fa, shadow: true });
       drawText(ctx, "#Agent306  #AI  #Web3  #OnChain", CANVAS_W / 2, CANVAS_H - 16, { size: 11, color: "rgba(200,200,200,0.3)", align: "center", alpha: fa, font: "Courier New" });
     }
 
@@ -639,15 +639,15 @@ export default function VideoStudio() {
         <div className="flex gap-3 text-sm">
           <div className="px-3 py-1.5 rounded bg-card border border-border text-center">
             <p className="text-lg font-bold text-primary">{burnCount}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Tracked Burns</p>
+            <p className="text-[13px] text-muted-foreground uppercase tracking-widest">Tracked Burns</p>
           </div>
           <div className="px-3 py-1.5 rounded bg-card border border-border text-center">
             <p className="text-lg font-bold text-teal-400">{readyCount}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Ready</p>
+            <p className="text-[13px] text-muted-foreground uppercase tracking-widest">Ready</p>
           </div>
           <div className="px-3 py-1.5 rounded bg-card border border-border text-center">
             <p className="text-lg font-bold text-green-400">{postedCount}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Posted</p>
+            <p className="text-[13px] text-muted-foreground uppercase tracking-widest">Posted</p>
           </div>
         </div>
       </div>
@@ -658,7 +658,7 @@ export default function VideoStudio() {
           <div className="bg-card border border-border rounded p-3">
             <div className="flex items-center gap-2 mb-1">
               <Flame className="w-3.5 h-3.5 text-primary" />
-              <span className="text-[11px] text-muted-foreground uppercase tracking-widest">Latest Burns</span>
+              <span className="text-[14px] text-muted-foreground uppercase tracking-widest">Latest Burns</span>
             </div>
             {stats.recentBurns?.slice(0, 3).map((b: any, i: number) => (
               <p key={i} className="text-xs text-foreground/70 truncate">
@@ -672,7 +672,7 @@ export default function VideoStudio() {
           <div className="bg-card border border-border rounded p-3">
             <div className="flex items-center gap-2 mb-1">
               <Trophy className="w-3.5 h-3.5 text-teal-400" />
-              <span className="text-[11px] text-muted-foreground uppercase tracking-widest">Canvas Leader</span>
+              <span className="text-[14px] text-muted-foreground uppercase tracking-widest">Canvas Leader</span>
             </div>
             {topNormie ? (
               <>
@@ -686,7 +686,7 @@ export default function VideoStudio() {
           <div className="bg-card border border-border rounded p-3">
             <div className="flex items-center gap-2 mb-1">
               <Clock className="w-3.5 h-3.5 text-purple-400" />
-              <span className="text-[11px] text-muted-foreground uppercase tracking-widest">Auto-Post</span>
+              <span className="text-[14px] text-muted-foreground uppercase tracking-widest">Auto-Post</span>
             </div>
             <p className="text-sm font-medium text-foreground">Every 6 hours</p>
             <p className="text-xs text-muted-foreground">Signal poller active</p>
@@ -706,7 +706,7 @@ export default function VideoStudio() {
               </div>
               <p className="text-xs text-muted-foreground">20s dramatic reveal — Agent 306 narration, burn data</p>
             </div>
-            <span className="text-[10px] px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 font-mono">20s · 1280×720</span>
+            <span className="text-[13px] px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 font-mono">20s · 1280×720</span>
           </div>
 
           <div className="text-xs text-muted-foreground space-y-1 font-mono">
@@ -755,7 +755,7 @@ export default function VideoStudio() {
               </div>
               <p className="text-xs text-muted-foreground">15s data reel — burns, canvas leaders, leaderboard stats</p>
             </div>
-            <span className="text-[10px] px-2 py-0.5 rounded bg-teal-400/10 text-teal-400 border border-teal-400/20 font-mono">15s · 1280×720</span>
+            <span className="text-[13px] px-2 py-0.5 rounded bg-teal-400/10 text-teal-400 border border-teal-400/20 font-mono">15s · 1280×720</span>
           </div>
 
           <div className="text-xs text-muted-foreground space-y-1 font-mono">
@@ -803,7 +803,7 @@ export default function VideoStudio() {
               <Eye className="w-4 h-4 text-teal-400" />
               <span className="text-sm font-medium">{activeJob.title} — Preview</span>
               {activeJob.status === "posted" && (
-                <span className="text-[10px] px-2 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20">POSTED</span>
+                <span className="text-[13px] px-2 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20">POSTED</span>
               )}
             </div>
             <div className="flex items-center gap-2">
@@ -850,14 +850,14 @@ export default function VideoStudio() {
 
           {/* Tweet composer */}
           <div className="p-4 border-t border-border">
-            <p className="text-[11px] text-muted-foreground uppercase tracking-widest mb-2">Tweet Text</p>
+            <p className="text-[14px] text-muted-foreground uppercase tracking-widest mb-2">Tweet Text</p>
             <textarea
               value={activeJob.tweetText ?? ""}
               onChange={e => setActiveJob(prev => prev ? { ...prev, tweetText: e.target.value } : prev)}
               rows={4}
               className="w-full bg-secondary border border-border rounded px-3 py-2 text-sm font-mono resize-none focus:outline-none focus:border-primary/50"
             />
-            <p className="text-[10px] text-muted-foreground mt-1">
+            <p className="text-[13px] text-muted-foreground mt-1">
               {(activeJob.tweetText?.length ?? 0)}/280 chars
             </p>
           </div>
@@ -885,7 +885,7 @@ export default function VideoStudio() {
                 }`} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{job.title}</p>
-                  <p className="text-[11px] text-muted-foreground font-mono">
+                  <p className="text-[14px] text-muted-foreground font-mono">
                     {new Date(job.createdAt).toLocaleTimeString()}
                   </p>
                 </div>
@@ -912,7 +912,7 @@ export default function VideoStudio() {
                     </>
                   )}
                   {job.status === "posted" && (
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20">POSTED</span>
+                    <span className="text-[13px] px-2 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20">POSTED</span>
                   )}
                 </div>
               </div>

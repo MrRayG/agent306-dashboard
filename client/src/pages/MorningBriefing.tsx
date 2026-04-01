@@ -11,9 +11,9 @@ const PURPLE = "#a78bfa";
 const YELLOW = "#fbbf24";
 const RED = "#f87171";
 const TEAL = "#2dd4bf";
-const DIM = "rgba(227,229,228,0.35)";
-const DIMMER = "rgba(227,229,228,0.18)";
-const DIMMEST = "rgba(227,229,228,0.07)";
+const DIM = "rgba(227,229,228,0.55)";
+const DIMMER = "rgba(227,229,228,0.30)";
+const DIMMEST = "rgba(227,229,228,0.14)";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface HypothesisUpdate {
@@ -133,19 +133,19 @@ export default function MorningBriefing() {
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem" }}>
         <div>
-          <h1 style={{ ...mono, fontSize: "1.1rem", color: "#e3e5e4", textTransform: "uppercase", letterSpacing: "0.1em", margin: 0 }}>
+          <h1 style={{ ...mono, fontSize: "1.3rem", color: "#efefef", textTransform: "uppercase", letterSpacing: "0.1em", margin: 0 }}>
             Morning Briefing
           </h1>
-          <p style={{ ...mono, fontSize: "0.6rem", color: DIM, marginTop: 4, letterSpacing: "0.1em" }}>
+          <p style={{ ...mono, fontSize: "0.78rem", color: DIM, marginTop: 4, letterSpacing: "0.1em" }}>
             Agent 306 Daily Intelligence Cycle
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           <div style={{ textAlign: "right" }}>
-            <p style={{ ...mono, fontSize: "0.55rem", color: DIM, margin: 0 }}>
+            <p style={{ ...mono, fontSize: "0.73rem", color: DIM, margin: 0 }}>
               Last: {data?.lastRunAt ? timeAgo(data.lastRunAt) : "never"}
             </p>
-            <p style={{ ...mono, fontSize: "0.55rem", color: DIM, margin: 0 }}>
+            <p style={{ ...mono, fontSize: "0.73rem", color: DIM, margin: 0 }}>
               Next: {data?.nextRunAt ? fmtDate(data.nextRunAt) : "—"}
             </p>
           </div>
@@ -154,7 +154,7 @@ export default function MorningBriefing() {
             disabled={runMutation.isPending}
             style={{
               ...mono,
-              fontSize: "0.6rem",
+              fontSize: "0.78rem",
               textTransform: "uppercase",
               letterSpacing: "0.12em",
               background: ORANGE,
@@ -171,23 +171,23 @@ export default function MorningBriefing() {
       </div>
 
       {isLoading && (
-        <p style={{ ...mono, fontSize: "0.7rem", color: DIM, textAlign: "center", padding: "4rem 0" }}>
+        <p style={{ ...mono, fontSize: "0.88rem", color: DIM, textAlign: "center", padding: "4rem 0" }}>
           Loading briefing...
         </p>
       )}
 
       {error && (
-        <p style={{ ...mono, fontSize: "0.7rem", color: RED, textAlign: "center", padding: "4rem 0" }}>
+        <p style={{ ...mono, fontSize: "0.88rem", color: RED, textAlign: "center", padding: "4rem 0" }}>
           Failed to load briefing
         </p>
       )}
 
       {!isLoading && !briefing && (
         <div style={{ textAlign: "center", padding: "4rem 0" }}>
-          <p style={{ ...mono, fontSize: "0.8rem", color: DIM, marginBottom: "0.5rem" }}>
+          <p style={{ ...mono, fontSize: "0.98rem", color: DIM, marginBottom: "0.5rem" }}>
             No briefing yet.
           </p>
-          <p style={{ ...mono, fontSize: "0.6rem", color: DIMMER }}>
+          <p style={{ ...mono, fontSize: "0.78rem", color: DIMMER }}>
             Click "Run Now" to generate the first daily briefing, or wait for the 6am ET auto-run.
           </p>
         </div>
@@ -205,7 +205,7 @@ export default function MorningBriefing() {
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
               <span style={{
                 ...mono,
-                fontSize: "0.5rem",
+                fontSize: "0.68rem",
                 textTransform: "uppercase",
                 letterSpacing: "0.18em",
                 color: PRIORITY_STYLE[briefing.todaysAction.priority]?.color ?? ORANGE,
@@ -214,14 +214,14 @@ export default function MorningBriefing() {
               }}>
                 {PRIORITY_STYLE[briefing.todaysAction.priority]?.label ?? "ACTION"}
               </span>
-              <span style={{ ...mono, fontSize: "0.5rem", color: DIM, textTransform: "uppercase", letterSpacing: "0.15em" }}>
+              <span style={{ ...mono, fontSize: "0.68rem", color: DIM, textTransform: "uppercase", letterSpacing: "0.15em" }}>
                 Today&apos;s Recommended Action
               </span>
             </div>
             <p style={{
               ...mono,
-              fontSize: "0.9rem",
-              color: "#e3e5e4",
+              fontSize: "1.1rem",
+              color: "#efefef",
               lineHeight: 1.5,
               margin: 0,
             }}>
@@ -229,7 +229,7 @@ export default function MorningBriefing() {
             </p>
             <p style={{
               ...mono,
-              fontSize: "0.65rem",
+              fontSize: "0.83rem",
               color: DIM,
               marginTop: "0.5rem",
               lineHeight: 1.5,
@@ -252,12 +252,12 @@ export default function MorningBriefing() {
                     borderBottom: i < briefing.hypothesisUpdates.length - 1 ? `1px solid ${DIMMEST}` : undefined,
                   }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                      <span style={{ ...mono, fontSize: "0.65rem", color: "#e3e5e4" }}>
+                      <span style={{ ...mono, fontSize: "0.83rem", color: "#efefef" }}>
                         {h.title}
                       </span>
                       <span style={{
                         ...mono,
-                        fontSize: "0.85rem",
+                        fontSize: "1.03rem",
                         color: CONFIDENCE_ICON[h.confidence]?.color ?? DIM,
                         fontWeight: 700,
                       }}>
@@ -266,19 +266,19 @@ export default function MorningBriefing() {
                     </div>
                     <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
                       <span style={{
-                        ...mono, fontSize: "0.5rem", textTransform: "uppercase",
+                        ...mono, fontSize: "0.68rem", textTransform: "uppercase",
                         color: DIMMER, letterSpacing: "0.1em",
                       }}>
                         {h.status}
                       </span>
                       <span style={{
-                        ...mono, fontSize: "0.5rem",
+                        ...mono, fontSize: "0.68rem",
                         color: h.daysRemaining <= 3 ? RED : h.daysRemaining <= 7 ? YELLOW : DIM,
                       }}>
                         {h.daysRemaining >= 0 ? `${h.daysRemaining}d left` : "no deadline"}
                       </span>
                     </div>
-                    <p style={{ ...mono, fontSize: "0.55rem", color: DIM, marginTop: 3, lineHeight: 1.4 }}>
+                    <p style={{ ...mono, fontSize: "0.73rem", color: DIM, marginTop: 3, lineHeight: 1.4 }}>
                       {h.reasoning}
                     </p>
                   </div>
@@ -297,11 +297,11 @@ export default function MorningBriefing() {
                     borderBottom: i < briefing.researchCompletions.length - 1 ? `1px solid ${DIMMEST}` : undefined,
                   }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                      <span style={{ ...mono, fontSize: "0.65rem", color: "#e3e5e4" }}>
+                      <span style={{ ...mono, fontSize: "0.83rem", color: "#efefef" }}>
                         {r.title}
                       </span>
                       <span style={{
-                        ...mono, fontSize: "0.45rem", textTransform: "uppercase", letterSpacing: "0.1em",
+                        ...mono, fontSize: "0.63rem", textTransform: "uppercase", letterSpacing: "0.1em",
                         color: ACTION_STYLE[r.recommendedAction]?.color ?? DIM,
                         background: ACTION_STYLE[r.recommendedAction]?.bg ?? DIMMEST,
                         padding: "2px 6px",
@@ -309,11 +309,11 @@ export default function MorningBriefing() {
                         {r.recommendedAction.replace("_", " ")}
                       </span>
                     </div>
-                    <p style={{ ...mono, fontSize: "0.55rem", color: DIM, lineHeight: 1.4, margin: "2px 0" }}>
+                    <p style={{ ...mono, fontSize: "0.73rem", color: DIM, lineHeight: 1.4, margin: "2px 0" }}>
                       {r.summary}
                     </p>
                     {r.knowledgeGained && (
-                      <p style={{ ...mono, fontSize: "0.5rem", color: TEAL, marginTop: 3 }}>
+                      <p style={{ ...mono, fontSize: "0.68rem", color: TEAL, marginTop: 3 }}>
                         KB: {r.knowledgeGained}
                       </p>
                     )}
@@ -333,12 +333,12 @@ export default function MorningBriefing() {
                     borderBottom: i < briefing.goalProgress.length - 1 ? `1px solid ${DIMMEST}` : undefined,
                   }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
-                      <span style={{ ...mono, fontSize: "0.65rem", color: "#e3e5e4" }}>
+                      <span style={{ ...mono, fontSize: "0.83rem", color: "#efefef" }}>
                         {g.goalTitle}
                       </span>
                       {g.staleDays >= 3 && (
                         <span style={{
-                          ...mono, fontSize: "0.45rem", color: RED,
+                          ...mono, fontSize: "0.63rem", color: RED,
                           background: "rgba(248,113,113,0.1)", padding: "2px 6px",
                           textTransform: "uppercase", letterSpacing: "0.1em",
                         }}>
@@ -346,23 +346,23 @@ export default function MorningBriefing() {
                         </span>
                       )}
                     </div>
-                    <div style={{ ...mono, fontSize: "0.5rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 3 }}>
+                    <div style={{ ...mono, fontSize: "0.68rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 3 }}>
                       {g.status}
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
                       <div>
-                        <span style={{ ...mono, fontSize: "0.45rem", color: DIMMER, textTransform: "uppercase" }}>
+                        <span style={{ ...mono, fontSize: "0.63rem", color: DIMMER, textTransform: "uppercase" }}>
                           Yesterday
                         </span>
-                        <p style={{ ...mono, fontSize: "0.55rem", color: DIM, margin: "2px 0 0", lineHeight: 1.3 }}>
+                        <p style={{ ...mono, fontSize: "0.73rem", color: DIM, margin: "2px 0 0", lineHeight: 1.3 }}>
                           {g.yesterday}
                         </p>
                       </div>
                       <div>
-                        <span style={{ ...mono, fontSize: "0.45rem", color: DIMMER, textTransform: "uppercase" }}>
+                        <span style={{ ...mono, fontSize: "0.63rem", color: DIMMER, textTransform: "uppercase" }}>
                           Today
                         </span>
-                        <p style={{ ...mono, fontSize: "0.55rem", color: "#e3e5e4", margin: "2px 0 0", lineHeight: 1.3 }}>
+                        <p style={{ ...mono, fontSize: "0.73rem", color: "#efefef", margin: "2px 0 0", lineHeight: 1.3 }}>
                           {g.today}
                         </p>
                       </div>
@@ -374,10 +374,10 @@ export default function MorningBriefing() {
                         background: "rgba(249,115,22,0.08)",
                         borderLeft: `2px solid ${ORANGE}`,
                       }}>
-                        <span style={{ ...mono, fontSize: "0.45rem", color: ORANGE, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                        <span style={{ ...mono, fontSize: "0.63rem", color: ORANGE, textTransform: "uppercase", letterSpacing: "0.1em" }}>
                           Dev Ask
                         </span>
-                        <p style={{ ...mono, fontSize: "0.55rem", color: "#e3e5e4", margin: "2px 0 0", lineHeight: 1.3 }}>
+                        <p style={{ ...mono, fontSize: "0.73rem", color: "#efefef", margin: "2px 0 0", lineHeight: 1.3 }}>
                           {g.devAsk}
                         </p>
                       </div>
@@ -391,23 +391,23 @@ export default function MorningBriefing() {
             <Card title="Knowledge Base">
               <div style={{ display: "flex", gap: "2rem", padding: "0.5rem 0" }}>
                 <div>
-                  <p style={{ ...mono, fontSize: "1.5rem", color: GREEN, margin: 0, fontWeight: 700 }}>
+                  <p style={{ ...mono, fontSize: "1.75rem", color: GREEN, margin: 0, fontWeight: 700 }}>
                     {briefing.kbStats.active}
                   </p>
-                  <p style={{ ...mono, fontSize: "0.45rem", color: DIM, textTransform: "uppercase", letterSpacing: "0.12em" }}>
+                  <p style={{ ...mono, fontSize: "0.63rem", color: DIM, textTransform: "uppercase", letterSpacing: "0.12em" }}>
                     Active
                   </p>
                 </div>
                 <div>
-                  <p style={{ ...mono, fontSize: "1.5rem", color: DIMMER, margin: 0, fontWeight: 700 }}>
+                  <p style={{ ...mono, fontSize: "1.75rem", color: DIMMER, margin: 0, fontWeight: 700 }}>
                     {briefing.kbStats.archived}
                   </p>
-                  <p style={{ ...mono, fontSize: "0.45rem", color: DIM, textTransform: "uppercase", letterSpacing: "0.12em" }}>
+                  <p style={{ ...mono, fontSize: "0.63rem", color: DIM, textTransform: "uppercase", letterSpacing: "0.12em" }}>
                     Archived
                   </p>
                 </div>
               </div>
-              <p style={{ ...mono, fontSize: "0.5rem", color: DIMMER, marginTop: 4 }}>
+              <p style={{ ...mono, fontSize: "0.68rem", color: DIMMER, marginTop: 4 }}>
                 Briefing generated {fmtDate(briefing.runAt)}
               </p>
             </Card>
@@ -431,7 +431,7 @@ export default function MorningBriefing() {
                 border: "none",
                 cursor: "pointer",
                 color: DIM,
-                fontSize: "0.6rem",
+                fontSize: "0.78rem",
                 textTransform: "uppercase",
                 letterSpacing: "0.12em",
               }}
@@ -444,17 +444,17 @@ export default function MorningBriefing() {
                   </span>
                 )}
               </span>
-              <span style={{ fontSize: "0.8rem" }}>{archiveOpen ? "\u25B4" : "\u25BE"}</span>
+              <span style={{ fontSize: "0.98rem" }}>{archiveOpen ? "\u25B4" : "\u25BE"}</span>
             </button>
             {archiveOpen && (
               <div style={{ padding: "0 1rem 0.75rem" }}>
                 {briefing.archiveReport.resolved.length > 0 && (
                   <div style={{ marginBottom: "0.5rem" }}>
-                    <p style={{ ...mono, fontSize: "0.5rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 4 }}>
+                    <p style={{ ...mono, fontSize: "0.68rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 4 }}>
                       Resolved
                     </p>
                     {briefing.archiveReport.resolved.map((r, i) => (
-                      <p key={i} style={{ ...mono, fontSize: "0.55rem", color: DIM, margin: "2px 0", paddingLeft: 8 }}>
+                      <p key={i} style={{ ...mono, fontSize: "0.73rem", color: DIM, margin: "2px 0", paddingLeft: 8 }}>
                         {r}
                       </p>
                     ))}
@@ -462,18 +462,18 @@ export default function MorningBriefing() {
                 )}
                 {briefing.archiveReport.archived.length > 0 && (
                   <div>
-                    <p style={{ ...mono, fontSize: "0.5rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 4 }}>
+                    <p style={{ ...mono, fontSize: "0.68rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 4 }}>
                       Archived
                     </p>
                     {briefing.archiveReport.archived.map((a, i) => (
-                      <p key={i} style={{ ...mono, fontSize: "0.55rem", color: DIM, margin: "2px 0", paddingLeft: 8 }}>
+                      <p key={i} style={{ ...mono, fontSize: "0.73rem", color: DIM, margin: "2px 0", paddingLeft: 8 }}>
                         {a}
                       </p>
                     ))}
                   </div>
                 )}
                 {briefing.archiveReport.resolved.length === 0 && briefing.archiveReport.archived.length === 0 && (
-                  <p style={{ ...mono, fontSize: "0.55rem", color: DIMMER }}>
+                  <p style={{ ...mono, fontSize: "0.73rem", color: DIMMER }}>
                     Nothing archived this cycle.
                   </p>
                 )}
@@ -498,13 +498,13 @@ function Card({ title, count, children }: { title: string; count?: number; child
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
         <span style={{
-          ...mono, fontSize: "0.55rem", textTransform: "uppercase",
+          ...mono, fontSize: "0.73rem", textTransform: "uppercase",
           letterSpacing: "0.15em", color: DIMMER,
         }}>
           {title}
         </span>
         {count !== undefined && (
-          <span style={{ ...mono, fontSize: "0.5rem", color: DIM }}>
+          <span style={{ ...mono, fontSize: "0.68rem", color: DIM }}>
             {count}
           </span>
         )}
@@ -516,7 +516,7 @@ function Card({ title, count, children }: { title: string; count?: number; child
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <p style={{ ...mono, fontSize: "0.55rem", color: DIMMER, padding: "1rem 0", textAlign: "center" }}>
+    <p style={{ ...mono, fontSize: "0.73rem", color: DIMMER, padding: "1rem 0", textAlign: "center" }}>
       {children}
     </p>
   );

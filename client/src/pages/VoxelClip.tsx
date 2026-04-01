@@ -309,7 +309,7 @@ function renderFrame(
       { label: "Burns recorded", val: `${stats.burns}`, color: "#f97316" },
       { label: "Canvas leader",  val: `#${stats.topId}`,  color: "#2dd4bf" },
       { label: "Top level",      val: `LVL ${stats.topLevel}`, color: "#a78bfa" },
-      { label: "On-chain pixels", val: "507",            color: "#e3e5e4" },
+      { label: "On-chain pixels", val: "507",            color: "#efefef" },
     ];
     rows.forEach((row, i) => {
       const showAt = i * 20;
@@ -539,11 +539,11 @@ export default function VoxelClip() {
         </div>
         <div className="flex items-center gap-2">
           {xVerified === null ? (
-            <span className="text-[11px] px-2.5 py-1 font-mono flex items-center gap-1.5" style={{ color: "rgba(227,229,228,0.35)" }}>
+            <span className="text-[14px] px-2.5 py-1 font-mono flex items-center gap-1.5" style={{ color: "rgba(227,229,228,0.55)" }}>
               <Loader2 className="w-3 h-3 animate-spin" /> Checking...
             </span>
           ) : xVerified.ok ? (
-            <span className="text-[11px] px-2.5 py-1 font-mono flex items-center gap-1.5" style={{
+            <span className="text-[14px] px-2.5 py-1 font-mono flex items-center gap-1.5" style={{
               background: "rgba(74,222,128,0.08)",
               border: "1px solid rgba(74,222,128,0.25)",
               color: "#4ade80",
@@ -552,7 +552,7 @@ export default function VoxelClip() {
               @{xVerified.username} Connected
             </span>
           ) : (
-            <span className="text-[11px] px-2.5 py-1 font-mono flex items-center gap-1.5" style={{
+            <span className="text-[14px] px-2.5 py-1 font-mono flex items-center gap-1.5" style={{
               background: "rgba(249,115,22,0.08)",
               border: "1px solid rgba(249,115,22,0.25)",
               color: "#f97316",
@@ -573,7 +573,7 @@ export default function VoxelClip() {
         ].map(item => (
           <div key={item.label} className="bg-card border border-border rounded p-3 text-center">
             <p className={`text-lg font-bold ${item.color}`}>{item.value}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{item.label}</p>
+            <p className="text-[13px] text-muted-foreground uppercase tracking-widest">{item.label}</p>
           </div>
         ))}
       </div>
@@ -590,7 +590,7 @@ export default function VoxelClip() {
               507 on-chain pixels extruded into 3D cubes · 1.5 full rotations · orange glow · 1280×720 · 30fps
             </p>
           </div>
-          <span className="text-[10px] px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 font-mono shrink-0">
+          <span className="text-[13px] px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 font-mono shrink-0">
             20s · WebM · 6Mbps
           </span>
         </div>
@@ -605,7 +605,7 @@ export default function VoxelClip() {
           ].map(s => (
             <div key={s.time} className={`border rounded p-2 ${s.color}`}>
               <p className="font-bold">{s.time}</p>
-              <p className="opacity-70 text-[10px] mt-0.5">{s.label}</p>
+              <p className="opacity-70 text-[13px] mt-0.5">{s.label}</p>
             </div>
           ))}
         </div>
@@ -647,7 +647,7 @@ export default function VoxelClip() {
               <Eye className="w-4 h-4 text-teal-400" />
               <span className="text-sm font-medium">Agent 306 — 3D Voxel Clip</span>
               {status === "posted" && (
-                <span className="text-[10px] px-2 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20">POSTED</span>
+                <span className="text-[13px] px-2 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20">POSTED</span>
               )}
             </div>
             <div className="flex items-center gap-2">
@@ -681,14 +681,14 @@ export default function VoxelClip() {
 
           {/* Tweet composer */}
           <div className="p-4 border-t border-border">
-            <p className="text-[11px] text-muted-foreground uppercase tracking-widest mb-2">Tweet Text</p>
+            <p className="text-[14px] text-muted-foreground uppercase tracking-widest mb-2">Tweet Text</p>
             <textarea
               value={tweetText}
               onChange={e => setTweetText(e.target.value)}
               rows={5}
               className="w-full bg-secondary border border-border rounded px-3 py-2 text-sm font-mono resize-none focus:outline-none focus:border-primary/50"
             />
-            <p className={`text-[10px] mt-1 ${tweetText.length > 260 ? "text-yellow-400" : "text-muted-foreground"}`}>
+            <p className={`text-[13px] mt-1 ${tweetText.length > 260 ? "text-yellow-400" : "text-muted-foreground"}`}>
               {tweetText.length}/280 chars
             </p>
           </div>
@@ -700,7 +700,7 @@ export default function VoxelClip() {
 
       {/* Live data note */}
       {stats && (
-        <div className="text-[11px] text-muted-foreground font-mono flex items-center gap-4">
+        <div className="text-[14px] text-muted-foreground font-mono flex items-center gap-4">
           <span><Flame className="w-3 h-3 inline mr-1 text-primary" />{stats.recentBurns?.length ?? 0} burns tracked</span>
           <span><Zap className="w-3 h-3 inline mr-1 text-teal-400" />Canvas leader: #{stats.topCanvas?.[0]?.tokenId ?? "—"} LVL {stats.topCanvas?.[0]?.level ?? "—"}</span>
           <span className="opacity-50">Updated {stats.lastUpdated ? new Date(stats.lastUpdated).toLocaleTimeString() : "—"}</span>

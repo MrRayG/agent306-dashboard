@@ -13,11 +13,11 @@ const pixel = {
 
 const BG = "#0a0b0d";
 const SURFACE = "#141516";
-const BORDER = "1px solid rgba(227,229,228,0.08)";
+const BORDER = "1px solid rgba(227,229,228,0.15)";
 const TEXT = "#e3e5e4";
 const TEXT_DIM = "rgba(227,229,228,0.45)";
-const TEXT_FAINT = "rgba(227,229,228,0.3)";
-const TEXT_GHOST = "rgba(227,229,228,0.25)";
+const TEXT_FAINT = "rgba(227,229,228,0.48)";
+const TEXT_GHOST = "rgba(227,229,228,0.40)";
 const ORANGE = "#f97316";
 const GREEN = "#4ade80";
 const PURPLE = "#a78bfa";
@@ -25,7 +25,7 @@ const BLUE = "#60a5fa";
 const RED = "#f87171";
 const YELLOW = "#fbbf24";
 const TEAL = "#2dd4bf";
-const DIMMEST = "rgba(227,229,228,0.07)";
+const DIMMEST = "rgba(227,229,228,0.14)";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Dream {
@@ -123,7 +123,7 @@ function StatusBadge({ status, color }: { status: string; color?: string }) {
     <span
       style={{
         ...pixel,
-        fontSize: "8px",
+        fontSize: "11px",
         color: c,
         background: `${c}20`,
         padding: "3px 8px",
@@ -152,7 +152,7 @@ function ActionButton({
       disabled={disabled}
       style={{
         ...mono,
-        fontSize: "10px",
+        fontSize: "13px",
         padding: "8px 16px",
         background: `${color}18`,
         border: `1px solid ${color}66`,
@@ -171,7 +171,7 @@ function SectionLabel({ children, color }: { children: React.ReactNode; color?: 
     <div
       style={{
         ...pixel,
-        fontSize: "9px",
+        fontSize: "12px",
         color: color ?? TEXT_FAINT,
         marginBottom: "12px",
       }}
@@ -196,17 +196,17 @@ function InputField({
 }) {
   const shared = {
     ...mono,
-    fontSize: "12px",
+    fontSize: "15px",
     width: "100%",
     padding: "8px 12px",
-    background: "rgba(227,229,228,0.04)",
+    background: "rgba(227,229,228,0.08)",
     border: BORDER,
     color: TEXT,
     outline: "none",
   };
   return (
     <div style={{ marginBottom: "12px" }}>
-      <div style={{ ...pixel, fontSize: "8px", color: TEXT_FAINT, marginBottom: "4px" }}>
+      <div style={{ ...pixel, fontSize: "11px", color: TEXT_FAINT, marginBottom: "4px" }}>
         {label}
       </div>
       {multiline ? (
@@ -322,12 +322,12 @@ export default function DreamsGrowth() {
     <div style={{ background: BG, minHeight: "100vh", padding: "24px", color: TEXT }}>
       {/* ─── Header ─────────────────────────────────────────────────────── */}
       <div style={{ marginBottom: "24px" }}>
-        <div style={{ ...pixel, fontSize: "9px", color: TEXT_FAINT, marginBottom: "4px" }}>
+        <div style={{ ...pixel, fontSize: "12px", color: TEXT_FAINT, marginBottom: "4px" }}>
           AGENT 306
         </div>
         <h1
           style={{
-            fontSize: "22px",
+            fontSize: "26px",
             fontWeight: 800,
             margin: "0 0 6px",
             letterSpacing: "-0.02em",
@@ -335,7 +335,7 @@ export default function DreamsGrowth() {
         >
           Dreams & <span style={{ color: TEAL }}>Growth</span>
         </h1>
-        <p style={{ ...mono, fontSize: "12px", color: TEXT_DIM, margin: 0 }}>
+        <p style={{ ...mono, fontSize: "15px", color: TEXT_DIM, margin: 0 }}>
           Long-term aspirations and self-improvement tracking
         </p>
       </div>
@@ -372,18 +372,18 @@ export default function DreamsGrowth() {
 
         {/* Loading / Error / Empty */}
         {dreamsLoading && (
-          <p style={{ ...mono, fontSize: "11px", color: TEXT_DIM, textAlign: "center", padding: "40px 0" }}>
+          <p style={{ ...mono, fontSize: "14px", color: TEXT_DIM, textAlign: "center", padding: "40px 0" }}>
             Loading dreams...
           </p>
         )}
         {dreamsError && (
-          <p style={{ ...mono, fontSize: "11px", color: RED, textAlign: "center", padding: "40px 0" }}>
+          <p style={{ ...mono, fontSize: "14px", color: RED, textAlign: "center", padding: "40px 0" }}>
             Failed to load dreams
           </p>
         )}
         {!dreamsLoading && !dreamsError && dreams.length === 0 && (
           <div style={{
-            ...mono, fontSize: "11px", color: TEXT_GHOST,
+            ...mono, fontSize: "14px", color: TEXT_GHOST,
             textAlign: "center", padding: "40px 20px",
             border: BORDER,
           }}>
@@ -393,7 +393,7 @@ export default function DreamsGrowth() {
 
         {/* Dream Cards */}
         {dreams.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "rgba(227,229,228,0.06)" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "rgba(227,229,228,0.12)" }}>
             {dreams.map((dream) => (
               <DreamCard key={dream.id} dream={dream} />
             ))}
@@ -418,7 +418,7 @@ export default function DreamsGrowth() {
         </div>
 
         {growthLoading && (
-          <p style={{ ...mono, fontSize: "11px", color: TEXT_DIM, textAlign: "center", padding: "40px 0" }}>
+          <p style={{ ...mono, fontSize: "14px", color: TEXT_DIM, textAlign: "center", padding: "40px 0" }}>
             Loading growth data...
           </p>
         )}
@@ -429,7 +429,7 @@ export default function DreamsGrowth() {
 
         {!growthLoading && !snapshot?.metrics && (
           <div style={{
-            ...mono, fontSize: "11px", color: TEXT_GHOST,
+            ...mono, fontSize: "14px", color: TEXT_GHOST,
             textAlign: "center", padding: "40px 20px", border: BORDER,
           }}>
             No growth snapshots yet. Take your first snapshot to begin tracking.
@@ -440,7 +440,7 @@ export default function DreamsGrowth() {
         {timeline.length > 0 && (
           <div style={{ marginTop: "16px" }}>
             <SectionLabel color={TEXT_FAINT}>HISTORY (LAST 10)</SectionLabel>
-            <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "rgba(227,229,228,0.06)" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "rgba(227,229,228,0.12)" }}>
               {timeline.slice(0, 10).map((snap, i) => (
                 <div
                   key={snap.id || i}
@@ -453,11 +453,11 @@ export default function DreamsGrowth() {
                   }}
                 >
                   <div>
-                    <div style={{ ...mono, fontSize: "11px", color: TEXT }}>
+                    <div style={{ ...mono, fontSize: "14px", color: TEXT }}>
                       {formatDate(snap.timestamp || snap.createdAt)}
                     </div>
                     {snap.selfAssessment && (
-                      <div style={{ ...mono, fontSize: "10px", color: TEXT_DIM, marginTop: "4px", maxWidth: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <div style={{ ...mono, fontSize: "13px", color: TEXT_DIM, marginTop: "4px", maxWidth: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {snap.selfAssessment}
                       </div>
                     )}
@@ -488,13 +488,13 @@ export default function DreamsGrowth() {
 
         {reflections.length === 0 ? (
           <div style={{
-            ...mono, fontSize: "11px", color: TEXT_GHOST,
+            ...mono, fontSize: "14px", color: TEXT_GHOST,
             textAlign: "center", padding: "40px 20px", border: BORDER,
           }}>
             No episode reflections yet.
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "rgba(227,229,228,0.06)" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "rgba(227,229,228,0.12)" }}>
             {reflections.map((ref, i) => (
               <ReflectionCard key={ref.id || i} reflection={ref} />
             ))}
@@ -520,13 +520,13 @@ export default function DreamsGrowth() {
 
         {plans.length === 0 ? (
           <div style={{
-            ...mono, fontSize: "11px", color: TEXT_GHOST,
+            ...mono, fontSize: "14px", color: TEXT_GHOST,
             textAlign: "center", padding: "40px 20px", border: BORDER,
           }}>
             No improvement plans yet. Generate your first weekly plan.
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "rgba(227,229,228,0.06)" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "rgba(227,229,228,0.12)" }}>
             {plans.map((plan, i) => (
               <PlanCard key={plan.id || i} plan={plan} isLatest={i === 0} />
             ))}
@@ -607,18 +607,18 @@ function DreamCard({ dream }: { dream: Dream }) {
     >
       <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", marginBottom: "6px" }}>
         <div style={{ flex: 1 }}>
-          <div style={{ ...mono, fontSize: "13px", fontWeight: 700, color: TEXT, marginBottom: "4px" }}>
+          <div style={{ ...mono, fontSize: "16px", fontWeight: 700, color: TEXT, marginBottom: "4px" }}>
             {dream.question}
           </div>
           {dream.context && (
-            <div style={{ ...mono, fontSize: "11px", color: TEXT_DIM, lineHeight: 1.5 }}>
+            <div style={{ ...mono, fontSize: "14px", color: TEXT_DIM, lineHeight: 1.5 }}>
               {dream.context}
             </div>
           )}
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px", flexShrink: 0 }}>
           <StatusBadge status={dream.status} />
-          <div style={{ ...mono, fontSize: "9px", color: TEXT_FAINT }}>
+          <div style={{ ...mono, fontSize: "12px", color: TEXT_FAINT }}>
             {timeAgo(dream.updatedAt || dream.createdAt)}
           </div>
         </div>
@@ -629,7 +629,7 @@ function DreamCard({ dream }: { dream: Dream }) {
           {/* Insights */}
           {dream.insights && dream.insights.length > 0 && (
             <div style={{ marginBottom: "12px" }}>
-              <div style={{ ...pixel, fontSize: "8px", color: PURPLE, marginBottom: "6px" }}>
+              <div style={{ ...pixel, fontSize: "11px", color: PURPLE, marginBottom: "6px" }}>
                 INSIGHTS
               </div>
               {dream.insights.map((insight, i) => (
@@ -637,7 +637,7 @@ function DreamCard({ dream }: { dream: Dream }) {
                   key={i}
                   style={{
                     ...mono,
-                    fontSize: "11px",
+                    fontSize: "14px",
                     color: "rgba(227,229,228,0.75)",
                     padding: "6px 12px",
                     background: `${PURPLE}08`,
@@ -655,7 +655,7 @@ function DreamCard({ dream }: { dream: Dream }) {
           {/* Related threads */}
           {dream.relatedThreadIds && dream.relatedThreadIds.length > 0 && (
             <div style={{ marginBottom: "8px" }}>
-              <div style={{ ...pixel, fontSize: "8px", color: BLUE, marginBottom: "6px" }}>
+              <div style={{ ...pixel, fontSize: "11px", color: BLUE, marginBottom: "6px" }}>
                 RELATED RESEARCH THREADS
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
@@ -666,7 +666,7 @@ function DreamCard({ dream }: { dream: Dream }) {
                     onClick={(e) => e.stopPropagation()}
                     style={{
                       ...mono,
-                      fontSize: "10px",
+                      fontSize: "13px",
                       color: BLUE,
                       background: `${BLUE}15`,
                       padding: "3px 8px",
@@ -683,10 +683,10 @@ function DreamCard({ dream }: { dream: Dream }) {
 
           {/* Timestamps */}
           <div style={{ display: "flex", gap: "16px", marginTop: "8px" }}>
-            <div style={{ ...mono, fontSize: "9px", color: TEXT_FAINT }}>
+            <div style={{ ...mono, fontSize: "12px", color: TEXT_FAINT }}>
               Created: {formatDate(dream.createdAt)}
             </div>
-            <div style={{ ...mono, fontSize: "9px", color: TEXT_FAINT }}>
+            <div style={{ ...mono, fontSize: "12px", color: TEXT_FAINT }}>
               Updated: {formatDate(dream.updatedAt)}
             </div>
           </div>
@@ -723,14 +723,14 @@ function SnapshotCard({ snapshot }: { snapshot: GrowthSnapshot }) {
   return (
     <div style={{ border: BORDER }}>
       <div style={{ padding: "12px 16px", borderBottom: BORDER, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ ...pixel, fontSize: "9px", color: GREEN }}>LATEST SNAPSHOT</div>
-        <div style={{ ...mono, fontSize: "9px", color: TEXT_FAINT }}>
+        <div style={{ ...pixel, fontSize: "12px", color: GREEN }}>LATEST SNAPSHOT</div>
+        <div style={{ ...mono, fontSize: "12px", color: TEXT_FAINT }}>
           {formatDate(snapshot.timestamp || snapshot.createdAt)}
         </div>
       </div>
 
       {/* Metric grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "1px", background: "rgba(227,229,228,0.06)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "1px", background: "rgba(227,229,228,0.12)" }}>
         {metricRows.map((mr) => {
           if (mr.value == null) return null;
           return (
@@ -738,7 +738,7 @@ function SnapshotCard({ snapshot }: { snapshot: GrowthSnapshot }) {
               <div style={{ ...pixel, fontSize: "7px", color: TEXT_FAINT, marginBottom: "3px" }}>
                 {mr.label}
               </div>
-              <div style={{ ...mono, fontSize: "16px", fontWeight: 700, color: mr.color }}>
+              <div style={{ ...mono, fontSize: "19px", fontWeight: 700, color: mr.color }}>
                 {mr.value}
               </div>
             </div>
@@ -749,10 +749,10 @@ function SnapshotCard({ snapshot }: { snapshot: GrowthSnapshot }) {
       {/* Self-assessment */}
       {snapshot.selfAssessment && (
         <div style={{ padding: "14px 16px", borderTop: BORDER }}>
-          <div style={{ ...pixel, fontSize: "8px", color: GREEN, marginBottom: "6px" }}>
+          <div style={{ ...pixel, fontSize: "11px", color: GREEN, marginBottom: "6px" }}>
             SELF-ASSESSMENT
           </div>
-          <div style={{ ...mono, fontSize: "11px", color: "rgba(227,229,228,0.75)", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
+          <div style={{ ...mono, fontSize: "14px", color: "rgba(227,229,228,0.75)", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
             {snapshot.selfAssessment}
           </div>
         </div>
@@ -769,7 +769,7 @@ function MetricChip({ label, value, color }: { label: string; value: number; col
   return (
     <div style={{ textAlign: "center" }}>
       <div style={{ ...pixel, fontSize: "7px", color: TEXT_FAINT }}>{label}</div>
-      <div style={{ ...mono, fontSize: "12px", fontWeight: 700, color }}>{value}</div>
+      <div style={{ ...mono, fontSize: "15px", fontWeight: 700, color }}>{value}</div>
     </div>
   );
 }
@@ -792,16 +792,16 @@ function ReflectionCard({ reflection }: { reflection: EpisodeReflection }) {
       onClick={() => setExpanded(!expanded)}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "6px" }}>
-        <div style={{ ...mono, fontSize: "13px", fontWeight: 700, color: TEXT }}>
+        <div style={{ ...mono, fontSize: "16px", fontWeight: 700, color: TEXT }}>
           {reflection.episodeTitle || `Episode ${reflection.episodeId || "?"}`}
         </div>
-        <div style={{ ...mono, fontSize: "9px", color: TEXT_FAINT, flexShrink: 0 }}>
+        <div style={{ ...mono, fontSize: "12px", color: TEXT_FAINT, flexShrink: 0 }}>
           {timeAgo(reflection.createdAt)}
         </div>
       </div>
 
       {reflection.strongestInsight && (
-        <div style={{ ...mono, fontSize: "11px", color: TEXT_DIM, lineHeight: 1.5, marginBottom: "4px" }}>
+        <div style={{ ...mono, fontSize: "14px", color: TEXT_DIM, lineHeight: 1.5, marginBottom: "4px" }}>
           <span style={{ color: GREEN, fontWeight: 700 }}>Strongest: </span>
           {reflection.strongestInsight}
         </div>
@@ -823,7 +823,7 @@ function ReflectionCard({ reflection }: { reflection: EpisodeReflection }) {
               }}
             />
           </div>
-          <div style={{ ...mono, fontSize: "10px", fontWeight: 700, color: TEXT, width: "40px", textAlign: "right" }}>
+          <div style={{ ...mono, fontSize: "13px", fontWeight: 700, color: TEXT, width: "40px", textAlign: "right" }}>
             {(reflection.audienceFitScore * 100).toFixed(0)}%
           </div>
         </div>
@@ -833,8 +833,8 @@ function ReflectionCard({ reflection }: { reflection: EpisodeReflection }) {
         <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: BORDER }}>
           {reflection.weakestPoint && (
             <div style={{ marginBottom: "10px" }}>
-              <div style={{ ...pixel, fontSize: "8px", color: RED, marginBottom: "4px" }}>WEAKEST POINT</div>
-              <div style={{ ...mono, fontSize: "11px", color: "rgba(227,229,228,0.75)", lineHeight: 1.5 }}>
+              <div style={{ ...pixel, fontSize: "11px", color: RED, marginBottom: "4px" }}>WEAKEST POINT</div>
+              <div style={{ ...mono, fontSize: "14px", color: "rgba(227,229,228,0.75)", lineHeight: 1.5 }}>
                 {reflection.weakestPoint}
               </div>
             </div>
@@ -842,12 +842,12 @@ function ReflectionCard({ reflection }: { reflection: EpisodeReflection }) {
 
           {reflection.missedAngles && reflection.missedAngles.length > 0 && (
             <div style={{ marginBottom: "10px" }}>
-              <div style={{ ...pixel, fontSize: "8px", color: YELLOW, marginBottom: "4px" }}>MISSED ANGLES</div>
+              <div style={{ ...pixel, fontSize: "11px", color: YELLOW, marginBottom: "4px" }}>MISSED ANGLES</div>
               {reflection.missedAngles.map((angle, i) => (
                 <div
                   key={i}
                   style={{
-                    ...mono, fontSize: "11px", color: "rgba(227,229,228,0.7)",
+                    ...mono, fontSize: "14px", color: "rgba(227,229,228,0.7)",
                     padding: "4px 12px", background: `${YELLOW}08`,
                     borderLeft: `2px solid ${YELLOW}40`, marginBottom: "3px", lineHeight: 1.5,
                   }}
@@ -860,12 +860,12 @@ function ReflectionCard({ reflection }: { reflection: EpisodeReflection }) {
 
           {reflection.lessonsLearned && reflection.lessonsLearned.length > 0 && (
             <div>
-              <div style={{ ...pixel, fontSize: "8px", color: GREEN, marginBottom: "4px" }}>LESSONS LEARNED</div>
+              <div style={{ ...pixel, fontSize: "11px", color: GREEN, marginBottom: "4px" }}>LESSONS LEARNED</div>
               {reflection.lessonsLearned.map((lesson, i) => (
                 <div
                   key={i}
                   style={{
-                    ...mono, fontSize: "11px", color: "rgba(227,229,228,0.7)",
+                    ...mono, fontSize: "14px", color: "rgba(227,229,228,0.7)",
                     padding: "4px 12px", background: `${GREEN}08`,
                     borderLeft: `2px solid ${GREEN}40`, marginBottom: "3px", lineHeight: 1.5,
                   }}
@@ -900,7 +900,7 @@ function PlanCard({ plan, isLatest }: { plan: ImprovementPlan; isLatest: boolean
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: expanded ? "8px" : 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <div style={{ ...mono, fontSize: "12px", fontWeight: 700, color: TEXT }}>
+          <div style={{ ...mono, fontSize: "15px", fontWeight: 700, color: TEXT }}>
             {plan.weekOf ? `Week of ${plan.weekOf}` : formatDate(plan.generatedAt || plan.createdAt)}
           </div>
           {isLatest && (
@@ -909,7 +909,7 @@ function PlanCard({ plan, isLatest }: { plan: ImprovementPlan; isLatest: boolean
             </span>
           )}
         </div>
-        <span style={{ ...mono, fontSize: "10px", color: TEXT_FAINT }}>
+        <span style={{ ...mono, fontSize: "13px", color: TEXT_FAINT }}>
           {expanded ? "\u25B4" : "\u25BE"}
         </span>
       </div>
@@ -917,19 +917,19 @@ function PlanCard({ plan, isLatest }: { plan: ImprovementPlan; isLatest: boolean
       {expanded && (
         <div style={{ marginTop: "8px" }}>
           {plan.summary && (
-            <div style={{ ...mono, fontSize: "11px", color: TEXT_DIM, lineHeight: 1.6, marginBottom: "12px" }}>
+            <div style={{ ...mono, fontSize: "14px", color: TEXT_DIM, lineHeight: 1.6, marginBottom: "12px" }}>
               {plan.summary}
             </div>
           )}
 
           {plan.actionItems && plan.actionItems.length > 0 && (
             <div>
-              <div style={{ ...pixel, fontSize: "8px", color: ORANGE, marginBottom: "6px" }}>ACTION ITEMS</div>
+              <div style={{ ...pixel, fontSize: "11px", color: ORANGE, marginBottom: "6px" }}>ACTION ITEMS</div>
               {plan.actionItems.map((item, i) => (
                 <div
                   key={i}
                   style={{
-                    ...mono, fontSize: "11px", color: "rgba(227,229,228,0.75)",
+                    ...mono, fontSize: "14px", color: "rgba(227,229,228,0.75)",
                     padding: "6px 12px", background: `${ORANGE}08`,
                     borderLeft: `2px solid ${ORANGE}40`, marginBottom: "4px", lineHeight: 1.5,
                   }}

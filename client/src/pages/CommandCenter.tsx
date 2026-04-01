@@ -25,7 +25,7 @@ const ENGINE_LABELS: Record<string, { label: string; color: string; schedule: st
   episode:       { label: "Episode",        color: "#f97316", schedule: "Every 12h",          show: "[306 STORIES]"    },
   news_dispatch: { label: "News Dispatch",  color: "#4ade80", schedule: "Daily 8am ET",        show: "[306 NEWS]"       },
   academy:       { label: "Academy",        color: "#60a5fa", schedule: "Tue/Thu/Sat 10am ET", show: "[306 ACADEMY]"   },
-  leaderboard:   { label: "Leaderboard",    color: "#e3e5e4", schedule: "Monday 9am ET",        show: "[306 LEADERBOARD]"   },
+  leaderboard:   { label: "Leaderboard",    color: "#efefef", schedule: "Monday 9am ET",        show: "[306 LEADERBOARD]"   },
   spotlight:     { label: "Spotlight",      color: "#fb923c", schedule: "Sunday 11am ET",      show: "[306 SPOTLIGHT]" },
   race:          { label: "THE RACE",       color: "#a78bfa", schedule: "Sunday 12pm ET",      show: "[306 ARENA]"     },
   cyoa:          { label: "CYOA Draft",     color: "#2dd4bf", schedule: "Sunday 10am ET",      show: "[306 LORE]"      },
@@ -44,7 +44,7 @@ function buildWeekCalendar(): Array<{ day: string; date: string; shows: Array<{ 
       { show: "[306 ARENA]",     time: "12pm ET", color: "#a78bfa", engine: "race"      },
     ],
     1: [ // Monday
-      { show: "[306 LEADERBOARD]",   time: "9am ET",  color: "#e3e5e4", engine: "leaderboard" },
+      { show: "[306 LEADERBOARD]",   time: "9am ET",  color: "#efefef", engine: "leaderboard" },
       { show: "[306 SIGNAL]",    time: "12pm ET", color: "#fbbf24", engine: "signal_brief" },
     ],
     2: [ // Tuesday
@@ -124,11 +124,11 @@ export default function CommandCenter() {
 
       {/* Header */}
       <div style={{ marginBottom: "28px" }}>
-        <div style={{ fontSize: "10px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.2em", marginBottom: "4px" }}>AGENT 306</div>
-        <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#e3e5e4", margin: "0 0 6px", letterSpacing: "-0.02em" }}>
+        <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.2em", marginBottom: "4px" }}>AGENT 306</div>
+        <h1 style={{ fontSize: "26px", fontWeight: 800, color: "#efefef", margin: "0 0 6px", letterSpacing: "-0.02em" }}>
           Command <span style={{ color: "#f97316" }}>Center</span>
         </h1>
-        <p style={{ fontSize: "12px", color: "rgba(227,229,228,0.5)", margin: 0 }}>
+        <p style={{ fontSize: "15px", color: "rgba(227,229,228,0.68)", margin: 0 }}>
           Every engine. Every schedule. One view. Nothing posts without going through here.
         </p>
       </div>
@@ -137,7 +137,7 @@ export default function CommandCenter() {
       {coord?.activeEngine && (
         <div style={{ background: "rgba(249,115,22,0.1)", border: "1px solid rgba(249,115,22,0.3)", padding: "10px 16px", marginBottom: "8px", display: "flex", alignItems: "center", gap: "10px" }}>
           <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#f97316", animation: "pulse 1s infinite" }} />
-          <span style={{ fontSize: "11px", color: "#f97316", fontFamily: "monospace" }}>
+          <span style={{ fontSize: "14px", color: "#f97316", fontFamily: "monospace" }}>
             {coord.activeEngine.toUpperCase()} IS CURRENTLY POSTING (X)
           </span>
         </div>
@@ -145,7 +145,7 @@ export default function CommandCenter() {
       {coord?.activeEngineFarcaster && (
         <div style={{ background: "rgba(138,99,210,0.1)", border: "1px solid rgba(138,99,210,0.3)", padding: "10px 16px", marginBottom: "8px", display: "flex", alignItems: "center", gap: "10px" }}>
           <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#8a63d2", animation: "pulse 1s infinite" }} />
-          <span style={{ fontSize: "11px", color: "#8a63d2", fontFamily: "monospace" }}>
+          <span style={{ fontSize: "14px", color: "#8a63d2", fontFamily: "monospace" }}>
             {coord.activeEngineFarcaster.toUpperCase()} IS CURRENTLY POSTING (FARCASTER)
           </span>
         </div>
@@ -153,10 +153,10 @@ export default function CommandCenter() {
 
       {/* Engine schedule grid */}
       <div style={{ marginBottom: "24px" }}>
-        <div style={{ fontSize: "9px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.15em", marginBottom: "10px" }}>POSTING SCHEDULE</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "rgba(227,229,228,0.06)" }}>
+        <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.15em", marginBottom: "10px" }}>POSTING SCHEDULE</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "rgba(227,229,228,0.12)" }}>
           {coord?.engines?.map((e: any) => {
-            const meta = ENGINE_LABELS[e.engine] ?? { label: e.engine, color: "#e3e5e4", schedule: "—" };
+            const meta = ENGINE_LABELS[e.engine] ?? { label: e.engine, color: "#efefef", schedule: "—" };
             const trigger_info = TRIGGERS[e.engine];
 
             return (
@@ -170,28 +170,28 @@ export default function CommandCenter() {
                 {/* Status dot */}
                 <div style={{
                   width: 8, height: 8, borderRadius: "50%",
-                  background: e.isReady ? "#4ade80" : "rgba(227,229,228,0.2)",
+                  background: e.isReady ? "#4ade80" : "rgba(227,229,228,0.35)",
                   flexShrink: 0,
                 }} />
 
                 {/* Engine name + schedule */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: "12px", fontWeight: 700, color: meta.color }}>{meta.label}</div>
-                  <div style={{ fontSize: "10px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace" }}>{meta.schedule}</div>
+                  <div style={{ fontSize: "15px", fontWeight: 700, color: meta.color }}>{meta.label}</div>
+                  <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace" }}>{meta.schedule}</div>
                 </div>
 
                 {/* Last posted */}
                 <div style={{ textAlign: "right", minWidth: "100px" }}>
-                  <div style={{ fontSize: "10px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace" }}>LAST POST</div>
-                  <div style={{ fontSize: "11px", color: "#e3e5e4", fontFamily: "monospace" }}>{timeAgo(e.lastPostedAt)}</div>
+                  <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace" }}>LAST POST</div>
+                  <div style={{ fontSize: "14px", color: "#efefef", fontFamily: "monospace" }}>{timeAgo(e.lastPostedAt)}</div>
                 </div>
 
                 {/* Next allowed */}
                 <div style={{ textAlign: "right", minWidth: "80px" }}>
-                  <div style={{ fontSize: "10px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace" }}>NEXT</div>
+                  <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace" }}>NEXT</div>
                   <div style={{
-                    fontSize: "11px",
-                    color: e.isReady ? "#4ade80" : "rgba(227,229,228,0.5)",
+                    fontSize: "14px",
+                    color: e.isReady ? "#4ade80" : "rgba(227,229,228,0.68)",
                     fontFamily: "monospace",
                     fontWeight: e.isReady ? 700 : 400,
                   }}>
@@ -203,13 +203,13 @@ export default function CommandCenter() {
                 <div style={{ display: "flex", gap: 6, minWidth: "60px" }}>
                   {e.lastTweetUrl && (
                     <a href={e.lastTweetUrl} target="_blank" rel="noopener noreferrer"
-                      style={{ fontSize: "10px", color: "#a78bfa", fontFamily: "monospace", textDecoration: "none" }}>
+                      style={{ fontSize: "13px", color: "#a78bfa", fontFamily: "monospace", textDecoration: "none" }}>
                       X ↗
                     </a>
                   )}
                   {e.lastCastUrl && (
                     <a href={e.lastCastUrl} target="_blank" rel="noopener noreferrer"
-                      style={{ fontSize: "10px", color: "#8a63d2", fontFamily: "monospace", textDecoration: "none" }}>
+                      style={{ fontSize: "13px", color: "#8a63d2", fontFamily: "monospace", textDecoration: "none" }}>
                       FC ↗
                     </a>
                   )}
@@ -222,11 +222,11 @@ export default function CommandCenter() {
                     disabled={triggering === meta.label}
                     style={{
                       background: "transparent",
-                      border: `1px solid ${e.isReady ? meta.color : "rgba(227,229,228,0.15)"}`,
-                      color: e.isReady ? meta.color : "rgba(227,229,228,0.3)",
+                      border: `1px solid ${e.isReady ? meta.color : "rgba(227,229,228,0.22)"}`,
+                      color: e.isReady ? meta.color : "rgba(227,229,228,0.48)",
                       padding: "4px 12px",
                       fontFamily: "monospace",
-                      fontSize: "10px",
+                      fontSize: "13px",
                       cursor: triggering === meta.label ? "not-allowed" : "pointer",
                       minWidth: "70px",
                     }}
@@ -242,8 +242,8 @@ export default function CommandCenter() {
 
       {/* 7-Day Programming Calendar */}
       <div style={{ marginBottom: "24px" }}>
-        <div style={{ fontSize: "9px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.15em", marginBottom: "10px" }}>THIS WEEK ON 306</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "1px", background: "rgba(227,229,228,0.06)" }}>
+        <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.15em", marginBottom: "10px" }}>THIS WEEK ON 306</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "1px", background: "rgba(227,229,228,0.12)" }}>
           {buildWeekCalendar().map((day, i) => (
             <div key={i} style={{
               background: i === 0 ? "rgba(249,115,22,0.06)" : "#141516",
@@ -251,12 +251,12 @@ export default function CommandCenter() {
               minHeight: "100px",
               borderTop: i === 0 ? "2px solid #f97316" : "2px solid transparent",
             }}>
-              <div style={{ fontSize: "10px", fontWeight: 700, color: i === 0 ? "#f97316" : "rgba(227,229,228,0.5)", fontFamily: "monospace", marginBottom: "2px" }}>{day.day}</div>
-              <div style={{ fontSize: "9px", color: "rgba(227,229,228,0.25)", fontFamily: "monospace", marginBottom: "8px" }}>{day.date}</div>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: i === 0 ? "#f97316" : "rgba(227,229,228,0.68)", fontFamily: "monospace", marginBottom: "2px" }}>{day.day}</div>
+              <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.40)", fontFamily: "monospace", marginBottom: "8px" }}>{day.date}</div>
               <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                 {day.shows.map((s, j) => (
                   <div key={j} style={{
-                    fontSize: "8px",
+                    fontSize: "11px",
                     color: s.color,
                     fontFamily: "monospace",
                     background: `${s.color}15`,
@@ -275,35 +275,35 @@ export default function CommandCenter() {
 
       {/* Recent posts feed */}
       <div>
-        <div style={{ fontSize: "9px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.15em", marginBottom: "10px" }}>
+        <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.15em", marginBottom: "10px" }}>
           RECENT POSTS — {coord?.totalPosts ?? 0} total
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "rgba(227,229,228,0.06)" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "rgba(227,229,228,0.12)" }}>
           {coord?.recentPosts?.length > 0 ? coord.recentPosts.map((p: any, i: number) => (
             <div key={i} style={{ background: "#141516", padding: "10px 20px", display: "flex", alignItems: "center", gap: "16px" }}>
-              <div style={{ fontSize: "10px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", minWidth: "80px" }}>
+              <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", minWidth: "80px" }}>
                 {timeAgo(p.postedAt)}
               </div>
-              <div style={{ fontSize: "11px", color: "#e3e5e4", fontFamily: "monospace", flex: 1 }}>
+              <div style={{ fontSize: "14px", color: "#efefef", fontFamily: "monospace", flex: 1 }}>
                 {p.engine.toUpperCase()}
               </div>
-              <div style={{ fontSize: "10px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace" }}>
+              <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace" }}>
                 {p.key}
               </div>
               {p.platform && (
-                <span style={{ fontSize: "9px", color: p.platform === "farcaster" ? "#8a63d2" : "rgba(227,229,228,0.3)", fontFamily: "monospace", textTransform: "uppercase" }}>
+                <span style={{ fontSize: "12px", color: p.platform === "farcaster" ? "#8a63d2" : "rgba(227,229,228,0.48)", fontFamily: "monospace", textTransform: "uppercase" }}>
                   {p.platform === "farcaster" ? "FC" : "X"}
                 </span>
               )}
               {(p.tweetUrl || p.postUrl) && (
                 <a href={p.postUrl || p.tweetUrl} target="_blank" rel="noopener noreferrer"
-                  style={{ fontSize: "10px", color: p.platform === "farcaster" ? "#8a63d2" : "#a78bfa", fontFamily: "monospace", textDecoration: "none" }}>
+                  style={{ fontSize: "13px", color: p.platform === "farcaster" ? "#8a63d2" : "#a78bfa", fontFamily: "monospace", textDecoration: "none" }}>
                   ↗ view
                 </a>
               )}
             </div>
           )) : (
-            <div style={{ background: "#141516", padding: "16px 20px", fontSize: "11px", color: "rgba(227,229,228,0.3)", fontFamily: "monospace" }}>
+            <div style={{ background: "#141516", padding: "16px 20px", fontSize: "14px", color: "rgba(227,229,228,0.48)", fontFamily: "monospace" }}>
               No posts recorded yet — history builds after first post
             </div>
           )}
@@ -311,32 +311,32 @@ export default function CommandCenter() {
       </div>
 
       {/* Server status */}
-      <div style={{ marginTop: "16px", padding: "12px 20px", background: "#141516", border: "1px solid rgba(227,229,228,0.06)", display: "flex", gap: "32px" }}>
+      <div style={{ marginTop: "16px", padding: "12px 20px", background: "#141516", border: "1px solid rgba(227,229,228,0.12)", display: "flex", gap: "32px" }}>
         <div>
-          <div style={{ fontSize: "9px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace" }}>SERVER</div>
-          <div style={{ fontSize: "11px", color: "#4ade80", fontFamily: "monospace" }}>● RAILWAY ONLINE</div>
+          <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace" }}>SERVER</div>
+          <div style={{ fontSize: "14px", color: "#4ade80", fontFamily: "monospace" }}>● RAILWAY ONLINE</div>
         </div>
         <div>
-          <div style={{ fontSize: "9px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace" }}>LAST EPISODE</div>
-          <div style={{ fontSize: "11px", color: "#e3e5e4", fontFamily: "monospace" }}>
+          <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace" }}>LAST EPISODE</div>
+          <div style={{ fontSize: "14px", color: "#efefef", fontFamily: "monospace" }}>
             {pollerStatus?.lastEpisode ? `EP${pollerStatus.lastEpisode}` : "—"}
           </div>
         </div>
         <div>
-          <div style={{ fontSize: "9px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace" }}>NEXT EPISODE</div>
-          <div style={{ fontSize: "11px", color: "#e3e5e4", fontFamily: "monospace" }}>
+          <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace" }}>NEXT EPISODE</div>
+          <div style={{ fontSize: "14px", color: "#efefef", fontFamily: "monospace" }}>
             {timeUntil(pollerStatus?.nextRun)}
           </div>
         </div>
         <div>
-          <div style={{ fontSize: "9px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace" }}>ERRORS</div>
-          <div style={{ fontSize: "11px", color: pollerStatus?.lastError ? "#f87171" : "#4ade80", fontFamily: "monospace" }}>
+          <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace" }}>ERRORS</div>
+          <div style={{ fontSize: "14px", color: pollerStatus?.lastError ? "#f87171" : "#4ade80", fontFamily: "monospace" }}>
             {pollerStatus?.lastError ? "⚠ ERROR" : "● NONE"}
           </div>
         </div>
       </div>
 
-      <div style={{ marginTop: "12px", fontSize: "10px", color: "rgba(227,229,228,0.2)", fontFamily: "monospace", textAlign: "center" }}>
+      <div style={{ marginTop: "12px", fontSize: "13px", color: "rgba(227,229,228,0.35)", fontFamily: "monospace", textAlign: "center" }}>
         All engines share the same disk-based coordinator — no duplicates across Railway restarts
       </div>
     </div>

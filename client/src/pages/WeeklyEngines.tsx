@@ -23,8 +23,8 @@ function timeAgo(iso: string | null): string {
 
 function Section({ title, accent, children }: { title: string; accent: string; children: React.ReactNode }) {
   return (
-    <div style={{ border: `1px solid rgba(227,229,228,0.08)`, background: "#141516", padding: "24px", marginBottom: "1px" }}>
-      <div style={{ fontSize: "10px", color: accent, fontFamily: "monospace", letterSpacing: "0.2em", marginBottom: "16px", fontWeight: 700 }}>
+    <div style={{ border: `1px solid rgba(227,229,228,0.15)`, background: "#141516", padding: "24px", marginBottom: "1px" }}>
+      <div style={{ fontSize: "13px", color: accent, fontFamily: "monospace", letterSpacing: "0.2em", marginBottom: "16px", fontWeight: 700 }}>
         {title}
       </div>
       {children}
@@ -35,10 +35,10 @@ function Section({ title, accent, children }: { title: string; accent: string; c
 function PreviewBox({ content, onPost, posting }: { content: string; onPost: () => void; posting: boolean }) {
   return (
     <div style={{ marginTop: "16px" }}>
-      <div style={{ background: "#0e0f10", border: "1px solid rgba(227,229,228,0.12)", padding: "16px", marginBottom: "12px" }}>
-        <div style={{ fontSize: "10px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", marginBottom: "8px" }}>TWEET PREVIEW</div>
-        <div style={{ fontSize: "14px", color: "#e3e5e4", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{content}</div>
-        <div style={{ fontSize: "10px", color: content.length > 240 ? "#f87171" : "rgba(227,229,228,0.3)", fontFamily: "monospace", marginTop: "8px" }}>
+      <div style={{ background: "#0e0f10", border: "1px solid rgba(227,229,228,0.20)", padding: "16px", marginBottom: "12px" }}>
+        <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", marginBottom: "8px" }}>TWEET PREVIEW</div>
+        <div style={{ fontSize: "17px", color: "#efefef", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{content}</div>
+        <div style={{ fontSize: "13px", color: content.length > 240 ? "#f87171" : "rgba(227,229,228,0.48)", fontFamily: "monospace", marginTop: "8px" }}>
           {content.length} / 240 chars
         </div>
       </div>
@@ -48,7 +48,7 @@ function PreviewBox({ content, onPost, posting }: { content: string; onPost: () 
         style={{
           background: posting ? "rgba(249,115,22,0.3)" : "#f97316",
           color: "#0e0f10", border: "none", padding: "10px 20px",
-          fontFamily: "monospace", fontSize: "11px", fontWeight: 700,
+          fontFamily: "monospace", fontSize: "14px", fontWeight: 700,
           letterSpacing: "0.1em", cursor: posting ? "not-allowed" : "pointer",
         }}
       >
@@ -134,11 +134,11 @@ export default function WeeklyEngines() {
 
       {/* Header */}
       <div style={{ marginBottom: "32px" }}>
-        <div style={{ fontSize: "10px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.2em", marginBottom: "4px" }}>WEEKLY ENGINES</div>
-        <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#e3e5e4", margin: "0 0 8px", letterSpacing: "-0.02em" }}>
+        <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.2em", marginBottom: "4px" }}>WEEKLY ENGINES</div>
+        <h1 style={{ fontSize: "26px", fontWeight: 800, color: "#efefef", margin: "0 0 8px", letterSpacing: "-0.02em" }}>
           The <span style={{ color: "#f97316" }}>Spotlight</span> + The <span style={{ color: "#a78bfa" }}>Race</span>
         </h1>
-        <p style={{ fontSize: "12px", color: "rgba(227,229,228,0.5)", margin: 0, lineHeight: 1.6 }}>
+        <p style={{ fontSize: "15px", color: "rgba(227,229,228,0.68)", margin: 0, lineHeight: 1.6 }}>
           Two weekly posts that drive growth. Spotlight celebrates co-creators. The Race writes Arena history.
           Both auto-post on Sundays — or preview and post manually here.
         </p>
@@ -148,40 +148,40 @@ export default function WeeklyEngines() {
       <Section title="🔦 THE SPOTLIGHT — HOLDER FEATURE" accent="#f97316">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "16px", marginBottom: "20px" }}>
           <div>
-            <div style={{ fontSize: "9px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.1em" }}>AUTO-POSTS</div>
-            <div style={{ fontSize: "14px", fontWeight: 700, color: "#e3e5e4" }}>Sundays · 11am ET</div>
+            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>AUTO-POSTS</div>
+            <div style={{ fontSize: "17px", fontWeight: 700, color: "#efefef" }}>Sundays · 11am ET</div>
           </div>
           <div>
-            <div style={{ fontSize: "9px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.1em" }}>TOTAL SPOTLIGHTS</div>
-            <div style={{ fontSize: "14px", fontWeight: 700, color: "#e3e5e4" }}>{ss?.totalSpotlights ?? 0}</div>
+            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>TOTAL SPOTLIGHTS</div>
+            <div style={{ fontSize: "17px", fontWeight: 700, color: "#efefef" }}>{ss?.totalSpotlights ?? 0}</div>
           </div>
           <div>
-            <div style={{ fontSize: "9px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.1em" }}>LAST HOLDER</div>
-            <div style={{ fontSize: "14px", fontWeight: 700, color: "#f97316" }}>
+            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>LAST HOLDER</div>
+            <div style={{ fontSize: "17px", fontWeight: 700, color: "#f97316" }}>
               {ss?.lastHolderUsername ? `@${ss.lastHolderUsername}` : "—"}
             </div>
           </div>
         </div>
 
-        <div style={{ fontSize: "11px", color: "rgba(227,229,228,0.5)", lineHeight: 1.6, marginBottom: "16px", borderLeft: "2px solid #f97316", paddingLeft: "12px" }}>
+        <div style={{ fontSize: "14px", color: "rgba(227,229,228,0.68)", lineHeight: 1.6, marginBottom: "16px", borderLeft: "2px solid #f97316", paddingLeft: "12px" }}>
           Agent 306 picks one co-creator each week and writes their story — not a stat dump, a human portrait.
           Who they are. What they've built. The holder shares it. Their network discovers us.
         </div>
 
         {spotlightResult ? (
           <div style={{ padding: "12px", background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.3)" }}>
-            <div style={{ fontSize: "10px", color: "#4ade80", fontFamily: "monospace", marginBottom: "4px" }}>● POSTED</div>
+            <div style={{ fontSize: "13px", color: "#4ade80", fontFamily: "monospace", marginBottom: "4px" }}>● POSTED</div>
             <a href={spotlightResult} target="_blank" rel="noopener noreferrer"
-              style={{ fontSize: "12px", color: "#4ade80", fontFamily: "monospace" }}>{spotlightResult}</a>
+              style={{ fontSize: "15px", color: "#4ade80", fontFamily: "monospace" }}>{spotlightResult}</a>
           </div>
         ) : spotlightPreview ? (
           <div>
-            <div style={{ fontSize: "10px", color: "#f97316", fontFamily: "monospace", marginBottom: "4px" }}>
+            <div style={{ fontSize: "13px", color: "#f97316", fontFamily: "monospace", marginBottom: "4px" }}>
               SPOTLIGHT: @{spotlightPreview.holderUsername} · "{spotlightPreview.headline}"
             </div>
             <PreviewBox content={spotlightPreview.tweet} onPost={postSpotlight} posting={spotlightPosting} />
             <button onClick={() => setSpotlightPreview(null)}
-              style={{ marginTop: "8px", background: "transparent", border: "1px solid rgba(227,229,228,0.2)", color: "rgba(227,229,228,0.5)", padding: "6px 14px", fontFamily: "monospace", fontSize: "10px", cursor: "pointer" }}>
+              style={{ marginTop: "8px", background: "transparent", border: "1px solid rgba(227,229,228,0.35)", color: "rgba(227,229,228,0.68)", padding: "6px 14px", fontFamily: "monospace", fontSize: "13px", cursor: "pointer" }}>
               REGENERATE
             </button>
           </div>
@@ -189,7 +189,7 @@ export default function WeeklyEngines() {
           <button onClick={previewSpotlight} disabled={spotlightLoading}
             style={{
               background: "transparent", border: "1px solid #f97316", color: "#f97316",
-              padding: "10px 20px", fontFamily: "monospace", fontSize: "11px", fontWeight: 700,
+              padding: "10px 20px", fontFamily: "monospace", fontSize: "14px", fontWeight: 700,
               letterSpacing: "0.1em", cursor: spotlightLoading ? "not-allowed" : "pointer",
             }}>
             {spotlightLoading ? "GENERATING..." : "→ GENERATE SPOTLIGHT PREVIEW"}
@@ -201,33 +201,33 @@ export default function WeeklyEngines() {
       <Section title="🏁 THE RACE — STATE OF THE ARENA" accent="#a78bfa">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "16px", marginBottom: "20px" }}>
           <div>
-            <div style={{ fontSize: "9px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.1em" }}>AUTO-POSTS</div>
-            <div style={{ fontSize: "14px", fontWeight: 700, color: "#e3e5e4" }}>Sundays · 12pm ET</div>
+            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>AUTO-POSTS</div>
+            <div style={{ fontSize: "17px", fontWeight: 700, color: "#efefef" }}>Sundays · 12pm ET</div>
           </div>
           <div>
-            <div style={{ fontSize: "9px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.1em" }}>DAYS TO ARENA</div>
-            <div style={{ fontSize: "14px", fontWeight: 700, color: "#a78bfa" }}>{rs?.daysToArena ?? "—"}</div>
+            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>DAYS TO ARENA</div>
+            <div style={{ fontSize: "17px", fontWeight: 700, color: "#a78bfa" }}>{rs?.daysToArena ?? "—"}</div>
           </div>
           <div>
-            <div style={{ fontSize: "9px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.1em" }}>CHAPTERS WRITTEN</div>
-            <div style={{ fontSize: "14px", fontWeight: 700, color: "#e3e5e4" }}>{rs?.totalWeeks ?? 0}</div>
+            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>CHAPTERS WRITTEN</div>
+            <div style={{ fontSize: "17px", fontWeight: 700, color: "#efefef" }}>{rs?.totalWeeks ?? 0}</div>
           </div>
         </div>
 
-        <div style={{ fontSize: "11px", color: "rgba(227,229,228,0.5)", lineHeight: 1.6, marginBottom: "16px", borderLeft: "2px solid #a78bfa", paddingLeft: "12px" }}>
+        <div style={{ fontSize: "14px", color: "rgba(227,229,228,0.68)", lineHeight: 1.6, marginBottom: "16px", borderLeft: "2px solid #a78bfa", paddingLeft: "12px" }}>
           Every Sunday between now and May 15 is a chapter. Live rankings. Burn velocity. Who's climbing silently.
           By launch day, 306 is the only place with the complete pre-launch record.
         </div>
 
         {rs?.weeks?.length > 0 && (
           <div style={{ marginBottom: "16px" }}>
-            <div style={{ fontSize: "9px", color: "rgba(227,229,228,0.4)", fontFamily: "monospace", letterSpacing: "0.1em", marginBottom: "8px" }}>PREVIOUS CHAPTERS</div>
+            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em", marginBottom: "8px" }}>PREVIOUS CHAPTERS</div>
             {(rs.weeks as any[]).slice(-3).reverse().map((w: any) => (
-              <div key={w.weekNumber} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid rgba(227,229,228,0.06)", fontSize: "11px" }}>
+              <div key={w.weekNumber} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid rgba(227,229,228,0.12)", fontSize: "14px" }}>
                 <span style={{ color: "#a78bfa", fontFamily: "monospace" }}>Week {w.weekNumber}</span>
-                <span style={{ color: "#e3e5e4" }}>"{w.headline}"</span>
-                <span style={{ color: "rgba(227,229,228,0.4)" }}>{w.daysToArena}d to Arena</span>
-                {w.tweetUrl && <a href={w.tweetUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#a78bfa", fontSize: "10px", fontFamily: "monospace" }}>↗</a>}
+                <span style={{ color: "#efefef" }}>"{w.headline}"</span>
+                <span style={{ color: "rgba(227,229,228,0.60)" }}>{w.daysToArena}d to Arena</span>
+                {w.tweetUrl && <a href={w.tweetUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#a78bfa", fontSize: "13px", fontFamily: "monospace" }}>↗</a>}
               </div>
             ))}
           </div>
@@ -235,18 +235,18 @@ export default function WeeklyEngines() {
 
         {raceResult ? (
           <div style={{ padding: "12px", background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.3)" }}>
-            <div style={{ fontSize: "10px", color: "#4ade80", fontFamily: "monospace", marginBottom: "4px" }}>● POSTED</div>
+            <div style={{ fontSize: "13px", color: "#4ade80", fontFamily: "monospace", marginBottom: "4px" }}>● POSTED</div>
             <a href={raceResult} target="_blank" rel="noopener noreferrer"
-              style={{ fontSize: "12px", color: "#4ade80", fontFamily: "monospace" }}>{raceResult}</a>
+              style={{ fontSize: "15px", color: "#4ade80", fontFamily: "monospace" }}>{raceResult}</a>
           </div>
         ) : racePreview ? (
           <div>
-            <div style={{ fontSize: "10px", color: "#a78bfa", fontFamily: "monospace", marginBottom: "4px" }}>
+            <div style={{ fontSize: "13px", color: "#a78bfa", fontFamily: "monospace", marginBottom: "4px" }}>
               "{racePreview.headline}" · {racePreview.weekLabel} · {racePreview.context?.daysToArena}d to Arena
             </div>
             <PreviewBox content={racePreview.tweet} onPost={postRace} posting={racePosting} />
             <button onClick={() => setRacePreview(null)}
-              style={{ marginTop: "8px", background: "transparent", border: "1px solid rgba(227,229,228,0.2)", color: "rgba(227,229,228,0.5)", padding: "6px 14px", fontFamily: "monospace", fontSize: "10px", cursor: "pointer" }}>
+              style={{ marginTop: "8px", background: "transparent", border: "1px solid rgba(227,229,228,0.35)", color: "rgba(227,229,228,0.68)", padding: "6px 14px", fontFamily: "monospace", fontSize: "13px", cursor: "pointer" }}>
               REGENERATE
             </button>
           </div>
@@ -254,7 +254,7 @@ export default function WeeklyEngines() {
           <button onClick={previewRace} disabled={raceLoading}
             style={{
               background: "transparent", border: "1px solid #a78bfa", color: "#a78bfa",
-              padding: "10px 20px", fontFamily: "monospace", fontSize: "11px", fontWeight: 700,
+              padding: "10px 20px", fontFamily: "monospace", fontSize: "14px", fontWeight: 700,
               letterSpacing: "0.1em", cursor: raceLoading ? "not-allowed" : "pointer",
             }}>
             {raceLoading ? "GENERATING..." : "→ GENERATE RACE PREVIEW"}
@@ -262,7 +262,7 @@ export default function WeeklyEngines() {
         )}
       </Section>
 
-      <div style={{ fontSize: "10px", color: "rgba(227,229,228,0.2)", fontFamily: "monospace", textAlign: "center", marginTop: "16px" }}>
+      <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.35)", fontFamily: "monospace", textAlign: "center", marginTop: "16px" }}>
         Both engines auto-post every Sunday. Use this page to preview, edit intent, or post manually at any time.
       </div>
     </div>

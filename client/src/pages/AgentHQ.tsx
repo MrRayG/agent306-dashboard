@@ -12,9 +12,9 @@ const TEAL = "#2dd4bf";
 const PURPLE = "#a78bfa";
 const YELLOW = "#fbbf24";
 const RED = "#f87171";
-const DIM = "rgba(227,229,228,0.35)";
-const DIMMER = "rgba(227,229,228,0.18)";
-const DIMMEST = "rgba(227,229,228,0.07)";
+const DIM = "rgba(227,229,228,0.55)";
+const DIMMER = "rgba(227,229,228,0.30)";
+const DIMMEST = "rgba(227,229,228,0.14)";
 
 // ── Data types ─────────────────────────────────────────────────────────────────
 interface HouseData {
@@ -155,7 +155,7 @@ interface Hypothesis {
 
 // ── Status badge config ────────────────────────────────────────────────────────
 const STATUS_BADGE: Record<string, { color: string; bg: string; pulse?: boolean; label: string }> = {
-  queued:        { color: "rgba(227,229,228,0.5)", bg: "rgba(227,229,228,0.07)", label: "QUEUED" },
+  queued:        { color: "rgba(227,229,228,0.68)", bg: "rgba(227,229,228,0.14)", label: "QUEUED" },
   researching:   { color: ORANGE, bg: "rgba(249,115,22,0.1)", pulse: true, label: "RESEARCHING" },
   synthesizing:  { color: PURPLE, bg: "rgba(167,139,250,0.1)", label: "SYNTHESIZING" },
   hypothesis:    { color: PURPLE, bg: "rgba(167,139,250,0.1)", label: "HYPOTHESIS" },
@@ -194,7 +194,7 @@ function fmtShort(iso?: string | null) {
 // ── Shared UI components ──────────────────────────────────────────────────────
 function Label({ children }: { children: React.ReactNode }) {
   return (
-    <p style={{ ...mono, fontSize: "0.5rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 3px" }}>
+    <p style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 3px" }}>
       {children}
     </p>
   );
@@ -210,7 +210,7 @@ function StatusBadge({ status }: { status: string }) {
   const cfg = STATUS_BADGE[status] ?? { color: DIM, bg: DIMMEST, label: status.toUpperCase() };
   return (
     <span style={{
-      ...mono, fontSize: "0.48rem", color: cfg.color, background: cfg.bg,
+      ...mono, fontSize: "0.66rem", color: cfg.color, background: cfg.bg,
       border: `1px solid ${cfg.color}30`, padding: "1px 6px",
       textTransform: "uppercase" as const, letterSpacing: "0.1em",
       animation: cfg.pulse ? "research-pulse 1.4s ease-in-out infinite" : undefined,
@@ -254,9 +254,9 @@ function Input({ value, onChange, placeholder, multiline = false, rows = 3 }: {
   value: string; onChange: (v: string) => void; placeholder?: string; multiline?: boolean; rows?: number;
 }) {
   const shared = {
-    ...mono, fontSize: "0.65rem",
-    background: "rgba(227,229,228,0.03)", border: "1px solid rgba(227,229,228,0.12)",
-    color: "#e3e5e4", padding: "0.45rem 0.6rem", width: "100%", boxSizing: "border-box" as const,
+    ...mono, fontSize: "0.83rem",
+    background: "rgba(227,229,228,0.06)", border: "1px solid rgba(227,229,228,0.20)",
+    color: "#efefef", padding: "0.45rem 0.6rem", width: "100%", boxSizing: "border-box" as const,
     outline: "none", resize: "vertical" as const,
   };
   return multiline
@@ -272,9 +272,9 @@ function Select({ value, onChange, options }: {
       value={value}
       onChange={e => onChange(e.target.value)}
       style={{
-        ...mono, fontSize: "0.62rem",
-        background: "#0e0f10", border: "1px solid rgba(227,229,228,0.12)",
-        color: "#e3e5e4", padding: "0.4rem 0.55rem", outline: "none", width: "100%",
+        ...mono, fontSize: "0.80rem",
+        background: "#0e0f10", border: "1px solid rgba(227,229,228,0.20)",
+        color: "#efefef", padding: "0.4rem 0.55rem", outline: "none", width: "100%",
       }}
     >
       {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -286,12 +286,12 @@ function Select({ value, onChange, options }: {
 function RoomCard({ icon, title, children }: { icon: string; title: string; children: React.ReactNode }) {
   return (
     <div style={{
-      background: "rgba(227,229,228,0.015)", border: "1px solid rgba(227,229,228,0.07)",
+      background: "rgba(227,229,228,0.04)", border: "1px solid rgba(227,229,228,0.14)",
       padding: "0.75rem 0.85rem",
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: "0.5rem", borderBottom: "1px solid rgba(227,229,228,0.05)", paddingBottom: "0.4rem" }}>
-        <span style={{ fontSize: "0.8rem" }}>{icon}</span>
-        <span style={{ ...mono, fontSize: "0.52rem", color: ORANGE, textTransform: "uppercase" as const, letterSpacing: "0.12em" }}>{title}</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: "0.5rem", borderBottom: "1px solid rgba(227,229,228,0.10)", paddingBottom: "0.4rem" }}>
+        <span style={{ fontSize: "0.98rem" }}>{icon}</span>
+        <span style={{ ...mono, fontSize: "0.70rem", color: ORANGE, textTransform: "uppercase" as const, letterSpacing: "0.12em" }}>{title}</span>
       </div>
       <div style={{ display: "flex", flexDirection: "column" as const, gap: 4 }}>
         {children}
@@ -303,8 +303,8 @@ function RoomCard({ icon, title, children }: { icon: string; title: string; chil
 function Row({ label, value, color = "#e3e5e4" }: { label: string; value: React.ReactNode; color?: string }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-      <span style={{ ...mono, fontSize: "0.5rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase" as const, letterSpacing: "0.08em", flexShrink: 0 }}>{label}</span>
-      <span style={{ ...mono, fontSize: "0.58rem", color, fontWeight: 600, textAlign: "right" as const, wordBreak: "break-word" as const }}>{value}</span>
+      <span style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase" as const, letterSpacing: "0.08em", flexShrink: 0 }}>{label}</span>
+      <span style={{ ...mono, fontSize: "0.76rem", color, fontWeight: 600, textAlign: "right" as const, wordBreak: "break-word" as const }}>{value}</span>
     </div>
   );
 }
@@ -392,7 +392,7 @@ function FarcasterRoom({ d }: { d: HouseData["farcaster"] }) {
   return (
     <RoomCard icon="🟣" title="Farcaster">
       <Row label="Status" value={
-        <span style={{ color: d?.enabled ? GREEN : "rgba(227,229,228,0.4)" }}>
+        <span style={{ color: d?.enabled ? GREEN : "rgba(227,229,228,0.60)" }}>
           {d?.enabled ? "ENABLED" : "DISABLED"}
           {d?.configured === false && " (NOT CONFIGURED)"}
         </span>
@@ -414,8 +414,8 @@ function RoadAheadRoom({ d }: { d: HouseData["roadAhead"] }) {
       <div style={{ display: "flex", flexDirection: "column" as const, gap: 2, marginTop: 2 }}>
         {items.slice(0, 4).map((item, i) => (
           <div key={i} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-            <span style={{ ...mono, fontSize: "0.48rem", color: item.done ? GREEN : DIMMER }}>{item.done ? "✓" : "○"}</span>
-            <span style={{ ...mono, fontSize: "0.48rem", color: item.done ? GREEN : "rgba(227,229,228,0.35)", textDecoration: item.done ? "line-through" : "none" }}>
+            <span style={{ ...mono, fontSize: "0.66rem", color: item.done ? GREEN : DIMMER }}>{item.done ? "✓" : "○"}</span>
+            <span style={{ ...mono, fontSize: "0.66rem", color: item.done ? GREEN : "rgba(227,229,228,0.55)", textDecoration: item.done ? "line-through" : "none" }}>
               {item.label}
             </span>
           </div>
@@ -432,20 +432,20 @@ function ManuscriptRenderer({ text }: { text: string }) {
     <div style={{ display: "flex", flexDirection: "column" as const, gap: 4 }}>
       {lines.map((line, i) => {
         if (line.startsWith("## ")) {
-          return <p key={i} style={{ ...mono, fontSize: "0.72rem", fontWeight: 700, color: "#e3e5e4", margin: "8px 0 2px", letterSpacing: "0.05em" }}>{line.replace("## ", "")}</p>;
+          return <p key={i} style={{ ...mono, fontSize: "0.90rem", fontWeight: 700, color: "#efefef", margin: "8px 0 2px", letterSpacing: "0.05em" }}>{line.replace("## ", "")}</p>;
         }
         if (line.startsWith("# ")) {
-          return <p key={i} style={{ ...mono, fontSize: "0.85rem", fontWeight: 700, color: ORANGE, margin: "6px 0 4px" }}>{line.replace("# ", "")}</p>;
+          return <p key={i} style={{ ...mono, fontSize: "1.03rem", fontWeight: 700, color: ORANGE, margin: "6px 0 4px" }}>{line.replace("# ", "")}</p>;
         }
         if (line.startsWith("> ")) {
           return (
             <div key={i} style={{ borderLeft: `2px solid ${ORANGE}44`, paddingLeft: 10, margin: "2px 0" }}>
-              <p style={{ ...mono, fontSize: "0.62rem", color: "rgba(227,229,228,0.55)", fontStyle: "italic", margin: 0 }}>{line.replace("> ", "")}</p>
+              <p style={{ ...mono, fontSize: "0.80rem", color: "rgba(227,229,228,0.55)", fontStyle: "italic", margin: 0 }}>{line.replace("> ", "")}</p>
             </div>
           );
         }
         if (!line.trim()) return <div key={i} style={{ height: 6 }} />;
-        return <p key={i} style={{ ...mono, fontSize: "0.62rem", color: "rgba(227,229,228,0.7)", margin: 0, lineHeight: 1.65 }}>{line}</p>;
+        return <p key={i} style={{ ...mono, fontSize: "0.80rem", color: "rgba(227,229,228,0.7)", margin: 0, lineHeight: 1.65 }}>{line}</p>;
       })}
     </div>
   );
@@ -495,7 +495,7 @@ function ResearchPipelineTimeline({ topic }: { topic: ResearchTopic }) {
           if (isCompleted) {
             circleColor = TEAL;
             circleBorder = TEAL;
-            circleContent = <span style={{ fontSize: "0.4rem", color: BG, fontWeight: 700 }}>✓</span>;
+            circleContent = <span style={{ fontSize: "0.58rem", color: BG, fontWeight: 700 }}>✓</span>;
           } else if (isCurrent) {
             circleColor = isNeedsInput ? RED : ORANGE;
             circleBorder = isNeedsInput ? RED : ORANGE;
@@ -528,13 +528,13 @@ function ResearchPipelineTimeline({ topic }: { topic: ResearchTopic }) {
                 )}
               </div>
               <span style={{
-                ...mono, fontSize: "0.38rem", color: isCurrent ? (isNeedsInput ? RED : ORANGE) : isCompleted ? TEAL : DIMMER,
+                ...mono, fontSize: "0.56rem", color: isCurrent ? (isNeedsInput ? RED : ORANGE) : isCompleted ? TEAL : DIMMER,
                 textTransform: "uppercase" as const, letterSpacing: "0.05em", marginTop: 3, textAlign: "center" as const,
               }}>
                 {phase.label}
               </span>
               {hasLoopback && (
-                <span style={{ ...mono, fontSize: "0.4rem", color: YELLOW, marginTop: 1 }}>↩</span>
+                <span style={{ ...mono, fontSize: "0.58rem", color: YELLOW, marginTop: 1 }}>↩</span>
               )}
             </div>
           );
@@ -542,7 +542,7 @@ function ResearchPipelineTimeline({ topic }: { topic: ResearchTopic }) {
       </div>
       {/* Latest phase note */}
       {latestNote && (
-        <p style={{ ...mono, fontSize: "0.46rem", color: DIM, textAlign: "center" as const, marginTop: 6, margin: "6px 0 0" }}>
+        <p style={{ ...mono, fontSize: "0.64rem", color: DIM, textAlign: "center" as const, marginTop: 6, margin: "6px 0 0" }}>
           {latestNote}
         </p>
       )}
@@ -591,7 +591,7 @@ function TopicModal({ topic, onClose }: { topic: ResearchTopic; onClose: () => v
         style={{
           width: "100%", maxWidth: 720,
           background: "#111213",
-          border: "1px solid rgba(227,229,228,0.12)",
+          border: "1px solid rgba(227,229,228,0.20)",
           padding: "1.75rem",
           position: "relative" as const,
           marginBottom: "4vh",
@@ -603,7 +603,7 @@ function TopicModal({ topic, onClose }: { topic: ResearchTopic; onClose: () => v
           style={{
             position: "absolute" as const, top: 14, right: 16,
             background: "transparent", border: "none", color: DIM,
-            fontFamily: "monospace", fontSize: "1.1rem", cursor: "pointer", lineHeight: 1,
+            fontFamily: "monospace", fontSize: "1.3rem", cursor: "pointer", lineHeight: 1,
           }}
         >×</button>
 
@@ -611,12 +611,12 @@ function TopicModal({ topic, onClose }: { topic: ResearchTopic; onClose: () => v
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const, marginBottom: "0.75rem" }}>
           <StatusBadge status={topic.status} />
           <span style={{
-            ...mono, fontSize: "0.48rem",
+            ...mono, fontSize: "0.66rem",
             color: PRIORITY_COLOR[topic.priority],
             border: `1px solid ${PRIORITY_COLOR[topic.priority]}40`,
             padding: "1px 6px", textTransform: "uppercase" as const,
           }}>{topic.priority}</span>
-          <span style={{ ...mono, fontSize: "0.46rem", color: DIMMER }}>
+          <span style={{ ...mono, fontSize: "0.64rem", color: DIMMER }}>
             by {topic.addedBy} · {fmtDate(topic.addedAt)}
           </span>
         </div>
@@ -624,8 +624,8 @@ function TopicModal({ topic, onClose }: { topic: ResearchTopic; onClose: () => v
         {/* Needs input banner */}
         {topic.status === "needs_input" && (
           <div style={{ background: `${RED}15`, border: `1px solid ${RED}40`, padding: "0.75rem", marginBottom: "0.75rem" }}>
-            <p style={{ ...mono, fontSize: "0.52rem", color: RED, textTransform: "uppercase" as const, letterSpacing: "0.1em", marginBottom: 4, fontWeight: 700 }}>Agent is blocked — needs your input</p>
-            <p style={{ ...mono, fontSize: "0.62rem", color: "rgba(227,229,228,0.7)", margin: "0 0 8px", lineHeight: 1.5 }}>
+            <p style={{ ...mono, fontSize: "0.70rem", color: RED, textTransform: "uppercase" as const, letterSpacing: "0.1em", marginBottom: 4, fontWeight: 700 }}>Agent is blocked — needs your input</p>
+            <p style={{ ...mono, fontSize: "0.80rem", color: "rgba(227,229,228,0.7)", margin: "0 0 8px", lineHeight: 1.5 }}>
               {topic.needsInputReason || "Agent 306 has exhausted all available sources and needs additional information."}
             </p>
             {!showInput ? (
@@ -656,7 +656,7 @@ function TopicModal({ topic, onClose }: { topic: ResearchTopic; onClose: () => v
         )}
 
         {/* Title */}
-        <h2 style={{ ...mono, fontSize: "1.05rem", fontWeight: 700, color: ORANGE, margin: "0 0 1rem", lineHeight: 1.3 }}>
+        <h2 style={{ ...mono, fontSize: "1.25rem", fontWeight: 700, color: ORANGE, margin: "0 0 1rem", lineHeight: 1.3 }}>
           {topic.topic}
         </h2>
 
@@ -668,8 +668,8 @@ function TopicModal({ topic, onClose }: { topic: ResearchTopic; onClose: () => v
         {/* Description */}
         {topic.description && (
           <div style={{ marginBottom: "1.25rem" }}>
-            <p style={{ ...mono, fontSize: "0.52rem", color: DIMMER, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>Why she queued this</p>
-            <p style={{ ...mono, fontSize: "0.72rem", color: "rgba(227,229,228,0.75)", lineHeight: 1.75, margin: 0, whiteSpace: "pre-wrap" as const }}>
+            <p style={{ ...mono, fontSize: "0.70rem", color: DIMMER, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>Why she queued this</p>
+            <p style={{ ...mono, fontSize: "0.90rem", color: "rgba(227,229,228,0.75)", lineHeight: 1.75, margin: 0, whiteSpace: "pre-wrap" as const }}>
               {topic.description}
             </p>
           </div>
@@ -678,15 +678,15 @@ function TopicModal({ topic, onClose }: { topic: ResearchTopic; onClose: () => v
         {/* Research Question */}
         {topic.researchQuestion && (
           <div style={{ marginBottom: "1.25rem", background: `${TEAL}0d`, border: `1px solid ${TEAL}25`, padding: "0.85rem" }}>
-            <p style={{ ...mono, fontSize: "0.52rem", color: TEAL, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>Research Question</p>
-            <p style={{ ...mono, fontSize: "0.72rem", color: "rgba(227,229,228,0.85)", lineHeight: 1.7, margin: 0 }}>{topic.researchQuestion}</p>
+            <p style={{ ...mono, fontSize: "0.70rem", color: TEAL, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>Research Question</p>
+            <p style={{ ...mono, fontSize: "0.90rem", color: "rgba(227,229,228,0.85)", lineHeight: 1.7, margin: 0 }}>{topic.researchQuestion}</p>
           </div>
         )}
 
         {/* Literature Review */}
         {(topic.existingWork || (topic.literatureGaps && topic.literatureGaps.length > 0)) && (
           <div style={{ marginBottom: "1.25rem" }}>
-            <p style={{ ...mono, fontSize: "0.52rem", color: DIMMER, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>Literature Review</p>
+            <p style={{ ...mono, fontSize: "0.70rem", color: DIMMER, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>Literature Review</p>
             {topic.existingWork && (
               <p style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.65)", lineHeight: 1.75, margin: "0 0 8px", whiteSpace: "pre-wrap" as const }}>
                 {topic.existingWork}
@@ -694,11 +694,11 @@ function TopicModal({ topic, onClose }: { topic: ResearchTopic; onClose: () => v
             )}
             {topic.literatureGaps && topic.literatureGaps.length > 0 && (
               <div style={{ marginTop: 6 }}>
-                <p style={{ ...mono, fontSize: "0.48rem", color: YELLOW, textTransform: "uppercase" as const, letterSpacing: "0.1em", marginBottom: 4 }}>Knowledge Gaps</p>
+                <p style={{ ...mono, fontSize: "0.66rem", color: YELLOW, textTransform: "uppercase" as const, letterSpacing: "0.1em", marginBottom: 4 }}>Knowledge Gaps</p>
                 {topic.literatureGaps.map((gap, i) => (
                   <div key={i} style={{ display: "flex", gap: 5, marginBottom: 2 }}>
-                    <span style={{ ...mono, fontSize: "0.58rem", color: YELLOW }}>•</span>
-                    <span style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.6)", lineHeight: 1.5 }}>{gap}</span>
+                    <span style={{ ...mono, fontSize: "0.76rem", color: YELLOW }}>•</span>
+                    <span style={{ ...mono, fontSize: "0.76rem", color: "rgba(227,229,228,0.75)", lineHeight: 1.5 }}>{gap}</span>
                   </div>
                 ))}
               </div>
@@ -709,7 +709,7 @@ function TopicModal({ topic, onClose }: { topic: ResearchTopic; onClose: () => v
         {/* Methodology */}
         {topic.methodology && (
           <div style={{ marginBottom: "1.25rem" }}>
-            <p style={{ ...mono, fontSize: "0.52rem", color: DIMMER, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>Methodology</p>
+            <p style={{ ...mono, fontSize: "0.70rem", color: DIMMER, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>Methodology</p>
             <p style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.65)", lineHeight: 1.75, margin: 0, whiteSpace: "pre-wrap" as const }}>
               {topic.methodology}
             </p>
@@ -719,31 +719,31 @@ function TopicModal({ topic, onClose }: { topic: ResearchTopic; onClose: () => v
         {/* Data Points */}
         {topic.dataPoints && topic.dataPoints.length > 0 && (
           <div style={{ marginBottom: "1.25rem" }}>
-            <p style={{ ...mono, fontSize: "0.52rem", color: DIMMER, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>
+            <p style={{ ...mono, fontSize: "0.70rem", color: DIMMER, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>
               Data Points ({topic.dataPoints.length})
             </p>
             <div style={{ display: "flex", flexDirection: "column" as const, gap: 6, maxHeight: 300, overflowY: "auto" as const }}>
               {topic.dataPoints.map((dp, i) => (
-                <div key={i} style={{ background: "rgba(227,229,228,0.02)", border: "1px solid rgba(227,229,228,0.06)", padding: "0.65rem" }}>
+                <div key={i} style={{ background: "rgba(227,229,228,0.05)", border: "1px solid rgba(227,229,228,0.12)", padding: "0.65rem" }}>
                   <div style={{ display: "flex", gap: 5, marginBottom: 4, flexWrap: "wrap" as const }}>
-                    <span style={{ ...mono, fontSize: "0.42rem", color: TEAL, border: `1px solid ${TEAL}40`, padding: "0px 4px", textTransform: "uppercase" as const }}>{dp.source}</span>
-                    <span style={{ ...mono, fontSize: "0.42rem", color: PURPLE, border: `1px solid ${PURPLE}40`, padding: "0px 4px", textTransform: "uppercase" as const }}>{dp.type}</span>
-                    <span style={{ ...mono, fontSize: "0.42rem", color: CONFIDENCE_COLOR[dp.relevance] ?? DIM, border: `1px solid ${(CONFIDENCE_COLOR[dp.relevance] ?? DIM)}40`, padding: "0px 4px", textTransform: "uppercase" as const }}>{dp.relevance}</span>
+                    <span style={{ ...mono, fontSize: "0.60rem", color: TEAL, border: `1px solid ${TEAL}40`, padding: "0px 4px", textTransform: "uppercase" as const }}>{dp.source}</span>
+                    <span style={{ ...mono, fontSize: "0.60rem", color: PURPLE, border: `1px solid ${PURPLE}40`, padding: "0px 4px", textTransform: "uppercase" as const }}>{dp.type}</span>
+                    <span style={{ ...mono, fontSize: "0.60rem", color: CONFIDENCE_COLOR[dp.relevance] ?? DIM, border: `1px solid ${(CONFIDENCE_COLOR[dp.relevance] ?? DIM)}40`, padding: "0px 4px", textTransform: "uppercase" as const }}>{dp.relevance}</span>
                     {dp.credibility && (() => {
                       const credColor = dp.credibility === "verified" ? GREEN : dp.credibility === "likely" ? TEAL : dp.credibility === "disputed" ? RED : YELLOW;
                       return (
-                        <span style={{ ...mono, fontSize: "0.42rem", color: credColor, border: `1px solid ${credColor}40`, padding: "0px 4px", textTransform: "uppercase" as const }}
+                        <span style={{ ...mono, fontSize: "0.60rem", color: credColor, border: `1px solid ${credColor}40`, padding: "0px 4px", textTransform: "uppercase" as const }}
                           title={dp.credibilityNote ?? ""}>
                           {dp.credibility === "verified" ? "✓ " : dp.credibility === "disputed" ? "⚠ " : ""}{dp.credibility}
                         </span>
                       );
                     })()}
                   </div>
-                  <p style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.6)", lineHeight: 1.5, margin: 0 }}>
+                  <p style={{ ...mono, fontSize: "0.76rem", color: "rgba(227,229,228,0.75)", lineHeight: 1.5, margin: 0 }}>
                     {dp.content.length > 300 ? dp.content.slice(0, 300) + "..." : dp.content}
                   </p>
                   {dp.sourceUrl && (
-                    <a href={dp.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ ...mono, fontSize: "0.46rem", color: TEAL, textDecoration: "none", marginTop: 3, display: "inline-block" }}>
+                    <a href={dp.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ ...mono, fontSize: "0.64rem", color: TEAL, textDecoration: "none", marginTop: 3, display: "inline-block" }}>
                       {dp.sourceUrl}
                     </a>
                   )}
@@ -756,7 +756,7 @@ function TopicModal({ topic, onClose }: { topic: ResearchTopic; onClose: () => v
         {/* Analysis Findings */}
         {topic.analysisFindings && (
           <div style={{ marginBottom: "1.25rem", background: `${PURPLE}0d`, border: `1px solid ${PURPLE}25`, padding: "0.85rem" }}>
-            <p style={{ ...mono, fontSize: "0.52rem", color: PURPLE, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>Analysis</p>
+            <p style={{ ...mono, fontSize: "0.70rem", color: PURPLE, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>Analysis</p>
             <p style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.75)", lineHeight: 1.75, margin: 0, whiteSpace: "pre-wrap" as const }}>
               {topic.analysisFindings}
             </p>
@@ -766,18 +766,18 @@ function TopicModal({ topic, onClose }: { topic: ResearchTopic; onClose: () => v
         {/* Conclusion */}
         {topic.conclusion && (
           <div style={{ marginBottom: "1.25rem", background: `${GREEN}0d`, border: `1px solid ${GREEN}25`, padding: "0.85rem" }}>
-            <p style={{ ...mono, fontSize: "0.52rem", color: GREEN, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>Conclusion</p>
-            <p style={{ ...mono, fontSize: "0.72rem", color: "rgba(227,229,228,0.85)", lineHeight: 1.7, margin: 0 }}>{topic.conclusion}</p>
+            <p style={{ ...mono, fontSize: "0.70rem", color: GREEN, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>Conclusion</p>
+            <p style={{ ...mono, fontSize: "0.90rem", color: "rgba(227,229,228,0.85)", lineHeight: 1.7, margin: 0 }}>{topic.conclusion}</p>
           </div>
         )}
 
         {/* Hypothesis */}
         {topic.hypothesis && (
           <div style={{ marginBottom: "1.25rem", background: `${PURPLE}0d`, border: `1px solid ${PURPLE}25`, padding: "0.85rem" }}>
-            <p style={{ ...mono, fontSize: "0.52rem", color: PURPLE, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>Hypothesis</p>
-            <p style={{ ...mono, fontSize: "0.72rem", color: "rgba(227,229,228,0.85)", lineHeight: 1.7, margin: 0 }}>{topic.hypothesis}</p>
+            <p style={{ ...mono, fontSize: "0.70rem", color: PURPLE, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>Hypothesis</p>
+            <p style={{ ...mono, fontSize: "0.90rem", color: "rgba(227,229,228,0.85)", lineHeight: 1.7, margin: 0 }}>{topic.hypothesis}</p>
             {topic.confidence && (
-              <p style={{ ...mono, fontSize: "0.5rem", color: CONFIDENCE_COLOR[topic.confidence], marginTop: 8 }}>
+              <p style={{ ...mono, fontSize: "0.68rem", color: CONFIDENCE_COLOR[topic.confidence], marginTop: 8 }}>
                 Confidence: {topic.confidence.toUpperCase()}
               </p>
             )}
@@ -787,9 +787,9 @@ function TopicModal({ topic, onClose }: { topic: ResearchTopic; onClose: () => v
         {/* Raw findings */}
         {topic.rawFindings && (
           <div style={{ marginBottom: "1.25rem" }}>
-            <p style={{ ...mono, fontSize: "0.52rem", color: DIMMER, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>Research findings</p>
+            <p style={{ ...mono, fontSize: "0.70rem", color: DIMMER, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>Research findings</p>
             <div style={{
-              background: "rgba(227,229,228,0.02)", border: "1px solid rgba(227,229,228,0.06)",
+              background: "rgba(227,229,228,0.05)", border: "1px solid rgba(227,229,228,0.12)",
               padding: "0.85rem", maxHeight: 300, overflowY: "auto" as const,
             }}>
               <p style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.65)", lineHeight: 1.75, margin: 0, whiteSpace: "pre-wrap" as const }}>
@@ -802,9 +802,9 @@ function TopicModal({ topic, onClose }: { topic: ResearchTopic; onClose: () => v
         {/* Manuscript */}
         {topic.manuscript && (
           <div style={{ marginBottom: "1.25rem" }}>
-            <p style={{ ...mono, fontSize: "0.52rem", color: DIMMER, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 8 }}>Manuscript draft</p>
+            <p style={{ ...mono, fontSize: "0.70rem", color: DIMMER, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 8 }}>Manuscript draft</p>
             <div style={{
-              background: "rgba(227,229,228,0.02)", border: "1px solid rgba(227,229,228,0.06)",
+              background: "rgba(227,229,228,0.05)", border: "1px solid rgba(227,229,228,0.12)",
               padding: "0.85rem", maxHeight: 420, overflowY: "auto" as const,
             }}>
               <ManuscriptRenderer text={topic.manuscript} />
@@ -815,19 +815,19 @@ function TopicModal({ topic, onClose }: { topic: ResearchTopic; onClose: () => v
         {/* Agent recommendation */}
         {topic.agentRecommendation && (
           <div style={{ marginBottom: "1.25rem", background: `${ORANGE}0a`, border: `1px solid ${ORANGE}20`, padding: "0.85rem" }}>
-            <p style={{ ...mono, fontSize: "0.52rem", color: ORANGE, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>Agent recommendation</p>
-            <p style={{ ...mono, fontSize: "0.72rem", color: "rgba(227,229,228,0.8)", lineHeight: 1.7, margin: 0 }}>{topic.agentRecommendation}</p>
+            <p style={{ ...mono, fontSize: "0.70rem", color: ORANGE, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>Agent recommendation</p>
+            <p style={{ ...mono, fontSize: "0.90rem", color: "rgba(227,229,228,0.8)", lineHeight: 1.7, margin: 0 }}>{topic.agentRecommendation}</p>
           </div>
         )}
 
         {/* Sources */}
         {topic.sources && topic.sources.length > 0 && (
           <div style={{ marginBottom: "1.25rem" }}>
-            <p style={{ ...mono, fontSize: "0.52rem", color: DIMMER, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>Sources</p>
+            <p style={{ ...mono, fontSize: "0.70rem", color: DIMMER, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>Sources</p>
             <div style={{ display: "flex", flexDirection: "column" as const, gap: 4 }}>
               {topic.sources.map((s, i) => (
                 <a key={i} href={s} target="_blank" rel="noopener noreferrer" style={{
-                  ...mono, fontSize: "0.62rem", color: TEAL,
+                  ...mono, fontSize: "0.80rem", color: TEAL,
                   textDecoration: "none", wordBreak: "break-all" as const,
                 }}>
                   {s}
@@ -840,7 +840,7 @@ function TopicModal({ topic, onClose }: { topic: ResearchTopic; onClose: () => v
         {/* MrRayG review note */}
         {topic.reviewNote && (
           <div style={{ background: `${YELLOW}0a`, border: `1px solid ${YELLOW}20`, padding: "0.75rem", marginBottom: "1.25rem" }}>
-            <p style={{ ...mono, fontSize: "0.52rem", color: YELLOW, textTransform: "uppercase" as const, letterSpacing: "0.1em", marginBottom: 4 }}>MrRayG note</p>
+            <p style={{ ...mono, fontSize: "0.70rem", color: YELLOW, textTransform: "uppercase" as const, letterSpacing: "0.1em", marginBottom: 4 }}>MrRayG note</p>
             <p style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.8)", margin: 0 }}>{topic.reviewNote}</p>
           </div>
         )}
@@ -848,19 +848,19 @@ function TopicModal({ topic, onClose }: { topic: ResearchTopic; onClose: () => v
         {/* Unresolved Knowledge Gaps */}
         {topic.unresolvedGaps && topic.unresolvedGaps.length > 0 && (
           <div style={{ marginBottom: "1.25rem", background: `${RED}0a`, border: `1px solid ${RED}20`, padding: "0.85rem" }}>
-            <p style={{ ...mono, fontSize: "0.52rem", color: RED, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>
+            <p style={{ ...mono, fontSize: "0.70rem", color: RED, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>
               Unresolved Knowledge Gaps ({topic.unresolvedGaps.length})
             </p>
             <div style={{ display: "flex", flexDirection: "column" as const, gap: 6 }}>
               {topic.unresolvedGaps.map((gap, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-                  <span style={{ ...mono, fontSize: "0.55rem", color: RED, flexShrink: 0 }}>⚠</span>
-                  <p style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.7)", margin: 0, lineHeight: 1.5 }}>{gap}</p>
+                  <span style={{ ...mono, fontSize: "0.73rem", color: RED, flexShrink: 0 }}>⚠</span>
+                  <p style={{ ...mono, fontSize: "0.76rem", color: "rgba(227,229,228,0.7)", margin: 0, lineHeight: 1.5 }}>{gap}</p>
                 </div>
               ))}
             </div>
             {topic.gapFollowUpIds && topic.gapFollowUpIds.length > 0 && (
-              <p style={{ ...mono, fontSize: "0.48rem", color: TEAL, marginTop: 8, margin: "8px 0 0" }}>
+              <p style={{ ...mono, fontSize: "0.66rem", color: TEAL, marginTop: 8, margin: "8px 0 0" }}>
                 → {topic.gapFollowUpIds.length} follow-up research topic{topic.gapFollowUpIds.length !== 1 ? "s" : ""} auto-queued to address these gaps
               </p>
             )}
@@ -870,23 +870,23 @@ function TopicModal({ topic, onClose }: { topic: ResearchTopic; onClose: () => v
         {/* Research Lineage */}
         {topic.spawnsFrom && (
           <div style={{ marginBottom: "1rem", background: `${PURPLE}0a`, border: `1px solid ${PURPLE}20`, padding: "0.65rem" }}>
-            <p style={{ ...mono, fontSize: "0.5rem", color: PURPLE, textTransform: "uppercase" as const, letterSpacing: "0.1em", marginBottom: 3 }}>Spawned from gap</p>
-            <p style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.65)", margin: 0 }}>This research was auto-queued to address an unresolved knowledge gap from a prior study.</p>
+            <p style={{ ...mono, fontSize: "0.68rem", color: PURPLE, textTransform: "uppercase" as const, letterSpacing: "0.1em", marginBottom: 3 }}>Spawned from gap</p>
+            <p style={{ ...mono, fontSize: "0.76rem", color: "rgba(227,229,228,0.65)", margin: 0 }}>This research was auto-queued to address an unresolved knowledge gap from a prior study.</p>
           </div>
         )}
 
         {/* Content Pipeline Suggestions */}
         {topic.contentSuggestions && (topic.contentSuggestions.postThread?.length || topic.contentSuggestions.podcastTopic || topic.contentSuggestions.articleAngle) && (
           <div style={{ marginBottom: "1.25rem", background: `${GREEN}0a`, border: `1px solid ${GREEN}20`, padding: "0.85rem" }}>
-            <p style={{ ...mono, fontSize: "0.52rem", color: GREEN, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 8 }}>Content Suggestions</p>
+            <p style={{ ...mono, fontSize: "0.70rem", color: GREEN, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 8 }}>Content Suggestions</p>
 
             {topic.contentSuggestions.postThread && topic.contentSuggestions.postThread.length > 0 && (
               <div style={{ marginBottom: 10 }}>
-                <p style={{ ...mono, fontSize: "0.48rem", color: TEAL, textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: 4 }}>Thread ({topic.contentSuggestions.postThread.length} tweets)</p>
+                <p style={{ ...mono, fontSize: "0.66rem", color: TEAL, textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: 4 }}>Thread ({topic.contentSuggestions.postThread.length} tweets)</p>
                 {topic.contentSuggestions.postThread.map((tweet, i) => (
                   <div key={i} style={{ display: "flex", gap: 6, marginBottom: 4 }}>
-                    <span style={{ ...mono, fontSize: "0.46rem", color: DIM, flexShrink: 0 }}>{i + 1}.</span>
-                    <p style={{ ...mono, fontSize: "0.56rem", color: "rgba(227,229,228,0.7)", margin: 0, lineHeight: 1.4 }}>{tweet}</p>
+                    <span style={{ ...mono, fontSize: "0.64rem", color: DIM, flexShrink: 0 }}>{i + 1}.</span>
+                    <p style={{ ...mono, fontSize: "0.74rem", color: "rgba(227,229,228,0.7)", margin: 0, lineHeight: 1.4 }}>{tweet}</p>
                   </div>
                 ))}
               </div>
@@ -894,15 +894,15 @@ function TopicModal({ topic, onClose }: { topic: ResearchTopic; onClose: () => v
 
             {topic.contentSuggestions.podcastTopic && (
               <div style={{ marginBottom: 10 }}>
-                <p style={{ ...mono, fontSize: "0.48rem", color: ORANGE, textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: 4 }}>Podcast Episode</p>
-                <p style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.7)", margin: 0, lineHeight: 1.5 }}>{topic.contentSuggestions.podcastTopic}</p>
+                <p style={{ ...mono, fontSize: "0.66rem", color: ORANGE, textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: 4 }}>Podcast Episode</p>
+                <p style={{ ...mono, fontSize: "0.76rem", color: "rgba(227,229,228,0.7)", margin: 0, lineHeight: 1.5 }}>{topic.contentSuggestions.podcastTopic}</p>
               </div>
             )}
 
             {topic.contentSuggestions.articleAngle && (
               <div>
-                <p style={{ ...mono, fontSize: "0.48rem", color: PURPLE, textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: 4 }}>Long-form Article</p>
-                <p style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.7)", margin: 0, lineHeight: 1.5 }}>{topic.contentSuggestions.articleAngle}</p>
+                <p style={{ ...mono, fontSize: "0.66rem", color: PURPLE, textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: 4 }}>Long-form Article</p>
+                <p style={{ ...mono, fontSize: "0.76rem", color: "rgba(227,229,228,0.7)", margin: 0, lineHeight: 1.5 }}>{topic.contentSuggestions.articleAngle}</p>
               </div>
             )}
           </div>
@@ -911,13 +911,13 @@ function TopicModal({ topic, onClose }: { topic: ResearchTopic; onClose: () => v
         {/* Linked goal */}
         {topic.goalId && (
           <div style={{ marginBottom: "1rem", background: `${TEAL}0a`, border: `1px solid ${TEAL}20`, padding: "0.65rem" }}>
-            <p style={{ ...mono, fontSize: "0.5rem", color: TEAL, textTransform: "uppercase" as const, letterSpacing: "0.1em", marginBottom: 3 }}>Linked Dev Goal</p>
-            <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.7)", margin: 0 }}>This research was suggested to advance a development goal. Check Dev Goals tab for progress.</p>
+            <p style={{ ...mono, fontSize: "0.68rem", color: TEAL, textTransform: "uppercase" as const, letterSpacing: "0.1em", marginBottom: 3 }}>Linked Dev Goal</p>
+            <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.7)", margin: 0 }}>This research was suggested to advance a development goal. Check Dev Goals tab for progress.</p>
           </div>
         )}
 
         {/* Footer meta */}
-        <p style={{ ...mono, fontSize: "0.46rem", color: DIMMEST, marginTop: 12 }}>
+        <p style={{ ...mono, fontSize: "0.64rem", color: DIMMEST, marginTop: 12 }}>
           Added {fmtDate(topic.addedAt)} · Updated {fmtDate(topic.updatedAt)}
           {topic.researchedAt ? ` · Researched ${fmtDate(topic.researchedAt)}` : ""}
           {topic.publishedAt ? ` · Published ${fmtDate(topic.publishedAt)}` : ""}
@@ -945,16 +945,16 @@ function BulkActionToolbar({
       padding: "0.65rem 1.25rem", display: "flex", alignItems: "center", gap: 12,
       zIndex: 1000, boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
     }}>
-      <span style={{ ...mono, fontSize: "0.58rem", color: ORANGE, fontWeight: 700 }}>
+      <span style={{ ...mono, fontSize: "0.76rem", color: ORANGE, fontWeight: 700 }}>
         {selectedCount} selected
       </span>
-      <div style={{ width: 1, height: 20, background: "rgba(227,229,228,0.1)" }} />
+      <div style={{ width: 1, height: 20, background: "rgba(227,229,228,0.18)" }} />
       {actions.map((a, i) => (
         <Btn key={i} onClick={a.onClick} disabled={a.disabled} color={a.color} outline={a.outline} small>
           {a.label}
         </Btn>
       ))}
-      <div style={{ width: 1, height: 20, background: "rgba(227,229,228,0.1)" }} />
+      <div style={{ width: 1, height: 20, background: "rgba(227,229,228,0.18)" }} />
       <Btn onClick={onClearSelection} color={DIM} outline small>Clear</Btn>
     </div>
   );
@@ -966,12 +966,12 @@ function SelectCheckbox({ checked, onChange }: { checked: boolean; onChange: (v:
       onClick={e => { e.stopPropagation(); onChange(!checked); }}
       style={{
         width: 16, height: 16, flexShrink: 0,
-        border: `1px solid ${checked ? ORANGE : "rgba(227,229,228,0.2)"}`,
+        border: `1px solid ${checked ? ORANGE : "rgba(227,229,228,0.35)"}`,
         background: checked ? ORANGE : "transparent",
         cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
       }}
     >
-      {checked && <span style={{ fontSize: "0.5rem", color: "#0e0f10", fontWeight: 900 }}>✓</span>}
+      {checked && <span style={{ fontSize: "0.68rem", color: "#0e0f10", fontWeight: 900 }}>✓</span>}
     </button>
   );
 }
@@ -1070,11 +1070,11 @@ function ResearchQueueTab({ topics, goals, refetch }: { topics: ResearchTopic[];
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap" as const, gap: 8 }}>
         <div style={{ display: "flex", flexDirection: "column" as const, gap: 3 }}>
-          <span style={{ ...mono, fontSize: "0.55rem", color: DIM, textTransform: "uppercase" as const, letterSpacing: "0.1em" }}>
+          <span style={{ ...mono, fontSize: "0.73rem", color: DIM, textTransform: "uppercase" as const, letterSpacing: "0.1em" }}>
             {visibleTopics.length} topics in queue{archivedCount > 0 && !showArchived ? ` (${archivedCount} archived)` : ""}
           </span>
           {scannerData?.lastScanAt && (
-            <span style={{ ...mono, fontSize: "0.46rem", color: DIMMER }}>
+            <span style={{ ...mono, fontSize: "0.64rem", color: DIMMER }}>
               Last gap scan: {fmtDate(scannerData.lastScanAt)} · {scannerData.totalQueued} topics queued total
             </span>
           )}
@@ -1121,7 +1121,7 @@ function ResearchQueueTab({ topics, goals, refetch }: { topics: ResearchTopic[];
             checked={visibleTopics.length > 0 && visibleTopics.every(t => selected.has(t.id))}
             onChange={v => setSelected(v ? new Set(visibleTopics.map(t => t.id)) : new Set())}
           />
-          <span style={{ ...mono, fontSize: "0.48rem", color: DIM, textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>
+          <span style={{ ...mono, fontSize: "0.66rem", color: DIM, textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>
             Select All
           </span>
         </div>
@@ -1158,7 +1158,7 @@ function ResearchQueueTab({ topics, goals, refetch }: { topics: ResearchTopic[];
       {/* Topic list */}
       {visibleTopics.length === 0 && (
         <div style={{ padding: "2rem", textAlign: "center" as const, border: `1px solid ${DIMMEST}` }}>
-          <p style={{ ...mono, fontSize: "0.65rem", color: DIMMER, margin: 0 }}>
+          <p style={{ ...mono, fontSize: "0.83rem", color: DIMMER, margin: 0 }}>
             {topics.length === 0 ? "No research topics yet. Add one above." : "All topics are archived. Toggle \"Show Archived\" to see them."}
           </p>
         </div>
@@ -1176,19 +1176,19 @@ function ResearchQueueTab({ topics, goals, refetch }: { topics: ResearchTopic[];
             key={topic.id}
             onClick={() => setModalTopic(topic)}
             style={{
-              background: "rgba(227,229,228,0.015)",
-              border: "1px solid rgba(227,229,228,0.07)",
+              background: "rgba(227,229,228,0.04)",
+              border: "1px solid rgba(227,229,228,0.14)",
               borderLeft: topic.status === "needs_input" ? `3px solid ${RED}` : undefined,
               padding: "0.75rem 1rem",
               cursor: "pointer",
               transition: "border-color 0.15s",
             }}
-            onMouseEnter={e => (e.currentTarget.style.borderColor = "rgba(227,229,228,0.18)")}
-            onMouseLeave={e => (e.currentTarget.style.borderColor = "rgba(227,229,228,0.07)")}
+            onMouseEnter={e => (e.currentTarget.style.borderColor = "rgba(227,229,228,0.30)")}
+            onMouseLeave={e => (e.currentTarget.style.borderColor = "rgba(227,229,228,0.14)")}
           >
             {/* Needs input banner on card */}
             {topic.status === "needs_input" && topic.needsInputReason && (
-              <p style={{ ...mono, fontSize: "0.5rem", color: RED, margin: "0 0 6px", lineHeight: 1.4 }}>
+              <p style={{ ...mono, fontSize: "0.68rem", color: RED, margin: "0 0 6px", lineHeight: 1.4 }}>
                 {topic.needsInputReason.length > 120 ? topic.needsInputReason.slice(0, 120) + "..." : topic.needsInputReason}
               </p>
             )}
@@ -1199,7 +1199,7 @@ function ResearchQueueTab({ topics, goals, refetch }: { topics: ResearchTopic[];
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" as const, marginBottom: 4 }}>
                   <StatusBadge status={topic.status} />
-                  <span style={{ ...mono, fontSize: "0.48rem", color: PRIORITY_COLOR[topic.priority], border: `1px solid ${PRIORITY_COLOR[topic.priority]}40`, padding: "1px 5px", textTransform: "uppercase" as const }}>
+                  <span style={{ ...mono, fontSize: "0.66rem", color: PRIORITY_COLOR[topic.priority], border: `1px solid ${PRIORITY_COLOR[topic.priority]}40`, padding: "1px 5px", textTransform: "uppercase" as const }}>
                     {topic.priority}
                   </span>
                   {/* Pipeline status — always visible */}
@@ -1244,11 +1244,11 @@ function ResearchQueueTab({ topics, goals, refetch }: { topics: ResearchTopic[];
                       STUCK · {getResearchStuckDays(topic)}d
                     </span>
                   )}
-                  <span style={{ ...mono, fontSize: "0.45rem", color: "rgba(227,229,228,0.25)" }}>
+                  <span style={{ ...mono, fontSize: "0.63rem", color: "rgba(227,229,228,0.40)" }}>
                     by {topic.addedBy} · {fmtShort(topic.updatedAt)}
                   </span>
                   {topic.spawnsFrom && (
-                    <span style={{ ...mono, fontSize: "0.42rem", color: PURPLE, background: `${PURPLE}12`, border: `1px solid ${PURPLE}25`, padding: "1px 5px" }}>
+                    <span style={{ ...mono, fontSize: "0.60rem", color: PURPLE, background: `${PURPLE}12`, border: `1px solid ${PURPLE}25`, padding: "1px 5px" }}>
                       → gap follow-up
                     </span>
                   )}
@@ -1267,9 +1267,9 @@ function ResearchQueueTab({ topics, goals, refetch }: { topics: ResearchTopic[];
                     ) : null;
                   })()}
                 </div>
-                <p style={{ ...mono, fontSize: "0.68rem", color: "#e3e5e4", fontWeight: 700, margin: 0, lineHeight: 1.3 }}>{topic.topic}</p>
+                <p style={{ ...mono, fontSize: "0.68rem", color: "#efefef", fontWeight: 700, margin: 0, lineHeight: 1.3 }}>{topic.topic}</p>
                 {topic.description && (
-                  <p style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.4)", margin: "3px 0 0", lineHeight: 1.4 }}>{topic.description.split("\n")[0]}</p>
+                  <p style={{ ...mono, fontSize: "0.76rem", color: "rgba(227,229,228,0.60)", margin: "3px 0 0", lineHeight: 1.4 }}>{topic.description.split("\n")[0]}</p>
                 )}
               </div>
               <div onClick={e => e.stopPropagation()} style={{ flexShrink: 0, display: "flex", gap: 6, alignItems: "flex-start" }}>
@@ -1295,7 +1295,7 @@ function ResearchQueueTab({ topics, goals, refetch }: { topics: ResearchTopic[];
                 )}
                 {topic.status === "published" && topic.publishedUrl && (
                   <a href={topic.publishedUrl} target="_blank" rel="noopener noreferrer" style={{
-                    ...mono, fontSize: "0.52rem", color: TEAL, border: `1px solid ${TEAL}40`,
+                    ...mono, fontSize: "0.70rem", color: TEAL, border: `1px solid ${TEAL}40`,
                     padding: "3px 10px", textDecoration: "none", textTransform: "uppercase" as const,
                   }}>
                     View →
@@ -1306,7 +1306,7 @@ function ResearchQueueTab({ topics, goals, refetch }: { topics: ResearchTopic[];
 
             {/* Inline manuscript viewer for pending_review */}
             {expanded === topic.id && topic.manuscript && (
-              <div style={{ marginTop: "0.75rem", paddingTop: "0.75rem", borderTop: "1px solid rgba(227,229,228,0.07)" }}>
+              <div style={{ marginTop: "0.75rem", paddingTop: "0.75rem", borderTop: "1px solid rgba(227,229,228,0.14)" }}>
                 <ManuscriptRenderer text={topic.manuscript} />
               </div>
             )}
@@ -1365,7 +1365,7 @@ function HypothesesTab({ hypotheses, refetch }: { hypotheses: Hypothesis[]; refe
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-        <span style={{ ...mono, fontSize: "0.55rem", color: DIM, textTransform: "uppercase" as const, letterSpacing: "0.1em" }}>
+        <span style={{ ...mono, fontSize: "0.73rem", color: DIM, textTransform: "uppercase" as const, letterSpacing: "0.1em" }}>
           {hypotheses.length} hypotheses tracked
         </span>
         <Btn onClick={() => setShowForm(v => !v)} outline color={PURPLE}>
@@ -1413,7 +1413,7 @@ function HypothesesTab({ hypotheses, refetch }: { hypotheses: Hypothesis[]; refe
 
       {hypotheses.length === 0 && (
         <div style={{ padding: "2rem", textAlign: "center" as const, border: `1px solid ${DIMMEST}` }}>
-          <p style={{ ...mono, fontSize: "0.65rem", color: DIMMER, margin: 0 }}>No hypotheses yet. Form one above or run a research cycle.</p>
+          <p style={{ ...mono, fontSize: "0.83rem", color: DIMMER, margin: 0 }}>No hypotheses yet. Form one above or run a research cycle.</p>
         </div>
       )}
 
@@ -1430,28 +1430,28 @@ function HypothesesTab({ hypotheses, refetch }: { hypotheses: Hypothesis[]; refe
           };
           const sc = statusCfg[hyp.status] ?? { color: DIM, label: hyp.status.toUpperCase() };
           return (
-            <div key={hyp.id} style={{ background: "rgba(227,229,228,0.015)", border: "1px solid rgba(227,229,228,0.07)", padding: "0.75rem 1rem" }}>
+            <div key={hyp.id} style={{ background: "rgba(227,229,228,0.04)", border: "1px solid rgba(227,229,228,0.14)", padding: "0.75rem 1rem" }}>
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" as const, marginBottom: 5 }}>
-                    <span style={{ ...mono, fontSize: "0.48rem", color: sc.color, border: `1px solid ${sc.color}40`, padding: "1px 6px", textTransform: "uppercase" as const }}>
+                    <span style={{ ...mono, fontSize: "0.66rem", color: sc.color, border: `1px solid ${sc.color}40`, padding: "1px 6px", textTransform: "uppercase" as const }}>
                       {sc.label}
                     </span>
-                    <span style={{ ...mono, fontSize: "0.48rem", color: CONFIDENCE_COLOR[hyp.confidence], border: `1px solid ${CONFIDENCE_COLOR[hyp.confidence]}40`, padding: "1px 5px", textTransform: "uppercase" as const }}>
+                    <span style={{ ...mono, fontSize: "0.66rem", color: CONFIDENCE_COLOR[hyp.confidence], border: `1px solid ${CONFIDENCE_COLOR[hyp.confidence]}40`, padding: "1px 5px", textTransform: "uppercase" as const }}>
                       {hyp.confidence} confidence
                     </span>
-                    <span style={{ ...mono, fontSize: "0.45rem", color: "rgba(227,229,228,0.25)" }}>{fmtShort(hyp.formedAt)}</span>
+                    <span style={{ ...mono, fontSize: "0.63rem", color: "rgba(227,229,228,0.40)" }}>{fmtShort(hyp.formedAt)}</span>
                   </div>
-                  <p style={{ ...mono, fontSize: "0.68rem", color: "#e3e5e4", fontWeight: 700, margin: "0 0 4px", lineHeight: 1.35 }}>
+                  <p style={{ ...mono, fontSize: "0.68rem", color: "#efefef", fontWeight: 700, margin: "0 0 4px", lineHeight: 1.35 }}>
                     {hyp.claim}
                   </p>
                   <div style={{ display: "flex", gap: 12, flexWrap: "wrap" as const }}>
-                    <span style={{ ...mono, fontSize: "0.52rem", color: "rgba(227,229,228,0.35)" }}>📊 {hyp.metric}</span>
-                    <span style={{ ...mono, fontSize: "0.52rem", color: "rgba(227,229,228,0.35)" }}>⏱ {hyp.timeframe}</span>
+                    <span style={{ ...mono, fontSize: "0.70rem", color: "rgba(227,229,228,0.55)" }}>📊 {hyp.metric}</span>
+                    <span style={{ ...mono, fontSize: "0.70rem", color: "rgba(227,229,228,0.55)" }}>⏱ {hyp.timeframe}</span>
                   </div>
                   {hyp.resolution && (
                     <div style={{ marginTop: 5, padding: "4px 8px", background: `${sc.color}10`, border: `1px solid ${sc.color}25` }}>
-                      <p style={{ ...mono, fontSize: "0.55rem", color: sc.color, margin: 0, fontStyle: "italic" }}>{hyp.resolution}</p>
+                      <p style={{ ...mono, fontSize: "0.73rem", color: sc.color, margin: 0, fontStyle: "italic" }}>{hyp.resolution}</p>
                     </div>
                   )}
                 </div>
@@ -1463,7 +1463,7 @@ function HypothesesTab({ hypotheses, refetch }: { hypotheses: Hypothesis[]; refe
               </div>
 
               {rs?.open && isActive && (
-                <div style={{ marginTop: "0.65rem", paddingTop: "0.65rem", borderTop: "1px solid rgba(227,229,228,0.06)", display: "flex", flexDirection: "column" as const, gap: 6 }}>
+                <div style={{ marginTop: "0.65rem", paddingTop: "0.65rem", borderTop: "1px solid rgba(227,229,228,0.12)", display: "flex", flexDirection: "column" as const, gap: 6 }}>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     <div>
                       <Label>Resolution</Label>
@@ -1554,7 +1554,7 @@ function ManuscriptsTab({ topics, refetch }: { topics: ResearchTopic[]; refetch:
   if (manuscripts.length === 0) {
     return (
       <div style={{ padding: "2rem", textAlign: "center" as const, border: `1px solid ${DIMMEST}` }}>
-        <p style={{ ...mono, fontSize: "0.65rem", color: DIMMER, margin: 0 }}>
+        <p style={{ ...mono, fontSize: "0.83rem", color: DIMMER, margin: 0 }}>
           No manuscripts yet. Run a research cycle to generate drafts.
         </p>
       </div>
@@ -1572,7 +1572,7 @@ function ManuscriptsTab({ topics, refetch }: { topics: ResearchTopic[]; refetch:
             checked={manuscripts.length > 0 && manuscripts.every(t => selected.has(t.id))}
             onChange={v => setSelected(v ? new Set(manuscripts.map(t => t.id)) : new Set())}
           />
-          <span style={{ ...mono, fontSize: "0.48rem", color: DIM, textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>
+          <span style={{ ...mono, fontSize: "0.66rem", color: DIM, textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>
             Select All
           </span>
         </div>
@@ -1583,7 +1583,7 @@ function ManuscriptsTab({ topics, refetch }: { topics: ResearchTopic[]; refetch:
         const isPendingReview = topic.status === "pending_review";
         const typeColor = topic.manuscriptType === "thesis" ? PURPLE : topic.manuscriptType === "deep_read" ? TEAL : ORANGE;
         return (
-          <div key={topic.id} style={{ background: "rgba(227,229,228,0.015)", border: "1px solid rgba(227,229,228,0.07)" }}>
+          <div key={topic.id} style={{ background: "rgba(227,229,228,0.04)", border: "1px solid rgba(227,229,228,0.14)" }}>
             <div style={{ padding: "0.75rem 1rem" }}>
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
                 <div style={{ paddingTop: 2, flexShrink: 0 }}>
@@ -1593,14 +1593,14 @@ function ManuscriptsTab({ topics, refetch }: { topics: ResearchTopic[]; refetch:
                   <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" as const, marginBottom: 5 }}>
                     <StatusBadge status={topic.status} />
                     {topic.manuscriptType && (
-                      <span style={{ ...mono, fontSize: "0.46rem", color: typeColor, border: `1px solid ${typeColor}35`, padding: "1px 5px", textTransform: "uppercase" as const }}>
+                      <span style={{ ...mono, fontSize: "0.64rem", color: typeColor, border: `1px solid ${typeColor}35`, padding: "1px 5px", textTransform: "uppercase" as const }}>
                         {topic.manuscriptType}
                       </span>
                     )}
                   </div>
-                  <p style={{ ...mono, fontSize: "0.7rem", fontWeight: 700, color: "#e3e5e4", margin: "0 0 5px", lineHeight: 1.3 }}>{topic.topic}</p>
+                  <p style={{ ...mono, fontSize: "0.88rem", fontWeight: 700, color: "#efefef", margin: "0 0 5px", lineHeight: 1.3 }}>{topic.topic}</p>
                   {topic.agentRecommendation && (
-                    <p style={{ ...mono, fontSize: "0.58rem", color: "rgba(249,115,22,0.6)", fontStyle: "italic", margin: 0, lineHeight: 1.4 }}>
+                    <p style={{ ...mono, fontSize: "0.76rem", color: "rgba(249,115,22,0.6)", fontStyle: "italic", margin: 0, lineHeight: 1.4 }}>
                       "{topic.agentRecommendation}"
                     </p>
                   )}
@@ -1613,18 +1613,18 @@ function ManuscriptsTab({ topics, refetch }: { topics: ResearchTopic[]; refetch:
 
             {/* Full manuscript */}
             {isExpanded && topic.manuscript && (
-              <div style={{ padding: "0 1rem 0.75rem", borderTop: "1px solid rgba(227,229,228,0.06)" }}>
+              <div style={{ padding: "0 1rem 0.75rem", borderTop: "1px solid rgba(227,229,228,0.12)" }}>
                 <div style={{ marginTop: "0.75rem", maxHeight: 480, overflowY: "auto" as const, paddingRight: 8 }}>
                   <ManuscriptRenderer text={topic.manuscript} />
                 </div>
                 {/* Sources */}
                 {topic.sources && topic.sources.length > 0 && (
                   <div style={{ marginTop: "0.75rem", padding: "0.65rem", background: "rgba(45,212,191,0.04)", border: `1px solid rgba(45,212,191,0.12)` }}>
-                    <p style={{ ...mono, fontSize: "0.48rem", color: TEAL, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>Research Sources</p>
+                    <p style={{ ...mono, fontSize: "0.66rem", color: TEAL, textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 6 }}>Research Sources</p>
                     <div style={{ display: "flex", flexDirection: "column" as const, gap: 3 }}>
                       {topic.sources.map((s, i) => (
                         <a key={i} href={s} target="_blank" rel="noopener noreferrer" style={{
-                          ...mono, fontSize: "0.56rem", color: "rgba(45,212,191,0.7)",
+                          ...mono, fontSize: "0.74rem", color: "rgba(45,212,191,0.7)",
                           textDecoration: "none", wordBreak: "break-all" as const,
                         }}>
                           [{i + 1}] {s}
@@ -1638,7 +1638,7 @@ function ManuscriptsTab({ topics, refetch }: { topics: ResearchTopic[]; refetch:
 
             {/* Action bar for pending review */}
             {isPendingReview && (
-              <div style={{ padding: "0.65rem 1rem", borderTop: "1px solid rgba(227,229,228,0.06)", background: "rgba(251,191,36,0.03)" }}>
+              <div style={{ padding: "0.65rem 1rem", borderTop: "1px solid rgba(227,229,228,0.12)", background: "rgba(251,191,36,0.03)" }}>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const, alignItems: "flex-start" }}>
                   {/* Approve */}
                   <Btn onClick={() => approveMutation.mutate({ id: topic.id })} disabled={approveMutation.isPending} color={GREEN} small>
@@ -1656,7 +1656,7 @@ function ManuscriptsTab({ topics, refetch }: { topics: ResearchTopic[]; refetch:
                           value={as.note}
                           onChange={e => setAS(topic.id, { note: e.target.value })}
                           placeholder="Reason..."
-                          style={{ ...mono, fontSize: "0.55rem", background: "rgba(227,229,228,0.03)", border: "1px solid rgba(248,113,113,0.3)", color: "#e3e5e4", padding: "3px 8px", width: 160, outline: "none" }}
+                          style={{ ...mono, fontSize: "0.73rem", background: "rgba(227,229,228,0.06)", border: "1px solid rgba(248,113,113,0.3)", color: "#efefef", padding: "3px 8px", width: 160, outline: "none" }}
                         />
                         <Btn onClick={() => declineMutation.mutate({ id: topic.id, note: as.note })} disabled={!as.note || declineMutation.isPending} color={RED} small>
                           {declineMutation.isPending ? "..." : "Confirm"}
@@ -1676,7 +1676,7 @@ function ManuscriptsTab({ topics, refetch }: { topics: ResearchTopic[]; refetch:
                           value={as.note}
                           onChange={e => setAS(topic.id, { note: e.target.value })}
                           placeholder="What needs changing?"
-                          style={{ ...mono, fontSize: "0.55rem", background: "rgba(227,229,228,0.03)", border: "1px solid rgba(251,191,36,0.3)", color: "#e3e5e4", padding: "3px 8px", width: 180, outline: "none" }}
+                          style={{ ...mono, fontSize: "0.73rem", background: "rgba(227,229,228,0.06)", border: "1px solid rgba(251,191,36,0.3)", color: "#efefef", padding: "3px 8px", width: 180, outline: "none" }}
                         />
                         <Btn onClick={() => reviseMutation.mutate({ id: topic.id, note: as.note })} disabled={!as.note || reviseMutation.isPending} color={YELLOW} small>
                           {reviseMutation.isPending ? "..." : "Send"}
@@ -1690,9 +1690,9 @@ function ManuscriptsTab({ topics, refetch }: { topics: ResearchTopic[]; refetch:
 
             {/* Review note */}
             {topic.reviewNote && (
-              <div style={{ padding: "0.5rem 1rem", borderTop: "1px solid rgba(227,229,228,0.05)" }}>
-                <p style={{ ...mono, fontSize: "0.55rem", color: DIMMER, margin: 0 }}>
-                  <span style={{ color: "rgba(227,229,228,0.3)" }}>Review note: </span>{topic.reviewNote}
+              <div style={{ padding: "0.5rem 1rem", borderTop: "1px solid rgba(227,229,228,0.10)" }}>
+                <p style={{ ...mono, fontSize: "0.73rem", color: DIMMER, margin: 0 }}>
+                  <span style={{ color: "rgba(227,229,228,0.48)" }}>Review note: </span>{topic.reviewNote}
                 </p>
               </div>
             )}
@@ -1744,7 +1744,7 @@ function PublicationQueueTab({ topics, refetch }: { topics: ResearchTopic[]; ref
   if (approved.length === 0) {
     return (
       <div style={{ padding: "2rem", textAlign: "center" as const, border: `1px solid ${DIMMEST}` }}>
-        <p style={{ ...mono, fontSize: "0.65rem", color: DIMMER, margin: 0 }}>
+        <p style={{ ...mono, fontSize: "0.83rem", color: DIMMER, margin: 0 }}>
           No approved manuscripts ready to publish. Approve manuscripts in the Manuscripts tab.
         </p>
       </div>
@@ -1763,12 +1763,12 @@ function PublicationQueueTab({ topics, refetch }: { topics: ResearchTopic[]; ref
             <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6, flexWrap: "wrap" as const }}>
               <StatusBadge status="approved" />
             </div>
-            <p style={{ ...mono, fontSize: "0.72rem", fontWeight: 700, color: "#e3e5e4", margin: "0 0 5px", lineHeight: 1.3 }}>{topic.topic}</p>
+            <p style={{ ...mono, fontSize: "0.90rem", fontWeight: 700, color: "#efefef", margin: "0 0 5px", lineHeight: 1.3 }}>{topic.topic}</p>
             {excerpt && (
-              <p style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.4)", margin: "0 0 8px", lineHeight: 1.5 }}>{excerpt}</p>
+              <p style={{ ...mono, fontSize: "0.76rem", color: "rgba(227,229,228,0.60)", margin: "0 0 8px", lineHeight: 1.5 }}>{excerpt}</p>
             )}
             {topic.agentRecommendation && (
-              <p style={{ ...mono, fontSize: "0.58rem", color: "rgba(74,222,128,0.55)", fontStyle: "italic", margin: "0 0 10px" }}>
+              <p style={{ ...mono, fontSize: "0.76rem", color: "rgba(74,222,128,0.55)", fontStyle: "italic", margin: "0 0 10px" }}>
                 "{topic.agentRecommendation}"
               </p>
             )}
@@ -1789,9 +1789,9 @@ function PublicationQueueTab({ topics, refetch }: { topics: ResearchTopic[]; ref
                         key={platform}
                         onClick={() => togglePlatform(topic.id, platform)}
                         style={{
-                          ...mono, fontSize: "0.55rem", padding: "4px 12px",
+                          ...mono, fontSize: "0.73rem", padding: "4px 12px",
                           background: active ? "rgba(74,222,128,0.12)" : "transparent",
-                          border: `1px solid ${active ? GREEN : "rgba(227,229,228,0.15)"}`,
+                          border: `1px solid ${active ? GREEN : "rgba(227,229,228,0.22)"}`,
                           color: active ? GREEN : DIM, cursor: "pointer",
                           textTransform: "uppercase" as const,
                         }}
@@ -1921,7 +1921,7 @@ function GoalStatusBadge({ status }: { status: GoalStatus }) {
   const cfg = GOAL_STATUS_BADGE[status];
   return (
     <span style={{
-      ...mono, fontSize: "0.48rem", color: cfg.color, background: cfg.bg,
+      ...mono, fontSize: "0.66rem", color: cfg.color, background: cfg.bg,
       border: `1px solid ${cfg.color}30`, padding: "1px 6px",
       textTransform: "uppercase" as const, letterSpacing: "0.1em",
       animation: cfg.pulse ? "research-pulse 2s ease-in-out infinite" : undefined,
@@ -1935,7 +1935,7 @@ function CategoryTag({ category }: { category: GoalCategory }) {
   const color = CATEGORY_COLOR[category];
   return (
     <span style={{
-      ...mono, fontSize: "0.46rem", color, background: `${color}15`,
+      ...mono, fontSize: "0.64rem", color, background: `${color}15`,
       border: `1px solid ${color}30`, padding: "1px 7px",
       textTransform: "uppercase" as const, letterSpacing: "0.12em",
     }}>
@@ -2150,7 +2150,7 @@ function GoalsTab({ goals, stats, topics, refetch }: {
       {/* Add Goal form */}
       {showAdd && (
         <div style={{ border: `1px solid ${ORANGE}30`, background: "rgba(249,115,22,0.04)", padding: "1rem", marginBottom: "1rem" }}>
-          <p style={{ ...mono, fontSize: "0.6rem", color: ORANGE, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.1em", margin: "0 0 0.75rem" }}>
+          <p style={{ ...mono, fontSize: "0.78rem", color: ORANGE, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.1em", margin: "0 0 0.75rem" }}>
             Set a Development Goal
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
@@ -2164,7 +2164,7 @@ function GoalsTab({ goals, stats, topics, refetch }: {
                 <select
                   value={form.category}
                   onChange={e => setForm(f => ({ ...f, category: e.target.value as GoalCategory }))}
-                  style={{ ...mono, fontSize: "0.6rem", background: "#0e0f10", color: "#e3e5e4", border: "1px solid rgba(227,229,228,0.12)", padding: "6px", width: "100%" }}
+                  style={{ ...mono, fontSize: "0.78rem", background: "#0e0f10", color: "#efefef", border: "1px solid rgba(227,229,228,0.20)", padding: "6px", width: "100%" }}
                 >
                   {(Object.keys(CATEGORY_LABEL) as GoalCategory[]).map(c => (
                     <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>
@@ -2176,7 +2176,7 @@ function GoalsTab({ goals, stats, topics, refetch }: {
                 <select
                   value={form.priority}
                   onChange={e => setForm(f => ({ ...f, priority: e.target.value as any }))}
-                  style={{ ...mono, fontSize: "0.6rem", background: "#0e0f10", color: "#e3e5e4", border: "1px solid rgba(227,229,228,0.12)", padding: "6px", width: "100%" }}
+                  style={{ ...mono, fontSize: "0.78rem", background: "#0e0f10", color: "#efefef", border: "1px solid rgba(227,229,228,0.20)", padding: "6px", width: "100%" }}
                 >
                   <option value="high">High</option>
                   <option value="medium">Medium</option>
@@ -2205,22 +2205,22 @@ function GoalsTab({ goals, stats, topics, refetch }: {
 
       {/* Filters */}
       <div style={{ display: "flex", gap: 6, marginBottom: "0.85rem", flexWrap: "wrap" as const }}>
-        <span style={{ ...mono, fontSize: "0.5rem", color: DIM, alignSelf: "center" }}>STATUS:</span>
+        <span style={{ ...mono, fontSize: "0.68rem", color: DIM, alignSelf: "center" }}>STATUS:</span>
         {(["all", "active", "paused", "achieved", "abandoned"] as const).map(s => (
           <button key={s} onClick={() => setFilterSt(s)} style={{
-            ...mono, fontSize: "0.5rem", background: filterSt === s ? ORANGE : "transparent",
+            ...mono, fontSize: "0.68rem", background: filterSt === s ? ORANGE : "transparent",
             color: filterSt === s ? "#0e0f10" : DIM,
-            border: `1px solid ${filterSt === s ? ORANGE : "rgba(227,229,228,0.1)"}`,
+            border: `1px solid ${filterSt === s ? ORANGE : "rgba(227,229,228,0.18)"}`,
             padding: "2px 8px", cursor: "pointer", textTransform: "uppercase" as const, letterSpacing: "0.08em",
           }}>{s}</button>
         ))}
-        <span style={{ ...mono, fontSize: "0.5rem", color: DIM, alignSelf: "center", marginLeft: 8 }}>CATEGORY:</span>
+        <span style={{ ...mono, fontSize: "0.68rem", color: DIM, alignSelf: "center", marginLeft: 8 }}>CATEGORY:</span>
         {(["all", ...Object.keys(CATEGORY_LABEL)] as Array<GoalCategory | "all">).map(c => (
           <button key={c} onClick={() => setFilterCat(c)} style={{
-            ...mono, fontSize: "0.5rem",
+            ...mono, fontSize: "0.68rem",
             background: filterCat === c ? (c === "all" ? ORANGE : CATEGORY_COLOR[c as GoalCategory]) : "transparent",
             color: filterCat === c ? "#0e0f10" : DIM,
-            border: `1px solid ${filterCat === c ? (c === "all" ? ORANGE : CATEGORY_COLOR[c as GoalCategory]) : "rgba(227,229,228,0.1)"}`,
+            border: `1px solid ${filterCat === c ? (c === "all" ? ORANGE : CATEGORY_COLOR[c as GoalCategory]) : "rgba(227,229,228,0.18)"}`,
             padding: "2px 8px", cursor: "pointer", textTransform: "uppercase" as const, letterSpacing: "0.08em",
           }}>{c}</button>
         ))}
@@ -2233,14 +2233,14 @@ function GoalsTab({ goals, stats, topics, refetch }: {
             checked={filtered.length > 0 && filtered.every(g => selected.has(g.id))}
             onChange={v => setSelected(v ? new Set(filtered.map(g => g.id)) : new Set())}
           />
-          <span style={{ ...mono, fontSize: "0.48rem", color: DIM, textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>
+          <span style={{ ...mono, fontSize: "0.66rem", color: DIM, textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>
             Select All
           </span>
         </div>
       )}
       {filtered.length === 0 ? (
         <div style={{ textAlign: "center" as const, padding: "2.5rem", color: DIM }}>
-          <p style={{ ...mono, fontSize: "0.6rem", marginBottom: 8 }}>
+          <p style={{ ...mono, fontSize: "0.78rem", marginBottom: 8 }}>
             {goals.length === 0
               ? "No goals set yet. Click \"Auto-Generate Goals\" to have Agent 306 set her own, or add one manually."
               : "No goals match this filter."}
@@ -2258,8 +2258,8 @@ function GoalsTab({ goals, stats, topics, refetch }: {
               <div
                 key={goal.id}
                 style={{
-                  border: `1px solid ${isExpanded ? "rgba(227,229,228,0.12)" : "rgba(227,229,228,0.06)"}`,
-                  background: isExpanded ? "rgba(227,229,228,0.02)" : "transparent",
+                  border: `1px solid ${isExpanded ? "rgba(227,229,228,0.20)" : "rgba(227,229,228,0.12)"}`,
+                  background: isExpanded ? "rgba(227,229,228,0.05)" : "transparent",
                   transition: "all 0.15s",
                 }}
               >
@@ -2281,7 +2281,7 @@ function GoalsTab({ goals, stats, topics, refetch }: {
                       <GoalStatusBadge status={goal.status} />
                       {isGoalStale(goal) && (
                         <span style={{
-                          ...mono, fontSize: "0.46rem", color: YELLOW, background: "rgba(251,191,36,0.1)",
+                          ...mono, fontSize: "0.64rem", color: YELLOW, background: "rgba(251,191,36,0.1)",
                           border: `1px solid ${YELLOW}30`, padding: "1px 6px",
                           textTransform: "uppercase" as const, letterSpacing: "0.1em",
                         }}>
@@ -2289,13 +2289,13 @@ function GoalsTab({ goals, stats, topics, refetch }: {
                         </span>
                       )}
                       <span style={{
-                        ...mono, fontSize: "0.46rem",
+                        ...mono, fontSize: "0.64rem",
                         color: PRIORITY_COLOR[goal.priority],
                         border: `1px solid ${PRIORITY_COLOR[goal.priority]}30`,
                         padding: "1px 6px", textTransform: "uppercase" as const, letterSpacing: "0.08em",
                       }}>{goal.priority}</span>
                       {goal.setBy === "agent" && (
-                        <span style={{ ...mono, fontSize: "0.44rem", color: "rgba(227,229,228,0.25)" }}>self-assigned</span>
+                        <span style={{ ...mono, fontSize: "0.44rem", color: "rgba(227,229,228,0.40)" }}>self-assigned</span>
                       )}
                       {(() => {
                         const linked = linkedTopicCount(goal.id);
@@ -2311,33 +2311,33 @@ function GoalsTab({ goals, stats, topics, refetch }: {
                         ) : null;
                       })()}
                     </div>
-                    <p style={{ ...mono, fontSize: "0.7rem", fontWeight: 700, color: "#e3e5e4", margin: "0 0 4px", lineHeight: 1.3 }}>
+                    <p style={{ ...mono, fontSize: "0.88rem", fontWeight: 700, color: "#efefef", margin: "0 0 4px", lineHeight: 1.3 }}>
                       {goal.title}
                     </p>
                     {/* Progress bar */}
                     {pct !== null && (
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-                        <div style={{ flex: 1, height: 3, background: "rgba(227,229,228,0.07)", maxWidth: 160 }}>
+                        <div style={{ flex: 1, height: 3, background: "rgba(227,229,228,0.14)", maxWidth: 160 }}>
                           <div style={{ width: `${pct}%`, height: "100%", background: CATEGORY_COLOR[goal.category], transition: "width 0.3s" }} />
                         </div>
-                        <span style={{ ...mono, fontSize: "0.46rem", color: DIM }}>{completed.length}/{milestones.length} milestones</span>
+                        <span style={{ ...mono, fontSize: "0.64rem", color: DIM }}>{completed.length}/{milestones.length} milestones</span>
                       </div>
                     )}
                     {goal.progressNote && (
-                      <p style={{ ...mono, fontSize: "0.52rem", color: DIM, margin: "4px 0 0", fontStyle: "italic" as const }}>
+                      <p style={{ ...mono, fontSize: "0.70rem", color: DIM, margin: "4px 0 0", fontStyle: "italic" as const }}>
                         Latest: {goal.progressNote.slice(0, 80)}{goal.progressNote.length > 80 ? "..." : ""}
                       </p>
                     )}
                   </div>
-                  <span style={{ ...mono, fontSize: "0.55rem", color: DIM, flexShrink: 0 }}>
+                  <span style={{ ...mono, fontSize: "0.73rem", color: DIM, flexShrink: 0 }}>
                     {isExpanded ? "▲" : "▼"}
                   </span>
                 </div>
 
                 {/* Expanded detail */}
                 {isExpanded && (
-                  <div style={{ padding: "0 1rem 1rem", borderTop: "1px solid rgba(227,229,228,0.05)" }}>
-                    <p style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.7)", margin: "0.75rem 0" }}>
+                  <div style={{ padding: "0 1rem 1rem", borderTop: "1px solid rgba(227,229,228,0.10)" }}>
+                    <p style={{ ...mono, fontSize: "0.76rem", color: "rgba(227,229,228,0.7)", margin: "0.75rem 0" }}>
                       {goal.description}
                     </p>
 
@@ -2356,20 +2356,20 @@ function GoalsTab({ goals, stats, topics, refetch }: {
                                   onClick={() => !done && milestoneMut.mutate({ id: goal.id, milestone: m })}
                                   disabled={done || milestoneMut.isPending}
                                   style={{
-                                    width: 14, height: 14, border: `1px solid ${done ? TEAL : "rgba(227,229,228,0.2)"}`,
+                                    width: 14, height: 14, border: `1px solid ${done ? TEAL : "rgba(227,229,228,0.35)"}`,
                                     background: done ? TEAL : "transparent",
                                     cursor: done ? "default" : "pointer",
                                     flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
                                   }}
                                 >
-                                  {done && <span style={{ fontSize: "0.5rem", color: "#0e0f10", fontWeight: 900 }}>✓</span>}
+                                  {done && <span style={{ fontSize: "0.68rem", color: "#0e0f10", fontWeight: 900 }}>✓</span>}
                                 </button>
-                                <span style={{ ...mono, fontSize: "0.56rem", color: done ? DIM : "#e3e5e4", textDecoration: done ? "line-through" : "none" }}>
+                                <span style={{ ...mono, fontSize: "0.74rem", color: done ? DIM : "#e3e5e4", textDecoration: done ? "line-through" : "none" }}>
                                   {m}
                                 </span>
                                 {isAiApproved && (
                                   <span style={{
-                                    ...mono, fontSize: "0.4rem",
+                                    ...mono, fontSize: "0.58rem",
                                     color: TEAL, background: `${TEAL}12`,
                                     border: `1px solid ${TEAL}25`,
                                     padding: "1px 5px", letterSpacing: "0.04em",
@@ -2393,7 +2393,7 @@ function GoalsTab({ goals, stats, topics, refetch }: {
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                           <Label>🔬 Grok Evaluation</Label>
                           {goal.lastEvaluatedAt && (
-                            <span style={{ ...mono, fontSize: "0.4rem", color: DIMMER }}>
+                            <span style={{ ...mono, fontSize: "0.58rem", color: DIMMER }}>
                               {fmtDate(goal.lastEvaluatedAt)}
                             </span>
                           )}
@@ -2409,42 +2409,42 @@ function GoalsTab({ goals, stats, topics, refetch }: {
                               ev.status === "rejected"  ? RED : YELLOW;
                             return (
                               <div key={idx} style={{
-                                background: "rgba(227,229,228,0.02)",
-                                border: "1px solid rgba(227,229,228,0.05)",
+                                background: "rgba(227,229,228,0.05)",
+                                border: "1px solid rgba(227,229,228,0.10)",
                                 padding: "0.5rem",
                               }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                                  <span style={{ fontSize: "0.65rem" }}>{ev.satisfied ? "✅" : "❌"}</span>
-                                  <span style={{ ...mono, fontSize: "0.54rem", color: "#e3e5e4", flex: 1 }}>
+                                  <span style={{ fontSize: "0.83rem" }}>{ev.satisfied ? "✅" : "❌"}</span>
+                                  <span style={{ ...mono, fontSize: "0.54rem", color: "#efefef", flex: 1 }}>
                                     {ev.milestone}
                                   </span>
                                   <span style={{
-                                    ...mono, fontSize: "0.38rem",
+                                    ...mono, fontSize: "0.56rem",
                                     color: confColor, background: `${confColor}12`,
                                     border: `1px solid ${confColor}30`,
                                     padding: "1px 5px", textTransform: "uppercase" as const, letterSpacing: "0.06em",
                                   }}>{ev.confidence}</span>
                                   <span style={{
-                                    ...mono, fontSize: "0.38rem",
+                                    ...mono, fontSize: "0.56rem",
                                     color: statusColor, background: `${statusColor}12`,
                                     border: `1px solid ${statusColor}30`,
                                     padding: "1px 5px",
                                   }}>{statusLabel}</span>
                                 </div>
-                                <p style={{ ...mono, fontSize: "0.48rem", color: DIM, margin: "2px 0 0" }}>
+                                <p style={{ ...mono, fontSize: "0.66rem", color: DIM, margin: "2px 0 0" }}>
                                   {ev.reasoning}
                                 </p>
                                 {ev.evidenceQuote && (
                                   <p style={{
                                     ...mono, fontSize: "0.44rem", color: DIMMER,
                                     margin: "3px 0 0", fontStyle: "italic" as const,
-                                    borderLeft: "2px solid rgba(227,229,228,0.08)", paddingLeft: 8,
+                                    borderLeft: "2px solid rgba(227,229,228,0.15)", paddingLeft: 8,
                                   }}>
                                     "{ev.evidenceQuote}"
                                   </p>
                                 )}
                                 {ev.topicTitle && (
-                                  <p style={{ ...mono, fontSize: "0.4rem", color: DIMMER, margin: "3px 0 0" }}>
+                                  <p style={{ ...mono, fontSize: "0.58rem", color: DIMMER, margin: "3px 0 0" }}>
                                     via research: "{ev.topicTitle}"
                                   </p>
                                 )}
@@ -2492,7 +2492,7 @@ function GoalsTab({ goals, stats, topics, refetch }: {
                     {goal.status === "achieved" && goal.achievementNote && (
                       <div style={{ marginBottom: "0.85rem", background: "rgba(45,212,191,0.06)", border: `1px solid ${TEAL}20`, padding: "0.6rem" }}>
                         <Label>Achievement Note</Label>
-                        <p style={{ ...mono, fontSize: "0.58rem", color: TEAL, margin: "3px 0 0" }}>{goal.achievementNote}</p>
+                        <p style={{ ...mono, fontSize: "0.76rem", color: TEAL, margin: "3px 0 0" }}>{goal.achievementNote}</p>
                       </div>
                     )}
 
@@ -2500,7 +2500,7 @@ function GoalsTab({ goals, stats, topics, refetch }: {
                     {goal.mrraygNote && (
                       <div style={{ marginBottom: "0.85rem", background: "rgba(249,115,22,0.05)", border: `1px solid ${ORANGE}20`, padding: "0.6rem" }}>
                         <Label>MrRayG</Label>
-                        <p style={{ ...mono, fontSize: "0.58rem", color: ORANGE, margin: "3px 0 0" }}>{goal.mrraygNote}</p>
+                        <p style={{ ...mono, fontSize: "0.76rem", color: ORANGE, margin: "3px 0 0" }}>{goal.mrraygNote}</p>
                       </div>
                     )}
 
@@ -2620,11 +2620,11 @@ function MirrorTab({ reflections, rules, refetchReflections, refetchRules }: {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
         <div>
-          <p style={{ ...mono, fontSize: "0.56rem", fontWeight: 700, color: ORANGE, margin: 0 }}>POST-ACTION REFLECTIONS</p>
-          <p style={{ ...mono, fontSize: "0.42rem", color: DIM, margin: "2px 0 0" }}>Grok analyzes why posts succeed or fail — extracts patterns into style rules</p>
+          <p style={{ ...mono, fontSize: "0.74rem", fontWeight: 700, color: ORANGE, margin: 0 }}>POST-ACTION REFLECTIONS</p>
+          <p style={{ ...mono, fontSize: "0.60rem", color: DIM, margin: "2px 0 0" }}>Grok analyzes why posts succeed or fail — extracts patterns into style rules</p>
         </div>
         <button onClick={() => runMut.mutate()} disabled={runMut.isPending}
-          style={{ ...mono, fontSize: "0.5rem", padding: "6px 14px", background: runMut.isPending ? "rgba(249,115,22,0.2)" : ORANGE, color: "#0e0f10", border: "none", cursor: "pointer", fontWeight: 700 }}>
+          style={{ ...mono, fontSize: "0.68rem", padding: "6px 14px", background: runMut.isPending ? "rgba(249,115,22,0.2)" : ORANGE, color: "#0e0f10", border: "none", cursor: "pointer", fontWeight: 700 }}>
           {runMut.isPending ? "REFLECTING..." : "RUN REFLECTION"}
         </button>
       </div>
@@ -2632,20 +2632,20 @@ function MirrorTab({ reflections, rules, refetchReflections, refetchRules }: {
       {/* Style Rules */}
       {rules.length > 0 && (
         <div style={{ marginBottom: "1.25rem" }}>
-          <p style={{ ...mono, fontSize: "0.46rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 8px" }}>
+          <p style={{ ...mono, fontSize: "0.64rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 8px" }}>
             Active Style Rules ({rules.length})
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {rules.map((r: any) => (
-              <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", border: "1px solid rgba(227,229,228,0.06)", background: "rgba(227,229,228,0.015)" }}>
+              <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", border: "1px solid rgba(227,229,228,0.12)", background: "rgba(227,229,228,0.04)" }}>
                 <div style={{ flex: 1 }}>
-                  <p style={{ ...mono, fontSize: "0.48rem", color: "rgba(227,229,228,0.7)", margin: 0 }}>{r.rule}</p>
-                  <p style={{ ...mono, fontSize: "0.38rem", color: DIMMER, margin: "2px 0 0" }}>
+                  <p style={{ ...mono, fontSize: "0.66rem", color: "rgba(227,229,228,0.7)", margin: 0 }}>{r.rule}</p>
+                  <p style={{ ...mono, fontSize: "0.56rem", color: DIMMER, margin: "2px 0 0" }}>
                     {r.confidence} confidence · {r.hitCount} hits · {fmtShort(r.createdAt)}
                   </p>
                 </div>
                 <button onClick={() => deleteMut.mutate(r.id)}
-                  style={{ ...mono, fontSize: "0.4rem", padding: "3px 8px", background: "transparent", border: `1px solid ${RED}40`, color: RED, cursor: "pointer" }}>
+                  style={{ ...mono, fontSize: "0.58rem", padding: "3px 8px", background: "transparent", border: `1px solid ${RED}40`, color: RED, cursor: "pointer" }}>
                   ×
                 </button>
               </div>
@@ -2656,29 +2656,29 @@ function MirrorTab({ reflections, rules, refetchReflections, refetchRules }: {
 
       {/* Reflections List */}
       {reflections.length === 0 ? (
-        <p style={{ ...mono, fontSize: "0.48rem", color: DIMMER, textAlign: "center", padding: "2rem 0" }}>No reflections yet — run reflection after posts have engagement data</p>
+        <p style={{ ...mono, fontSize: "0.66rem", color: DIMMER, textAlign: "center", padding: "2rem 0" }}>No reflections yet — run reflection after posts have engagement data</p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {reflections.slice(0, 15).map((r: any) => (
-            <div key={r.id} style={{ padding: "10px 12px", border: "1px solid rgba(227,229,228,0.06)", background: "rgba(227,229,228,0.015)" }}>
+            <div key={r.id} style={{ padding: "10px 12px", border: "1px solid rgba(227,229,228,0.12)", background: "rgba(227,229,228,0.04)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                <p style={{ ...mono, fontSize: "0.44rem", color: "rgba(227,229,228,0.5)", margin: 0, flex: 1 }}>
+                <p style={{ ...mono, fontSize: "0.44rem", color: "rgba(227,229,228,0.68)", margin: 0, flex: 1 }}>
                   "{r.postText?.slice(0, 120)}..."
                 </p>
-                <span style={{ ...mono, fontSize: "0.5rem", fontWeight: 700, color: r.score >= 7 ? GREEN : r.score >= 4 ? YELLOW : RED, marginLeft: 10, flexShrink: 0 }}>
+                <span style={{ ...mono, fontSize: "0.68rem", fontWeight: 700, color: r.score >= 7 ? GREEN : r.score >= 4 ? YELLOW : RED, marginLeft: 10, flexShrink: 0 }}>
                   {r.score}/10
                 </span>
               </div>
-              <p style={{ ...mono, fontSize: "0.46rem", color: ORANGE, margin: "0 0 4px" }}>{r.analysis?.whyWorked}</p>
+              <p style={{ ...mono, fontSize: "0.64rem", color: ORANGE, margin: "0 0 4px" }}>{r.analysis?.whyWorked}</p>
               {r.analysis?.patterns?.length > 0 && (
                 <div style={{ display: "flex", gap: 4, flexWrap: "wrap" as const, marginBottom: 4 }}>
                   {r.analysis.patterns.map((p: string, i: number) => (
-                    <span key={i} style={{ ...mono, fontSize: "0.38rem", padding: "2px 6px", border: "1px solid rgba(249,115,22,0.2)", color: "rgba(249,115,22,0.6)" }}>{p}</span>
+                    <span key={i} style={{ ...mono, fontSize: "0.56rem", padding: "2px 6px", border: "1px solid rgba(249,115,22,0.2)", color: "rgba(249,115,22,0.6)" }}>{p}</span>
                   ))}
                 </div>
               )}
               {r.analysis?.styleNote && (
-                <p style={{ ...mono, fontSize: "0.4rem", color: DIM, margin: 0, fontStyle: "italic" }}>{r.analysis.styleNote}</p>
+                <p style={{ ...mono, fontSize: "0.58rem", color: DIM, margin: 0, fontStyle: "italic" }}>{r.analysis.styleNote}</p>
               )}
               <p style={{ ...mono, fontSize: "0.36rem", color: DIMMER, margin: "4px 0 0" }}>
                 {r.engagement?.likes ?? 0} likes · {r.engagement?.replies ?? 0} replies · {r.engagement?.retweets ?? 0} RTs · {fmtDate(r.createdAt)}
@@ -2714,18 +2714,18 @@ function ForgeTab({ debates, contradictions, decaying, refetchDebates, refetchCo
     <div>
       {/* Debates */}
       <div style={{ marginBottom: "1.5rem" }}>
-        <p style={{ ...mono, fontSize: "0.56rem", fontWeight: 700, color: PURPLE, margin: "0 0 4px" }}>SELF-DEBATES (Devil's Advocate)</p>
-        <p style={{ ...mono, fontSize: "0.42rem", color: DIM, margin: "0 0 12px" }}>Grok critiques manuscripts and hypotheses — finds weaknesses before publication</p>
+        <p style={{ ...mono, fontSize: "0.74rem", fontWeight: 700, color: PURPLE, margin: "0 0 4px" }}>SELF-DEBATES (Devil's Advocate)</p>
+        <p style={{ ...mono, fontSize: "0.60rem", color: DIM, margin: "0 0 12px" }}>Grok critiques manuscripts and hypotheses — finds weaknesses before publication</p>
         {debates.length === 0 ? (
-          <p style={{ ...mono, fontSize: "0.48rem", color: DIMMER, textAlign: "center", padding: "1rem 0" }}>No debates yet — debates auto-run when manuscripts are approved</p>
+          <p style={{ ...mono, fontSize: "0.66rem", color: DIMMER, textAlign: "center", padding: "1rem 0" }}>No debates yet — debates auto-run when manuscripts are approved</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {debates.slice(0, 10).map((d: any) => (
               <div key={d.id} style={{ padding: "10px 12px", border: "1px solid rgba(167,139,250,0.12)", background: "rgba(167,139,250,0.02)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                  <p style={{ ...mono, fontSize: "0.5rem", fontWeight: 700, color: "rgba(227,229,228,0.7)", margin: 0 }}>{d.title}</p>
+                  <p style={{ ...mono, fontSize: "0.68rem", fontWeight: 700, color: "rgba(227,229,228,0.7)", margin: 0 }}>{d.title}</p>
                   <span style={{
-                    ...mono, fontSize: "0.4rem", padding: "2px 8px",
+                    ...mono, fontSize: "0.58rem", padding: "2px 8px",
                     color: d.critique?.overallAssessment === "solid" ? GREEN : d.critique?.overallAssessment === "flawed" ? RED : YELLOW,
                     border: `1px solid ${d.critique?.overallAssessment === "solid" ? GREEN : d.critique?.overallAssessment === "flawed" ? RED : YELLOW}40`,
                   }}>
@@ -2734,17 +2734,17 @@ function ForgeTab({ debates, contradictions, decaying, refetchDebates, refetchCo
                 </div>
                 {d.critique?.weaknesses?.length > 0 && (
                   <div style={{ marginBottom: 4 }}>
-                    <p style={{ ...mono, fontSize: "0.4rem", color: RED, margin: "0 0 2px" }}>Weaknesses:</p>
+                    <p style={{ ...mono, fontSize: "0.58rem", color: RED, margin: "0 0 2px" }}>Weaknesses:</p>
                     {d.critique.weaknesses.map((w: string, i: number) => (
-                      <p key={i} style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.5)", margin: "1px 0", paddingLeft: 8 }}>• {w}</p>
+                      <p key={i} style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.68)", margin: "1px 0", paddingLeft: 8 }}>• {w}</p>
                     ))}
                   </div>
                 )}
                 {d.critique?.suggestions?.length > 0 && (
                   <div>
-                    <p style={{ ...mono, fontSize: "0.4rem", color: GREEN, margin: "0 0 2px" }}>Suggestions:</p>
+                    <p style={{ ...mono, fontSize: "0.58rem", color: GREEN, margin: "0 0 2px" }}>Suggestions:</p>
                     {d.critique.suggestions.map((s: string, i: number) => (
-                      <p key={i} style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.5)", margin: "1px 0", paddingLeft: 8 }}>• {s}</p>
+                      <p key={i} style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.68)", margin: "1px 0", paddingLeft: 8 }}>• {s}</p>
                     ))}
                   </div>
                 )}
@@ -2757,29 +2757,29 @@ function ForgeTab({ debates, contradictions, decaying, refetchDebates, refetchCo
 
       {/* Contradictions */}
       <div style={{ marginBottom: "1.5rem" }}>
-        <p style={{ ...mono, fontSize: "0.56rem", fontWeight: 700, color: RED, margin: "0 0 4px" }}>CONTRADICTIONS ({openContradictions.length} open)</p>
-        <p style={{ ...mono, fontSize: "0.42rem", color: DIM, margin: "0 0 12px" }}>Detected when new knowledge conflicts with existing entries</p>
+        <p style={{ ...mono, fontSize: "0.74rem", fontWeight: 700, color: RED, margin: "0 0 4px" }}>CONTRADICTIONS ({openContradictions.length} open)</p>
+        <p style={{ ...mono, fontSize: "0.60rem", color: DIM, margin: "0 0 12px" }}>Detected when new knowledge conflicts with existing entries</p>
         {openContradictions.length === 0 ? (
-          <p style={{ ...mono, fontSize: "0.48rem", color: DIMMER, textAlign: "center", padding: "1rem 0" }}>No open contradictions</p>
+          <p style={{ ...mono, fontSize: "0.66rem", color: DIMMER, textAlign: "center", padding: "1rem 0" }}>No open contradictions</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {openContradictions.map((c: any) => (
               <div key={c.id} style={{ padding: "10px 12px", border: `1px solid ${RED}20`, background: `${RED}05` }}>
-                <p style={{ ...mono, fontSize: "0.46rem", color: "rgba(227,229,228,0.7)", margin: "0 0 6px" }}>{c.description}</p>
+                <p style={{ ...mono, fontSize: "0.64rem", color: "rgba(227,229,228,0.7)", margin: "0 0 6px" }}>{c.description}</p>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-                  <div style={{ padding: "6px 8px", border: "1px solid rgba(227,229,228,0.06)" }}>
-                    <p style={{ ...mono, fontSize: "0.38rem", color: ORANGE, margin: "0 0 2px" }}>ENTRY A</p>
-                    <p style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.6)", margin: 0 }}>{c.entryA?.title}</p>
+                  <div style={{ padding: "6px 8px", border: "1px solid rgba(227,229,228,0.12)" }}>
+                    <p style={{ ...mono, fontSize: "0.56rem", color: ORANGE, margin: "0 0 2px" }}>ENTRY A</p>
+                    <p style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.75)", margin: 0 }}>{c.entryA?.title}</p>
                   </div>
-                  <div style={{ padding: "6px 8px", border: "1px solid rgba(227,229,228,0.06)" }}>
-                    <p style={{ ...mono, fontSize: "0.38rem", color: TEAL, margin: "0 0 2px" }}>ENTRY B</p>
-                    <p style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.6)", margin: 0 }}>{c.entryB?.title}</p>
+                  <div style={{ padding: "6px 8px", border: "1px solid rgba(227,229,228,0.12)" }}>
+                    <p style={{ ...mono, fontSize: "0.56rem", color: TEAL, margin: "0 0 2px" }}>ENTRY B</p>
+                    <p style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.75)", margin: 0 }}>{c.entryB?.title}</p>
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 4 }}>
                   {(["keep_new", "keep_old", "keep_both", "merge"] as const).map(res => (
                     <button key={res} onClick={() => resolveMut.mutate({ id: c.id, resolution: res })}
-                      style={{ ...mono, fontSize: "0.38rem", padding: "3px 8px", background: "transparent", border: `1px solid rgba(227,229,228,0.12)`, color: "rgba(227,229,228,0.5)", cursor: "pointer" }}>
+                      style={{ ...mono, fontSize: "0.56rem", padding: "3px 8px", background: "transparent", border: `1px solid rgba(227,229,228,0.20)`, color: "rgba(227,229,228,0.68)", cursor: "pointer" }}>
                       {res.replace("_", " ").toUpperCase()}
                     </button>
                   ))}
@@ -2794,29 +2794,29 @@ function ForgeTab({ debates, contradictions, decaying, refetchDebates, refetchCo
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <div>
-            <p style={{ ...mono, fontSize: "0.56rem", fontWeight: 700, color: YELLOW, margin: "0 0 4px" }}>CONFIDENCE DECAY</p>
-            <p style={{ ...mono, fontSize: "0.42rem", color: DIM, margin: 0 }}>Knowledge entries losing confidence from staleness</p>
+            <p style={{ ...mono, fontSize: "0.74rem", fontWeight: 700, color: YELLOW, margin: "0 0 4px" }}>CONFIDENCE DECAY</p>
+            <p style={{ ...mono, fontSize: "0.60rem", color: DIM, margin: 0 }}>Knowledge entries losing confidence from staleness</p>
           </div>
           <button onClick={() => decayMut.mutate()} disabled={decayMut.isPending}
-            style={{ ...mono, fontSize: "0.46rem", padding: "4px 10px", background: "transparent", border: `1px solid ${YELLOW}40`, color: YELLOW, cursor: "pointer" }}>
+            style={{ ...mono, fontSize: "0.64rem", padding: "4px 10px", background: "transparent", border: `1px solid ${YELLOW}40`, color: YELLOW, cursor: "pointer" }}>
             {decayMut.isPending ? "CHECKING..." : "RUN DECAY CHECK"}
           </button>
         </div>
         {decaying.length === 0 ? (
-          <p style={{ ...mono, fontSize: "0.48rem", color: DIMMER, textAlign: "center", padding: "1rem 0" }}>All knowledge entries are fresh</p>
+          <p style={{ ...mono, fontSize: "0.66rem", color: DIMMER, textAlign: "center", padding: "1rem 0" }}>All knowledge entries are fresh</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             {decaying.slice(0, 15).map((e: any) => (
-              <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 10px", border: "1px solid rgba(227,229,228,0.04)" }}>
+              <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 10px", border: "1px solid rgba(227,229,228,0.08)" }}>
                 <div>
-                  <span style={{ ...mono, fontSize: "0.44rem", color: "rgba(227,229,228,0.6)" }}>{e.title}</span>
-                  <span style={{ ...mono, fontSize: "0.38rem", color: DIMMER, marginLeft: 8 }}>{e.category}</span>
+                  <span style={{ ...mono, fontSize: "0.44rem", color: "rgba(227,229,228,0.75)" }}>{e.title}</span>
+                  <span style={{ ...mono, fontSize: "0.56rem", color: DIMMER, marginLeft: 8 }}>{e.category}</span>
                 </div>
                 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                  <span style={{ ...mono, fontSize: "0.4rem", color: e.status === "critical" ? RED : e.status === "decaying" ? YELLOW : DIM }}>
+                  <span style={{ ...mono, fontSize: "0.58rem", color: e.status === "critical" ? RED : e.status === "decaying" ? YELLOW : DIM }}>
                     {e.daysSinceUpdate}d stale
                   </span>
-                  <span style={{ ...mono, fontSize: "0.4rem", color: DIMMER }}>w:{e.weight}</span>
+                  <span style={{ ...mono, fontSize: "0.58rem", color: DIMMER }}>w:{e.weight}</span>
                 </div>
               </div>
             ))}
@@ -2850,16 +2850,16 @@ function NexusTab({ connections, reports, refetchConnections, refetchReports }: 
       {/* Actions */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
         <div>
-          <p style={{ ...mono, fontSize: "0.56rem", fontWeight: 700, color: TEAL, margin: 0 }}>KNOWLEDGE GRAPH</p>
-          <p style={{ ...mono, fontSize: "0.42rem", color: DIM, margin: "2px 0 0" }}>{connections.length} connections across knowledge entries</p>
+          <p style={{ ...mono, fontSize: "0.74rem", fontWeight: 700, color: TEAL, margin: 0 }}>KNOWLEDGE GRAPH</p>
+          <p style={{ ...mono, fontSize: "0.60rem", color: DIM, margin: "2px 0 0" }}>{connections.length} connections across knowledge entries</p>
         </div>
         <div style={{ display: "flex", gap: 6 }}>
           <button onClick={() => scanMut.mutate()} disabled={scanMut.isPending}
-            style={{ ...mono, fontSize: "0.46rem", padding: "4px 10px", background: "transparent", border: `1px solid ${TEAL}40`, color: TEAL, cursor: "pointer" }}>
+            style={{ ...mono, fontSize: "0.64rem", padding: "4px 10px", background: "transparent", border: `1px solid ${TEAL}40`, color: TEAL, cursor: "pointer" }}>
             {scanMut.isPending ? "SCANNING..." : "SCAN CONNECTIONS"}
           </button>
           <button onClick={() => synthMut.mutate()} disabled={synthMut.isPending}
-            style={{ ...mono, fontSize: "0.46rem", padding: "4px 10px", background: "transparent", border: `1px solid ${PURPLE}40`, color: PURPLE, cursor: "pointer" }}>
+            style={{ ...mono, fontSize: "0.64rem", padding: "4px 10px", background: "transparent", border: `1px solid ${PURPLE}40`, color: PURPLE, cursor: "pointer" }}>
             {synthMut.isPending ? "GENERATING..." : "GENERATE SYNTHESIS"}
           </button>
         </div>
@@ -2868,15 +2868,15 @@ function NexusTab({ connections, reports, refetchConnections, refetchReports }: 
       {/* Connections */}
       {connections.length > 0 && (
         <div style={{ marginBottom: "1.5rem" }}>
-          <p style={{ ...mono, fontSize: "0.46rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 8px" }}>
+          <p style={{ ...mono, fontSize: "0.64rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 8px" }}>
             Connections
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             {connections.slice(0, 20).map((c: any) => (
-              <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px", border: "1px solid rgba(227,229,228,0.04)" }}>
-                <span style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.6)", flex: 1 }}>{c.fromTitle}</span>
-                <span style={{ ...mono, fontSize: "0.38rem", color: STRENGTH_COLOR[c.strength] ?? DIM, flexShrink: 0 }}>↔</span>
-                <span style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.6)", flex: 1 }}>{c.toTitle}</span>
+              <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px", border: "1px solid rgba(227,229,228,0.08)" }}>
+                <span style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.75)", flex: 1 }}>{c.fromTitle}</span>
+                <span style={{ ...mono, fontSize: "0.56rem", color: STRENGTH_COLOR[c.strength] ?? DIM, flexShrink: 0 }}>↔</span>
+                <span style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.75)", flex: 1 }}>{c.toTitle}</span>
                 <span style={{ ...mono, fontSize: "0.36rem", color: DIMMER, flex: 1.5, textAlign: "right" as const }}>{c.relationship}</span>
               </div>
             ))}
@@ -2886,17 +2886,17 @@ function NexusTab({ connections, reports, refetchConnections, refetchReports }: 
 
       {/* Synthesis Reports */}
       <div>
-        <p style={{ ...mono, fontSize: "0.46rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 8px" }}>
+        <p style={{ ...mono, fontSize: "0.64rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 8px" }}>
           Synthesis Reports ({reports.length})
         </p>
         {reports.length === 0 ? (
-          <p style={{ ...mono, fontSize: "0.48rem", color: DIMMER, textAlign: "center", padding: "1.5rem 0" }}>No synthesis reports yet — scan connections first, then generate a synthesis</p>
+          <p style={{ ...mono, fontSize: "0.66rem", color: DIMMER, textAlign: "center", padding: "1.5rem 0" }}>No synthesis reports yet — scan connections first, then generate a synthesis</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {reports.slice(0, 8).map((r: any) => (
               <div key={r.id} style={{ padding: "12px 14px", border: "1px solid rgba(45,212,191,0.12)", background: "rgba(45,212,191,0.02)" }}>
-                <p style={{ ...mono, fontSize: "0.52rem", fontWeight: 700, color: TEAL, margin: "0 0 6px" }}>{r.title}</p>
-                <p style={{ ...mono, fontSize: "0.44rem", color: "rgba(227,229,228,0.6)", margin: "0 0 6px", lineHeight: 1.6, whiteSpace: "pre-wrap" as const }}>
+                <p style={{ ...mono, fontSize: "0.70rem", fontWeight: 700, color: TEAL, margin: "0 0 6px" }}>{r.title}</p>
+                <p style={{ ...mono, fontSize: "0.44rem", color: "rgba(227,229,228,0.75)", margin: "0 0 6px", lineHeight: 1.6, whiteSpace: "pre-wrap" as const }}>
                   {r.thesis}
                 </p>
                 <p style={{ ...mono, fontSize: "0.36rem", color: DIMMER, margin: 0 }}>
@@ -2937,23 +2937,23 @@ function NetworkTab({ insights, relationships, refetchInsights, refetchRelations
       <div style={{ marginBottom: "1.5rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
           <div>
-            <p style={{ ...mono, fontSize: "0.56rem", fontWeight: 700, color: GREEN, margin: 0 }}>RELATIONSHIP INTELLIGENCE</p>
-            <p style={{ ...mono, fontSize: "0.42rem", color: DIM, margin: "2px 0 0" }}>Community engagement patterns and key voices</p>
+            <p style={{ ...mono, fontSize: "0.74rem", fontWeight: 700, color: GREEN, margin: 0 }}>RELATIONSHIP INTELLIGENCE</p>
+            <p style={{ ...mono, fontSize: "0.60rem", color: DIM, margin: "2px 0 0" }}>Community engagement patterns and key voices</p>
           </div>
           <button onClick={() => analyzeMut.mutate()} disabled={analyzeMut.isPending}
-            style={{ ...mono, fontSize: "0.46rem", padding: "4px 10px", background: "transparent", border: `1px solid ${GREEN}40`, color: GREEN, cursor: "pointer" }}>
+            style={{ ...mono, fontSize: "0.64rem", padding: "4px 10px", background: "transparent", border: `1px solid ${GREEN}40`, color: GREEN, cursor: "pointer" }}>
             {analyzeMut.isPending ? "ANALYZING..." : "ANALYZE RELATIONSHIPS"}
           </button>
         </div>
         {relationships.length === 0 ? (
-          <p style={{ ...mono, fontSize: "0.48rem", color: DIMMER, textAlign: "center", padding: "1rem 0" }}>No relationship data yet</p>
+          <p style={{ ...mono, fontSize: "0.66rem", color: DIMMER, textAlign: "center", padding: "1rem 0" }}>No relationship data yet</p>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
             {relationships.slice(0, 15).map((r: any) => (
-              <div key={r.username} style={{ padding: "8px 10px", border: "1px solid rgba(227,229,228,0.06)", background: "rgba(227,229,228,0.015)" }}>
+              <div key={r.username} style={{ padding: "8px 10px", border: "1px solid rgba(227,229,228,0.12)", background: "rgba(227,229,228,0.04)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                  <span style={{ ...mono, fontSize: "0.48rem", fontWeight: 700, color: "rgba(227,229,228,0.7)" }}>@{r.username}</span>
-                  <span style={{ ...mono, fontSize: "0.4rem", color: DIMMER }}>{r.totalInteractions} chats</span>
+                  <span style={{ ...mono, fontSize: "0.66rem", fontWeight: 700, color: "rgba(227,229,228,0.7)" }}>@{r.username}</span>
+                  <span style={{ ...mono, fontSize: "0.58rem", color: DIMMER }}>{r.totalInteractions} chats</span>
                 </div>
                 <div style={{ display: "flex", gap: 3, flexWrap: "wrap" as const, marginBottom: 4 }}>
                   {(r.tags ?? []).map((t: string) => (
@@ -2975,20 +2975,20 @@ function NetworkTab({ insights, relationships, refetchInsights, refetchRelations
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
           <div>
-            <p style={{ ...mono, fontSize: "0.56rem", fontWeight: 700, color: TEAL, margin: 0 }}>CONVERSATION INSIGHTS</p>
-            <p style={{ ...mono, fontSize: "0.42rem", color: DIM, margin: "2px 0 0" }}>Knowledge extracted from community interactions</p>
+            <p style={{ ...mono, fontSize: "0.74rem", fontWeight: 700, color: TEAL, margin: 0 }}>CONVERSATION INSIGHTS</p>
+            <p style={{ ...mono, fontSize: "0.60rem", color: DIM, margin: "2px 0 0" }}>Knowledge extracted from community interactions</p>
           </div>
           <button onClick={() => extractMut.mutate()} disabled={extractMut.isPending}
-            style={{ ...mono, fontSize: "0.46rem", padding: "4px 10px", background: "transparent", border: `1px solid ${TEAL}40`, color: TEAL, cursor: "pointer" }}>
+            style={{ ...mono, fontSize: "0.64rem", padding: "4px 10px", background: "transparent", border: `1px solid ${TEAL}40`, color: TEAL, cursor: "pointer" }}>
             {extractMut.isPending ? "EXTRACTING..." : "EXTRACT INSIGHTS"}
           </button>
         </div>
         {insights.length === 0 ? (
-          <p style={{ ...mono, fontSize: "0.48rem", color: DIMMER, textAlign: "center", padding: "1rem 0" }}>No insights extracted yet — run extraction after community conversations</p>
+          <p style={{ ...mono, fontSize: "0.66rem", color: DIMMER, textAlign: "center", padding: "1rem 0" }}>No insights extracted yet — run extraction after community conversations</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {insights.slice(0, 20).map((i: any) => (
-              <div key={i.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "6px 10px", border: "1px solid rgba(227,229,228,0.04)" }}>
+              <div key={i.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "6px 10px", border: "1px solid rgba(227,229,228,0.08)" }}>
                 <div style={{ flex: 1 }}>
                   <p style={{ ...mono, fontSize: "0.44rem", color: "rgba(227,229,228,0.7)", margin: "0 0 2px" }}>{i.insight}</p>
                   <p style={{ ...mono, fontSize: "0.36rem", color: DIMMER, margin: 0 }}>{i.source} · {fmtShort(i.createdAt)}</p>
@@ -3127,25 +3127,25 @@ export default function AgentHQ() {
         }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(227,229,228,0.1); }
+        ::-webkit-scrollbar-thumb { background: rgba(227,229,228,0.18); }
       `}</style>
 
       {/* ── Header ── */}
       <div style={{ marginBottom: "1.75rem", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" as const }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-            <span style={{ ...mono, fontSize: "0.52rem", color: "rgba(249,115,22,0.5)", textTransform: "uppercase" as const, letterSpacing: "0.2em" }}>
+            <span style={{ ...mono, fontSize: "0.70rem", color: "rgba(249,115,22,0.5)", textTransform: "uppercase" as const, letterSpacing: "0.2em" }}>
               Agent 306
             </span>
-            <span style={{ ...mono, fontSize: "0.45rem", color: "rgba(227,229,228,0.2)" }}>•</span>
-            <span style={{ ...mono, fontSize: "0.52rem", color: "rgba(227,229,228,0.25)", textTransform: "uppercase" as const, letterSpacing: "0.15em" }}>
+            <span style={{ ...mono, fontSize: "0.63rem", color: "rgba(227,229,228,0.35)" }}>•</span>
+            <span style={{ ...mono, fontSize: "0.70rem", color: "rgba(227,229,228,0.40)", textTransform: "uppercase" as const, letterSpacing: "0.15em" }}>
               Command Center
             </span>
           </div>
           <h1 style={{ ...mono, fontSize: "1.45rem", fontWeight: 700, color: ORANGE, margin: 0, letterSpacing: "0.06em", textTransform: "uppercase" as const }}>
             Agent HQ
           </h1>
-          <p style={{ ...mono, fontSize: "0.55rem", color: "rgba(227,229,228,0.25)", margin: "4px 0 0" }}>
+          <p style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.40)", margin: "4px 0 0" }}>
             All systems nominal · {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
           </p>
         </div>
@@ -3154,13 +3154,13 @@ export default function AgentHQ() {
           {researchingCount > 0 && (
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <div style={{ width: 6, height: 6, borderRadius: "50%", background: ORANGE, animation: "research-pulse 1.2s infinite" }} />
-              <span style={{ ...mono, fontSize: "0.52rem", color: ORANGE }}>
+              <span style={{ ...mono, fontSize: "0.70rem", color: ORANGE }}>
                 {researchingCount} active research cycle{researchingCount !== 1 ? "s" : ""}
               </span>
             </div>
           )}
           {pendingReviewCount > 0 && (
-            <div style={{ ...mono, fontSize: "0.52rem", color: YELLOW, border: `1px solid ${YELLOW}40`, padding: "3px 10px" }}>
+            <div style={{ ...mono, fontSize: "0.70rem", color: YELLOW, border: `1px solid ${YELLOW}40`, padding: "3px 10px" }}>
               {pendingReviewCount} awaiting review
             </div>
           )}
@@ -3169,13 +3169,13 @@ export default function AgentHQ() {
 
       {/* ── House rooms 4-col grid ── */}
       <div style={{ marginBottom: "2rem" }}>
-        <p style={{ ...mono, fontSize: "0.5rem", color: "rgba(227,229,228,0.25)", textTransform: "uppercase" as const, letterSpacing: "0.18em", margin: "0 0 0.65rem" }}>
+        <p style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.40)", textTransform: "uppercase" as const, letterSpacing: "0.18em", margin: "0 0 0.65rem" }}>
           System Status
         </p>
         {houseLoading ? (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} style={{ height: 90, background: "rgba(227,229,228,0.02)", border: "1px solid rgba(227,229,228,0.05)", animation: "research-pulse 1.5s infinite" }} />
+              <div key={i} style={{ height: 90, background: "rgba(227,229,228,0.05)", border: "1px solid rgba(227,229,228,0.10)", animation: "research-pulse 1.5s infinite" }} />
             ))}
           </div>
         ) : (
@@ -3197,98 +3197,98 @@ export default function AgentHQ() {
       {metaData && (
         <div style={{ marginBottom: "1.25rem", border: "1px solid rgba(249,115,22,0.15)", background: "rgba(249,115,22,0.02)", padding: "0.85rem 1.25rem" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "0.7rem" }}>
-            <span style={{ fontSize: "0.9rem" }}>🧠</span>
-            <span style={{ ...mono, fontSize: "0.6rem", fontWeight: 700, color: ORANGE, textTransform: "uppercase" as const, letterSpacing: "0.12em" }}>
+            <span style={{ fontSize: "1.1rem" }}>🧠</span>
+            <span style={{ ...mono, fontSize: "0.78rem", fontWeight: 700, color: ORANGE, textTransform: "uppercase" as const, letterSpacing: "0.12em" }}>
               The Mind
             </span>
-            <span style={{ ...mono, fontSize: "0.46rem", color: "rgba(227,229,228,0.2)" }}>
+            <span style={{ ...mono, fontSize: "0.64rem", color: "rgba(227,229,228,0.35)" }}>
               Cognitive State Overview
             </span>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
             {/* Knowledge Coverage */}
-            <div style={{ padding: "0.6rem", border: "1px solid rgba(227,229,228,0.06)", background: "rgba(227,229,228,0.015)" }}>
-              <p style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 6px" }}>Knowledge</p>
+            <div style={{ padding: "0.6rem", border: "1px solid rgba(227,229,228,0.12)", background: "rgba(227,229,228,0.04)" }}>
+              <p style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 6px" }}>Knowledge</p>
               <p style={{ ...mono, fontSize: "1rem", fontWeight: 700, color: TEAL, margin: "0 0 4px" }}>{metaData.knowledgeCoverage?.totalActive ?? 0}</p>
-              <p style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.25)", margin: 0 }}>
+              <p style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.40)", margin: 0 }}>
                 {(metaData.knowledgeCoverage?.categories ?? []).length} categories · avg weight {metaData.confidenceCalibration?.avgWeight ?? 0}
               </p>
             </div>
             {/* Learning Velocity */}
-            <div style={{ padding: "0.6rem", border: "1px solid rgba(227,229,228,0.06)", background: "rgba(227,229,228,0.015)" }}>
-              <p style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 6px" }}>Velocity</p>
+            <div style={{ padding: "0.6rem", border: "1px solid rgba(227,229,228,0.12)", background: "rgba(227,229,228,0.04)" }}>
+              <p style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 6px" }}>Velocity</p>
               <p style={{ ...mono, fontSize: "1rem", fontWeight: 700, color: metaData.learningVelocity?.trend === "accelerating" ? GREEN : metaData.learningVelocity?.trend === "slowing" ? RED : YELLOW, margin: "0 0 4px" }}>
-                {metaData.learningVelocity?.knowledgeAdded7d ?? 0}<span style={{ fontSize: "0.5rem", color: "rgba(227,229,228,0.3)" }}>/7d</span>
+                {metaData.learningVelocity?.knowledgeAdded7d ?? 0}<span style={{ fontSize: "0.68rem", color: "rgba(227,229,228,0.48)" }}>/7d</span>
               </p>
-              <p style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.25)", margin: 0 }}>
+              <p style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.40)", margin: 0 }}>
                 {metaData.learningVelocity?.knowledgeAdded30d ?? 0}/30d · {metaData.learningVelocity?.trend ?? "steady"}
               </p>
             </div>
             {/* Reasoning Quality */}
-            <div style={{ padding: "0.6rem", border: "1px solid rgba(227,229,228,0.06)", background: "rgba(227,229,228,0.015)" }}>
-              <p style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 6px" }}>Reasoning</p>
+            <div style={{ padding: "0.6rem", border: "1px solid rgba(227,229,228,0.12)", background: "rgba(227,229,228,0.04)" }}>
+              <p style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 6px" }}>Reasoning</p>
               <p style={{ ...mono, fontSize: "1rem", fontWeight: 700, color: PURPLE, margin: "0 0 4px" }}>
-                {metaData.reasoningQuality?.debatesRun ?? 0}<span style={{ fontSize: "0.5rem", color: "rgba(227,229,228,0.3)" }}> debates</span>
+                {metaData.reasoningQuality?.debatesRun ?? 0}<span style={{ fontSize: "0.68rem", color: "rgba(227,229,228,0.48)" }}> debates</span>
               </p>
-              <p style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.25)", margin: 0 }}>
+              <p style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.40)", margin: 0 }}>
                 {metaData.reasoningQuality?.contradictionsOpen ?? 0} open contradictions · {metaData.reasoningQuality?.contradictionsResolved ?? 0} resolved
               </p>
             </div>
             {/* Reflection & Performance */}
-            <div style={{ padding: "0.6rem", border: "1px solid rgba(227,229,228,0.06)", background: "rgba(227,229,228,0.015)" }}>
-              <p style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 6px" }}>Performance</p>
+            <div style={{ padding: "0.6rem", border: "1px solid rgba(227,229,228,0.12)", background: "rgba(227,229,228,0.04)" }}>
+              <p style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 6px" }}>Performance</p>
               <p style={{ ...mono, fontSize: "1rem", fontWeight: 700, color: metaData.reflectionStats?.scoreTrend === "improving" ? GREEN : metaData.reflectionStats?.scoreTrend === "declining" ? RED : YELLOW, margin: "0 0 4px" }}>
-                {metaData.reflectionStats?.avgPostScore7d ?? 0}<span style={{ fontSize: "0.5rem", color: "rgba(227,229,228,0.3)" }}>/10</span>
+                {metaData.reflectionStats?.avgPostScore7d ?? 0}<span style={{ fontSize: "0.68rem", color: "rgba(227,229,228,0.48)" }}>/10</span>
               </p>
-              <p style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.25)", margin: 0 }}>
+              <p style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.40)", margin: 0 }}>
                 {metaData.reflectionStats?.activeRules ?? 0} style rules · {metaData.reflectionStats?.scoreTrend ?? "stable"}
               </p>
             </div>
           </div>
           {/* Second row: synthesis + conversation stats */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 10 }}>
-            <div style={{ padding: "0.4rem 0.6rem", border: "1px solid rgba(227,229,228,0.04)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase" as const }}>Connections</span>
-              <span style={{ ...mono, fontSize: "0.58rem", fontWeight: 700, color: TEAL }}>{metaData.synthesisStats?.totalConnections ?? 0}</span>
+            <div style={{ padding: "0.4rem 0.6rem", border: "1px solid rgba(227,229,228,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase" as const }}>Connections</span>
+              <span style={{ ...mono, fontSize: "0.76rem", fontWeight: 700, color: TEAL }}>{metaData.synthesisStats?.totalConnections ?? 0}</span>
             </div>
-            <div style={{ padding: "0.4rem 0.6rem", border: "1px solid rgba(227,229,228,0.04)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase" as const }}>Syntheses</span>
-              <span style={{ ...mono, fontSize: "0.58rem", fontWeight: 700, color: PURPLE }}>{metaData.synthesisStats?.totalReports ?? 0}</span>
+            <div style={{ padding: "0.4rem 0.6rem", border: "1px solid rgba(227,229,228,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase" as const }}>Syntheses</span>
+              <span style={{ ...mono, fontSize: "0.76rem", fontWeight: 700, color: PURPLE }}>{metaData.synthesisStats?.totalReports ?? 0}</span>
             </div>
-            <div style={{ padding: "0.4rem 0.6rem", border: "1px solid rgba(227,229,228,0.04)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ ...mono, fontSize: "0.42rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase" as const }}>Relationships</span>
-              <span style={{ ...mono, fontSize: "0.58rem", fontWeight: 700, color: GREEN }}>{metaData.conversationStats?.relationshipsTracked ?? 0}</span>
+            <div style={{ padding: "0.4rem 0.6rem", border: "1px solid rgba(227,229,228,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase" as const }}>Relationships</span>
+              <span style={{ ...mono, fontSize: "0.76rem", fontWeight: 700, color: GREEN }}>{metaData.conversationStats?.relationshipsTracked ?? 0}</span>
             </div>
           </div>
         </div>
       )}
 
       {/* ── Research Lab ── */}
-      <div style={{ border: "1px solid rgba(227,229,228,0.07)", background: "rgba(227,229,228,0.01)" }}>
+      <div style={{ border: "1px solid rgba(227,229,228,0.14)", background: "rgba(227,229,228,0.01)" }}>
         {/* Research lab header */}
-        <div style={{ padding: "0.85rem 1.25rem", borderBottom: "1px solid rgba(227,229,228,0.07)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ padding: "0.85rem 1.25rem", borderBottom: "1px solid rgba(227,229,228,0.14)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{ fontSize: "1rem" }}>🔬</span>
-            <span style={{ ...mono, fontSize: "0.62rem", fontWeight: 700, color: ORANGE, textTransform: "uppercase" as const, letterSpacing: "0.12em" }}>
+            <span style={{ ...mono, fontSize: "0.80rem", fontWeight: 700, color: ORANGE, textTransform: "uppercase" as const, letterSpacing: "0.12em" }}>
               Research Lab
             </span>
-            <span style={{ ...mono, fontSize: "0.48rem", color: "rgba(227,229,228,0.25)", border: "1px solid rgba(227,229,228,0.1)", padding: "1px 8px" }}>
+            <span style={{ ...mono, fontSize: "0.66rem", color: "rgba(227,229,228,0.40)", border: "1px solid rgba(227,229,228,0.18)", padding: "1px 8px" }}>
               {(topics as ResearchTopic[]).length} topics · {(hypotheses as Hypothesis[]).length} hypotheses · {goalsStats.active} active goals
             </span>
           </div>
         </div>
 
         {/* Research tab bar */}
-        <div style={{ display: "flex", borderBottom: "1px solid rgba(227,229,228,0.07)", padding: "0 1.25rem" }}>
+        <div style={{ display: "flex", borderBottom: "1px solid rgba(227,229,228,0.14)", padding: "0 1.25rem" }}>
           {TAB_LABELS.map(({ key, label, badge }) => (
             <button
               key={key}
               onClick={() => setResearchTab(key)}
               style={{
-                ...mono, fontSize: "0.58rem", textTransform: "uppercase" as const, letterSpacing: "0.1em",
+                ...mono, fontSize: "0.76rem", textTransform: "uppercase" as const, letterSpacing: "0.1em",
                 background: "transparent", border: "none",
                 borderBottom: researchTab === key ? `2px solid ${ORANGE}` : "2px solid transparent",
-                color: researchTab === key ? ORANGE : "rgba(227,229,228,0.3)",
+                color: researchTab === key ? ORANGE : "rgba(227,229,228,0.48)",
                 padding: "0.65rem 0.9rem", cursor: "pointer", marginBottom: -1,
                 display: "flex", alignItems: "center", gap: 6,
               }}
@@ -3298,7 +3298,7 @@ export default function AgentHQ() {
                 <span style={{
                   background: researchTab === key ? ORANGE : "rgba(249,115,22,0.25)",
                   color: researchTab === key ? "#0e0f10" : ORANGE,
-                  ...mono, fontSize: "0.45rem", fontWeight: 700,
+                  ...mono, fontSize: "0.63rem", fontWeight: 700,
                   borderRadius: "50%", width: 16, height: 16,
                   display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
                 }}>

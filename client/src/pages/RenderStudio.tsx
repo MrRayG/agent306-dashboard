@@ -24,14 +24,14 @@ function VoxelPreview({ tokenId }: { tokenId: number }) {
       {!loaded && !error && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
           <Loader2 className="w-6 h-6 text-primary animate-spin" />
-          <p className="text-[10px] text-muted-foreground">Loading 3D preview…</p>
+          <p className="text-[13px] text-muted-foreground">Loading 3D preview…</p>
         </div>
       )}
       {error && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
           <Box className="w-8 h-8 text-muted-foreground" />
-          <p className="text-[11px] text-muted-foreground">Preview unavailable</p>
-          <p className="text-[10px] text-muted-foreground/60">Token #{tokenId}</p>
+          <p className="text-[14px] text-muted-foreground">Preview unavailable</p>
+          <p className="text-[13px] text-muted-foreground/60">Token #{tokenId}</p>
         </div>
       )}
       <iframe
@@ -123,7 +123,7 @@ export default function RenderStudio() {
         ].map(s => (
           <Card key={s.label} className="pixel-hover">
             <CardContent className="p-4">
-              <p className="text-[11px] text-muted-foreground uppercase tracking-widest">{s.label}</p>
+              <p className="text-[14px] text-muted-foreground uppercase tracking-widest">{s.label}</p>
               <p className={`text-2xl font-bold font-mono mt-1 ${s.cls}`}>{s.value}</p>
             </CardContent>
           </Card>
@@ -156,13 +156,13 @@ export default function RenderStudio() {
 
               {/* Quick picks */}
               <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1.5">Quick picks</p>
+                <p className="text-[13px] text-muted-foreground uppercase tracking-wider mb-1.5">Quick picks</p>
                 <div className="flex flex-wrap gap-1.5">
                   {[306, 603, 4354, 45, 666, 5070].map(t => (
                     <button
                       key={t}
                       onClick={() => setTokenInput(String(t))}
-                      className={`px-2 py-1 rounded text-[10px] font-mono transition-colors ${
+                      className={`px-2 py-1 rounded text-[13px] font-mono transition-colors ${
                         tokenInput === String(t)
                           ? "bg-primary/20 text-primary border border-primary/40"
                           : "bg-secondary text-muted-foreground hover:text-foreground border border-border"
@@ -202,8 +202,8 @@ export default function RenderStudio() {
               </div>
 
               <div className="bg-secondary/50 rounded p-3 space-y-1.5">
-                <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">USDZ Pipeline</p>
-                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                <p className="text-[13px] text-muted-foreground font-semibold uppercase tracking-wider">USDZ Pipeline</p>
+                <p className="text-[13px] text-muted-foreground leading-relaxed">
                   Renders pull geometry from{" "}
                   <a
                     href="https://normie-3d.vercel.app"
@@ -244,7 +244,7 @@ export default function RenderStudio() {
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <Box className="w-4 h-4 text-primary" /> 3D Preview — Token #{previewToken}
-                  <Badge className="text-[10px] bg-primary/10 text-primary border-primary/30">Live</Badge>
+                  <Badge className="text-[13px] bg-primary/10 text-primary border-primary/30">Live</Badge>
                 </CardTitle>
               </div>
             </CardHeader>
@@ -252,7 +252,7 @@ export default function RenderStudio() {
               <div key={previewKey}>
                 <VoxelPreview tokenId={previewToken} />
               </div>
-              <p className="text-[10px] text-muted-foreground mt-2 text-center">
+              <p className="text-[13px] text-muted-foreground mt-2 text-center">
                 Interactive — drag to rotate · scroll to zoom · right-click to pan
               </p>
             </CardContent>
@@ -292,15 +292,15 @@ export default function RenderStudio() {
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium font-mono">Token #{job.tokenId}</p>
-                      <p className="text-[10px] text-muted-foreground">
+                      <p className="text-[13px] text-muted-foreground">
                         {job.voxelCount ? `${job.voxelCount} voxels` : "Voxel count pending"} · Job #{job.id}
                       </p>
                     </div>
                     <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded ${cfg.bg}`}>
                       <StatusIcon className={`w-3.5 h-3.5 ${cfg.className}`} />
-                      <span className={`text-[11px] font-medium ${cfg.className}`}>{cfg.label}</span>
+                      <span className={`text-[14px] font-medium ${cfg.className}`}>{cfg.label}</span>
                     </div>
-                    <p className="text-[10px] text-muted-foreground w-24 text-right">
+                    <p className="text-[13px] text-muted-foreground w-24 text-right">
                       {new Date(job.createdAt).toLocaleDateString()}
                     </p>
                   </div>

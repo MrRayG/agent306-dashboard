@@ -18,17 +18,17 @@
     --fg-raw:  227,229,228;
 
     --background:        220 5% 11%;   /* #1a1b1c */
-    --foreground:        60 3% 89%;    /* #e3e5e4 */
+    --foreground:        60 3% 93%;    /* #edeeee — brighter */
     --card:              220 5% 13%;
-    --card-foreground:   60 3% 89%;
+    --card-foreground:   60 3% 93%;
     --popover:           220 5% 11%;
-    --popover-foreground:60 3% 89%;
-    --primary:           60 3% 89%;    /* fg = white-ish — normies.art style */
+    --popover-foreground:60 3% 93%;
+    --primary:           60 3% 93%;    /* fg = white-ish — normies.art style */
     --primary-foreground:220 5% 11%;
     --secondary:         220 5% 16%;
-    --secondary-foreground: 60 3% 70%;
+    --secondary-foreground: 60 3% 80%;
     --muted:             220 5% 15%;
-    --muted-foreground:  60 3% 52%;
+    --muted-foreground:  60 3% 68%;
     --accent:            185 80% 42%;  /* teal — canvas glow */
     --accent-foreground: 220 5% 11%;
     --destructive:       0 72% 51%;
@@ -68,7 +68,7 @@
   body {
     @apply bg-background text-foreground;
     font-family: 'Courier New', Courier, monospace;
-    font-size: 0.875rem;
+    font-size: 1rem;
     line-height: 1.7;
     min-height: 100dvh;
   }
@@ -159,7 +159,7 @@ body::before {
   color: hsl(var(--burn));
   border: 1px solid hsl(var(--burn) / 0.3);
   font-family: 'Courier New', monospace;
-  font-size: 0.7rem;
+  font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   padding: 0.4rem 1rem;
@@ -177,7 +177,7 @@ body::before {
   color: hsl(var(--canvas));
   border: 1px solid hsl(var(--canvas) / 0.25);
   font-family: 'Courier New', monospace;
-  font-size: 0.7rem;
+  font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   padding: 0.4rem 1rem;

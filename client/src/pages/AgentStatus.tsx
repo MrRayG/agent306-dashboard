@@ -42,7 +42,7 @@ function ScoreRing({ score, size = 80 }: { score: number; size?: number }) {
   const color = score >= 70 ? "#4ade80" : score >= 40 ? "#f97316" : "#a78bfa";
   return (
     <svg width={size} height={size} style={{ flexShrink: 0 }}>
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(227,229,228,0.06)" strokeWidth={5} />
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(227,229,228,0.12)" strokeWidth={5} />
       <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={5}
         strokeDasharray={`${fill} ${circ - fill}`}
         strokeDashoffset={circ / 4}
@@ -81,12 +81,12 @@ function StatCard({ label, value, sub, color = "#e3e5e4", spark }: {
   label: string; value: string | number; sub?: string; color?: string; spark?: number[];
 }) {
   return (
-    <div style={{ background: "rgba(227,229,228,0.02)", border: "1px solid rgba(227,229,228,0.07)", padding: "0.85rem 1rem" }}>
-      <p style={{ ...mono, fontSize: "0.5rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: 0, marginBottom: 4 }}>{label}</p>
+    <div style={{ background: "rgba(227,229,228,0.05)", border: "1px solid rgba(227,229,228,0.14)", padding: "0.85rem 1rem" }}>
+      <p style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: 0, marginBottom: 4 }}>{label}</p>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
         <div>
-          <p style={{ ...mono, fontSize: "1.3rem", fontWeight: 700, color, margin: 0, lineHeight: 1 }}>{value}</p>
-          {sub && <p style={{ ...mono, fontSize: "0.55rem", color: "rgba(227,229,228,0.3)", margin: "3px 0 0" }}>{sub}</p>}
+          <p style={{ ...mono, fontSize: "1.5rem", fontWeight: 700, color, margin: 0, lineHeight: 1 }}>{value}</p>
+          {sub && <p style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.48)", margin: "3px 0 0" }}>{sub}</p>}
         </div>
         {spark && spark.length > 1 && <Sparkline values={spark} color={color} />}
       </div>
@@ -104,7 +104,7 @@ function GrowthBadge({ vector }: { vector: string }) {
   };
   const { color, icon } = cfg[vector] ?? cfg.early;
   return (
-    <span style={{ ...mono, fontSize: "0.55rem", color, border: `1px solid ${color}40`, padding: "2px 8px", textTransform: "uppercase" as const, letterSpacing: "0.1em" }}>
+    <span style={{ ...mono, fontSize: "0.73rem", color, border: `1px solid ${color}40`, padding: "2px 8px", textTransform: "uppercase" as const, letterSpacing: "0.1em" }}>
       {icon} {vector}
     </span>
   );
@@ -115,26 +115,26 @@ function TimelineRow({ snap, isFirst }: { snap: DailySnapshot; isFirst: boolean 
   const date = new Date(snap.date).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   const scoreColor = snap.overallScore >= 70 ? "#4ade80" : snap.overallScore >= 40 ? "#f97316" : "#a78bfa";
   return (
-    <div style={{ display: "flex", gap: 12, padding: "0.75rem 0", borderBottom: "1px solid rgba(227,229,228,0.05)", alignItems: "flex-start" }}>
+    <div style={{ display: "flex", gap: 12, padding: "0.75rem 0", borderBottom: "1px solid rgba(227,229,228,0.10)", alignItems: "flex-start" }}>
       {/* Timeline dot */}
       <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "center", flexShrink: 0, width: 16 }}>
-        <div style={{ width: 8, height: 8, borderRadius: "50%", background: isFirst ? scoreColor : "rgba(227,229,228,0.2)", border: `1px solid ${scoreColor}`, marginTop: 4 }} />
+        <div style={{ width: 8, height: 8, borderRadius: "50%", background: isFirst ? scoreColor : "rgba(227,229,228,0.35)", border: `1px solid ${scoreColor}`, marginTop: 4 }} />
       </div>
       <div style={{ flex: 1 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4, flexWrap: "wrap" as const }}>
-          <span style={{ ...mono, fontSize: "0.62rem", color: "#e3e5e4", fontWeight: 700 }}>{date}</span>
-          <span style={{ ...mono, fontSize: "0.6rem", color: scoreColor, border: `1px solid ${scoreColor}30`, padding: "0px 6px" }}>{snap.overallScore}/100</span>
+          <span style={{ ...mono, fontSize: "0.80rem", color: "#efefef", fontWeight: 700 }}>{date}</span>
+          <span style={{ ...mono, fontSize: "0.78rem", color: scoreColor, border: `1px solid ${scoreColor}30`, padding: "0px 6px" }}>{snap.overallScore}/100</span>
           <GrowthBadge vector={snap.growthVector} />
-          <span style={{ ...mono, fontSize: "0.58rem", color: "rgba(249,115,22,0.6)" }}>{snap.mood}</span>
+          <span style={{ ...mono, fontSize: "0.76rem", color: "rgba(249,115,22,0.6)" }}>{snap.mood}</span>
         </div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" as const }}>
-          <span style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.4)" }}>📚 {snap.knowledgeTotal} entries {snap.knowledgeAddedToday > 0 ? `(+${snap.knowledgeAddedToday} today)` : ""}</span>
-          <span style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.4)" }}>📝 {snap.totalPosts} posts · {snap.avgQualityScore.toFixed(1)}/10 avg</span>
-          {snap.totalExplorations > 0 && <span style={{ ...mono, fontSize: "0.58rem", color: "rgba(167,139,250,0.5)" }}>🌍 {snap.totalExplorations} explorations</span>}
+          <span style={{ ...mono, fontSize: "0.76rem", color: "rgba(227,229,228,0.60)" }}>📚 {snap.knowledgeTotal} entries {snap.knowledgeAddedToday > 0 ? `(+${snap.knowledgeAddedToday} today)` : ""}</span>
+          <span style={{ ...mono, fontSize: "0.76rem", color: "rgba(227,229,228,0.60)" }}>📝 {snap.totalPosts} posts · {snap.avgQualityScore.toFixed(1)}/10 avg</span>
+          {snap.totalExplorations > 0 && <span style={{ ...mono, fontSize: "0.76rem", color: "rgba(167,139,250,0.5)" }}>🌍 {snap.totalExplorations} explorations</span>}
         </div>
         {snap.milestone && (
           <div style={{ marginTop: 4, padding: "3px 8px", background: "rgba(249,115,22,0.06)", border: "1px solid rgba(249,115,22,0.15)", display: "inline-block" }}>
-            <span style={{ ...mono, fontSize: "0.55rem", color: "#f97316" }}>🏆 {snap.milestone}</span>
+            <span style={{ ...mono, fontSize: "0.73rem", color: "#f97316" }}>🏆 {snap.milestone}</span>
           </div>
         )}
       </div>
@@ -203,7 +203,7 @@ export default function AgentStatus() {
     if (previous === undefined || previous === 0) return null;
     const delta = current - previous;
     if (delta === 0) return null;
-    return <span style={{ ...mono, fontSize: "0.55rem", color: delta > 0 ? "#4ade80" : "#f87171", marginLeft: 4 }}>{delta > 0 ? "+" : ""}{delta}</span>;
+    return <span style={{ ...mono, fontSize: "0.73rem", color: delta > 0 ? "#4ade80" : "#f87171", marginLeft: 4 }}>{delta > 0 ? "+" : ""}{delta}</span>;
   };
 
   return (
@@ -214,23 +214,23 @@ export default function AgentStatus() {
         <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
           <ScoreRing score={snapshot?.overallScore ?? 0} />
           <div>
-            <h1 style={{ ...mono, fontSize: "0.85rem", color: "#f97316", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: 0, marginBottom: 4 }}>
+            <h1 style={{ ...mono, fontSize: "1.03rem", color: "#f97316", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: 0, marginBottom: 4 }}>
               Agent 306 — Evolution Status
             </h1>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const, alignItems: "center" }}>
               {snapshot && <GrowthBadge vector={snapshot.growthVector} />}
               {snapshot && (
-                <span style={{ ...mono, fontSize: "0.58rem", color: "rgba(249,115,22,0.6)", border: "1px solid rgba(249,115,22,0.2)", padding: "1px 7px" }}>
+                <span style={{ ...mono, fontSize: "0.76rem", color: "rgba(249,115,22,0.6)", border: "1px solid rgba(249,115,22,0.2)", padding: "1px 7px" }}>
                   {snapshot.mood}
                 </span>
               )}
-              <span style={{ ...mono, fontSize: "0.55rem", color: "rgba(227,229,228,0.25)" }}>
+              <span style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.40)" }}>
                 {evolution?.totalDays ?? 0} days tracked · since {evolution?.startDate ?? "—"}
               </span>
             </div>
             {snapshot?.milestone && (
               <div style={{ marginTop: 6, padding: "3px 10px", background: "rgba(249,115,22,0.06)", border: "1px solid rgba(249,115,22,0.2)", display: "inline-block" }}>
-                <span style={{ ...mono, fontSize: "0.58rem", color: "#f97316" }}>🏆 {snapshot.milestone}</span>
+                <span style={{ ...mono, fontSize: "0.76rem", color: "#f97316" }}>🏆 {snapshot.milestone}</span>
               </div>
             )}
           </div>
@@ -242,7 +242,7 @@ export default function AgentStatus() {
             style={{
               background: exploreMutation.isPending || explorationState?.isRunning ? "rgba(167,139,250,0.12)" : "#a78bfa",
               color: exploreMutation.isPending || explorationState?.isRunning ? "rgba(167,139,250,0.4)" : "#1a1b1c",
-              border: "none", ...mono, fontSize: "0.65rem", fontWeight: 700,
+              border: "none", ...mono, fontSize: "0.83rem", fontWeight: 700,
               padding: "0.6rem 1.1rem", cursor: "pointer",
               textTransform: "uppercase" as const, letterSpacing: "0.06em",
             }}
@@ -252,8 +252,8 @@ export default function AgentStatus() {
           <button
             onClick={() => snapshotMutation.mutate()}
             style={{
-              background: "transparent", border: "1px solid rgba(227,229,228,0.15)",
-              color: "rgba(227,229,228,0.4)", ...mono, fontSize: "0.6rem",
+              background: "transparent", border: "1px solid rgba(227,229,228,0.22)",
+              color: "rgba(227,229,228,0.60)", ...mono, fontSize: "0.78rem",
               padding: "0.6rem 0.85rem", cursor: "pointer",
               textTransform: "uppercase" as const,
             }}
@@ -268,7 +268,7 @@ export default function AgentStatus() {
               background: syncMutation.isPending ? "rgba(74,222,128,0.08)" : "transparent",
               border: "1px solid rgba(74,222,128,0.2)",
               color: syncMutation.isPending ? "rgba(74,222,128,0.3)" : "rgba(74,222,128,0.6)",
-              ...mono, fontSize: "0.6rem",
+              ...mono, fontSize: "0.78rem",
               padding: "0.6rem 0.85rem", cursor: syncMutation.isPending ? "not-allowed" : "pointer",
               textTransform: "uppercase" as const,
             }}
@@ -279,13 +279,13 @@ export default function AgentStatus() {
       </div>
 
       {/* Tab bar */}
-      <div style={{ display: "flex", borderBottom: "1px solid rgba(227,229,228,0.08)", marginBottom: "1.5rem" }}>
+      <div style={{ display: "flex", borderBottom: "1px solid rgba(227,229,228,0.15)", marginBottom: "1.5rem" }}>
         {(["vitals", "evolution", "exploration"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
-            ...mono, fontSize: "0.62rem", textTransform: "uppercase" as const, letterSpacing: "0.12em",
+            ...mono, fontSize: "0.80rem", textTransform: "uppercase" as const, letterSpacing: "0.12em",
             background: "transparent", border: "none",
             borderBottom: tab === t ? "2px solid #f97316" : "2px solid transparent",
-            color: tab === t ? "#f97316" : "rgba(227,229,228,0.35)",
+            color: tab === t ? "#f97316" : "rgba(227,229,228,0.55)",
             padding: "0.6rem 1.25rem", cursor: "pointer", marginBottom: -1,
           }}>{t}</button>
         ))}
@@ -321,13 +321,13 @@ export default function AgentStatus() {
           </div>
 
           {/* Knowledge breakdown */}
-          <div style={{ border: "1px solid rgba(227,229,228,0.07)", background: "rgba(227,229,228,0.015)", padding: "1rem 1.25rem" }}>
-            <p style={{ ...mono, fontSize: "0.52rem", color: "rgba(227,229,228,0.3)", textTransform: "uppercase" as const, letterSpacing: "0.15em", marginBottom: "0.75rem" }}>Knowledge Breakdown</p>
+          <div style={{ border: "1px solid rgba(227,229,228,0.14)", background: "rgba(227,229,228,0.04)", padding: "1rem 1.25rem" }}>
+            <p style={{ ...mono, fontSize: "0.70rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase" as const, letterSpacing: "0.15em", marginBottom: "0.75rem" }}>Knowledge Breakdown</p>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
               {Object.entries(snapshot.knowledgeByCategory).sort((a, b) => b[1] - a[1]).map(([cat, count]) => (
                 <div key={cat} style={{ background: "rgba(167,139,250,0.06)", border: "1px solid rgba(167,139,250,0.15)", padding: "4px 10px" }}>
-                  <span style={{ ...mono, fontSize: "0.6rem", color: "#a78bfa" }}>{cat}</span>
-                  <span style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.4)", marginLeft: 6 }}>{count}</span>
+                  <span style={{ ...mono, fontSize: "0.78rem", color: "#a78bfa" }}>{cat}</span>
+                  <span style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", marginLeft: 6 }}>{count}</span>
                 </div>
               ))}
             </div>
@@ -336,10 +336,10 @@ export default function AgentStatus() {
           {/* Best topics */}
           {snapshot.bestTopics.length > 0 && (
             <div style={{ border: "1px solid rgba(74,222,128,0.1)", background: "rgba(74,222,128,0.02)", padding: "1rem 1.25rem" }}>
-              <p style={{ ...mono, fontSize: "0.52rem", color: "rgba(74,222,128,0.4)", textTransform: "uppercase" as const, letterSpacing: "0.15em", marginBottom: "0.6rem" }}>Best Performing Topics</p>
+              <p style={{ ...mono, fontSize: "0.70rem", color: "rgba(74,222,128,0.4)", textTransform: "uppercase" as const, letterSpacing: "0.15em", marginBottom: "0.6rem" }}>Best Performing Topics</p>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
                 {snapshot.bestTopics.map(t => (
-                  <span key={t} style={{ ...mono, fontSize: "0.62rem", color: "#4ade80", border: "1px solid rgba(74,222,128,0.2)", padding: "2px 10px" }}>{t}</span>
+                  <span key={t} style={{ ...mono, fontSize: "0.80rem", color: "#4ade80", border: "1px solid rgba(74,222,128,0.2)", padding: "2px 10px" }}>{t}</span>
                 ))}
               </div>
             </div>
@@ -348,8 +348,8 @@ export default function AgentStatus() {
       )}
 
       {tab === "vitals" && !snapshot && (
-        <div style={{ padding: "2rem", border: "1px solid rgba(227,229,228,0.07)", textAlign: "center" as const }}>
-          <p style={{ ...mono, fontSize: "0.7rem", color: "rgba(227,229,228,0.3)", margin: 0 }}>
+        <div style={{ padding: "2rem", border: "1px solid rgba(227,229,228,0.14)", textAlign: "center" as const }}>
+          <p style={{ ...mono, fontSize: "0.88rem", color: "rgba(227,229,228,0.48)", margin: 0 }}>
             No snapshot yet. Click "Snapshot" to take the first baseline reading of Agent 306.
           </p>
         </div>
@@ -359,14 +359,14 @@ export default function AgentStatus() {
       {tab === "evolution" && (
         <div>
           {!evolution?.snapshots?.length ? (
-            <div style={{ padding: "2rem", border: "1px solid rgba(227,229,228,0.07)", textAlign: "center" as const }}>
-              <p style={{ ...mono, fontSize: "0.7rem", color: "rgba(227,229,228,0.3)", margin: 0 }}>
+            <div style={{ padding: "2rem", border: "1px solid rgba(227,229,228,0.14)", textAlign: "center" as const }}>
+              <p style={{ ...mono, fontSize: "0.88rem", color: "rgba(227,229,228,0.48)", margin: 0 }}>
                 Evolution tracking begins with the first snapshot. Click "Snapshot" to start.
               </p>
             </div>
           ) : (
             <div>
-              <p style={{ ...mono, fontSize: "0.55rem", color: "rgba(227,229,228,0.25)", textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: "1rem" }}>
+              <p style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.40)", textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: "1rem" }}>
                 {evolution.snapshots.length} daily snapshots · agent started {evolution.startDate}
               </p>
               {evolution.snapshots.map((snap, i) => (
@@ -381,8 +381,8 @@ export default function AgentStatus() {
       {tab === "exploration" && (
         <div>
           <div style={{ border: "1px solid rgba(167,139,250,0.15)", background: "rgba(167,139,250,0.02)", padding: "1.25rem", marginBottom: "1.25rem" }}>
-            <p style={{ ...mono, fontSize: "0.55rem", color: "rgba(167,139,250,0.5)", textTransform: "uppercase" as const, letterSpacing: "0.15em", marginBottom: "0.75rem" }}>Autonomous Exploration</p>
-            <p style={{ ...mono, fontSize: "0.7rem", color: "rgba(227,229,228,0.6)", margin: 0, lineHeight: 1.7 }}>
+            <p style={{ ...mono, fontSize: "0.73rem", color: "rgba(167,139,250,0.5)", textTransform: "uppercase" as const, letterSpacing: "0.15em", marginBottom: "0.75rem" }}>Autonomous Exploration</p>
+            <p style={{ ...mono, fontSize: "0.88rem", color: "rgba(227,229,228,0.75)", margin: 0, lineHeight: 1.7 }}>
               Agent 306 explores 4 territories + 3 Agent-Reach channels every day at 3am ET.
               Core territories: AI World, Web3 World, Media Landscape, Global Context.
               Agent-Reach channels: Twitter Pulse, Video Intelligence, RSS Wire.
@@ -391,7 +391,7 @@ export default function AgentStatus() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginTop: "1rem" }}>
               {["AI World", "Web3 World", "Media Landscape", "Global Context"].map(t => (
                 <div key={t} style={{ padding: "0.6rem", background: "rgba(167,139,250,0.04)", border: "1px solid rgba(167,139,250,0.1)", textAlign: "center" as const }}>
-                  <p style={{ ...mono, fontSize: "0.58rem", color: "#a78bfa", margin: 0 }}>{t}</p>
+                  <p style={{ ...mono, fontSize: "0.76rem", color: "#a78bfa", margin: 0 }}>{t}</p>
                 </div>
               ))}
             </div>
@@ -401,13 +401,13 @@ export default function AgentStatus() {
           {agentReach && (
             <div style={{ border: "1px solid rgba(45,212,191,0.15)", background: "rgba(45,212,191,0.02)", padding: "1.25rem", marginBottom: "1.25rem" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-                <p style={{ ...mono, fontSize: "0.55rem", color: "rgba(45,212,191,0.5)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: 0 }}>
+                <p style={{ ...mono, fontSize: "0.73rem", color: "rgba(45,212,191,0.5)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: 0 }}>
                   Agent-Reach Channels
                 </p>
                 <span style={{
-                  ...mono, fontSize: "0.5rem",
-                  color: agentReach.enabled ? "#4ade80" : "rgba(227,229,228,0.3)",
-                  border: `1px solid ${agentReach.enabled ? "rgba(74,222,128,0.3)" : "rgba(227,229,228,0.1)"}`,
+                  ...mono, fontSize: "0.68rem",
+                  color: agentReach.enabled ? "#4ade80" : "rgba(227,229,228,0.48)",
+                  border: `1px solid ${agentReach.enabled ? "rgba(74,222,128,0.3)" : "rgba(227,229,228,0.18)"}`,
                   padding: "1px 6px",
                 }}>
                   {agentReach.enabled ? "ENABLED" : "DISABLED"}
@@ -420,21 +420,21 @@ export default function AgentStatus() {
                   { key: "rss" as const, label: "RSS Wire", icon: "RSS", detail: `${agentReach.channels.rss.feeds ?? 0} feeds` },
                 ]).map(ch => {
                   const status = agentReach.channels[ch.key];
-                  const statusColor = !status.active ? "rgba(227,229,228,0.2)" : status.ok ? "#4ade80" : "#fbbf24";
+                  const statusColor = !status.active ? "rgba(227,229,228,0.35)" : status.ok ? "#4ade80" : "#fbbf24";
                   return (
                     <div key={ch.key} style={{ padding: "0.6rem 0.75rem", background: "rgba(45,212,191,0.03)", border: `1px solid rgba(45,212,191,0.1)` }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                        <span style={{ ...mono, fontSize: "0.58rem", color: "#2dd4bf", fontWeight: 700 }}>{ch.label}</span>
+                        <span style={{ ...mono, fontSize: "0.76rem", color: "#2dd4bf", fontWeight: 700 }}>{ch.label}</span>
                         <div style={{ width: 6, height: 6, borderRadius: "50%", background: statusColor, flexShrink: 0 }} />
                       </div>
-                      <p style={{ ...mono, fontSize: "0.5rem", color: "rgba(227,229,228,0.35)", margin: 0 }}>{ch.detail}</p>
+                      <p style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.55)", margin: 0 }}>{ch.detail}</p>
                       {status.lastSuccess && (
-                        <p style={{ ...mono, fontSize: "0.48rem", color: "rgba(227,229,228,0.2)", margin: "2px 0 0" }}>
+                        <p style={{ ...mono, fontSize: "0.66rem", color: "rgba(227,229,228,0.35)", margin: "2px 0 0" }}>
                           last: {new Date(status.lastSuccess).toLocaleDateString("en-US", { month: "short", day: "numeric" })} {new Date(status.lastSuccess).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
                         </p>
                       )}
                       {status.lastError && !status.ok && (
-                        <p style={{ ...mono, fontSize: "0.48rem", color: "rgba(251,191,36,0.5)", margin: "2px 0 0" }}>{status.lastError}</p>
+                        <p style={{ ...mono, fontSize: "0.66rem", color: "rgba(251,191,36,0.5)", margin: "2px 0 0" }}>{status.lastError}</p>
                       )}
                     </div>
                   );
@@ -451,8 +451,8 @@ export default function AgentStatus() {
           )}
 
           {!explorationState?.history?.length ? (
-            <div style={{ padding: "2rem", border: "1px solid rgba(227,229,228,0.07)", textAlign: "center" as const }}>
-              <p style={{ ...mono, fontSize: "0.7rem", color: "rgba(227,229,228,0.3)", margin: "0 0 1rem" }}>No explorations yet. Let her loose.</p>
+            <div style={{ padding: "2rem", border: "1px solid rgba(227,229,228,0.14)", textAlign: "center" as const }}>
+              <p style={{ ...mono, fontSize: "0.88rem", color: "rgba(227,229,228,0.48)", margin: "0 0 1rem" }}>No explorations yet. Let her loose.</p>
               <button onClick={() => exploreMutation.mutate()} disabled={exploreMutation.isPending}
                 style={{ background: "#a78bfa", color: "#1a1b1c", border: "none", ...mono, fontSize: "0.68rem", fontWeight: 700, padding: "0.7rem 1.5rem", cursor: "pointer", textTransform: "uppercase" as const }}>
                 🌍 Send Agent 306 into the World
@@ -460,40 +460,40 @@ export default function AgentStatus() {
             </div>
           ) : (
             <div>
-              <p style={{ ...mono, fontSize: "0.55rem", color: "rgba(227,229,228,0.25)", textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: "1rem" }}>
+              <p style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.40)", textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: "1rem" }}>
                 {explorationState.totalRuns} exploration runs completed
               </p>
               {explorationState.history.slice(0, 10).map(run => (
-                <div key={run.runId} style={{ border: "1px solid rgba(227,229,228,0.07)", background: "rgba(227,229,228,0.015)", marginBottom: "0.65rem", padding: "1rem 1.25rem" }}>
+                <div key={run.runId} style={{ border: "1px solid rgba(227,229,228,0.14)", background: "rgba(227,229,228,0.04)", marginBottom: "0.65rem", padding: "1rem 1.25rem" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
                     <div>
                       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4, flexWrap: "wrap" as const }}>
-                        <span style={{ ...mono, fontSize: "0.62rem", color: run.status === "complete" ? "#4ade80" : "#f87171", fontWeight: 700 }}>
+                        <span style={{ ...mono, fontSize: "0.80rem", color: run.status === "complete" ? "#4ade80" : "#f87171", fontWeight: 700 }}>
                           {run.status === "complete" ? "✓" : "✗"} {new Date(run.startedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} · {new Date(run.startedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
                         </span>
-                        <span style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.5)" }}>
+                        <span style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.68)" }}>
                           {run.findingsCount} findings · <span style={{ color: "#4ade80" }}>+{run.knowledgeAdded} knowledge</span> · {run.durationMs ? `${Math.round(run.durationMs / 1000)}s` : "—"}
                         </span>
                         {run.apiUsed && run.apiUsed.includes("fallback") && (
-                          <span style={{ ...mono, fontSize: "0.5rem", color: "#fbbf24", border: "1px solid rgba(251,191,36,0.3)", padding: "1px 5px" }}>
+                          <span style={{ ...mono, fontSize: "0.68rem", color: "#fbbf24", border: "1px solid rgba(251,191,36,0.3)", padding: "1px 5px" }}>
                             ⚠ Add PERPLEXITY_API_KEY for live web search
                           </span>
                         )}
                       </div>
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const }}>
                         {run.territoriesScanned.map(t => (
-                          <span key={t} style={{ ...mono, fontSize: "0.52rem", color: "rgba(167,139,250,0.6)", border: "1px solid rgba(167,139,250,0.15)", padding: "1px 6px" }}>{t}</span>
+                          <span key={t} style={{ ...mono, fontSize: "0.70rem", color: "rgba(167,139,250,0.6)", border: "1px solid rgba(167,139,250,0.15)", padding: "1px 6px" }}>{t}</span>
                         ))}
                       </div>
                     </div>
                   </div>
                   {run.topFindings.length > 0 && (
-                    <div style={{ marginTop: "0.65rem", paddingTop: "0.65rem", borderTop: "1px solid rgba(227,229,228,0.05)" }}>
-                      <p style={{ ...mono, fontSize: "0.5rem", color: "rgba(167,139,250,0.4)", textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 4 }}>
+                    <div style={{ marginTop: "0.65rem", paddingTop: "0.65rem", borderTop: "1px solid rgba(227,229,228,0.10)" }}>
+                      <p style={{ ...mono, fontSize: "0.68rem", color: "rgba(167,139,250,0.4)", textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 4 }}>
                         Top findings ({run.topFindings.length})
                       </p>
                       {run.topFindings.map((f, i) => (
-                        <p key={i} style={{ ...mono, fontSize: "0.62rem", color: "rgba(227,229,228,0.6)", margin: "3px 0", lineHeight: 1.6 }}>
+                        <p key={i} style={{ ...mono, fontSize: "0.80rem", color: "rgba(227,229,228,0.75)", margin: "3px 0", lineHeight: 1.6 }}>
                           <span style={{ color: "#a78bfa", marginRight: 6 }}>{i + 1}.</span>{f}
                         </p>
                       ))}

@@ -14,11 +14,11 @@ const pixel = {
 // ─── Colors & constants ──────────────────────────────────────────────────────
 const BG = "#0a0b0d";
 const SURFACE = "#141516";
-const BORDER = "1px solid rgba(227,229,228,0.08)";
+const BORDER = "1px solid rgba(227,229,228,0.15)";
 const TEXT = "#e3e5e4";
 const TEXT_DIM = "rgba(227,229,228,0.45)";
-const TEXT_FAINT = "rgba(227,229,228,0.3)";
-const TEXT_GHOST = "rgba(227,229,228,0.25)";
+const TEXT_FAINT = "rgba(227,229,228,0.48)";
+const TEXT_GHOST = "rgba(227,229,228,0.40)";
 const ORANGE = "#f97316";
 const GREEN = "#4ade80";
 const PURPLE = "#a78bfa";
@@ -101,7 +101,7 @@ function StatusBadge({ status, color }: { status: string; color?: string }) {
     <span
       style={{
         ...pixel,
-        fontSize: "8px",
+        fontSize: "11px",
         color: c,
         background: `${c}20`,
         padding: "3px 8px",
@@ -130,7 +130,7 @@ function ActionButton({
       disabled={disabled}
       style={{
         ...mono,
-        fontSize: "10px",
+        fontSize: "13px",
         padding: "8px 16px",
         background: `${color}18`,
         border: `1px solid ${color}66`,
@@ -149,7 +149,7 @@ function SectionLabel({ children, color }: { children: React.ReactNode; color?: 
     <div
       style={{
         ...pixel,
-        fontSize: "9px",
+        fontSize: "12px",
         color: color ?? TEXT_FAINT,
         marginBottom: "12px",
       }}
@@ -174,17 +174,17 @@ function InputField({
 }) {
   const shared = {
     ...mono,
-    fontSize: "12px",
+    fontSize: "15px",
     width: "100%",
     padding: "8px 12px",
-    background: "rgba(227,229,228,0.04)",
+    background: "rgba(227,229,228,0.08)",
     border: BORDER,
     color: TEXT,
     outline: "none",
   };
   return (
     <div style={{ marginBottom: "12px" }}>
-      <div style={{ ...pixel, fontSize: "8px", color: TEXT_FAINT, marginBottom: "4px" }}>
+      <div style={{ ...pixel, fontSize: "11px", color: TEXT_FAINT, marginBottom: "4px" }}>
         {label}
       </div>
       {multiline ? (
@@ -405,12 +405,12 @@ export default function PodcastStudio() {
 
       {/* ─── Header ─────────────────────────────────────────────────────── */}
       <div style={{ marginBottom: "24px" }}>
-        <div style={{ ...pixel, fontSize: "9px", color: TEXT_FAINT, marginBottom: "4px" }}>
+        <div style={{ ...pixel, fontSize: "12px", color: TEXT_FAINT, marginBottom: "4px" }}>
           AGENT 306
         </div>
         <h1
           style={{
-            fontSize: "22px",
+            fontSize: "26px",
             fontWeight: 800,
             margin: "0 0 6px",
             letterSpacing: "-0.02em",
@@ -418,7 +418,7 @@ export default function PodcastStudio() {
         >
           Podcast <span style={{ color: ORANGE }}>Studio</span>
         </h1>
-        <p style={{ ...mono, fontSize: "12px", color: TEXT_DIM, margin: 0 }}>
+        <p style={{ ...mono, fontSize: "15px", color: TEXT_DIM, margin: 0 }}>
           THE SIGNAL · THE CONVERSATION — Agent 306 hosts all.
         </p>
       </div>
@@ -429,7 +429,7 @@ export default function PodcastStudio() {
           display: "grid",
           gridTemplateColumns: "repeat(4, 1fr)",
           gap: "1px",
-          background: "rgba(227,229,228,0.06)",
+          background: "rgba(227,229,228,0.12)",
           marginBottom: "24px",
         }}
       >
@@ -440,10 +440,10 @@ export default function PodcastStudio() {
           { label: "Guests", value: guestCount, color: PURPLE },
         ].map((s, i) => (
           <div key={i} style={{ background: SURFACE, padding: "16px 20px" }}>
-            <div style={{ ...pixel, fontSize: "8px", color: TEXT_FAINT, marginBottom: "4px" }}>
+            <div style={{ ...pixel, fontSize: "11px", color: TEXT_FAINT, marginBottom: "4px" }}>
               {s.label}
             </div>
-            <div style={{ fontSize: "28px", fontWeight: 800, color: s.color, ...mono }}>
+            <div style={{ fontSize: "32px", fontWeight: 800, color: s.color, ...mono }}>
               {s.value}
             </div>
           </div>
@@ -458,7 +458,7 @@ export default function PodcastStudio() {
         style={{
           display: "flex",
           gap: "1px",
-          background: "rgba(227,229,228,0.06)",
+          background: "rgba(227,229,228,0.12)",
           marginBottom: "1px",
         }}
       >
@@ -469,7 +469,7 @@ export default function PodcastStudio() {
             style={{
               ...pixel,
               flex: 1,
-              fontSize: "10px",
+              fontSize: "13px",
               padding: "12px 16px",
               background: activeTab === tab.key ? `${tab.color}15` : SURFACE,
               border: "none",
@@ -564,7 +564,7 @@ function SignalTab({
           {showCreate ? "✕ CLOSE" : "+ NEW EPISODE"}
         </ActionButton>
         <div style={{ flex: 1 }} />
-        <div style={{ ...mono, fontSize: "10px", color: TEXT_DIM }}>
+        <div style={{ ...mono, fontSize: "13px", color: TEXT_DIM }}>
           {episodes.length} episodes
         </div>
       </div>
@@ -617,7 +617,7 @@ function PipelineStatusBar({ status }: { status: any }) {
         display: "grid",
         gridTemplateColumns: `repeat(${metrics.length}, 1fr)`,
         gap: "1px",
-        background: "rgba(227,229,228,0.06)",
+        background: "rgba(227,229,228,0.12)",
         marginBottom: "16px",
       }}
     >
@@ -626,7 +626,7 @@ function PipelineStatusBar({ status }: { status: any }) {
           <div style={{ ...pixel, fontSize: "7px", color: TEXT_FAINT, marginBottom: "3px" }}>
             {m.label}
           </div>
-          <div style={{ ...mono, fontSize: "18px", fontWeight: 800, color: m.color }}>
+          <div style={{ ...mono, fontSize: "21px", fontWeight: 800, color: m.color }}>
             {m.value}
           </div>
         </div>
@@ -670,7 +670,7 @@ function ResearchThreadCandidates({
   return (
     <div style={{ marginBottom: "20px" }}>
       <SectionLabel color={PURPLE}>RESEARCH THREAD CANDIDATES</SectionLabel>
-      <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "rgba(227,229,228,0.06)" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "rgba(227,229,228,0.12)" }}>
         {threads.map((thread: any) => (
           <div
             key={thread.id}
@@ -685,11 +685,11 @@ function ResearchThreadCandidates({
             }}
           >
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ ...mono, fontSize: "12px", fontWeight: 700, color: TEXT, marginBottom: "3px" }}>
+              <div style={{ ...mono, fontSize: "15px", fontWeight: 700, color: TEXT, marginBottom: "3px" }}>
                 {thread.title || thread.question || thread.topic || thread.id}
               </div>
               {(thread.summary || thread.description) && (
-                <div style={{ ...mono, fontSize: "10px", color: TEXT_DIM, lineHeight: 1.5 }}>
+                <div style={{ ...mono, fontSize: "13px", color: TEXT_DIM, lineHeight: 1.5 }}>
                   {(thread.summary || thread.description).slice(0, 120)}
                   {(thread.summary || thread.description).length > 120 ? "..." : ""}
                 </div>
@@ -701,7 +701,7 @@ function ResearchThreadCandidates({
                   </span>
                 )}
                 {thread.evidenceCount != null && (
-                  <span style={{ ...mono, fontSize: "9px", color: TEXT_FAINT }}>
+                  <span style={{ ...mono, fontSize: "12px", color: TEXT_FAINT }}>
                     {thread.evidenceCount} evidence
                   </span>
                 )}
@@ -866,10 +866,10 @@ function EpisodePipeline({
                   background: stageColor,
                 }}
               />
-              <div style={{ ...pixel, fontSize: "9px", color: stageColor }}>
+              <div style={{ ...pixel, fontSize: "12px", color: stageColor }}>
                 {STATUS_LABELS[status]}
               </div>
-              <div style={{ ...mono, fontSize: "10px", color: TEXT_FAINT }}>
+              <div style={{ ...mono, fontSize: "13px", color: TEXT_FAINT }}>
                 ({items.length})
               </div>
             </div>
@@ -879,7 +879,7 @@ function EpisodePipeline({
               <div
                 style={{
                   ...mono,
-                  fontSize: "10px",
+                  fontSize: "13px",
                   color: TEXT_GHOST,
                   padding: "16px",
                   textAlign: "center",
@@ -912,7 +912,7 @@ function EpisodePipeline({
                           <div
                             style={{
                               ...mono,
-                              fontSize: "13px",
+                              fontSize: "16px",
                               fontWeight: 700,
                               color: TEXT,
                               marginBottom: "4px",
@@ -924,7 +924,7 @@ function EpisodePipeline({
                             <div
                               style={{
                                 ...mono,
-                                fontSize: "11px",
+                                fontSize: "14px",
                                 color: TEXT_DIM,
                                 lineHeight: 1.5,
                               }}
@@ -933,7 +933,7 @@ function EpisodePipeline({
                             </div>
                           )}
                         </div>
-                        <div style={{ ...mono, fontSize: "9px", color: TEXT_FAINT, whiteSpace: "nowrap" }}>
+                        <div style={{ ...mono, fontSize: "12px", color: TEXT_FAINT, whiteSpace: "nowrap" }}>
                           {timeAgo(ep.createdAt || ep.updatedAt)}
                         </div>
                       </div>
@@ -943,7 +943,7 @@ function EpisodePipeline({
                         <div
                           style={{
                             ...mono,
-                            fontSize: "10px",
+                            fontSize: "13px",
                             color: TEXT_DIM,
                             padding: "8px 12px",
                             background: `${BLUE}08`,
@@ -959,7 +959,7 @@ function EpisodePipeline({
 
                       {/* Episode number for published */}
                       {status === "published" && ep.episodeNumber && (
-                        <div style={{ ...pixel, fontSize: "8px", color: GREEN, marginBottom: "6px" }}>
+                        <div style={{ ...pixel, fontSize: "11px", color: GREEN, marginBottom: "6px" }}>
                           Episode #{ep.episodeNumber}
                           {ep.publishedAt && ` · ${formatDate(ep.publishedAt)}`}
                         </div>
@@ -967,7 +967,7 @@ function EpisodePipeline({
 
                       {/* Produced date */}
                       {status === "produced" && ep.producedAt && (
-                        <div style={{ ...pixel, fontSize: "8px", color: PURPLE, marginBottom: "6px" }}>
+                        <div style={{ ...pixel, fontSize: "11px", color: PURPLE, marginBottom: "6px" }}>
                           Produced {formatDate(ep.producedAt)}
                         </div>
                       )}
@@ -1098,13 +1098,13 @@ function ScriptViewer({ script }: { script: any }) {
         (s, i) =>
           s.content && (
             <div key={i} style={{ marginBottom: "16px" }}>
-              <div style={{ ...pixel, fontSize: "8px", color: s.color, marginBottom: "6px" }}>
+              <div style={{ ...pixel, fontSize: "11px", color: s.color, marginBottom: "6px" }}>
                 {s.label}
               </div>
               <div
                 style={{
                   ...mono,
-                  fontSize: "11px",
+                  fontSize: "14px",
                   color: "rgba(227,229,228,0.75)",
                   lineHeight: 1.7,
                   whiteSpace: "pre-wrap",
@@ -1126,10 +1126,10 @@ function ScriptViewer({ script }: { script: any }) {
             marginTop: "12px",
           }}
         >
-          <div style={{ ...pixel, fontSize: "8px", color: YELLOW, marginBottom: "4px" }}>
+          <div style={{ ...pixel, fontSize: "11px", color: YELLOW, marginBottom: "4px" }}>
             UNRESOLVED QUESTION
           </div>
-          <div style={{ ...mono, fontSize: "12px", color: TEXT, lineHeight: 1.6 }}>
+          <div style={{ ...mono, fontSize: "15px", color: TEXT, lineHeight: 1.6 }}>
             {script.unresolvedQuestion}
           </div>
         </div>
@@ -1165,7 +1165,7 @@ function ConversationTab({
       <div
         style={{
           ...mono,
-          fontSize: "11px",
+          fontSize: "14px",
           color: TEXT_DIM,
           padding: "10px 16px",
           background: `${PURPLE}08`,
@@ -1183,7 +1183,7 @@ function ConversationTab({
           display: "grid",
           gridTemplateColumns: "1fr 1fr",
           gap: "1px",
-          background: "rgba(227,229,228,0.06)",
+          background: "rgba(227,229,228,0.12)",
         }}
       >
         {/* Left: Guest list by status */}
@@ -1194,7 +1194,7 @@ function ConversationTab({
             <div
               style={{
                 ...mono,
-                fontSize: "11px",
+                fontSize: "14px",
                 color: TEXT_GHOST,
                 textAlign: "center",
                 padding: "40px 20px",
@@ -1228,10 +1228,10 @@ function ConversationTab({
                           background: stageColor,
                         }}
                       />
-                      <div style={{ ...pixel, fontSize: "8px", color: stageColor }}>
+                      <div style={{ ...pixel, fontSize: "11px", color: stageColor }}>
                         {GUEST_STATUS_LABELS[status]}
                       </div>
-                      <div style={{ ...mono, fontSize: "9px", color: TEXT_FAINT }}>
+                      <div style={{ ...mono, fontSize: "12px", color: TEXT_FAINT }}>
                         ({items.length})
                       </div>
                     </div>
@@ -1241,7 +1241,7 @@ function ConversationTab({
                         display: "flex",
                         flexDirection: "column",
                         gap: "1px",
-                        background: "rgba(227,229,228,0.04)",
+                        background: "rgba(227,229,228,0.08)",
                       }}
                     >
                       {items.map((g: any) => (
@@ -1264,7 +1264,7 @@ function ConversationTab({
                           <div
                             style={{
                               ...mono,
-                              fontSize: "12px",
+                              fontSize: "15px",
                               fontWeight: 700,
                               color: TEXT,
                               marginBottom: "2px",
@@ -1275,7 +1275,7 @@ function ConversationTab({
                           <div
                             style={{
                               ...mono,
-                              fontSize: "10px",
+                              fontSize: "13px",
                               color: TEXT_DIM,
                             }}
                           >
@@ -1286,7 +1286,7 @@ function ConversationTab({
                           <div
                             style={{
                               ...mono,
-                              fontSize: "9px",
+                              fontSize: "12px",
                               color: TEXT_FAINT,
                               marginTop: "2px",
                             }}
@@ -1309,7 +1309,7 @@ function ConversationTab({
             <div
               style={{
                 ...mono,
-                fontSize: "11px",
+                fontSize: "14px",
                 color: TEXT_GHOST,
                 textAlign: "center",
                 padding: "60px 20px",
@@ -1358,8 +1358,8 @@ function GuestDetail({
       <div style={{ marginBottom: "20px", paddingBottom: "16px", borderBottom: BORDER }}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", marginBottom: "8px" }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: "16px", fontWeight: 800, ...mono }}>{guest.name}</div>
-            <div style={{ ...mono, fontSize: "11px", color: TEXT_DIM }}>
+            <div style={{ fontSize: "19px", fontWeight: 800, ...mono }}>{guest.name}</div>
+            <div style={{ ...mono, fontSize: "14px", color: TEXT_DIM }}>
               @{guest.handle || guest.xHandle}
               {guest.platform && ` · ${guest.platform}`}
             </div>
@@ -1367,7 +1367,7 @@ function GuestDetail({
           <StatusBadge status={guest.status} />
         </div>
         {guest.tokenId && (
-          <div style={{ ...mono, fontSize: "10px", color: GREEN }}>
+          <div style={{ ...mono, fontSize: "13px", color: GREEN }}>
             Token #{guest.tokenId}
           </div>
         )}
@@ -1382,10 +1382,10 @@ function GuestDetail({
         (s, i) =>
           s.value && (
             <div key={i} style={{ marginBottom: "14px" }}>
-              <div style={{ ...pixel, fontSize: "8px", color: TEXT_FAINT, marginBottom: "4px" }}>
+              <div style={{ ...pixel, fontSize: "11px", color: TEXT_FAINT, marginBottom: "4px" }}>
                 {s.label}
               </div>
-              <div style={{ ...mono, fontSize: "12px", color: TEXT, lineHeight: 1.6 }}>
+              <div style={{ ...mono, fontSize: "15px", color: TEXT, lineHeight: 1.6 }}>
                 {s.value}
               </div>
             </div>
@@ -1395,7 +1395,7 @@ function GuestDetail({
       {/* Questions */}
       {guest.questions?.length > 0 && (
         <div style={{ marginBottom: "14px" }}>
-          <div style={{ ...pixel, fontSize: "8px", color: ORANGE, marginBottom: "8px" }}>
+          <div style={{ ...pixel, fontSize: "11px", color: ORANGE, marginBottom: "8px" }}>
             Agent 306's Questions
           </div>
           {guest.questions.map((q: any, i: number) => {
@@ -1405,7 +1405,7 @@ function GuestDetail({
                 key={i}
                 style={{
                   ...mono,
-                  fontSize: "11px",
+                  fontSize: "14px",
                   color: "rgba(227,229,228,0.75)",
                   padding: "8px 12px",
                   background: `${ORANGE}08`,
@@ -1420,7 +1420,7 @@ function GuestDetail({
             );
           })}
           {guest.status === "questions_generated" && (
-            <div style={{ ...mono, fontSize: "10px", color: TEXT_DIM, marginTop: "8px" }}>
+            <div style={{ ...mono, fontSize: "13px", color: TEXT_DIM, marginTop: "8px" }}>
               Send these to the guest via the public form link or direct message.
             </div>
           )}
@@ -1430,18 +1430,18 @@ function GuestDetail({
       {/* Answers */}
       {guest.answers?.length > 0 && (
         <div style={{ marginBottom: "14px" }}>
-          <div style={{ ...pixel, fontSize: "8px", color: PURPLE, marginBottom: "8px" }}>
+          <div style={{ ...pixel, fontSize: "11px", color: PURPLE, marginBottom: "8px" }}>
             Guest Responses
           </div>
           {guest.answers.map((qa: any, i: number) => (
             <div key={i} style={{ marginBottom: "12px" }}>
-              <div style={{ ...mono, fontSize: "10px", color: PURPLE, marginBottom: "4px" }}>
+              <div style={{ ...mono, fontSize: "13px", color: PURPLE, marginBottom: "4px" }}>
                 {qa.question}
               </div>
               <div
                 style={{
                   ...mono,
-                  fontSize: "11px",
+                  fontSize: "14px",
                   color: "rgba(227,229,228,0.7)",
                   padding: "8px 12px",
                   background: `${PURPLE}08`,
@@ -1461,7 +1461,7 @@ function GuestDetail({
         <div
           style={{
             ...mono,
-            fontSize: "10px",
+            fontSize: "13px",
             color: GREEN,
             padding: "8px 12px",
             background: `${GREEN}08`,

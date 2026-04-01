@@ -125,7 +125,7 @@ export default function StoryEngine() {
                       : "text-muted-foreground hover:bg-secondary"
                   }`}
                 >
-                  <span className={`${p}-badge inline-block px-1.5 py-0.5 rounded text-[10px] mr-2`}>
+                  <span className={`${p}-badge inline-block px-1.5 py-0.5 rounded text-[13px] mr-2`}>
                     {p === "phase1" ? "LIVE" : p === "phase2" ? "SOON" : "FUTURE"}
                   </span>
                   {PHASE_LABELS[p]}
@@ -141,7 +141,7 @@ export default function StoryEngine() {
                 <CardTitle className="text-sm font-semibold">Signal Stream</CardTitle>
                 <div className="flex items-center gap-1.5">
                   <div className="w-1.5 h-1.5 rounded-full bg-primary live-dot" />
-                  <span className="text-[10px] text-muted-foreground">{phaseSignals.length} signals</span>
+                  <span className="text-[13px] text-muted-foreground">{phaseSignals.length} signals</span>
                 </div>
               </div>
             </CardHeader>
@@ -160,8 +160,8 @@ export default function StoryEngine() {
                     <div key={s.id} className="px-4 py-2.5 flex items-start gap-2.5 hover:bg-secondary/50 transition-colors">
                       <div className="mt-0.5">{SIGNAL_ICONS[s.type] || <Zap className="w-3.5 h-3.5" />}</div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[11px] text-foreground leading-tight">{s.description}</p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5 uppercase tracking-wider">{s.type.replace('_', ' ')} · weight {s.weight}</p>
+                        <p className="text-[14px] text-foreground leading-tight">{s.description}</p>
+                        <p className="text-[13px] text-muted-foreground mt-0.5 uppercase tracking-wider">{s.type.replace('_', ' ')} · weight {s.weight}</p>
                       </div>
                     </div>
                   ))}
@@ -179,7 +179,7 @@ export default function StoryEngine() {
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <Skull className="w-4 h-4 text-cyan-400" />
                   Agent 306 Narrative
-                  <Badge variant="outline" className="text-[10px]">{PHASE_LABELS[selectedPhase]}</Badge>
+                  <Badge variant="outline" className="text-[13px]">{PHASE_LABELS[selectedPhase]}</Badge>
                 </CardTitle>
                 <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => setEditedNarrative("")} data-testid="button-regenerate">
                   <RefreshCw className="w-3 h-3 mr-1" /> Regenerate
@@ -195,7 +195,7 @@ export default function StoryEngine() {
                 placeholder="Narrative will auto-generate from signals..."
                 data-testid="textarea-narrative"
               />
-              <div className="flex items-center gap-2 text-[11px] text-muted-foreground bg-secondary/50 rounded px-3 py-2">
+              <div className="flex items-center gap-2 text-[14px] text-muted-foreground bg-secondary/50 rounded px-3 py-2">
                 <Zap className="w-3 h-3 text-primary" />
                 Generated from {phaseSignals.length} active signals · Edit freely · Community comments will shape future episodes
               </div>
@@ -219,7 +219,7 @@ export default function StoryEngine() {
                     placeholder="e.g. 603"
                     data-testid="input-token-id"
                   />
-                  <p className="text-[10px] text-muted-foreground">3D render will feature this token</p>
+                  <p className="text-[13px] text-muted-foreground">3D render will feature this token</p>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs text-muted-foreground uppercase tracking-wider">Story Phase</label>
@@ -245,8 +245,8 @@ export default function StoryEngine() {
                 ].map(f => (
                   <div key={f.label} className={`${f.phase}-badge rounded p-3 opacity-60`}>
                     <p className="text-base mb-1">{f.icon}</p>
-                    <p className="text-[11px] font-semibold">{f.label}</p>
-                    <p className="text-[10px] opacity-80 leading-tight mt-0.5">{f.desc}</p>
+                    <p className="text-[14px] font-semibold">{f.label}</p>
+                    <p className="text-[13px] opacity-80 leading-tight mt-0.5">{f.desc}</p>
                   </div>
                 ))}
               </div>

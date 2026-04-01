@@ -101,7 +101,7 @@ const TOOLS = [
     description: "AI generates fake tabloid front pages starring any token. Enter a Token ID, optionally write a headline, and get a full newspaper front page with an AI-generated story based on that token's exact traits. Every token is a celebrity. Every story is absurd and true.",
     lore: "The headlines write themselves.",
     accent: "#e3e5e4",
-    accentBg: "rgba(227,229,228,0.06)",
+    accentBg: "rgba(227,229,228,0.12)",
     details: [
       { label: "Built by", value: "Community" },
       { label: "Input", value: "Any Token ID" },
@@ -122,7 +122,7 @@ function ToolCard({ tool }: { tool: typeof TOOLS[0] }) {
       onMouseLeave={() => setHovered(false)}
       style={{
         border: `1px solid ${hovered ? tool.accent + "55" : "rgba(227,229,228,0.10)"}`,
-        background: hovered ? tool.accentBg : "rgba(227,229,228,0.02)",
+        background: hovered ? tool.accentBg : "rgba(227,229,228,0.05)",
         padding: "1.5rem",
         transition: "all 0.2s ease",
         position: "relative",
@@ -139,10 +139,10 @@ function ToolCard({ tool }: { tool: typeof TOOLS[0] }) {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: "1.4rem" }}>{tool.emoji}</span>
+          <span style={{ fontSize: "1.6rem" }}>{tool.emoji}</span>
           <div>
-            <p style={{ ...mono, fontSize: "0.85rem", fontWeight: 700, color: "#e3e5e4", margin: 0 }}>{tool.title}</p>
-            <p style={{ ...mono, fontSize: "0.6rem", color: tool.accent, marginTop: 2 }}>
+            <p style={{ ...mono, fontSize: "1.03rem", fontWeight: 700, color: "#efefef", margin: 0 }}>{tool.title}</p>
+            <p style={{ ...mono, fontSize: "0.78rem", color: tool.accent, marginTop: 2 }}>
               built by {tool.builder}
             </p>
           </div>
@@ -154,11 +154,11 @@ function ToolCard({ tool }: { tool: typeof TOOLS[0] }) {
           style={{
             display: "flex", alignItems: "center", gap: 5,
             padding: "0.4rem 0.8rem",
-            background: hovered ? tool.accent + "22" : "rgba(227,229,228,0.06)",
-            border: `1px solid ${hovered ? tool.accent + "55" : "rgba(227,229,228,0.12)"}`,
-            color: hovered ? tool.accent : "rgba(227,229,228,0.5)",
+            background: hovered ? tool.accent + "22" : "rgba(227,229,228,0.12)",
+            border: `1px solid ${hovered ? tool.accent + "55" : "rgba(227,229,228,0.20)"}`,
+            color: hovered ? tool.accent : "rgba(227,229,228,0.68)",
             textDecoration: "none",
-            ...mono, fontSize: "0.6rem", textTransform: "uppercase" as const, letterSpacing: "0.1em",
+            ...mono, fontSize: "0.78rem", textTransform: "uppercase" as const, letterSpacing: "0.1em",
             transition: "all 0.2s",
           }}
         >
@@ -167,12 +167,12 @@ function ToolCard({ tool }: { tool: typeof TOOLS[0] }) {
       </div>
 
       {/* Tagline */}
-      <p style={{ ...mono, fontSize: "0.8rem", color: tool.accent, marginBottom: "0.6rem", fontStyle: "italic" }}>
+      <p style={{ ...mono, fontSize: "0.98rem", color: tool.accent, marginBottom: "0.6rem", fontStyle: "italic" }}>
         "{tool.tagline}"
       </p>
 
       {/* Description */}
-      <p style={{ ...mono, fontSize: "0.65rem", color: "rgba(227,229,228,0.55)", lineHeight: 1.7, marginBottom: "1rem" }}>
+      <p style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.55)", lineHeight: 1.7, marginBottom: "1rem" }}>
         {tool.description}
       </p>
 
@@ -181,10 +181,10 @@ function ToolCard({ tool }: { tool: typeof TOOLS[0] }) {
         {tool.details.map(d => (
           <div key={d.label} style={{
             padding: "0.4rem 0.6rem",
-            background: "rgba(227,229,228,0.03)",
-            border: "1px solid rgba(227,229,228,0.07)",
+            background: "rgba(227,229,228,0.06)",
+            border: "1px solid rgba(227,229,228,0.14)",
           }}>
-            <p style={{ ...mono, fontSize: "0.55rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "rgba(227,229,228,0.3)", margin: 0 }}>{d.label}</p>
+            <p style={{ ...mono, fontSize: "0.73rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "rgba(227,229,228,0.48)", margin: 0 }}>{d.label}</p>
             <p style={{ ...mono, fontSize: "0.68rem", color: tool.accent, margin: "1px 0 0" }}>{d.value}</p>
           </div>
         ))}
@@ -192,12 +192,12 @@ function ToolCard({ tool }: { tool: typeof TOOLS[0] }) {
 
       {/* Lore */}
       <div style={{
-        borderTop: "1px solid rgba(227,229,228,0.07)",
+        borderTop: "1px solid rgba(227,229,228,0.14)",
         paddingTop: "0.75rem",
         display: "flex", alignItems: "center", gap: 8,
       }}>
         <Icon style={{ width: 12, height: 12, color: tool.accent, flexShrink: 0 }} />
-        <span style={{ ...mono, fontSize: "0.62rem", color: "rgba(227,229,228,0.4)", fontStyle: "italic" }}>
+        <span style={{ ...mono, fontSize: "0.80rem", color: "rgba(227,229,228,0.60)", fontStyle: "italic" }}>
           {tool.lore}
         </span>
       </div>
@@ -213,14 +213,14 @@ export default function CommunityTools() {
       <div style={{ marginBottom: "1.75rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
           <Zap style={{ width: 15, height: 15, color: "#f97316" }} />
-          <span style={{ ...mono, fontSize: "0.62rem", textTransform: "uppercase", letterSpacing: "0.18em", color: "rgba(227,229,228,0.4)" }}>
+          <span style={{ ...mono, fontSize: "0.80rem", textTransform: "uppercase", letterSpacing: "0.18em", color: "rgba(227,229,228,0.60)" }}>
             Community Built
           </span>
         </div>
-        <h1 style={{ ...mono, fontSize: "1.4rem", color: "#e3e5e4", margin: 0, letterSpacing: "0.05em" }}>
+        <h1 style={{ ...mono, fontSize: "1.6rem", color: "#efefef", margin: 0, letterSpacing: "0.05em" }}>
           THE CULTURE
         </h1>
-        <p style={{ ...mono, fontSize: "0.65rem", color: "rgba(227,229,228,0.4)", marginTop: 6, lineHeight: 1.7, maxWidth: 600 }}>
+        <p style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.60)", marginTop: 6, lineHeight: 1.7, maxWidth: 600 }}>
           These were not built by the team. They were built by the community — out of love, out of obsession, out of the belief that 306 is something worth building on top of.
           No one asked. Everyone showed up. This is what culture looks like.
         </p>
@@ -230,7 +230,7 @@ export default function CommunityTools() {
           border: "1px solid rgba(249,115,22,0.2)",
           display: "inline-block",
         }}>
-          <span style={{ ...mono, fontSize: "0.62rem", color: "#f97316" }}>
+          <span style={{ ...mono, fontSize: "0.80rem", color: "#f97316" }}>
             Agent 306 features these in every episode — they are part of the story
           </span>
         </div>
@@ -249,11 +249,11 @@ export default function CommunityTools() {
       {/* Bottom manifesto */}
       <div style={{
         marginTop: 20, padding: "1.25rem 1.5rem",
-        border: "1px solid rgba(227,229,228,0.08)",
-        background: "rgba(227,229,228,0.02)",
+        border: "1px solid rgba(227,229,228,0.15)",
+        background: "rgba(227,229,228,0.05)",
       }}>
-        <p style={{ ...mono, fontSize: "0.7rem", color: "rgba(227,229,228,0.5)", lineHeight: 1.9, margin: 0 }}>
-          <span style={{ color: "#e3e5e4", fontWeight: 700 }}>The art is CC0.</span>{" "}
+        <p style={{ ...mono, fontSize: "0.88rem", color: "rgba(227,229,228,0.68)", lineHeight: 1.9, margin: 0 }}>
+          <span style={{ color: "#efefef", fontWeight: 700 }}>The art is CC0.</span>{" "}
           The art, the code, everything — belongs to everyone. No restrictions. Anyone can build on top of it, remix it, or create entirely new experiences around it.
           These tools prove that promise is real. A radio. A yearbook. A card game.
           A newspaper where tokens make the front page.{" "}

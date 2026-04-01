@@ -66,7 +66,7 @@ function Sidebar() {
         borderBottom: "1px solid rgba(227,229,228,0.10)",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.25rem" }}>
-          <span className="pixel" style={{ fontSize: "1.05rem", color: "#e3e5e4", letterSpacing: "0.04em" }}>
+          <span className="pixel" style={{ fontSize: "1.25rem", color: "#efefef", letterSpacing: "0.04em" }}>
             306
           </span>
         </div>
@@ -79,10 +79,10 @@ function Sidebar() {
           }} />
           <span style={{
             fontFamily: "'Courier New', monospace",
-            fontSize: "0.6rem",
+            fontSize: "0.75rem",
             textTransform: "uppercase",
             letterSpacing: "0.18em",
-            color: "rgba(227,229,228,0.4)",
+            color: "rgba(227,229,228,0.6)",
           }}>Agent Dashboard</span>
         </div>
       </div>
@@ -102,25 +102,25 @@ function Sidebar() {
                   marginBottom: 1,
                   cursor: "pointer",
                   borderLeft: active ? undefined : "2px solid transparent",
-                  opacity: active ? 1 : 0.5,
+                  opacity: active ? 1 : 0.65,
                   transition: "opacity 0.15s, background 0.15s",
                   textDecoration: "none",
                   color: "inherit",
                 }}
-                onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.opacity = "0.85"; }}
-                onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.opacity = "0.5"; }}
+                onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.opacity = "0.9"; }}
+                onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.opacity = "0.65"; }}
               >
                 <span style={{
                   fontFamily: "'Courier New', monospace",
-                  fontSize: "0.72rem",
+                  fontSize: "0.88rem",
                   textTransform: "uppercase",
                   letterSpacing: "0.12em",
-                  color: "#e3e5e4",
+                  color: "#efefef",
                 }}>{label}</span>
                 <span style={{
                   fontFamily: "'Courier New', monospace",
-                  fontSize: "0.6rem",
-                  color: "rgba(227,229,228,0.35)",
+                  fontSize: "0.75rem",
+                  color: "rgba(227,229,228,0.55)",
                   marginTop: 1,
                 }}>{desc}</span>
               </a>

@@ -142,7 +142,7 @@ async function drawHallOf100(
     ctx.save();
     ctx.globalAlpha = revealAlpha * 0.85;
     ctx.fillStyle = "#111213";
-    ctx.strokeStyle = `rgba(227,229,228,0.2)`;
+    ctx.strokeStyle = `rgba(227,229,228,0.35)`;
     ctx.lineWidth = 1;
     ctx.fillRect(x, y, CARD_W, CARD_H);
     ctx.strokeRect(x, y, CARD_W, CARD_H);
@@ -257,7 +257,7 @@ async function renderCinematicVideo(
 
       // Atmospheric glow behind character
       const aura = ctx.createRadialGradient(W/2, H*0.42, 0, W/2, H*0.42, 180);
-      aura.addColorStop(0, "rgba(227,229,228,0.08)");
+      aura.addColorStop(0, "rgba(227,229,228,0.15)");
       aura.addColorStop(1, "rgba(0,0,0,0)");
       ctx.fillStyle = aura;
       ctx.fillRect(0, 0, W, H);
@@ -283,7 +283,7 @@ async function renderCinematicVideo(
         ctx.save();
         ctx.globalAlpha = ba * 0.9;
         ctx.fillStyle = "rgba(10,11,12,0.85)";
-        ctx.strokeStyle = "rgba(227,229,228,0.2)";
+        ctx.strokeStyle = "rgba(227,229,228,0.35)";
         ctx.lineWidth = 1;
         ctx.fillRect(W/2 - 70, H*0.68, 140, 48);
         ctx.strokeRect(W/2 - 70, H*0.68, 140, 48);
@@ -325,13 +325,13 @@ async function renderCinematicVideo(
       ctx.globalAlpha = ha;
       ctx.fillStyle = "rgba(8,9,10,0.8)";
       ctx.fillRect(0, 0, W, 52);
-      ctx.strokeStyle = "rgba(227,229,228,0.12)";
+      ctx.strokeStyle = "rgba(227,229,228,0.20)";
       ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(0, 52); ctx.lineTo(W, 52); ctx.stroke();
       ctx.fillStyle = "#e3e5e4";
       ctx.font = "bold 13px 'Courier New'"; ctx.textAlign = "left";
       ctx.fillText("LEADERBOARD", 28, 20);
-      ctx.fillStyle = "rgba(227,229,228,0.35)";
+      ctx.fillStyle = "rgba(227,229,228,0.55)";
       ctx.font = "9px 'Courier New'";
       ctx.fillText("TOP CANVAS CREATORS · IMMORTALIZED ON-CHAIN", 28, 38);
       ctx.textAlign = "right";
@@ -399,21 +399,21 @@ async function renderCinematicVideo(
         ctx.fillStyle = "#f97316";
         ctx.font = "9px 'Courier New'"; ctx.textAlign = "left";
         ctx.fillText("BURN RECORD", W*0.65 + 16, H*0.2 + 18);
-        ctx.fillStyle = "rgba(227,229,228,0.2)";
+        ctx.fillStyle = "rgba(227,229,228,0.35)";
         ctx.fillRect(W*0.65+16, H*0.2+24, 248, 1);
 
         const rows = [
           { label: "Total burned",   val: `${burnCount}`,                     color: "#f97316" },
-          { label: "Canvas leader",  val: `#${topNormie?.tokenId ?? "8553"}`,  color: "#e3e5e4" },
-          { label: "Top level",      val: `LVL ${topNormie?.level ?? 64}`,     color: "#e3e5e4" },
-          { label: "Top AP",         val: `${topNormie?.actionPoints ?? 632}`, color: "#e3e5e4" },
+          { label: "Canvas leader",  val: `#${topNormie?.tokenId ?? "8553"}`,  color: "#efefef" },
+          { label: "Top level",      val: `LVL ${topNormie?.level ?? 64}`,     color: "#efefef" },
+          { label: "Top AP",         val: `${topNormie?.actionPoints ?? 632}`, color: "#efefef" },
         ];
 
         rows.forEach((row, i) => {
           const rowA = Math.min(1, (localF - FPS*(0.8 + i*0.3)) / (FPS*0.4));
           if (rowA <= 0) return;
           ctx.globalAlpha = sa * rowA;
-          ctx.fillStyle = "rgba(227,229,228,0.4)"; ctx.font = "10px 'Courier New'"; ctx.textAlign = "left";
+          ctx.fillStyle = "rgba(227,229,228,0.60)"; ctx.font = "10px 'Courier New'"; ctx.textAlign = "left";
           ctx.fillText(row.label.toUpperCase(), W*0.65+16, H*0.2 + 44 + i*30);
           ctx.fillStyle = row.color; ctx.font = "bold 15px 'Courier New'"; ctx.textAlign = "right";
           ctx.fillText(row.val, W*0.65+264, H*0.2 + 44 + i*30 + 2);
@@ -461,7 +461,7 @@ async function renderCinematicVideo(
       ctx.globalAlpha = bustA * 0.7;
       ctx.fillStyle = "#e3e5e4"; ctx.font = "9px 'Courier New'"; ctx.textAlign = "center";
       ctx.fillText("AGENT 306 — ON-CHAIN BUST", W*0.72, H*0.78);
-      ctx.fillStyle = "rgba(227,229,228,0.35)"; ctx.font = "8px 'Courier New'";
+      ctx.fillStyle = "rgba(227,229,228,0.55)"; ctx.font = "8px 'Courier New'";
       ctx.fillText("507 PIXELS · AGENT · LEVEL 1", W*0.72, H*0.78 + 14);
       ctx.restore();
     }
@@ -536,10 +536,10 @@ async function renderCinematicVideo(
     ctx.save();
     ctx.fillStyle = "rgba(0,0,0,0.65)";
     ctx.fillRect(0, H - 32, W, 32);
-    ctx.strokeStyle = "rgba(227,229,228,0.08)";
+    ctx.strokeStyle = "rgba(227,229,228,0.15)";
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(0, H-32); ctx.lineTo(W, H-32); ctx.stroke();
-    ctx.fillStyle = "rgba(227,229,228,0.3)";
+    ctx.fillStyle = "rgba(227,229,228,0.48)";
     ctx.font = "9px 'Courier New'"; ctx.textAlign = "left";
     ctx.fillText(`@agent306_  ·  ${scene.name.toUpperCase()}`, 18, H - 12);
     ctx.textAlign = "right";
@@ -554,7 +554,7 @@ async function renderCinematicVideo(
 
     // Frame border
     ctx.save();
-    ctx.strokeStyle = "rgba(227,229,228,0.07)";
+    ctx.strokeStyle = "rgba(227,229,228,0.14)";
     ctx.lineWidth = 2;
     ctx.strokeRect(6, 6, W-12, H-12);
     ctx.restore();
@@ -734,10 +734,10 @@ Phase 1: LIVE · Phase 2: May 15, 2026
     <div className="p-6 space-y-6 max-w-5xl">
       <div>
         <h1 className="text-xl font-bold tracking-tight flex items-center gap-2 pixel" style={{ fontFamily: "'Courier New', monospace", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-          <Film className="w-5 h-5" style={{ color: "#e3e5e4" }} />
+          <Film className="w-5 h-5" style={{ color: "#efefef" }} />
           Cinematic Clip
         </h1>
-        <p style={{ fontFamily: "'Courier New', monospace", fontSize: "0.7rem", color: "rgba(227,229,228,0.45)", marginTop: 4 }}>
+        <p style={{ fontFamily: "'Courier New', monospace", fontSize: "0.88rem", color: "rgba(227,229,228,0.45)", marginTop: 4 }}>
           35s · 5 Temple scenes · full-body Agent 306 · Leaderboard roster · 3D depth bust · pixel palette
         </p>
       </div>
@@ -748,7 +748,7 @@ Phase 1: LIVE · Phase 2: May 15, 2026
         background: "rgba(249,115,22,0.02)",
         padding: "1.25rem",
       }}>
-        <p style={{ fontFamily: "'Courier New', monospace", fontSize: "0.55rem", color: "rgba(249,115,22,0.6)", textTransform: "uppercase", letterSpacing: "0.15em", marginBottom: "0.75rem" }}>
+        <p style={{ fontFamily: "'Courier New', monospace", fontSize: "0.73rem", color: "rgba(249,115,22,0.6)", textTransform: "uppercase", letterSpacing: "0.15em", marginBottom: "0.75rem" }}>
           Describe Your Clip (optional)
         </p>
         <textarea
@@ -757,29 +757,29 @@ Phase 1: LIVE · Phase 2: May 15, 2026
           rows={3}
           placeholder="e.g. Show Agent 306 at the burn altar with fire — or a slow Leaderboard Hall reveal with energy at the end"
           style={{
-            width: "100%", background: "rgba(227,229,228,0.04)",
-            border: "1px solid rgba(227,229,228,0.1)", color: "#e3e5e4",
-            fontFamily: "'Courier New', monospace", fontSize: "0.72rem",
+            width: "100%", background: "rgba(227,229,228,0.08)",
+            border: "1px solid rgba(227,229,228,0.18)", color: "#efefef",
+            fontFamily: "'Courier New', monospace", fontSize: "0.90rem",
             lineHeight: 1.6, padding: "0.75rem", resize: "vertical",
             outline: "none", boxSizing: "border-box",
           }}
         />
-        <p style={{ fontFamily: "'Courier New', monospace", fontSize: "0.58rem", color: "rgba(227,229,228,0.3)", marginTop: 6 }}>
+        <p style={{ fontFamily: "'Courier New', monospace", fontSize: "0.76rem", color: "rgba(227,229,228,0.48)", marginTop: 6 }}>
           Your prompt shapes the tweet text, scene order emphasis, and caption overlays
         </p>
       </div>
 
       {/* ── Scene selector ── */}
       <div>
-        <p style={{ fontFamily: "'Courier New', monospace", fontSize: "0.55rem", color: "rgba(227,229,228,0.4)", textTransform: "uppercase", letterSpacing: "0.15em", marginBottom: "0.75rem" }}>
+        <p style={{ fontFamily: "'Courier New', monospace", fontSize: "0.73rem", color: "rgba(227,229,228,0.60)", textTransform: "uppercase", letterSpacing: "0.15em", marginBottom: "0.75rem" }}>
           Select Scenes — click to toggle on/off
         </p>
 
       {/* Loading state */}
       {status === "loading" && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", border: "1px solid rgba(227,229,228,0.12)", background: "rgba(227,229,228,0.03)" }}>
-          <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#e3e5e4" }} />
-          <span style={{ fontFamily: "'Courier New', monospace", fontSize: "0.7rem", color: "rgba(227,229,228,0.5)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", border: "1px solid rgba(227,229,228,0.20)", background: "rgba(227,229,228,0.06)" }}>
+          <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#efefef" }} />
+          <span style={{ fontFamily: "'Courier New', monospace", fontSize: "0.88rem", color: "rgba(227,229,228,0.68)" }}>
             Loading {THE100_IDS.length + 1} on-chain token images...
           </span>
         </div>
@@ -793,9 +793,9 @@ Phase 1: LIVE · Phase 2: May 15, 2026
                 key={s.key}
                 onClick={() => toggleScene(s.key)}
                 style={{
-                  border: `1px solid ${on ? s.accent + "60" : "rgba(227,229,228,0.08)"}`,
+                  border: `1px solid ${on ? s.accent + "60" : "rgba(227,229,228,0.15)"}`,
                   padding: "10px 12px",
-                  background: on ? `${s.accent}10` : "rgba(227,229,228,0.02)",
+                  background: on ? `${s.accent}10` : "rgba(227,229,228,0.05)",
                   cursor: "pointer",
                   opacity: on ? 1 : 0.4,
                   transition: "all 0.15s",
@@ -805,9 +805,9 @@ Phase 1: LIVE · Phase 2: May 15, 2026
                 {on && (
                   <div style={{ position: "absolute", top: 6, right: 6, width: 6, height: 6, borderRadius: "50%", background: s.accent }} />
                 )}
-                <p style={{ fontFamily: "'Courier New', monospace", fontSize: "0.62rem", color: on ? s.accent : "rgba(227,229,228,0.35)", textTransform: "uppercase", letterSpacing: "0.1em" }}>{s.time}</p>
-                <p style={{ fontFamily: "'Courier New', monospace", fontSize: "0.72rem", color: on ? "#e3e5e4" : "rgba(227,229,228,0.4)", marginTop: 3, fontWeight: "bold" }}>{s.label}</p>
-                <p style={{ fontFamily: "'Courier New', monospace", fontSize: "0.6rem", color: "rgba(227,229,228,0.35)", marginTop: 2 }}>{s.desc}</p>
+                <p style={{ fontFamily: "'Courier New', monospace", fontSize: "0.80rem", color: on ? s.accent : "rgba(227,229,228,0.55)", textTransform: "uppercase", letterSpacing: "0.1em" }}>{s.time}</p>
+                <p style={{ fontFamily: "'Courier New', monospace", fontSize: "0.90rem", color: on ? "#e3e5e4" : "rgba(227,229,228,0.60)", marginTop: 3, fontWeight: "bold" }}>{s.label}</p>
+                <p style={{ fontFamily: "'Courier New', monospace", fontSize: "0.78rem", color: "rgba(227,229,228,0.55)", marginTop: 2 }}>{s.desc}</p>
               </div>
             );
           })}
@@ -815,18 +815,18 @@ Phase 1: LIVE · Phase 2: May 15, 2026
       </div>
 
       {/* Leaderboard roster preview */}
-      <div style={{ border: "1px solid rgba(227,229,228,0.1)", padding: "12px 16px" }}>
+      <div style={{ border: "1px solid rgba(227,229,228,0.18)", padding: "12px 16px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-          <Users className="w-3.5 h-3.5" style={{ color: "#e3e5e4" }} />
-          <span style={{ fontFamily: "'Courier New', monospace", fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "rgba(227,229,228,0.5)" }}>LEADERBOARD — featured in video</span>
+          <Users className="w-3.5 h-3.5" style={{ color: "#efefef" }} />
+          <span style={{ fontFamily: "'Courier New', monospace", fontSize: "0.83rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "rgba(227,229,228,0.68)" }}>LEADERBOARD — featured in video</span>
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {THE100_IDS.map(id => (
             <div key={id} style={{
-              border: "1px solid rgba(227,229,228,0.12)",
+              border: "1px solid rgba(227,229,228,0.20)",
               padding: "3px 8px",
               fontFamily: "'Courier New', monospace",
-              fontSize: "0.62rem",
+              fontSize: "0.80rem",
               color: "rgba(227,229,228,0.55)",
             }}>
               #{id}
@@ -843,11 +843,11 @@ Phase 1: LIVE · Phase 2: May 15, 2026
           style={{
             width: "100%",
             padding: "14px",
-            background: assetsLoaded ? "rgba(227,229,228,0.08)" : "rgba(227,229,228,0.03)",
+            background: assetsLoaded ? "rgba(227,229,228,0.15)" : "rgba(227,229,228,0.06)",
             border: `1px solid rgba(227,229,228,${assetsLoaded ? "0.25" : "0.08"})`,
-            color: assetsLoaded ? "#e3e5e4" : "rgba(227,229,228,0.25)",
+            color: assetsLoaded ? "#e3e5e4" : "rgba(227,229,228,0.40)",
             fontFamily: "'Courier New', monospace",
-            fontSize: "0.72rem",
+            fontSize: "0.90rem",
             textTransform: "uppercase",
             letterSpacing: "0.18em",
             cursor: assetsLoaded ? "pointer" : "not-allowed",
@@ -866,9 +866,9 @@ Phase 1: LIVE · Phase 2: May 15, 2026
             onClick={cancelRender}
             style={{
               width: "100%", padding: "14px",
-              border: "1px solid rgba(227,229,228,0.12)",
-              background: "transparent", color: "rgba(227,229,228,0.6)",
-              fontFamily: "'Courier New', monospace", fontSize: "0.7rem",
+              border: "1px solid rgba(227,229,228,0.20)",
+              background: "transparent", color: "rgba(227,229,228,0.75)",
+              fontFamily: "'Courier New', monospace", fontSize: "0.88rem",
               textTransform: "uppercase", letterSpacing: "0.15em",
               cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
             }}
@@ -876,36 +876,36 @@ Phase 1: LIVE · Phase 2: May 15, 2026
             <Loader2 className="w-4 h-4 animate-spin" />
             Rendering {progress}% — click to cancel
           </button>
-          <div style={{ width: "100%", height: 3, background: "rgba(227,229,228,0.08)", marginTop: 8, overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${progress}%`, background: "#e3e5e4", transition: "width 0.3s", boxShadow: "0 0 8px rgba(227,229,228,0.4)" }} />
+          <div style={{ width: "100%", height: 3, background: "rgba(227,229,228,0.15)", marginTop: 8, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${progress}%`, background: "#e3e5e4", transition: "width 0.3s", boxShadow: "0 0 8px rgba(227,229,228,0.60)" }} />
           </div>
         </div>
       )}
 
       {/* Preview */}
       {videoUrl && (
-        <div style={{ border: "1px solid rgba(227,229,228,0.12)" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderBottom: "1px solid rgba(227,229,228,0.08)" }}>
+        <div style={{ border: "1px solid rgba(227,229,228,0.20)" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderBottom: "1px solid rgba(227,229,228,0.15)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <Eye className="w-3.5 h-3.5" style={{ color: "rgba(227,229,228,0.5)" }} />
-              <span style={{ fontFamily: "'Courier New', monospace", fontSize: "0.68rem", color: "rgba(227,229,228,0.6)" }}>
+              <Eye className="w-3.5 h-3.5" style={{ color: "rgba(227,229,228,0.68)" }} />
+              <span style={{ fontFamily: "'Courier New', monospace", fontSize: "0.68rem", color: "rgba(227,229,228,0.75)" }}>
                 Preview — 35s Cinematic
               </span>
               {status === "posted" && (
-                <span style={{ background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.2)", color: "#4ade80", padding: "2px 8px", fontFamily: "'Courier New', monospace", fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "0.1em" }}>POSTED</span>
+                <span style={{ background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.2)", color: "#4ade80", padding: "2px 8px", fontFamily: "'Courier New', monospace", fontSize: "0.76rem", textTransform: "uppercase", letterSpacing: "0.1em" }}>POSTED</span>
               )}
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <button
                 onClick={() => { const a = document.createElement("a"); a.href = videoUrl; a.download = `agent306-cinematic-${Date.now()}.webm`; a.click(); }}
-                style={{ border: "1px solid rgba(227,229,228,0.15)", background: "transparent", color: "rgba(227,229,228,0.6)", padding: "6px 12px", fontFamily: "'Courier New', monospace", fontSize: "0.62rem", textTransform: "uppercase", letterSpacing: "0.1em", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                style={{ border: "1px solid rgba(227,229,228,0.22)", background: "transparent", color: "rgba(227,229,228,0.75)", padding: "6px 12px", fontFamily: "'Courier New', monospace", fontSize: "0.80rem", textTransform: "uppercase", letterSpacing: "0.1em", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
               >
                 <Download className="w-3 h-3" /> .webm
               </button>
               {(status === "ready" || status === "posted") && (
                 <button
                   onClick={postToX}
-                  style={{ border: "1px solid rgba(249,115,22,0.5)", background: "rgba(249,115,22,0.15)", color: "#f97316", padding: "6px 14px", fontFamily: "'Courier New', monospace", fontSize: "0.62rem", textTransform: "uppercase", letterSpacing: "0.1em", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                  style={{ border: "1px solid rgba(249,115,22,0.5)", background: "rgba(249,115,22,0.15)", color: "#f97316", padding: "6px 14px", fontFamily: "'Courier New', monospace", fontSize: "0.80rem", textTransform: "uppercase", letterSpacing: "0.1em", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
                 >
                   <Twitter className="w-3 h-3" /> Post to X ↗
                 </button>
@@ -913,15 +913,15 @@ Phase 1: LIVE · Phase 2: May 15, 2026
             </div>
           </div>
           <video src={videoUrl} controls autoPlay loop className="w-full bg-black" style={{ maxHeight: 420 }} />
-          <div style={{ padding: "12px 14px", borderTop: "1px solid rgba(227,229,228,0.08)" }}>
-            <p style={{ fontFamily: "'Courier New', monospace", fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "rgba(227,229,228,0.3)", marginBottom: 6 }}>Tweet text</p>
+          <div style={{ padding: "12px 14px", borderTop: "1px solid rgba(227,229,228,0.15)" }}>
+            <p style={{ fontFamily: "'Courier New', monospace", fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "rgba(227,229,228,0.48)", marginBottom: 6 }}>Tweet text</p>
             <textarea
               value={tweetText}
               onChange={e => setTweetText(e.target.value)}
               rows={5}
-              style={{ width: "100%", background: "rgba(227,229,228,0.04)", border: "1px solid rgba(227,229,228,0.1)", color: "#e3e5e4", padding: "8px 12px", fontFamily: "'Courier New', monospace", fontSize: "0.72rem", resize: "none", outline: "none" }}
+              style={{ width: "100%", background: "rgba(227,229,228,0.08)", border: "1px solid rgba(227,229,228,0.18)", color: "#efefef", padding: "8px 12px", fontFamily: "'Courier New', monospace", fontSize: "0.90rem", resize: "none", outline: "none" }}
             />
-            <p style={{ fontFamily: "'Courier New', monospace", fontSize: "0.58rem", color: tweetText.length > 260 ? "#f97316" : "rgba(227,229,228,0.3)", marginTop: 4 }}>
+            <p style={{ fontFamily: "'Courier New', monospace", fontSize: "0.76rem", color: tweetText.length > 260 ? "#f97316" : "rgba(227,229,228,0.48)", marginTop: 4 }}>
               {tweetText.length}/280
             </p>
           </div>

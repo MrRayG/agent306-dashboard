@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 
 const mono  = { fontFamily: "'Courier New', monospace" } as const;
 const pixel = { fontFamily: "'Courier New', monospace", textTransform: "uppercase" as const, letterSpacing: "0.15em" } as const;
-const card  = { background: "rgba(227,229,228,0.02)", border: "1px solid rgba(227,229,228,0.08)", padding: "1.25rem 1.5rem" } as const;
+const card  = { background: "rgba(227,229,228,0.05)", border: "1px solid rgba(227,229,228,0.15)", padding: "1.25rem 1.5rem" } as const;
 
 interface VoiceClip {
   id: string; text: string; audioUrl: string;
@@ -51,18 +51,18 @@ function AudioPlayer({ url, id }: { url: string; id: string }) {
           border: `1px solid ${playing ? "rgba(249,115,22,0.4)" : "#f97316"}`,
           color: playing ? "#f97316" : "#1a1b1c",
           cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: "12px", flexShrink: 0,
+          fontSize: "15px", flexShrink: 0,
         }}
       >
         {playing ? "⏸" : "▶"}
       </button>
-      <div style={{ flex: 1, height: 3, background: "rgba(227,229,228,0.08)", borderRadius: 2, overflow: "hidden" }}>
+      <div style={{ flex: 1, height: 3, background: "rgba(227,229,228,0.15)", borderRadius: 2, overflow: "hidden" }}>
         <div style={{ height: "100%", width: `${progress * 100}%`, background: "#f97316", transition: "width 0.1s linear" }} />
       </div>
       <a
         href={url}
         download={`agent306-${id}.mp3`}
-        style={{ ...mono, fontSize: "0.55rem", color: "rgba(227,229,228,0.3)", textDecoration: "none" }}
+        style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.48)", textDecoration: "none" }}
       >
         ↓ mp3
       </a>
@@ -110,11 +110,11 @@ export default function VoiceStudio() {
           <img src="/agent306-avatar.png" alt="Agent 306"
             style={{ width: 36, height: 36, imageRendering: "pixelated", border: "1px solid rgba(249,115,22,0.3)" }} />
           <div>
-            <h1 style={{ ...pixel, fontSize: "0.85rem", color: "#f97316", margin: 0 }}>VOICE STUDIO</h1>
-            <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.35)", margin: 0 }}>Agent 306 · Matilda Voice · ElevenLabs</p>
+            <h1 style={{ ...pixel, fontSize: "1.03rem", color: "#f97316", margin: 0 }}>VOICE STUDIO</h1>
+            <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.55)", margin: 0 }}>Agent 306 · Matilda Voice · ElevenLabs</p>
           </div>
         </div>
-        <p style={{ ...mono, fontSize: "0.7rem", color: "rgba(227,229,228,0.45)", lineHeight: 1.6, margin: 0 }}>
+        <p style={{ ...mono, fontSize: "0.88rem", color: "rgba(227,229,228,0.45)", lineHeight: 1.6, margin: 0 }}>
           Type anything — a burn narration, a dispatch, a spotlight. Agent 306 speaks it.
         </p>
       </div>
@@ -123,21 +123,21 @@ export default function VoiceStudio() {
       {quota && (
         <div style={card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <span style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.4)", textTransform: "uppercase", letterSpacing: "0.12em" }}>
+            <span style={{ ...mono, fontSize: "0.76rem", color: "rgba(227,229,228,0.60)", textTransform: "uppercase", letterSpacing: "0.12em" }}>
               Monthly Usage · {quota.tier} plan
             </span>
-            <span style={{ ...mono, fontSize: "0.65rem", color: quotaPct > 80 ? "#f87171" : "#4ade80" }}>
+            <span style={{ ...mono, fontSize: "0.83rem", color: quotaPct > 80 ? "#f87171" : "#4ade80" }}>
               {quota.used.toLocaleString()} / {quota.limit.toLocaleString()} chars
             </span>
           </div>
-          <div style={{ height: 4, background: "rgba(227,229,228,0.06)", borderRadius: 2 }}>
+          <div style={{ height: 4, background: "rgba(227,229,228,0.12)", borderRadius: 2 }}>
             <div style={{
               height: "100%", width: `${Math.min(quotaPct, 100)}%`,
               background: quotaPct > 80 ? "#f87171" : "#4ade80",
               borderRadius: 2, transition: "width 0.3s ease",
             }} />
           </div>
-          <p style={{ ...mono, fontSize: "0.56rem", color: "rgba(227,229,228,0.25)", marginTop: 6, marginBottom: 0 }}>
+          <p style={{ ...mono, fontSize: "0.74rem", color: "rgba(227,229,228,0.40)", marginTop: 6, marginBottom: 0 }}>
             ~{Math.floor(remaining / 180)} narrations remaining this month
           </p>
         </div>
@@ -145,7 +145,7 @@ export default function VoiceStudio() {
 
       {/* Generate */}
       <div style={{ ...card, borderColor: "rgba(249,115,22,0.15)" }}>
-        <p style={{ ...mono, fontSize: "0.58rem", color: "rgba(249,115,22,0.6)", textTransform: "uppercase", letterSpacing: "0.15em", marginBottom: "0.85rem" }}>
+        <p style={{ ...mono, fontSize: "0.76rem", color: "rgba(249,115,22,0.6)", textTransform: "uppercase", letterSpacing: "0.15em", marginBottom: "0.85rem" }}>
           Generate Voice Clip
         </p>
 
@@ -155,16 +155,16 @@ export default function VoiceStudio() {
           rows={5}
           placeholder={`#3284 burned at 2am. No tweet. No announcement. Just a transaction.\n\nI've been watching this wallet for three weeks. Something is being built.`}
           style={{
-            width: "100%", background: "rgba(227,229,228,0.03)",
-            border: "1px solid rgba(227,229,228,0.1)", color: "#e3e5e4",
-            ...mono, fontSize: "0.75rem", lineHeight: 1.7,
+            width: "100%", background: "rgba(227,229,228,0.06)",
+            border: "1px solid rgba(227,229,228,0.18)", color: "#efefef",
+            ...mono, fontSize: "0.93rem", lineHeight: 1.7,
             padding: "0.85rem", resize: "vertical", outline: "none",
             boxSizing: "border-box" as const, marginBottom: "0.85rem",
           }}
         />
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.25)" }}>
+          <span style={{ ...mono, fontSize: "0.76rem", color: "rgba(227,229,228,0.40)" }}>
             {text.length} chars · ~{Math.ceil(text.length / 5)} seconds of audio
           </span>
           <button
@@ -205,14 +205,14 @@ export default function VoiceStudio() {
       {lastClip && (
         <div style={{ ...card, borderColor: "rgba(74,222,128,0.2)", background: "rgba(74,222,128,0.02)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.85rem" }}>
-            <p style={{ ...mono, fontSize: "0.58rem", color: "rgba(74,222,128,0.6)", textTransform: "uppercase", letterSpacing: "0.15em", margin: 0 }}>
+            <p style={{ ...mono, fontSize: "0.76rem", color: "rgba(74,222,128,0.6)", textTransform: "uppercase", letterSpacing: "0.15em", margin: 0 }}>
               Latest · Just now
             </p>
-            <span style={{ ...mono, fontSize: "0.55rem", color: "rgba(227,229,228,0.25)" }}>
+            <span style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.40)" }}>
               {lastClip.characters} chars
             </span>
           </div>
-          <p style={{ ...mono, fontSize: "0.7rem", color: "rgba(227,229,228,0.6)", lineHeight: 1.6, marginBottom: "0.85rem" }}>
+          <p style={{ ...mono, fontSize: "0.88rem", color: "rgba(227,229,228,0.75)", lineHeight: 1.6, marginBottom: "0.85rem" }}>
             {lastClip.text.slice(0, 180)}{lastClip.text.length > 180 ? "..." : ""}
           </p>
           <AudioPlayer url={lastClip.audioUrl} id={lastClip.id} />
@@ -222,21 +222,21 @@ export default function VoiceStudio() {
       {/* Recent clips */}
       {recentData && recentData.clips.length > 0 && (
         <div style={card}>
-          <p style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.35)", textTransform: "uppercase", letterSpacing: "0.15em", marginBottom: "1rem" }}>
+          <p style={{ ...mono, fontSize: "0.76rem", color: "rgba(227,229,228,0.55)", textTransform: "uppercase", letterSpacing: "0.15em", marginBottom: "1rem" }}>
             Recent Clips
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
             {recentData.clips.map((clip) => (
-              <div key={clip.id} style={{ paddingBottom: "0.85rem", borderBottom: "1px solid rgba(227,229,228,0.05)" }}>
+              <div key={clip.id} style={{ paddingBottom: "0.85rem", borderBottom: "1px solid rgba(227,229,228,0.10)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                  <span style={{ ...mono, fontSize: "0.56rem", color: "rgba(249,115,22,0.5)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  <span style={{ ...mono, fontSize: "0.74rem", color: "rgba(249,115,22,0.5)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
                     {clip.source}
                   </span>
-                  <span style={{ ...mono, fontSize: "0.55rem", color: "rgba(227,229,228,0.25)" }}>
+                  <span style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.40)" }}>
                     {timeAgo(clip.createdAt)}
                   </span>
                 </div>
-                <p style={{ ...mono, fontSize: "0.67rem", color: "rgba(227,229,228,0.5)", lineHeight: 1.5, marginBottom: 8 }}>
+                <p style={{ ...mono, fontSize: "0.67rem", color: "rgba(227,229,228,0.68)", lineHeight: 1.5, marginBottom: 8 }}>
                   {clip.text.slice(0, 120)}{clip.text.length > 120 ? "..." : ""}
                 </p>
                 <AudioPlayer url={clip.audioUrl} id={clip.id} />
@@ -251,8 +251,8 @@ export default function VoiceStudio() {
         <div style={{ ...card, textAlign: "center", padding: "2rem", borderColor: "rgba(249,115,22,0.1)" }}>
           <img src="/agent306-avatar.png" alt="Agent 306"
             style={{ width: 48, height: 48, imageRendering: "pixelated", margin: "0 auto 1rem", border: "1px solid rgba(249,115,22,0.2)" }} />
-          <p style={{ ...mono, fontSize: "0.7rem", color: "#f97316", marginBottom: 6 }}>Agent 306 is ready to speak.</p>
-          <p style={{ ...mono, fontSize: "0.62rem", color: "rgba(227,229,228,0.3)", lineHeight: 1.6 }}>
+          <p style={{ ...mono, fontSize: "0.88rem", color: "#f97316", marginBottom: 6 }}>Agent 306 is ready to speak.</p>
+          <p style={{ ...mono, fontSize: "0.80rem", color: "rgba(227,229,228,0.48)", lineHeight: 1.6 }}>
             Type any narration above. Burns. Rankings. Dispatches.<br />
             She'll speak it in her voice. You hear it before it posts.
           </p>

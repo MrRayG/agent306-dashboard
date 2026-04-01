@@ -40,9 +40,9 @@ const TYPE_CONFIG: Record<string, { label: string; color: string; emoji: string 
   community_event:  { label: "Community Event",     color: "#2dd4bf", emoji: "🎁" },
   creativity:       { label: "Creativity",         color: "#2dd4bf", emoji: "🎨" },
   holder_milestone: { label: "Milestones",         color: "#4ade80", emoji: "🏆" },
-  community:        { label: "Community",          color: "#e3e5e4", emoji: "💬" },
-  engagement:       { label: "Engagement",         color: "#e3e5e4", emoji: "↩️" },
-  general:          { label: "General",            color: "rgba(227,229,228,0.4)", emoji: "📌" },
+  community:        { label: "Community",          color: "#efefef", emoji: "💬" },
+  engagement:       { label: "Engagement",         color: "#efefef", emoji: "↩️" },
+  general:          { label: "General",            color: "rgba(227,229,228,0.60)", emoji: "📌" },
 };
 
 const SENTIMENT_CONFIG: Record<string, { color: string; label: string }> = {
@@ -50,7 +50,7 @@ const SENTIMENT_CONFIG: Record<string, { color: string; label: string }> = {
   building:    { color: "#4ade80", label: "🔨 Building" },
   celebratory: { color: "#f97316", label: "🎉 Celebrating" },
   anxious:     { color: "#f87171", label: "😤 Anxious" },
-  quiet:       { color: "rgba(227,229,228,0.4)", label: "🤫 Quiet" },
+  quiet:       { color: "rgba(227,229,228,0.60)", label: "🤫 Quiet" },
 };
 
 // ─── Post Card ─────────────────────────────────────────────────────
@@ -59,13 +59,13 @@ function PostCard({ post }: { post: CommunityPost }) {
   return (
     <div style={{
       padding: "0.75rem 1rem",
-      background: "rgba(227,229,228,0.02)",
-      border: "1px solid rgba(227,229,228,0.06)",
+      background: "rgba(227,229,228,0.05)",
+      border: "1px solid rgba(227,229,228,0.12)",
       display: "flex", flexDirection: "column", gap: 6,
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{
-          fontFamily: "'Courier New'", fontSize: "0.6rem",
+          fontFamily: "'Courier New'", fontSize: "0.78rem",
           color: cfg.color, background: `${cfg.color}15`,
           border: `1px solid ${cfg.color}25`,
           padding: "1px 6px", flexShrink: 0,
@@ -74,23 +74,23 @@ function PostCard({ post }: { post: CommunityPost }) {
           @{post.username}
         </span>
         {post.likes > 0 && (
-          <span style={{ fontFamily: "'Courier New'", fontSize: "0.58rem", color: "rgba(227,229,228,0.35)", marginLeft: "auto" }}>
+          <span style={{ fontFamily: "'Courier New'", fontSize: "0.76rem", color: "rgba(227,229,228,0.55)", marginLeft: "auto" }}>
             ♥ {post.likes}
           </span>
         )}
-        <span style={{ fontFamily: "'Courier New'", fontSize: "0.55rem", color: "rgba(227,229,228,0.25)" }}>
+        <span style={{ fontFamily: "'Courier New'", fontSize: "0.73rem", color: "rgba(227,229,228,0.40)" }}>
           {timeAgo(post.capturedAt)}
         </span>
       </div>
       <p style={{
-        fontFamily: "'Courier New'", fontSize: "0.75rem",
+        fontFamily: "'Courier New'", fontSize: "0.93rem",
         color: "rgba(227,229,228,0.8)", lineHeight: 1.6, margin: 0,
       }}>
         {post.text}
       </p>
       {post.url && (
         <a href={post.url} target="_blank" rel="noopener noreferrer"
-          style={{ fontFamily: "'Courier New'", fontSize: "0.58rem", color: "rgba(249,115,22,0.5)", textDecoration: "none" }}>
+          style={{ fontFamily: "'Courier New'", fontSize: "0.76rem", color: "rgba(249,115,22,0.5)", textDecoration: "none" }}>
           View on X →
         </a>
       )}
@@ -107,7 +107,7 @@ function StoryAngleCard({ angle, onPin }: { angle: string; onPin: (a: string) =>
       border: "1px solid rgba(167,139,250,0.15)",
       display: "flex", alignItems: "flex-start", gap: 10,
     }}>
-      <span style={{ color: "#a78bfa", fontSize: "0.8rem", flexShrink: 0, marginTop: 2 }}>▸</span>
+      <span style={{ color: "#a78bfa", fontSize: "0.98rem", flexShrink: 0, marginTop: 2 }}>▸</span>
       <p style={{
         fontFamily: "'Courier New'", fontSize: "0.78rem",
         color: "rgba(227,229,228,0.85)", lineHeight: 1.6, margin: 0, flex: 1,
@@ -117,7 +117,7 @@ function StoryAngleCard({ angle, onPin }: { angle: string; onPin: (a: string) =>
       <button
         onClick={() => onPin(angle)}
         style={{
-          fontFamily: "'Courier New'", fontSize: "0.58rem",
+          fontFamily: "'Courier New'", fontSize: "0.76rem",
           textTransform: "uppercase", letterSpacing: "0.1em",
           color: "#a78bfa", background: "transparent",
           border: "1px solid rgba(167,139,250,0.3)",
@@ -195,10 +195,10 @@ export default function CommunityIntel() {
   });
 
   const mono = { fontFamily: "'Courier New', monospace" } as const;
-  const label = { ...mono, fontSize: "0.65rem", textTransform: "uppercase" as const, letterSpacing: "0.15em", color: "rgba(227,229,228,0.4)" };
+  const label = { ...mono, fontSize: "0.83rem", textTransform: "uppercase" as const, letterSpacing: "0.15em", color: "rgba(227,229,228,0.60)" };
   const card = {
-    background: "rgba(227,229,228,0.03)",
-    border: "1px solid rgba(227,229,228,0.08)",
+    background: "rgba(227,229,228,0.06)",
+    border: "1px solid rgba(227,229,228,0.15)",
     padding: "1.25rem",
   };
 
@@ -216,21 +216,21 @@ export default function CommunityIntel() {
     <div style={{ padding: "1.5rem 2rem", maxWidth: 1100, margin: "0 auto" }}>
 
       {/* ── Header ── */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem", paddingBottom: "1rem", borderBottom: "1px solid rgba(227,229,228,0.08)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem", paddingBottom: "1rem", borderBottom: "1px solid rgba(227,229,228,0.15)" }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#2dd4bf", display: "inline-block", animation: "pulse-dot 1.6s ease-in-out infinite" }} />
-            <h1 className="pixel" style={{ fontSize: "1.1rem", color: "#e3e5e4", letterSpacing: "0.12em", margin: 0 }}>
+            <h1 className="pixel" style={{ fontSize: "1.3rem", color: "#efefef", letterSpacing: "0.12em", margin: 0 }}>
               COMMUNITY INTEL
             </h1>
           </div>
-          <p style={{ ...mono, fontSize: "0.62rem", color: "rgba(227,229,228,0.35)", marginTop: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          <p style={{ ...mono, fontSize: "0.80rem", color: "rgba(227,229,228,0.55)", marginTop: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>
             What the community is posting · Shape the next episode · You're the editor
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {data?.generatedAt && (
-            <span style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.25)" }}>
+            <span style={{ ...mono, fontSize: "0.76rem", color: "rgba(227,229,228,0.40)" }}>
               {timeAgo(data.generatedAt)}
             </span>
           )}
@@ -238,7 +238,7 @@ export default function CommunityIntel() {
             onClick={() => refetch()}
             disabled={isFetching}
             style={{
-              ...mono, fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.1em",
+              ...mono, fontSize: "0.83rem", textTransform: "uppercase", letterSpacing: "0.1em",
               color: "#2dd4bf", background: "transparent",
               border: "1px solid rgba(45,212,191,0.3)", padding: "0.35rem 0.85rem",
               cursor: "pointer", opacity: isFetching ? 0.5 : 1,
@@ -252,14 +252,14 @@ export default function CommunityIntel() {
       {/* ── Stats Row ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: "1.5rem" }}>
         {[
-          { label: "Posts Found", value: isLoading ? "..." : String(data?.totalPosts ?? 0), color: "#e3e5e4" },
+          { label: "Posts Found", value: isLoading ? "..." : String(data?.totalPosts ?? 0), color: "#efefef" },
           { label: "Active Today", value: isLoading ? "..." : String(data?.uniquePosters ?? 0), color: "#4ade80" },
           { label: "Network Size", value: catalogStats ? String(catalogStats.totalUnique) : "...", color: "#2dd4bf" },
           { label: "Story Sources", value: catalogStats ? String(catalogStats.taggedFounder + catalogStats.taggedOfficial) : "...", color: "#f97316" },
         ].map(({ label: l, value, color }) => (
           <div key={l} style={card}>
             <p style={label}>{l}</p>
-            <p style={{ ...mono, fontSize: "1.4rem", fontWeight: 700, color, margin: "4px 0 0" }}>{value}</p>
+            <p style={{ ...mono, fontSize: "1.6rem", fontWeight: 700, color, margin: "4px 0 0" }}>{value}</p>
           </div>
         ))}
       </div>
@@ -275,16 +275,16 @@ export default function CommunityIntel() {
             {isLoading || (data?.totalPosts === 0)
               ? (
                 <div>
-                  <div style={{ height: 8, background: "rgba(227,229,228,0.06)", marginBottom: 8, animation: "pulse-skeleton 1.6s infinite", width: "80%" }} />
-                  <div style={{ height: 8, background: "rgba(227,229,228,0.04)", marginBottom: 8, animation: "pulse-skeleton 1.6s infinite", width: "60%" }} />
-                  <p style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.3)", margin: "12px 0 0" }}>
+                  <div style={{ height: 8, background: "rgba(227,229,228,0.12)", marginBottom: 8, animation: "pulse-skeleton 1.6s infinite", width: "80%" }} />
+                  <div style={{ height: 8, background: "rgba(227,229,228,0.08)", marginBottom: 8, animation: "pulse-skeleton 1.6s infinite", width: "60%" }} />
+                  <p style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.48)", margin: "12px 0 0" }}>
                     Agent 306 is scanning X for community signals — this takes 30–60 seconds on first load.
                     {isFetching ? " Scanning now..." : " Refresh to check again."}
                   </p>
                 </div>
               )
               : (
-                <p style={{ ...mono, fontSize: "0.8rem", color: "rgba(227,229,228,0.8)", lineHeight: 1.8, margin: 0 }}>
+                <p style={{ ...mono, fontSize: "0.98rem", color: "rgba(227,229,228,0.8)", lineHeight: 1.8, margin: 0 }}>
                   {data?.summary || "Scanning community posts..."}
                 </p>
               )
@@ -295,10 +295,10 @@ export default function CommunityIntel() {
           {data?.spotlight && (
             <section style={{ ...card, borderColor: "rgba(249,115,22,0.2)", background: "rgba(249,115,22,0.03)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                <span style={{ fontSize: "0.9rem" }}>✨</span>
-                <span style={{ ...mono, fontSize: "0.58rem", color: "#f97316", textTransform: "uppercase" as const, letterSpacing: "0.15em" }}>Spotlight — Boost This</span>
+                <span style={{ fontSize: "1.1rem" }}>✨</span>
+                <span style={{ ...mono, fontSize: "0.76rem", color: "#f97316", textTransform: "uppercase" as const, letterSpacing: "0.15em" }}>Spotlight — Boost This</span>
               </div>
-              <p style={{ ...mono, fontSize: "0.72rem", color: "rgba(227,229,228,0.8)", lineHeight: 1.6, margin: 0 }}>
+              <p style={{ ...mono, fontSize: "0.90rem", color: "rgba(227,229,228,0.8)", lineHeight: 1.6, margin: 0 }}>
                 {data.spotlight}
               </p>
             </section>
@@ -308,17 +308,17 @@ export default function CommunityIntel() {
           <section>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "0.85rem", flexWrap: "wrap" as const }}>
               <div style={{ width: 3, height: 18, background: "#a78bfa", flexShrink: 0 }} />
-              <span className="pixel upper" style={{ fontSize: "0.7rem", letterSpacing: "0.2em", color: "#e3e5e4" }}>
+              <span className="pixel upper" style={{ fontSize: "0.88rem", letterSpacing: "0.2em", color: "#efefef" }}>
                 Story Angles for Agent 306
               </span>
-              <span style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.3)", marginLeft: 4, flex: 1 }}>
+              <span style={{ ...mono, fontSize: "0.76rem", color: "rgba(227,229,228,0.48)", marginLeft: 4, flex: 1 }}>
                 Pin one to shape the next episode
               </span>
               <button
                 onClick={() => regenAnglesMutation.mutate()}
                 disabled={regenAnglesMutation.isPending}
                 style={{
-                  ...mono, fontSize: "0.56rem", background: "transparent",
+                  ...mono, fontSize: "0.74rem", background: "transparent",
                   border: "1px solid rgba(167,139,250,0.25)",
                   color: regenAnglesMutation.isPending ? "rgba(167,139,250,0.3)" : "rgba(167,139,250,0.7)",
                   padding: "3px 8px", cursor: "pointer", letterSpacing: "0.06em",
@@ -329,7 +329,7 @@ export default function CommunityIntel() {
             </div>
             {isLoading
               ? <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {[1,2,3].map(i => <div key={i} style={{ height: 52, background: "rgba(227,229,228,0.04)", animation: "pulse-skeleton 1.6s infinite" }} />)}
+                  {[1,2,3].map(i => <div key={i} style={{ height: 52, background: "rgba(227,229,228,0.08)", animation: "pulse-skeleton 1.6s infinite" }} />)}
                 </div>
               : data?.storyAngles?.length
                 ? <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -346,13 +346,13 @@ export default function CommunityIntel() {
                           Agent 306 is reading the signals...
                         </span>
                       </div>
-                      <p style={{ ...mono, fontSize: "0.62rem", color: "rgba(227,229,228,0.3)", margin: 0, lineHeight: 1.5 }}>
+                      <p style={{ ...mono, fontSize: "0.80rem", color: "rgba(227,229,228,0.48)", margin: 0, lineHeight: 1.5 }}>
                         Story angles generating in the background. This page will update automatically in a few seconds.
                       </p>
                     </div>
                   )
                   : (
-                    <div style={{ ...card, color: "rgba(227,229,228,0.35)", ...mono, fontSize: "0.7rem", textAlign: "center" as const, padding: "1.5rem" }}>
+                    <div style={{ ...card, color: "rgba(227,229,228,0.55)", ...mono, fontSize: "0.88rem", textAlign: "center" as const, padding: "1.5rem" }}>
                       Hit Refresh to scan X for community posts
                     </div>
                   )
@@ -366,10 +366,10 @@ export default function CommunityIntel() {
               <section key={group.type}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "0.75rem" }}>
                   <div style={{ width: 3, height: 18, background: cfg.color, flexShrink: 0 }} />
-                  <span className="pixel upper" style={{ fontSize: "0.68rem", letterSpacing: "0.15em", color: "#e3e5e4" }}>
+                  <span className="pixel upper" style={{ fontSize: "0.68rem", letterSpacing: "0.15em", color: "#efefef" }}>
                     {cfg.emoji} {cfg.label}
                   </span>
-                  <span style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.3)" }}>
+                  <span style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.48)" }}>
                     {group.count} post{group.count !== 1 ? "s" : ""}
                   </span>
                 </div>
@@ -384,8 +384,8 @@ export default function CommunityIntel() {
 
           {!isLoading && (!data || data.totalPosts === 0) && (
             <div style={{ ...card, textAlign: "center" as const, padding: "2rem" }}>
-              <div className="pixel" style={{ fontSize: "0.7rem", color: "#f97316", marginBottom: 8 }}>NO SIGNALS YET</div>
-              <p style={{ ...mono, fontSize: "0.72rem", color: "rgba(227,229,228,0.4)" }}>
+              <div className="pixel" style={{ fontSize: "0.88rem", color: "#f97316", marginBottom: 8 }}>NO SIGNALS YET</div>
+              <p style={{ ...mono, fontSize: "0.90rem", color: "rgba(227,229,228,0.60)" }}>
                 Hit Refresh to scan X for community posts.
               </p>
             </div>
@@ -408,9 +408,9 @@ export default function CommunityIntel() {
                 { show: "306 NEWS",         color: "#2dd4bf", desc: "Web3 + ecosystem, 8am daily" },
                 { show: "306 BATTLES",      color: "#a78bfa", desc: "Battles — May 15+" },
               ].map(({ show, color, desc }) => (
-                <div key={show} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", borderBottom: "1px solid rgba(227,229,228,0.04)" }}>
-                  <span style={{ fontFamily: "'Courier New'", fontSize: "0.6rem", color, letterSpacing: "0.05em" }}>[{show}]</span>
-                  <span style={{ fontFamily: "'Courier New'", fontSize: "0.56rem", color: "rgba(227,229,228,0.3)" }}>{desc}</span>
+                <div key={show} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", borderBottom: "1px solid rgba(227,229,228,0.08)" }}>
+                  <span style={{ fontFamily: "'Courier New'", fontSize: "0.78rem", color, letterSpacing: "0.05em" }}>[{show}]</span>
+                  <span style={{ fontFamily: "'Courier New'", fontSize: "0.74rem", color: "rgba(227,229,228,0.48)" }}>{desc}</span>
                 </div>
               ))}
             </div>
@@ -427,13 +427,13 @@ export default function CommunityIntel() {
                   { label: "Tagged Founder", value: catalogStats.taggedFounder },
                   { label: "Tagged Official", value: catalogStats.taggedOfficial },
                 ].map(({ label: l, value }) => (
-                  <div key={l} style={{ background: "rgba(227,229,228,0.02)", border: "1px solid rgba(227,229,228,0.06)", padding: "8px 10px" }}>
-                    <p style={{ ...mono, fontSize: "0.55rem", color: "rgba(227,229,228,0.35)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 3 }}>{l}</p>
+                  <div key={l} style={{ background: "rgba(227,229,228,0.05)", border: "1px solid rgba(227,229,228,0.12)", padding: "8px 10px" }}>
+                    <p style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.55)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 3 }}>{l}</p>
                     <p style={{ ...mono, fontSize: "1rem", fontWeight: 700, color: "#4ade80", margin: 0 }}>{value}</p>
                   </div>
                 ))}
               </div>
-              <p style={{ ...mono, fontSize: "0.55rem", color: "rgba(227,229,228,0.25)", marginTop: 8 }}>
+              <p style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.40)", marginTop: 8 }}>
                 Grows every 30min as new holders are found
               </p>
             </section>
@@ -447,7 +447,7 @@ export default function CommunityIntel() {
                 onClick={() => syncFollowingMutation.mutate()}
                 disabled={syncFollowingMutation.isPending}
                 style={{
-                  fontFamily: "'Courier New'", fontSize: "0.58rem",
+                  fontFamily: "'Courier New'", fontSize: "0.76rem",
                   color: syncFollowingMutation.isPending ? "rgba(74,222,128,0.3)" : "#4ade80",
                   background: "transparent",
                   border: "1px solid rgba(74,222,128,0.3)",
@@ -457,7 +457,7 @@ export default function CommunityIntel() {
                 {syncFollowingMutation.isPending ? "syncing..." : "↻ sync"}
               </button>
             </div>
-            <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.3)", marginBottom: 10 }}>
+            <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.48)", marginBottom: 10 }}>
               Everyone we follow. Their tweets shape the story.
             </p>
             {followingData ? (
@@ -468,13 +468,13 @@ export default function CommunityIntel() {
                     { label: "PFP Holders", value: followingData.pfpHolders, color: "#f97316" },
                   ].map(({ label: l, value, color }) => (
                     <div key={l} style={{ background: "rgba(74,222,128,0.03)", border: "1px solid rgba(74,222,128,0.08)", padding: "8px 10px" }}>
-                      <p style={{ ...mono, fontSize: "0.52rem", color: "rgba(227,229,228,0.35)", textTransform: "uppercase" as const, letterSpacing: "0.1em", marginBottom: 3 }}>{l}</p>
+                      <p style={{ ...mono, fontSize: "0.70rem", color: "rgba(227,229,228,0.55)", textTransform: "uppercase" as const, letterSpacing: "0.1em", marginBottom: 3 }}>{l}</p>
                       <p style={{ ...mono, fontSize: "1rem", fontWeight: 700, color, margin: 0 }}>{value ?? 0}</p>
                     </div>
                   ))}
                 </div>
                 {followingData.lastSynced && (
-                  <p style={{ ...mono, fontSize: "0.52rem", color: "rgba(227,229,228,0.2)", marginBottom: 8 }}>
+                  <p style={{ ...mono, fontSize: "0.70rem", color: "rgba(227,229,228,0.35)", marginBottom: 8 }}>
                     Last synced {timeAgo(followingData.lastSynced)}
                   </p>
                 )}
@@ -483,28 +483,28 @@ export default function CommunityIntel() {
                     <div key={a.username} style={{
                       display: "flex", justifyContent: "space-between", alignItems: "center",
                       padding: "4px 7px",
-                      background: a.isPfpHolder ? "rgba(249,115,22,0.04)" : "rgba(227,229,228,0.015)",
-                      border: `1px solid ${a.isPfpHolder ? "rgba(249,115,22,0.12)" : "rgba(227,229,228,0.05)"}`,
+                      background: a.isPfpHolder ? "rgba(249,115,22,0.04)" : "rgba(227,229,228,0.04)",
+                      border: `1px solid ${a.isPfpHolder ? "rgba(249,115,22,0.12)" : "rgba(227,229,228,0.10)"}`,
                     }}>
-                      <span style={{ ...mono, fontSize: "0.65rem", color: a.isPfpHolder ? "#f97316" : "#e3e5e4" }}>
+                      <span style={{ ...mono, fontSize: "0.83rem", color: a.isPfpHolder ? "#f97316" : "#e3e5e4" }}>
                         @{a.username}
                       </span>
-                      <span style={{ ...mono, fontSize: "0.52rem", color: "rgba(227,229,228,0.3)" }}>
+                      <span style={{ ...mono, fontSize: "0.70rem", color: "rgba(227,229,228,0.48)" }}>
                         {a.isPfpHolder ? "🖼 pfp" : ""}
                         {a.normieTokenIds?.length > 0 ? ` #${a.normieTokenIds[0]}` : ""}
                       </span>
                     </div>
                   ))}
                   {(followingData.accounts?.length ?? 0) > 20 && (
-                    <p style={{ ...mono, fontSize: "0.55rem", color: "rgba(227,229,228,0.25)", padding: "4px 0" }}>
+                    <p style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.40)", padding: "4px 0" }}>
                       + {followingData.accounts.length - 20} more
                     </p>
                   )}
                 </div>
               </>
             ) : (
-              <div style={{ height: 80, background: "rgba(227,229,228,0.03)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <span style={{ ...mono, fontSize: "0.65rem", color: "rgba(227,229,228,0.3)" }}>Loading roster...</span>
+              <div style={{ height: 80, background: "rgba(227,229,228,0.06)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.48)" }}>Loading roster...</span>
               </div>
             )}
           </section>
@@ -513,14 +513,14 @@ export default function CommunityIntel() {
           {storySources && storySources.holders.length > 0 && (
             <section style={card}>
               <p style={{ ...label, marginBottom: "0.85rem" }}>📖 Story Sources</p>
-              <p style={{ ...mono, fontSize: "0.6rem", color: "rgba(227,229,228,0.3)", marginBottom: 10 }}>
+              <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.48)", marginBottom: 10 }}>
                 Tagged by the community — their posts fuel the narrative
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 {storySources.holders.slice(0, 8).map((h: any) => (
                   <div key={h.username} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 8px", background: "rgba(249,115,22,0.03)", border: "1px solid rgba(249,115,22,0.08)" }}>
                     <span style={{ ...mono, fontSize: "0.68rem", color: "#f97316" }}>@{h.username}</span>
-                    <span style={{ ...mono, fontSize: "0.55rem", color: "rgba(227,229,228,0.3)" }}>{h.postCount} post{h.postCount !== 1 ? "s" : ""}</span>
+                    <span style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.48)" }}>{h.postCount} post{h.postCount !== 1 ? "s" : ""}</span>
                   </div>
                 ))}
               </div>
@@ -538,17 +538,17 @@ export default function CommunityIntel() {
                       background: "rgba(249,115,22,0.05)",
                       border: "1px solid rgba(249,115,22,0.2)",
                     }}>
-                      <p style={{ ...mono, fontSize: "0.72rem", color: "#e3e5e4", margin: 0, lineHeight: 1.5 }}>
+                      <p style={{ ...mono, fontSize: "0.90rem", color: "#efefef", margin: 0, lineHeight: 1.5 }}>
                         {angle}
                       </p>
-                      <p style={{ ...mono, fontSize: "0.56rem", color: "rgba(249,115,22,0.5)", marginTop: 4 }}>
+                      <p style={{ ...mono, fontSize: "0.74rem", color: "rgba(249,115,22,0.5)", marginTop: 4 }}>
                         Agent 306 will use this →
                       </p>
                     </div>
                   ))}
                 </div>
               : (
-                <p style={{ ...mono, fontSize: "0.7rem", color: "rgba(227,229,228,0.3)", textAlign: "center" as const, padding: "0.5rem 0" }}>
+                <p style={{ ...mono, fontSize: "0.88rem", color: "rgba(227,229,228,0.48)", textAlign: "center" as const, padding: "0.5rem 0" }}>
                   No angles pinned yet.<br />Pin a story angle above to guide the next episode.
                 </p>
               )
@@ -559,7 +559,7 @@ export default function CommunityIntel() {
           <section style={card}>
             <p style={{ ...label, marginBottom: "0.85rem" }}>Signal Breakdown</p>
             {isLoading
-              ? <div style={{ height: 120, background: "rgba(227,229,228,0.04)", animation: "pulse-skeleton 1.6s infinite" }} />
+              ? <div style={{ height: 120, background: "rgba(227,229,228,0.08)", animation: "pulse-skeleton 1.6s infinite" }} />
               : <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {sortedGroups.map(group => {
                     const cfg = TYPE_CONFIG[group.type] ?? TYPE_CONFIG.general;
@@ -567,10 +567,10 @@ export default function CommunityIntel() {
                     return (
                       <div key={group.type}>
                         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                          <span style={{ ...mono, fontSize: "0.62rem", color: cfg.color }}>{cfg.emoji} {cfg.label}</span>
-                          <span style={{ ...mono, fontSize: "0.62rem", color: "rgba(227,229,228,0.4)" }}>{group.count}</span>
+                          <span style={{ ...mono, fontSize: "0.80rem", color: cfg.color }}>{cfg.emoji} {cfg.label}</span>
+                          <span style={{ ...mono, fontSize: "0.80rem", color: "rgba(227,229,228,0.60)" }}>{group.count}</span>
                         </div>
-                        <div style={{ height: 4, background: "rgba(227,229,228,0.06)" }}>
+                        <div style={{ height: 4, background: "rgba(227,229,228,0.12)" }}>
                           <div style={{ height: "100%", width: `${pct}%`, background: cfg.color, opacity: 0.7 }} />
                         </div>
                       </div>
@@ -591,8 +591,8 @@ export default function CommunityIntel() {
                 { step: "4", text: "Pinned angles feed directly into Agent 306's next episode narrative" },
               ].map(({ step, text }) => (
                 <div key={step} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                  <span style={{ ...mono, fontSize: "0.6rem", color: "#2dd4bf", flexShrink: 0, marginTop: 2 }}>{step}.</span>
-                  <p style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.6)", lineHeight: 1.5, margin: 0 }}>{text}</p>
+                  <span style={{ ...mono, fontSize: "0.78rem", color: "#2dd4bf", flexShrink: 0, marginTop: 2 }}>{step}.</span>
+                  <p style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.75)", lineHeight: 1.5, margin: 0 }}>{text}</p>
                 </div>
               ))}
             </div>

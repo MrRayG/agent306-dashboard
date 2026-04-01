@@ -37,7 +37,7 @@ function MoodDot({ mood }: { mood?: ChatMessage["mood"] }) {
   if (!mood) return null;
   return (
     <span style={{
-      ...mono, fontSize: "0.5rem", color: colors[mood] ?? "#e3e5e4",
+      ...mono, fontSize: "0.68rem", color: colors[mood] ?? "#e3e5e4",
       border: `1px solid ${colors[mood]}30`,
       padding: "1px 6px", textTransform: "uppercase" as const,
       letterSpacing: "0.1em", flexShrink: 0,
@@ -76,12 +76,12 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
 
         {/* Name + mood */}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ ...mono, fontSize: "0.55rem", color: isAgent ? "#f97316" : "rgba(227,229,228,0.4)",
+          <span style={{ ...mono, fontSize: "0.73rem", color: isAgent ? "#f97316" : "rgba(227,229,228,0.60)",
             textTransform: "uppercase" as const, letterSpacing: "0.1em" }}>
             {isAgent ? "Agent 306" : "MrRayG"}
           </span>
           {isAgent && <MoodDot mood={msg.mood} />}
-          <span style={{ ...mono, fontSize: "0.5rem", color: "rgba(227,229,228,0.2)" }}>{time}</span>
+          <span style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.35)" }}>{time}</span>
         </div>
 
         {/* Bubble */}
@@ -89,20 +89,20 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
           padding: "0.85rem 1rem",
           background: isAgent
             ? "rgba(249,115,22,0.04)"
-            : "rgba(227,229,228,0.06)",
+            : "rgba(227,229,228,0.12)",
           border: `1px solid ${isAgent
             ? msg.needsHelp ? "rgba(251,191,36,0.4)" : "rgba(249,115,22,0.15)"
-            : "rgba(227,229,228,0.1)"}`,
+            : "rgba(227,229,228,0.18)"}`,
           borderLeft: isAgent ? `3px solid ${msg.needsHelp ? "#fbbf24" : "#f97316"}` : "none",
-          borderRight: !isAgent ? "3px solid rgba(227,229,228,0.3)" : "none",
+          borderRight: !isAgent ? "3px solid rgba(227,229,228,0.48)" : "none",
         }}>
           {msg.needsHelp && (
-            <div style={{ ...mono, fontSize: "0.52rem", color: "#fbbf24", textTransform: "uppercase" as const,
+            <div style={{ ...mono, fontSize: "0.70rem", color: "#fbbf24", textTransform: "uppercase" as const,
               letterSpacing: "0.12em", marginBottom: 6 }}>
               ⚠ Agent needs your guidance
             </div>
           )}
-          <p style={{ ...mono, fontSize: "0.75rem", color: "rgba(227,229,228,0.88)",
+          <p style={{ ...mono, fontSize: "0.93rem", color: "rgba(227,229,228,0.88)",
             lineHeight: 1.75, margin: 0, whiteSpace: "pre-wrap" as const }}>
             {msg.text}
           </p>
@@ -125,7 +125,7 @@ function TypingIndicator() {
           <div key={i} style={{ width: 5, height: 5, borderRadius: "50%", background: "#f97316",
             animation: `chat-bounce 1.2s ease-in-out ${i * 0.2}s infinite` }} />
         ))}
-        <span style={{ ...mono, fontSize: "0.6rem", color: "rgba(249,115,22,0.5)", marginLeft: 4 }}>
+        <span style={{ ...mono, fontSize: "0.78rem", color: "rgba(249,115,22,0.5)", marginLeft: 4 }}>
           Agent 306 is thinking...
         </span>
       </div>
@@ -216,7 +216,7 @@ export default function CommandChat() {
       {/* Header */}
       <div style={{
         padding: "1.25rem 1.5rem",
-        borderBottom: "1px solid rgba(227,229,228,0.08)",
+        borderBottom: "1px solid rgba(227,229,228,0.15)",
         display: "flex", alignItems: "center", justifyContent: "space-between",
         flexShrink: 0,
       }}>
@@ -224,13 +224,13 @@ export default function CommandChat() {
           <img src="/agent306-avatar.png" alt="#306"
             style={{ width: 32, height: 32, imageRendering: "pixelated", borderRadius: 2 }} />
           <div>
-            <p style={{ ...mono, fontSize: "0.75rem", color: "#f97316", margin: 0, fontWeight: 700 }}>
+            <p style={{ ...mono, fontSize: "0.93rem", color: "#f97316", margin: 0, fontWeight: 700 }}>
               Agent 306
             </p>
             <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 1 }}>
               <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#4ade80",
                 animation: "chat-pulse 2s infinite" }} />
-              <span style={{ ...mono, fontSize: "0.55rem", color: "rgba(74,222,128,0.7)",
+              <span style={{ ...mono, fontSize: "0.73rem", color: "rgba(74,222,128,0.7)",
                 textTransform: "uppercase" as const, letterSpacing: "0.1em" }}>
                 Online · agent306.eth
               </span>
@@ -242,7 +242,7 @@ export default function CommandChat() {
             { label: "33 Knowledge", color: "rgba(167,139,250,0.5)" },
             { label: "Direct Line", color: "rgba(249,115,22,0.5)" },
           ].map(tag => (
-            <span key={tag.label} style={{ ...mono, fontSize: "0.5rem", color: tag.color,
+            <span key={tag.label} style={{ ...mono, fontSize: "0.68rem", color: tag.color,
               border: `1px solid ${tag.color}50`, padding: "2px 8px",
               textTransform: "uppercase" as const, letterSpacing: "0.1em" }}>
               {tag.label}
@@ -257,15 +257,15 @@ export default function CommandChat() {
         {/* Quick prompts — shown when chat is empty */}
         {isEmpty && (
           <div style={{ marginBottom: "1.5rem" }}>
-            <p style={{ ...mono, fontSize: "0.52rem", color: "rgba(227,229,228,0.25)",
+            <p style={{ ...mono, fontSize: "0.70rem", color: "rgba(227,229,228,0.40)",
               textTransform: "uppercase" as const, letterSpacing: "0.15em", marginBottom: "0.75rem" }}>
               Quick prompts
             </p>
             <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 6 }}>
               {QUICK_PROMPTS.map(q => (
                 <button key={q} onClick={() => send(q)} style={{
-                  ...mono, fontSize: "0.6rem", background: "rgba(227,229,228,0.03)",
-                  border: "1px solid rgba(227,229,228,0.1)", color: "rgba(227,229,228,0.5)",
+                  ...mono, fontSize: "0.78rem", background: "rgba(227,229,228,0.06)",
+                  border: "1px solid rgba(227,229,228,0.18)", color: "rgba(227,229,228,0.68)",
                   padding: "5px 10px", cursor: "pointer", textAlign: "left" as const,
                   transition: "all 0.15s",
                 }}
@@ -274,8 +274,8 @@ export default function CommandChat() {
                     (e.currentTarget as HTMLElement).style.color = "#e3e5e4";
                   }}
                   onMouseLeave={e => {
-                    (e.currentTarget as HTMLElement).style.borderColor = "rgba(227,229,228,0.1)";
-                    (e.currentTarget as HTMLElement).style.color = "rgba(227,229,228,0.5)";
+                    (e.currentTarget as HTMLElement).style.borderColor = "rgba(227,229,228,0.18)";
+                    (e.currentTarget as HTMLElement).style.color = "rgba(227,229,228,0.68)";
                   }}
                 >
                   {q}
@@ -293,7 +293,7 @@ export default function CommandChat() {
       {/* Input */}
       <div style={{
         padding: "1rem 1.5rem",
-        borderTop: "1px solid rgba(227,229,228,0.08)",
+        borderTop: "1px solid rgba(227,229,228,0.15)",
         background: "#0e0f10",
         flexShrink: 0,
       }}>
@@ -309,16 +309,16 @@ export default function CommandChat() {
             placeholder="Talk to Agent 306 directly... (Enter to send, Shift+Enter for new line)"
             style={{
               flex: 1,
-              background: "rgba(227,229,228,0.04)",
-              border: "1px solid rgba(227,229,228,0.1)",
-              color: "#e3e5e4",
-              ...mono, fontSize: "0.72rem",
+              background: "rgba(227,229,228,0.08)",
+              border: "1px solid rgba(227,229,228,0.18)",
+              color: "#efefef",
+              ...mono, fontSize: "0.90rem",
               lineHeight: 1.6, padding: "0.65rem 0.85rem",
               resize: "none", outline: "none", borderRadius: 0,
               transition: "border-color 0.15s",
             }}
             onFocus={e => (e.target.style.borderColor = "rgba(249,115,22,0.3)")}
-            onBlur={e => (e.target.style.borderColor = "rgba(227,229,228,0.1)")}
+            onBlur={e => (e.target.style.borderColor = "rgba(227,229,228,0.18)")}
           />
           <button
             onClick={() => send()}
@@ -326,7 +326,7 @@ export default function CommandChat() {
             style={{
               background: !input.trim() || sendMutation.isPending ? "rgba(249,115,22,0.12)" : "#f97316",
               color: !input.trim() || sendMutation.isPending ? "rgba(249,115,22,0.35)" : "#1a1b1c",
-              border: "none", ...mono, fontSize: "0.65rem", fontWeight: 700,
+              border: "none", ...mono, fontSize: "0.83rem", fontWeight: 700,
               padding: "0.65rem 1.25rem",
               cursor: !input.trim() || sendMutation.isPending ? "not-allowed" : "pointer",
               textTransform: "uppercase" as const, letterSpacing: "0.08em",
@@ -336,7 +336,7 @@ export default function CommandChat() {
             {sendMutation.isPending ? "..." : "Send →"}
           </button>
         </div>
-        <p style={{ ...mono, fontSize: "0.52rem", color: "rgba(227,229,228,0.2)", marginTop: 6 }}>
+        <p style={{ ...mono, fontSize: "0.70rem", color: "rgba(227,229,228,0.35)", marginTop: 6 }}>
           Agent 306 has access to full knowledge base · 33 entries · Responds with her genuine POV
         </p>
       </div>
