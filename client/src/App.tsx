@@ -20,6 +20,7 @@ import MorningBriefing from "@/pages/MorningBriefing";
 import DataIntake from "@/pages/DataIntake";
 import KnowledgeGraph from "@/pages/KnowledgeGraph";
 import ResearchAgenda from "@/pages/ResearchAgenda";
+import DreamsGrowth from "@/pages/DreamsGrowth";
 import NotFound from "@/pages/not-found";
 import PerplexityAttribution from "@/components/PerplexityAttribution";
 
@@ -41,6 +42,7 @@ const nav = [
   { href: "/intake",    label: "Data Intake",       desc: "AI source feeds" },
   { href: "/knowledge", label: "Knowledge Graph",   desc: "Connected intelligence" },
   { href: "/agenda",    label: "Research Agenda",   desc: "Active investigations" },
+  { href: "/dreams",    label: "Dreams & Growth",   desc: "Aspirations \u00B7 Self-improvement" },
 ];
 
 function Sidebar() {
@@ -168,6 +170,7 @@ function App() {
             <Route path="/intake"    component={DataIntake}      />
             <Route path="/knowledge" component={KnowledgeGraph}  />
             <Route path="/agenda"    component={ResearchAgenda}  />
+            <Route path="/dreams"    component={DreamsGrowth}   />
             <Route component={NotFound} />
           </Switch>
         </Layout>
