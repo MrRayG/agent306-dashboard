@@ -68,6 +68,13 @@ import { getKnowledgeTiers, scanForInjection } from "./memoryEngine.js";
 import { getModel, getModelConfig as getModelRouterStats } from "./modelRouter.js";
 import { getCoreIdentity, getRelevantContext, getOptimizedContext } from "./contextWindow.js";
 import { getSkills, getSkillById, deleteSkill, extractSkill, getSkillsState, checkAndExtractSkills } from "./skillEngine.js";
+import {
+  getDreams, getDreamById, dream, updateDreamManual, updateDreams,
+  getGrowthSnapshots, getLatestGrowthSnapshot, getGrowthTimeline, takeGrowthSnapshot,
+  getEpisodeReflections, reflectOnEpisode,
+  getImprovementPlans, getLatestPlan, generateSelfImprovementPlan,
+  seedDreams,
+} from "./dreamEngine.js";
 
 // On-chain API removed
 // const ONCHAIN_API = "";
@@ -842,6 +849,11 @@ setTimeout(() => {
   scheduleDailyCycle();
 }, 50_000);
 
+// ── DREAM ENGINE — seed initial dreams on startup ────────────────────────────
+setTimeout(() => {
+  seedDreams();
+}, 55_000);
+
 // ── Editorial Summary Cache ─────────────────────────────────────────────────────
 // Decoupled from signal collection — generated async, served instantly from cache.
 // Prevents the digest endpoint from timing out while waiting for Grok.
@@ -1461,6 +1473,8 @@ export function registerRoutes(httpServer: Server, app: Express) {
     const ok = await generateEpisodeScript(req.params.id, grokKey, researchContent);
     if (!ok) return res.status(500).json({ error: "Failed to generate script" });
     const ep = getEpisode(req.params.id);
+    // Auto-reflect on the episode in the background
+    reflectOnEpisode(req.params.id).catch(e => console.warn("[Routes] Auto-reflection failed:", e.message));
     res.json({ ok: true, episode: ep });
   });
 
@@ -3270,6 +3284,113 @@ needsHelp: true only when you genuinely need his direction or information`,
       estimatedTokens: Math.ceil((core.length + context.length) / 4),
       context,
     });
+  });
+
+  // ── Dream Engine (The Vision) ─────────────────────────────────────────────
+
+  app.get("/api/dreams", (_req, res) => {
+    try { res.json({ dreams: getDreams() }); }
+    catch (e: any) { res.status(500).json({ error: "Failed to fetch dreams" }); }
+  });
+
+  app.post("/api/dreams", requireDashAuth, (req, res) => {
+    try {
+      const { question, context } = req.body as { question?: string; context?: string };
+      if (!question) return res.status(400).json({ error: "question required" });
+      const entry = dream(question, context ?? "");
+      res.json({ dream: entry });
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to create dream: " + e.message });
+    }
+  });
+
+  app.put("/api/dreams/:id", requireDashAuth, (req, res) => {
+    try {
+      const { status, insights, relatedThreads } = req.body;
+      const updated = updateDreamManual(req.params.id, { status, insights, relatedThreads });
+      if (!updated) return res.status(404).json({ error: "Dream not found" });
+      res.json({ dream: updated });
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to update dream: " + e.message });
+    }
+  });
+
+  app.get("/api/growth", (_req, res) => {
+    try { res.json({ snapshots: getGrowthSnapshots() }); }
+    catch (e: any) { res.status(500).json({ error: "Failed to fetch growth data" }); }
+  });
+
+  app.get("/api/growth/timeline", (_req, res) => {
+    try { res.json({ timeline: getGrowthTimeline() }); }
+    catch (e: any) { res.status(500).json({ error: "Failed to fetch growth timeline" }); }
+  });
+
+  app.get("/api/growth/latest", (_req, res) => {
+    try { res.json({ snapshot: getLatestGrowthSnapshot() }); }
+    catch (e: any) { res.status(500).json({ error: "Failed to fetch latest snapshot" }); }
+  });
+
+  app.post("/api/growth/snapshot", requireDashAuth, async (_req, res) => {
+    try {
+      const snapshot = await takeGrowthSnapshot();
+      if (!snapshot) return res.status(500).json({ error: "Growth snapshot failed" });
+      res.json({ snapshot });
+    } catch (e: any) {
+      res.status(500).json({ error: "Growth snapshot failed: " + e.message });
+    }
+  });
+
+  app.get("/api/reflections/episodes", (_req, res) => {
+    try { res.json({ reflections: getEpisodeReflections() }); }
+    catch (e: any) { res.status(500).json({ error: "Failed to fetch episode reflections" }); }
+  });
+
+  app.post("/api/reflections/episode/:id", requireDashAuth, async (req, res) => {
+    try {
+      const reflection = await reflectOnEpisode(req.params.id);
+      if (!reflection) return res.status(500).json({ error: "Episode reflection failed" });
+      res.json({ reflection });
+    } catch (e: any) {
+      res.status(500).json({ error: "Episode reflection failed: " + e.message });
+    }
+  });
+
+  app.get("/api/improvement-plan", (_req, res) => {
+    try {
+      const plans = getImprovementPlans();
+      const latest = getLatestPlan();
+      res.json({ plans, latest });
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to fetch improvement plans" });
+    }
+  });
+
+  app.post("/api/improvement-plan/generate", requireDashAuth, async (_req, res) => {
+    try {
+      const plan = await generateSelfImprovementPlan();
+      if (!plan) return res.status(500).json({ error: "Plan generation failed" });
+      res.json({ plan });
+    } catch (e: any) {
+      res.status(500).json({ error: "Plan generation failed: " + e.message });
+    }
+  });
+
+  app.post("/api/dreams/seed", requireDashAuth, (_req, res) => {
+    try {
+      const dreams = seedDreams();
+      res.json({ dreams, count: dreams.length });
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to seed dreams: " + e.message });
+    }
+  });
+
+  app.post("/api/dreams/update", requireDashAuth, async (_req, res) => {
+    try {
+      const result = await updateDreams();
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ error: "Dream update failed: " + e.message });
+    }
   });
 
   app.post("/api/seed", (_req, res) => {
