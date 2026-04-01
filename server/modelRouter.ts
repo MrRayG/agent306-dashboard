@@ -42,8 +42,10 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "reply-generation": "standard",
   "community-boost": "standard",
   "episode-generation": "standard",
+  "research-agenda-advance": "standard",
 
   // Premium — highest quality for public-facing content
+  "research-agenda-generate": "premium",
   "podcast-script": "premium",
   "synthesis-report": "premium",
   "article-draft": "premium",
