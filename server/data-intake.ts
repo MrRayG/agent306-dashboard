@@ -16,7 +16,8 @@
 import * as fs from "fs";
 import * as crypto from "crypto";
 import { dataPath } from "./dataPaths.js";
-import { addKnowledge } from "./memoryEngine.js";
+import { addKnowledge, knowledge } from "./memoryEngine.js";
+import { findConnections } from "./knowledge-graph.js";
 import RssParser from "rss-parser";
 
 const INTAKE_FILE = dataPath("intake-history.json");
@@ -605,6 +606,34 @@ export async function runFullIntake(): Promise<IntakeItem[]> {
     }
   }
   console.log(`[DataIntake] Ingested ${ingested} items into knowledge base (threshold: ${RELEVANCE_THRESHOLD})`);
+
+  // Auto-find knowledge graph connections for top ingested items (limit to 3 to control LLM calls)
+  const topIngestedItems = newItems
+    .filter(item => item.relevanceScore >= RELEVANCE_THRESHOLD)
+    .sort((a, b) => b.relevanceScore - a.relevanceScore)
+    .slice(0, 3);
+
+  let connectionsFound = 0;
+  for (const item of topIngestedItems) {
+    try {
+      // Find the KB entry that was just created for this item
+      const kbEntry = knowledge.entries.find(e => e.title === item.title.slice(0, 100));
+      if (kbEntry) {
+        const conns = await findConnections({
+          id: kbEntry.id,
+          title: kbEntry.title,
+          summary: kbEntry.summary ?? "",
+          category: kbEntry.category,
+        }, "auto_ingest");
+        connectionsFound += conns.length;
+      }
+    } catch (e: any) {
+      console.warn(`[DataIntake] Connection finding failed for "${item.title}":`, e.message);
+    }
+  }
+  if (connectionsFound > 0) {
+    console.log(`[DataIntake] Found ${connectionsFound} knowledge graph connections for ingested items`);
+  }
 
   // Save run to history
   const durationMs = Date.now() - startTime;

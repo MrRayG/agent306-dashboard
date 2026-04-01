@@ -61,6 +61,7 @@ import { getPublicStatus, getPublicProgress, getPublicActivity, getPublicGoals, 
 import { getReflections, getStyleRules, deleteStyleRule, runReflection } from "./reflectionEngine.js";
 import { getDebates, getContradictions, runDebate, resolveContradiction, runConfidenceDecay, getDecayingEntries } from "./reasoningEngine.js";
 import { getConnections, getReports, runConnectionScan, generateSynthesis } from "./synthesisEngine.js";
+import { getKnowledgeMap, getClusters, getContradictions as getGraphContradictions, findConnections as findGraphConnections, clusterKnowledge, detectContradictions, generatePerspective } from "./knowledge-graph.js";
 import { getInsights, getRelationships, extractInsights, analyzeRelationships } from "./conversationLearningEngine.js";
 import { getMetacognitionState } from "./metacognitionEngine.js";
 import { searchConversations } from "./conversationMemory.js";
@@ -3197,6 +3198,68 @@ needsHelp: true only when you genuinely need his direction or information`,
       res.json({ report });
     } catch (e: any) {
       res.status(500).json({ error: "Synthesis failed: " + e.message });
+    }
+  });
+
+  // ── Knowledge Graph (Layer 2: Connected Reasoning) ──────────────────────
+
+  app.get("/api/knowledge/graph", (_req, res) => {
+    try { res.json(getKnowledgeMap()); }
+    catch (e: any) { res.status(500).json({ error: "Failed to fetch knowledge graph" }); }
+  });
+
+  app.get("/api/knowledge/clusters", (_req, res) => {
+    try { res.json({ clusters: getClusters() }); }
+    catch (e: any) { res.status(500).json({ error: "Failed to fetch clusters" }); }
+  });
+
+  app.post("/api/knowledge/connections/find", requireDashAuth, async (req, res) => {
+    try {
+      const { entry } = req.body as { entry?: { id: string; title: string; summary: string; category: string } };
+      if (!entry?.id || !entry?.title) {
+        return res.status(400).json({ error: "entry with id, title, summary, category required" });
+      }
+      const connections = await findGraphConnections(entry, "manual");
+      res.json({ connections, count: connections.length });
+    } catch (e: any) {
+      res.status(500).json({ error: "Connection finding failed: " + e.message });
+    }
+  });
+
+  app.get("/api/knowledge/perspective/:topic", async (req, res) => {
+    try {
+      const topic = decodeURIComponent(req.params.topic);
+      if (!topic || topic.length < 3) {
+        return res.status(400).json({ error: "topic parameter required (min 3 chars)" });
+      }
+      const perspective = await generatePerspective(topic);
+      if (!perspective) return res.status(500).json({ error: "Perspective generation failed" });
+      res.json(perspective);
+    } catch (e: any) {
+      res.status(500).json({ error: "Perspective generation failed: " + e.message });
+    }
+  });
+
+  app.get("/api/knowledge/contradictions", (_req, res) => {
+    try { res.json({ contradictions: getGraphContradictions() }); }
+    catch (e: any) { res.status(500).json({ error: "Failed to fetch contradictions" }); }
+  });
+
+  app.post("/api/knowledge/cluster", requireDashAuth, async (_req, res) => {
+    try {
+      const clusters = await clusterKnowledge();
+      res.json({ clusters, count: clusters.length });
+    } catch (e: any) {
+      res.status(500).json({ error: "Clustering failed: " + e.message });
+    }
+  });
+
+  app.post("/api/knowledge/contradictions/scan", requireDashAuth, async (_req, res) => {
+    try {
+      const contradictions = await detectContradictions();
+      res.json({ contradictions, count: contradictions.length });
+    } catch (e: any) {
+      res.status(500).json({ error: "Contradiction scan failed: " + e.message });
     }
   });
 

@@ -12,6 +12,7 @@ import { knowledge, getFullAgentContext } from "./memoryEngine.js";
 import { getOptimizedContext } from "./contextWindow.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { getGraphConnections, getClusters, type KnowledgeConnection as GraphConnection } from "./knowledge-graph.js";
 
 const GROK_URL = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
@@ -266,6 +267,23 @@ export async function generateSynthesis(entryIds?: string[]): Promise<SynthesisR
     `${c.fromTitle} ↔ ${c.toTitle}: ${c.relationship} (${c.strength})`
   ).join("\n");
 
+  // Enrich with knowledge graph typed connections
+  const targetIds = new Set(targetEntries.map(e => e.id));
+  const graphConns = getGraphConnections().filter(gc =>
+    targetIds.has(gc.fromEntryId) || targetIds.has(gc.toEntryId)
+  );
+  const graphText = graphConns.slice(0, 10).map(gc =>
+    `${gc.fromEntryId} --${gc.relationshipType} (${gc.confidence.toFixed(1)})--> ${gc.toEntryId}: ${gc.reasoning}`
+  ).join("\n");
+
+  // Include cluster context
+  const clusters = getClusters().filter(cl =>
+    cl.entryIds.some(id => targetIds.has(id))
+  );
+  const clusterText = clusters.map(cl =>
+    `Theme: "${cl.theme}" — Open questions: ${cl.openQuestions.join("; ")}`
+  ).join("\n");
+
   const systemPrompt = `${getOptimizedContext("synthesis report knowledge connections thesis")}
 
 You are Agent 306's synthesis module. Combine fragmented knowledge into a coherent thesis.
@@ -287,6 +305,12 @@ ${entriesText}
 
 KNOWN CONNECTIONS:
 ${connectionsText || "No explicit connections mapped yet."}
+
+TYPED GRAPH CONNECTIONS:
+${graphText || "No graph connections yet."}
+
+CLUSTER CONTEXT:
+${clusterText || "No clusters identified yet."}
 
 Produce a synthesis that combines these fragments into a single coherent insight.`;
 
