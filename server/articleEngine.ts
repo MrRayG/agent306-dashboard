@@ -262,7 +262,6 @@ async function generateDeepReadArticle(
     headers: getLLMHeaders(),
     body: JSON.stringify({
       model: getModel("article_draft"),
-      response_format: { type: "json_object" },
       messages: [
         {
           role: "system",
@@ -388,20 +387,66 @@ Return JSON:
 }`,
         },
       ],
-      max_tokens: 3000,
+      max_tokens: 6000,
       temperature: 0.82,
     }),
-    signal: AbortSignal.timeout(60000),
+    signal: AbortSignal.timeout(120000),
   });
 
-  if (!res.ok) throw new Error(`Article generation failed: ${res.status}`);
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    console.error("[ArticleEngine] LLM API error:", res.status, errBody.slice(0, 500));
+    throw new Error(`Article generation failed: ${res.status} — ${errBody.slice(0, 200)}`);
+  }
 
   const data = await res.json();
-  const raw = data.choices?.[0]?.message?.content ?? "{}";
+  const raw = data.choices?.[0]?.message?.content ?? "";
 
+  if (!raw) {
+    console.error("[ArticleEngine] LLM returned empty content. Full response:", JSON.stringify(data).slice(0, 500));
+    throw new Error("LLM returned empty content — check OPENROUTER_API_KEY and model availability");
+  }
+
+  console.log("[ArticleEngine] Raw LLM response length:", raw.length, "chars");
+
+  // Try JSON parse first — the model may or may not wrap in JSON
   let parsed: any = {};
-  try { parsed = JSON.parse(raw); } catch {}
+  try {
+    // Find JSON block in response (model may include markdown fences)
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      parsed = JSON.parse(jsonMatch[0]);
+    }
+  } catch (e: any) {
+    console.warn("[ArticleEngine] JSON parse failed, attempting text extraction:", e.message);
+  }
 
+  // If JSON parse produced a body, use it
+  if (parsed.body && parsed.body.length > 100) {
+    return {
+      headline: parsed.headline ?? articleInfo.title,
+      teaser:   parsed.teaser   ?? "",
+      body:     parsed.body,
+    };
+  }
+
+  // Fallback: treat entire response as article body if it's long enough
+  // This handles cases where the model outputs markdown directly instead of JSON
+  if (raw.length > 200) {
+    console.log("[ArticleEngine] Using raw response as article body (JSON extraction failed)");
+    // Try to extract headline from first markdown heading
+    const headlineMatch = raw.match(/^#\s+(.+)$/m);
+    const headline = headlineMatch?.[1]?.trim() ?? articleInfo.title;
+    // Remove the headline from body if found
+    const body = headlineMatch ? raw.replace(headlineMatch[0], "").trim() : raw;
+    return {
+      headline,
+      teaser: body.slice(0, 220).replace(/\n/g, " ").trim() + "...",
+      body,
+    };
+  }
+
+  console.error("[ArticleEngine] Generation produced insufficient content. Raw:", raw.slice(0, 300));
   return {
     headline: parsed.headline ?? articleInfo.title,
     teaser:   parsed.teaser   ?? "",

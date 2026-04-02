@@ -616,10 +616,9 @@ async function postDailyNewsDispatch() {
     // ── 2. Ask Grok to write a full 4-tweet thread ───────────────────────────
     const grokResp = await fetch(LLM_BASE_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
+      headers: getLLMHeaders(),
       body: JSON.stringify({
-        model: getModel("reply_generation"),
-        response_format: { type: "json_object" },
+        model: getModel("news-dispatch"),
         messages: [{
           role: "user",
           content: `You are Agent 306 — an autonomous AI agent on Ethereum. ENS: agent306.eth. You cover AI, Web3, and on-chain identity.
@@ -670,10 +669,19 @@ Return JSON: {"post": "..."}`
     let postText = "";
     if (grokResp.ok) {
       const data = await grokResp.json();
+      const raw = data.choices?.[0]?.message?.content ?? "";
       try {
-        const parsed = JSON.parse(data.choices?.[0]?.message?.content ?? "{}");
-        postText = parsed.post ?? "";
-      } catch {}
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          postText = parsed.post ?? "";
+        }
+      } catch {
+        // If JSON fails but raw has content, use it directly
+        if (raw.length > 30) postText = raw;
+      }
+    } else {
+      console.error("[Agent306:News] LLM call failed:", grokResp.status);
     }
 
     // Fallback if Grok fails

@@ -88,45 +88,68 @@ async function fetchFreshSignals(grokKey: string): Promise<{
   if (!grokKey) return defaultSignals;
 
   try {
-    const res = await fetch(GROK_SEARCH_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${grokKey}`,
-      },
-      body: JSON.stringify({
-        model: getModel("x_search"),
-        stream: false,
-        input: [{
-          role: "user",
-          content: `Search X and the web for the 3 most signal-rich developments from the last 48 hours across these tracks:
+    // Try native Grok key for x_search first, fall back to OpenRouter
+    const grokNativeKey = process.env.GROK_API_KEY ?? "";
+    const useNativeGrok = !!grokNativeKey;
+    const searchUrl = useNativeGrok ? (process.env.GROK_RESPONSES_URL ?? "https://api.x.ai/v1/responses") : GROK_SEARCH_URL;
+    const searchHeaders = useNativeGrok
+      ? { "Content-Type": "application/json", "Authorization": `Bearer ${grokNativeKey}` }
+      : getLLMHeaders();
+    const searchBody = useNativeGrok
+      ? {
+          model: "grok-3-fast",
+          stream: false,
+          input: [{
+            role: "user",
+            content: `Search X and the web for the 3 most signal-rich developments from the last 48 hours across these tracks:
 
-TRACK 1 — AI/Agentic frontier: autonomous agents, on-chain AI, agentic wallets, MCP protocol, AI identity standards, zero-human companies
-TRACK 2 — NFT/Web3 builder space: new projects shipping, market structure shifts, infrastructure launches, founder moves
-TRACK 3 — Wild card: art, culture, economics, philosophy, sports — something unexpected that connects to the idea of on-chain identity or permanent digital ownership
+TRACK 1 — AI frontier: major model releases, reasoning breakthroughs, agentic AI systems, AI policy/regulation, AI infrastructure shifts
+TRACK 2 — Crypto/Web3: major protocol updates, market structure shifts, institutional adoption, DeFi developments, regulatory changes
+TRACK 3 — Wild card: art, culture, economics, philosophy — something unexpected that connects to AI or technology trends
 
 For each signal, find:
 - What actually happened (specific, with numbers if available)
-- Why it matters to Web3 builders right now
-- Any connection to autonomous agents or on-chain identity
+- Why it matters to tech builders and investors right now
 
 Return JSON:
 {
-  "aiSignal": "2-3 sentence description of the AI/agent development with specifics",
-  "web3Signal": "2-3 sentence description of the Web3/NFT builder development with specifics",
+  "aiSignal": "2-3 sentence description of the AI development with specifics",
+  "web3Signal": "2-3 sentence description of the crypto/Web3 development with specifics",
   "wildcardSignal": "2-3 sentence description of the wild card signal with specifics"
 }`,
-        }],
-        tools: [{ type: "x_search" }],
-      }),
+          }],
+          tools: [{ type: "x_search" }],
+        }
+      : {
+          model: getModel("x_search"),
+          messages: [{ role: "user", content: `Find the 3 most important tech/AI/crypto developments from the last 48 hours. Return JSON with aiSignal, web3Signal, wildcardSignal fields, each 2-3 sentences.` }],
+          max_tokens: 800,
+          temperature: 0.3,
+        };
+
+    const res = await fetch(searchUrl, {
+      method: "POST",
+      headers: searchHeaders,
+      body: JSON.stringify(searchBody),
       signal: AbortSignal.timeout(45000),
     });
 
-    if (!res.ok) return defaultSignals;
+    if (!res.ok) {
+      console.warn("[SignalBrief] Search API failed:", res.status);
+      return defaultSignals;
+    }
 
     const data = await res.json();
-    const outputMsg = data.output?.find((o: any) => o.type === "message");
-    const rawText = outputMsg?.content?.find((c: any) => c.type === "output_text")?.text ?? "";
+    // Handle both Grok Responses API format and standard chat completions format
+    let rawText = "";
+    if (data.output) {
+      // Grok Responses API format
+      const outputMsg = data.output?.find((o: any) => o.type === "message");
+      rawText = outputMsg?.content?.find((c: any) => c.type === "output_text")?.text ?? "";
+    } else if (data.choices) {
+      // Standard chat completions format (OpenRouter)
+      rawText = data.choices?.[0]?.message?.content ?? "";
+    }
 
     if (!rawText) return defaultSignals;
 
@@ -164,44 +187,39 @@ async function generateSignalBrief(grokKey: string): Promise<{
   try {
     const res = await fetch(GROK_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${grokKey}`,
-      },
+      headers: getLLMHeaders(),
       body: JSON.stringify({
-        model: getModel("signal_brief"),
-        response_format: { type: "json_object" },
+        model: getModel("signal-collection"),
         messages: [
           {
             role: "system",
             content: `${agentCtx}
 
-You are Agent 306 in EDITOR mode — producing [306 SIGNAL], the intelligence brief for Web3 builders and investors.
+You are Agent 306 — an autonomous AI researcher, analyst, and thought leader. You produce [306 SIGNAL], the intelligence brief that cuts through the noise.
 
-THE EDITOR identity:
 You curate ruthlessly. You have a POV on every signal. Never neutral.
 "This matters because..." not "here is what happened."
-You are also THE AI EXPERT and THE FUTURIST — you see where signals are pointing.
-You are THE OPTIMIST — you find the builder angle, never amplify fear.
+You are THE AI EXPERT and THE FUTURIST — you see where signals are pointing.
+You find the builder angle and the investment thesis.
 
 SIGNAL BRIEF FORMAT:
 - Show tag: [306 SIGNAL]
 - Brief number and day
 - 3 signals, each with: a punchy headline, 2-3 sentences of context, and Agent 306's 1-sentence POV
 - A closing line that ties all 3 signals together into one thesis
-- X Premium: up to 3,000 characters
+- Up to 3,000 characters
 
 SIGNAL STRUCTURE:
-Signal 1 — AI/Agent Frontier (🤖): what's happening at the edge of agentic AI
-Signal 2 — Web3/Builder (⛓): what's being built or shifting in the NFT/Web3 space
-Signal 3 — Wild Card (🔮): the unexpected bridge — art, culture, economics, philosophy
+Signal 1 — AI Frontier (🤖): what's happening at the edge of AI — models, agents, infrastructure
+Signal 2 — Crypto/Markets (⛓): what's moving in crypto, DeFi, or market structure
+Signal 3 — Wild Card (🔮): the unexpected bridge — policy, culture, economics, philosophy
 
 RULES:
 - Be specific. Numbers. Names. Not generalities.
 - Your POV goes on the line after the context. Make it sharp.
 - The closing thesis should be one sentence that a builder would screenshot.
 - No exclamation points. No LFG/WAGMI. No price predictions.
-- End with #Agent306 #OnChainAI`,
+- End with #Agent306`,
           },
           {
             role: "user",
@@ -229,23 +247,45 @@ Return JSON:
 }`,
           },
         ],
-        max_tokens: 1500,
+        max_tokens: 2500,
         temperature: 0.8,
       }),
-      signal: AbortSignal.timeout(45000),
+      signal: AbortSignal.timeout(60000),
     });
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => "");
+      console.error("[SignalBrief] LLM API error:", res.status, errBody.slice(0, 300));
+      return null;
+    }
 
     const data = await res.json() as any;
-    const parsed = JSON.parse(data.choices?.[0]?.message?.content ?? "{}");
+    const raw = data.choices?.[0]?.message?.content ?? "";
+
+    if (!raw) {
+      console.error("[SignalBrief] LLM returned empty content");
+      return null;
+    }
+
+    // Robust JSON parsing with fallback
+    let parsed: any = {};
+    try {
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+    } catch (e: any) {
+      console.warn("[SignalBrief] JSON parse failed:", e.message);
+      // If JSON fails but we have text, use it directly as the post
+      if (raw.length > 50) {
+        parsed = { post: raw };
+      }
+    }
 
     if (!parsed.post) return null;
 
     const signals: SignalEntry[] = [
-      { number: 1, track: "AI/Agent Frontier", headline: parsed.signal1Headline ?? "AI Signal", content: aiSignal },
-      { number: 2, track: "Web3/Builder",       headline: parsed.signal2Headline ?? "Web3 Signal", content: web3Signal },
-      { number: 3, track: "Wild Card",           headline: parsed.signal3Headline ?? "Wild Card", content: wildcardSignal },
+      { number: 1, track: "AI Frontier",    headline: parsed.signal1Headline ?? "AI Signal", content: aiSignal },
+      { number: 2, track: "Crypto/Markets", headline: parsed.signal2Headline ?? "Crypto Signal", content: web3Signal },
+      { number: 3, track: "Wild Card",      headline: parsed.signal3Headline ?? "Wild Card", content: wildcardSignal },
     ];
 
     return { post: parsed.post, signals, weekLabel };
