@@ -114,13 +114,18 @@ function postingJitterMs(baseMs: number, jitterMinutes = 15): number {
 // OAuth 1.0a tokens do NOT expire — they stay valid until you regenerate them
 // in the X Developer Portal. This is the only auth method used for posting.
 // If X_ACCESS_TOKEN or X_ACCESS_SECRET are missing, posting is disabled safely.
-const X_APP_KEY     = process.env.X_APP_KEY     ?? "KflwX2evH6oU1bjX3uuVWZ8Ix";
-const X_APP_SECRET  = process.env.X_APP_SECRET  ?? "HFmTeE0KHUeKjWcx221tatZU7pSzXBWpFZhRpOgeZaVvB3yfAr";
+const X_APP_KEY     = process.env.X_APP_KEY     ?? "";
+const X_APP_SECRET  = process.env.X_APP_SECRET  ?? "";
 const X_ACCESS_TOKEN  = process.env.X_ACCESS_TOKEN  ?? "";
 const X_ACCESS_SECRET = process.env.X_ACCESS_SECRET ?? "";
 
+if (!X_APP_KEY || !X_APP_SECRET) {
+  console.error("[Agent306] X_APP_KEY or X_APP_SECRET not set — X API will not work");
+}
 if (!X_ACCESS_TOKEN || !X_ACCESS_SECRET) {
-  console.warn("[Agent306] X_ACCESS_TOKEN or X_ACCESS_SECRET not set — posting disabled");
+  console.error("[Agent306] X_ACCESS_TOKEN or X_ACCESS_SECRET not set — posting to X disabled");
+} else {
+  console.log("[Agent306] X API credentials configured — posting enabled");
 }
 
 const xClient = new TwitterApi({
@@ -704,11 +709,12 @@ Return JSON: {"post": "..."}`
 
     // ── 5. Post to Farcaster ───────────────────────────────────────────────
     try {
-      if (isFarcasterEnabled()) {
+      if (isFarcasterEnabled() && postText.trim().length > 10) {
         const tweetUrl = lastTweetId ? `https://x.com/agent3zero6/status/${lastTweetId}` : undefined;
+        const channel = postText.match(/\bai\b|agent|llm|model/i) ? "ai" : undefined;
         const cast = await postCast({
           text: postText.trim().slice(0, 1024),
-          channel: "nft",
+          channel,
           embeds: tweetUrl ? [{ url: tweetUrl }] : undefined,
         });
         if (cast) {

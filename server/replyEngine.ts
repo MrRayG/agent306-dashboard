@@ -420,7 +420,7 @@ export async function runMidnightReplies(xWrite: any): Promise<void> {
 
       const posted = await xWrite.v2.tweet(payload);
       const tweetUrl = posted.data?.id
-        ? `https://x.com/AGENT_306/status/${posted.data.id}`
+        ? `https://x.com/agent3zero6/status/${posted.data.id}`
         : null;
 
       registerPost(`reply_${reply.username}`, tweetUrl, "reply_engine");

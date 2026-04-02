@@ -303,7 +303,7 @@ export async function postAcademyEpisode(xWrite: any): Promise<void> {
   try {
     const tweet = await xWrite.v2.tweet({ text: generated.post.trim() });
     const tweetId = tweet.data?.id;
-    tweetUrl = tweetId ? `https://x.com/AGENT_306/status/${tweetId}` : null;
+    tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
     console.log(`[Academy] EP${state.totalEpisodes + 1} posted — ${tweetUrl}`);
   } catch (e: any) {
     console.error("[Academy] Post failed:", e.message);

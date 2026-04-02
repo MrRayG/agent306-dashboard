@@ -1,8 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // 306 — FOLLOWING SYNC
-// @AGENT_306 follows = confirmed 306 community.
+// @agent3zero6 follows = confirmed 306 community.
 // Pulls the full following list every 6 hours and seeds the holder catalog.
-// Their tweets shape the narrative — every PFP holder is a node in the network.
+// Their tweets shape the narrative — every follower is a node in the network.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { TwitterApi } from "twitter-api-v2";
@@ -11,7 +11,8 @@ import { upsertHolder, getCatalog, type HolderEntry } from "./holderCatalog";
 
 import { dataPath } from "./dataPaths.js";
 const FOLLOWING_FILE  = dataPath("following.json");
-const AGENT_306_ID   = "2035048299808661507";
+// X user ID for @agent3zero6 — update via X_ACCOUNT_ID env var if needed
+const AGENT_306_ID   = process.env.X_ACCOUNT_ID ?? "2035048299808661507";
 
 // Interval: sync every 6 hours
 const SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000;

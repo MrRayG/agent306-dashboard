@@ -312,7 +312,7 @@ export async function postSignalBrief(xWrite: any, grokKey: string): Promise<str
   try {
     const tweet = await xWrite.v2.tweet({ text: generated.post.trim() });
     const tweetId = tweet.data?.id;
-    tweetUrl = tweetId ? `https://x.com/AGENT_306/status/${tweetId}` : null;
+    tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
     console.log(`[SignalBrief] Brief #${state.totalBriefs + 1} posted — ${tweetUrl}`);
   } catch (e: any) {
     console.error("[SignalBrief] Post failed:", e.message);
@@ -322,8 +322,8 @@ export async function postSignalBrief(xWrite: any, grokKey: string): Promise<str
   let castUrl: string | null = null;
   try {
     const { postCast, isFarcasterEnabled } = await import("./farcasterEngine.js");
-    if (isFarcasterEnabled()) {
-      const cast = await postCast({ text: generated.post.trim().slice(0, 1024), channel: "web3" });
+    if (isFarcasterEnabled() && generated.post.trim().length > 10) {
+      const cast = await postCast({ text: generated.post.trim().slice(0, 1024), channel: "ai" });
       if (cast) {
         castUrl = cast.url;
         const { registerPost: regPost } = await import("./postCoordinator.js");
