@@ -47,6 +47,7 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "episode-generation": "standard",
   "research-agenda-advance": "standard",
   "episode-reflection": "standard",
+  "x_search": "standard",
 
   "perspective-generation": "standard",
 
@@ -56,6 +57,7 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "podcast-from-thread": "premium",
   "synthesis-report": "premium",
   "article-draft": "premium",
+  "article_draft": "premium",
   "manuscript-generation": "premium",
   "skill-extraction": "premium",
   "daily-briefing": "premium",

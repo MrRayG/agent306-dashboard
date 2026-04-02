@@ -116,6 +116,7 @@ export default function CommandCenter() {
     race:          { endpoint: "/api/race/post"        },
     academy:       { endpoint: "/api/academy/post"     },
     signal_brief:  { endpoint: "/api/signal-brief/post" },
+    cyoa:          { endpoint: "/api/cyoa/post"         },
   };
 
   return (

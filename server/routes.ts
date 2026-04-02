@@ -17,8 +17,7 @@ import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./ll
 import { generateCYOAEpisode, postCYOAHook, resolveCYOA, getCYOAState, buildHookTweet, type CYOATrigger } from "./cyoaEngine";
 import { fetchReplies, getReplyState, formatRepliesForContext, getTopReplies, initReplyWatcher } from "./replyWatcher";
 import { getConversationMemoryState } from "./conversationMemory.js";
-// Leaderboard import removed (removed)
-// import { scheduleWeeklyLeaderboard, postWeeklyLeaderboard, fetchLiveLeaderboard } from "./leaderboardEngine";
+import { scheduleWeeklyLeaderboard, postWeeklyLeaderboard, fetchLiveLeaderboard } from "./leaderboardEngine";
 import { scheduleFollowingSync, syncFollowing, getFollowingState, buildFollowingQuery, getPfpHolderUsernames, getFollowingUsernames } from "./followingSync";
 import { generateBoost } from "./boostEngine";
 import { generateVoiceClip, getVoiceQuota, getClip, getRecentClips } from "./voiceEngine";
@@ -1707,7 +1706,12 @@ export function registerRoutes(httpServer: Server, app: Express) {
     postDailyNewsDispatch().catch(console.error);
   });
 
-  // Burns and Leaderboard route handlers removed (removed)
+  // ── Leaderboard (AI Rankings) ─────────────────────────────────────
+  app.post("/api/leaderboard/post", async (_req, res) => {
+    resetCooldown("leaderboard");
+    res.json({ ok: true, message: "Leaderboard triggered — posting in background" });
+    postWeeklyLeaderboard(xWrite, LLM_API_KEY || undefined).catch(console.error);
+  });
 
   // Community digest, pin-angle, pinned, and refresh-editorial endpoints removed (removed)
 
@@ -1871,6 +1875,21 @@ export function registerRoutes(httpServer: Server, app: Express) {
   // ── Research Briefs ─────────────────────────────────────────────────
   app.get("/api/cyoa/state", (_req, res) => {
     res.json(getCYOAState());
+  });
+
+  // One-click trigger: generate + post a Research Brief
+  app.post("/api/cyoa/post", async (_req, res) => {
+    const grokKey = LLM_API_KEY;
+    if (!grokKey) return res.status(500).json({ error: "No Grok key" });
+    resetCooldown("cyoa");
+    res.json({ ok: true, message: "Research Brief triggered — generating and posting in background" });
+    (async () => {
+      try {
+        const episode = await generateCYOAEpisode({ trigger: "pre_arena" as CYOATrigger, grokKey });
+        if (!episode) { console.error("[CYOA] Generation failed during trigger"); return; }
+        await postCYOAHook(episode.id, xWrite);
+      } catch (e: any) { console.error("[CYOA] Trigger error:", e.message); }
+    })();
   });
 
   // Generate a new CYOA episode
