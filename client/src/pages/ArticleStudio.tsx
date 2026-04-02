@@ -10,6 +10,7 @@ interface ArticlePreview {
   body:        string;
   sourceUrl:   string;
   sourceTitle: string;
+  imageUrl?:   string;
 }
 interface ArticleEntry {
   articleId:    string;
@@ -352,6 +353,21 @@ export default function ArticleStudio() {
                   {article.body.split(/\s+/).filter(Boolean).length} words
                 </span>
               </div>
+
+              {/* Article image from source */}
+              {article.imageUrl && (
+                <div style={{ marginBottom: "1.25rem" }}>
+                  <p style={{ ...mono, fontSize: "0.70rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase" as const, letterSpacing: "0.12em", margin: 0, marginBottom: "0.5rem" }}>Source Image</p>
+                  <div style={{ border: "1px solid rgba(227,229,228,0.14)", overflow: "hidden" }}>
+                    <img
+                      src={article.imageUrl}
+                      alt={article.sourceTitle}
+                      style={{ width: "100%", maxHeight: 400, objectFit: "cover", display: "block" }}
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* ── ACTION BUTTONS — top of review for visibility ── */}
               <div style={{

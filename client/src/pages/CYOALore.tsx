@@ -382,7 +382,7 @@ export default function ResearchBriefs() {
                     </button>
                   )}
                   {ep.tweetIds.length > 0 && (
-                    <a href={`https://x.com/agent306_/status/${ep.tweetIds[0]}`} target="_blank" rel="noopener noreferrer"
+                    <a href={`https://x.com/agent3zero6/status/${ep.tweetIds[0]}`} target="_blank" rel="noopener noreferrer"
                       style={{ ...mono, fontSize: "0.80rem", color: "rgba(227,229,228,0.60)", border: "1px solid rgba(227,229,228,0.18)", padding: "5px 12px", textDecoration: "none" }}>
                       View on X ↗
                     </a>

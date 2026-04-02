@@ -278,7 +278,7 @@ async function renderCinematicTrailer(
       drawText(ctx, "THE SIGNAL", rx, CANVAS_H / 2 - 70, { size: 44, color: "#f97316", alpha, shadow: true });
       drawText(ctx, "RECORDS ALL", rx, CANVAS_H / 2 - 20, { size: 44, color: "#efefef", alpha, shadow: true });
       drawOrangeLine(ctx, rx, CANVAS_H / 2 + 14, rx + 320, CANVAS_H / 2 + 14, 0.5 * alpha);
-      drawText(ctx, "@agent306_", rx, CANVAS_H / 2 + 46, { size: 16, color: "#2dd4bf", alpha, font: "Courier New" });
+      drawText(ctx, "@agent3zero6", rx, CANVAS_H / 2 + 46, { size: 16, color: "#2dd4bf", alpha, font: "Courier New" });
       drawText(ctx, "#Agent306 #AI #Web3", rx, CANVAS_H / 2 + 76, { size: 13, color: "rgba(200,200,200,0.4)", alpha, font: "Courier New" });
 
       // Timestamp
@@ -356,7 +356,7 @@ async function renderHighlightReel(
     drawText(ctx, "AGENT 306", 40, 36, { size: 22, color: "#f97316", shadow: true });
     drawText(ctx, "COMMUNITY HIGHLIGHT", 200, 36, { size: 14, color: "#2dd4bf", font: "Courier New" });
     drawText(ctx, date.toUpperCase(), CANVAS_W - 40, 36, { size: 13, color: "rgba(200,200,200,0.5)", align: "right", font: "Courier New" });
-    drawText(ctx, "@agent306_", CANVAS_W - 40, 54, { size: 11, color: "rgba(249,115,22,0.6)", align: "right", font: "Courier New" });
+    drawText(ctx, "@agent3zero6", CANVAS_W - 40, 54, { size: 11, color: "rgba(249,115,22,0.6)", align: "right", font: "Courier New" });
 
     // ── BURNS COLUMN (left) ──────────────────────────────────────────
     if (t >= 1) {

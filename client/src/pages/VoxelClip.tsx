@@ -346,7 +346,7 @@ function renderFrame(
     ctx.fillStyle = "#e3e5e4"; ctx.font = "bold 42px 'Space Grotesk'";
     ctx.fillText("RECORDS ALL", W/2, H/2 + 28);
     ctx.fillStyle = "#2dd4bf"; ctx.font = "13px 'Courier New'";
-    ctx.fillText("@agent306_  ·  #Agent306  #Web3  #AI", W/2, H/2 + 72);
+    ctx.fillText("@agent3zero6  ·  #Agent306  #Web3  #AI", W/2, H/2 + 72);
   }
 
   ctx.restore();
@@ -379,7 +379,7 @@ export default function VoxelClip() {
   const [authUrl, setAuthUrl] = useState<string | null>(null);
   // OAuth 1.0a credentials are verified — default to connected, confirm live if API reachable
   const [xVerified, setXVerified] = useState<{ ok: boolean; username?: string }>(
-    { ok: true, username: "agent306_" }
+    { ok: true, username: "agent3zero6" }
   );
 
   const { data: stats } = useQuery<any>({
@@ -418,7 +418,7 @@ export default function VoxelClip() {
               setOauth2Ready(true);
               setAuthUrl(null);
               clearInterval(poll);
-              toast({ title: "@agent306_ authorized!", description: "Ready to post to X." });
+              toast({ title: "@agent3zero6 authorized!", description: "Ready to post to X." });
             }
           } catch {}
         }, 2500);

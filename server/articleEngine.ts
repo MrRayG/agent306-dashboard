@@ -203,20 +203,29 @@ function parseDiscoveryJSON(rawText: string): {
 }
 
 // ── Step 2: Fetch full article content for deep reading ─────────────────────
-async function fetchArticleContent(url: string): Promise<{ text: string; title: string }> {
+async function fetchArticleContent(url: string): Promise<{ text: string; title: string; imageUrl: string }> {
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; Agent306Bot/1.0)", "Accept": "text/html,application/xhtml+xml" },
       signal: AbortSignal.timeout(15000),
       redirect: "follow",
     });
-    if (!res.ok) return { text: "", title: "" };
+    if (!res.ok) return { text: "", title: "", imageUrl: "" };
     const html = await res.text();
 
     // Extract title from raw HTML BEFORE stripping tags
     const titleMatch = html.match(/<title[^>]*>([^<]{3,200})<\/title>/i);
     const ogTitleMatch = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']{3,200})["']/i);
     const title = (ogTitleMatch?.[1] ?? titleMatch?.[1] ?? "").trim();
+
+    // Extract og:image (try both attribute orderings)
+    const ogImageMatch =
+      html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']{5,500})["']/i) ??
+      html.match(/<meta[^>]*content=["']([^"']{5,500})["'][^>]*property=["']og:image["']/i);
+    const twitterImageMatch =
+      html.match(/<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"']{5,500})["']/i) ??
+      html.match(/<meta[^>]*content=["']([^"']{5,500})["'][^>]*name=["']twitter:image["']/i);
+    const imageUrl = (ogImageMatch?.[1] ?? twitterImageMatch?.[1] ?? "").trim();
 
     const clean = html
       .replace(/<script[\s\S]*?<\/script>/gi, "")
@@ -228,9 +237,9 @@ async function fetchArticleContent(url: string): Promise<{ text: string; title: 
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, 8000); // more content for deep reading
-    return { text: clean, title };
+    return { text: clean, title, imageUrl };
   } catch {
-    return { text: "", title: "" };
+    return { text: "", title: "", imageUrl: "" };
   }
 }
 
@@ -569,13 +578,13 @@ export async function runWeeklyDeepRead(
 export async function previewDeepRead(
   apiKey: string,
   overrideUrl?: string  // optional: skip discovery, use this URL directly
-): Promise<{ headline: string; teaser: string; body: string; sourceUrl: string; sourceTitle: string }> {
+): Promise<{ headline: string; teaser: string; body: string; sourceUrl: string; sourceTitle: string; imageUrl: string }> {
   let articleInfo: NonNullable<Awaited<ReturnType<typeof discoverArticle>>>;
 
   if (overrideUrl) {
     // Direct URL mode — skip discovery, fetch and analyze the provided URL
     console.log(`[ArticleEngine] Direct URL mode: ${overrideUrl}`);
-    const { text: pageText, title: pageTitle } = await fetchArticleContent(overrideUrl);
+    const { text: pageText, title: pageTitle, imageUrl } = await fetchArticleContent(overrideUrl);
     // Build a minimal articleInfo from the URL and fetched page data
     let hostname = overrideUrl;
     try { hostname = new URL(overrideUrl).hostname.replace("www.", ""); } catch {}
@@ -589,13 +598,13 @@ export async function previewDeepRead(
     const { headline, teaser, body } = await generateDeepReadArticle(
       articleInfo, pageText, apiKey
     );
-    return { headline, teaser, body, sourceUrl: overrideUrl, sourceTitle: articleInfo.title };
+    return { headline, teaser, body, sourceUrl: overrideUrl, sourceTitle: articleInfo.title, imageUrl };
   }
 
   // Auto-discovery mode
   articleInfo = await discoverArticle(apiKey) as NonNullable<Awaited<ReturnType<typeof discoverArticle>>>;
 
-  const { text: articleContent } = await fetchArticleContent(articleInfo.url);
+  const { text: articleContent, imageUrl } = await fetchArticleContent(articleInfo.url);
   const { headline, teaser, body } = await generateDeepReadArticle(
     articleInfo, articleContent, apiKey
   );
@@ -606,6 +615,7 @@ export async function previewDeepRead(
     body,
     sourceUrl:   articleInfo.url,
     sourceTitle: articleInfo.title,
+    imageUrl,
   };
 }
 

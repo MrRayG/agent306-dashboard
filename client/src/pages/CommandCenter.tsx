@@ -12,75 +12,51 @@ function timeAgo(iso: string | null): string {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-function timeUntil(iso: string | null): string {
-  if (!iso) return "—";
-  const diff = Math.floor((new Date(iso).getTime() - Date.now()) / 1000);
-  if (diff <= 0) return "READY";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m`;
-  return `${Math.floor(diff / 86400)}d ${Math.floor((diff % 86400) / 3600)}h`;
-}
+const mono = { fontFamily: "'Courier New', monospace" } as const;
+const pixel = { fontFamily: "'Courier New', monospace", textTransform: "uppercase" as const, letterSpacing: "0.15em" } as const;
 
-const ENGINE_LABELS: Record<string, { label: string; color: string; schedule: string; show: string }> = {
-  episode:       { label: "Episode",        color: "#f97316", schedule: "Every 12h",          show: "[306 STORIES]"    },
-  news_dispatch: { label: "News Dispatch",  color: "#4ade80", schedule: "Daily 8am ET",        show: "[306 NEWS]"       },
-  academy:       { label: "Academy",        color: "#60a5fa", schedule: "Tue/Thu/Sat 10am ET", show: "[306 ACADEMY]"   },
-  leaderboard:   { label: "AI Rankings",     color: "#efefef", schedule: "Monday 9am ET",        show: "[306 RANKINGS]"      },
-  spotlight:     { label: "Spotlight",      color: "#fb923c", schedule: "Sunday 11am ET",      show: "[306 SPOTLIGHT]" },
-  race:          { label: "AI Roundup",      color: "#a78bfa", schedule: "Sunday 12pm ET",      show: "[306 ROUNDUP]"   },
-  cyoa:          { label: "Research Brief",  color: "#2dd4bf", schedule: "Sunday 10am ET",      show: "[306 RESEARCH]"  },
-  signal_brief:  { label: "Signal Brief",   color: "#fbbf24", schedule: "Mon/Wed/Fri 12pm ET", show: "[306 SIGNAL]"  },
-};
+// ── Content type definitions ────────────────────────────────────────────────
+const CONTENT_TYPES = [
+  {
+    id: "signal_brief",
+    label: "SIGNAL Brief",
+    color: "#fbbf24",
+    tag: "[306 SIGNAL]",
+    description: "A concise daily intelligence brief summarizing the most important AI/crypto signals and news.",
+    schedule: "Mon / Wed / Fri at 12pm ET",
+    endpoint: "/api/signal-brief/post",
+  },
+  {
+    id: "cyoa",
+    label: "Research Brief",
+    color: "#2dd4bf",
+    tag: "[306 RESEARCH]",
+    description: "A deeper analytical piece on a specific AI or crypto research topic Agent 306 has been investigating.",
+    schedule: "Sunday at 10am ET",
+    endpoint: "/api/cyoa/post",
+  },
+  {
+    id: "race",
+    label: "AI Roundup",
+    color: "#a78bfa",
+    tag: "[306 ROUNDUP]",
+    description: "A weekly roundup of the biggest AI developments, model releases, and industry moves.",
+    schedule: "Sunday at 12pm ET",
+    endpoint: "/api/race/post",
+  },
+  {
+    id: "news_dispatch",
+    label: "News Dispatch",
+    color: "#4ade80",
+    tag: "[306 NEWS]",
+    description: "Breaking or timely news coverage on a specific AI/crypto event or announcement.",
+    schedule: "Daily at 8am ET",
+    endpoint: "/api/news/dispatch",
+  },
+] as const;
 
-// Generate the 7-day programming calendar
-function buildWeekCalendar(): Array<{ day: string; date: string; shows: Array<{ show: string; time: string; color: string; engine: string }> }> {
-  const today = new Date();
-  const days = [];
-  const dayNames = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-  const schedule: Record<number, Array<{ show: string; time: string; color: string; engine: string }>> = {
-    0: [ // Sunday
-      { show: "[306 RESEARCH]",  time: "10am ET", color: "#2dd4bf", engine: "cyoa"      },
-      { show: "[306 SPOTLIGHT]", time: "11am ET", color: "#fb923c", engine: "spotlight" },
-      { show: "[306 ROUNDUP]",   time: "12pm ET", color: "#a78bfa", engine: "race"      },
-    ],
-    1: [ // Monday
-      { show: "[306 RANKINGS]",      time: "9am ET",  color: "#efefef", engine: "leaderboard" },
-      { show: "[306 SIGNAL]",    time: "12pm ET", color: "#fbbf24", engine: "signal_brief" },
-    ],
-    2: [ // Tuesday
-      { show: "[306 ACADEMY]",   time: "10am ET", color: "#60a5fa", engine: "academy" },
-    ],
-    3: [ // Wednesday
-      { show: "[306 SIGNAL]",    time: "12pm ET", color: "#fbbf24", engine: "signal_brief" },
-    ],
-    4: [ // Thursday
-      { show: "[306 ACADEMY]",   time: "10am ET", color: "#60a5fa", engine: "academy" },
-    ],
-    5: [ // Friday
-      { show: "[306 SIGNAL]",    time: "12pm ET", color: "#fbbf24", engine: "signal_brief" },
-    ],
-    6: [ // Saturday
-      { show: "[306 ACADEMY]",   time: "10am ET", color: "#60a5fa", engine: "academy" },
-    ],
-  };
-  // Daily shows appear every day
-  const daily = [
-    { show: "[306 NEWS]",    time: "8am ET",  color: "#4ade80", engine: "news_dispatch" },
-    { show: "[306 STORIES]", time: "12h cycle", color: "#f97316", engine: "episode"     },
-  ];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() + i);
-    const dow = d.getUTCDay();
-    const dayShows = [...daily, ...(schedule[dow] || [])];
-    days.push({
-      day: dayNames[dow],
-      date: `${d.getMonth()+1}/${d.getDate()}`,
-      shows: dayShows,
-    });
-  }
-  return days;
-}
+const X_ACCOUNT = "@agent3zero6";
+const FC_ACCOUNT = "@ntvagent306";
 
 export default function CommandCenter() {
   const { toast } = useToast();
@@ -90,17 +66,13 @@ export default function CommandCenter() {
     queryKey: ["/api/house"],
   });
 
-  const { data: pollerStatus } = useQuery<any>({
-    queryKey: ["/api/poller/status"],
-  });
-
   const coord = house?.coordinator;
 
   async function trigger(endpoint: string, label: string) {
     setTriggering(label);
     try {
       await apiRequest("POST", endpoint, {});
-      toast({ title: `${label} triggered`, description: "Check X in ~30 seconds" });
+      toast({ title: `${label} triggered`, description: "Generating and posting to X + Farcaster..." });
       setTimeout(() => refetch(), 5000);
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
@@ -108,29 +80,23 @@ export default function CommandCenter() {
     setTriggering(null);
   }
 
-  const TRIGGERS: Record<string, { endpoint: string }> = {
-    episode:       { endpoint: "/api/poller/run"        },
-    news_dispatch: { endpoint: "/api/news/dispatch"    },
-    leaderboard:   { endpoint: "/api/leaderboard/post" },
-    spotlight:     { endpoint: "/api/spotlight/post"   },
-    race:          { endpoint: "/api/race/post"        },
-    academy:       { endpoint: "/api/academy/post"     },
-    signal_brief:  { endpoint: "/api/signal-brief/post" },
-    cyoa:          { endpoint: "/api/cyoa/post"         },
-  };
+  // Find engine state from coordinator
+  function getEngineState(engineId: string) {
+    return coord?.engines?.find((e: any) => e.engine === engineId);
+  }
 
   return (
-    <div style={{ padding: "24px", maxWidth: "1000px", margin: "0 auto" }}>
+    <div style={{ padding: "24px", maxWidth: "900px", margin: "0 auto" }}>
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
 
       {/* Header */}
       <div style={{ marginBottom: "28px" }}>
-        <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.2em", marginBottom: "4px" }}>AGENT 306</div>
+        <div style={{ ...pixel, fontSize: "0.68rem", color: "rgba(227,229,228,0.60)", marginBottom: "4px" }}>AGENT 306</div>
         <h1 style={{ fontSize: "26px", fontWeight: 800, color: "#efefef", margin: "0 0 6px", letterSpacing: "-0.02em" }}>
           Command <span style={{ color: "#f97316" }}>Center</span>
         </h1>
-        <p style={{ fontSize: "15px", color: "rgba(227,229,228,0.68)", margin: 0 }}>
-          Every engine. Every schedule. One view. Nothing posts without going through here.
+        <p style={{ ...mono, fontSize: "0.88rem", color: "rgba(227,229,228,0.68)", margin: 0 }}>
+          Content engines for X ({X_ACCOUNT}) and Farcaster ({FC_ACCOUNT}). Generate, preview, and post.
         </p>
       </div>
 
@@ -138,7 +104,7 @@ export default function CommandCenter() {
       {coord?.activeEngine && (
         <div style={{ background: "rgba(249,115,22,0.1)", border: "1px solid rgba(249,115,22,0.3)", padding: "10px 16px", marginBottom: "8px", display: "flex", alignItems: "center", gap: "10px" }}>
           <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#f97316", animation: "pulse 1s infinite" }} />
-          <span style={{ fontSize: "14px", color: "#f97316", fontFamily: "monospace" }}>
+          <span style={{ ...mono, fontSize: "0.83rem", color: "#f97316" }}>
             {coord.activeEngine.toUpperCase()} IS CURRENTLY POSTING (X)
           </span>
         </div>
@@ -146,165 +112,135 @@ export default function CommandCenter() {
       {coord?.activeEngineFarcaster && (
         <div style={{ background: "rgba(138,99,210,0.1)", border: "1px solid rgba(138,99,210,0.3)", padding: "10px 16px", marginBottom: "8px", display: "flex", alignItems: "center", gap: "10px" }}>
           <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#8a63d2", animation: "pulse 1s infinite" }} />
-          <span style={{ fontSize: "14px", color: "#8a63d2", fontFamily: "monospace" }}>
+          <span style={{ ...mono, fontSize: "0.83rem", color: "#8a63d2" }}>
             {coord.activeEngineFarcaster.toUpperCase()} IS CURRENTLY POSTING (FARCASTER)
           </span>
         </div>
       )}
 
-      {/* Engine schedule grid */}
-      <div style={{ marginBottom: "24px" }}>
-        <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.15em", marginBottom: "10px" }}>POSTING SCHEDULE</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "rgba(227,229,228,0.12)" }}>
-          {coord?.engines?.map((e: any) => {
-            const meta = ENGINE_LABELS[e.engine] ?? { label: e.engine, color: "#efefef", schedule: "—" };
-            const trigger_info = TRIGGERS[e.engine];
+      {/* Content type cards */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "28px" }}>
+        {CONTENT_TYPES.map(ct => {
+          const engineState = getEngineState(ct.id);
+          const isReady = engineState?.isReady ?? true;
+          const lastPosted = engineState?.lastPostedAt ?? null;
+          const lastTweetUrl = engineState?.lastTweetUrl ?? null;
+          const lastCastUrl = engineState?.lastCastUrl ?? null;
+          const isTriggering = triggering === ct.label;
 
-            return (
-              <div key={e.engine} style={{
-                background: "#141516",
-                padding: "14px 20px",
-                display: "flex",
-                alignItems: "center",
-                gap: "16px",
-              }}>
-                {/* Status dot */}
-                <div style={{
-                  width: 8, height: 8, borderRadius: "50%",
-                  background: e.isReady ? "#4ade80" : "rgba(227,229,228,0.35)",
-                  flexShrink: 0,
-                }} />
+          return (
+            <div key={ct.id} style={{
+              border: `1px solid ${ct.color}25`,
+              background: "#141516",
+              padding: "0",
+              overflow: "hidden",
+            }}>
+              {/* Top accent bar */}
+              <div style={{ height: 3, background: ct.color }} />
 
-                {/* Engine name + schedule */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: "15px", fontWeight: 700, color: meta.color }}>{meta.label}</div>
-                  <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace" }}>{meta.schedule}</div>
-                </div>
+              <div style={{ padding: "20px 24px" }}>
+                {/* Header row */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
+                      <span style={{ ...mono, fontSize: "0.70rem", color: ct.color, background: `${ct.color}15`, padding: "2px 8px" }}>{ct.tag}</span>
+                      {isReady && <span style={{ ...mono, fontSize: "0.63rem", color: "#4ade80" }}>READY</span>}
+                    </div>
+                    <h2 style={{ ...mono, fontSize: "1.10rem", fontWeight: 700, color: ct.color, margin: "0 0 4px" }}>{ct.label}</h2>
+                    <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", margin: 0, lineHeight: 1.6, maxWidth: 550 }}>
+                      {ct.description}
+                    </p>
+                  </div>
 
-                {/* Last posted */}
-                <div style={{ textAlign: "right", minWidth: "100px" }}>
-                  <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace" }}>LAST POST</div>
-                  <div style={{ fontSize: "14px", color: "#efefef", fontFamily: "monospace" }}>{timeAgo(e.lastPostedAt)}</div>
-                </div>
-
-                {/* Next allowed */}
-                <div style={{ textAlign: "right", minWidth: "80px" }}>
-                  <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace" }}>NEXT</div>
-                  <div style={{
-                    fontSize: "14px",
-                    color: e.isReady ? "#4ade80" : "rgba(227,229,228,0.68)",
-                    fontFamily: "monospace",
-                    fontWeight: e.isReady ? 700 : 400,
-                  }}>
-                    {e.isReady ? "READY" : timeUntil(e.nextAllowedAt)}
+                  {/* Status dot */}
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{
+                      width: 10, height: 10, borderRadius: "50%",
+                      background: isReady ? "#4ade80" : "rgba(227,229,228,0.35)",
+                      marginLeft: "auto", marginBottom: 6,
+                    }} />
+                    <div style={{ ...mono, fontSize: "0.63rem", color: "rgba(227,229,228,0.45)" }}>
+                      {lastPosted ? `Last: ${timeAgo(lastPosted)}` : "No posts yet"}
+                    </div>
                   </div>
                 </div>
 
-                {/* Last post links */}
-                <div style={{ display: "flex", gap: 6, minWidth: "60px" }}>
-                  {e.lastTweetUrl && (
-                    <a href={e.lastTweetUrl} target="_blank" rel="noopener noreferrer"
-                      style={{ fontSize: "13px", color: "#a78bfa", fontFamily: "monospace", textDecoration: "none" }}>
-                      X ↗
-                    </a>
-                  )}
-                  {e.lastCastUrl && (
-                    <a href={e.lastCastUrl} target="_blank" rel="noopener noreferrer"
-                      style={{ fontSize: "13px", color: "#8a63d2", fontFamily: "monospace", textDecoration: "none" }}>
-                      FC ↗
-                    </a>
-                  )}
+                {/* Platforms + Schedule */}
+                <div style={{ display: "flex", gap: "16px", alignItems: "center", marginBottom: "16px", flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <span style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.40)" }}>Posts to:</span>
+                    <span style={{ ...mono, fontSize: "0.68rem", color: "#efefef", background: "rgba(227,229,228,0.08)", padding: "2px 8px" }}>X {X_ACCOUNT}</span>
+                    <span style={{ ...mono, fontSize: "0.68rem", color: "#8a63d2", background: "rgba(138,99,210,0.08)", padding: "2px 8px" }}>Farcaster {FC_ACCOUNT}</span>
+                  </div>
+                  <span style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.35)" }}>{ct.schedule}</span>
                 </div>
 
-                {/* Manual trigger */}
-                {trigger_info && (
+                {/* Actions row */}
+                <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
                   <button
-                    onClick={() => trigger(trigger_info.endpoint, meta.label)}
-                    disabled={triggering === meta.label}
+                    onClick={() => trigger(ct.endpoint, ct.label)}
+                    disabled={isTriggering}
                     style={{
-                      background: "transparent",
-                      border: `1px solid ${e.isReady ? meta.color : "rgba(227,229,228,0.22)"}`,
-                      color: e.isReady ? meta.color : "rgba(227,229,228,0.48)",
-                      padding: "4px 12px",
-                      fontFamily: "monospace",
-                      fontSize: "13px",
-                      cursor: triggering === meta.label ? "not-allowed" : "pointer",
-                      minWidth: "70px",
+                      background: isTriggering ? `${ct.color}25` : ct.color,
+                      color: isTriggering ? `${ct.color}80` : "#1a1b1c",
+                      border: "none", ...mono, fontSize: "0.83rem", fontWeight: 700,
+                      padding: "8px 20px", cursor: isTriggering ? "not-allowed" : "pointer",
+                      textTransform: "uppercase" as const, letterSpacing: "0.06em",
                     }}
                   >
-                    {triggering === meta.label ? "..." : "TRIGGER"}
+                    {isTriggering ? "Generating..." : "Generate & Post"}
                   </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
 
-      {/* 7-Day Programming Calendar */}
-      <div style={{ marginBottom: "24px" }}>
-        <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.15em", marginBottom: "10px" }}>THIS WEEK ON 306</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "1px", background: "rgba(227,229,228,0.12)" }}>
-          {buildWeekCalendar().map((day, i) => (
-            <div key={i} style={{
-              background: i === 0 ? "rgba(249,115,22,0.06)" : "#141516",
-              padding: "10px 8px",
-              minHeight: "100px",
-              borderTop: i === 0 ? "2px solid #f97316" : "2px solid transparent",
-            }}>
-              <div style={{ fontSize: "13px", fontWeight: 700, color: i === 0 ? "#f97316" : "rgba(227,229,228,0.68)", fontFamily: "monospace", marginBottom: "2px" }}>{day.day}</div>
-              <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.40)", fontFamily: "monospace", marginBottom: "8px" }}>{day.date}</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                {day.shows.map((s, j) => (
-                  <div key={j} style={{
-                    fontSize: "11px",
-                    color: s.color,
-                    fontFamily: "monospace",
-                    background: `${s.color}15`,
-                    padding: "2px 5px",
-                    lineHeight: 1.4,
-                  }}>
-                    <div style={{ opacity: 0.6 }}>{s.time}</div>
-                    <div>{s.show}</div>
-                  </div>
-                ))}
+                  {/* Recent post links */}
+                  {lastTweetUrl && (
+                    <a href={lastTweetUrl} target="_blank" rel="noopener noreferrer"
+                      style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.55)", textDecoration: "none", border: "1px solid rgba(227,229,228,0.18)", padding: "6px 12px" }}>
+                      View on X
+                    </a>
+                  )}
+                  {lastCastUrl && (
+                    <a href={lastCastUrl} target="_blank" rel="noopener noreferrer"
+                      style={{ ...mono, fontSize: "0.73rem", color: "#8a63d2", textDecoration: "none", border: "1px solid rgba(138,99,210,0.18)", padding: "6px 12px" }}>
+                      View on Farcaster
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
-          ))}
-        </div>
+          );
+        })}
       </div>
 
       {/* Recent posts feed */}
-      <div>
-        <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.15em", marginBottom: "10px" }}>
+      <div style={{ marginBottom: "20px" }}>
+        <div style={{ ...pixel, fontSize: "0.68rem", color: "rgba(227,229,228,0.60)", marginBottom: "10px" }}>
           RECENT POSTS — {coord?.totalPosts ?? 0} total
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "rgba(227,229,228,0.12)" }}>
-          {coord?.recentPosts?.length > 0 ? coord.recentPosts.map((p: any, i: number) => (
+          {coord?.recentPosts?.length > 0 ? coord.recentPosts
+            .filter((p: any) => ["signal_brief", "cyoa", "race", "news_dispatch"].includes(p.key || p.engine))
+            .map((p: any, i: number) => (
             <div key={i} style={{ background: "#141516", padding: "10px 20px", display: "flex", alignItems: "center", gap: "16px" }}>
-              <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", minWidth: "80px" }}>
+              <div style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", minWidth: "80px" }}>
                 {timeAgo(p.postedAt)}
               </div>
-              <div style={{ fontSize: "14px", color: "#efefef", fontFamily: "monospace", flex: 1 }}>
+              <div style={{ ...mono, fontSize: "0.83rem", color: "#efefef", flex: 1 }}>
                 {p.engine.toUpperCase()}
               </div>
-              <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace" }}>
-                {p.key}
-              </div>
               {p.platform && (
-                <span style={{ fontSize: "12px", color: p.platform === "farcaster" ? "#8a63d2" : "rgba(227,229,228,0.48)", fontFamily: "monospace", textTransform: "uppercase" }}>
+                <span style={{ ...mono, fontSize: "0.73rem", color: p.platform === "farcaster" ? "#8a63d2" : "rgba(227,229,228,0.48)", textTransform: "uppercase" as const }}>
                   {p.platform === "farcaster" ? "FC" : "X"}
                 </span>
               )}
               {(p.tweetUrl || p.postUrl) && (
                 <a href={p.postUrl || p.tweetUrl} target="_blank" rel="noopener noreferrer"
-                  style={{ fontSize: "13px", color: p.platform === "farcaster" ? "#8a63d2" : "#a78bfa", fontFamily: "monospace", textDecoration: "none" }}>
-                  ↗ view
+                  style={{ ...mono, fontSize: "0.78rem", color: p.platform === "farcaster" ? "#8a63d2" : "#a78bfa", textDecoration: "none" }}>
+                  view
                 </a>
               )}
             </div>
           )) : (
-            <div style={{ background: "#141516", padding: "16px 20px", fontSize: "14px", color: "rgba(227,229,228,0.48)", fontFamily: "monospace" }}>
+            <div style={{ background: "#141516", padding: "16px 20px", ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.48)" }}>
               No posts recorded yet — history builds after first post
             </div>
           )}
@@ -312,32 +248,22 @@ export default function CommandCenter() {
       </div>
 
       {/* Server status */}
-      <div style={{ marginTop: "16px", padding: "12px 20px", background: "#141516", border: "1px solid rgba(227,229,228,0.12)", display: "flex", gap: "32px" }}>
+      <div style={{ padding: "12px 20px", background: "#141516", border: "1px solid rgba(227,229,228,0.12)", display: "flex", gap: "32px" }}>
         <div>
-          <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace" }}>SERVER</div>
-          <div style={{ fontSize: "14px", color: "#4ade80", fontFamily: "monospace" }}>● RAILWAY ONLINE</div>
+          <div style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.60)" }}>SERVER</div>
+          <div style={{ ...mono, fontSize: "0.83rem", color: "#4ade80" }}>RAILWAY ONLINE</div>
         </div>
         <div>
-          <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace" }}>LAST EPISODE</div>
-          <div style={{ fontSize: "14px", color: "#efefef", fontFamily: "monospace" }}>
-            {pollerStatus?.lastEpisode ? `EP${pollerStatus.lastEpisode}` : "—"}
-          </div>
+          <div style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.60)" }}>X ACCOUNT</div>
+          <div style={{ ...mono, fontSize: "0.83rem", color: "#efefef" }}>{X_ACCOUNT}</div>
         </div>
         <div>
-          <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace" }}>NEXT EPISODE</div>
-          <div style={{ fontSize: "14px", color: "#efefef", fontFamily: "monospace" }}>
-            {timeUntil(pollerStatus?.nextRun)}
-          </div>
-        </div>
-        <div>
-          <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace" }}>ERRORS</div>
-          <div style={{ fontSize: "14px", color: pollerStatus?.lastError ? "#f87171" : "#4ade80", fontFamily: "monospace" }}>
-            {pollerStatus?.lastError ? "⚠ ERROR" : "● NONE"}
-          </div>
+          <div style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.60)" }}>FARCASTER</div>
+          <div style={{ ...mono, fontSize: "0.83rem", color: "#8a63d2" }}>{FC_ACCOUNT}</div>
         </div>
       </div>
 
-      <div style={{ marginTop: "12px", fontSize: "13px", color: "rgba(227,229,228,0.35)", fontFamily: "monospace", textAlign: "center" }}>
+      <div style={{ marginTop: "12px", ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.35)", textAlign: "center" as const }}>
         All engines share the same disk-based coordinator — no duplicates across Railway restarts
       </div>
     </div>

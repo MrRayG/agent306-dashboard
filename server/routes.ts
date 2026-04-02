@@ -483,7 +483,7 @@ Respond as JSON only: { "score": number, "reason": "brief reason", "rewrite": "i
         ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),
       });
       openerTweetId = openerTweet.data?.id;
-      tweetUrl = openerTweetId ? `https://x.com/agent306_ai/status/${openerTweetId}` : `https://x.com/agent306_ai`;
+      tweetUrl = openerTweetId ? `https://x.com/agent3zero6/status/${openerTweetId}` : `https://x.com/agent3zero6`;
       storage.updateEpisodeStatus(episode.id, "posted", tweetUrl);
       pollerStatus.lastTweetUrl = tweetUrl;
       console.log(`[Agent306] EP${epNum} opener posted${xMediaId ? " with image" : ""}: ${tweetUrl}`);
@@ -692,12 +692,12 @@ Return JSON: {"post": "..."}`
       console.error(`[Agent306:News] Post failed:`, e.message);
     }
 
-    registerPost("news_dispatch", lastTweetId ? `https://x.com/agent306_ai/status/${lastTweetId}` : null, "news_dispatch");
+    registerPost("news_dispatch", lastTweetId ? `https://x.com/agent3zero6/status/${lastTweetId}` : null, "news_dispatch");
 
     // ── 5. Post to Farcaster ───────────────────────────────────────────────
     try {
       if (isFarcasterEnabled()) {
-        const tweetUrl = lastTweetId ? `https://x.com/agent306_ai/status/${lastTweetId}` : undefined;
+        const tweetUrl = lastTweetId ? `https://x.com/agent3zero6/status/${lastTweetId}` : undefined;
         const cast = await postCast({
           text: postText.trim().slice(0, 1024),
           channel: "nft",
@@ -986,7 +986,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       const tweet = await xWrite.v2.tweet(text);
       tweetId = tweet.data?.id;
 
-      const tweetUrl = tweetId ? `https://x.com/agent306_ai/status/${tweetId}` : undefined;
+      const tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : undefined;
       if (episodeId) storage.updateEpisodeStatus(Number(episodeId), "posted", tweetUrl);
       res.json({ ok: true, tweetId, tweetUrl });
     } catch (e: any) {
@@ -1147,7 +1147,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
         ...(mediaId ? { media: { media_ids: [mediaId] } } : {}),
       });
       const tweetId = tweet.data?.id;
-      const tweetUrl = tweetId ? `https://x.com/agent306_ai/status/${tweetId}` : undefined;
+      const tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : undefined;
       res.json({ ok: true, tweetId, tweetUrl, mediaId });
     } catch (e: any) {
       console.error("[Agent306] post-with-media error:", e.message);
@@ -1803,7 +1803,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       try {
         const result = await xWrite.v2.tweet({ text: tweet.trim() });
         const tweetId = result.data?.id;
-        tweetUrl = tweetId ? `https://x.com/agent306_ai/status/${tweetId}` : null;
+        tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
       } catch (xErr: any) {
         console.error("[CommunityBoost] X post failed:", xErr.message);
       }
@@ -1943,7 +1943,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       fs.writeFileSync(dataPath("cyoa_state.json"), JSON.stringify(state, null, 2));
 
       console.log(`[CYOA] Hook posted with image — ${tweetId}`);
-      res.json({ ok: true, tweetId, url: `https://x.com/agent306_ai/status/${tweetId}` });
+      res.json({ ok: true, tweetId, url: `https://x.com/agent3zero6/status/${tweetId}` });
     } catch (e: any) {
       console.error("[CYOA] Post error:", e.message);
       res.status(500).json({ error: e.message });
