@@ -128,13 +128,28 @@ if (!X_ACCESS_TOKEN || !X_ACCESS_SECRET) {
   console.log("[Agent306] X API credentials configured — posting enabled");
 }
 
-const xClient = new TwitterApi({
-  appKey:       X_APP_KEY,
-  appSecret:    X_APP_SECRET,
-  accessToken:  X_ACCESS_TOKEN,
-  accessSecret: X_ACCESS_SECRET,
-});
-const xWrite = xClient.readWrite;
+// Guard: TwitterApi may throw on empty strings — wrap in try/catch so server still boots
+let xClient: TwitterApi;
+let xWrite: any;
+try {
+  if (X_APP_KEY && X_APP_SECRET && X_ACCESS_TOKEN && X_ACCESS_SECRET) {
+    xClient = new TwitterApi({
+      appKey:       X_APP_KEY,
+      appSecret:    X_APP_SECRET,
+      accessToken:  X_ACCESS_TOKEN,
+      accessSecret: X_ACCESS_SECRET,
+    });
+    xWrite = xClient.readWrite;
+  } else {
+    console.warn("[Agent306] X API keys incomplete — creating dummy client (posts will fail gracefully)");
+    xClient = new TwitterApi({ appKey: "x", appSecret: "x", accessToken: "x", accessSecret: "x" });
+    xWrite = xClient.readWrite;
+  }
+} catch (e: any) {
+  console.error("[Agent306] TwitterApi init failed:", e.message, "— creating dummy client");
+  xClient = new TwitterApi({ appKey: "x", appSecret: "x", accessToken: "x", accessSecret: "x" });
+  xWrite = xClient.readWrite;
+}
 
 // fetchOnChainAPI removed
 // async function fetchOnChainAPI(path: string) {
