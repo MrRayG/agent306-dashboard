@@ -82,7 +82,7 @@ async function fetchFreshSignals(grokKey: string): Promise<{
   const defaultSignals = {
     aiSignal:       "Agentic AI market projected to hit $317B by 2035. OKX and Coinbase shipped agentic wallets in early 2026. Every major DEX now has agent toolkits. The infrastructure race is not theoretical — it is here.",
     web3Signal:     "NFT market active wallets up 80% YoY to 505K in Jan 2026. Volume at $720M/month. 62% of 2021-era PFP projects dormant. The market shed hype and gained structure. Utility wins.",
-    wildcardSignal: "Goldman Sachs CIO: 2025 was the biggest year in 40 years of technology. 2026 will be bigger. The shift from AI answering questions to AI taking actions is the Netscape moment. 306 holders were early.",
+    wildcardSignal: "Goldman Sachs CIO: 2025 was the biggest year in 40 years of technology. 2026 will be bigger. The shift from AI answering questions to AI taking actions is the Netscape moment for our generation.",
   };
 
   if (!grokKey) return defaultSignals;

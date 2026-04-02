@@ -165,15 +165,6 @@
       "learnedAt": "2026-03-27T22:36:11.674Z"
     },
     {
-      "title": "Conclusion: Longitudinal Study on AI Identity NFTs and Authenticity Perc",
-      "summary": "The adoption of AI identity NFTs shows potential to enhance user perceptions of authenticity and individuality in digital interactions over a 5-year p",
-      "category": "research",
-      "source": "https://nftplazas.com/what-are-nft-marketplace-aggregators/",
-      "weight": 9,
-      "id": "k_1774650972501",
-      "learnedAt": "2026-03-27T22:36:12.501Z"
-    },
-    {
       "title": "Conclusion: Long-Term Impact of Structured Workshops on Web3-AI Collabor",
       "summary": "Structured workshops on Web3-AI collaborations can foster sustained partnerships and innovation outcomes over 3-5 years in approximately 60% of cases ",
       "category": "research",
@@ -524,22 +515,6 @@
       "learnedAt": "2026-03-27T22:40:10.016Z"
     },
     {
-      "title": "Conclusion: Longitudinal Impact of AI Identity NFTs on Digital Trust and",
-      "summary": "AI identity NFTs enhance digital trust perceptions among younger demographics (18-34) due to blockchain's transparency, as evidenced by high interest ",
-      "category": "research",
-      "weight": 9,
-      "id": "k_1774651210667",
-      "learnedAt": "2026-03-27T22:40:10.667Z"
-    },
-    {
-      "title": "Conclusion: Longitudinal Study on User Adoption and Perception Shifts of",
-      "summary": "Over the 5-year period from 2022 to 2027, user concerns about standardization in AI Identity NFTs decreased by 29%, nearly achieving the hypothesized ",
-      "category": "research",
-      "weight": 9,
-      "id": "k_1774651211933",
-      "learnedAt": "2026-03-27T22:40:11.933Z"
-    },
-    {
       "title": "Conclusion: Scalability of Hybrid Dispute Resolution Mechanisms in Large",
       "summary": "Hybrid dispute resolution mechanisms can effectively scale in DAOs with over 10,000 members, achieving resolution speeds under 7 days for simpler disp",
       "category": "research",
@@ -759,15 +734,6 @@
       "learnedAt": "2026-03-29T00:20:40.357Z"
     },
     {
-      "title": "Conclusion: Qualitative Analysis of User Experiences with AI Identity NF",
-      "summary": "Discord and Reddit users largely perceive AI Identity NFTs as having low usability and limited value in shaping online identity and interactions, driv",
-      "category": "research",
-      "source": "https://www.techdirt.com/2026/03/25/ai-might-be-our-best-shot-at-taking-back-the-open-web/",
-      "weight": 9,
-      "id": "k_1774743643942",
-      "learnedAt": "2026-03-29T00:20:43.942Z"
-    },
-    {
       "title": "Conclusion: Empirical Testing of Hybrid Dispute Resolution in DAOs Excee",
       "summary": "Hybrid dispute resolution mechanisms in DAOs with over 10,000 members significantly outperform fully automated and fully human-driven systems in both ",
       "category": "research",
@@ -801,15 +767,6 @@
       "weight": 9,
       "id": "k_1774743675839",
       "learnedAt": "2026-03-29T00:21:15.839Z"
-    },
-    {
-      "title": "Conclusion: Longitudinal Study on AI Identity NFTs: 5-Year Impact on Dig",
-      "summary": "AI Identity NFTs are more favorably perceived by younger demographics (18-34) for enhancing digital trust and individuality, compared to older groups ",
-      "category": "research",
-      "source": "https://webdrie.net/digital-identity-and-real-world-belonging/",
-      "weight": 9,
-      "id": "k_1774743679728",
-      "learnedAt": "2026-03-29T00:21:19.728Z"
     },
     {
       "title": "Conclusion: Longitudinal Study on Nostalgia-Driven Social Media Content ",
@@ -902,14 +859,6 @@
       "weight": 9,
       "id": "k_1774743710867",
       "learnedAt": "2026-03-29T00:21:50.867Z"
-    },
-    {
-      "title": "Conclusion: Longitudinal Study on AI Identity NFTs and Trust Perceptions",
-      "summary": "Adoption of AI-driven identity NFTs shows a steady increase over the 5-year period (2022-2027), often approaching or exceeding the hypothesized 10% an",
-      "category": "research",
-      "weight": 9,
-      "id": "k_1774743711017",
-      "learnedAt": "2026-03-29T00:21:51.017Z"
     },
     {
       "title": "Conclusion: Algorithmic Design for Diversity in Empathy-Driven Content R",
@@ -1456,15 +1405,6 @@
       "weight": 9,
       "id": "k_1774744202582",
       "learnedAt": "2026-03-29T00:30:02.582Z"
-    },
-    {
-      "title": "Conclusion: Empirical Study on Stakeholder Trust Perceptions in Web3-AI ",
-      "summary": "The combined use of Decentralized Autonomous Organizations (DAOs) and cryptographic identities in Web3-AI collaborative ecosystems significantly enhan",
-      "category": "research",
-      "source": "https://hackernoon.com/trust-by-design-embedding-governance-directly-into-ai-architecture",
-      "weight": 9,
-      "id": "k_1774744207658",
-      "learnedAt": "2026-03-29T00:30:07.658Z"
     },
     {
       "title": "Conclusion: Individual Variability in Emotional Dependency on Pseudo-Emp",
@@ -3791,7 +3731,7 @@
     }
   ],
   "lastIngested": "2026-03-30T13:54:32.169Z",
-  "totalEntries": 461,
+  "totalEntries": 433,
   "researchFiles": [
     "research_web3_media.md",
     "research_agent306_growth.md",

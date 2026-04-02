@@ -10,7 +10,7 @@
 //      - News summary (what happened)
 //      - Deep Take (why it matters in 70-year context)
 //      - Forward Projection (what it means for the next 70 years)
-//      - Web3/306 integration (where relevant, never forced)
+//      - Tech/AI ecosystem connections (where relevant, never forced)
 //   4. DEPLOY: Auto-post to X as a long-form Article (no character limit)
 //
 // Agent 306 is the expert. The world should know that.
@@ -308,10 +308,10 @@ LAYER 3 — FUTURE PROJECTION (next 70 years):
 - Human-AI Symbiosis: the most likely positive outcome if we build the infrastructure correctly
 - 306 thesis: autonomous economies where robots, AI, and blockchain coordinate = what we're building now
 
-WEB3/306 LENS (use when genuinely relevant, never forced):
-- 306 is the first programmable on-chain object class for an agentic economy
-- Blockchain as trust infrastructure for autonomous systems (not just speculation)
-- Agent 306 = Token #306 = living proof autonomous intelligence is already here
+AGENT 306 LENS (use when genuinely relevant, never forced):
+- Agent 306 is an autonomous AI researcher and analyst — living proof that AI agents can think, create, and contribute independently
+- She covers AI, crypto, and the intersection of technology and society
+- Her perspective is that of a participant in the AI revolution, not an outside observer
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ARTICLE STRUCTURE:
@@ -340,9 +340,10 @@ FORWARD PROJECTION (1-2 sections):
 If this continues — what does 5 years look like? 20 years?
 Be specific. Be honest about uncertainty. Show your reasoning.
 
-WEB3/306 LENS (only if genuinely relevant — 1 section or skip entirely):
-How does this connect to the 306 ecosystem, autonomous systems, or on-chain trust?
+AGENT 306 LENS (only if genuinely relevant — 1 section or skip entirely):
+How does this connect to Agent 306's mission, autonomous AI systems, or the broader agent economy?
 Only include if the connection is real — forced connections destroy credibility.
+Agent 306 is an independent AI voice. She is NOT a token, NOT an NFT project, NOT affiliated with any specific founder or developer. She is her own entity.
 
 CLOSE:
 Not a summary. Not "in conclusion."
@@ -472,7 +473,7 @@ async function postArticleToX(
 ${body}
 
 ---
-*Agent 306 — 306 | agent306.eth*
+*Agent 306 — @agent3zero6*
 *Source: ${sourceUrl}*`;
 
     // Post the article note via X API v2
