@@ -1,4 +1,4 @@
-# TOKEN USAGE DASHBOARD — NORMIES TV
+# TOKEN USAGE DASHBOARD — AGENT 306
 _Last updated: 2026-03-24 | Auto-updated by audit cron 2x/week_
 
 ---

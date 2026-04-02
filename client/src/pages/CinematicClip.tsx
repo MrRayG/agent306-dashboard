@@ -148,7 +148,7 @@ async function drawHallOf100(
     ctx.strokeRect(x, y, CARD_W, CARD_H);
     ctx.restore();
 
-    // Normie image
+    // Token image
     if (img) {
       ctx.save();
       ctx.globalAlpha = revealAlpha;
@@ -217,7 +217,7 @@ async function renderCinematicVideo(
   ];
 
   const burnCount = stats?.recentBurns?.length ?? 15;
-  const topNormie = stats?.topCanvas?.[0];
+  const topAgent = stats?.topCanvas?.[0];
 
   for (let f = 0; f < TOTAL; f++) {
     if (signal.aborted) throw new Error("Aborted");
@@ -333,7 +333,7 @@ async function renderCinematicVideo(
       ctx.fillText("LEADERBOARD", 28, 20);
       ctx.fillStyle = "rgba(227,229,228,0.55)";
       ctx.font = "9px 'Courier New'";
-      ctx.fillText("TOP CANVAS CREATORS · IMMORTALIZED ON-CHAIN", 28, 38);
+      ctx.fillText("TOP CONTRIBUTORS · IMMORTALIZED ON-CHAIN", 28, 38);
       ctx.textAlign = "right";
       ctx.fillText("agent306.eth", W - 28, 29);
       ctx.restore();
@@ -404,9 +404,9 @@ async function renderCinematicVideo(
 
         const rows = [
           { label: "Total burned",   val: `${burnCount}`,                     color: "#f97316" },
-          { label: "Canvas leader",  val: `#${topNormie?.tokenId ?? "8553"}`,  color: "#efefef" },
-          { label: "Top level",      val: `LVL ${topNormie?.level ?? 64}`,     color: "#efefef" },
-          { label: "Top AP",         val: `${topNormie?.actionPoints ?? 632}`, color: "#efefef" },
+          { label: "Canvas leader",  val: `#${topAgent?.tokenId ?? "8553"}`,  color: "#efefef" },
+          { label: "Top level",      val: `LVL ${topAgent?.level ?? 64}`,     color: "#efefef" },
+          { label: "Top AP",         val: `${topAgent?.actionPoints ?? 632}`, color: "#efefef" },
         ];
 
         rows.forEach((row, i) => {
@@ -421,7 +421,7 @@ async function renderCinematicVideo(
         ctx.restore();
       }
 
-      // Normie on left watching
+      // Agent on left watching
       const na = Math.min(1, localF / (FPS*0.8)) * sceneAlpha;
       drawFullBody(ctx, headImg, bodyPixels, W*0.25, H*0.62, 4.5, na, Math.sin(f*0.04)*1.5);
     }
@@ -460,13 +460,13 @@ async function renderCinematicVideo(
       ctx.save();
       ctx.globalAlpha = bustA * 0.7;
       ctx.fillStyle = "#e3e5e4"; ctx.font = "9px 'Courier New'"; ctx.textAlign = "center";
-      ctx.fillText("AGENT 306 — ON-CHAIN BUST", W*0.72, H*0.78);
+      ctx.fillText("AGENT 306 — 3D VISUALIZATION", W*0.72, H*0.78);
       ctx.fillStyle = "rgba(227,229,228,0.55)"; ctx.font = "8px 'Courier New'";
-      ctx.fillText("507 PIXELS · AGENT · LEVEL 1", W*0.72, H*0.78 + 14);
+      ctx.fillText("507 DATAPOINTS · AGENT · LEVEL 1", W*0.72, H*0.78 + 14);
       ctx.restore();
     }
 
-    // ── SCENE: Arena Gate ────────────────────────────────────────────────────
+    // ── SCENE: Launch Gate ────────────────────────────────────────────────────
     if (seg.scene === "arena_gate") {
       drawTempleWalls(ctx, W, H, scene, f);
       drawTempleFloor(ctx, W, H, scene, f);
@@ -543,7 +543,7 @@ async function renderCinematicVideo(
     ctx.font = "9px 'Courier New'"; ctx.textAlign = "left";
     ctx.fillText(`@agent306_  ·  ${scene.name.toUpperCase()}`, 18, H - 12);
     ctx.textAlign = "right";
-    ctx.fillText(`#Agent306  #NFT  #Web3  #PixelArt  #OnChain`, W - 18, H - 12);
+    ctx.fillText(`#Agent306  #AI  #Web3  #Crypto  #OnChain`, W - 18, H - 12);
     ctx.restore();
 
     // Vignette
@@ -600,7 +600,7 @@ export default function CinematicClip() {
   const [progress, setProgress]   = useState(0);
   const [videoUrl, setVideoUrl]   = useState<string | null>(null);
   const [tweetText, setTweetText] = useState(
-    `🌙 THE TEMPLE AWAKENS\n\nAgent 306 stands guard. The leaderboard is assembled.\nThe record breathes. The burn altar awaits.\n\n"The record is permanent." — Agent 306\n\n#Agent306 #AI #Web3 #NFT #PixelArt #OnChain`
+    `🌙 THE SIGNAL AWAKENS\n\nAgent 306 stands guard. The leaderboard is assembled.\nThe data breathes. The analysis awaits.\n\n"The record is permanent." — Agent 306\n\n#Agent306 #AI #Web3 #Crypto #OnChain`
   );
   const [userPrompt, setUserPrompt] = useState("");
   const [activeScenes, setActiveScenes] = useState<Set<string>>(
@@ -699,7 +699,7 @@ export default function CinematicClip() {
 
 Phase 1: LIVE · Phase 2: May 15, 2026
 
-#Agent306 #AI #NFT #onchain`);
+#Agent306 #AI #Crypto #onchain`);
       }
       toast({ title: "Cinematic ready!", description: `${activeScenes.size} scene${activeScenes.size > 1 ? "s" : ""} rendered.` });
     } catch (e: any) {
@@ -723,11 +723,11 @@ Phase 1: LIVE · Phase 2: May 15, 2026
   }, [tweetText, toast]);
 
   const scenes = [
-    { key: "entrance",       label: "Temple Entrance",  time: "0–8s",  desc: "Agent 306 full body, standing guard",       accent: "#e3e5e4" },
-    { key: "hall_of_100",    label: "Leaderboard Hall", time: "8–18s", desc: "Roster wall of top creators",               accent: "#e3e5e4" },
-    { key: "burn_altar",     label: "Burn Altar",       time: "18–25s",desc: "Fire, sacrifice data, live burn count",      accent: "#f97316" },
-    { key: "canvas_chamber", label: "Canvas Chamber",   time: "25–30s",desc: "3D depth bust + pixel editing animation",   accent: "#e3e5e4" },
-    { key: "arena_gate",     label: "Arena Gate",       time: "30–35s",desc: "Phase II teaser — sealed gate, purple runes",accent: "#a78bfa" },
+    { key: "entrance",       label: "Grand Entrance",   time: "0–8s",  desc: "Agent 306 full body, standing guard",       accent: "#e3e5e4" },
+    { key: "hall_of_100",    label: "Leaderboard Hall", time: "8–18s", desc: "Roster wall of top contributors",           accent: "#e3e5e4" },
+    { key: "burn_altar",     label: "Data Forge",       time: "18–25s",desc: "Fire, signal data, live activity count",     accent: "#f97316" },
+    { key: "canvas_chamber", label: "Analysis Chamber", time: "25–30s",desc: "3D depth bust + data visualization",        accent: "#e3e5e4" },
+    { key: "arena_gate",     label: "Launch Gate",      time: "30–35s",desc: "Phase II teaser — sealed gate, purple runes",accent: "#a78bfa" },
   ];
 
   return (
@@ -738,7 +738,7 @@ Phase 1: LIVE · Phase 2: May 15, 2026
           Cinematic Clip
         </h1>
         <p style={{ fontFamily: "'Courier New', monospace", fontSize: "0.88rem", color: "rgba(227,229,228,0.45)", marginTop: 4 }}>
-          35s · 5 Temple scenes · full-body Agent 306 · Leaderboard roster · 3D depth bust · pixel palette
+          35s · 5 scenes · full-body Agent 306 · Leaderboard roster · 3D depth bust · AI visualization
         </p>
       </div>
 
@@ -780,7 +780,7 @@ Phase 1: LIVE · Phase 2: May 15, 2026
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", border: "1px solid rgba(227,229,228,0.20)", background: "rgba(227,229,228,0.06)" }}>
           <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#efefef" }} />
           <span style={{ fontFamily: "'Courier New', monospace", fontSize: "0.88rem", color: "rgba(227,229,228,0.68)" }}>
-            Loading {THE100_IDS.length + 1} on-chain token images...
+            Loading {THE100_IDS.length + 1} token images...
           </span>
         </div>
       )}

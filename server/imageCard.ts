@@ -1,8 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // 306 — EPISODE IMAGE CARD GENERATOR
-// Creates a 1200×675 PNG card for each episode using the featured token's
-// on-chain pixel art. Styled in 306 palette. Uploaded to a public
-// URL via a temp file so Publer can attach it to the tweet.
+// Creates a 1200x675 PNG card for each episode. Styled in Agent 306 palette.
+// Uploaded to a public URL via a temp file so it can be attached to posts.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createCanvas, loadImage } from "canvas";
@@ -216,7 +215,7 @@ export async function generateEpisodeCard(opts: {
     ctx.fillStyle = "rgba(227,229,228,0.75)";
     ctx.font = "bold 13px 'Courier New'";
     ctx.textAlign = "left";
-    ctx.fillText("agent306.eth  ·  fully on-chain  ·  ethereum", rx, H - 18);
+    ctx.fillText("agent306.eth  ·  AI thought leader  ·  tracking the field", rx, H - 18);
 
     ctx.fillStyle = ORANGE;
     ctx.font = "bold 14px 'Courier New'";
@@ -456,7 +455,7 @@ export async function generateSpotlightCard(opts: {
     ctx.fillStyle = "rgba(227,229,228,0.3)";
     ctx.font = "10px 'Courier New'";
     ctx.textAlign = "right";
-    ctx.fillText("@agent306  ·  agent306.eth", W - 40, H - 17);
+    ctx.fillText("@agent306  ·  AI thought leader", W - 40, H - 17);
 
     // Outer border
     ctx.strokeStyle = "rgba(249,115,22,0.35)";
@@ -519,7 +518,7 @@ export async function generateRaceCard(opts: {
     ctx.fillStyle = "#f97316";
     ctx.font = "bold 12px 'Courier New'";
     ctx.textAlign = "right";
-    ctx.fillText(`${daysToArena} DAYS TO ARENA  ●`, W - 40, 32);
+    ctx.fillText(`WEEK ${weekNumber}  ●  AI ROUNDUP`, W - 40, 32);
 
     // ── Layout: LEFT = headline + stats | RIGHT = leaderboard with NFT art ──
     const splitX = 440;
@@ -550,10 +549,10 @@ export async function generateRaceCard(opts: {
     ctx.fillStyle = "#f97316";
     ctx.font = "bold 11px 'Courier New'";
     ctx.textAlign = "left";
-    ctx.fillText(`🔥 ${totalBurnsThisWeek} SOULS BURNED THIS WEEK`, 56, lineY + 22);
+    ctx.fillText(`📊 ${totalBurnsThisWeek} KEY DEVELOPMENTS THIS WEEK`, 56, lineY + 22);
     lineY += 60;
 
-    // Arena countdown big
+    // Tracking metric
     ctx.fillStyle = "rgba(167,139,250,0.08)";
     ctx.fillRect(40, lineY, 200, 80);
     ctx.strokeStyle = "rgba(167,139,250,0.2)";
@@ -561,10 +560,10 @@ export async function generateRaceCard(opts: {
     ctx.strokeRect(40, lineY, 200, 80);
     ctx.fillStyle = "rgba(167,139,250,0.5)";
     ctx.font = "9px 'Courier New'";
-    ctx.fillText("DAYS TO ARENA", 56, lineY + 22);
+    ctx.fillText("WEEKS TRACKED", 56, lineY + 22);
     ctx.fillStyle = "#a78bfa";
     ctx.font = "bold 48px 'Courier New'";
-    ctx.fillText(String(daysToArena), 56, lineY + 68);
+    ctx.fillText(String(weekNumber), 56, lineY + 68);
 
     // ── DIVIDER ──────────────────────────────────────────────────────────────
     ctx.strokeStyle = "rgba(167,139,250,0.15)";
@@ -677,7 +676,7 @@ export async function generateRaceCard(opts: {
     ctx.fillStyle = "rgba(227,229,228,0.3)";
     ctx.font = "10px 'Courier New'";
     ctx.textAlign = "right";
-    ctx.fillText("@agent306  ·  agent306.eth  ·  arena may 15", W - 40, H - 16);
+    ctx.fillText("@agent306  ·  agent306.eth  ·  AI thought leader", W - 40, H - 16);
 
     // Outer border
     ctx.strokeStyle = "rgba(167,139,250,0.3)";

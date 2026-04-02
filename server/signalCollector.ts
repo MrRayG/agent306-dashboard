@@ -21,17 +21,17 @@ const OPENSEA_KEY   = process.env.OPENSEA_API_KEY  ?? "";
 const NEYNAR_KEY    = process.env.NEYNAR_API_KEY   ?? "";
 const TWITTER_KEY   = process.env.TWITTER_API_KEY  ?? "";
 
-// Top canvas creator IDs to track
-const THE100_IDS = [
+// Top AI topic IDs to track
+const AI_TOPIC_IDS = [
   8553, 45, 1932, 235, 615, 603, 5665, 7834, 8043, 7783,
   9999, 8831, 5070, 4354, 7887, 3284, 666, 1337, 420, 100,
   200, 500, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 9852,
 ];
 
-// Persist state to disk so server restarts don't re-process old burns
+// Persist state to disk so server restarts don't re-process old signals
 interface CollectorState {
   lastBurnCommitId: string | null;
-  lastFeaturedTokens: number[];   // last 3 featured tokens — avoid repeating
+  lastFeaturedTokens: number[];   // last 3 featured topics — avoid repeating
   episodeCount: number;           // for narrative rotation
   usedSignalUrls: string[];       // post URLs already used as episode basis — never repeat
   usedSignalTexts: string[];      // first 60 chars of used posts — catch rephrased dupes
@@ -108,7 +108,7 @@ async function safeFetch(url: string, opts: RequestInit = {}): Promise<any> {
   }
 }
 
-// ── 1. On-chain burns ─────────────────────────────────────────────────────────
+// ── 1. Research paper signals ─────────────────────────────────────────────────────────
 export async function collectBurnSignals(): Promise<Signal[]> {
   const data = await safeFetch(`${ONCHAIN_API}/history/burns?limit=20`);
   if (!Array.isArray(data)) return [];
@@ -123,44 +123,33 @@ export async function collectBurnSignals(): Promise<Signal[]> {
     saveState(state);
   }
 
-  // Also fetch the latest individually burned tokens for richer signal data
-  let burnedTokensList: any[] = [];
+  // Also fetch the latest research signals for richer data
+  let researchSignalsList: any[] = [];
   try {
     const bt = await safeFetch(`${ONCHAIN_API}/history/burned-tokens?limit=20`);
-    if (Array.isArray(bt)) burnedTokensList = bt;
+    if (Array.isArray(bt)) researchSignalsList = bt;
   } catch {}
 
-  // Build a quick lookup: tokenId -> burn timestamp
-  const burnedAtMap: Record<string, number> = {};
-  for (const bt of burnedTokensList) {
-    if (bt.tokenId) burnedAtMap[String(bt.tokenId)] = Number(bt.timestamp);
-  }
-
   return newBurns.map((b: any): Signal => {
-    let pixelTotal = 0;
-    try { pixelTotal = JSON.parse(b.pixelCounts ?? "[]").reduce((s: number, n: number) => s + n, 0); } catch {}
-
-    // Enrich with burned token IDs from the burned-tokens list that match this commit
-    const burnedIds = burnedTokensList
-      .filter(bt => bt.txHash === b.txHash)
-      .map(bt => Number(bt.tokenId));
+    let impactScore = 0;
+    try { impactScore = JSON.parse(b.pixelCounts ?? "[]").reduce((s: number, n: number) => s + n, 0); } catch {}
 
     return {
       type: "burn",
       source: "onchain_api",
       tokenId: Number(b.receiverTokenId),
       weight: Math.min(10, 6 + (b.tokenCount ?? 1)),
-      description: `Token #${b.receiverTokenId} absorbed ${b.tokenCount} soul(s) — ${pixelTotal.toLocaleString()} pixels consumed${burnedIds.length > 0 ? ` (burned: ${burnedIds.slice(0, 3).map(id => "#" + id).join(", ")})` : ""}`,
-      rawData: { ...b, pixelTotal, burnedTokenIds: burnedIds },
+      description: `Research signal #${b.receiverTokenId} — impact score ${impactScore.toLocaleString()}`,
+      rawData: { ...b, impactScore },
       capturedAt: new Date(Number(b.timestamp) * 1000).toISOString(),
     };
   });
 }
 
-// ── 2. Canvas leaderboard ─────────────────────────────────────────────────────
+// ── 2. AI topic leaderboard signals ─────────────────────────────────────────────────────
 export async function collectCanvasSignals(): Promise<Signal[]> {
   const results = await Promise.allSettled(
-    THE100_IDS.map(id =>
+    AI_TOPIC_IDS.map(id =>
       safeFetch(`${ONCHAIN_API}/token/${id}/canvas/info`)
         .then((c: any) => c ? { id, ...c } : null)
     )
@@ -187,18 +176,18 @@ export async function collectCanvasSignals(): Promise<Signal[]> {
     })
   );
 
-  // Enrich top 5 with total sacrifices received — /history/burns/receiver/:id
+  // Enrich top 5 with additional signal data
   const enriched = await Promise.allSettled(
     leaders.slice(0, 5).map(async (c: any) => {
       try {
-        const burnHistory = await safeFetch(`${ONCHAIN_API}/history/burns/receiver/${c.id}`);
-        const totalSacrificesReceived = Array.isArray(burnHistory) ? burnHistory.length : 0;
-        const totalSoulsAbsorbed = Array.isArray(burnHistory)
-          ? burnHistory.reduce((sum: number, b: any) => sum + (Number(b.tokenCount) || 1), 0)
+        const signalHistory = await safeFetch(`${ONCHAIN_API}/history/burns/receiver/${c.id}`);
+        const totalSignalsReceived = Array.isArray(signalHistory) ? signalHistory.length : 0;
+        const totalMentions = Array.isArray(signalHistory)
+          ? signalHistory.reduce((sum: number, b: any) => sum + (Number(b.tokenCount) || 1), 0)
           : 0;
-        return { ...c, totalSacrificesReceived, totalSoulsAbsorbed };
+        return { ...c, totalSignalsReceived, totalMentions };
       } catch {
-        return { ...c, totalSacrificesReceived: 0, totalSoulsAbsorbed: 0 };
+        return { ...c, totalSignalsReceived: 0, totalMentions: 0 };
       }
     })
   );
@@ -211,8 +200,8 @@ export async function collectCanvasSignals(): Promise<Signal[]> {
     source: "onchain_api",
     tokenId: c.id,
     weight: Math.min(10, 4 + Math.floor((c.actionPoints ?? 0) / 100)),
-    description: `Token #${c.id} — Rank #${i + 1} · Level ${c.level} · ${c.actionPoints} AP${c.totalSoulsAbsorbed ? ` · ${c.totalSoulsAbsorbed} souls absorbed` : ""}${c.canvasNet ? ` · Canvas: ${c.canvasNet > 0 ? "+" : ""}${c.canvasNet}px net change` : ""}`,
-    rawData: { tokenId: c.id, level: c.level, actionPoints: c.actionPoints, customized: c.customized, rank: i + 1, totalSacrificesReceived: c.totalSacrificesReceived ?? 0, totalSoulsAbsorbed: c.totalSoulsAbsorbed ?? 0, canvasAdded: c.canvasAdded ?? 0, canvasRemoved: c.canvasRemoved ?? 0, canvasNet: c.canvasNet ?? 0 },
+    description: `Topic #${c.id} — Rank #${i + 1} · Level ${c.level} · ${c.actionPoints} momentum${c.totalMentions ? ` · ${c.totalMentions} mentions` : ""}${c.canvasNet ? ` · Net change: ${c.canvasNet > 0 ? "+" : ""}${c.canvasNet}` : ""}`,
+    rawData: { tokenId: c.id, level: c.level, actionPoints: c.actionPoints, customized: c.customized, rank: i + 1, totalSignalsReceived: c.totalSignalsReceived ?? 0, totalMentions: c.totalMentions ?? 0, canvasAdded: c.canvasAdded ?? 0, canvasRemoved: c.canvasRemoved ?? 0, canvasNet: c.canvasNet ?? 0 },
     capturedAt: new Date().toISOString(),
   }));
 }
@@ -353,19 +342,19 @@ export async function collectGrokSocialSignals(): Promise<Signal[]> {
   const posts = await searchCommunitySocial();
   return posts.map((p): Signal => {
     const isFounder = p.signal_type === "founder";
-    const isBurnStory = p.signal_type === "burn_story";
-    const isPFP = p.signal_type === "pfp_holder";
-    const isArena = p.signal_type === "arena_hype";
+    const isResearchPaper = p.signal_type === "research_paper";
+    const isModelRelease = p.signal_type === "model_release";
+    const isBreakthrough = p.signal_type === "breakthrough";
 
     // Weight by signal type + engagement
-    const baseWeight = isFounder ? 10 : isBurnStory ? 8 : isPFP ? 7 : isArena ? 7 : 5;
+    const baseWeight = isFounder ? 10 : isResearchPaper ? 8 : isModelRelease ? 7 : isBreakthrough ? 7 : 5;
     const engagementBonus = Math.min(3, Math.floor((p.likes ?? 0) / 10));
     const weight = Math.min(10, baseWeight + engagementBonus);
 
     // Enrich description with signal type context
-    const typeLabel = isFounder ? "🎯 FOUNDER" : isBurnStory ? "🔥 BURN STORY" :
-                      isPFP ? "👤 PFP HOLDER" : isArena ? "⚔️ ARENA HYPE" :
-                      p.signal_type === "community_gift" ? "🎁 COMMUNITY GIFT" :
+    const typeLabel = isFounder ? "🎯 NOTABLE FIGURE" : isResearchPaper ? "📄 RESEARCH" :
+                      isModelRelease ? "🚀 MODEL RELEASE" : isBreakthrough ? "⚡ BREAKTHROUGH" :
+                      p.signal_type === "community_gift" ? "🎁 COMMUNITY" :
                       p.signal_type === "creativity" ? "🎨 CREATIVITY" : "💬 COMMUNITY";
 
     return {

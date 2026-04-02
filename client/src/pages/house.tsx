@@ -185,9 +185,9 @@ export default function HousePage() {
             <Stat label="TOTAL SIGNALS" value={data.signals.total} />
             <Stat label="STREAMS RUNNING" value={data.signals.streams} />
             <Stat label="FOUNDER POSTS" value={data.signals.founderPosts} />
-            <Stat label="BURN STORIES" value={data.signals.burnStories} />
-            <Stat label="ARENA PREP" value={data.signals.arenaPrep} />
-            <Stat label="PFP HOLDERS" value={data.signals.pfpHolders} />
+            <Stat label="RESEARCH THREADS" value={data.signals.burnStories} />
+            <Stat label="MARKET SIGNALS" value={data.signals.arenaPrep} />
+            <Stat label="ACTIVE MEMBERS" value={data.signals.pfpHolders} />
           </div>
           <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", borderTop: "1px solid rgba(227,229,228,0.15)", paddingTop: "8px" }}>
             LAST REFRESH: {timeAgo(data.signals.lastRefreshed)}
@@ -215,7 +215,7 @@ export default function HousePage() {
         {/* Room 04 — Diplomatic Floor */}
         <RoomCard num="04" color="#4ade80" title="🌐 Diplomatic Floor" status="online">
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-            <Stat label="FOLLOWING" value={data.diplomatic.followingCount} sub="confirmed holders" />
+            <Stat label="FOLLOWING" value={data.diplomatic.followingCount} sub="confirmed members" />
             <Stat label="REPLIES TRACKED" value={data.diplomatic.replyCount} />
           </div>
           <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", borderTop: "1px solid rgba(227,229,228,0.15)", paddingTop: "8px" }}>
@@ -317,8 +317,8 @@ export default function HousePage() {
         {/* Room 08 — Road Ahead */}
         <RoomCard num="08" color="#f97316" title="🗺 Road Ahead" status="online">
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "8px" }}>
-            <Stat label="DAYS TO ARENA" value={data.roadAhead.daysToArena} sub={data.roadAhead.arenaDate} />
-            <Stat label="NFC SUMMIT" value="June 2026" sub={data.roadAhead.nfcSummit} />
+            <Stat label="DAYS TO LAUNCH" value={data.roadAhead.daysToArena} sub={data.roadAhead.arenaDate} />
+            <Stat label="NEXT MILESTONE" value="June 2026" sub={data.roadAhead.nfcSummit} />
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "5px", borderTop: "1px solid rgba(227,229,228,0.15)", paddingTop: "8px" }}>
             <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.48)", fontFamily: "monospace", letterSpacing: "0.1em", marginBottom: "4px" }}>PHASE 1 · CANVAS — ACTIVE</div>
@@ -330,7 +330,7 @@ export default function HousePage() {
               { id: "podcast", label: "Podcast Studio — LIVE", done: true },
               { id: "academy", label: "Academy Engine — LIVE", done: true },
               { id: "research", label: "Research pipeline — In Progress", done: false },
-              { id: "phase2", label: "Phase 2: The Rise — May 15", done: false },
+              { id: "phase2", label: "Phase 2: Expansion — May 15", done: false },
               { id: "phase3", label: "Phase 3: The Economy", done: false },
             ].map(item => (
               <div key={item.id} style={{ display: "flex", alignItems: "center", gap: "8px" }}>

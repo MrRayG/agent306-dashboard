@@ -242,7 +242,7 @@ export default function LiveStats() {
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
                 <TrendingUp className="w-4 h-4 text-cyan-400" /> Canvas Leaderboard
               </CardTitle>
-              <Badge variant="outline" className="text-[13px]">Top 100 cast</Badge>
+              <Badge variant="outline" className="text-[13px]">Top 100</Badge>
             </div>
           </CardHeader>
           <CardContent className="p-0">
@@ -287,8 +287,8 @@ export default function LiveStats() {
               },
               {
                 label: "3D USDZ",
-                endpoint: "External normie-3d.vercel.app",
-                upstream: "normie-3d.vercel.app/api/ar/usdz?id=:id",
+                endpoint: "External 3D visualization API",
+                upstream: "3D visualization API /api/ar/usdz?id=:id",
                 note: "USDZ geometry for voxel 3D pipeline",
               },
             ].map(api => (

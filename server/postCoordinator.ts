@@ -28,8 +28,8 @@ const COOLDOWNS: Record<string, number> = {
   signal_brief:  47 * 60 * 60 * 1000,  // 47h  — Mon/Wed/Fri, 48h buffer
 };
 
-// Per-burn cooldown: 5 minutes per commitId
-const BURN_COOLDOWN = 5 * 60 * 1000;
+// Per-signal cooldown: 5 minutes per commitId
+const SIGNAL_COOLDOWN = 5 * 60 * 1000;
 
 export interface PostRecord {
   engine: string;
@@ -37,7 +37,7 @@ export interface PostRecord {
   postUrl: string | null;     // tweet URL or cast URL
   tweetUrl: string | null;    // kept for backward compat (alias for postUrl on X)
   postedAt: string;
-  key: string;    // unique key used for dedup (e.g. "episode", "burn_566")
+  key: string;    // unique key used for dedup (e.g. "episode", "signal_566")
 }
 
 interface CoordinatorState {
@@ -82,8 +82,8 @@ export function requestPost(key: string, force = false, platform: "x" | "farcast
   if (state.activeEngineFarcasterStarted === undefined) state.activeEngineFarcasterStarted = null;
 
   // Get cooldown for this key
-  const cooldown = key.startsWith("burn_")
-    ? BURN_COOLDOWN
+  const cooldown = key.startsWith("burn_") || key.startsWith("signal_")
+    ? SIGNAL_COOLDOWN
     : (COOLDOWNS[key] ?? 5 * 60 * 1000);
 
   // Use per-platform state

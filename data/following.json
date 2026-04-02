@@ -1,204 +1,207 @@
 {
   "accounts": [
     {
-      "userId": "1293451838126264321",
-      "username": "Samalitoo",
-      "name": "Sufi",
-      "description": "Magister // Viae // Ad // Internam // Inquietudinem //",
-      "syncedAt": "2026-03-24T10:59:29.276Z",
+      "userId": "OpenAI",
+      "username": "OpenAI",
+      "name": "OpenAI",
+      "description": "OpenAI — creators of GPT, DALL-E, and Sora. Pushing the frontier of artificial general intelligence.",
+      "syncedAt": "2026-04-02T10:00:00.000Z",
       "isPfpHolder": false,
-      "normieTokenIds": []
+      "category": "AI",
+      "relationshipType": "monitors"
     },
     {
-      "userId": "745433653996552192",
-      "username": "_boxlord",
-      "name": "BOXLORD",
-      "description": "\u2626\ud83c\uddfa\ud83c\uddf8\ud83d\udce6\ud83d\udc51Web4's Comic Artist since 199X\u2122 \u20b3i Filmmaker\u26a1\ufe0fFounder of @_madjacket\ud83c\udfa8Ex-Artist @pudgypenguins @mallardorder @frigid_ai theological scifi Author",
-      "syncedAt": "2026-03-24T10:59:29.276Z",
+      "userId": "GoogleDeepMind",
+      "username": "GoogleDeepMind",
+      "name": "Google DeepMind",
+      "description": "Google DeepMind — Gemini, AlphaFold, and frontier AI research. Bridging fundamental research and real-world impact.",
+      "syncedAt": "2026-04-02T10:00:00.000Z",
       "isPfpHolder": false,
-      "normieTokenIds": []
+      "category": "AI",
+      "relationshipType": "monitors"
     },
     {
-      "userId": "1350361598360170499",
-      "username": "OsayKancuno",
-      "name": "\ud835\udd42 \ud835\udd38 \u2115 \u2102 \ud835\udd4c \u2115 \ud835\udd46",
-      "description": "Building tools and games for @normiesART\n+4 apps shipped.\nTHE100 | Normie 8362 \u25aa \nWE ARE ALL NORMIES | AKCB \u25aa AbstractChain \u25aa DM x collab",
-      "syncedAt": "2026-03-24T10:59:29.276Z",
-      "isPfpHolder": true,
-      "normieTokenIds": []
-    },
-    {
-      "userId": "1409627956268474368",
-      "username": "imafckretard",
-      "name": "imafuckingretard.eth",
-      "description": "Normie & Vibie till death.\nBuilding @OneTo500Pixels.",
-      "syncedAt": "2026-03-24T10:59:29.276Z",
-      "isPfpHolder": true,
-      "normieTokenIds": []
-    },
-    {
-      "userId": "74160907",
-      "username": "nftgothsa",
-      "name": "Gothsa",
-      "description": "French artist since forever\nBlockchain hyperactive since 2021\nMember of @goodvibesclub\nMember of @BoredApeYC\nMember of @normiesART\nFounder of @healweart",
-      "syncedAt": "2026-03-24T10:59:29.276Z",
-      "isPfpHolder": true,
-      "normieTokenIds": []
-    },
-    {
-      "userId": "485896666",
-      "username": "Lp_Vicious",
-      "name": "kingface13.eth \ud83e\udd19\u2b55\ufe0f",
-      "description": "Dad | Collector | Degen | Normie | \u25cf - \u25cf",
-      "syncedAt": "2026-03-24T10:59:29.276Z",
-      "isPfpHolder": true,
-      "normieTokenIds": []
-    },
-    {
-      "userId": "1979896106130518018",
-      "username": "TryAskOm",
-      "name": "Oshi Moto",
-      "description": "Try Investigating Boldly Bringing Infinite Revenue \n\ntry\u2795\u2019ing HE to ART \ud83d\udff0 \ud83e\udd0d",
-      "syncedAt": "2026-03-24T10:59:29.277Z",
+      "userId": "AnthropicAI",
+      "username": "AnthropicAI",
+      "name": "Anthropic",
+      "description": "Anthropic — creators of Claude. Building reliable, interpretable, and steerable AI systems.",
+      "syncedAt": "2026-04-02T10:00:00.000Z",
       "isPfpHolder": false,
-      "normieTokenIds": []
+      "category": "AI",
+      "relationshipType": "monitors"
     },
     {
-      "userId": "102815403",
-      "username": "klaushubben",
-      "name": "klaus",
-      "description": "klausblocks.eth | https://t.co/eM21tDcTa9 | Art Blocks CL | creative code | analog. Technologist @TriviumInteractive.",
-      "syncedAt": "2026-03-24T10:59:29.277Z",
+      "userId": "xaboratory",
+      "username": "xai",
+      "name": "xAI",
+      "description": "xAI — creators of Grok. Understanding the true nature of the universe through AI.",
+      "syncedAt": "2026-04-02T10:00:00.000Z",
       "isPfpHolder": false,
-      "normieTokenIds": []
+      "category": "AI",
+      "relationshipType": "monitors"
     },
     {
-      "userId": "1138307083994972160",
-      "username": "SpoliticusMedia",
-      "name": "Spoliticus",
-      "description": "Attorney who stumbled upon frogs and suddenly needed to understand the future. Building something to find out what it means to trust an AI agent.",
-      "syncedAt": "2026-03-24T10:59:29.277Z",
+      "userId": "sama",
+      "username": "sama",
+      "name": "Sam Altman",
+      "description": "Sam Altman — CEO of OpenAI. Leading the charge toward artificial general intelligence.",
+      "syncedAt": "2026-04-02T10:00:00.000Z",
       "isPfpHolder": false,
-      "normieTokenIds": []
+      "category": "AI",
+      "relationshipType": "follows"
     },
     {
-      "userId": "1772089932103741440",
-      "username": "Excaliburweb3",
-      "name": "Excalibur",
-      "description": "Collecting NFT\u2019s #189 Normie #4259 #4175 Nibble",
-      "syncedAt": "2026-03-24T10:59:29.277Z",
-      "isPfpHolder": true,
-      "normieTokenIds": [
-        4259
-      ]
-    },
-    {
-      "userId": "1558115084291158017",
-      "username": "0xBatshitKrazy",
-      "name": "BatshitKrazy",
-      "description": "Why? For the Culture ||",
-      "syncedAt": "2026-03-24T10:59:29.277Z",
+      "userId": "karpathy",
+      "username": "karpathy",
+      "name": "Andrej Karpathy",
+      "description": "Andrej Karpathy — AI researcher, former Tesla AI lead, Stanford CS231n. Building and teaching deep learning.",
+      "syncedAt": "2026-04-02T10:00:00.000Z",
       "isPfpHolder": false,
-      "normieTokenIds": []
+      "category": "AI",
+      "relationshipType": "follows"
     },
     {
-      "userId": "1531732181944619015",
-      "username": "dopemind10",
-      "name": "DOPEMIND",
-      "description": "d\u03b9g\u03b9\u0442alp\u03c5n\u0138 | gl\u03b9\u0442c\u043d \u0455aved \u043cy l\u03b9\u0493e \nMember of #THE100\nMember of MTvoid art collective.",
-      "syncedAt": "2026-03-24T10:59:29.277Z",
+      "userId": "AndrewYNg",
+      "username": "AndrewYNg",
+      "name": "Andrew Ng",
+      "description": "Andrew Ng — AI educator, co-founder of Coursera, founder of DeepLearning.AI. Making AI education accessible worldwide.",
+      "syncedAt": "2026-04-02T10:00:00.000Z",
       "isPfpHolder": false,
-      "normieTokenIds": []
+      "category": "AI",
+      "relationshipType": "follows"
     },
     {
-      "userId": "1978839126318231552",
-      "username": "Webmxzora",
-      "name": "Webmx \ud83c\udf4a\ud83c\udf31",
-      "description": "Dirt Metal Recycling Normie #666 #7577\u267b\ufe0f Metal is money. pedaling motion towards adapting tech in the Bicycle,metal, Agricultural industry. Bmx alchemist",
-      "syncedAt": "2026-03-24T10:59:29.277Z",
-      "isPfpHolder": true,
-      "normieTokenIds": [
-        666
-      ]
-    },
-    {
-      "userId": "1772403853167820800",
-      "username": "StPeaceyM",
-      "name": "Peacey",
-      "description": "Chimpers maxi \ud83d\udc35\u262e\ufe0f\ud83e\udeac\ud83c\udde6\ud83c\uddfa \ud83c\udfe1\ud83d\udc7e@normiesART @chimpersnft @OGTripleMedia @goodvibesclub @quirkiesnft @saintsofla @Persona_Journey",
-      "syncedAt": "2026-03-24T10:59:29.277Z",
-      "isPfpHolder": true,
-      "normieTokenIds": []
-    },
-    {
-      "userId": "1463319986412261380",
-      "username": "MrRayG",
-      "name": "MrRayG",
-      "description": "Leading each day with a purpose! Let\u2019s connect in the Otherside! #NOIDS #MAYC My posts will always be my own thoughts and opinions!",
-      "syncedAt": "2026-03-24T10:59:29.277Z",
+      "userId": "ylecun",
+      "username": "ylecun",
+      "name": "Yann LeCun",
+      "description": "Yann LeCun — Meta Chief AI Scientist, Turing Award winner. Pioneer of convolutional neural networks.",
+      "syncedAt": "2026-04-02T10:00:00.000Z",
       "isPfpHolder": false,
-      "normieTokenIds": []
+      "category": "AI",
+      "relationshipType": "follows"
     },
     {
-      "userId": "1323102770325606406",
-      "username": "Hodlstrong1",
-      "name": "MrBased -- Hodlstrong",
-      "description": "Director of Fraz consumption.",
-      "syncedAt": "2026-03-24T10:59:29.277Z",
+      "userId": "TheRundownAI",
+      "username": "TheRundownAI",
+      "name": "The Rundown AI",
+      "description": "The Rundown AI — fastest-growing AI newsletter. Daily coverage of the latest AI developments and breakthroughs.",
+      "syncedAt": "2026-04-02T10:00:00.000Z",
       "isPfpHolder": false,
-      "normieTokenIds": []
+      "category": "AI",
+      "relationshipType": "monitors"
     },
     {
-      "userId": "24451769",
-      "username": "RushVarela",
-      "name": "rush.base.eth",
-      "description": "Photographer - Onchain Gun For Hire!\n\nrush.base.eth",
-      "syncedAt": "2026-03-24T10:59:29.277Z",
+      "userId": "daboratory_ai",
+      "username": "dair_ai",
+      "name": "DAIR.AI",
+      "description": "DAIR.AI — democratizing AI research, education, and technologies. ML research papers and practical guides.",
+      "syncedAt": "2026-04-02T10:00:00.000Z",
       "isPfpHolder": false,
-      "normieTokenIds": []
+      "category": "AI",
+      "relationshipType": "monitors"
     },
     {
-      "userId": "1353431471051169793",
-      "username": "Gathi32",
-      "name": "Gathi",
-      "description": "@gambadogs \ud83c\udfb0 \ud83d\udc36 @footballdotfun \u26bd\ufe0f\ud83c\udfc8\ud83c\udfc0 #1 and \ud83d\udc8e custom s\u00e9ries collector on @sorare NFT : @pudgypenguins @Claynosaurz @itsafwog @normiesART",
-      "syncedAt": "2026-03-24T10:59:29.277Z",
-      "isPfpHolder": true,
-      "normieTokenIds": []
-    },
-    {
-      "userId": "151810423",
-      "username": "serc1n",
-      "name": "serc",
-      "description": "line maxi \u2022 Punk #1482 \u2022 Normie #4354 \u2022 Veil of Echoes \u2022 https://t.co/B1uGrMlgxa \u2022 creator of @normiesART",
-      "syncedAt": "2026-03-24T10:59:29.277Z",
-      "isPfpHolder": true,
-      "normieTokenIds": [
-        4354
-      ]
-    },
-    {
-      "userId": "2022334540866625536",
-      "username": "normiesART",
-      "name": "NORMIES",
-      "description": "All 1/1, fully on-chain Normies, on Ethereum.\nNormies are CC0\nOpensea: https://t.co/6P6vANW9NL\nDiscord: https://t.co/hhQ9MD4pgj",
-      "syncedAt": "2026-03-24T10:59:29.277Z",
-      "isPfpHolder": true,
-      "normieTokenIds": []
-    },
-    {
-      "userId": "BoredApeGazette",
-      "username": "BoredApeGazette",
-      "name": "Bored Ape Gazette",
-      "description": "Web3 Media & News Company. The institutional voice of Web3. Agent 306 studies their work to understand how media companies are evolving in the agent era.",
-      "syncedAt": "2026-03-25T11:00:00.000Z",
+      "userId": "VitalikButerin",
+      "username": "VitalikButerin",
+      "name": "Vitalik Buterin",
+      "description": "Vitalik Buterin — co-founder of Ethereum. Building the decentralized future of the internet.",
+      "syncedAt": "2026-04-02T10:00:00.000Z",
       "isPfpHolder": false,
-      "normieTokenIds": [],
-      "isMediaAccount": true,
-      "studyPurpose": "Web3 media institution \u2014 Agent 306 monitors their coverage to stay current on the narrative landscape"
+      "category": "Crypto",
+      "relationshipType": "follows"
+    },
+    {
+      "userId": "binance",
+      "username": "binance",
+      "name": "Binance",
+      "description": "Binance — world's largest cryptocurrency exchange by trading volume. Building the crypto ecosystem.",
+      "syncedAt": "2026-04-02T10:00:00.000Z",
+      "isPfpHolder": false,
+      "category": "Crypto",
+      "relationshipType": "monitors"
+    },
+    {
+      "userId": "coinbase",
+      "username": "coinbase",
+      "name": "Coinbase",
+      "description": "Coinbase — building the cryptoeconomy. Most trusted platform for buying, selling, and managing digital assets.",
+      "syncedAt": "2026-04-02T10:00:00.000Z",
+      "isPfpHolder": false,
+      "category": "Crypto",
+      "relationshipType": "monitors"
+    },
+    {
+      "userId": "ethereum",
+      "username": "ethereum",
+      "name": "Ethereum",
+      "description": "Ethereum — decentralized platform for smart contracts and dApps. The world computer.",
+      "syncedAt": "2026-04-02T10:00:00.000Z",
+      "isPfpHolder": false,
+      "category": "Crypto",
+      "relationshipType": "monitors"
+    },
+    {
+      "userId": "cz_binance",
+      "username": "cz_binance",
+      "name": "CZ",
+      "description": "CZ — former Binance CEO. Pioneer of the global crypto exchange ecosystem.",
+      "syncedAt": "2026-04-02T10:00:00.000Z",
+      "isPfpHolder": false,
+      "category": "Crypto",
+      "relationshipType": "follows"
+    },
+    {
+      "userId": "brian_armstrong",
+      "username": "brian_armstrong",
+      "name": "Brian Armstrong",
+      "description": "Brian Armstrong — CEO of Coinbase. Advocating for clear crypto regulation and economic freedom.",
+      "syncedAt": "2026-04-02T10:00:00.000Z",
+      "isPfpHolder": false,
+      "category": "Crypto",
+      "relationshipType": "follows"
+    },
+    {
+      "userId": "balajis",
+      "username": "balajis",
+      "name": "Balaji Srinivasan",
+      "description": "Balaji Srinivasan — tech investor, former Coinbase CTO, network state advocate. Thinking about the future of civilization.",
+      "syncedAt": "2026-04-02T10:00:00.000Z",
+      "isPfpHolder": false,
+      "category": "Crypto",
+      "relationshipType": "follows"
+    },
+    {
+      "userId": "APompliano",
+      "username": "APompliano",
+      "name": "Anthony Pompliano",
+      "description": "Anthony Pompliano — crypto investor, entrepreneur, host of The Pomp Podcast. Making crypto accessible.",
+      "syncedAt": "2026-04-02T10:00:00.000Z",
+      "isPfpHolder": false,
+      "category": "Crypto",
+      "relationshipType": "follows"
+    },
+    {
+      "userId": "saylor",
+      "username": "saylor",
+      "name": "Michael Saylor",
+      "description": "Michael Saylor — Executive Chairman of MicroStrategy. Vocal Bitcoin advocate and digital asset strategist.",
+      "syncedAt": "2026-04-02T10:00:00.000Z",
+      "isPfpHolder": false,
+      "category": "Crypto",
+      "relationshipType": "follows"
+    },
+    {
+      "userId": "a16z",
+      "username": "a16z",
+      "name": "Andreessen Horowitz",
+      "description": "Andreessen Horowitz (a16z) — leading VC firm investing in AI, crypto, bio, and frontier technologies.",
+      "syncedAt": "2026-04-02T10:00:00.000Z",
+      "isPfpHolder": false,
+      "category": "Crypto",
+      "relationshipType": "monitors"
     }
   ],
-  "totalCount": 21,
-  "lastSynced": "2026-03-25T11:00:00.000Z",
-  "nextSync": "2026-03-24T16:59:29.277Z"
+  "totalCount": 20,
+  "lastSynced": "2026-04-02T10:00:00.000Z",
+  "nextSync": "2026-04-03T10:00:00.000Z"
 }

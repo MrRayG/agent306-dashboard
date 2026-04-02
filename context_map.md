@@ -1,4 +1,4 @@
-# CONTEXT MAP — NORMIES TV
+# CONTEXT MAP — AGENT 306
 _All files that consume tokens at runtime_
 
 ---
@@ -63,7 +63,7 @@ TOTAL PER CALL          → ~2,550 tokens
 |---|---|---|
 | Mission statement repeated | grokEngine (x3), memoryEngine, academyEngine | ~800 tokens/call |
 | Voice rules repeated | grokEngine + replyEngine | ~400 tokens/call |
-| Arena/burn framing repeated | grokEngine + burnReceiptEngine + cyoaEngine | ~300 tokens/call |
+| Framing repeated | grokEngine + burnReceiptEngine + cyoaEngine | ~300 tokens/call |
 | following.json loads full profiles | Only usernames/isPfpHolder needed | ~1,200 tokens saved |
 | Knowledge summaries avg 396 chars | Should be ≤150 chars | ~500 tokens/call |
 

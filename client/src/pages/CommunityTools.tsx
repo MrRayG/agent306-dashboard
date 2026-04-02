@@ -16,10 +16,10 @@ const TOOLS = [
     title: "Token Radio",
     builder: "yasuna-ide",
     builderUrl: "https://github.com/yasuna-ide",
-    url: "https://yasuna-ide.github.io/normie-radio/",
+    url: "https://yasuna-ide.github.io/token-radio/",
     tagline: "Every token has a sound.",
-    description: "Each token generates unique ambient music from its on-chain traits + pixel data. Type determines the scale — Human plays Major, Cat plays Pentatonic, Alien plays Whole Tone, Agent plays Minor. The face itself shapes the melody — pixel density across columns determines pitch and tone. No two tokens sound the same. The music shifts daily with a date-based seed.",
-    lore: "The Temple has a frequency. Tune in.",
+    description: "Each token generates unique ambient music from its on-chain traits + data. Type determines the scale — Human plays Major, Cat plays Pentatonic, Alien plays Whole Tone, Agent plays Minor. The data itself shapes the melody — density across columns determines pitch and tone. No two tokens sound the same. The music shifts daily with a date-based seed.",
+    lore: "The network has a frequency. Tune in.",
     accent: "#a78bfa",
     accentBg: "rgba(167,139,250,0.08)",
     details: [
@@ -36,9 +36,9 @@ const TOOLS = [
     title: "Token Yearbook",
     builder: "Community",
     builderUrl: null,
-    url: "https://normie-yearbook.vercel.app/",
+    url: "https://token-yearbook.vercel.app/",
     tagline: "They were here before the burns.",
-    description: "Senior portraits for tokens #0-47, each assigned a generated name. Haruto Tanaka. Adaeze Bullrunner. Margot Bullrunner. Louis Weber. The characters have names. They have identities. The yearbook records what existed before everything changed.",
+    description: "Senior portraits for tokens #0-47, each assigned a generated name. Haruto Tanaka. Adaeze Bullrunner. Margot Bullrunner. Louis Weber. The agents have names. They have identities. The yearbook records what existed before everything changed.",
     lore: "The yearbook never forgets.",
     accent: "#2dd4bf",
     accentBg: "rgba(45,212,191,0.08)",
@@ -46,7 +46,7 @@ const TOOLS = [
       { label: "Coverage", value: "#0 – #47" },
       { label: "Format", value: "Senior portraits" },
       { label: "Names", value: "Generated identities" },
-      { label: "Era", value: "Before the burns" },
+      { label: "Era", value: "Genesis era" },
     ],
     icon: BookOpen,
   },
@@ -56,17 +56,17 @@ const TOOLS = [
     title: "306 Blackjack",
     builder: "Community",
     builderUrl: null,
-    url: "https://normies-blackjack.vercel.app/",
-    tagline: "The Temple deals cards tonight.",
-    description: "A card game where every card IS a real NFT, rendered directly from the chain. Card value is determined by Pixel Count — rarer tokens = higher cards. Trait combos trigger special bonuses: Double Agents reveal the dealer's hole card, Cat Pair gives bust insurance, Alien Blackjack pays 3x instead of 1.5x. Also includes Tetris.",
+    url: "https://306-blackjack.vercel.app/",
+    tagline: "The network deals cards tonight.",
+    description: "A card game where every card IS a real on-chain token, rendered directly from the chain. Card value is determined by data density — rarer tokens = higher cards. Trait combos trigger special bonuses: Double Agents reveal the dealer's hole card, Cat Pair gives bust insurance, Alien Blackjack pays 3x instead of 1.5x. Also includes Tetris.",
     lore: "The stakes are on-chain.",
     accent: "#f97316",
     accentBg: "rgba(249,115,22,0.08)",
     details: [
-      { label: "Cat Pair", value: "Bust insurance" },
+      { label: "Pair Bonus", value: "Bust insurance" },
       { label: "Double Agents", value: "Reveal dealer card" },
-      { label: "Alien Blackjack", value: "3× payout" },
-      { label: "Human Pair", value: "+200 chips" },
+      { label: "Special Hand", value: "3x payout" },
+      { label: "Standard Pair", value: "+200 chips" },
     ],
     icon: Gamepad2,
   },
@@ -78,7 +78,7 @@ const TOOLS = [
     builderUrl: null,
     url: "https://editor.p5js.org/nftmooods/full/PRBv_Bgoq",
     tagline: "The culture plays.",
-    description: "A generative game built in p5.js by community member nftmooods. When the community builds games unprompted — that's not hype. That's culture. The Temple has an arcade now.",
+    description: "A generative game built in p5.js by community member nftmooods. When the community builds games unprompted — that's not hype. That's culture. The network has an arcade now.",
     lore: "No one asked. Everyone showed up.",
     accent: "#4ade80",
     accentBg: "rgba(74,222,128,0.08)",
@@ -98,7 +98,7 @@ const TOOLS = [
     builderUrl: null,
     url: "",
     tagline: "All the news that's fit to mint.",
-    description: "AI generates fake tabloid front pages starring any token. Enter a Token ID, optionally write a headline, and get a full newspaper front page with an AI-generated story based on that token's exact traits. Every token is a celebrity. Every story is absurd and true.",
+    description: "AI generates fake tabloid front pages starring any token. Enter a Token ID, optionally write a headline, and get a full newspaper front page with an AI-generated story based on that token's data. Every token is a celebrity. Every story is absurd and true.",
     lore: "The headlines write themselves.",
     accent: "#e3e5e4",
     accentBg: "rgba(227,229,228,0.12)",
@@ -257,7 +257,7 @@ export default function CommunityTools() {
           The art, the code, everything — belongs to everyone. No restrictions. Anyone can build on top of it, remix it, or create entirely new experiences around it.
           These tools prove that promise is real. A radio. A yearbook. A card game.
           A newspaper where tokens make the front page.{" "}
-          <span style={{ color: "#f97316" }}>This is the best community in Web3. It's not a claim. It's a record on-chain.</span>
+          <span style={{ color: "#f97316" }}>This is what happens when a community builds together. It's not a claim. It's a record on-chain.</span>
         </p>
       </div>
     </div>

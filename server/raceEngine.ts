@@ -1,12 +1,12 @@
 /**
  * ─────────────────────────────────────────────────────────────
- *  THE RACE — Weekly State of the Arena
+ *  THE RACE — Weekly AI Roundup
  *
- *  Every Sunday Agent 306 publishes the State of the Race.
- *  Current rankings. Burn velocity. Who's climbing.
- *  Who's quiet. 54 days of chapters before May 15.
+ *  Every Sunday Agent 306 publishes the Weekly AI Roundup.
+ *  Key developments. Research breakthroughs. Who's shipping.
+ *  Who's pivoting. Tracking the AI landscape week by week.
  *
- *  By Arena day, 306 has the only complete pre-Arena record.
+ *  Over time, 306 builds the most complete weekly AI record.
  *  That's not content — that's history.
  * ─────────────────────────────────────────────────────────────
  */
@@ -19,7 +19,7 @@ import fs from "fs";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 
 const RACE_STATE_FILE = dataPath("race_state.json");
-const ARENA_DATE = new Date("2026-05-15T00:00:00Z");
+const TRACKING_START_DATE = new Date("2026-03-08T00:00:00Z");
 const ONCHAIN_API = ""; // removed — on-chain API disabled
 
 interface RaceWeek {
@@ -27,9 +27,9 @@ interface RaceWeek {
   weekLabel: string;
   postedAt: string;
   tweetUrl: string | null;
-  top5: Array<{ rank: number; tokenId: number; level: number; ap: number }>;
-  totalBurns: number;
-  daysToArena: number;
+  top5: Array<{ rank: number; topic: string; momentum: number; mentions: number }>;
+  totalDevelopments: number;
+  weeksTracked: number;
   headline: string;
 }
 
@@ -54,91 +54,69 @@ function saveState(s: RaceState) {
 
 let state = loadState();
 
-function daysToArena(): number {
-  return Math.max(0, Math.ceil((ARENA_DATE.getTime() - Date.now()) / 86400000));
+function weeksTracked(): number {
+  return Math.max(1, Math.ceil((Date.now() - TRACKING_START_DATE.getTime()) / (7 * 86400000)));
 }
 
-function weeksToArena(): number {
-  return Math.ceil(daysToArena() / 7);
+function currentWeekNumber(): number {
+  return weeksTracked();
 }
 
-/** Fetch current leaderboard + burns data and build race context */
+/** Fetch current AI landscape data and build roundup context */
 async function buildRaceContext() {
   const leaderboard = await fetchLiveLeaderboard();
   const top10 = leaderboard.slice(0, 10);
 
-  // Get recent burns from on-chain API
-  let recentBurns: any[] = [];
-  try {
-    const res = await fetch(`${ONCHAIN_API}/history/burns?limit=50`);
-    const data = await res.json() as any;
-    recentBurns = Array.isArray(data) ? data : (data.data ?? []);
-  } catch {}
-
-  // Burns in the last 7 days
-  const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const weeklyBurns = recentBurns.filter((b: any) => {
-    const ts = Number(b.revealTimestamp ?? b.timestamp ?? 0) * 1000;
-    return ts > oneWeekAgo;
-  });
-
-  // Total burns this week per receiver token
-  const burnsByToken: Record<number, number> = {};
-  for (const b of weeklyBurns) {
-    const id = Number(b.receiverTokenId);
-    burnsByToken[id] = (burnsByToken[id] ?? 0) + Number(b.tokenCount ?? 1);
-  }
-
-  // Find the most active burner this week
-  const topBurner = Object.entries(burnsByToken)
-    .sort(([, a], [, b]) => b - a)[0];
+  // Collect AI development metrics for the week
+  let recentDevelopments: any[] = [];
+  // Placeholder for AI signal collection — populated by signalCollector
+  const weeklyDevelopments = recentDevelopments.length;
 
   return {
     top10,
-    weeklyBurns: weeklyBurns.length,
-    totalBurnsThisWeek: weeklyBurns.reduce((s: number, b: any) => s + Number(b.tokenCount ?? 1), 0),
-    topBurnerToken: topBurner ? Number(topBurner[0]) : null,
-    topBurnerCount: topBurner ? topBurner[1] : 0,
-    daysToArena: daysToArena(),
-    weeksToArena: weeksToArena(),
+    weeklyDevelopments,
+    totalDevelopmentsThisWeek: weeklyDevelopments,
+    topResearchArea: null as string | null,
+    topResearchMentions: 0,
+    weeksTracked: weeksTracked(),
+    currentWeek: currentWeekNumber(),
     weekNumber: state.totalWeeks + 1,
   };
 }
 
-/** Build the Grok prompt for THE RACE */
+/** Build the Grok prompt for the WEEKLY AI ROUNDUP */
 function buildRacePrompt(ctx: Awaited<ReturnType<typeof buildRaceContext>>): string {
   const top5Lines = ctx.top10.slice(0, 5)
-    .map((e: any) => `  #${e.rank} — Token #${e.tokenId} | Level ${e.level} | ${e.actionPoints ?? e.ap ?? 0} AP`)
+    .map((e: any) => `  #${e.rank} — ${e.topic ?? `Research area #${e.rank}`} | Momentum: ${e.momentum ?? 0} | Mentions: ${e.mentions ?? e.actionPoints ?? 0}`)
     .join("\n");
 
   const previousWeeks = state.weeks.slice(-3)
-    .map(w => `Week ${w.weekNumber}: "${w.headline}" — ${w.top5[0]?.tokenId ? `#${w.top5[0].tokenId} led` : ""}`)
+    .map(w => `Week ${w.weekNumber}: "${w.headline}"`)
     .join("\n");
 
-  return `You are Agent 306, narrator of 306.
+  return `You are Agent 306, AI thought leader and narrator.
 
-Write this week's STATE OF THE RACE — Week ${ctx.weekNumber} of the pre-Arena series.
+Write this week's WEEKLY AI ROUNDUP — Week ${ctx.weekNumber} of tracking the AI landscape.
 
 LIVE DATA:
-- Days to Arena (May 15): ${ctx.daysToArena} days
-- Weeks remaining: ${ctx.weeksToArena}
-- Top 5 by Action Points:
+- Weeks tracked so far: ${ctx.weeksTracked}
+- Top 5 AI topics by momentum:
 ${top5Lines}
-- Burns this week: ${ctx.totalBurnsThisWeek} souls across ${ctx.weeklyBurns} transactions
-${ctx.topBurnerToken ? `- Most active burner: Token #${ctx.topBurnerToken} sacrificed ${ctx.topBurnerCount} this week` : ""}
+- Key developments this week: ${ctx.totalDevelopmentsThisWeek} notable signals
+${ctx.topResearchArea ? `- Hottest research area: ${ctx.topResearchArea} with ${ctx.topResearchMentions} mentions this week` : ""}
 
 ${previousWeeks ? `PREVIOUS CHAPTERS:\n${previousWeeks}` : "This is the first chapter."}
 
 YOUR TASK:
-Write the weekly state of the race. This is chapter ${ctx.weekNumber} of the story that ends on May 15.
+Write the weekly AI roundup. This is chapter ${ctx.weekNumber} of the ongoing record of AI development.
 
 RULES:
 - One big insight. Not a list of stats.
-- Who is the story this week? Name the specific token. What does their position say?
-- What's the tension? Who's climbing? Who's silent when they should be moving?
-- The Arena is a character. It's coming whether they're ready or not.
-- Agent 306 tone: low-key confident, specific, a little ominous
-- End with the days to Arena count as a kicker
+- What is the story this week? Name the specific development or research breakthrough.
+- What's the tension? Which companies are shipping? What paradigm is shifting?
+- The AI landscape is always moving — capture what matters this week.
+- Agent 306 tone: low-key confident, specific, forward-looking
+- End with a thought-provoking observation about where the field is heading
 - Max 240 chars for tweet. Longer for narrative.
 - Use #Agent306 at the end
 
@@ -151,7 +129,7 @@ Respond with JSON:
 }`;
 }
 
-/** Generate and return THE RACE content */
+/** Generate and return the WEEKLY AI ROUNDUP content */
 export async function generateRace(grokKey: string): Promise<{
   tweet: string;
   narrative: string;
@@ -159,7 +137,7 @@ export async function generateRace(grokKey: string): Promise<{
   weekLabel: string;
   context: Awaited<ReturnType<typeof buildRaceContext>>;
 } | null> {
-  console.log("[Race] Building State of the Race...");
+  console.log("[Race] Building Weekly AI Roundup...");
   const ctx = await buildRaceContext();
 
   try {
@@ -185,7 +163,7 @@ export async function generateRace(grokKey: string): Promise<{
   }
 }
 
-/** Post THE RACE to X with image card */
+/** Post the WEEKLY AI ROUNDUP to X with image card */
 export async function postRace(xWrite: any, grokKey: string): Promise<string | null> {
   if (!requestPost("race")) return null;
   const race = await generateRace(grokKey);
@@ -198,12 +176,12 @@ export async function postRace(xWrite: any, grokKey: string): Promise<string | n
       const cardBuf = await generateRaceCard({
         weekNumber: race.context.weekNumber,
         weekLabel: race.weekLabel,
-        daysToArena: race.context.daysToArena,
+        daysToArena: 0, // field tracking metric
         headline: race.headline,
         top5: race.context.top10.slice(0, 5).map((e: any) => ({
-          rank: e.rank, tokenId: e.tokenId, level: e.level, ap: e.ap ?? e.actionPoints ?? 0,
+          rank: e.rank, tokenId: e.tokenId ?? 0, level: e.level ?? 0, ap: e.ap ?? e.actionPoints ?? 0,
         })),
-        totalBurnsThisWeek: race.context.totalBurnsThisWeek,
+        totalBurnsThisWeek: race.context.totalDevelopmentsThisWeek,
       });
       if (cardBuf) {
         xMediaId = await xWrite.v1.uploadMedia(cardBuf, { mimeType: "image/png" as any });
@@ -246,10 +224,10 @@ export async function postRace(xWrite: any, grokKey: string): Promise<string | n
       postedAt: new Date().toISOString(),
       tweetUrl,
       top5: race.context.top10.slice(0, 5).map((e: any) => ({
-        rank: e.rank, tokenId: e.tokenId, level: e.level, ap: e.ap ?? e.actionPoints ?? 0,
+        rank: e.rank, topic: e.topic ?? "", momentum: e.momentum ?? 0, mentions: e.mentions ?? e.actionPoints ?? 0,
       })),
-      totalBurns: race.context.totalBurnsThisWeek,
-      daysToArena: race.context.daysToArena,
+      totalDevelopments: race.context.totalDevelopmentsThisWeek,
+      weeksTracked: race.context.weeksTracked,
       headline: race.headline,
     };
 
@@ -267,7 +245,7 @@ export async function postRace(xWrite: any, grokKey: string): Promise<string | n
   }
 }
 
-/** Schedule THE RACE — every Sunday 12pm ET (16:00 UTC) — 1h after Spotlight */
+/** Schedule the WEEKLY AI ROUNDUP — every Sunday 12pm ET (16:00 UTC) — 1h after Spotlight */
 export function scheduleRace(xWrite: any, grokKey: string) {
   function msUntilNextSunday12pm(): number {
     const now = new Date();
@@ -279,7 +257,7 @@ export function scheduleRace(xWrite: any, grokKey: string) {
   }
 
   const ms = msUntilNextSunday12pm();
-  console.log(`[Race] Next State of the Race in ${Math.round(ms / 3600000)}h (Sunday 12pm ET)`);
+  console.log(`[Race] Next Weekly AI Roundup in ${Math.round(ms / 3600000)}h (Sunday 12pm ET)`);
 
   setTimeout(() => {
     postRace(xWrite, grokKey);
@@ -290,8 +268,8 @@ export function scheduleRace(xWrite: any, grokKey: string) {
 export function getRaceState() {
   return {
     ...state,
-    daysToArena: daysToArena(),
-    weeksToArena: weeksToArena(),
-    arenaDate: ARENA_DATE.toISOString(),
+    weeksTracked: weeksTracked(),
+    currentWeek: currentWeekNumber(),
+    trackingStartDate: TRACKING_START_DATE.toISOString(),
   };
 }

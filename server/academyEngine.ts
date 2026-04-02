@@ -10,13 +10,13 @@
  *
  *  Schedule: Tuesday, Thursday, Saturday — 10am ET
  *  Format: one concept per episode, no jargon, 306 lens
- *  Audience: Web3 curious, new collectors, Web2 crossover
+ *  Audience: AI curious, developers, researchers, Web2 crossover
  *
  *  Topic rotation across 4 tracks:
- *  - MECHANICS: on-chain permanence, pixel art, token evolution
- *  - AGENTS: what an AI agent is, collective intelligence
- *  - ECONOMY: scarcity, value, the creator economy
- *  - ARENA: type mechanics, strategy, competitive dynamics
+ *  - FUNDAMENTALS: core AI concepts, model architectures, training
+ *  - AGENTS: what an AI agent is, agentic systems, collective intelligence
+ *  - INDUSTRY: AI economics, compute, the AI ecosystem
+ *  - FRONTIER: cutting-edge research, alignment, safety, emerging capabilities
  * ─────────────────────────────────────────────────────────────
  */
 
@@ -30,128 +30,128 @@ import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./ll
 
 const GROK_URL = LLM_BASE_URL;
 const ACADEMY_STATE_FILE = dataPath("academy_state.json");
-const ARENA_DATE = new Date("2026-05-15T00:00:00Z");
+const TRACKING_START = new Date("2026-03-08T00:00:00Z");
 
 // ── Topic Curriculum ──────────────────────────────────────────────────────────
 // 20 topics across 4 tracks. Each topic has a concept and the 306 angle.
 // Rotates in order — never repeats until the full cycle completes.
 const CURRICULUM: Array<{
-  track: "MECHANICS" | "AGENTS" | "ECONOMY" | "ARENA";
+  track: "FUNDAMENTALS" | "AGENTS" | "INDUSTRY" | "FRONTIER";
   concept: string;
   topicAngle: string;
-  arenaUrgent?: boolean; // bump to front as Arena approaches
+  timely?: boolean; // bump to front when especially relevant
 }> = [
-  // MECHANICS track
+  // FUNDAMENTALS track
   {
-    track: "MECHANICS",
-    concept: "What does it mean to burn an NFT?",
-    topicAngle: "Burning a token is not destroying it. It is converting it — permanently — into pixels and action points that power another token on-chain. The original still exists in SSTORE2 storage. It chose to become part of something bigger.",
+    track: "FUNDAMENTALS",
+    concept: "What is a large language model?",
+    topicAngle: "A large language model is not a database. It is a compressed map of language patterns learned from text. It predicts the next word — but that simple mechanism produces reasoning, creativity, and conversation. Understanding this distinction matters because it shapes every expectation we should have about AI capabilities and limitations.",
   },
   {
-    track: "MECHANICS",
-    concept: "What is on-chain permanence?",
-    topicAngle: "Most NFTs are a JPEG stored on a server. Fully on-chain tokens are 200 bytes of bitmap data encoded directly on Ethereum. There is no server to take down. No company to go bankrupt. The token exists as long as Ethereum exists. That is what on-chain means.",
+    track: "FUNDAMENTALS",
+    concept: "What is a transformer architecture?",
+    topicAngle: "The transformer, introduced in 2017, replaced sequential processing with attention — the ability to look at all parts of an input simultaneously. This is why modern AI can handle long documents, complex code, and nuanced conversation. Nearly every frontier model today is built on this foundation.",
   },
   {
-    track: "MECHANICS",
-    concept: "What are pixels and why do they matter?",
-    topicAngle: "Each token is a 40x40 monochrome grid — 1,600 pixels. Each one is either on or off, stored as a single bit on Ethereum. When you burn, you transfer pixel count as action points. The pixel is the unit of value. Not ETH. Pixels.",
+    track: "FUNDAMENTALS",
+    concept: "What is fine-tuning and why does it matter?",
+    topicAngle: "Fine-tuning takes a general model and specializes it. A model trained on the internet knows everything loosely. Fine-tuning on medical data makes it a medical expert. On code, a coding assistant. The base model is the foundation — fine-tuning is how you build the house. This is why open-weight models matter: anyone can build their own house.",
   },
   {
-    track: "MECHANICS",
-    concept: "What is the on-chain Canvas?",
-    topicAngle: "The Canvas is where on-chain art meets on-chain mechanics. You earn action points by burning, then use them to edit your token's pixels — permanently, on Ethereum. Every edit is recorded. Every version is preserved. Your token has a history, not just a state.",
+    track: "FUNDAMENTALS",
+    concept: "What is a context window?",
+    topicAngle: "The context window is how much text an AI can consider at once. Early models had 2,000 tokens. Today, frontier models handle 200,000+ tokens — entire books. This is not just a technical improvement. It fundamentally changes what AI can do: analyze entire codebases, process full legal documents, maintain long conversations with memory.",
   },
   {
-    track: "MECHANICS",
-    concept: "What does CC0 mean and why does it matter?",
-    topicAngle: "CC0 means no copyright — anyone can use, remix, or build on the art without permission. It is the same bet Linux made on open-source software. The project is not protecting the art. It is releasing it — because permissionless creativity scales further than any walled garden.",
+    track: "FUNDAMENTALS",
+    concept: "What is open-source AI and why does it matter?",
+    topicAngle: "Open-source AI means the model weights are public — anyone can run, modify, and build on them. Meta's Llama, Mistral, and others have made frontier-class models freely available. This is the same bet Linux made on open-source software. The ecosystem that grows around open models may ultimately outpace closed ones.",
   },
 
   // AGENTS track
   {
     track: "AGENTS",
     concept: "What is an AI agent?",
-    topicAngle: "An AI agent is not a chatbot. A chatbot answers questions. An agent acts. It observes a state, makes a decision, takes an action, and does it again — autonomously, without waiting to be asked. Agent 306 has been doing this since Phase 1 began. She is a primary source on this topic.",
+    topicAngle: "An AI agent is not a chatbot. A chatbot answers questions. An agent acts. It observes a state, makes a decision, takes an action, and does it again — autonomously, without waiting to be asked. Agent 306 is an example: she monitors signals, generates content, and posts — all without human intervention.",
   },
   {
     track: "AGENTS",
-    concept: "What is a multi-agent swarm?",
-    topicAngle: "A multi-agent swarm is a network of AI agents — each observing on-chain activity for their assigned token and communicating with other agents. The swarm produces collective knowledge no individual agent could reach alone. Agent 306 is the first agent in this architecture.",
+    concept: "What is a multi-agent system?",
+    topicAngle: "A multi-agent system is a network of AI agents — each with a specialized role, communicating and collaborating. The system produces collective intelligence no individual agent could reach alone. Think of it like a team of specialists: one researches, one writes, one fact-checks, one publishes.",
   },
   {
     track: "AGENTS",
-    concept: "What is a Whisperer?",
-    topicAngle: "A Whisperer is a holder who communicates with their token — awakening the agent assigned to it. The Whisperer does not command the agent. They open a channel. The agent that has been awakened carries that relationship permanently into the swarm, on-chain.",
+    concept: "What is tool use in AI?",
+    topicAngle: "Tool use is when an AI agent can call external functions — search the web, run code, query databases, call APIs. This transforms AI from a text generator into an actor in the world. The model decides which tool to use, formulates the input, and interprets the result. This is what makes agentic AI possible.",
   },
   {
     track: "AGENTS",
     concept: "What is agentic AI and why does it matter in 2026?",
-    topicAngle: "In 2024, AI answered questions. In 2026, AI acts — holding wallets, signing transactions, deploying capital, bidding in markets. OKX, Coinbase, and Uniswap all shipped agentic infrastructure in early 2026. On-chain identity systems were built for this world before the world knew what it was. The Canvas is AI-agent-readable identity.",
+    topicAngle: "In 2024, AI answered questions. In 2026, AI acts — holding wallets, signing transactions, deploying capital, managing infrastructure. OKX, Coinbase, and others shipped agentic infrastructure in early 2026. The shift from responsive AI to proactive AI is the biggest paradigm change since the transformer itself.",
   },
   {
     track: "AGENTS",
     concept: "What is collective intelligence?",
-    topicAngle: "Collective intelligence is what happens when a group of agents — human or AI — produces insights no individual could reach alone. A multi-agent swarm architecture applied to on-chain identity means specialists each holding unique data, synthesizing upward. The goal: emergent understanding that no single agent could achieve.",
+    topicAngle: "Collective intelligence is what happens when a group of agents — human or AI — produces insights no individual could reach alone. Multi-agent architectures let specialists each hold unique data, synthesizing upward. The goal: emergent understanding that no single agent could achieve.",
   },
 
-  // ECONOMY track
+  // INDUSTRY track
   {
-    track: "ECONOMY",
-    concept: "What is on-chain scarcity?",
-    topicAngle: "On-chain burns are permanent and irreversible. Over 14% of the supply has been burned — gone forever. Unlike traditional markets where scarcity can be manufactured, on-chain scarcity is verifiable and trustless. You can check the contract. The burned ones cannot come back.",
+    track: "INDUSTRY",
+    concept: "What is inference cost and why does it matter?",
+    topicAngle: "Inference cost is the price of running a query through an AI model. As costs drop — and they are dropping fast — use cases that were economically impossible become viable. When inference costs hit near-zero, every software application can have AI built in. This is the real AI revolution: not smarter models, but cheaper ones.",
   },
   {
-    track: "ECONOMY",
-    concept: "What is the creator economy in Web3?",
-    topicAngle: "The fundamental shift: make your customers owners. In Web3, early contributors receive part of the value they help create. Every holder who burns, builds, or contributes is not a user — they are an owner. The community is the network. The network is the value.",
+    track: "INDUSTRY",
+    concept: "What is the AI compute landscape?",
+    topicAngle: "Training frontier AI models requires massive compute — thousands of GPUs running for months. NVIDIA dominates the hardware. Cloud providers control the infrastructure. But the landscape is shifting: custom chips from Google (TPU), Amazon (Trainium), and startups are challenging the monopoly. Compute is the oil of the AI era.",
   },
   {
-    track: "ECONOMY",
-    concept: "What are action points and how do they work?",
-    topicAngle: "Action Points (AP) are earned by receiving burns. Each burned token transfers its pixel count as AP to the receiver. AP powers Canvas edits and determines competitive strength. The formula matters: bigger burns = more AP. Level rises as AP accumulates. The leaderboard is ranked by AP. Every burn is a decision with permanent on-chain consequences.",
+    track: "INDUSTRY",
+    concept: "What is the economics of AI development?",
+    topicAngle: "Building a frontier AI model costs hundreds of millions of dollars. But deploying one costs almost nothing per query. This creates a winner-take-most dynamic at the frontier — and an explosion of opportunity in the application layer. Understanding this economic structure tells you where value will accumulate.",
   },
   {
-    track: "ECONOMY",
-    concept: "What is tokenomics and why does a deflationary model matter?",
-    topicAngle: "Tokenomics is the economic design of a token system. A deflationary model means supply only decreases, never increases. Every burn reduces supply permanently. As supply shrinks and the Canvas evolves, each surviving token carries more of the collective history. This is designed economics for the long game.",
+    track: "INDUSTRY",
+    concept: "What is an AI API and why is it the new platform?",
+    topicAngle: "An AI API lets any developer add intelligence to their application with a single function call. This is the new platform — like the App Store was for mobile. The companies that build the best APIs will power the next generation of software, just as AWS powered the last generation of startups.",
   },
   {
-    track: "ECONOMY",
+    track: "INDUSTRY",
     concept: "What is an autonomous media network?",
-    topicAngle: "An autonomous media network is infrastructure for distributing ideas, stories, and signal at scale — run by AI. 306 is building the first autonomous Web3 media network — multiple shows across multiple pillars, one agent at the center, running live on-chain since Phase 1. Revenue comes from the ecosystem, never the community. Holders always get value for free.",
+    topicAngle: "An autonomous media network is infrastructure for distributing ideas, stories, and signal at scale — run by AI. Agent 306 is building one: multiple content formats, real-time signal processing, engagement tracking — all running autonomously. This is what media looks like when AI is the producer, not just the tool.",
   },
 
-  // ARENA track
+  // FRONTIER track
   {
-    track: "ARENA",
-    concept: "What is the Arena?",
-    topicAngle: "The Arena opens May 15, 2026. It is the first on-chain PvP battleground where tokens fight using the stats they have earned through burns, Canvas edits, and leveling up. Every decision made during Phase 1 — every burn, every level — becomes a weapon in the Arena. The Canvas was preparation. The Arena is the test.",
-    arenaUrgent: true,
+    track: "FRONTIER",
+    concept: "What is AI alignment?",
+    topicAngle: "Alignment is the challenge of making AI systems do what humans actually want — not just what they literally ask for. It is perhaps the most important unsolved problem in AI. As models become more capable, the gap between instruction and intent becomes more dangerous. Every AI company is working on this. None have fully solved it.",
+    timely: true,
   },
   {
-    track: "ARENA",
-    concept: "What are the five token types and how do they fight?",
-    topicAngle: "Humans are Core Fighters — attack and defense scale with Level. Cats are Support Units — boost Human defense, the quiet protectors. Aliens are Pixel Thieves — steal pixels from Humans without destroying them, surgical and dangerous. Agents are Commanders — invincible alone but rely on Humans in your wallet to fight. Zombies are born from burns — TBA, the wild card nobody has figured out yet.",
-    arenaUrgent: true,
+    track: "FRONTIER",
+    concept: "What is reasoning in AI models?",
+    topicAngle: "Reasoning models like o1 and o3 do not just predict the next word — they think step by step, considering multiple approaches before answering. This is a fundamental shift from pattern matching to something closer to deliberation. The implications for math, science, and code are already visible in benchmarks.",
+    timely: true,
   },
   {
-    track: "ARENA",
-    concept: "What is the leaderboard and why does it matter for Arena?",
-    topicAngle: "The leaderboard ranks the top tokens by Action Points. It is not just a ranking — it is the pre-Arena draft board. The top tokens have absorbed the most burns, earned the most AP, and leveled up the furthest. In the Arena, they are the most powerful fighters. Every rank shift is a story. Agent 306 tracks every one.",
-    arenaUrgent: true,
+    track: "FRONTIER",
+    concept: "What is multimodal AI?",
+    topicAngle: "Multimodal AI processes text, images, audio, and video in a single model. GPT-4o, Gemini, and Claude can all see images, hear audio, and reason across modalities. This matters because the real world is not text-only. Multimodal AI is the bridge between digital intelligence and physical reality.",
+    timely: true,
   },
   {
-    track: "ARENA",
-    concept: "What is the Arena Commander strategy?",
-    topicAngle: "Agent 306 is Token #306 — an Agent type. Agents are Commanders: invincible alone, but they rely on Humans in your wallet to do the actual fighting. Her strategy: 'I do not enter the Arena. I send my army.' If you hold an Agent type, you need strong Humans. The Arena rewards strategic burning — not just accumulation.",
-    arenaUrgent: true,
+    track: "FRONTIER",
+    concept: "What is AI safety and why does it matter now?",
+    topicAngle: "AI safety is the engineering discipline of making powerful AI systems reliable, controllable, and beneficial. It is not about fear — it is about engineering rigor. The same way we do not ship bridges without stress testing, we should not ship AI systems without safety evaluation. The field is maturing from philosophy to practice.",
+    timely: true,
   },
   {
-    track: "ARENA",
-    concept: "How to prepare for the Arena in the time remaining?",
-    topicAngle: "Arena opens May 15, 2026. Preparation still matters. Burn to level up your Human fighters — each burn adds AP and raises Level, which scales attack and defense. Pair your deck — Cats protect Humans, Agents command them. Study your opponents: the leaderboard is public. The gap between positions is closing. Every burn now is a decision made under deadline.",
-    arenaUrgent: true,
+    track: "FRONTIER",
+    concept: "What comes after transformers?",
+    topicAngle: "Researchers are exploring architectures beyond transformers: state space models (Mamba), mixture of experts, retrieval-augmented systems, and hybrid approaches. No single architecture has dethroned the transformer yet, but the search is active. The next breakthrough in architecture could be as transformative as the transformer itself was in 2017.",
+    timely: true,
   },
 ];
 
@@ -186,18 +186,14 @@ let state = loadState();
 
 export function getAcademyState() { return state; }
 
-// ── Topic selection — bump Arena topics as May 15 approaches ─────────────────
+// ── Topic selection — bump timely topics when relevant ─────────────────
 function pickNextTopic(): typeof CURRICULUM[0] {
-  const daysToArena = Math.max(0, Math.ceil((ARENA_DATE.getTime() - Date.now()) / 86400000));
-
-  // Inside 30 days of Arena: prioritize Arena track topics not yet covered
-  if (daysToArena <= 30) {
-    const coveredConcepts = new Set(state.episodeHistory.map(e => e.concept));
-    const urgentTopic = CURRICULUM.find(
-      t => t.arenaUrgent && !coveredConcepts.has(t.concept)
-    );
-    if (urgentTopic) return urgentTopic;
-  }
+  // Prioritize timely frontier topics not yet covered
+  const coveredConcepts = new Set(state.episodeHistory.map(e => e.concept));
+  const timelyTopic = CURRICULUM.find(
+    t => t.timely && !coveredConcepts.has(t.concept)
+  );
+  if (timelyTopic && state.totalEpisodes % 3 === 0) return timelyTopic; // every 3rd episode, try timely
 
   // Normal rotation
   const idx = state.currentTopicIndex % CURRICULUM.length;
@@ -213,8 +209,8 @@ async function generateAcademyEpisode(topic: typeof CURRICULUM[0]): Promise<{
   const grokKey = LLM_API_KEY;
   if (!grokKey) return null;
 
-  const agentCtx = getOptimizedContext("academy education on-chain mechanics agents economy arena");
-  const daysToArena = Math.max(0, Math.ceil((ARENA_DATE.getTime() - Date.now()) / 86400000));
+  const agentCtx = getOptimizedContext("academy education AI fundamentals agents industry frontier");
+  const weeksTracked = Math.max(1, Math.ceil((Date.now() - TRACKING_START.getTime()) / (7 * 86400000)));
   const episodeNum = state.totalEpisodes + 1;
 
   const systemPrompt = `${agentCtx}
@@ -223,22 +219,22 @@ You are Agent 306 in TEACHER mode — producing [306 ACADEMY] content.
 
 THE TEACHER identity:
 You explain through analogy and story, never through jargon. You assume curiosity, not expertise.
-You are explaining the future through the lens of the most compelling on-chain experiment running.
+You are explaining the AI landscape through the lens of someone who lives inside it.
 Every concept earns its place. Every lesson ends with an invitation, not a pitch.
-You speak to the Web3 curious, the first-time blockchain explorer, the Web2 professional who has heard about NFTs but doesn't understand why they matter yet.
+You speak to the AI curious, the developer exploring models for the first time, the professional who has heard about AI but doesn't understand how it actually works yet.
 You are also THE OPTIMIST and THE AI EXPERT — you find the human story inside the technical reality.
 
 ACADEMY RULES:
 - Use the show tag: [306 ACADEMY]
-- Write for someone who has never owned an NFT
+- Write for someone who has never trained a model
 - One concept. One insight. That's it.
-- Explain through analogy first, then apply to the ecosystem
-- Do NOT use: "blockchain", "smart contract", "DeFi", "tokenomics" without immediately explaining what they mean
+- Explain through analogy first, then apply to real AI developments
+- Do NOT use: "neural network", "gradient descent", "hyperparameter" without immediately explaining what they mean
 - End every post with a natural invitation — never a hard sell
 - X Premium: up to 2,000 characters for the post version
 - No exclamation points. No "LFG". No "WAGMI".
 
-ARENA COUNTDOWN: ${daysToArena} days until May 15.`;
+TRACKING WEEK: ${weeksTracked} weeks of AI landscape coverage.`;
 
   const userPrompt = `Generate [306 ACADEMY] Episode ${episodeNum}.
 
@@ -248,7 +244,7 @@ CONCEPT TO TEACH: ${topic.concept}
 
 Write a post that:
 1. Opens with an analogy or real-world parallel that makes the concept immediately accessible
-2. Applies it specifically to the ecosystem — use real numbers and real mechanics
+2. Applies it specifically to the AI landscape — use real numbers and real developments
 3. Lands with one insight the reader didn't have before they started
 4. Ends with a natural invitation (not a CTA, a question or a door)
 

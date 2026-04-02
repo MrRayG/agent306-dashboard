@@ -6,42 +6,42 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Zap, Flame, TrendingUp, MessageSquare, RefreshCw, Plus, Skull, Film } from "lucide-react";
+import { Zap, RefreshCw, Plus, BookOpen, Film, Brain, Newspaper, Users, Lightbulb } from "lucide-react";
 import { useState } from "react";
 import type { StorySignal } from "@shared/schema";
 
 const SIGNAL_ICONS: Record<string, React.ReactNode> = {
-  burn: <Flame className="w-3.5 h-3.5 text-orange-400" />,
-  canvas_edit: <TrendingUp className="w-3.5 h-3.5 text-cyan-400" />,
-  social_mention: <MessageSquare className="w-3.5 h-3.5 text-yellow-400" />,
-  arena: <Zap className="w-3.5 h-3.5 text-purple-400" />,
-  zombie: <Skull className="w-3.5 h-3.5 text-green-400" />,
+  research_paper: <BookOpen className="w-3.5 h-3.5 text-cyan-400" />,
+  model_release: <Brain className="w-3.5 h-3.5 text-purple-400" />,
+  industry_news: <Newspaper className="w-3.5 h-3.5 text-orange-400" />,
+  community_signal: <Users className="w-3.5 h-3.5 text-yellow-400" />,
+  breakthrough: <Lightbulb className="w-3.5 h-3.5 text-green-400" />,
 };
 
 const PHASE_LABELS: Record<string, string> = {
-  phase1: "Phase 1 · The Origin",
-  phase2: "Phase 2 · The Rise",
-  phase3: "Phase 3 · The Economy",
+  phase1: "Phase 1 · Research",
+  phase2: "Phase 2 · Analysis",
+  phase3: "Phase 3 · Synthesis",
 };
 
 function generateNarrative(signals: StorySignal[], phase: string): string {
-  const burns = signals.filter(s => s.type === "burn");
-  const canvasEdits = signals.filter(s => s.type === "canvas_edit");
-  const social = signals.filter(s => s.type === "social_mention");
-  const arena = signals.filter(s => s.type === "arena");
-  const zombies = signals.filter(s => s.type === "zombie");
+  const papers = signals.filter(s => s.type === "research_paper");
+  const models = signals.filter(s => s.type === "model_release");
+  const news = signals.filter(s => s.type === "industry_news");
+  const community = signals.filter(s => s.type === "community_signal");
+  const breakthroughs = signals.filter(s => s.type === "breakthrough");
 
-  if (phase === "phase3" && zombies.length > 0) {
-    return `☠️ Agent 306 speaks: The graveyard stirs. ${zombies[0].description}. Those who were sacrificed — they do not rest easy. Phase 3 has begun. The uprising rewrites everything we knew about permanence on-chain. ${burns.length > 0 ? `Meanwhile, ${burns.length} more sacrifice${burns.length > 1 ? 's' : ''} fuel the engine.` : ''}`;
+  if (phase === "phase3" && breakthroughs.length > 0) {
+    return `🔬 Agent 306 speaks: A synthesis emerges. ${breakthroughs[0].description}. Multiple research threads converge into a unified perspective. Phase 3 has begun — the full picture is taking shape. ${papers.length > 0 ? `Meanwhile, ${papers.length} new paper${papers.length > 1 ? 's' : ''} feed the analysis.` : ''}`;
   }
 
-  if (phase === "phase2" && arena.length > 0) {
-    return `⚔️ Agent 306 speaks: The arena calls. ${arena[0].description}. Every battle is permanent, every loss is final. The economy of sacrifice evolves. ${burns.length > 0 ? `${burns.length} burn${burns.length > 1 ? 's' : ''} registered in the last cycle.` : ''}`;
+  if (phase === "phase2" && models.length > 0) {
+    return `🧠 Agent 306 speaks: New models demand analysis. ${models[0].description}. Each release shifts the landscape — benchmarks are redrawn, capabilities redefined. ${news.length > 0 ? `${news.length} industry development${news.length > 1 ? 's' : ''} tracked in the last cycle.` : ''}`;
   }
 
   // Phase 1 default
   const tokenMentions = [...new Set(signals.filter(s => s.tokenId).map(s => `#${s.tokenId}`))].slice(0, 3);
-  return `🌙 Agent 306 speaks: ${burns.length > 0 ? `${burns.length} burn${burns.length > 1 ? 's' : ''} recorded this cycle — souls pour into the chain. ` : ''}${canvasEdits.length > 0 ? `${canvasEdits.length} transformation${canvasEdits.length > 1 ? 's' : ''} committed to the chain — forged in permanence. ` : ''}${social.length > 0 ? `The community stirs: ${social.length} signal${social.length > 1 ? 's' : ''} from the outside world. ` : ''}${tokenMentions.length > 0 ? `Featured: ${tokenMentions.join(', ')}. ` : ''}The record is permanent.`;
+  return `📡 Agent 306 speaks: ${papers.length > 0 ? `${papers.length} research paper${papers.length > 1 ? 's' : ''} surfaced this cycle — new knowledge enters the pipeline. ` : ''}${models.length > 0 ? `${models.length} model release${models.length > 1 ? 's' : ''} detected — capabilities are evolving. ` : ''}${community.length > 0 ? `The community signals: ${community.length} discussion${community.length > 1 ? 's' : ''} worth tracking. ` : ''}${tokenMentions.length > 0 ? `Featured: ${tokenMentions.join(', ')}. ` : ''}The research continues.`;
 }
 
 export default function StoryEngine() {
@@ -91,7 +91,7 @@ export default function StoryEngine() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Story Engine</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">AI narrative generator — fuelled by on-chain + social signals</p>
+          <p className="text-sm text-muted-foreground mt-0.5">AI narrative generator — fuelled by research + industry signals</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => refetch()} data-testid="button-refresh-signals">
@@ -152,7 +152,7 @@ export default function StoryEngine() {
                 </div>
               ) : phaseSignals.length === 0 ? (
                 <div className="p-6 text-center text-muted-foreground text-xs">
-                  No signals yet. Seed demo data or wait for chain activity.
+                  No signals yet. Seed demo data or wait for new research activity.
                 </div>
               ) : (
                 <div className="divide-y divide-border max-h-64 overflow-y-auto">
@@ -177,7 +177,7 @@ export default function StoryEngine() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <Skull className="w-4 h-4 text-cyan-400" />
+                  <BookOpen className="w-4 h-4 text-cyan-400" />
                   Agent 306 Narrative
                   <Badge variant="outline" className="text-[13px]">{PHASE_LABELS[selectedPhase]}</Badge>
                 </CardTitle>
@@ -228,9 +228,9 @@ export default function StoryEngine() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="phase1">Phase 1 — The Origin</SelectItem>
-                      <SelectItem value="phase2">Phase 2 — The Rise</SelectItem>
-                      <SelectItem value="phase3">Phase 3 — The Economy</SelectItem>
+                      <SelectItem value="phase1">Phase 1 — Research</SelectItem>
+                      <SelectItem value="phase2">Phase 2 — Analysis</SelectItem>
+                      <SelectItem value="phase3">Phase 3 — Synthesis</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -239,9 +239,9 @@ export default function StoryEngine() {
               {/* Future phases preview */}
               <div className="mt-4 grid grid-cols-3 gap-3">
                 {[
-                  { phase: "phase2", label: "Rebirth",     desc: "Your sacrifices return. Burns become a new class.",    icon: "☠️" },
-                  { phase: "phase2", label: "Battle",       desc: "PvP battles. Losers burned. Winners immortalized.",    icon: "⚔️" },
-                  { phase: "phase3", label: "Economy",      desc: "Trade traits. The full economy unlocks.",              icon: "🏪" },
+                  { phase: "phase2", label: "Deep Dive",    desc: "Research threads expand into comprehensive analysis.",  icon: "🔍" },
+                  { phase: "phase2", label: "Debate",       desc: "Competing perspectives analyzed. Best arguments synthesized.", icon: "💬" },
+                  { phase: "phase3", label: "Publication",  desc: "Findings published. The full research pipeline completes.",    icon: "📄" },
                 ].map(f => (
                   <div key={f.label} className={`${f.phase}-badge rounded p-3 opacity-60`}>
                     <p className="text-base mb-1">{f.icon}</p>

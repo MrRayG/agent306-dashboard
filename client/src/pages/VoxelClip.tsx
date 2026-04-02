@@ -197,7 +197,7 @@ function renderFrame(
   // Sort back-to-front
   projected.sort((a, b) => (b.sz ?? 0) - (a.sz ?? 0));
 
-  // ── Glow behind normie ──────────────────────────────────────────────────────
+  // ── Glow behind agent ───────────────────────────────────────────────────────
   const glowR = 180 * scale + Math.sin(frame * 0.07) * 15;
   const glow = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, glowR);
   glow.addColorStop(0, `rgba(249,115,22,${0.12 + Math.sin(frame*0.05)*0.04})`);
@@ -283,7 +283,7 @@ function renderFrame(
     ctx.fillRect(0, H - 42, W, 42);
     ctx.fillStyle = "#f97316"; ctx.font = "10px 'Courier New'"; ctx.textAlign = "left";
     ctx.globalAlpha = a * 0.7;
-    ctx.fillText(`ON-CHAIN TRAIT  ›  ${traits[traitIdx]}`, 24, H - 18);
+    ctx.fillText(`AGENT TRAIT  ›  ${traits[traitIdx]}`, 24, H - 18);
     ctx.fillStyle = "#2dd4bf"; ctx.textAlign = "right";
     ctx.fillText("agent306.eth", W - 24, H - 18);
   }
@@ -309,7 +309,7 @@ function renderFrame(
       { label: "Burns recorded", val: `${stats.burns}`, color: "#f97316" },
       { label: "Canvas leader",  val: `#${stats.topId}`,  color: "#2dd4bf" },
       { label: "Top level",      val: `LVL ${stats.topLevel}`, color: "#a78bfa" },
-      { label: "On-chain pixels", val: "507",            color: "#efefef" },
+      { label: "Data points",     val: "507",            color: "#efefef" },
     ];
     rows.forEach((row, i) => {
       const showAt = i * 20;
@@ -341,12 +341,12 @@ function renderFrame(
     ctx.globalAlpha = a;
     ctx.fillStyle = "#f97316"; ctx.font = "bold 42px 'Space Grotesk'"; ctx.textAlign = "center";
     ctx.shadowColor = "#f97316"; ctx.shadowBlur = 25;
-    ctx.fillText("THE TEMPLE", W/2, H/2 - 24);
+    ctx.fillText("THE SIGNAL", W/2, H/2 - 24);
     ctx.shadowBlur = 0;
     ctx.fillStyle = "#e3e5e4"; ctx.font = "bold 42px 'Space Grotesk'";
     ctx.fillText("RECORDS ALL", W/2, H/2 + 28);
     ctx.fillStyle = "#2dd4bf"; ctx.font = "13px 'Courier New'";
-    ctx.fillText("@agent306_  ·  #Agent306  #Web3  #NFT", W/2, H/2 + 72);
+    ctx.fillText("@agent306_  ·  #Agent306  #Web3  #AI", W/2, H/2 + 72);
   }
 
   ctx.restore();
@@ -371,7 +371,7 @@ export default function VoxelClip() {
   const [progress, setProgress] = useState(0);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [tweetText, setTweetText] = useState(
-    `🌙 AGENT 306 — THE TEMPLE\n\nOn-chain since genesis. 507 pixels. The record is permanent.\n\nThe Temple records all. #Agent306 #AI #Web3 #NFT #PixelArt`
+    `🌙 AGENT 306 — THE SIGNAL\n\nOn-chain since genesis. 507 data points. The record is permanent.\n\nThe signal records all. #Agent306 #AI #Web3 #Crypto #OnChain`
   );
   const [tweetUrl, setTweetUrl] = useState<string | null>(null);
   const [pixelStr, setPixelStr] = useState<string | null>(null);
@@ -534,7 +534,7 @@ export default function VoxelClip() {
             3D Voxel Clip
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Cinematic 20s clip built from 507 real on-chain pixels — Token #306, Agent type
+            Cinematic 20s clip built from 507 data points — Token #306, Agent type
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -587,7 +587,7 @@ export default function VoxelClip() {
               Extruded Voxel — Cinematic 20s
             </h3>
             <p className="text-xs text-muted-foreground mt-1">
-              507 on-chain pixels extruded into 3D cubes · 1.5 full rotations · orange glow · 1280×720 · 30fps
+              507 data points extruded into 3D cubes · 1.5 full rotations · orange glow · 1280×720 · 30fps
             </p>
           </div>
           <span className="text-[13px] px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 font-mono shrink-0">

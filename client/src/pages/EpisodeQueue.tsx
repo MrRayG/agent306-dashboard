@@ -213,10 +213,10 @@ function PendingCard({ ep, onMarkPosted, isPosting }: {
 
       {/* Main content */}
       <div style={{ display: "flex", gap: 16, padding: "1.25rem" }}>
-        {/* Left: animated Normie */}
+        {/* Left: animated token */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
           <TokenPreview tokenId={ep.tokenId} size={96} />
-          {/* On-chain stats under the Normie */}
+          {/* On-chain stats under the token */}
           {signals.burnCount > 0 && (
             <div style={{ textAlign: "center" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "center" }}>
@@ -418,7 +418,7 @@ function EmptyState({ onGenerate, isPending }: { onGenerate: () => void; isPendi
         No episodes yet
       </p>
       <p style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.55)", marginBottom: 20, maxWidth: 320, lineHeight: 1.7 }}>
-        The Temple is waiting. Hit Generate to pull live on-chain burns + canvas activity and create the first episode.
+        The system is waiting. Hit Generate to pull live on-chain activity + signals and create the first episode.
       </p>
       <button
         onClick={onGenerate}

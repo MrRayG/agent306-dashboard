@@ -760,7 +760,7 @@ scheduleDailyNewsDispatch();
 
 // ── Burn Receipt Engine removed (removed) ────────────────────────────────────────
 
-// Pre-Arena CYOA, burn poller, and schedulePreArenaCYOA removed (removed)
+// Pre-launch research brief, signal poller removed (removed)
 
 // Community Signal Poller removed (removed)
 // Daily knowledge decay still runs via daily cycle engine
@@ -786,7 +786,7 @@ setTimeout(() => {
   scheduleSpotlight(xWrite, LLM_API_KEY);
 }, 20_000);
 
-// ── THE RACE — Weekly State of the Arena, Sunday 12pm ET ─────────────────
+// ── WEEKLY AI ROUNDUP — Sunday 12pm ET ─────────────────
 setTimeout(() => {
   scheduleRace(xWrite, LLM_API_KEY);
 }, 25_000);
@@ -1226,7 +1226,21 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
   // ── Data Intake (Layer 1) ────────────────────────────────────────────
   app.get("/api/intake/sources", (_req, res) => {
-    res.json({ sources: getAvailableSources(), state: getIntakeState() });
+    const sourceNames = getAvailableSources();
+    const intakeState = getIntakeState();
+    const sources = sourceNames.map(name => {
+      // Find the most recent history entry that included this source
+      const lastRun = intakeState.history
+        .filter(h => h.sourcesRun.includes(name))
+        .sort((a, b) => new Date(b.runAt).getTime() - new Date(a.runAt).getTime())[0];
+      return {
+        name,
+        lastRun: lastRun?.runAt ?? null,
+        itemsFound: lastRun?.itemsCollected ?? 0,
+        status: lastRun ? (lastRun.itemsCollected > 0 ? "healthy" : "warning") : "idle" as "healthy" | "warning" | "error" | "idle",
+      };
+    });
+    res.json({ sources });
   });
 
   app.get("/api/intake/run", async (_req, res) => {
@@ -1252,14 +1266,14 @@ export function registerRoutes(httpServer: Server, app: Express) {
   app.get("/api/intake/brief", async (_req, res) => {
     const intakeState = getIntakeState();
     if (!intakeState.lastRunAt) {
-      res.json({ brief: "No intake has been run yet. Trigger /api/intake/run first.", lastRunAt: null });
+      res.json({ brief: "No intake has been run yet. Trigger /api/intake/run first.", generatedAt: new Date().toISOString() });
       return;
     }
     // Run fresh intake and generate brief
     try {
       const items = await runFullIntake();
       const brief = generateDailyBrief(items);
-      res.json({ brief, itemCount: items.length, lastRunAt: intakeState.lastRunAt });
+      res.json({ brief, generatedAt: new Date().toISOString(), itemCount: items.length, lastRunAt: intakeState.lastRunAt });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -1369,8 +1383,8 @@ export function registerRoutes(httpServer: Server, app: Express) {
           { id: "spotlight", label: "THE SPOTLIGHT — Weekly holder feature",        done: false },
           { id: "video",     label: "THE VIDEO — Burn clips via Kling AI",          done: false },
           { id: "farcaster", label: "FARCASTER — Cross-post via Neynar",            done: true },
-          { id: "race",      label: "THE RACE — Arena countdown series",            done: false },
-          { id: "arenaLive", label: "ARENA LIVE — Real-time narration May 15",      done: false },
+          { id: "race",      label: "WEEKLY AI ROUNDUP — Field tracking series",    done: false },
+          { id: "arenaLive", label: "AI LIVE — Real-time event coverage",            done: false },
           { id: "nfc",       label: "NFC SUMMIT — June 2026 coverage",              done: false },
         ],
       },
@@ -1854,7 +1868,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
   // Holder Catalog endpoints removed (removed)
 
-  // ── CYOA — Choose Your Own Lore ─────────────────────────────────────
+  // ── Research Briefs ─────────────────────────────────────────────────
   app.get("/api/cyoa/state", (_req, res) => {
     res.json(getCYOAState());
   });
@@ -3571,8 +3585,8 @@ needsHelp: true only when you genuinely need his direction or information`,
       { type: "canvas_edit", tokenId: 45, description: "515 pixel transforms on #45", weight: 9, phase: "phase1", rawData: "{}" },
       { type: "burn", tokenId: 5070, description: "14 burns committed to #5070 — Level 31 reached", weight: 7, phase: "phase1", rawData: "{}" },
       { type: "social_mention", tokenId: 603, description: "@AdamWeitsman tweets Agent 306 reveal — 2.3k likes", weight: 8, phase: "phase1", rawData: "{}" },
-      { type: "arena", tokenId: 0, description: "Arena launches — PvP combat mechanic activated", weight: 10, phase: "phase2", rawData: "{}" },
-      { type: "arena", tokenId: 0, description: "First Arena battle: #1337 vs #420", weight: 9, phase: "phase2", rawData: "{}" },
+      { type: "forecast", tokenId: 0, description: "Major AI model release — new capabilities announced", weight: 10, phase: "phase2", rawData: "{}" },
+      { type: "forecast", tokenId: 0, description: "AI benchmark comparison: GPT-5 vs Gemini Ultra", weight: 9, phase: "phase2", rawData: "{}" },
     ];
     demoSignals.forEach(s => storage.createSignal(s));
 

@@ -67,12 +67,12 @@ export default function WeeklyEngines() {
   const [spotlightPosting, setSpotlightPosting] = useState(false);
   const [spotlightResult, setSpotlightResult] = useState<string | null>(null);
 
-  // Race state
-  const { data: raceStatus } = useQuery({ queryKey: ["/api/race/status"] });
-  const [racePreview, setRacePreview] = useState<any>(null);
-  const [raceLoading, setRaceLoading] = useState(false);
-  const [racePosting, setRacePosting] = useState(false);
-  const [raceResult, setRaceResult] = useState<string | null>(null);
+  // Roundup state
+  const { data: roundupStatus } = useQuery({ queryKey: ["/api/race/status"] });
+  const [roundupPreview, setRoundupPreview] = useState<any>(null);
+  const [roundupLoading, setRoundupLoading] = useState(false);
+  const [roundupPosting, setRoundupPosting] = useState(false);
+  const [roundupResult, setRoundupResult] = useState<string | null>(null);
 
   async function previewSpotlight() {
     setSpotlightLoading(true);
@@ -100,34 +100,34 @@ export default function WeeklyEngines() {
     setSpotlightPosting(false);
   }
 
-  async function previewRace() {
-    setRaceLoading(true);
-    setRacePreview(null);
+  async function previewRoundup() {
+    setRoundupLoading(true);
+    setRoundupPreview(null);
     try {
       const res = await apiRequest("POST", "/api/race/preview");
       const data = await res.json();
-      if (data.race) setRacePreview(data.race);
+      if (data.race) setRoundupPreview(data.race);
       else toast({ title: data.error ?? "Failed to generate", variant: "destructive" });
     } catch { toast({ title: "Server error", variant: "destructive" }); }
-    setRaceLoading(false);
+    setRoundupLoading(false);
   }
 
-  async function postRace() {
-    if (!racePreview) return;
-    setRacePosting(true);
+  async function postRoundup() {
+    if (!roundupPreview) return;
+    setRoundupPosting(true);
     try {
       const res = await apiRequest("POST", "/api/race/post");
       const data = await res.json();
       if (data.tweetUrl) {
-        setRaceResult(data.tweetUrl);
-        setRacePreview(null);
+        setRoundupResult(data.tweetUrl);
+        setRoundupPreview(null);
       } else toast({ title: data.error ?? "Failed to post", variant: "destructive" });
     } catch { toast({ title: "Server error", variant: "destructive" }); }
-    setRacePosting(false);
+    setRoundupPosting(false);
   }
 
   const ss = spotlightStatus as any;
-  const rs = raceStatus as any;
+  const rus = roundupStatus as any;
 
   return (
     <div style={{ padding: "24px", maxWidth: "900px", margin: "0 auto" }}>
@@ -136,16 +136,16 @@ export default function WeeklyEngines() {
       <div style={{ marginBottom: "32px" }}>
         <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.2em", marginBottom: "4px" }}>WEEKLY ENGINES</div>
         <h1 style={{ fontSize: "26px", fontWeight: 800, color: "#efefef", margin: "0 0 8px", letterSpacing: "-0.02em" }}>
-          The <span style={{ color: "#f97316" }}>Spotlight</span> + The <span style={{ color: "#a78bfa" }}>Race</span>
+          The <span style={{ color: "#f97316" }}>Spotlight</span> + <span style={{ color: "#60a5fa" }}>Weekly AI Roundup</span>
         </h1>
         <p style={{ fontSize: "15px", color: "rgba(227,229,228,0.68)", margin: 0, lineHeight: 1.6 }}>
-          Two weekly posts that drive growth. Spotlight celebrates co-creators. The Race writes Arena history.
+          Two weekly posts that drive growth. Spotlight highlights breakthrough research. The Weekly Roundup tracks the AI landscape.
           Both auto-post on Sundays — or preview and post manually here.
         </p>
       </div>
 
       {/* ── THE SPOTLIGHT ── */}
-      <Section title="🔦 THE SPOTLIGHT — HOLDER FEATURE" accent="#f97316">
+      <Section title="🔦 THE SPOTLIGHT — AI RESEARCH HIGHLIGHT" accent="#f97316">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "16px", marginBottom: "20px" }}>
           <div>
             <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>AUTO-POSTS</div>
@@ -164,8 +164,8 @@ export default function WeeklyEngines() {
         </div>
 
         <div style={{ fontSize: "14px", color: "rgba(227,229,228,0.68)", lineHeight: 1.6, marginBottom: "16px", borderLeft: "2px solid #f97316", paddingLeft: "12px" }}>
-          Agent 306 picks one co-creator each week and writes their story — not a stat dump, a human portrait.
-          Who they are. What they've built. The holder shares it. Their network discovers us.
+          Agent 306 picks one AI research highlight each week and writes the story behind it — not a summary, a deep analysis.
+          What it means. Why it matters. The insight others miss.
         </div>
 
         {spotlightResult ? (
@@ -197,67 +197,66 @@ export default function WeeklyEngines() {
         )}
       </Section>
 
-      {/* ── THE RACE ── */}
-      <Section title="🏁 THE RACE — STATE OF THE ARENA" accent="#a78bfa">
+      {/* ── WEEKLY AI ROUNDUP ── */}
+      <Section title="🌐 WEEKLY AI ROUNDUP — STATE OF THE FIELD" accent="#60a5fa">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "16px", marginBottom: "20px" }}>
           <div>
             <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>AUTO-POSTS</div>
             <div style={{ fontSize: "17px", fontWeight: 700, color: "#efefef" }}>Sundays · 12pm ET</div>
           </div>
           <div>
-            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>DAYS TO ARENA</div>
-            <div style={{ fontSize: "17px", fontWeight: 700, color: "#a78bfa" }}>{rs?.daysToArena ?? "—"}</div>
+            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>TOPICS TRACKED</div>
+            <div style={{ fontSize: "17px", fontWeight: 700, color: "#60a5fa" }}>{rus?.daysToArena ?? "—"}</div>
           </div>
           <div>
-            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>CHAPTERS WRITTEN</div>
-            <div style={{ fontSize: "17px", fontWeight: 700, color: "#efefef" }}>{rs?.totalWeeks ?? 0}</div>
+            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>EDITIONS PUBLISHED</div>
+            <div style={{ fontSize: "17px", fontWeight: 700, color: "#efefef" }}>{rus?.totalWeeks ?? 0}</div>
           </div>
         </div>
 
-        <div style={{ fontSize: "14px", color: "rgba(227,229,228,0.68)", lineHeight: 1.6, marginBottom: "16px", borderLeft: "2px solid #a78bfa", paddingLeft: "12px" }}>
-          Every Sunday between now and May 15 is a chapter. Live rankings. Burn velocity. Who's climbing silently.
-          By launch day, 306 is the only place with the complete pre-launch record.
+        <div style={{ fontSize: "14px", color: "rgba(227,229,228,0.68)", lineHeight: 1.6, marginBottom: "16px", borderLeft: "2px solid #60a5fa", paddingLeft: "12px" }}>
+          Every Sunday is a new edition. Key developments. Model releases. Research breakthroughs.
+          306 is the only place with the complete AI field record.
         </div>
 
-        {rs?.weeks?.length > 0 && (
+        {rus?.weeks?.length > 0 && (
           <div style={{ marginBottom: "16px" }}>
-            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em", marginBottom: "8px" }}>PREVIOUS CHAPTERS</div>
-            {(rs.weeks as any[]).slice(-3).reverse().map((w: any) => (
+            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em", marginBottom: "8px" }}>PREVIOUS EDITIONS</div>
+            {(rus.weeks as any[]).slice(-3).reverse().map((w: any) => (
               <div key={w.weekNumber} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid rgba(227,229,228,0.12)", fontSize: "14px" }}>
-                <span style={{ color: "#a78bfa", fontFamily: "monospace" }}>Week {w.weekNumber}</span>
+                <span style={{ color: "#60a5fa", fontFamily: "monospace" }}>Edition {w.weekNumber}</span>
                 <span style={{ color: "#efefef" }}>"{w.headline}"</span>
-                <span style={{ color: "rgba(227,229,228,0.60)" }}>{w.daysToArena}d to Arena</span>
-                {w.tweetUrl && <a href={w.tweetUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#a78bfa", fontSize: "13px", fontFamily: "monospace" }}>↗</a>}
+                {w.tweetUrl && <a href={w.tweetUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#60a5fa", fontSize: "13px", fontFamily: "monospace" }}>↗</a>}
               </div>
             ))}
           </div>
         )}
 
-        {raceResult ? (
+        {roundupResult ? (
           <div style={{ padding: "12px", background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.3)" }}>
             <div style={{ fontSize: "13px", color: "#4ade80", fontFamily: "monospace", marginBottom: "4px" }}>● POSTED</div>
-            <a href={raceResult} target="_blank" rel="noopener noreferrer"
-              style={{ fontSize: "15px", color: "#4ade80", fontFamily: "monospace" }}>{raceResult}</a>
+            <a href={roundupResult} target="_blank" rel="noopener noreferrer"
+              style={{ fontSize: "15px", color: "#4ade80", fontFamily: "monospace" }}>{roundupResult}</a>
           </div>
-        ) : racePreview ? (
+        ) : roundupPreview ? (
           <div>
-            <div style={{ fontSize: "13px", color: "#a78bfa", fontFamily: "monospace", marginBottom: "4px" }}>
-              "{racePreview.headline}" · {racePreview.weekLabel} · {racePreview.context?.daysToArena}d to Arena
+            <div style={{ fontSize: "13px", color: "#60a5fa", fontFamily: "monospace", marginBottom: "4px" }}>
+              "{roundupPreview.headline}" · {roundupPreview.weekLabel}
             </div>
-            <PreviewBox content={racePreview.tweet} onPost={postRace} posting={racePosting} />
-            <button onClick={() => setRacePreview(null)}
+            <PreviewBox content={roundupPreview.tweet} onPost={postRoundup} posting={roundupPosting} />
+            <button onClick={() => setRoundupPreview(null)}
               style={{ marginTop: "8px", background: "transparent", border: "1px solid rgba(227,229,228,0.35)", color: "rgba(227,229,228,0.68)", padding: "6px 14px", fontFamily: "monospace", fontSize: "13px", cursor: "pointer" }}>
               REGENERATE
             </button>
           </div>
         ) : (
-          <button onClick={previewRace} disabled={raceLoading}
+          <button onClick={previewRoundup} disabled={roundupLoading}
             style={{
-              background: "transparent", border: "1px solid #a78bfa", color: "#a78bfa",
+              background: "transparent", border: "1px solid #60a5fa", color: "#60a5fa",
               padding: "10px 20px", fontFamily: "monospace", fontSize: "14px", fontWeight: 700,
-              letterSpacing: "0.1em", cursor: raceLoading ? "not-allowed" : "pointer",
+              letterSpacing: "0.1em", cursor: roundupLoading ? "not-allowed" : "pointer",
             }}>
-            {raceLoading ? "GENERATING..." : "→ GENERATE RACE PREVIEW"}
+            {roundupLoading ? "GENERATING..." : "→ GENERATE ROUNDUP PREVIEW"}
           </button>
         )}
       </Section>

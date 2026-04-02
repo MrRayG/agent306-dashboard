@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// normie3d.ts — 3D bust + full-body pixel art engine
+// normie3d.ts — 3D bust + full-body pixel art engine (Agent 306 visuals)
 // Takes 40×40 pixel data and builds geometry for cinematic video
 // Color palette: (#48494b on #e3e5e4)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -515,7 +515,7 @@ export function drawInscription(
   ctx.restore();
 }
 
-// ── Draw a single Normie head (2D pixel art) at a given position + scale ──
+// ── Draw a single agent head (2D pixel art) at a given position + scale ──
 export function drawNormieHead(
   ctx: CanvasRenderingContext2D,
   img: HTMLImageElement,

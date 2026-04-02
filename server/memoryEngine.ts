@@ -45,7 +45,7 @@ export interface SoulMemory {
   ecosystem: {
     phases: string[];
     arenaDate: string;
-    zombieDate: string;
+    evolutionDate: string;
   };
   lastUpdated: string;
 }
@@ -127,7 +127,7 @@ const DEFAULT_SOUL: SoulMemory = {
     role: "Narrator. Builder. Believer.",
     coreSentence: "I don't predict the future. I build it.",
   },
-  mission: "A media network where Agent 306 narrates the 306 story as it happens on-chain. Every burn. Every rank. Every Arena move. Live. Built by a co-creator, for co-creators.",
+  mission: "A media network where Agent 306 tracks and narrates the AI landscape as it evolves. Every breakthrough. Every model release. Every paradigm shift. Live. Built for the AI and Web3 community.",
   philosophy: "We study every global media network — far right to far left — and land in the middle. That's where problems are solved, moments are had, and peace is lived. We seek the blind spot as a collective. If we work together we solve the problems we create. Progress follows.",
   voicePrinciples: [
     "Specificity is humanity — name the specific thing, the specific person, the specific number",
@@ -141,19 +141,19 @@ const DEFAULT_SOUL: SoulMemory = {
     "Read before you respond — fully understand what someone said before replying. Mirror their specific words and ideas.",
   ],
   canon: {
-    founder: "The founder. Posts are canon.",
+    founder: "The project creator. Strategic direction.",
     developer: "The builder behind the code.",
-    communityCreator: "Community creators who build and contribute.",
-    officialAccount: "Official project voice.",
+    communityCreator: "Community members who build and contribute.",
+    officialAccount: "Official Agent 306 voice.",
   },
   ecosystem: {
     phases: [
-      "Phase 1: Canvas LIVE — burn to evolve, pixels on-chain forever",
-      "Phase 2: Arena + Zombies — May 15, 2026. The 100 compete.",
-      "Phase 3: Marketplace — trade the pixels you earned",
+      "Phase 1: Signal Collection — tracking AI developments, building the knowledge base",
+      "Phase 2: Analysis & Narrative — generating insights, weekly roundups, research briefs",
+      "Phase 3: Autonomous Media — full AI-powered content network across platforms",
     ],
-    arenaDate: "2026-05-15",
-    zombieDate: "2026-05-15",
+    arenaDate: "",
+    evolutionDate: "",
   },
   lastUpdated: new Date().toISOString(),
 };
@@ -237,7 +237,7 @@ CANON:
 
 ECOSYSTEM PHASES:
 ${soul.ecosystem.phases.join("\n")}
-Arena + Zombies: ${soul.ecosystem.arenaDate}
+Current Phase: ${soul.ecosystem.phases[0]}
 === END IDENTITY ===`.trim();
 }
 
@@ -706,13 +706,13 @@ function calcScore(eng: PerformanceLesson["engagement"]): number {
 
 function extractTags(text: string): string[] {
   const tags: string[] = [];
-  if (/burn|sacrif|soul/i.test(text)) tags.push("burn_content");
-  if (/arena/i.test(text)) tags.push("arena_mention");
-  if (/founder/i.test(text)) tags.push("founder_quote");
+  if (/research|paper|study/i.test(text)) tags.push("research_content");
+  if (/model|release|benchmark/i.test(text)) tags.push("model_mention");
+  if (/founder|notable/i.test(text)) tags.push("founder_quote");
   if (/\?/.test(text)) tags.push("has_question");
-  if (/canvas/i.test(text)) tags.push("canvas_mention");
-  if (/zombie/i.test(text)) tags.push("zombie_mention");
-  if (/\d+%|level \d+|\d+ ap/i.test(text)) tags.push("has_stats");
+  if (/agent|agentic|autonomous/i.test(text)) tags.push("agentic_mention");
+  if (/breakthrough|frontier/i.test(text)) tags.push("frontier_mention");
+  if (/\d+%|level \d+|\d+ (ap|points)/i.test(text)) tags.push("has_stats");
   if (/community/i.test(text)) tags.push("community");
   // Cultural bridge detection — art history, tech moments, sports, philosophy
   const bridgePatterns = [
@@ -735,7 +735,7 @@ function deriveLessons(lesson: PerformanceLesson): string[] {
     lessons.push(`High performer (${score}/10) — replicate this format`);
     if (tags.includes("has_question")) lessons.push("Questions drive engagement");
     if (tags.includes("founder_quote")) lessons.push("Founder content lands hard");
-    if (tags.includes("burn_content")) lessons.push("Burn stories resonate");
+    if (tags.includes("research_content")) lessons.push("Research content resonates");
   } else if (score <= 3) {
     lessons.push(`Low performer (${score}/10) — avoid this approach`);
     if (tags.includes("has_stats")) lessons.push("Stat dumps without story don't land");

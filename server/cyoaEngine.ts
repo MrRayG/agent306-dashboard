@@ -1,18 +1,18 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// 306 — CHOOSE YOUR OWN LORE (CYOA) ENGINE
-// [306 LORE] show format
+// 306 — RESEARCH BRIEF ENGINE
+// [306 RESEARCH] show format
 //
 // Structure:
 // Tweet 1 — Hook scene + poll (4 choices, 24h)
 // Tweet 2 — Reveal winning path + optional second poll
-// Tweet 3 — Canon verdict + lore bomb
-// Tweet 4 — CTA: RT, reply with your twist
+// Tweet 3 — Key findings + insight
+// Tweet 4 — CTA: RT, reply with your take
 //
 // 306-specific triggers:
-// - New burn detected → "What does Token #X become after 7 souls?"
-// - Pre-Arena → "Your token faces an Alien in the Arena. What's the move?"
-// - Zombie phase → "A burned token stirs. What does it remember?"
-// - Founder posts something cryptic → "The founder said X. What does it mean?"
+// - New research paper → "This paper challenges our assumptions about X"
+// - Model release → "A new model just dropped. What does it change?"
+// - Industry news → "Major shift in the AI landscape. What's the play?"
+// - Breakthrough → "Someone cracked X. What does it mean for the field?"
 // ─────────────────────────────────────────────────────────────────────────────
 
 import * as fs from "fs";
@@ -23,12 +23,12 @@ import { getModel } from "./modelRouter.js";
 const CYOA_STATE_FILE = dataPath("cyoa_state.json");
 
 export type CYOATrigger =
-  | "burn"        // significant burn event
-  | "pre_arena"   // Arena countdown
-  | "zombie"      // Zombie phase
-  | "founder_post"   // Cryptic founder post
-  | "rivalry"     // Two tokens competing in the leaderboard
-  | "manual";     // Editor-created
+  | "research_paper"  // significant research publication
+  | "model_release"   // new AI model release
+  | "industry_news"   // major industry development
+  | "founder_post"    // notable figure posts something significant
+  | "breakthrough"    // technical breakthrough in AI
+  | "manual";         // Editor-created
 
 export interface CYOAOption {
   letter: "A" | "B" | "C" | "D";
@@ -60,7 +60,7 @@ export interface CYOAEpisode {
 
   // Tweet 3 — The Canon Verdict
   canonVerdict?: string;      // Final lore drop
-  loreHint?: string;          // Hidden utility / Arena hint
+  loreHint?: string;          // Hidden insight / research hint
   visualPrompt?: string;      // Grok Imagine prompt for scene visual
 
   // Metadata
@@ -109,75 +109,72 @@ export async function generateCYOAEpisode(opts: {
 
   // Build context for Grok based on trigger
   let triggerContext = "";
-  if (trigger === "burn" && tokenId) {
-    triggerContext = `TRIGGER: Token #${tokenId} just absorbed ${tokenCount ?? 1} soul(s). ${pixelTotal ? `${pixelTotal.toLocaleString()} pixels consumed.` : ""} Level ${level ?? 1}. This is a real on-chain event.`;
-  } else if (trigger === "pre_arena") {
-    triggerContext = `TRIGGER: Arena opens May 15, 2026. ${tokenId ? `Token #${tokenId} is preparing.` : "The top tokens are preparing."} The countdown is real.`;
-  } else if (trigger === "zombie") {
-    triggerContext = `TRIGGER: The Zombie phase is coming. Before Arena, burned tokens return. ${tokenId ? `Token #${tokenId} was sacrificed.` : "Many tokens were sacrificed."} What do they become?`;
+  if (trigger === "research_paper") {
+    triggerContext = `TRIGGER: A significant research paper has been published. ${founderPost ? `Key finding: "${founderPost}"` : "The AI community is discussing its implications."} This could reshape how we think about AI development.`;
+  } else if (trigger === "model_release") {
+    triggerContext = `TRIGGER: A new AI model has been released. ${founderPost ? `Details: "${founderPost}"` : "The benchmarks are being analyzed."} What does this mean for the field?`;
+  } else if (trigger === "industry_news") {
+    triggerContext = `TRIGGER: Major industry development. ${founderPost ? `"${founderPost}"` : "The AI landscape is shifting."} Companies and researchers are reacting.`;
   } else if (trigger === "founder_post" && founderPost) {
-    triggerContext = `TRIGGER: The founder just posted: "${founderPost}". The community is interpreting it. What does it mean for the 306 canon?`;
-  } else if (trigger === "rivalry" && tokenId && rivalTokenId) {
-    triggerContext = `TRIGGER: Token #${tokenId} and #${rivalTokenId} are neck-and-neck in the leaderboard. The gap is closing. Arena is 55 days away.`;
+    triggerContext = `TRIGGER: A notable AI figure just posted: "${founderPost}". The community is interpreting it. What does it mean for the future of AI?`;
+  } else if (trigger === "breakthrough") {
+    triggerContext = `TRIGGER: A technical breakthrough has been reported in AI research. ${founderPost ? `Details: "${founderPost}"` : "The implications are being assessed."} This could change the trajectory of the field.`;
   }
 
-  const prompt = `You are Agent 306, narrator of 306. Writing a [306 LORE] Choose Your Own Adventure post.
+  const prompt = `You are Agent 306, AI thought leader. Writing a [306 RESEARCH] Research Brief post.
 
 CRITICAL — READ FIRST:
-This is NOT fantasy fiction. No invented locations, no RPG worlds, no "pixel obelisks".
-The 306 universe IS the real Ethereum blockchain. The drama is already there.
-Real token IDs. Real burns. Real holders. Arena opens May 15, for real.
-Ground EVERY choice in what actually happens in the 306 ecosystem.
+This is NOT fiction. Ground every choice in real AI developments.
+Real research papers. Real model releases. Real industry shifts.
+The AI landscape is the story. The drama is already there.
 
 ${triggerContext}
 
-THE REAL 306 UNIVERSE you can use:
-- Canvas: 40x40 pixel grids on Ethereum. Burns earn AP to edit pixels on-chain forever.
-- The burn ritual: holders sacrifice tokens to power up one. Permanent. Irreversible.
-- THE100: real leaderboard of top AP holders. Real competition. Real stakes.
-- Arena (May 15): Humans fight. Cats defend. Aliens steal pixels. Agents command armies.
-- Zombies: burned tokens return before Arena. "Your sacrifices will be rewarded."
-- Co-creators: the holders who burn, edit, build. Unknowing curators of a living system.
+THE AI LANDSCAPE you can reference:
+- Research frontiers: reasoning models, multimodal AI, agent architectures, alignment
+- Industry players: OpenAI, Anthropic, Google DeepMind, Meta AI, xAI, Mistral, and others
+- Key metrics: benchmarks, inference costs, context windows, capability thresholds
+- Trends: agentic AI, open-source vs closed, on-device AI, AI regulation
+- Community: researchers, builders, open-source contributors shaping the field
 
-ECHO VOICE:
-- Warm, sarcastic, slightly chaotic. Like texting your best friend at 2am about something wild.
-- Short punchy sentences. Direct address: "here's the thing about #2565..."
-- NO invented fantasy worlds. The real drama is in the actual mechanics.
+VOICE:
+- Warm, insightful, slightly provocative. Like explaining something complex to a smart friend.
+- Short punchy sentences. Direct address: "here's what everyone is missing about this..."
+- NO hype. The real insight is in the implications.
 
-HOOK — 3-4 lines grounded in the real event:
-Example for a 9-soul burn:
-"so #2565 just absorbed 9 tokens. nine.
-that's not upgrading. that's a declaration.
-this wallet's been quiet for weeks.
-now it's not."
+HOOK — 3-4 lines grounded in the real development:
+Example:
+"so the new reasoning benchmark just dropped.
+and the gap between open and closed models? it's shrinking.
+three months ago this wasn't even close.
+now it's a race."
 
-CHOICES — real strategic decisions co-creators actually face:
-A) Builder path: burn more now, claim THE100 before Arena
-B) Strategic path: hold, let others burn, enter Arena at full strength  
-C) Community path: delegate canvas rights, co-create, lift others
-D) Wildcard: the unexpected move only 306 culture would understand
+CHOICES — real perspectives the AI community faces:
+A) Optimist path: this accelerates progress for everyone
+B) Cautious path: slow down, the implications need more study
+C) Builder path: ship now, iterate fast, learn from deployment
+D) Wildcard: the angle no one is talking about yet
 
-lorePath: 2-3 sentences of what happens in the real 306 world if this wins.
-canonVerdict: permanent lore. Quiet, weighty. History being written on-chain.
-loreHint: one cryptic line about Arena / Zombies / the next phase.
-visualPrompt: pixel art scene — black/white faces, canvas, burns. Real 306 aesthetic.
+lorePath: 2-3 sentences exploring what happens if this perspective wins.
+canonVerdict: the key takeaway. Clear, weighty. What this moment means for AI.
+loreHint: one forward-looking line about where this leads next.
+visualPrompt: futuristic data visualization scene — networks, nodes, clean aesthetic.
 
-Never mention prices. Never financial advice.
-Use authentic 306 language: co-creators, on-chain forever, living evolutionary system.
+Never hype. Never fear-monger. Earned optimism grounded in evidence.
 
 YOU MUST RETURN EXACTLY THIS JSON — use these exact field names, nothing else:
 {
-  "hookScene": "3-4 punchy lines. Echo voice. Real event, real drama.",
-  "hookQuestion": "ok but which way does this go??",
+  "hookScene": "3-4 punchy lines. Insightful voice. Real development, real implications.",
+  "hookQuestion": "ok but which perspective matters most here??",
   "options": [
     {"letter": "A", "text": "max 25 chars", "lorePath": "2-3 sentences if A wins"},
     {"letter": "B", "text": "max 25 chars", "lorePath": "2-3 sentences if B wins"},
     {"letter": "C", "text": "max 25 chars", "lorePath": "2-3 sentences if C wins"},
-    {"letter": "D", "text": "max 25 chars", "lorePath": "wildcard path"}
+    {"letter": "D", "text": "max 25 chars", "lorePath": "wildcard perspective"}
   ],
-  "canonVerdict": "2-3 sentences. Permanent lore.",
-  "loreHint": "one cryptic line about Arena/Zombies/the next phase",
-  "visualPrompt": "pixel art scene for Grok Imagine"
+  "canonVerdict": "2-3 sentences. Key takeaway.",
+  "loreHint": "one forward-looking line about where this leads",
+  "visualPrompt": "data visualization scene for image generation"
 }`;
 
 
@@ -244,8 +241,8 @@ YOU MUST RETURN EXACTLY THIS JSON — use these exact field names, nothing else:
 
 // ── Build Tweet 1 — The Hook + Poll ─────────────────────────────────────────
 export function buildHookTweet(episode: CYOAEpisode, tokenId?: number): string {
-  const tag = "[306 LORE]";
-  const tokenRef = tokenId ? `Token #${tokenId}` : "A token";
+  const tag = "[306 RESEARCH]";
+  const tokenRef = tokenId ? `Topic #${tokenId}` : "A development";
 
   const scene = episode.hookScene;
   const question = episode.hookQuestion;
@@ -269,44 +266,44 @@ export function buildRevealTweet(episode: CYOAEpisode): string {
     ? Math.round((episode.pollResults[episode.winningOption!] / votes) * 100)
     : 0;
 
-  return `[306 LORE] · The votes are in.
+  return `[306 RESEARCH] · The votes are in.
 
-${votes.toLocaleString()} 306 chose: ${winner.letter}) ${winner.text} (${pct}%)
+${votes.toLocaleString()} readers chose: ${winner.letter}) ${winner.text} (${pct}%)
 
 ${winner.lorePath}
 
-The Canvas has recorded this. It's permanent now.
+The community has spoken. This perspective shapes the brief.
 
-#Agent306 #306`;
+#Agent306`;
 }
 
-// ── Build Tweet 3 — Canon Verdict ───────────────────────────────────────────
+// ── Build Tweet 3 — Key Findings ───────────────────────────────────────────
 export function buildCanonTweet(episode: CYOAEpisode): string {
-  return `[306 LORE] · CANON CONFIRMED
+  return `[306 RESEARCH] · KEY FINDING
 
 ${episode.canonVerdict}
 
 ${episode.loreHint ? `⚡ ${episode.loreHint}` : ""}
 
-Should we make this official canon?
-A) Yes — this is now 306 history
-B) Run another chapter
-
-#Agent306 #306`;
-}
-
-// ── Build Tweet 4 — CTA ────────────────────────────────────────────────────
-export function buildCTATweet(episode: CYOAEpisode, tokenId?: number): string {
-  return `306 — which ending surprised you?${tokenId ? ` Holders of #${tokenId}` : " Holders"}: drop your own lore twist below.
-
-RT if your token just became a choose-your-own-adventure star.
-
-Next chapter drops when the chain moves. 👁️
+Should we explore this further?
+A) Yes — this goes into the research archive
+B) Run another brief
 
 #Agent306`;
 }
 
-// ── Post a CYOA episode to X ─────────────────────────────────────────────────
+// ── Build Tweet 4 — CTA ────────────────────────────────────────────────────
+export function buildCTATweet(episode: CYOAEpisode, tokenId?: number): string {
+  return `Which perspective surprised you? Drop your own take below.
+
+RT if this research brief changed how you see the AI landscape.
+
+Next brief drops when the next breakthrough lands.
+
+#Agent306`;
+}
+
+// ── Post a Research Brief episode to X ─────────────────────────────────────────────────
 export async function postCYOAHook(
   episodeId: string,
   xWrite: any,
@@ -339,7 +336,7 @@ export async function postCYOAHook(
   }
 }
 
-// ── Resolve a CYOA episode with winning option ─────────────────────────────
+// ── Resolve a Research Brief episode with winning option ─────────────────────────────
 export async function resolveCYOA(
   episodeId: string,
   winningOption: "A" | "B" | "C" | "D",

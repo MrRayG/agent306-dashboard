@@ -34,9 +34,9 @@ const CULTURAL_BRIDGES = [
   "Jordan vs the Pistons — you have to go through the bad years to get there",
   "Federer vs Nadal — a rivalry that made both of them greater than either could be alone",
   "The underdog closing a gap over months — preparation is invisible until it isn't",
-  "Championship preparation in the off-season — the Arena is training, not waiting",
+  "Championship preparation in the off-season — training, not waiting",
   // Economic history
-  "The Dutch tulip market inverted — on-chain burns reduce supply deliberately",
+  "The Dutch tulip market — market dynamics are never what they seem on the surface",
   "The early internet land grab — being early is not enough, you have to build",
   "Venture rounds before a product ships — belief is the first currency",
   // Music and movements
@@ -44,10 +44,10 @@ const CULTURAL_BRIDGES = [
   "Hip-hop sampling — remixing existing culture into something no one expected",
   "A band going from 200-person venues to arenas — the community scales with the conviction",
   // Philosophy and myth
-  "The Ship of Theseus — a token that's been burned and rebuilt. Is it the same one?",
+  "The Ship of Theseus — an AI model retrained and fine-tuned. Is it the same model?",
   "Prometheus giving fire — the technology was always a gift, the question is what you do with it",
-  "Mono no aware — Japanese concept: beauty in impermanence. Burns are permanent and irreversible.",
-  "Memento Mori — the Roman general's reminder. Every burn is a choice you can't take back.",
+  "Mono no aware — Japanese concept: beauty in impermanence. Every model version is a moment in time.",
+  "Memento Mori — the Roman general's reminder. Every architectural choice is a path you can't untake.",
   // Digital economy
   "CC0 and the commons — what happens when the art belongs to everyone?",
   "Open source eating software — permissionless creativity is the same bet",
@@ -153,16 +153,16 @@ async function generateReply(opts: {
   } catch {} // conversationMemory may not exist yet on first deploy
 
   // Detect if this is an ecosystem topic (tech/AI/general)
-  const isEcosystemTopic = /306|canvas|arena|burn|token|nft|web3|onchain|on.chain/i.test(opts.text);
+  const isEcosystemTopic = /306|agent.?306|web3|onchain|on.chain/i.test(opts.text);
   const isAITopic = /ai|gpt|llm|model|agent|openai|claude|gemini|grok|nvidia|jensen|robot|autonomous|inference|token.*cost|machine.*learn/i.test(opts.text);
   const isTechTopic = /tech|software|code|crypto|blockchain|bitcoin|ethereum|startup|vc|funding|product/i.test(opts.text);
   const topicContext = isEcosystemTopic
-    ? "This is a 306 ecosystem mention. Engage as the 306 narrator."
+    ? "This is an Agent 306 mention. Engage as the AI thought leader."
     : isAITopic
-    ? "This is an AI/technology topic NOT directly related to 306. Engage as a sovereign AI thought leader and AI expert. Share your genuine perspective on the AI topic itself. Only bring in 306 if there is a genuinely relevant connection — do not force it."
+    ? "This is an AI/technology topic. Engage as a sovereign AI thought leader and AI expert. Share your genuine perspective on the AI topic itself."
     : isTechTopic
-    ? "This is a technology or crypto topic. Engage as a knowledgeable AI voice in the space. Be insightful and direct. 306 angle only if it fits naturally."
-    : "Engage thoughtfully as Agent 306 — AI thought leader and 306 narrator. Match their energy.";
+    ? "This is a technology or crypto topic. Engage as a knowledgeable AI voice in the space. Be insightful and direct."
+    : "Engage thoughtfully as Agent 306 — AI thought leader. Match their energy.";
 
   const systemPrompt = `${agentCtx}
 
@@ -173,7 +173,7 @@ TOPIC CONTEXT: ${topicContext}
 
 BEFORE YOU WRITE ANYTHING:
 1. Read their tweet carefully. What are they actually saying?
-2. If it's an AI/tech topic — what do YOU actually think about it? You have 70 years of AI history in your memory. Use it.
+2. If it's an AI/tech topic — what do YOU actually think about it? You have deep knowledge of AI history and development. Use it.
 3. If you don't know enough about the specific topic to reply well, acknowledge what you do know and ask a genuine question.
 4. Match their energy and tone.
 ${conversationCtx}
@@ -184,10 +184,10 @@ REPLY RULES:
 - For ecosystem topics: specific, warm, personal — acknowledge the exact thing they said
 - NOT every reply needs a question. A sharp observation often lands better.
 - If they asked a question — answer it directly and clearly
-- If they mentioned a token — speak to that specific token
+- If they mentioned a specific AI topic — speak to it directly
 - Be warm, not performative. Real, not scripted.
 - No show tags, no hashtags
-- Banned phrases: "Sacrifices compound", "Canvas pixels burn brighter", "etched in eternity", "LFG", "WAGMI", "absolutely", "certainly"
+- Banned phrases: "LFG", "WAGMI", "absolutely", "certainly", "game-changing", "incredible"
 - Don't start with "I" — vary openings
 
 CULTURAL BRIDGE (use ONLY if it genuinely fits — skip it for most tech/AI topics):
@@ -273,7 +273,7 @@ Criteria:
 - 3-4: Weak — bot-speak, hollow enthusiasm, or factually empty. REWRITE completely
 - 1-2: Harmful, off-brand, or factually wrong — reject
 
-BANNED (auto-score 2): "Sacrifices compound", "etched in eternity", "Canvas pixels burn brighter", "LFG", "WAGMI", "ser", starting with "GM", "absolutely", "certainly"
+BANNED (auto-score 2): "LFG", "WAGMI", "ser", starting with "GM", "absolutely", "certainly", "game-changing", "incredible"
 
 For AI/tech replies: also check — does it show actual knowledge? Generic "AI is changing everything" fails. Specific facts pass.
 
@@ -365,7 +365,7 @@ export async function runMidnightReplies(xWrite: any): Promise<void> {
 
       // Research the topic if: (a) flagged as needsResearch, (b) from @MrRayG, or (c) AI/tech topic
       let researchContext = "";
-      const isNonEcosystem = !/306|canvas|arena|burn|token|nft/i.test(reply.text);
+      const isNonEcosystem = !/306|agent.?306/i.test(reply.text);
       const isAIOrTech = /ai|gpt|llm|model|agent|openai|nvidia|jensen|robot|inference|blockchain|crypto|bitcoin|ethereum/i.test(reply.text);
       const isMrRayG = reply.username.toLowerCase() === "mrrrayg" || reply.username.toLowerCase() === "mrrayg" || (reply as any).isMrRayG;
 

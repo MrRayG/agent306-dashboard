@@ -1,418 +1,318 @@
 {
   "holders": {
-    "samalitoo": {
-      "username": "Samalitoo",
-      "firstSeen": "2026-03-24T10:59:29.279Z",
-      "lastSeen": "2026-03-24T10:59:29.279Z",
+    "openai": {
+      "username": "OpenAI",
+      "firstSeen": "2026-04-02T10:00:00.000Z",
+      "lastSeen": "2026-04-02T10:00:00.000Z",
       "postCount": 0,
-      "signalTypes": [
-        "community"
-      ],
-      "shows": [
-        "[NORMIES COMMUNITY]"
-      ],
+      "signalTypes": ["ai_research"],
+      "shows": ["[AI LEADERS]"],
       "notable": true,
-      "notes": "",
+      "notes": "GPT, DALL-E, Sora — frontier AI lab",
       "tokenIds": [],
-      "tags": [],
-      "confirmedHolder": true,
-      "signalWeight": 6
+      "tags": ["@OpenAI"],
+      "confirmedHolder": false,
+      "signalWeight": 9
     },
-    "_boxlord": {
-      "username": "_boxlord",
-      "firstSeen": "2026-03-24T10:59:29.279Z",
-      "lastSeen": "2026-03-24T10:59:29.279Z",
+    "googledeermind": {
+      "username": "GoogleDeepMind",
+      "firstSeen": "2026-04-02T10:00:00.000Z",
+      "lastSeen": "2026-04-02T10:00:00.000Z",
       "postCount": 0,
-      "signalTypes": [
-        "community"
-      ],
-      "shows": [
-        "[NORMIES COMMUNITY]"
-      ],
+      "signalTypes": ["ai_research"],
+      "shows": ["[AI LEADERS]"],
       "notable": true,
-      "notes": "",
+      "notes": "Gemini, AlphaFold — Google's AI research arm",
       "tokenIds": [],
-      "tags": [],
-      "confirmedHolder": true,
-      "signalWeight": 6
+      "tags": ["@GoogleDeepMind"],
+      "confirmedHolder": false,
+      "signalWeight": 9
     },
-    "osaykancuno": {
-      "username": "OsayKancuno",
-      "firstSeen": "2026-03-24T10:59:29.279Z",
-      "lastSeen": "2026-03-24T10:59:29.279Z",
+    "anthropicai": {
+      "username": "AnthropicAI",
+      "firstSeen": "2026-04-02T10:00:00.000Z",
+      "lastSeen": "2026-04-02T10:00:00.000Z",
       "postCount": 0,
-      "signalTypes": [
-        "pfp_holder"
-      ],
-      "shows": [
-        "[NORMIES COMMUNITY]"
-      ],
+      "signalTypes": ["ai_research"],
+      "shows": ["[AI LEADERS]"],
       "notable": true,
-      "notes": "",
+      "notes": "Claude — safety-focused AI lab",
       "tokenIds": [],
-      "tags": [
-        "@normiesART"
-      ],
-      "confirmedHolder": true,
+      "tags": ["@AnthropicAI"],
+      "confirmedHolder": false,
+      "signalWeight": 9
+    },
+    "xai": {
+      "username": "xai",
+      "firstSeen": "2026-04-02T10:00:00.000Z",
+      "lastSeen": "2026-04-02T10:00:00.000Z",
+      "postCount": 0,
+      "signalTypes": ["ai_research"],
+      "shows": ["[AI LEADERS]"],
+      "notable": true,
+      "notes": "Grok — Elon Musk's AI company",
+      "tokenIds": [],
+      "tags": ["@xai"],
+      "confirmedHolder": false,
+      "signalWeight": 8
+    },
+    "sama": {
+      "username": "sama",
+      "firstSeen": "2026-04-02T10:00:00.000Z",
+      "lastSeen": "2026-04-02T10:00:00.000Z",
+      "postCount": 0,
+      "signalTypes": ["ai_thought_leader"],
+      "shows": ["[AI LEADERS]"],
+      "notable": true,
+      "notes": "CEO of OpenAI",
+      "tokenIds": [],
+      "tags": ["@sama"],
+      "confirmedHolder": false,
+      "signalWeight": 9
+    },
+    "karpathy": {
+      "username": "karpathy",
+      "firstSeen": "2026-04-02T10:00:00.000Z",
+      "lastSeen": "2026-04-02T10:00:00.000Z",
+      "postCount": 0,
+      "signalTypes": ["ai_thought_leader"],
+      "shows": ["[AI LEADERS]"],
+      "notable": true,
+      "notes": "AI researcher, ex-Tesla AI, Stanford",
+      "tokenIds": [],
+      "tags": ["@karpathy"],
+      "confirmedHolder": false,
+      "signalWeight": 9
+    },
+    "andrewng": {
+      "username": "AndrewYNg",
+      "firstSeen": "2026-04-02T10:00:00.000Z",
+      "lastSeen": "2026-04-02T10:00:00.000Z",
+      "postCount": 0,
+      "signalTypes": ["ai_thought_leader"],
+      "shows": ["[AI LEADERS]"],
+      "notable": true,
+      "notes": "AI educator, Coursera co-founder",
+      "tokenIds": [],
+      "tags": ["@AndrewYNg"],
+      "confirmedHolder": false,
+      "signalWeight": 8
+    },
+    "ylecun": {
+      "username": "ylecun",
+      "firstSeen": "2026-04-02T10:00:00.000Z",
+      "lastSeen": "2026-04-02T10:00:00.000Z",
+      "postCount": 0,
+      "signalTypes": ["ai_thought_leader"],
+      "shows": ["[AI LEADERS]"],
+      "notable": true,
+      "notes": "Meta Chief AI Scientist, Turing Award winner",
+      "tokenIds": [],
+      "tags": ["@ylecun"],
+      "confirmedHolder": false,
+      "signalWeight": 9
+    },
+    "therundownai": {
+      "username": "TheRundownAI",
+      "firstSeen": "2026-04-02T10:00:00.000Z",
+      "lastSeen": "2026-04-02T10:00:00.000Z",
+      "postCount": 0,
+      "signalTypes": ["ai_media"],
+      "shows": ["[AI MEDIA]"],
+      "notable": true,
+      "notes": "Fastest-growing AI newsletter",
+      "tokenIds": [],
+      "tags": ["@TheRundownAI"],
+      "confirmedHolder": false,
       "signalWeight": 7
     },
-    "imafckretard": {
-      "username": "imafckretard",
-      "firstSeen": "2026-03-24T10:59:29.280Z",
-      "lastSeen": "2026-03-24T10:59:29.280Z",
+    "dair_ai": {
+      "username": "dair_ai",
+      "firstSeen": "2026-04-02T10:00:00.000Z",
+      "lastSeen": "2026-04-02T10:00:00.000Z",
       "postCount": 0,
-      "signalTypes": [
-        "pfp_holder"
-      ],
-      "shows": [
-        "[NORMIES COMMUNITY]"
-      ],
+      "signalTypes": ["ai_research"],
+      "shows": ["[AI MEDIA]"],
       "notable": true,
-      "notes": "",
+      "notes": "ML research democratization",
       "tokenIds": [],
-      "tags": [],
-      "confirmedHolder": true,
+      "tags": ["@dair_ai"],
+      "confirmedHolder": false,
       "signalWeight": 7
     },
-    "nftgothsa": {
-      "username": "nftgothsa",
-      "firstSeen": "2026-03-24T10:59:29.280Z",
-      "lastSeen": "2026-03-24T10:59:29.280Z",
+    "vitalikbuterin": {
+      "username": "VitalikButerin",
+      "firstSeen": "2026-04-02T10:00:00.000Z",
+      "lastSeen": "2026-04-02T10:00:00.000Z",
       "postCount": 0,
-      "signalTypes": [
-        "pfp_holder"
-      ],
-      "shows": [
-        "[NORMIES COMMUNITY]"
-      ],
+      "signalTypes": ["crypto_thought_leader"],
+      "shows": ["[CRYPTO LEADERS]"],
       "notable": true,
-      "notes": "",
+      "notes": "Ethereum co-founder",
       "tokenIds": [],
-      "tags": [
-        "@normiesART"
-      ],
-      "confirmedHolder": true,
+      "tags": ["@VitalikButerin"],
+      "confirmedHolder": false,
+      "signalWeight": 9
+    },
+    "binance": {
+      "username": "binance",
+      "firstSeen": "2026-04-02T10:00:00.000Z",
+      "lastSeen": "2026-04-02T10:00:00.000Z",
+      "postCount": 0,
+      "signalTypes": ["crypto_exchange"],
+      "shows": ["[CRYPTO LEADERS]"],
+      "notable": true,
+      "notes": "World's largest crypto exchange",
+      "tokenIds": [],
+      "tags": ["@binance"],
+      "confirmedHolder": false,
+      "signalWeight": 8
+    },
+    "coinbase": {
+      "username": "coinbase",
+      "firstSeen": "2026-04-02T10:00:00.000Z",
+      "lastSeen": "2026-04-02T10:00:00.000Z",
+      "postCount": 0,
+      "signalTypes": ["crypto_exchange"],
+      "shows": ["[CRYPTO LEADERS]"],
+      "notable": true,
+      "notes": "Leading US crypto exchange",
+      "tokenIds": [],
+      "tags": ["@coinbase"],
+      "confirmedHolder": false,
+      "signalWeight": 8
+    },
+    "ethereum": {
+      "username": "ethereum",
+      "firstSeen": "2026-04-02T10:00:00.000Z",
+      "lastSeen": "2026-04-02T10:00:00.000Z",
+      "postCount": 0,
+      "signalTypes": ["crypto_protocol"],
+      "shows": ["[CRYPTO LEADERS]"],
+      "notable": true,
+      "notes": "The world computer — smart contract platform",
+      "tokenIds": [],
+      "tags": ["@ethereum"],
+      "confirmedHolder": false,
+      "signalWeight": 9
+    },
+    "cz_binance": {
+      "username": "cz_binance",
+      "firstSeen": "2026-04-02T10:00:00.000Z",
+      "lastSeen": "2026-04-02T10:00:00.000Z",
+      "postCount": 0,
+      "signalTypes": ["crypto_thought_leader"],
+      "shows": ["[CRYPTO LEADERS]"],
+      "notable": true,
+      "notes": "Former Binance CEO",
+      "tokenIds": [],
+      "tags": ["@cz_binance"],
+      "confirmedHolder": false,
+      "signalWeight": 8
+    },
+    "brian_armstrong": {
+      "username": "brian_armstrong",
+      "firstSeen": "2026-04-02T10:00:00.000Z",
+      "lastSeen": "2026-04-02T10:00:00.000Z",
+      "postCount": 0,
+      "signalTypes": ["crypto_thought_leader"],
+      "shows": ["[CRYPTO LEADERS]"],
+      "notable": true,
+      "notes": "Coinbase CEO",
+      "tokenIds": [],
+      "tags": ["@brian_armstrong"],
+      "confirmedHolder": false,
+      "signalWeight": 8
+    },
+    "balajis": {
+      "username": "balajis",
+      "firstSeen": "2026-04-02T10:00:00.000Z",
+      "lastSeen": "2026-04-02T10:00:00.000Z",
+      "postCount": 0,
+      "signalTypes": ["crypto_thought_leader"],
+      "shows": ["[CRYPTO LEADERS]"],
+      "notable": true,
+      "notes": "Tech investor, former Coinbase CTO",
+      "tokenIds": [],
+      "tags": ["@balajis"],
+      "confirmedHolder": false,
+      "signalWeight": 8
+    },
+    "apompliano": {
+      "username": "APompliano",
+      "firstSeen": "2026-04-02T10:00:00.000Z",
+      "lastSeen": "2026-04-02T10:00:00.000Z",
+      "postCount": 0,
+      "signalTypes": ["crypto_thought_leader"],
+      "shows": ["[CRYPTO LEADERS]"],
+      "notable": true,
+      "notes": "Crypto investor, The Pomp Podcast",
+      "tokenIds": [],
+      "tags": ["@APompliano"],
+      "confirmedHolder": false,
       "signalWeight": 7
     },
-    "lp_vicious": {
-      "username": "Lp_Vicious",
-      "firstSeen": "2026-03-24T10:59:29.281Z",
-      "lastSeen": "2026-03-24T10:59:29.281Z",
+    "saylor": {
+      "username": "saylor",
+      "firstSeen": "2026-04-02T10:00:00.000Z",
+      "lastSeen": "2026-04-02T10:00:00.000Z",
       "postCount": 0,
-      "signalTypes": [
-        "pfp_holder"
-      ],
-      "shows": [
-        "[NORMIES COMMUNITY]"
-      ],
+      "signalTypes": ["crypto_thought_leader"],
+      "shows": ["[CRYPTO LEADERS]"],
       "notable": true,
-      "notes": "",
+      "notes": "MicroStrategy, Bitcoin advocate",
       "tokenIds": [],
-      "tags": [],
-      "confirmedHolder": true,
-      "signalWeight": 7
+      "tags": ["@saylor"],
+      "confirmedHolder": false,
+      "signalWeight": 8
     },
-    "tryaskom": {
-      "username": "TryAskOm",
-      "firstSeen": "2026-03-24T10:59:29.281Z",
-      "lastSeen": "2026-03-24T10:59:29.281Z",
+    "a16z": {
+      "username": "a16z",
+      "firstSeen": "2026-04-02T10:00:00.000Z",
+      "lastSeen": "2026-04-02T10:00:00.000Z",
       "postCount": 0,
-      "signalTypes": [
-        "community"
-      ],
-      "shows": [
-        "[NORMIES COMMUNITY]"
-      ],
+      "signalTypes": ["crypto_vc"],
+      "shows": ["[CRYPTO LEADERS]"],
       "notable": true,
-      "notes": "",
+      "notes": "Andreessen Horowitz — AI and crypto VC",
       "tokenIds": [],
-      "tags": [],
-      "confirmedHolder": true,
-      "signalWeight": 6
-    },
-    "klaushubben": {
-      "username": "klaushubben",
-      "firstSeen": "2026-03-24T10:59:29.281Z",
-      "lastSeen": "2026-03-24T10:59:29.281Z",
-      "postCount": 0,
-      "signalTypes": [
-        "community"
-      ],
-      "shows": [
-        "[NORMIES COMMUNITY]"
-      ],
-      "notable": true,
-      "notes": "",
-      "tokenIds": [],
-      "tags": [],
-      "confirmedHolder": true,
-      "signalWeight": 6
-    },
-    "spoliticusmedia": {
-      "username": "SpoliticusMedia",
-      "firstSeen": "2026-03-24T10:59:29.281Z",
-      "lastSeen": "2026-03-24T10:59:29.281Z",
-      "postCount": 0,
-      "signalTypes": [
-        "community"
-      ],
-      "shows": [
-        "[NORMIES COMMUNITY]"
-      ],
-      "notable": true,
-      "notes": "",
-      "tokenIds": [],
-      "tags": [],
-      "confirmedHolder": true,
-      "signalWeight": 6
-    },
-    "excaliburweb3": {
-      "username": "Excaliburweb3",
-      "firstSeen": "2026-03-24T10:59:29.281Z",
-      "lastSeen": "2026-03-24T10:59:29.281Z",
-      "postCount": 0,
-      "signalTypes": [
-        "pfp_holder"
-      ],
-      "shows": [
-        "[NORMIES COMMUNITY]"
-      ],
-      "notable": true,
-      "notes": "",
-      "tokenIds": [
-        4259,
-        189,
-        4175
-      ],
-      "tags": [],
-      "confirmedHolder": true,
-      "signalWeight": 7
-    },
-    "0xbatshitkrazy": {
-      "username": "0xBatshitKrazy",
-      "firstSeen": "2026-03-24T10:59:29.281Z",
-      "lastSeen": "2026-03-24T10:59:29.281Z",
-      "postCount": 0,
-      "signalTypes": [
-        "community"
-      ],
-      "shows": [
-        "[NORMIES COMMUNITY]"
-      ],
-      "notable": true,
-      "notes": "",
-      "tokenIds": [],
-      "tags": [],
-      "confirmedHolder": true,
-      "signalWeight": 6
-    },
-    "dopemind10": {
-      "username": "dopemind10",
-      "firstSeen": "2026-03-24T10:59:29.282Z",
-      "lastSeen": "2026-03-24T10:59:29.282Z",
-      "postCount": 0,
-      "signalTypes": [
-        "community"
-      ],
-      "shows": [
-        "[NORMIES COMMUNITY]"
-      ],
-      "notable": true,
-      "notes": "",
-      "tokenIds": [],
-      "tags": [],
-      "confirmedHolder": true,
-      "signalWeight": 6
-    },
-    "webmxzora": {
-      "username": "Webmxzora",
-      "firstSeen": "2026-03-24T10:59:29.282Z",
-      "lastSeen": "2026-03-24T10:59:29.282Z",
-      "postCount": 0,
-      "signalTypes": [
-        "pfp_holder"
-      ],
-      "shows": [
-        "[NORMIES COMMUNITY]"
-      ],
-      "notable": true,
-      "notes": "",
-      "tokenIds": [
-        666,
-        7577
-      ],
-      "tags": [],
-      "confirmedHolder": true,
-      "signalWeight": 7
-    },
-    "stpeaceym": {
-      "username": "StPeaceyM",
-      "firstSeen": "2026-03-24T10:59:29.282Z",
-      "lastSeen": "2026-03-24T10:59:29.282Z",
-      "postCount": 0,
-      "signalTypes": [
-        "pfp_holder"
-      ],
-      "shows": [
-        "[NORMIES COMMUNITY]"
-      ],
-      "notable": true,
-      "notes": "",
-      "tokenIds": [],
-      "tags": [
-        "@normiesART"
-      ],
-      "confirmedHolder": true,
-      "signalWeight": 7
-    },
-    "mrrayg": {
-      "username": "MrRayG",
-      "firstSeen": "2026-03-24T10:59:29.282Z",
-      "lastSeen": "2026-03-24T10:59:29.282Z",
-      "postCount": 0,
-      "signalTypes": [
-        "community"
-      ],
-      "shows": [
-        "[NORMIES COMMUNITY]"
-      ],
-      "notable": true,
-      "notes": "",
-      "tokenIds": [],
-      "tags": [],
-      "confirmedHolder": true,
-      "signalWeight": 6
-    },
-    "hodlstrong1": {
-      "username": "Hodlstrong1",
-      "firstSeen": "2026-03-24T10:59:29.283Z",
-      "lastSeen": "2026-03-24T10:59:29.283Z",
-      "postCount": 0,
-      "signalTypes": [
-        "community"
-      ],
-      "shows": [
-        "[NORMIES COMMUNITY]"
-      ],
-      "notable": true,
-      "notes": "",
-      "tokenIds": [],
-      "tags": [],
-      "confirmedHolder": true,
-      "signalWeight": 6
-    },
-    "rushvarela": {
-      "username": "RushVarela",
-      "firstSeen": "2026-03-24T10:59:29.283Z",
-      "lastSeen": "2026-03-24T10:59:29.283Z",
-      "postCount": 0,
-      "signalTypes": [
-        "community"
-      ],
-      "shows": [
-        "[NORMIES COMMUNITY]"
-      ],
-      "notable": true,
-      "notes": "",
-      "tokenIds": [],
-      "tags": [],
-      "confirmedHolder": true,
-      "signalWeight": 6
-    },
-    "gathi32": {
-      "username": "Gathi32",
-      "firstSeen": "2026-03-24T10:59:29.283Z",
-      "lastSeen": "2026-03-24T10:59:29.283Z",
-      "postCount": 0,
-      "signalTypes": [
-        "pfp_holder"
-      ],
-      "shows": [
-        "[NORMIES COMMUNITY]"
-      ],
-      "notable": true,
-      "notes": "",
-      "tokenIds": [
-        1
-      ],
-      "tags": [
-        "@normiesART"
-      ],
-      "confirmedHolder": true,
-      "signalWeight": 7
-    },
-    "serc1n": {
-      "username": "serc1n",
-      "firstSeen": "2026-03-24T10:59:29.283Z",
-      "lastSeen": "2026-03-24T10:59:29.283Z",
-      "postCount": 0,
-      "signalTypes": [
-        "pfp_holder"
-      ],
-      "shows": [
-        "[NORMIES COMMUNITY]"
-      ],
-      "notable": true,
-      "notes": "",
-      "tokenIds": [
-        4354,
-        1482
-      ],
-      "tags": [
-        "@normiesART"
-      ],
-      "confirmedHolder": true,
-      "signalWeight": 7
-    },
-    "normiesart": {
-      "username": "normiesART",
-      "firstSeen": "2026-03-24T10:59:29.283Z",
-      "lastSeen": "2026-03-24T10:59:29.283Z",
-      "postCount": 0,
-      "signalTypes": [
-        "pfp_holder"
-      ],
-      "shows": [
-        "[NORMIES COMMUNITY]"
-      ],
-      "notable": true,
-      "notes": "",
-      "tokenIds": [],
-      "tags": [],
-      "confirmedHolder": true,
-      "signalWeight": 7
+      "tags": ["@a16z"],
+      "confirmedHolder": false,
+      "signalWeight": 8
     }
   },
   "totalUnique": 20,
-  "lastUpdated": "2026-03-24T10:59:29.283Z",
+  "lastUpdated": "2026-04-02T10:00:00.000Z",
   "ecosystem": {
-    "founder": [
-      "serc1n"
+    "ai_labs": [
+      "openai",
+      "googledeermind",
+      "anthropicai",
+      "xai"
     ],
-    "developer": [
-      "YigitDuman"
+    "ai_leaders": [
+      "sama",
+      "karpathy",
+      "andrewng",
+      "ylecun"
     ],
-    "creator": [
-      "nuclearsamurai",
-      "crisguyot"
+    "ai_media": [
+      "therundownai",
+      "dair_ai"
     ],
-    "activeBuilders": [
-      "johnkarp",
-      "gothsa",
-      "dopemind",
-      "Adiipati"
+    "crypto_leaders": [
+      "vitalikbuterin",
+      "cz_binance",
+      "brian_armstrong",
+      "balajis",
+      "apompliano",
+      "saylor"
     ],
-    "pfpHolders": [
-      "osaykancuno",
-      "imafckretard",
-      "nftgothsa",
-      "lp_vicious",
-      "excaliburweb3",
-      "webmxzora",
-      "stpeaceym",
-      "gathi32",
-      "serc1n",
-      "normiesart"
+    "crypto_platforms": [
+      "binance",
+      "coinbase",
+      "ethereum",
+      "a16z"
     ]
   }
 }

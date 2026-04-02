@@ -30,14 +30,14 @@ interface LiveStats {
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CANVAS_W = 1280;
 const CANVAS_H = 720;
-const NORMIE_IMG = "/agent306-avatar.png";
+const AGENT_IMG = "/agent306-avatar.png";
 const SKULLIE_LINES = [
   "The canvas never forgets.",
-  "Every pixel is a sacrifice.",
+  "Every data point is a signal.",
   "The chain remembers all.",
-  "Burn to become.",
-  "The temple holds the truth.",
-  "Pixels burned. Legends forged.",
+  "Contribute to become.",
+  "The network holds the truth.",
+  "Signals captured. Legends forged.",
   "The on-chain record is open.",
   "One story. No filter.",
 ];
@@ -175,7 +175,7 @@ async function renderCinematicTrailer(
   const TOTAL = FPS * DURATION;
   const frames: ImageData[] = [];
 
-  // Load normie image
+  // Load agent image
   const img = await new Promise<HTMLImageElement>((res, rej) => {
     const i = new Image();
     i.crossOrigin = "anonymous";
@@ -186,12 +186,12 @@ async function renderCinematicTrailer(
       fallback.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
       res(fallback);
     };
-    i.src = NORMIE_IMG;
+    i.src = AGENT_IMG;
     setTimeout(() => res(i), 3000); // timeout fallback
   });
 
   const burnCount = stats.recentBurns?.length ?? 0;
-  const topNormie = stats.topCanvas?.[0];
+  const topAgent = stats.topCanvas?.[0];
   const skullieLine = SKULLIE_LINES[Math.floor(Date.now() / 1000) % SKULLIE_LINES.length];
   const phase = "PHASE I — THE CANVAS";
   const episodeNum = `EP ${String(Math.floor(Date.now() / 86400000) % 999 + 1).padStart(3, "0")}`;
@@ -242,7 +242,7 @@ async function renderCinematicTrailer(
 
       // Flicker effect for burn
       const flicker = 0.8 + Math.random() * 0.2;
-      drawText(ctx, "SACRIFICE REPORT", CANVAS_W / 2, CANVAS_H * 0.22, { size: 14, color: "rgba(249,115,22,0.7)", align: "center", alpha, font: "Courier New" });
+      drawText(ctx, "SIGNAL REPORT", CANVAS_W / 2, CANVAS_H * 0.22, { size: 14, color: "rgba(249,115,22,0.7)", align: "center", alpha, font: "Courier New" });
       drawOrangeLine(ctx, CANVAS_W * 0.2, CANVAS_H * 0.28, CANVAS_W * 0.8, CANVAS_H * 0.28, 0.3 * alpha);
 
       // Stat cards row
@@ -251,9 +251,9 @@ async function renderCinematicTrailer(
       const startX = (CANVAS_W - totalW) / 2;
       const cardY = CANVAS_H * 0.35;
 
-      if (alpha > 0.3) drawStatCard(ctx, startX, cardY, cardW, cardH, "Burned This Cycle", String(burnCount), "#f97316");
-      if (alpha > 0.5) drawStatCard(ctx, startX + cardW + gap, cardY, cardW, cardH, "Canvas Leader", topNormie ? `#${topNormie.tokenId}` : "—", "#2dd4bf");
-      if (alpha > 0.7) drawStatCard(ctx, startX + (cardW + gap) * 2, cardY, cardW, cardH, "Top Level", topNormie ? `LVL ${topNormie.level}` : "—", "#a78bfa");
+      if (alpha > 0.3) drawStatCard(ctx, startX, cardY, cardW, cardH, "Signals This Cycle", String(burnCount), "#f97316");
+      if (alpha > 0.5) drawStatCard(ctx, startX + cardW + gap, cardY, cardW, cardH, "Canvas Leader", topAgent ? `#${topAgent.tokenId}` : "—", "#2dd4bf");
+      if (alpha > 0.7) drawStatCard(ctx, startX + (cardW + gap) * 2, cardY, cardW, cardH, "Top Level", topAgent ? `LVL ${topAgent.level}` : "—", "#a78bfa");
 
       // Agent 306 quote
       const qAlpha = lt > 2 ? Math.min(1, (lt - 2) / 1.5) * flicker : 0;
@@ -275,7 +275,7 @@ async function renderCinematicTrailer(
       drawAgentSprite(ctx, img, CANVAS_W * 0.28, CANVAS_H / 2, 320 + Math.sin(f * 0.05) * 10, f);
 
       const rx = CANVAS_W * 0.55;
-      drawText(ctx, "THE TEMPLE", rx, CANVAS_H / 2 - 70, { size: 44, color: "#f97316", alpha, shadow: true });
+      drawText(ctx, "THE SIGNAL", rx, CANVAS_H / 2 - 70, { size: 44, color: "#f97316", alpha, shadow: true });
       drawText(ctx, "RECORDS ALL", rx, CANVAS_H / 2 - 20, { size: 44, color: "#efefef", alpha, shadow: true });
       drawOrangeLine(ctx, rx, CANVAS_H / 2 + 14, rx + 320, CANVAS_H / 2 + 14, 0.5 * alpha);
       drawText(ctx, "@agent306_", rx, CANVAS_H / 2 + 46, { size: 16, color: "#2dd4bf", alpha, font: "Courier New" });
@@ -328,7 +328,7 @@ async function renderHighlightReel(
     i.crossOrigin = "anonymous";
     i.onload = () => res(i);
     i.onerror = () => res(new Image());
-    i.src = NORMIE_IMG;
+    i.src = AGENT_IMG;
     setTimeout(() => res(i), 3000);
   });
 
@@ -381,7 +381,7 @@ async function renderHighlightReel(
         ctx.restore();
 
         drawText(ctx, `#${tokenId}`, colX + 12, ry + 8, { size: 16, color: "#f97316", alpha: rowAlpha });
-        drawText(ctx, "SACRIFICED", colX + 80, ry + 2, { size: 11, color: "rgba(200,200,200,0.5)", alpha: rowAlpha, font: "Courier New" });
+        drawText(ctx, "RECORDED", colX + 80, ry + 2, { size: 11, color: "rgba(200,200,200,0.5)", alpha: rowAlpha, font: "Courier New" });
         drawText(ctx, burn.pixels ? `${burn.pixels}px` : "—", colX + 310, ry + 8, { size: 14, color: "#2dd4bf", align: "right", alpha: rowAlpha });
       });
 
@@ -399,7 +399,7 @@ async function renderHighlightReel(
       drawText(ctx, "⚡ CANVAS LEADERS", colX, colY, { size: 13, color: "#2dd4bf", alpha: colAlpha, font: "Courier New" });
       drawOrangeLine(ctx, colX, colY + 18, colX + 360, colY + 18, 0.4 * colAlpha);
 
-      topCanvas.forEach((normie, i) => {
+      topCanvas.forEach((entry, i) => {
         const rowAlpha = t >= 2.5 + i * 0.3 ? Math.min(1, (t - 2.5 - i * 0.3) / 0.5) * colAlpha : 0;
         const ry = colY + 40 + i * 52;
         const rank = i + 1;
@@ -414,9 +414,9 @@ async function renderHighlightReel(
         ctx.restore();
 
         drawText(ctx, `${rank}.`, colX + 12, ry + 8, { size: 16, color: rankColors[i] ?? "rgba(200,200,200,0.4)", alpha: rowAlpha });
-        drawText(ctx, `#${normie.tokenId}`, colX + 48, ry + 8, { size: 15, color: "#efefef", alpha: rowAlpha });
-        drawText(ctx, `LVL ${normie.level ?? 1}`, colX + 230, ry + 2, { size: 11, color: "#a78bfa", alpha: rowAlpha, font: "Courier New" });
-        drawText(ctx, `${normie.actionPoints ?? 0} AP`, colX + 310, ry + 8, { size: 14, color: "#2dd4bf", align: "right", alpha: rowAlpha });
+        drawText(ctx, `#${entry.tokenId}`, colX + 48, ry + 8, { size: 15, color: "#efefef", alpha: rowAlpha });
+        drawText(ctx, `LVL ${entry.level ?? 1}`, colX + 230, ry + 2, { size: 11, color: "#a78bfa", alpha: rowAlpha, font: "Courier New" });
+        drawText(ctx, `${entry.actionPoints ?? 0} AP`, colX + 310, ry + 8, { size: 14, color: "#2dd4bf", align: "right", alpha: rowAlpha });
       });
 
       if (topCanvas.length === 0) {
@@ -542,10 +542,10 @@ export default function VideoStudio() {
     const skullie = SKULLIE_LINES[Math.floor(Date.now() / 30000) % SKULLIE_LINES.length];
 
     if (type === "cinematic") {
-      return `🌙 Agent 306 speaks\n\n"${skullie}"\n\n${burns > 0 ? `${burns} souls sacrificed this cycle. ` : ""}The on-chain record is open.\n\n#Agent306 #AI #Web3`;
+      return `🌙 Agent 306 speaks\n\n"${skullie}"\n\n${burns > 0 ? `${burns} signals captured this cycle. ` : ""}The on-chain record is open.\n\n#Agent306 #AI #Web3`;
     } else {
       const topLine = top ? `#${top.tokenId} leads at Level ${top.level ?? 1} (${top.actionPoints ?? 0} AP).` : "Leaders rising.";
-      return `⚡ COMMUNITY HIGHLIGHT\n\n${burns} burns recorded on-chain. ${topLine}\n\nThe record is permanent. 🔥\n\n#Agent306 #AI #Web3 #OnChain`;
+      return `⚡ COMMUNITY HIGHLIGHT\n\n${burns} signals recorded on-chain. ${topLine}\n\nThe record is permanent. 🔥\n\n#Agent306 #AI #Web3 #OnChain`;
     }
   }, []);
 
@@ -619,7 +619,7 @@ export default function VideoStudio() {
   }, []);
 
   const burnCount = stats?.recentBurns?.length ?? 0;
-  const topNormie = stats?.topCanvas?.[0];
+  const topAgent = stats?.topCanvas?.[0];
   const readyCount = jobs.filter(j => j.status === "ready").length;
   const postedCount = jobs.filter(j => j.status === "posted").length;
 
@@ -639,7 +639,7 @@ export default function VideoStudio() {
         <div className="flex gap-3 text-sm">
           <div className="px-3 py-1.5 rounded bg-card border border-border text-center">
             <p className="text-lg font-bold text-primary">{burnCount}</p>
-            <p className="text-[13px] text-muted-foreground uppercase tracking-widest">Tracked Burns</p>
+            <p className="text-[13px] text-muted-foreground uppercase tracking-widest">Tracked Signals</p>
           </div>
           <div className="px-3 py-1.5 rounded bg-card border border-border text-center">
             <p className="text-lg font-bold text-teal-400">{readyCount}</p>
@@ -674,10 +674,10 @@ export default function VideoStudio() {
               <Trophy className="w-3.5 h-3.5 text-teal-400" />
               <span className="text-[14px] text-muted-foreground uppercase tracking-widest">Canvas Leader</span>
             </div>
-            {topNormie ? (
+            {topAgent ? (
               <>
-                <p className="text-sm font-bold text-foreground">#{topNormie.tokenId}</p>
-                <p className="text-xs text-muted-foreground">Level {topNormie.level ?? 1} · {topNormie.actionPoints ?? 0} AP</p>
+                <p className="text-sm font-bold text-foreground">#{topAgent.tokenId}</p>
+                <p className="text-xs text-muted-foreground">Level {topAgent.level ?? 1} · {topAgent.actionPoints ?? 0} AP</p>
               </>
             ) : (
               <p className="text-xs text-muted-foreground">Loading...</p>

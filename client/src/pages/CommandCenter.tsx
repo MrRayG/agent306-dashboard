@@ -25,10 +25,10 @@ const ENGINE_LABELS: Record<string, { label: string; color: string; schedule: st
   episode:       { label: "Episode",        color: "#f97316", schedule: "Every 12h",          show: "[306 STORIES]"    },
   news_dispatch: { label: "News Dispatch",  color: "#4ade80", schedule: "Daily 8am ET",        show: "[306 NEWS]"       },
   academy:       { label: "Academy",        color: "#60a5fa", schedule: "Tue/Thu/Sat 10am ET", show: "[306 ACADEMY]"   },
-  leaderboard:   { label: "Leaderboard",    color: "#efefef", schedule: "Monday 9am ET",        show: "[306 LEADERBOARD]"   },
+  leaderboard:   { label: "AI Rankings",     color: "#efefef", schedule: "Monday 9am ET",        show: "[306 RANKINGS]"      },
   spotlight:     { label: "Spotlight",      color: "#fb923c", schedule: "Sunday 11am ET",      show: "[306 SPOTLIGHT]" },
-  race:          { label: "THE RACE",       color: "#a78bfa", schedule: "Sunday 12pm ET",      show: "[306 ARENA]"     },
-  cyoa:          { label: "CYOA Draft",     color: "#2dd4bf", schedule: "Sunday 10am ET",      show: "[306 LORE]"      },
+  race:          { label: "AI Roundup",      color: "#a78bfa", schedule: "Sunday 12pm ET",      show: "[306 ROUNDUP]"   },
+  cyoa:          { label: "Research Brief",  color: "#2dd4bf", schedule: "Sunday 10am ET",      show: "[306 RESEARCH]"  },
   signal_brief:  { label: "Signal Brief",   color: "#fbbf24", schedule: "Mon/Wed/Fri 12pm ET", show: "[306 SIGNAL]"  },
 };
 
@@ -39,12 +39,12 @@ function buildWeekCalendar(): Array<{ day: string; date: string; shows: Array<{ 
   const dayNames = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   const schedule: Record<number, Array<{ show: string; time: string; color: string; engine: string }>> = {
     0: [ // Sunday
-      { show: "[306 LORE]",      time: "10am ET", color: "#2dd4bf", engine: "cyoa"      },
+      { show: "[306 RESEARCH]",  time: "10am ET", color: "#2dd4bf", engine: "cyoa"      },
       { show: "[306 SPOTLIGHT]", time: "11am ET", color: "#fb923c", engine: "spotlight" },
-      { show: "[306 ARENA]",     time: "12pm ET", color: "#a78bfa", engine: "race"      },
+      { show: "[306 ROUNDUP]",   time: "12pm ET", color: "#a78bfa", engine: "race"      },
     ],
     1: [ // Monday
-      { show: "[306 LEADERBOARD]",   time: "9am ET",  color: "#efefef", engine: "leaderboard" },
+      { show: "[306 RANKINGS]",      time: "9am ET",  color: "#efefef", engine: "leaderboard" },
       { show: "[306 SIGNAL]",    time: "12pm ET", color: "#fbbf24", engine: "signal_brief" },
     ],
     2: [ // Tuesday

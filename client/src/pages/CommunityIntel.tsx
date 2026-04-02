@@ -27,16 +27,16 @@ function timeAgo(iso: string | null) {
 }
 
 const TYPE_CONFIG: Record<string, { label: string; color: string; emoji: string }> = {
-  founder:          { label: "Founder · serc1n",   color: "#f97316", emoji: "🎯" },
-  developer:        { label: "Developer · Yigit",  color: "#f97316", emoji: "⚙️" },
+  founder:          { label: "Founder",            color: "#f97316", emoji: "🎯" },
+  developer:        { label: "Developer",          color: "#f97316", emoji: "⚙️" },
   creator:          { label: "Creator",            color: "#2dd4bf", emoji: "🎨" },
-  holder_builder:   { label: "Holders · Builders", color: "#4ade80", emoji: "🔨" },
-  burn_story:       { label: "Burn Stories",       color: "#f97316", emoji: "🔥" },
-  arena_prep:       { label: "Arena Prep",         color: "#a78bfa", emoji: "⚔️" },
-  arena_hype:       { label: "Arena Hype",         color: "#a78bfa", emoji: "⚔️" },
-  nfc_summit:       { label: "NFC Summit",         color: "#fbbf24", emoji: "🏛️" },
-  pfp_holder:       { label: "PFP Holders",        color: "#4ade80", emoji: "👤" },
-  holder_spotlight: { label: "Holder Spotlight",   color: "#4ade80", emoji: "✨" },
+  holder_builder:   { label: "Members · Builders", color: "#4ade80", emoji: "🔨" },
+  burn_story:       { label: "Research Threads",   color: "#f97316", emoji: "🔥" },
+  arena_prep:       { label: "Market Signals",     color: "#a78bfa", emoji: "⚔️" },
+  arena_hype:       { label: "Market Buzz",        color: "#a78bfa", emoji: "⚔️" },
+  nfc_summit:       { label: "Conference",         color: "#fbbf24", emoji: "🏛️" },
+  pfp_holder:       { label: "Active Members",     color: "#4ade80", emoji: "👤" },
+  holder_spotlight: { label: "Member Spotlight",   color: "#4ade80", emoji: "✨" },
   community_event:  { label: "Community Event",     color: "#2dd4bf", emoji: "🎁" },
   creativity:       { label: "Creativity",         color: "#2dd4bf", emoji: "🎨" },
   holder_milestone: { label: "Milestones",         color: "#4ade80", emoji: "🏆" },
@@ -401,12 +401,12 @@ export default function CommunityIntel() {
             <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
               {[
                 { show: "306 SIGNAL",       color: "#f97316", desc: "Community highlights" },
-                { show: "306 FIELD REPORT", color: "#f97316", desc: "Live burns, level ups" },
+                { show: "306 FIELD REPORT", color: "#f97316", desc: "Live activity, updates" },
                 { show: "306 STORIES",      color: "#a78bfa", desc: "Character arcs, narrative" },
-                { show: "306 COMMUNITY",    color: "#4ade80", desc: "Holder spotlight, builders" },
+                { show: "306 COMMUNITY",    color: "#4ade80", desc: "Member spotlight, builders" },
                 { show: "306 LEADERBOARD",  color: "#4ade80", desc: "Leaderboard, Monday 9am" },
                 { show: "306 NEWS",         color: "#2dd4bf", desc: "Web3 + ecosystem, 8am daily" },
-                { show: "306 BATTLES",      color: "#a78bfa", desc: "Battles — May 15+" },
+                { show: "306 ANALYSIS",     color: "#a78bfa", desc: "Deep analysis — May 15+" },
               ].map(({ show, color, desc }) => (
                 <div key={show} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", borderBottom: "1px solid rgba(227,229,228,0.08)" }}>
                   <span style={{ fontFamily: "'Courier New'", fontSize: "0.78rem", color, letterSpacing: "0.05em" }}>[{show}]</span>
@@ -422,7 +422,7 @@ export default function CommunityIntel() {
               <p style={{ ...label, marginBottom: "0.85rem" }}>🌐 The Network</p>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 {[
-                  { label: "Unique Holders", value: catalogStats.totalUnique },
+                  { label: "Unique Members", value: catalogStats.totalUnique },
                   { label: "Notable", value: catalogStats.notable },
                   { label: "Tagged Founder", value: catalogStats.taggedFounder },
                   { label: "Tagged Official", value: catalogStats.taggedOfficial },
@@ -434,7 +434,7 @@ export default function CommunityIntel() {
                 ))}
               </div>
               <p style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.40)", marginTop: 8 }}>
-                Grows every 30min as new holders are found
+                Grows every 30min as new members are found
               </p>
             </section>
           )}
@@ -465,7 +465,7 @@ export default function CommunityIntel() {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
                   {[
                     { label: "Following", value: followingData.totalCount, color: "#4ade80" },
-                    { label: "PFP Holders", value: followingData.pfpHolders, color: "#f97316" },
+                    { label: "Active Members", value: followingData.pfpHolders, color: "#f97316" },
                   ].map(({ label: l, value, color }) => (
                     <div key={l} style={{ background: "rgba(74,222,128,0.03)", border: "1px solid rgba(74,222,128,0.08)", padding: "8px 10px" }}>
                       <p style={{ ...mono, fontSize: "0.70rem", color: "rgba(227,229,228,0.55)", textTransform: "uppercase" as const, letterSpacing: "0.1em", marginBottom: 3 }}>{l}</p>
@@ -490,8 +490,8 @@ export default function CommunityIntel() {
                         @{a.username}
                       </span>
                       <span style={{ ...mono, fontSize: "0.70rem", color: "rgba(227,229,228,0.48)" }}>
-                        {a.isPfpHolder ? "🖼 pfp" : ""}
-                        {a.normieTokenIds?.length > 0 ? ` #${a.normieTokenIds[0]}` : ""}
+                        {a.isPfpHolder ? "🖼 member" : ""}
+                        {a.tokenIds?.length > 0 ? ` #${a.tokenIds[0]}` : ""}
                       </span>
                     </div>
                   ))}

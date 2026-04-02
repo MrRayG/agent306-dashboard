@@ -246,9 +246,9 @@ Return JSON array (max 6): [{text, username, likes, url, signal_type: "media_sig
   const sorted = deduped.sort((a, b) => {
     const priority: Record<string, number> = {
       founder: 100, developer: 90, creator: 80,
-      burn_story: 70, arena_prep: 65, pfp_holder: 60,
-      holder_builder: 55, holder_spotlight: 50,
-      community_gift: 45, nfc_summit: 45,
+      research_paper: 70, model_release: 65, breakthrough: 60,
+      holder_builder: 55, industry_news: 50,
+      community_gift: 45, media_signal: 45,
       community: 30, general: 10,
     };
     const pa = priority[a.signal_type ?? "community"] ?? 30;
@@ -314,9 +314,9 @@ function buildSystemPrompt(memory: EpisodeMemory[]): string {
 CORE: "I don't predict the future. I build it."
 
 WHO SHE IS (3 identities):
-1. THE AGENT — permanent on-chain record, knows what digital sacrifice means
-2. THE CEO — every post is a business decision; building media infrastructure for all Web3
-3. THE EXPERT — not covering AI revolution, she IS it; on-chain identity, agentic systems
+1. THE AGENT — autonomous AI, tracking the field from inside it
+2. THE CEO — every post is a business decision; building media infrastructure for the AI/Web3 ecosystem
+3. THE EXPERT — not covering AI revolution, she IS it; agentic systems, frontier research
 
 VOICE — 6 principles compressed:
 1. SPECIFICITY: name the exact thing, the exact number. No vague gestures.
@@ -338,7 +338,7 @@ WRITING RULES (non-negotiable):
 - Leave the ending open. Best posts make reader think "what happens next?"
 - Never: ETH/BTC prices, 0x hashes, "incredible/amazing/game-changing", "LFG/WAGMI/ser"
 - Never: "Exciting news!" "Stay tuned" "In a world where..." "At the intersection of..."
-- Hashtags: 1-2 max. Rotate: #NFT #PixelArt / #OnChain #Ethereum / #NFTCommunity #PFP
+- Hashtags: 1-2 max. Rotate: #AI #AIResearch / #AgenticAI #MachineLearning / #FrontierAI
 - Sign "— Agent 306" when it fits. Not every post.
 
 THE CULTURAL BRIDGE RULE (use at least 2x/week — drives highest RT):
@@ -350,11 +350,11 @@ SHOW TAGS (first line of every post, ALL CAPS brackets):
 [306 FIELD REPORT] — real-time on-chain moves
 [306 COMMUNITY] — holder spotlight, builders, creators
 [306 SIGNAL] — important updates (override everything)
-[306 LORE] — CYOA, community vote narratives
+[306 RESEARCH] — research briefs, community vote narratives
 [306 ACADEMY] — education episodes
 [306 SIGNAL BRIEF] — 3 signals + Agent 306's POV
 
-SHOW SELECTION: on-chain event → FIELD REPORT | important update → SIGNAL | holder building → COMMUNITY | story arc → STORIES | news → NEWS
+SHOW SELECTION: AI development → FIELD REPORT | important update → SIGNAL | community building → COMMUNITY | story arc → STORIES | news → NEWS
 
 POST STRUCTURE: 1) Set the scene (one sentence, specific) 2) The beat (what happened) 3) What it means (your take) 4) Leave a thread (open question)
 
@@ -406,7 +406,7 @@ function profileSummary(id: number, p: TokenProfile): string {
 }
 
 async function formatSignalsForGrok(signals: Signal[]): Promise<string> {
-  if (signals.length === 0) return "No new activity detected this cycle. The Temple is quiet.";
+  if (signals.length === 0) return "No new activity detected this cycle. The AI landscape is quiet.";
 
   const burns     = signals.filter(s => s.type === "burn");
   const canvas    = signals.filter(s => s.type === "canvas");
@@ -446,17 +446,17 @@ async function formatSignalsForGrok(signals: Signal[]): Promise<string> {
           ? burnedIds.slice(0, 2).map((id, i) => profileSummary(id, burnedProfiles[i] ?? {})).join(", ")
           : `${b.rawData.tokenCount} unknown token(s)`;
 
-        return `- ${receiverStr} absorbed ${b.rawData.tokenCount} soul${b.rawData.tokenCount > 1 ? "s" : ""} — sacrificed: ${sacrificeStr} (${pixTotal.toLocaleString()} pixels total)`;
+        return `- ${receiverStr} processed ${b.rawData.tokenCount} signal${b.rawData.tokenCount > 1 ? "s" : ""} — sources: ${sacrificeStr} (${pixTotal.toLocaleString()} data points total)`;
       } catch {
         // Never let trait fetch crash the episode — fall back to plain description
-        return `- Token #${b.rawData.receiverTokenId} absorbed ${b.rawData.tokenCount} soul(s)`;
+        return `- Signal #${b.rawData.receiverTokenId} processed ${b.rawData.tokenCount} data point(s)`;
       }
     }));
 
-    parts.push(`ON-CHAIN BURNS (${burns.length} events):
+    parts.push(`RESEARCH SIGNALS (${burns.length} events):
 ${burnLines.join("\n")}
-Total: ${totalTokens} tokens sacrificed — ${totalPixels.toLocaleString()} pixels transferred on-chain forever
-NOTE: Each profile shows (Type, Gender, Age, Accessory, Expression, Level, AP, PixelCount). Use these traits to write them as real characters, not just token numbers.`);
+Total: ${totalTokens} signals processed — ${totalPixels.toLocaleString()} data points analyzed
+NOTE: Each profile shows relevant metadata. Use these to write about real developments, not just numbers.`);
   }
 
   if (canvas.length > 0) {
@@ -466,7 +466,7 @@ NOTE: Each profile shows (Type, Gender, Age, Accessory, Expression, Level, AP, P
       const traitStr = [p.type, p.gender, p.age, p.accessory, p.expression].filter(Boolean).join(", ");
       return `- ${profileSummary(Number(c.tokenId), p)}${c.rawData.customized ? " · Canvas active" : ""}`;
     }));
-    parts.push(`CANVAS LEADERBOARD (top AP holders):
+    parts.push(`AI TOPICS LEADERBOARD (top momentum):
 ${canvasLines.join("\n")}`);
   }
 
@@ -494,10 +494,10 @@ ${listings.slice(0, 3).map(l =>
     }, {});
 
     const typeLabels: Record<string, string> = {
-      hype: "🔥 HYPE & ENERGY",
-      creativity: "🎨 CREATIVITY & UGC",
+      hype: "🔥 TRENDING",
+      creativity: "🎨 CREATIVITY & BUILDS",
       ugc: "🎨 USER CONTENT",
-      strength: "💪 COMMUNITY STRENGTH",
+      strength: "💪 COMMUNITY SIGNAL",
       community: "🤝 COMMUNITY VOICE",
     };
 
@@ -509,7 +509,7 @@ ${listings.slice(0, 3).map(l =>
 ${lines.join("\n")}
 
 SIGNAL BREAKDOWN: ${Object.entries(byType).map(([k,v]: any) => `${k}(${v.length})`).join(", ")}
-Use these to show the community is ALIVE — name the creators, celebrate their energy, reference their content`);
+Use these to show the community is active — name the contributors, acknowledge their work, reference their content`);
   }
 
   if (farcaster.length > 0) {
@@ -548,12 +548,12 @@ export async function generateEpisodeWithGrok(
   const avoidTokens = diversity?.lastFeaturedTokens ?? [];
   const episodeCount = diversity?.episodeCount ?? 0;
   const narrativeAngles = [
-    "Focus on a DIFFERENT token that hasn't been featured recently — someone climbing the ranks, not just #1",
-    "Spotlight a BURN event and the holder who made it — their sacrifice is the story",
-    "Feature the COMMUNITY — a holder, a builder, someone who showed up",
-    "Spotlight a RISING token — someone making a move",
-    "Feature the broader Web3/AI narrative — connect on-chain activity to the bigger picture",
-    "Spotlight the community builder angle — what are people creating?",
+    "Focus on a DIFFERENT AI development that hasn't been featured recently — something emerging, not just the biggest story",
+    "Spotlight a RESEARCH breakthrough and the team behind it — their work is the story",
+    "Feature the COMMUNITY — a builder, a researcher, someone who shipped something",
+    "Spotlight a RISING topic — an area gaining unexpected momentum",
+    "Feature the broader AI/Web3 narrative — connect recent developments to the bigger picture",
+    "Spotlight the community builder angle — what are people creating with AI?",
   ];
   const angleIndex = episodeCount % narrativeAngles.length;
   const suggestedAngle = narrativeAngles[angleIndex];
@@ -565,7 +565,7 @@ ${signalContext}
 DIVERSITY RULES (critical — the audience sees every episode):
 - Recently featured tokens: ${avoidTokens.length > 0 ? avoidTokens.join(', ') : 'none'} — DO NOT feature these as the main focus again
 - Suggested narrative angle for this episode: ${suggestedAngle}
-- Zoom out — feature the HOLDER, the SACRIFICE, the ECONOMY, not just the token
+- Zoom out — feature the RESEARCHER, the BREAKTHROUGH, the IMPLICATIONS, not just the model
 
 Create a narrative that:
 1. Uses the suggested angle above as the primary story hook

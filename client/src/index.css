@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Robotastic font — matches normies.art exactly ── */
+/* ── Robotastic font — pixel art style ── */
 @font-face {
   font-family: 'Robotastic';
   src: url('https://www.normies.art/fonts/robotastic.ttf') format('truetype');
@@ -13,7 +13,7 @@
 
 @layer base {
   :root {
-    /* normies.art dark mode design tokens */
+    /* dark mode design tokens */
     --bg-raw:  26,27,28;
     --fg-raw:  227,229,228;
 
@@ -23,7 +23,7 @@
     --card-foreground:   60 3% 93%;
     --popover:           220 5% 11%;
     --popover-foreground:60 3% 93%;
-    --primary:           60 3% 93%;    /* fg = white-ish — normies.art style */
+    --primary:           60 3% 93%;    /* fg = white-ish */
     --primary-foreground:220 5% 11%;
     --secondary:         220 5% 16%;
     --secondary-foreground: 60 3% 80%;
@@ -36,7 +36,7 @@
     --border:            220 5% 20%;
     --input:             220 5% 18%;
     --ring:              60 3% 89%;
-    --radius:            0px;          /* normies.art uses sharp corners */
+    --radius:            0px;          /* sharp corners */
 
     /* Accent colours for phases / burn */
     --burn:   22 100% 53%;   /* #f97316 orange */
@@ -73,7 +73,7 @@
     min-height: 100dvh;
   }
 
-  /* Pixel font class — Robotastic like normies.art */
+  /* Pixel font class — Robotastic */
   .pixel, .font-pixel {
     font-family: 'Robotastic', 'Courier New', monospace;
     letter-spacing: 0.05em;
@@ -84,7 +84,7 @@
   .upper { text-transform: uppercase; letter-spacing: 0.15em; }
 }
 
-/* ── Subtle scanline overlay (matches normies.art feel) ── */
+/* ── Subtle scanline overlay ── */
 body::before {
   content: '';
   position: fixed;
@@ -100,7 +100,7 @@ body::before {
   z-index: 9999;
 }
 
-/* ── Sidebar nav active state — normies.art underline style ── */
+/* ── Sidebar nav active state ── */
 .nav-active {
   opacity: 1 !important;
   border-left: 2px solid rgba(var(--fg-raw), 0.7) !important;
@@ -142,12 +142,12 @@ body::before {
 .pixel-hover { transition: box-shadow 0.2s ease; }
 .pixel-hover:hover { box-shadow: 0 0 0 1px rgba(var(--fg-raw),0.2), 0 0 10px rgba(var(--fg-raw),0.06); }
 
-/* ── Scrollbar — thin like normies.art ── */
+/* ── Scrollbar — thin ── */
 ::-webkit-scrollbar       { width: 3px; height: 3px; }
 ::-webkit-scrollbar-track { background: hsl(var(--background)); }
 ::-webkit-scrollbar-thumb { background: rgba(var(--fg-raw),0.15); }
 
-/* ── Normies border utilities ── */
+/* ── Border utilities ── */
 .border-faint  { border: 1px solid rgba(var(--fg-raw), 0.10); }
 .border-subtle { border: 1px solid rgba(var(--fg-raw), 0.15); }
 .border-medium { border: 1px solid rgba(var(--fg-raw), 0.25); }

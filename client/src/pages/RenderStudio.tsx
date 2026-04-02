@@ -204,14 +204,14 @@ export default function RenderStudio() {
               <div className="bg-secondary/50 rounded p-3 space-y-1.5">
                 <p className="text-[13px] text-muted-foreground font-semibold uppercase tracking-wider">USDZ Pipeline</p>
                 <p className="text-[13px] text-muted-foreground leading-relaxed">
-                  Renders pull geometry from{" "}
+                  Renders pull geometry from the{" "}
                   <a
                     href="https://normie-3d.vercel.app"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-primary hover:underline"
                   >
-                    normie-3d.vercel.app
+                    3D visualization API
                   </a>
                   . USDZ → voxel positions → Three.js InstancedMesh with metallic finish + bloom.
                 </p>

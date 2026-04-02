@@ -37,7 +37,7 @@ export type RenderJob = typeof renderJobs.$inferSelect;
 // Story signals cache
 export const storySignals = sqliteTable("story_signals", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  type: text("type").notNull(), // burn|canvas_edit|social_mention|arena|zombie
+  type: text("type").notNull(), // insight|canvas_edit|social_mention|forecast|trend
   tokenId: integer("token_id"),
   description: text("description").notNull(),
   weight: real("weight").notNull().default(1.0),

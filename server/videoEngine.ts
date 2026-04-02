@@ -2,9 +2,9 @@
  * ─────────────────────────────────────────────────────────────
  *  306 — xAI VIDEO ENGINE
  *
- *  Animates token pixel art using grok-imagine-video.
- *  $0.0639/video. Used selectively — burns ≥2 souls, weekly
- *  Race and Spotlight posts.
+ *  Generates animated content using grok-imagine-video.
+ *  $0.0639/video. Used selectively for high-impact AI
+ *  content, weekly Roundup and Spotlight posts.
  *
  *  Strategy: build it, measure engagement lift vs static image,
  *  scale up or back based on data.
@@ -28,7 +28,7 @@ const STATS_FILE = dataPath("video_stats.json");
 interface VideoStats {
   totalGenerated: number;
   totalCost: number;        // estimated at $0.0639/video
-  burnVideos: number;
+  contentVideos: number;
   raceVideos: number;
   spotlightVideos: number;
   lastGenerated: string | null;
@@ -44,7 +44,7 @@ function loadStats(): VideoStats {
   } catch {}
   return {
     totalGenerated: 0, totalCost: 0,
-    burnVideos: 0, raceVideos: 0, spotlightVideos: 0,
+    contentVideos: 0, raceVideos: 0, spotlightVideos: 0,
     lastGenerated: null,
     engagementComparison: { withVideo: [], withoutVideo: [] },
   };
@@ -56,7 +56,7 @@ function saveStats(s: VideoStats) {
 
 let stats = loadStats();
 
-// ── Build a cinematic prompt for a token ─────────────────────────────────────
+// ── Build a cinematic prompt for AI content visualization ─────────────────────────────────────
 function buildBurnPrompt(opts: {
   tokenId: number;
   tokenCount: number;
@@ -67,42 +67,39 @@ function buildBurnPrompt(opts: {
   const { tokenId, tokenCount, level, ap, scale } = opts;
 
   // 306 visual identity:
-  // - Pixel art PFP characters (40x40 grid, black #48494b pixels on light background)
-  // - The Canvas is the on-chain ritual space — sacred, permanent
-  // - Orange (#f97316) is the color of sacrifice and transformation
-  // - The vibe: low-key, deliberate, builder energy. NOT horror, NOT skull imagery.
-  // - Think: a small pixel character in a vast dark space, gaining power quietly.
+  // - Clean, modern data visualization aesthetic
+  // - Orange (#f97316) is the accent color for highlights and emphasis
+  // - The vibe: thoughtful, precise, forward-looking. Knowledge emerging from data.
+  // - Think: neural networks, data flows, emerging patterns in a vast dark space.
   const prompts = {
-    small: `A small pixel art character — a tiny blocky figure made of dark pixels on a light background, 
-like a classic 8-bit NFT avatar. The figure stands centered in a wide dark space.
-A soft orange glow slowly pulses around it from below, like light rising from the ground.
-One or two small orange pixel fragments drift upward and dissolve gently.
-The character stays still — calm, present, absorbing.
-Warm, peaceful, respectful. Like a quiet moment of recognition.
-9:16 vertical. No text. No skulls. No horror. No flames.`,
+    small: `A minimalist data visualization — a small glowing node in a vast dark space.
+Soft orange connections radiate outward, linking to distant dimmer nodes.
+Data particles drift gently along the connections, flowing toward the center.
+The central node pulses softly — absorbing, processing, understanding.
+Warm, calm, contemplative. Like watching an idea take shape.
+9:16 vertical. No text. Clean aesthetic. No clutter.`,
 
-    significant: `A pixel art NFT avatar — small blocky character made of crisp dark pixels, centered on screen.
-Dark background. Warm orange light rises slowly from beneath the figure.
-Small pixel fragments — tiny squares of orange light — drift in from the sides and merge into the character.
-The figure brightens slightly as each fragment arrives. New pixels appear at the edges, solidifying.
-A gentle transformation. The canvas is being rewritten.
-The mood: quiet confidence. A holder making a deliberate choice.
-9:16 vertical. Slow motion. No text. No skulls or horror imagery.`,
+    significant: `A network visualization — interconnected nodes forming a constellation in dark space.
+Orange data streams flow between nodes, some brighter than others.
+New connections form in real-time — orange lines tracing paths between previously separate clusters.
+The network grows more coherent as connections multiply.
+The mood: quiet discovery. A pattern emerging from complexity.
+9:16 vertical. Slow motion. No text. Clean modern aesthetic.`,
 
-    major: `A pixel art character — a sharp 8-bit NFT figure — stands at the center of a dark void.
-Orange pixel fragments stream in from multiple directions, orbiting briefly before merging.
-The figure grows more defined with each absorption — new pixel details appear, edges sharpen.
-The orange glow builds steadily then softens into a warm aura around the character.
-Powerful but controlled. Arena-ready. The kind of transformation that only on-chain permanence can make real.
-9:16 vertical. Cinematic pacing. No text. No skulls, no bones, no horror.`,
+    major: `A neural network visualization — layered nodes and connections in a dark void.
+Orange data streams flow from multiple directions, converging on a central cluster.
+The central structure grows more complex and defined as each stream arrives.
+The orange glow builds steadily, illuminating hidden connections.
+Powerful but elegant. The kind of insight that changes how you see everything.
+9:16 vertical. Cinematic pacing. No text. Clean and precise.`,
 
-    legendary: `A pixel art NFT avatar at the center of a massive dark canvas.
-Hundreds of tiny orange pixel squares converge from every direction, swirling in orbit before merging.
-The character remains perfectly still at the center as the energy builds around it.
-With each wave of incoming pixels, new details form — the figure becomes more defined, more complete.
-Finally: stillness. The orange glow settles into a steady warm light behind the character.
-The canvas has changed forever. This is what 50 sacrifices looks like.
-Epic scale, calm execution. 9:16 vertical. No text. No skulls. No flames. No horror.`,
+    legendary: `A vast data visualization at cosmic scale — thousands of nodes forming a brain-like structure.
+Orange data streams converge from every direction, swirling in orbit before integrating.
+The structure remains coherent at the center as complexity builds around it.
+With each wave of new data, deeper patterns emerge — layers of understanding forming.
+Finally: clarity. The orange glow settles into a steady illumination of the complete picture.
+The landscape of knowledge has shifted. This is what a breakthrough looks like.
+Epic scale, calm execution. 9:16 vertical. No text. Clean futuristic aesthetic.`,
   };
 
   return prompts[scale];
@@ -125,7 +122,7 @@ export async function generateBurnVideo(opts: {
   const prompt = buildBurnPrompt({ tokenId, tokenCount, level, ap, scale });
   const imageUrl = `${ONCHAIN_API}/token/${tokenId}/image.png`;
 
-  console.log(`[Video] Generating ${scale} burn video for #${tokenId} (${tokenCount} souls)...`);
+  console.log(`[Video] Generating ${scale} content video for #${tokenId} (impact: ${tokenCount})...`);
 
   try {
     // Step 1: Start generation (image-to-video)
@@ -176,12 +173,12 @@ export async function generateBurnVideo(opts: {
         // Update stats
         stats.totalGenerated++;
         stats.totalCost += 0.0639;
-        stats.burnVideos++;
+        stats.contentVideos++;
         stats.lastGenerated = new Date().toISOString();
         saveStats(stats);
 
         // Download video to /tmp for X upload
-        const videoPath = `/tmp/agent306_burn_${tokenId}_${Date.now()}.mp4`;
+        const videoPath = `/tmp/agent306_content_${tokenId}_${Date.now()}.mp4`;
         await downloadFile(data.video.url, videoPath);
         return videoPath;
 
@@ -251,7 +248,7 @@ export function getVideoStats() {
     estimatedCost: `$${stats.totalCost.toFixed(2)}`,
     costPerVideo: "$0.0639",
     breakdown: {
-      burns: stats.burnVideos,
+      content: stats.contentVideos,
       race: stats.raceVideos,
       spotlight: stats.spotlightVideos,
     },

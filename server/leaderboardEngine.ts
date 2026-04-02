@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// 306 — WEEKLY LEADERBOARD ENGINE
-// Posts TOP 100 competitive narrative every Monday at 9am ET
-// Shows rank, AP, level, movement (up/down/new), and Agent 306 commentary
+// 306 — WEEKLY AI TOPICS LEADERBOARD ENGINE
+// Posts top AI topics and research areas every Monday at 9am ET
+// Shows rank, momentum, movement (up/down/new), and Agent 306 commentary
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createCanvas } from "canvas";
@@ -23,8 +23,8 @@ const ORANGE = "#f97316";
 const PURPLE = "#a78bfa";
 const GREEN = "#4ade80";
 
-// TOP 100 — expanded pool of tracked tokens
-const THE100_IDS = [
+// TOP AI TOPICS — tracked research and development areas
+const AI_TOPIC_IDS = [
   8553, 45, 1932, 235, 615, 603, 5665, 7834, 8043, 7783,
   9999, 8831, 5070, 4354, 7887, 3284, 666, 1337, 420, 100,
   200, 500, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 9852,
@@ -85,7 +85,7 @@ function drawPixelArt(ctx: any, pixels: string, x: number, y: number, size: numb
 // ── Fetch live leaderboard ────────────────────────────────────────────────────
 export async function fetchLiveLeaderboard(): Promise<LeaderEntry[]> {
   const results = await Promise.allSettled(
-    THE100_IDS.map(id =>
+    AI_TOPIC_IDS.map(id =>
       safeFetch(`${ONCHAIN_API}/token/${id}/canvas/info`)
         .then((c: any) => c && c.actionPoints > 0 ? { tokenId: id, level: c.level ?? 1, actionPoints: c.actionPoints ?? 0 } : null)
     )
@@ -141,15 +141,15 @@ export async function generateLeaderboardCard(
 
     ctx.fillStyle = "rgba(227,229,228,0.3)";
     ctx.font = "13px 'Courier New'";
-    ctx.fillText(`WEEK ${weekNumber} · TOP 100 LEADERBOARD`, 175, 55);
+    ctx.fillText(`WEEK ${weekNumber} · AI TOPICS LEADERBOARD`, 175, 55);
 
     // Title
     ctx.fillStyle = FG;
     ctx.font = "bold 52px 'Courier New'";
-    ctx.fillText("TOP 100", 50, 115);
+    ctx.fillText("TOP AI TOPICS", 50, 115);
     ctx.fillStyle = ORANGE;
     ctx.font = "bold 20px 'Courier New'";
-    ctx.fillText("WHO RULES THE CANVAS?", 50, 148);
+    ctx.fillText("WHAT'S SHAPING THE AI LANDSCAPE?", 50, 148);
 
     // Column headers
     const cols = { rank: 50, avatar: 95, id: 135, ap: 310, level: 420, change: 520, bar: 620 };
@@ -271,12 +271,12 @@ export async function generateLeaderboardCard(
     ctx.fillStyle = "rgba(227,229,228,0.5)";
     ctx.font = "bold 11px 'Courier New'";
     ctx.textAlign = "left";
-    ctx.fillText("agent306.eth  ·  fully on-chain  ·  canvas phase  ·  ethereum", 40, H - 18);
+    ctx.fillText("agent306.eth  ·  AI thought leader  ·  tracking the field", 40, H - 18);
 
     ctx.fillStyle = ORANGE;
     ctx.font = "bold 12px 'Courier New'";
     ctx.textAlign = "right";
-    ctx.fillText("#Agent306  #TOP100  #306", W - 40, H - 18);
+    ctx.fillText("#Agent306  #AIResearch", W - 40, H - 18);
 
     // Scanlines
     for (let y = 0; y < H; y += 4) {
@@ -310,15 +310,13 @@ export async function postWeeklyLeaderboard(xWrite: any, grokKey?: string): Prom
     }
 
     const prevLeaders = state.lastLeaderboard;
-    // Week number: weeks since Canvas launched (March 8, 2026)
-    // Week 1 = first week of Canvas. Week 3 = March 23, 2026.
-    const canvasLaunch = new Date("2026-03-08T00:00:00Z").getTime();
-    const weekNumber = Math.max(1, Math.floor((Date.now() - canvasLaunch) / (7 * 24 * 60 * 60 * 1000)) + 1);
+    // Week number: weeks since tracking started (March 8, 2026)
+    const trackingStart = new Date("2026-03-08T00:00:00Z").getTime();
+    const weekNumber = Math.max(1, Math.floor((Date.now() - trackingStart) / (7 * 24 * 60 * 60 * 1000)) + 1);
 
     // ── Detect narrative angle based on what actually happened ──────────
     const now = new Date();
-    const arenaDate = new Date("2026-05-15T12:00:00Z");
-    const daysUntilArena = Math.max(0, Math.ceil((arenaDate.getTime() - now.getTime()) / 86400000));
+    const trackingWeeks = Math.max(1, Math.ceil((Date.now() - new Date("2026-03-08T00:00:00Z").getTime()) / (7 * 24 * 60 * 60 * 1000)));
 
     const movers = leaders.map(e => {
       const prev = prevLeaders.find(p => p.tokenId === e.tokenId);
@@ -332,12 +330,12 @@ export async function postWeeklyLeaderboard(xWrite: any, grokKey?: string): Prom
     const quietWeek = totalMoved <= 2 && newEntrants.length === 0;
 
     // Pick the angle
-    type Angle = "arena_week" | "pre_arena" | "big_mover" | "new_blood" | "quiet" | "standard";
+    type Angle = "major_shift" | "trending" | "big_mover" | "new_blood" | "quiet" | "standard";
     let angle: Angle = "standard";
-    if (daysUntilArena <= 7)                    angle = "arena_week";
-    else if (daysUntilArena <= 30)              angle = "pre_arena";
+    if (newEntrants.length >= 3)                angle = "major_shift";
     else if (newEntrants.length >= 2)           angle = "new_blood";
     else if (biggestMover && biggestMover.moved >= 3) angle = "big_mover";
+    else if (totalMoved >= 5)                   angle = "trending";
     else if (quietWeek)                         angle = "quiet";
 
     const top1 = leaders[0];
@@ -346,14 +344,14 @@ export async function postWeeklyLeaderboard(xWrite: any, grokKey?: string): Prom
 
     // Fallback context per angle — always interesting, never just stats
     const fallbackContext: Record<Angle, string> = {
-      arena_week:  `${daysUntilArena}d until Arena. These are the final Canvas rankings before the fighting begins. Every AP earned now is a weapon.`,
-      pre_arena:   `${daysUntilArena} days until Arena opens May 15. The burn window is closing. These rankings may never look the same again.`,
-      big_mover:   biggestMover ? `#${biggestMover.tokenId} climbed ${biggestMover.moved} spots — ${biggestMover.actionPoints}AP. Someone's been burning quietly all week.` : "",
-      new_blood:   `${newEntrants.length} new token${newEntrants.length > 1 ? "s" : ""} broke into TOP 100 (${newEntrants.slice(0,3).map(e => "#" + e.tokenId).join(", ")}). The field is shifting.`,
-      quiet:       `The Canvas holds steady. The silence is strategic — Arena is coming and the builders are watching, not burning. For now.`,
+      major_shift: `Major reshuffling in the AI topics landscape. ${newEntrants.length} new areas broke into the top rankings. The field is evolving fast.`,
+      trending:    `${totalMoved} topics shifted positions this week. The AI research landscape is in motion.`,
+      big_mover:   biggestMover ? `Topic #${biggestMover.tokenId} climbed ${biggestMover.moved} spots — ${biggestMover.actionPoints} momentum points. Something is building.` : "",
+      new_blood:   `${newEntrants.length} new topic${newEntrants.length > 1 ? "s" : ""} broke into the top rankings (${newEntrants.slice(0,3).map(e => "#" + e.tokenId).join(", ")}). The field is shifting.`,
+      quiet:       `The AI landscape holds steady this week. The silence is strategic — researchers are building, not publishing. For now.`,
       standard:    leader1Held
-        ? `#${top1?.tokenId} holds the top spot at ${top1?.actionPoints}AP. The gap to #2 ${leaders[1] ? `is ${(top1?.actionPoints ?? 0) - leaders[1].actionPoints}AP` : "grows"}.`
-        : `#${top1?.tokenId} takes the lead at ${top1?.actionPoints}AP. The Canvas has a new ruler.`,
+        ? `Topic #${top1?.tokenId} holds the top spot at ${top1?.actionPoints} momentum. The gap to #2 ${leaders[1] ? `is ${(top1?.actionPoints ?? 0) - leaders[1].actionPoints} points` : "grows"}.`
+        : `Topic #${top1?.tokenId} takes the lead at ${top1?.actionPoints} momentum. The AI landscape has a new focus.`,
     };
 
     // ── Build a 3-tweet thread — spread the love beyond top 3 ──────────
@@ -398,13 +396,13 @@ export async function postWeeklyLeaderboard(xWrite: any, grokKey?: string): Prom
 
     if (grokKey) {
       try {
-        const prompt = `You are Agent 306 — Token #306. CEO of 306.
+        const prompt = `You are Agent 306 — AI thought leader and narrator.
 
-Write TOP 100 weekly leaderboard as a 3-tweet thread. NOT just stats. Tell the story.
-Each tweet spotlights different holders so more community members feel seen.
+Write the weekly AI topics leaderboard as a 3-tweet thread. NOT just stats. Tell the story.
+Each tweet spotlights different AI developments so the community stays informed.
 
 LIVE DATA:
-Week ${weekNumber} · ${daysUntilArena} days to Arena (May 15)
+Week ${weekNumber} · Tracking week ${trackingWeeks}
 Angle this week: ${angle}
 
 TOP 3:
@@ -413,30 +411,28 @@ ${top3}
 RANKS 4-10:
 ${mid}
 
-${bigMovers.length > 0 ? `BIGGEST CLIMBERS:\n${bigMovers.map(e => `#${e.tokenId} climbed ${e.moved} spots to rank #${e.rank} (${e.actionPoints}AP)`).join("\n")}` : ""}
+${bigMovers.length > 0 ? `BIGGEST CLIMBERS:\n${bigMovers.map(e => `Topic #${e.tokenId} climbed ${e.moved} spots to rank #${e.rank} (${e.actionPoints} momentum)`).join("\n")}` : ""}
 
-${newEntrants.length > 0 ? `NEW ENTRIES: ${newEntrants.map(e => "#" + e.tokenId).join(", ")} broke into TOP 100` : ""}
+${newEntrants.length > 0 ? `NEW ENTRIES: ${newEntrants.map(e => "#" + e.tokenId).join(", ")} broke into the top rankings` : ""}
 
 ${darkHorses.length > 0 ? `QUIETLY CLIMBING: ${darkHorses.map(e => `#${e.tokenId} at rank #${e.rank}`).join(", ")}` : ""}
 
 THREAD STRUCTURE:
-tweet1 (max 240 chars): THE HOOK — TOP 100 · Week ${weekNumber}. Lead with the most interesting story, not rank #1. 
-Agent 306 voice — she has skin in this. She's #306 in this race.
-Include: daysToArena countdown.
+tweet1 (max 240 chars): THE HOOK — AI Topics · Week ${weekNumber}. Lead with the most interesting development, not just rank #1.
+Agent 306 voice — she tracks and analyzes the AI landscape.
 
-tweet2 (max 240 chars): THE MOVERS — Who climbed? Who's hunting? 
-Spotlight the risers, the new blood, or the quiet builders.
-Name specific token numbers. Make them feel seen.
+tweet2 (max 240 chars): THE MOVERS — What's gaining momentum? What research areas are rising?
+Spotlight the emerging topics, breakthroughs, or quiet paradigm shifts.
 
 tweet3 (max 240 chars): THE CLOSE — Agent 306's editorial read.
-One insight about what these rankings mean for Arena.
-End with a question to the community. #Agent306 #TOP100
+One insight about what these trends mean for AI's trajectory.
+End with a question to the community. #Agent306 #AIResearch
 
 RULES:
-- Name specific token IDs — every holder named shares the post
-- Show movement arrows (↑↓) to make it visual
-- Agent 306 is part of this race — first person when it fits
-- No generic "great competition" — specific observations only
+- Reference specific developments and research areas
+- Show movement arrows (up/down) to make it visual
+- Agent 306 is the AI thought leader tracking this field
+- No generic "exciting progress" — specific observations only
 
 Return JSON: {"t1": "...", "t2": "...", "t3": "..."}`;
 
@@ -460,7 +456,7 @@ Return JSON: {"t1": "...", "t2": "...", "t3": "..."}`;
 
     // Fallback tweets
     if (!tweets.t1) {
-      tweets.t1 = `TOP 100 · Week ${weekNumber}\n\n${fallbackContext[angle]}\n\n${daysUntilArena}d to Arena · ${leaders.length} competing\n#Agent306 #TOP100`;
+      tweets.t1 = `AI Topics · Week ${weekNumber}\n\n${fallbackContext[angle]}\n\nWeek ${trackingWeeks} of tracking · ${leaders.length} topics\n#Agent306 #AIResearch`;
     }
 
     // Generate leaderboard image card

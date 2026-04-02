@@ -9,7 +9,7 @@ type OptionLetter = "A" | "B" | "C" | "D";
 interface CYOAOption {
   letter: OptionLetter; text: string; lorePath: string; isCanon?: boolean;
 }
-interface CYOAEpisode {
+interface ResearchBriefEpisode {
   id: string; trigger: Trigger; tokenId?: number; status: string;
   hookScene: string; hookQuestion: string; options: CYOAOption[];
   pollTweetId?: string; winningOption?: OptionLetter; totalVotes?: number;
@@ -20,26 +20,26 @@ interface CYOAEpisode {
 }
 
 const TRIGGER_CONFIG: Record<Trigger, { label: string; color: string; desc: string; emoji: string }> = {
-  burn:      { label: "Burn Event",     color: "#f97316", desc: "What does this token become after sacrifice?",  emoji: "🔥" },
-  pre_arena: { label: "Pre-Battle",    color: "#a78bfa", desc: "Battles open May 15. What's your strategy?",    emoji: "⚔️" },
-  zombie:    { label: "Zombie Rising", color: "#4ade80", desc: "A burned token stirs. What does it remember?",  emoji: "☠️" },
-  serc_post: { label: "Founder Signal",color: "#f97316", desc: "The founder posted something cryptic...",       emoji: "🎯" },
-  rivalry:   { label: "Leaderboard Rival", color: "#2dd4bf", desc: "Two tokens are neck-and-neck. What's next?",   emoji: "🏆" },
-  manual:    { label: "Custom",        color: "#efefef", desc: "Editor-created lore episode",                    emoji: "✍️" },
+  burn:      { label: "Deprecation Study",  color: "#f97316", desc: "What emerges when an old model is retired?",     emoji: "🔬" },
+  pre_arena: { label: "Benchmark Preview",  color: "#a78bfa", desc: "New benchmarks drop soon. What's the hypothesis?", emoji: "📊" },
+  zombie:    { label: "Legacy Revival",     color: "#4ade80", desc: "A deprecated approach resurfaces. What did it teach us?", emoji: "🔄" },
+  serc_post: { label: "Research Signal",    color: "#f97316", desc: "A new paper or announcement just dropped...",    emoji: "🎯" },
+  rivalry:   { label: "Model Comparison",   color: "#2dd4bf", desc: "Two approaches are neck-and-neck. What's next?", emoji: "📈" },
+  manual:    { label: "Custom",             color: "#efefef", desc: "Editor-created research brief",                  emoji: "✍️" },
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   draft:    { label: "Draft",    color: "rgba(227,229,228,0.60)" },
   posted:   { label: "Live",     color: "#f97316" },
   revealed: { label: "Revealed", color: "#a78bfa" },
-  resolved: { label: "Canon",    color: "#4ade80" },
+  resolved: { label: "Confirmed", color: "#4ade80" },
 };
 
 const LETTER_COLORS: Record<OptionLetter, string> = {
   A: "#4ade80", B: "#2dd4bf", C: "#a78bfa", D: "#f97316",
 };
 
-export default function CYOALore() {
+export default function ResearchBriefs() {
   const { toast } = useToast();
   const mono = { fontFamily: "'Courier New', monospace" } as const;
   const label = { ...mono, fontSize: "0.83rem", textTransform: "uppercase" as const, letterSpacing: "0.15em", color: "rgba(227,229,228,0.60)" };
@@ -49,8 +49,8 @@ export default function CYOALore() {
   const [trigger, setTrigger] = useState<Trigger>("pre_arena");
   const [tokenId, setTokenId] = useState("");
   const [tokenCount, setTokenCount] = useState("");
-  const [serc1nPost, setSerc1nPost] = useState("");
-  const [rivalTokenId, setRivalTokenId] = useState("");
+  const [researchSignal, setResearchSignal] = useState("");
+  const [comparisonModelId, setComparisonModelId] = useState("");
 
   // Resolve form state
   const [resolveEpId, setResolveEpId] = useState<string | null>(null);
@@ -60,7 +60,7 @@ export default function CYOALore() {
   const [voteC, setVoteC] = useState("");
   const [voteD, setVoteD] = useState("");
 
-  const { data: cyoaData, isLoading } = useQuery<{ episodes: CYOAEpisode[]; activeEpisodeId: string | null; totalResolved: number }>({
+  const { data: researchData, isLoading } = useQuery<{ episodes: ResearchBriefEpisode[]; activeEpisodeId: string | null; totalResolved: number }>({
     queryKey: ["/api/cyoa/state"],
   });
 
@@ -69,12 +69,12 @@ export default function CYOALore() {
       trigger,
       tokenId: tokenId ? Number(tokenId) : undefined,
       tokenCount: tokenCount ? Number(tokenCount) : undefined,
-      serc1nPost: serc1nPost || undefined,
-      rivalTokenId: rivalTokenId ? Number(rivalTokenId) : undefined,
+      serc1nPost: researchSignal || undefined,
+      rivalTokenId: comparisonModelId ? Number(comparisonModelId) : undefined,
     }).then(r => r.json()),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/cyoa/state"] });
-      toast({ title: "CYOA episode generated", description: data.episode?.hookQuestion });
+      toast({ title: "Research brief generated", description: data.episode?.hookQuestion });
     },
     onError: () => toast({ title: "Generation failed", variant: "destructive" }),
   });
@@ -98,7 +98,7 @@ export default function CYOALore() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/cyoa/state"] });
       setResolveEpId(null);
-      toast({ title: "CYOA resolved — canon confirmed", description: "Reveal + canon + CTA tweets posting now" });
+      toast({ title: "Research brief resolved — finding confirmed", description: "Reveal + finding + CTA tweets posting now" });
     },
   });
 
@@ -111,8 +111,8 @@ export default function CYOALore() {
     },
   });
 
-  const episodes = cyoaData?.episodes ?? [];
-  const activeEp = episodes.find(e => e.id === cyoaData?.activeEpisodeId);
+  const episodes = researchData?.episodes ?? [];
+  const activeEp = episodes.find(e => e.id === researchData?.activeEpisodeId);
 
   return (
     <div style={{ padding: "1.5rem 2rem", maxWidth: 1100, margin: "0 auto" }}>
@@ -122,14 +122,14 @@ export default function CYOALore() {
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span className="pixel" style={{ fontSize: "1.3rem", color: "#efefef", letterSpacing: "0.12em" }}>
-              [306 LORE]
+              [306 RESEARCH]
             </span>
             <span style={{ ...mono, fontSize: "0.83rem", color: "#a78bfa", background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.25)", padding: "2px 8px" }}>
-              Choose Your Own Lore
+              AI Research Briefs
             </span>
           </div>
           <p style={{ ...mono, fontSize: "0.80rem", color: "rgba(227,229,228,0.55)", marginTop: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-            Community votes shape the 306 canon · {cyoaData?.totalResolved ?? 0} episodes resolved
+            Community votes shape AI research direction · {researchData?.totalResolved ?? 0} briefs resolved
           </p>
         </div>
         {activeEp && (
@@ -148,10 +148,10 @@ export default function CYOALore() {
         <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
 
           <section style={card}>
-            <p style={{ ...label, marginBottom: "1rem" }}>Generate New Episode</p>
+            <p style={{ ...label, marginBottom: "1rem" }}>Generate New Research Brief</p>
 
             {/* Trigger selector */}
-            <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", marginBottom: 6 }}>TRIGGER TYPE</p>
+            <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", marginBottom: 6 }}>RESEARCH TRIGGER</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: "1rem" }}>
               {(Object.entries(TRIGGER_CONFIG) as [Trigger, typeof TRIGGER_CONFIG[Trigger]][]).map(([key, cfg]) => (
                 <button key={key} onClick={() => setTrigger(key)}
@@ -174,35 +174,35 @@ export default function CYOALore() {
             {/* Optional fields by trigger */}
             {(trigger === "burn" || trigger === "pre_arena" || trigger === "zombie") && (
               <div style={{ marginBottom: 10 }}>
-                <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", marginBottom: 4 }}>TOKEN ID (optional)</p>
+                <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", marginBottom: 4 }}>MODEL ID (optional)</p>
                 <input value={tokenId} onChange={e => setTokenId(e.target.value)} placeholder="e.g. 8553"
                   style={{ width: "100%", background: "rgba(227,229,228,0.08)", border: "1px solid rgba(227,229,228,0.20)", padding: "6px 10px", color: "#efefef", ...mono, fontSize: "0.93rem", boxSizing: "border-box" as const }} />
               </div>
             )}
             {trigger === "burn" && (
               <div style={{ marginBottom: 10 }}>
-                <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", marginBottom: 4 }}>SOULS BURNED (optional)</p>
+                <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", marginBottom: 4 }}>PARAMETERS STUDIED (optional)</p>
                 <input value={tokenCount} onChange={e => setTokenCount(e.target.value)} placeholder="e.g. 7"
                   style={{ width: "100%", background: "rgba(227,229,228,0.08)", border: "1px solid rgba(227,229,228,0.20)", padding: "6px 10px", color: "#efefef", ...mono, fontSize: "0.93rem", boxSizing: "border-box" as const }} />
               </div>
             )}
             {trigger === "serc_post" && (
               <div style={{ marginBottom: 10 }}>
-                <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", marginBottom: 4 }}>FOUNDER'S POST TEXT</p>
-                <textarea value={serc1nPost} onChange={e => setSerc1nPost(e.target.value)} placeholder="Paste the founder's post here..." rows={3}
+                <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", marginBottom: 4 }}>RESEARCH PAPER / ANNOUNCEMENT</p>
+                <textarea value={researchSignal} onChange={e => setResearchSignal(e.target.value)} placeholder="Paste the research signal or announcement here..." rows={3}
                   style={{ width: "100%", background: "rgba(227,229,228,0.08)", border: "1px solid rgba(227,229,228,0.20)", padding: "6px 10px", color: "#efefef", ...mono, fontSize: "0.90rem", resize: "none", boxSizing: "border-box" as const }} />
               </div>
             )}
             {trigger === "rivalry" && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
                 <div>
-                  <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", marginBottom: 4 }}>TOKEN A</p>
+                  <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", marginBottom: 4 }}>MODEL A</p>
                   <input value={tokenId} onChange={e => setTokenId(e.target.value)} placeholder="e.g. 8553"
                     style={{ width: "100%", background: "rgba(227,229,228,0.08)", border: "1px solid rgba(227,229,228,0.20)", padding: "6px 10px", color: "#efefef", ...mono, fontSize: "0.93rem", boxSizing: "border-box" as const }} />
                 </div>
                 <div>
-                  <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", marginBottom: 4 }}>TOKEN B</p>
-                  <input value={rivalTokenId} onChange={e => setRivalTokenId(e.target.value)} placeholder="e.g. 45"
+                  <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", marginBottom: 4 }}>MODEL B</p>
+                  <input value={comparisonModelId} onChange={e => setComparisonModelId(e.target.value)} placeholder="e.g. 45"
                     style={{ width: "100%", background: "rgba(227,229,228,0.08)", border: "1px solid rgba(227,229,228,0.20)", padding: "6px 10px", color: "#efefef", ...mono, fontSize: "0.93rem", boxSizing: "border-box" as const }} />
                 </div>
               </div>
@@ -210,18 +210,18 @@ export default function CYOALore() {
 
             <button onClick={() => generateMutation.mutate()} disabled={generateMutation.isPending}
               style={{ width: "100%", padding: "10px", background: "#a78bfa", border: "none", color: "#0a0b0d", ...mono, fontSize: "0.90rem", fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.12em", cursor: "pointer", opacity: generateMutation.isPending ? 0.7 : 1, marginTop: 4 }}>
-              {generateMutation.isPending ? "Generating..." : "Generate Episode"}
+              {generateMutation.isPending ? "Generating..." : "Generate Research Brief"}
             </button>
           </section>
 
           {/* How it works */}
           <section style={{ ...card, background: "rgba(167,139,250,0.03)", borderColor: "rgba(167,139,250,0.15)" }}>
-            <p style={{ ...label, marginBottom: "0.85rem", color: "#a78bfa" }}>The CYOA Format</p>
+            <p style={{ ...label, marginBottom: "0.85rem", color: "#a78bfa" }}>The Research Brief Format</p>
             {[
-              { step: "1", title: "Hook Tweet", desc: "Cinematic scene + 4 choices. Community polls for 24h. X algorithm loves polls." },
-              { step: "2", title: "Reveal", desc: "You enter the winning vote count. Agent 306 writes the reveal story." },
-              { step: "3", title: "Canon Verdict", desc: "The lore drops. Permanent. On-chain narrative confirmed." },
-              { step: "4", title: "CTA", desc: "RT if your token is the star. Holders reply with their twist." },
+              { step: "1", title: "Hook Tweet", desc: "Research scenario + 4 hypotheses. Community polls for 24h." },
+              { step: "2", title: "Reveal", desc: "You enter the winning vote count. Agent 306 writes the research analysis." },
+              { step: "3", title: "Confirmed Finding", desc: "The finding drops. A new insight added to our AI research canon." },
+              { step: "4", title: "CTA", desc: "RT to share the finding. Community replies with their own analysis." },
             ].map(({ step, title, desc }) => (
               <div key={step} style={{ display: "flex", gap: 10, marginBottom: 10, alignItems: "flex-start" }}>
                 <span style={{ ...mono, fontSize: "0.78rem", color: "#a78bfa", flexShrink: 0, marginTop: 2 }}>{step}.</span>
@@ -255,10 +255,10 @@ export default function CYOALore() {
                   <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#a78bfa", display: "inline-block", animation: "pulse-dot 1.6s ease-in-out infinite" }} />
                   <div>
                     <span className="pixel" style={{ fontSize: "0.90rem", color: "#a78bfa", letterSpacing: "0.12em" }}>
-                      {drafts.length} EPISODE{drafts.length > 1 ? "S" : ""} WAITING FOR YOUR APPROVAL
+                      {drafts.length} BRIEF{drafts.length > 1 ? "S" : ""} WAITING FOR YOUR APPROVAL
                     </span>
                     <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(167,139,250,0.6)", margin: "3px 0 0" }}>
-                      Auto-generated from on-chain activity · Review below · Post when ready
+                      Auto-generated from research signals · Review below · Post when ready
                     </p>
                   </div>
                 </div>
@@ -269,10 +269,10 @@ export default function CYOALore() {
 
           {!isLoading && episodes.length === 0 && (
             <div style={{ ...card, textAlign: "center" as const, padding: "2.5rem" }}>
-              <div className="pixel" style={{ fontSize: "0.93rem", color: "#a78bfa", marginBottom: 10 }}>NO LORE EPISODES YET</div>
+              <div className="pixel" style={{ fontSize: "0.93rem", color: "#a78bfa", marginBottom: 10 }}>NO RESEARCH BRIEFS YET</div>
               <p style={{ ...mono, fontSize: "0.90rem", color: "rgba(227,229,228,0.60)", lineHeight: 1.6 }}>
-                Auto-drafts appear here when significant burns happen<br />
-                or Arena countdown hits weekly milestones.<br />
+                Auto-drafts appear here when new research signals are detected<br />
+                or benchmark milestones are reached.<br />
                 You can also generate one manually on the left.
               </p>
             </div>
@@ -293,7 +293,7 @@ export default function CYOALore() {
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "0.85rem" }}>
                   <span style={{ fontSize: "1rem" }}>{trigCfg.emoji}</span>
                   <span style={{ ...mono, fontSize: "0.83rem", color: trigCfg.color }}>{trigCfg.label}</span>
-                  {ep.tokenId && <span style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)" }}>Token #{ep.tokenId}</span>}
+                  {ep.tokenId && <span style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)" }}>Model #{ep.tokenId}</span>}
                   <span style={{ ...mono, fontSize: "0.76rem", color: stsCfg.color, background: `${stsCfg.color}15`, border: `1px solid ${stsCfg.color}30`, padding: "1px 7px", marginLeft: "auto" }}>{stsCfg.label}</span>
                 </div>
 
@@ -341,9 +341,9 @@ export default function CYOALore() {
                 {/* Canon verdict (if resolved) */}
                 {ep.canonVerdict && ep.status === "resolved" && (
                   <div style={{ padding: "10px 12px", background: "rgba(74,222,128,0.05)", border: "1px solid rgba(74,222,128,0.15)", marginBottom: "0.85rem" }}>
-                    <p style={{ ...mono, fontSize: "0.78rem", color: "#4ade80", marginBottom: 4, textTransform: "uppercase" as const, letterSpacing: "0.12em" }}>Canon Confirmed</p>
+                    <p style={{ ...mono, fontSize: "0.78rem", color: "#4ade80", marginBottom: 4, textTransform: "uppercase" as const, letterSpacing: "0.12em" }}>Finding Confirmed</p>
                     <p style={{ ...mono, fontSize: "0.90rem", color: "rgba(227,229,228,0.8)", margin: 0, lineHeight: 1.6 }}>{ep.canonVerdict}</p>
-                    {ep.loreHint && <p style={{ ...mono, fontSize: "0.63rem", color: "#a78bfa", marginTop: 6 }}>⚡ {ep.loreHint}</p>}
+                    {ep.loreHint && <p style={{ ...mono, fontSize: "0.63rem", color: "#a78bfa", marginTop: 6 }}>💡 {ep.loreHint}</p>}
                     {(ep as any).visualPrompt && (
                       <div style={{ marginTop: 8, padding: "8px 10px", background: "rgba(45,212,191,0.04)", border: "1px solid rgba(45,212,191,0.15)" }}>
                         <p style={{ ...mono, fontSize: "0.73rem", color: "#2dd4bf", textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 4 }}>🎨 Visual Prompt</p>
@@ -356,7 +356,7 @@ export default function CYOALore() {
                 {/* Visual Prompt — always show if available */}
                 {(ep as any).visualPrompt && ep.status === "draft" && (
                   <div style={{ padding: "8px 10px", background: "rgba(45,212,191,0.04)", border: "1px solid rgba(45,212,191,0.12)", marginBottom: "0.75rem" }}>
-                    <p style={{ ...mono, fontSize: "0.73rem", color: "#2dd4bf", textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 4 }}>🎨 Visual for Grok Imagine</p>
+                    <p style={{ ...mono, fontSize: "0.73rem", color: "#2dd4bf", textTransform: "uppercase" as const, letterSpacing: "0.12em", marginBottom: 4 }}>🎨 Visual Prompt</p>
                     <p style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.75)", margin: 0, lineHeight: 1.5 }}>{(ep as any).visualPrompt}</p>
                   </div>
                 )}
@@ -392,7 +392,7 @@ export default function CYOALore() {
                 {/* Resolve form */}
                 {isResolving && (
                   <div style={{ marginTop: "1rem", padding: "1rem", background: "rgba(167,139,250,0.05)", border: "1px solid rgba(167,139,250,0.2)" }}>
-                    <p style={{ ...label, marginBottom: "0.75rem" }}>Enter 24h Poll Results</p>
+                    <p style={{ ...label, marginBottom: "0.75rem" }}>Enter Poll Results</p>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: "0.85rem" }}>
                       {(["A", "B", "C", "D"] as OptionLetter[]).map(letter => {
                         const setters = { A: setVoteA, B: setVoteB, C: setVoteC, D: setVoteD };

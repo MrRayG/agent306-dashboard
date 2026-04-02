@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: normiestv-dashboard
+    name: agent306-dashboard
     runtime: docker
     plan: starter
     healthCheckPath: /api/poller/status

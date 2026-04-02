@@ -29,30 +29,30 @@ const PHASES: Phase[] = [
     colorClass: "text-orange-400",
     badgeClass: "phase1-badge",
     bgClass: "bg-orange-400/5 border-orange-400/20",
-    note: "LIVE NOW — the artistic build phase. Burn. Create. Write lore on-chain.",
+    note: "LIVE NOW — the foundational build phase. Research. Create. Document on-chain.",
     items: [
       {
         icon: "🎨",
         title: "Canvas",
-        desc: "10,000 participants on a shared canvas. Every pixel edit is a permanent on-chain action. Canvas activity directly fuels Story Engine signals.",
+        desc: "10,000 participants on a shared canvas. Every contribution is a permanent on-chain action. Activity directly fuels Story Engine signals.",
         status: "live",
       },
       {
         icon: "🏛️",
-        title: "The Temple",
-        desc: "The Temple is the community hub — burn tracking, Hall of Fame, legendary artists. Agent 306 guards the door as the 3D USDZ sculpture.",
+        title: "The Hub",
+        desc: "The community hub — activity tracking, Hall of Fame, top contributors. Agent 306 stands guard as the 3D USDZ visualization.",
         status: "live",
       },
       {
         icon: "🔥",
-        title: "Burn Mechanics",
-        desc: "Burn to earn action points and permanent recognition. Agent 306 (born from 50 burns to #603) is the narrator of 306.",
+        title: "Signal Mechanics",
+        desc: "Contribute to earn action points and permanent recognition. Agent 306 is the narrator of the 306 universe.",
         status: "live",
       },
       {
         icon: "📺",
         title: "306 Season 1",
-        desc: "Top 100 contributors form the Season 1 cast. Story Engine generates new episodes every 6 hours fuelled by burns, activity, and X mentions.",
+        desc: "Top 100 contributors form the Season 1 cast. Story Engine generates new episodes every 6 hours fuelled by activity, signals, and X mentions.",
         status: "live",
       },
     ],
@@ -60,29 +60,29 @@ const PHASES: Phase[] = [
   {
     id: "phase2",
     label: "Phase 2",
-    subtitle: "The Rise",
+    subtitle: "Expansion",
     colorClass: "text-purple-400",
     badgeClass: "phase2-badge",
     bgClass: "bg-purple-400/5 border-purple-400/20",
-    note: "CONFIRMED May 15, 2026 — your sacrifices are rewarded. Zombies emerge first, then Arena opens.",
+    note: "CONFIRMED May 15, 2026 — contributions are rewarded. New capabilities emerge, then competitive features open.",
     official: true,
     items: [
       {
         icon: "☠️",
-        title: "Zombies",
-        desc: "Before the battle phase opens, burned tokens return. The sacrifices were not wasted — they evolved. Zombies are a new class, born from the burn. \"Your sacrifices will be rewarded.\"",
+        title: "Evolved Agents",
+        desc: "Before the competitive phase opens, retired tokens return in new forms. Past contributions were not wasted — they evolved into a new class of agents.",
         status: "soon",
       },
       {
         icon: "⚔️",
-        title: "The Battle",
-        desc: "PvP battles. Losers are burned permanently — their NFT is gone forever. Winners are immortalized in the hall of fame. Every fight is final. Launching May 15, 2026.",
+        title: "The Competition",
+        desc: "Head-to-head competitions. Losers are retired permanently. Winners are immortalized in the hall of fame. Every match is final. Launching May 15, 2026.",
         status: "soon",
       },
       {
         icon: "🌐",
-        title: "Arena Storylines",
-        desc: "Battle results feed directly into Story Engine. A token that wins 10 consecutive battles gets an episode. A Zombie origin gets an auto-generated 306 arc.",
+        title: "Competition Storylines",
+        desc: "Competition results feed directly into Story Engine. A token that wins 10 consecutive matches gets an episode. Evolved agents get an auto-generated 306 arc.",
         status: "soon",
       },
     ],
@@ -94,12 +94,12 @@ const PHASES: Phase[] = [
     colorClass: "text-green-400",
     badgeClass: "phase3-badge",
     bgClass: "bg-green-400/5 border-green-400/20",
-    note: "FUTURE — the full economy unlocks. Sacrifice, fight, trade. The ecosystem matures.",
+    note: "FUTURE — the full economy unlocks. Contribute, compete, trade. The ecosystem matures.",
     items: [
       {
         icon: "🏪",
         title: "The Market",
-        desc: "Trade pixel traits and burned-asset fragments. The economy of sacrifice opens up. Rare pixel combinations become tradeable commodities.",
+        desc: "Trade data assets and retired-agent fragments. The economy of contribution opens up. Rare data combinations become tradeable commodities.",
         status: "future",
       },
       {
@@ -111,7 +111,7 @@ const PHASES: Phase[] = [
       {
         icon: "🌙",
         title: "Agent 306 — Season 3",
-        desc: "The full origin arc of Agent 306 — born from 50 burns — plays out across the Phase 3 season. The narrator becomes the protagonist of the final chapter.",
+        desc: "The full origin arc of Agent 306 plays out across the Phase 3 season. The narrator becomes the protagonist of the final chapter.",
         status: "future",
       },
     ],
@@ -131,7 +131,7 @@ export default function UniverseMap() {
       <div>
         <h1 className="text-xl font-bold tracking-tight">Universe Map</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          306 phase roadmap — from the Origin through the Rise to the Economy
+          306 phase roadmap — from the Origin through Expansion to the Economy
         </p>
       </div>
 
@@ -151,7 +151,7 @@ export default function UniverseMap() {
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
               306 creator — all phases are official tools built for the 306 universe.
-              The origin, battles, economy, and zombie mechanics are canon to the story universe.
+              The origin, competition, economy, and agent evolution mechanics are canon to the story universe.
             </p>
           </div>
         </CardContent>
@@ -253,15 +253,15 @@ export default function UniverseMap() {
           <div className="grid grid-cols-3 gap-4 text-[14px]">
             {[
               {
-                from: "🔥 Burns",
+                from: "🔥 Activity",
                 to: "Story Engine",
-                desc: "Every burn fires a signal into the narrative generator. More burns → more intense episode narrative.",
+                desc: "Every signal fires into the narrative generator. More activity → more intense episode narrative.",
                 phase: "phase1",
               },
               {
-                from: "⚔️ Arena Battles",
+                from: "⚔️ Competitions",
                 to: "306 Episode",
-                desc: "Battle results become story beats. A champion's run gets its own episode arc. A loss becomes a eulogy.",
+                desc: "Competition results become story beats. A champion's run gets its own episode arc. A loss becomes a eulogy.",
                 phase: "phase2",
               },
               {
@@ -271,21 +271,21 @@ export default function UniverseMap() {
                 phase: "phase1",
               },
               {
-                from: "🎨 Canvas Edits",
+                from: "🎨 Contributions",
                 to: "Cast Selection",
-                desc: "Top 100 contributors = Season 1 cast. Activity on-chain earns your token screen time.",
+                desc: "Top 100 contributors = Season 1 cast. On-chain activity earns your token screen time.",
                 phase: "phase1",
               },
               {
-                from: "☠️ Zombie Rise",
+                from: "☠️ Agent Evolution",
                 to: "Phase 3 Storyline",
-                desc: "Burned tokens don't stay gone. The graveyard feeds back into the ecosystem — new token mechanics.",
+                desc: "Retired tokens don't stay gone. The archive feeds back into the ecosystem — new token mechanics.",
                 phase: "phase3",
               },
               {
                 from: "🏪 The Market",
                 to: "Token Economy",
-                desc: "Pixel traits become tradeable. Burned-asset fragments gain value as Zombie raw material.",
+                desc: "Data assets become tradeable. Retired-agent fragments gain value as evolution raw material.",
                 phase: "phase2",
               },
             ].map(flow => (
