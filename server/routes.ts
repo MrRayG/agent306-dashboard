@@ -2227,10 +2227,13 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
   app.post("/api/article/preview", async (req, res) => {
     const apiKey = LLM_API_KEY;
-    if (!apiKey) return res.status(500).json({ error: "GROK_API_KEY not set" });
+    if (!apiKey) return res.status(500).json({ error: "LLM_API_KEY not set — configure OPENROUTER_API_KEY or GROK_API_KEY" });
     const overrideUrl: string | undefined = req.body?.url?.trim() || undefined;
     try {
       const preview = await previewDeepRead(apiKey, overrideUrl);
+      if (!preview.body || preview.body.length < 100) {
+        return res.status(500).json({ error: "Article generation produced insufficient content — try again or use a different URL" });
+      }
       res.json(preview);
     } catch (e: any) {
       console.error("[Article] Preview failed:", e.message);

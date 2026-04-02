@@ -30,6 +30,11 @@ const GROK_CHAT_API     = LLM_BASE_URL;
 const GROK_RESPONSE_API = LLM_RESPONSE_URL;
 const ARTICLE_STATE_FILE = dataPath("article_state.json");
 
+// Grok x_search needs a native Grok API key (not OpenRouter) and the Responses API endpoint.
+// If GROK_API_KEY is set separately, prefer it for x_search; otherwise fall back to unified key.
+const GROK_NATIVE_KEY = process.env.GROK_API_KEY ?? "";
+const GROK_RESPONSES_URL = process.env.GROK_RESPONSES_URL ?? "https://api.x.ai/v1/responses";
+
 // ── State tracking ─────────────────────────────────────────────────────────────
 interface ArticleEntry {
   articleId:    string;
@@ -63,29 +68,8 @@ export function getArticleState(): ArticleState {
   return loadState();
 }
 
-// ── Step 1: Discover the week's most important AI article via Grok x_search ──
-async function discoverArticle(apiKey: string): Promise<{
-  title:   string;
-  url:     string;
-  summary: string;
-  source:  string;
-  publishedDate: string;
-} | null> {
-  console.log("[ArticleEngine] Discovering this week's AI article...");
-
-  try {
-    const res = await fetch(GROK_RESPONSE_API, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: getModel("x_search"),
-        stream: false,
-        input: [{
-          role: "user",
-          content: `Search for the single most important AI news article published in the last 7 days.
+// ── Discovery prompt (shared between Grok x_search and chat fallback) ────────
+const DISCOVERY_PROMPT = `Search for the single most important AI news article published in the last 7 days.
 
 CRITERIA (in priority order):
 1. Breaking or genuinely significant — not routine product updates
@@ -106,8 +90,34 @@ Return JSON ONLY — no extra text:
   "source": "publication name",
   "publishedDate": "YYYY-MM-DD or approximate date",
   "whyThisOne": "why this is the most important AI story this week"
-}`,
-        }],
+}`;
+
+// ── Step 1: Discover the week's most important AI article ────────────────────
+// Strategy: Try Grok x_search (Responses API) first for real-time search,
+// then fall back to chat completions API if Grok native key is unavailable.
+async function discoverArticle(apiKey: string): Promise<{
+  title:   string;
+  url:     string;
+  summary: string;
+  source:  string;
+  publishedDate: string;
+} | null> {
+  console.log("[ArticleEngine] Discovering this week's AI article...");
+
+  // Attempt 1: Grok x_search via Responses API (requires native Grok key)
+  const grokKey = GROK_NATIVE_KEY || apiKey;
+  try {
+    console.log("[ArticleEngine] Trying Grok x_search (Responses API)...");
+    const res = await fetch(GROK_RESPONSES_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${grokKey}`,
+      },
+      body: JSON.stringify({
+        model: "grok-3-fast",
+        stream: false,
+        input: [{ role: "user", content: DISCOVERY_PROMPT }],
         tools: [{ type: "x_search" }],
       }),
       signal: AbortSignal.timeout(45000),
@@ -115,8 +125,8 @@ Return JSON ONLY — no extra text:
 
     if (!res.ok) {
       const errBody = await res.text().catch(() => "");
-      console.error("[ArticleEngine] Discovery failed:", res.status, errBody.slice(0, 200));
-      throw new Error(`Grok API ${res.status}: ${errBody.slice(0, 120)}`);
+      console.warn("[ArticleEngine] Grok x_search failed:", res.status, errBody.slice(0, 200));
+      throw new Error(`Grok Responses API ${res.status}`);
     }
 
     const data = await res.json();
@@ -125,44 +135,102 @@ Return JSON ONLY — no extra text:
 
     if (!rawText) throw new Error("Grok returned empty response from x_search");
 
-    const firstBrace = rawText.indexOf("{");
-    const lastBrace  = rawText.lastIndexOf("}");
-    if (firstBrace === -1 || lastBrace <= firstBrace) {
-      // Try to extract any URL from the raw text as fallback
-      console.warn("[ArticleEngine] No JSON in response, raw:", rawText.slice(0, 300));
-      throw new Error("Grok response did not contain valid JSON article data");
+    const result = parseDiscoveryJSON(rawText);
+    if (result) {
+      console.log(`[ArticleEngine] Selected article (x_search): "${result.title}" from ${result.source}`);
+      return result;
+    }
+    throw new Error("No valid JSON in Grok x_search response");
+  } catch (e: any) {
+    console.warn("[ArticleEngine] Grok x_search unavailable:", e.message, "— falling back to chat completions");
+  }
+
+  // Attempt 2: Chat completions API fallback (works with OpenRouter or any provider)
+  try {
+    console.log("[ArticleEngine] Trying chat completions fallback for discovery...");
+    const res = await fetch(GROK_CHAT_API, {
+      method: "POST",
+      headers: getLLMHeaders(),
+      body: JSON.stringify({
+        model: getModel("x_search"),
+        messages: [{ role: "user", content: DISCOVERY_PROMPT }],
+        max_tokens: 800,
+        temperature: 0.3,
+      }),
+      signal: AbortSignal.timeout(45000),
+    });
+
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => "");
+      console.error("[ArticleEngine] Chat discovery failed:", res.status, errBody.slice(0, 200));
+      throw new Error(`Chat API ${res.status}: ${errBody.slice(0, 120)}`);
     }
 
-    const parsed = JSON.parse(rawText.slice(firstBrace, lastBrace + 1));
-    if (!parsed.title || !parsed.url) throw new Error("Discovered article missing title or URL");
-    console.log(`[ArticleEngine] Selected article: "${parsed.title}" from ${parsed.source}`);
-    return parsed;
+    const data = await res.json();
+    const rawText = data.choices?.[0]?.message?.content ?? "";
 
+    if (!rawText) throw new Error("Chat API returned empty response");
+
+    const result = parseDiscoveryJSON(rawText);
+    if (result) {
+      console.log(`[ArticleEngine] Selected article (chat fallback): "${result.title}" from ${result.source}`);
+      return result;
+    }
+    throw new Error("Chat API response did not contain valid JSON article data");
   } catch (e: any) {
     console.error("[ArticleEngine] Discovery error:", e.message);
     throw new Error(`Discovery failed: ${e.message}`);
   }
 }
 
+/** Parse discovery JSON from LLM response text */
+function parseDiscoveryJSON(rawText: string): {
+  title: string; url: string; summary: string; source: string; publishedDate: string;
+} | null {
+  const firstBrace = rawText.indexOf("{");
+  const lastBrace  = rawText.lastIndexOf("}");
+  if (firstBrace === -1 || lastBrace <= firstBrace) {
+    console.warn("[ArticleEngine] No JSON in response, raw:", rawText.slice(0, 300));
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(rawText.slice(firstBrace, lastBrace + 1));
+    if (!parsed.title || !parsed.url) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 // ── Step 2: Fetch full article content for deep reading ─────────────────────
-async function fetchArticleContent(url: string): Promise<string> {
+async function fetchArticleContent(url: string): Promise<{ text: string; title: string }> {
   try {
     const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0", "Accept": "text/html" },
-      signal: AbortSignal.timeout(10000),
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; Agent306Bot/1.0)", "Accept": "text/html,application/xhtml+xml" },
+      signal: AbortSignal.timeout(15000),
+      redirect: "follow",
     });
-    if (!res.ok) return "";
+    if (!res.ok) return { text: "", title: "" };
     const html = await res.text();
+
+    // Extract title from raw HTML BEFORE stripping tags
+    const titleMatch = html.match(/<title[^>]*>([^<]{3,200})<\/title>/i);
+    const ogTitleMatch = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']{3,200})["']/i);
+    const title = (ogTitleMatch?.[1] ?? titleMatch?.[1] ?? "").trim();
+
     const clean = html
       .replace(/<script[\s\S]*?<\/script>/gi, "")
       .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<nav[\s\S]*?<\/nav>/gi, "")
+      .replace(/<header[\s\S]*?<\/header>/gi, "")
+      .replace(/<footer[\s\S]*?<\/footer>/gi, "")
       .replace(/<[^>]+>/g, " ")
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, 8000); // more content for deep reading
-    return clean;
+    return { text: clean, title };
   } catch {
-    return "";
+    return { text: "", title: "" };
   }
 }
 
@@ -182,10 +250,7 @@ async function generateDeepReadArticle(
 
   const res = await fetch(GROK_CHAT_API, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`,
-    },
+    headers: getLLMHeaders(),
     body: JSON.stringify({
       model: getModel("article_draft"),
       response_format: { type: "json_object" },
@@ -461,7 +526,7 @@ export async function runWeeklyDeepRead(
     }
 
     // 2. Fetch full content
-    const articleContent = await fetchArticleContent(articleInfo.url);
+    const { text: articleContent } = await fetchArticleContent(articleInfo.url);
 
     // 3. Generate the Deep Read
     const { headline, teaser, body } = await generateDeepReadArticle(
@@ -510,14 +575,15 @@ export async function previewDeepRead(
   if (overrideUrl) {
     // Direct URL mode — skip discovery, fetch and analyze the provided URL
     console.log(`[ArticleEngine] Direct URL mode: ${overrideUrl}`);
-    const pageText = await fetchArticleContent(overrideUrl);
-    // Build a minimal articleInfo from the URL and page text
-    const titleMatch = pageText.match(/<title[^>]*>([^<]{5,120})<\/title>/i);
+    const { text: pageText, title: pageTitle } = await fetchArticleContent(overrideUrl);
+    // Build a minimal articleInfo from the URL and fetched page data
+    let hostname = overrideUrl;
+    try { hostname = new URL(overrideUrl).hostname.replace("www.", ""); } catch {}
     articleInfo = {
-      title: titleMatch?.[1]?.trim() ?? overrideUrl,
+      title: pageTitle || hostname,
       url: overrideUrl,
       summary: pageText.slice(0, 500),
-      source: new URL(overrideUrl).hostname.replace("www.", ""),
+      source: hostname,
       publishedDate: new Date().toISOString().slice(0, 10),
     };
     const { headline, teaser, body } = await generateDeepReadArticle(
@@ -529,7 +595,7 @@ export async function previewDeepRead(
   // Auto-discovery mode
   articleInfo = await discoverArticle(apiKey) as NonNullable<Awaited<ReturnType<typeof discoverArticle>>>;
 
-  const articleContent = await fetchArticleContent(articleInfo.url);
+  const { text: articleContent } = await fetchArticleContent(articleInfo.url);
   const { headline, teaser, body } = await generateDeepReadArticle(
     articleInfo, articleContent, apiKey
   );
