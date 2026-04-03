@@ -28,7 +28,7 @@ import { scheduleRace, generateRace, postRace, getRaceState } from "./raceEngine
 import { scheduleMidnightReplies, runMidnightReplies } from "./replyEngine.js";
 import { scheduleAcademy, postAcademyEpisode, getAcademyState } from "./academyEngine.js";
 import { scheduleSignalBrief, postSignalBrief, getSignalBriefState } from "./signalBriefEngine.js";
-import { getPodcastState, EPISODE_META, createEpisode, generateEpisodeScript, regenerateEpisodeScript, reviewEpisode, markProduced, publishEpisode, submitGuestRequest, reviewGuest, generateInterviewQuestions, submitAnswers, createConversationEpisode, getEpisodesByType, getEpisodesByStatus, getGuestsByStatus, getEpisode, getGuest, formatScriptForProduction, formatConversationForProduction, generateEpisodeFromThread, getThreadCandidates, getPipelineStatus } from "./podcastEngine.js";
+import { getPodcastState, EPISODE_META, createEpisode, generateEpisodeScript, regenerateEpisodeScript, reviewEpisode, markProduced, publishEpisode, submitGuestRequest, reviewGuest, generateInterviewQuestions, submitAnswers, createConversationEpisode, getEpisodesByType, getEpisodesByStatus, getGuestsByStatus, getEpisode, getGuest, formatScriptForProduction, formatConversationForProduction, generateEpisodeFromThread, getThreadCandidates, getPipelineStatus, deleteEpisode, clearAllEpisodes } from "./podcastEngine.js";
 import { getVideoStats } from "./videoEngine.js";
 import { requestPost, registerPost, releasePost, getCoordinatorState, resetCooldown } from "./postCoordinator.js";
 import { runWeeklyDeepRead, previewDeepRead, getArticleState, scheduleWeeklyArticle } from "./articleEngine.js";
@@ -1621,6 +1621,18 @@ export function registerRoutes(httpServer: Server, app: Express) {
     res.json({ episodes });
   });
 
+
+  app.delete("/api/podcast/episodes/:id", requireDashAuth, (req, res) => {
+    const ok = deleteEpisode(req.params.id);
+    if (!ok) return res.status(404).json({ error: "Episode not found" });
+    res.json({ ok: true });
+  });
+
+  app.post("/api/podcast/clear-all", requireDashAuth, (_req, res) => {
+    const count = clearAllEpisodes();
+    res.json({ ok: true, cleared: count });
+  });
+
   app.get("/api/podcast/episodes/:id", (req, res) => {
     const ep = getEpisode(req.params.id);
     if (!ep) return res.status(404).json({ error: "Episode not found" });
@@ -1746,7 +1758,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       const agentCtx = getOptimizedContext("podcast topic scanning research community");
       const scanRes = await fetch(LLM_BASE_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${grokKey}` },
+        headers: getLLMHeaders(),
         body: JSON.stringify({
           model: getModel("research_phase"),
           messages: [
@@ -1771,7 +1783,21 @@ export function registerRoutes(httpServer: Server, app: Express) {
       const topics = parsed.topics ?? [];
 
       console.log(`[Podcast] Topic scan returned ${topics.length} recommendations`);
-      res.json({ ok: true, topics });
+
+      // Auto-create draft episodes from scanned topics so they appear in the pipeline
+      const created: any[] = [];
+      for (const t of topics) {
+        try {
+          const ep = createEpisode({
+            type: t.type === "the_conversation" ? "the_conversation" : "the_signal",
+            title: t.title ?? "Untitled",
+            drivingQuestion: t.drivingQuestion ?? t.pitch ?? "",
+          });
+          if (ep) created.push(ep);
+        } catch {}
+      }
+      console.log(`[Podcast] Created ${created.length} draft episodes from scan`);
+      res.json({ ok: true, topics, created: created.length });
     } catch (e: any) {
       console.error("[Podcast] Topic scan error:", e.message);
       res.status(500).json({ error: e.message });

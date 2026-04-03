@@ -683,6 +683,23 @@ export function getGuestsByStatus(status?: GuestStatus): ConversationGuest[] {
 export function getEpisode(id: string): Episode | undefined {
   return state.episodes.find(e => e.id === id);
 }
+export function deleteEpisode(id: string): boolean {
+  const idx = state.episodes.findIndex(e => e.id === id);
+  if (idx === -1) return false;
+  state.episodes.splice(idx, 1);
+  saveState(state);
+  console.log(`[Podcast] Deleted episode ${id}`);
+  return true;
+}
+
+export function clearAllEpisodes(): number {
+  const count = state.episodes.length;
+  state.episodes = [];
+  saveState(state);
+  console.log(`[Podcast] Cleared all ${count} episodes`);
+  return count;
+}
+
 
 export function getGuest(id: string): ConversationGuest | undefined {
   return state.guests.find(g => g.id === id);
