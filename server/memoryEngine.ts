@@ -258,6 +258,63 @@ if (!fs.existsSync(SOUL_FILE)) {
     save(SOUL_FILE, soul);
     console.log('[Memory] MIGRATION: Soul identity updated — old token/eth/canon fields removed');
   }
+  // Clean old research topics from the volume
+  const researchFiles = ['research_lab.json', 'research-agenda.json'];
+  for (const rf of researchFiles) {
+    const rfPath = dataPath(rf);
+    if (fs.existsSync(rfPath)) {
+      try {
+        const raw = fs.readFileSync(rfPath, 'utf8');
+        const data = JSON.parse(raw);
+        const stringify = JSON.stringify(data).toLowerCase();
+        if (BAD_KEYWORDS.some(k => stringify.includes(k))) {
+          // Reset the research files to clean state
+          if (rf === 'research_lab.json') {
+            const cleanLab = { topics: [], hypotheses: [], syntheses: [] };
+            fs.writeFileSync(rfPath, JSON.stringify(cleanLab, null, 2));
+            console.log(`[Memory] MIGRATION: Cleaned old research topics from ${rf}`);
+          } else if (rf === 'research-agenda.json') {
+            const cleanAgenda = { threads: [], lastGenerated: null, stats: { totalGenerated: 0, totalPruned: 0 } };
+            fs.writeFileSync(rfPath, JSON.stringify(cleanAgenda, null, 2));
+            console.log(`[Memory] MIGRATION: Cleaned old research agenda from ${rf}`);
+          }
+        }
+      } catch (e: any) {
+        console.warn(`[Memory] Could not clean ${rf}:`, e.message);
+      }
+    }
+  }
+
+  // Clean old goals
+  const goalsPath = dataPath('agent_goals.json');
+  if (fs.existsSync(goalsPath)) {
+    try {
+      const goalsRaw = fs.readFileSync(goalsPath, 'utf8');
+      if (BAD_KEYWORDS.some(k => goalsRaw.toLowerCase().includes(k))) {
+        fs.writeFileSync(goalsPath, JSON.stringify({ goals: [], generatedAt: null }, null, 2));
+        console.log('[Memory] MIGRATION: Cleaned old goals with Normies references');
+      }
+    } catch (e: any) {
+      console.warn('[Memory] Could not clean goals:', e.message);
+    }
+  }
+
+  // Clean old activity/exploration state
+  const actFiles = ['exploration_state.json', 'daily_briefing.json'];
+  for (const af of actFiles) {
+    const afPath = dataPath(af);
+    if (fs.existsSync(afPath)) {
+      try {
+        const raw = fs.readFileSync(afPath, 'utf8');
+        if (BAD_KEYWORDS.some(k => raw.toLowerCase().includes(k))) {
+          fs.unlinkSync(afPath);
+          console.log(`[Memory] MIGRATION: Removed stale ${af} with old references`);
+        }
+      } catch (e: any) {
+        console.warn(`[Memory] Could not clean ${af}:`, e.message);
+      }
+    }
+  }
 })();
 
 // ── Public API ────────────────────────────────────────────────
