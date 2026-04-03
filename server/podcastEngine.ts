@@ -302,7 +302,6 @@ The unresolved question is not a weakness. It is the most credible thing in the 
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${grokKey}` },
       body: JSON.stringify({
         model: getModel("podcast_script"),
-        response_format: { type: "json_object" },
         messages: [
           {
             role: "system",
@@ -554,7 +553,6 @@ export async function generateInterviewQuestions(guestId: string, grokKey: strin
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${grokKey}` },
       body: JSON.stringify({
         model: getModel("podcast_script"),
-        response_format: { type: "json_object" },
         messages: [
           {
             role: "system",
@@ -1013,7 +1011,6 @@ export async function generateEpisodeFromThread(threadId: string): Promise<Episo
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${grokKey}` },
       body: JSON.stringify({
         model: getModel("podcast-script"),
-        response_format: { type: "json_object" },
         messages: [
           {
             role: "system",
@@ -1202,7 +1199,6 @@ async function triggerEpisodeReflection(episode: Episode): Promise<void> {
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${grokKey}` },
       body: JSON.stringify({
         model: getModel("reflection"),
-        response_format: { type: "json_object" },
         messages: [
           {
             role: "system",

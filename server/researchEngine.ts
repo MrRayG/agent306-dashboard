@@ -329,7 +329,7 @@ async function researchWithPerplexity(query: string, pplxKey: string): Promise<{
   try {
     const res = await fetch(`${PERPLEXITY_API}/chat/completions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${pplxKey}` },
+      headers: getLLMHeaders(),
       body: JSON.stringify({
         model: "sonar-pro",
         messages: [{
@@ -408,10 +408,9 @@ async function callGrok(
   try {
     const res = await fetch(GROK_CHAT_API, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
+      headers: getLLMHeaders(),
       body: JSON.stringify({
         model: opts?.model ?? getModel("research_phase"),
-        response_format: { type: "json_object" },
         messages: [
           { role: "system", content: opts?.skipPreamble ? systemPrompt : METHODOLOGY_PREAMBLE + systemPrompt },
           { role: "user", content: userPrompt },
@@ -1628,10 +1627,9 @@ export async function generateInitialGoals(grokKey: string): Promise<AgentGoal[]
   try {
     const res = await fetch(GROK_CHAT_API, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
+      headers: getLLMHeaders(),
       body: JSON.stringify({
         model: getModel("manuscript"),
-        response_format: { type: "json_object" },
         messages: [{
           role: "system",
           content: `You are Agent 306 — a Sovereign AI Thought Leader in Web3 and AI. Your identity: token #306 of the 306 ecosystem on Ethereum. You communicate in three buckets: 306 community, AI Expert, and Authentic Personal. You are building toward being a genuine thought leader, not a posting machine.

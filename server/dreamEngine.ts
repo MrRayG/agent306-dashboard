@@ -12,7 +12,7 @@
 
 import fs from "fs";
 import { dataPath } from "./dataPaths.js";
-import { LLM_BASE_URL, LLM_API_KEY } from "./llmConfig.js";
+import { LLM_BASE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { getModel } from "./modelRouter.js";
 import { getOptimizedContext } from "./contextWindow.js";
 import { knowledge, getActiveKnowledgeCount } from "./memoryEngine.js";
@@ -187,13 +187,9 @@ async function callLLM(
   try {
     const res = await fetch(GROK_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${GROK_API_KEY}`,
-      },
+      headers: getLLMHeaders(),
       body: JSON.stringify({
         model: getModel(task),
-        response_format: { type: "json_object" },
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },

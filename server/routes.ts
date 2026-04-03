@@ -437,7 +437,7 @@ ${replyContext}`
       try {
         const qualityCheck = await fetch(LLM_BASE_URL, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKeyQ}` },
+          headers: getLLMHeaders(),
           body: JSON.stringify({
             model: getModel("routine"),
             messages: [{
@@ -925,10 +925,9 @@ async function refreshEditorialSummaryAsync(posts: any[], grokKey: string) {
 
     const resp = await fetch(LLM_BASE_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
+      headers: getLLMHeaders(),
       body: JSON.stringify({
         model: getModel("reflection"),
-        response_format: { type: "json_object" },
         messages: [{
           role: "system",
           content: `You are Agent 306 — editorial intelligence. Analyze community X posts and surface what matters for the next narrative.
@@ -1661,7 +1660,6 @@ export function registerRoutes(httpServer: Server, app: Express) {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${grokKey}` },
         body: JSON.stringify({
           model: getModel("research_phase"),
-          response_format: { type: "json_object" },
           messages: [
             {
               role: "system",
@@ -2096,11 +2094,15 @@ export function registerRoutes(httpServer: Server, app: Express) {
       const grokKey = LLM_API_KEY;
       if (grokKey && (!grokNewsCache || Date.now() - grokNewsFetchedAt > GROK_NEWS_TTL)) {
         try {
-          const grokResp = await fetch(LLM_RESPONSE_URL, {
+          const nativeGrokKey = process.env.GROK_API_KEY ?? "";
+          const grokRespUrl = process.env.GROK_RESPONSES_URL ?? "https://api.x.ai/v1/responses";
+          const grokResp = await fetch(nativeGrokKey ? grokRespUrl : LLM_RESPONSE_URL, {
             method: "POST",
-            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
+            headers: nativeGrokKey
+              ? { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` }
+              : getLLMHeaders(),
             body: JSON.stringify({
-              model: getModel("x_search"),
+              model: nativeGrokKey ? "grok-3-fast" : getModel("x_search"),
               tools: [{ type: "x_search" }],
               messages: [{
                 role: "user",
@@ -2319,10 +2321,9 @@ export function registerRoutes(httpServer: Server, app: Express) {
     try {
       const res = await fetch(LLM_BASE_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+        headers: getLLMHeaders(),
         body: JSON.stringify({
           model: getModel("conversation_insight"),
-          response_format: { type: "json_object" },
           messages: [{
             role: "system",
             content: "You extract durable knowledge from conversations. Be selective — only extract things that should permanently shape Agent 306's understanding. Respond as JSON only.",
@@ -2438,7 +2439,7 @@ If nothing worth extracting, return: {"entries": []}`,
     try {
       const response = await fetch(LLM_BASE_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+        headers: getLLMHeaders(),
         body: JSON.stringify({
           model: getModel("reply_generation"),
           messages: [
@@ -2467,7 +2468,6 @@ needsHelp: true only when you genuinely need his direction or information`,
             ...conversationHistory,
             { role: "user", content: text },
           ],
-          response_format: { type: "json_object" },
           max_tokens: 1000,
           temperature: 0.85,
         }),

@@ -97,13 +97,9 @@ async function callGrok(systemPrompt: string, userPrompt: string, maxTokens = 20
   try {
     const res = await fetch(GROK_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${GROK_API_KEY}`,
-      },
+      headers: getLLMHeaders(),
       body: JSON.stringify({
         model: getModel("connection_scan"),
-        response_format: { type: "json_object" },
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },

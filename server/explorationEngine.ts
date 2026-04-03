@@ -72,12 +72,13 @@ async function searchWithPerplexity(
   deep = false
 ): Promise<string> {
   try {
+    const pplxHeaders = {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${pplxKey}`,
+    };
     const res = await fetch(`${PERPLEXITY_API}/chat/completions`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${pplxKey}`,
-      },
+      headers: pplxHeaders,
       body: JSON.stringify({
         model: "sonar-pro",
         messages: [
@@ -124,12 +125,19 @@ async function searchWithPerplexity(
 
 // ── Grok x_search — X/Twitter social signal scan ────────────────────────────
 async function searchXSocial(query: string, grokKey: string): Promise<string> {
+  // x_search requires the native Grok Responses API, NOT OpenRouter
+  const nativeGrokKey = process.env.GROK_API_KEY ?? "";
+  if (!nativeGrokKey) {
+    console.warn("[Exploration] GROK_API_KEY not set — skipping x_search");
+    return "";
+  }
   try {
-    const res = await fetch(GROK_RESPONSE_API, {
+    const grokResponsesUrl = process.env.GROK_RESPONSES_URL ?? "https://api.x.ai/v1/responses";
+    const res = await fetch(grokResponsesUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` },
       body: JSON.stringify({
-        model: getModel("exploration_synthesis"),
+        model: "grok-3-fast",
         stream: false,
         input: [{ role: "user", content: query }],
         tools: [{ type: "x_search" }],
@@ -164,7 +172,7 @@ async function searchWithGrokKnowledge(query: string, grokKey: string): Promise<
   try {
     const res = await fetch(GROK_CHAT_API, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
+      headers: getLLMHeaders(),
       body: JSON.stringify({
         model: getModel("exploration_synthesis"),
         messages: [{
@@ -198,10 +206,9 @@ async function extractKnowledge(
   try {
     const res = await fetch(GROK_CHAT_API, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
+      headers: getLLMHeaders(),
       body: JSON.stringify({
         model: getModel("exploration_synthesis"),
-        response_format: { type: "json_object" },
         messages: [{
           role: "system",
           content: "Extract structured knowledge from research text. Return valid JSON only. Be selective — only extract specific, durable, actionable insights. IMPORTANT: Do NOT extract things the agent already knows unless the information has materially changed or updated.",
@@ -286,10 +293,9 @@ async function fetchAcademicResearch(grokKey: string, existingKBDigest?: string)
 
     const res = await fetch(LLM_BASE_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + grokKey },
+      headers: getLLMHeaders(),
       body: JSON.stringify({
         model: getModel("exploration_synthesis"),
-        response_format: { type: "json_object" },
         messages: [{
           role: "system",
           content: "Extract structured knowledge from academic AI research papers. Return valid JSON only.",
@@ -555,7 +561,7 @@ export async function runExploration(grokKey: string, pplxKey?: string): Promise
     try {
       const synthRes = await fetch(GROK_CHAT_API, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
+        headers: getLLMHeaders(),
         body: JSON.stringify({
           model: getModel("exploration_synthesis"),
           messages: [{

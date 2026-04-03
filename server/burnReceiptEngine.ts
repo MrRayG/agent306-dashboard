@@ -443,7 +443,7 @@ export async function generateBurnNarrative(opts: {
   try {
     const resp = await fetch(LLM_BASE_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
+      headers: getLLMHeaders(),
       body: JSON.stringify({
         model: getModel("burn_receipt"),
         messages: [{

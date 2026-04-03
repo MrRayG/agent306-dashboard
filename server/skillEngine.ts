@@ -131,13 +131,9 @@ export async function extractSkill(input: {
   try {
     const res = await fetch(GROK_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${GROK_API_KEY}`,
-      },
+      headers: getLLMHeaders(),
       body: JSON.stringify({
         model: getModel("skill_extraction"),
-        response_format: { type: "json_object" },
         messages: [
           {
             role: "system",

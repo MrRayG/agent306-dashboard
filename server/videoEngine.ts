@@ -128,10 +128,7 @@ export async function generateBurnVideo(opts: {
     // Step 1: Start generation (image-to-video)
     const startResp = await fetch(VIDEO_API, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${XAI_API_KEY}`,
-      },
+      headers: getLLMHeaders(),
       body: JSON.stringify({
         model: "grok-imagine-video",
         prompt,

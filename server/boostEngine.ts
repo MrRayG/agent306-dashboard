@@ -83,14 +83,14 @@ async function readTweetWithXSearch(url: string, apiKey: string): Promise<{
   communityMood: string;
 } | null> {
   try {
-    const res = await fetch(GROK_RESPONSE_API, {
+    const nativeGrokKey = process.env.GROK_API_KEY ?? "";
+    if (!nativeGrokKey) throw new Error("GROK_API_KEY not set for x_search");
+    const grokResponsesUrl = process.env.GROK_RESPONSES_URL ?? "https://api.x.ai/v1/responses";
+    const res = await fetch(grokResponsesUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` },
       body: JSON.stringify({
-        model: getModel("boost"),
+        model: "grok-3-fast",
         stream: false,
         input: [{
           role: "user",
@@ -190,13 +190,9 @@ Community tone: ${tweetData.communityMood}`.trim()
 
   const res = await fetch(GROK_CHAT_API, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`,
-    },
+    headers: getLLMHeaders(),
     body: JSON.stringify({
       model: getModel("boost"),
-      response_format: { type: "json_object" },
       messages: [
         {
           role: "system",

@@ -87,9 +87,15 @@ function parseGrokSocialResponse(data: any): Array<{
 
 // ── Run a single Grok x_search with a specific query ─────────────────────────
 async function runGrokSearch(query: string): Promise<typeof communitySignalCache> {
-  const res = await fetch(LLM_RESPONSE_URL, {
+  const nativeGrokKey = process.env.GROK_API_KEY ?? "";
+  if (!nativeGrokKey) {
+    console.warn("[306] GROK_API_KEY not set — skipping x_search");
+    return [];
+  }
+  const grokResponsesUrl = process.env.GROK_RESPONSES_URL ?? "https://api.x.ai/v1/responses";
+  const res = await fetch(grokResponsesUrl, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${GROK_API_KEY}` },
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` },
     body: JSON.stringify({
       model: getModel("x_search"), // x_search quality is identical; grok-4-1-fast overkill for text retrieval
       stream: false,
@@ -594,10 +600,7 @@ Remember: respond only with the JSON format specified.`;
 
   const res = await fetch(GROK_URL, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${GROK_API_KEY}`,
-    },
+    headers: getLLMHeaders(),
     body: JSON.stringify({
       model: GROK_MODEL,
       messages: [

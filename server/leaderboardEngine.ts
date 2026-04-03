@@ -438,10 +438,9 @@ Return JSON: {"t1": "...", "t2": "...", "t3": "..."}`;
 
         const grokResp = await fetch(LLM_BASE_URL, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
+          headers: getLLMHeaders(),
           body: JSON.stringify({
             model: getModel("leaderboard"),
-            response_format: { type: "json_object" },
             messages: [{ role: "user", content: prompt }],
             max_tokens: 600,
             temperature: 0.85,

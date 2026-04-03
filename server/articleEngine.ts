@@ -110,10 +110,7 @@ async function discoverArticle(apiKey: string): Promise<{
     console.log("[ArticleEngine] Trying Grok x_search (Responses API)...");
     const res = await fetch(GROK_RESPONSES_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${grokKey}`,
-      },
+      headers: getLLMHeaders(),
       body: JSON.stringify({
         model: "grok-3-fast",
         stream: false,

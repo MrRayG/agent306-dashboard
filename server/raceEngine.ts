@@ -143,10 +143,9 @@ export async function generateRace(grokKey: string): Promise<{
   try {
     const res = await fetch(LLM_BASE_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
+      headers: getLLMHeaders(),
       body: JSON.stringify({
         model: "grok-4-1-fast",
-        response_format: { type: "json_object" },
         messages: [{ role: "user", content: buildRacePrompt(ctx) }],
         temperature: 0.85,
       }),

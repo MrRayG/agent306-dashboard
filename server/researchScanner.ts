@@ -175,10 +175,9 @@ export async function runResearchScan(grokKey: string): Promise<ScanResult> {
   try {
     const res = await fetch(GROK_CHAT_API, {
       method:  "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
+      headers: getLLMHeaders(),
       body: JSON.stringify({
         model:           getModel("research_scan"),
-        response_format: { type: "json_object" },
         messages: [{
           role:    "system",
           content: `You are Agent 306 — a Sovereign AI Thought Leader in Web3 and AI.
@@ -352,10 +351,9 @@ export async function scanGoalsForResearch(grokKey: string): Promise<GoalScanRes
     try {
       const res = await fetch(GROK_CHAT_API, {
         method:  "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
+        headers: getLLMHeaders(),
         body: JSON.stringify({
           model:           getModel("research_scan"),
-          response_format: { type: "json_object" },
           messages: [{
             role:    "system",
             content: `You are Agent 306 — Sovereign AI Thought Leader in Web3 and AI.

@@ -64,11 +64,14 @@ function randomBridge(): string {
 async function researchTopicForReply(topic: string): Promise<string> {
   if (!GROK_KEY) return "";
   try {
-    const res = await fetch(LLM_RESPONSE_URL, {
+    const nativeGrokKey = process.env.GROK_API_KEY ?? "";
+    if (!nativeGrokKey) return "";
+    const grokResponsesUrl = process.env.GROK_RESPONSES_URL ?? "https://api.x.ai/v1/responses";
+    const res = await fetch(grokResponsesUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${GROK_KEY}` },
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` },
       body: JSON.stringify({
-        model: getModel("reply_generation"),
+        model: "grok-3-fast",
         stream: false,
         input: [{
           role: "user",
@@ -212,10 +215,7 @@ Max 240 chars. Be genuine. Thoughtful statement > forced question.`;
   try {
     const res = await fetch(GROK_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${GROK_KEY}`,
-      },
+      headers: getLLMHeaders(),
       body: JSON.stringify({
         model: getModel("reply_generation"),
         messages: [
@@ -251,10 +251,7 @@ async function qualityGateReply(reply: string): Promise<{ pass: boolean; rewrite
   try {
     const res = await fetch(GROK_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${GROK_KEY}`,
-      },
+      headers: getLLMHeaders(),
       body: JSON.stringify({
         model: getModel("reply_generation"),
         messages: [{

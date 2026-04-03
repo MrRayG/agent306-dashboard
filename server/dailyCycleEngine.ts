@@ -295,13 +295,9 @@ Generate the daily briefing. Respond with JSON only.`;
   try {
     const res = await fetch(GROK_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${GROK_API_KEY}`,
-      },
+      headers: getLLMHeaders(),
       body: JSON.stringify({
         model: getModel("daily_briefing"),
-        response_format: { type: "json_object" },
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user",   content: userPrompt },
@@ -420,7 +416,6 @@ async function autoResolveHypotheses(): Promise<number> {
         },
         body: JSON.stringify({
           model: getModel("hypothesis_resolution"),
-          response_format: { type: "json_object" },
           messages: [
             {
               role: "system",

@@ -107,7 +107,6 @@ async function callLLM(
       headers: getLLMHeaders(),
       body: JSON.stringify({
         model: getModel(task),
-        response_format: { type: "json_object" },
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },

@@ -163,10 +163,9 @@ export async function generateSpotlight(grokKey: string): Promise<{
   try {
     const res = await fetch(LLM_BASE_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
+      headers: getLLMHeaders(),
       body: JSON.stringify({
         model: getModel("spotlight"),
-        response_format: { type: "json_object" },
         messages: [{ role: "user", content: prompt }],
         temperature: 0.8,
       }),

@@ -209,7 +209,6 @@ Generate 3-5 new research threads and any updates to existing threads. Respond w
       headers: getLLMHeaders(),
       body: JSON.stringify({
         model: getModel("research-agenda-generate"),
-        response_format: { type: "json_object" },
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -422,7 +421,6 @@ Research the next gap and advance this thread. Respond with JSON only.`;
       headers: getLLMHeaders(),
       body: JSON.stringify({
         model: getModel("research-agenda-advance"),
-        response_format: { type: "json_object" },
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },

@@ -201,14 +201,14 @@ async function fetchMentionsViaGrok(): Promise<CommunityReply[]> {
   if (!GROK_KEY) return [];
 
   try {
-    const res = await fetch(LLM_RESPONSE_URL, {
+    const nativeGrokKey = process.env.GROK_API_KEY ?? "";
+    if (!nativeGrokKey) return [];
+    const grokResponsesUrl = process.env.GROK_RESPONSES_URL ?? "https://api.x.ai/v1/responses";
+    const res = await fetch(grokResponsesUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${GROK_KEY}`,
-      },
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` },
       body: JSON.stringify({
-        model: getModel("reply_classification"),
+        model: "grok-3-fast",
         stream: false,
         input: [{
           role: "user",
@@ -305,11 +305,14 @@ Return JSON array (max 10):
 async function fetchMrRayGMentions(): Promise<CommunityReply[]> {
   if (!GROK_KEY) return [];
   try {
-    const res = await fetch(LLM_RESPONSE_URL, {
+    const nativeGrokKey = process.env.GROK_API_KEY ?? "";
+    if (!nativeGrokKey) return [];
+    const grokResponsesUrl = process.env.GROK_RESPONSES_URL ?? "https://api.x.ai/v1/responses";
+    const res = await fetch(grokResponsesUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${GROK_KEY}` },
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` },
       body: JSON.stringify({
-        model: getModel("reply_classification"),
+        model: "grok-3-fast",
         stream: false,
         input: [{
           role: "user",

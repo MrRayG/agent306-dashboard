@@ -181,14 +181,13 @@ YOU MUST RETURN EXACTLY THIS JSON — use these exact field names, nothing else:
   try {
     const resp = await fetch(LLM_BASE_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${grokKey}` },
+      headers: getLLMHeaders(),
       body: JSON.stringify({
         model: getModel("cyoa"),
         messages: [
           { role: "system", content: "You are a JSON generator. You ONLY output valid JSON objects. Never use markdown. Never add explanations. Output ONLY the raw JSON object requested, starting with { and ending with }." },
           { role: "user", content: prompt }
         ],
-        response_format: { type: "json_object" },
         max_tokens: 800,
         temperature: 0.9,
       }),
