@@ -606,7 +606,7 @@ function SignalTab({
         onMarkProduced={onMarkProduced}
         onPublish={onPublish}
         toast={toast}
-        onRefetch={refetchAll}
+        onRefetch={onRefetch}
       />
     </div>
   );

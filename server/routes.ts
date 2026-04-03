@@ -2909,10 +2909,26 @@ needsHelp: true only when you genuinely need his direction or information`,
       .catch(e => console.error("[Research] Cycle error:", e.message));
   });
 
-  app.post("/api/research/approve/:id", (req, res) => {
+  app.post("/api/research/approve/:id", async (req, res) => {
     const { id } = req.params;
     const { note } = req.body ?? {};
     const ok = approveForPublication(id, note);
+    // Bridge: approved Agent HQ research -> Research Agenda thread
+    try {
+      const { getResearchLab } = await import("./researchEngine.js");
+      const lab = getResearchLab();
+      const topic = lab?.topics?.find((t: any) => t.id === id);
+      if (topic) {
+        const { createThread } = await import("./research-agenda.js");
+        createThread({
+          title: topic.topic || topic.title || "Approved Research",
+          thesis: topic.hypothesis || topic.researchQuestion || "",
+          status: "active",
+          source: "agent_hq_approved",
+        });
+        console.log(`[Bridge] Agent HQ approval -> Research Agenda thread: "${topic.title}"`);
+      }
+    } catch (e: any) { console.warn("[Bridge] Failed to create agenda thread:", e.message); }
     res.json({ ok });
   });
 

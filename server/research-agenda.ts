@@ -89,6 +89,33 @@ export function getAgenda(): AgendaState { return loadAgenda(); }
 export function getThreadById(id: string): ResearchThread | undefined {
   return loadAgenda().threads.find(t => t.id === id);
 }
+export function createThread(data: {
+  title: string;
+  thesis?: string;
+  status?: string;
+  source?: string;
+}): any {
+  const agenda = loadAgenda();
+  const id = `thread_${Date.now()}`;
+  const thread = {
+    id,
+    title: data.title,
+    thesis: data.thesis || "",
+    status: data.status || "exploring",
+    priority: 5,
+    evidence: { supporting: [], contradicting: [], gaps: [] },
+    advances: [],
+    podcastCandidate: false,
+    createdAt: new Date().toISOString(),
+    lastAdvancedAt: null,
+    source: data.source || "manual",
+  };
+  agenda.threads.push(thread);
+  saveAgenda(agenda);
+  console.log(`[ResearchAgenda] Created thread: "${data.title}" (${data.source || "manual"})`);
+  return thread;
+}
+
 
 export function updateThread(id: string, updates: Partial<ResearchThread>): ResearchThread | null {
   const agenda = loadAgenda();
