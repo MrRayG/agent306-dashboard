@@ -1024,6 +1024,28 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
   // Test X connection
   // ── Token health check — call this to verify posting is working ────────────
+  // Diagnostic: test actual tweet posting
+  app.post("/api/x/test-tweet", requireDashAuth, async (_req, res) => {
+    try {
+      const testText = `[306 SYSTEM] Connection test — ${new Date().toISOString().slice(0, 16)} UTC`;
+      const tweet = await xWrite.v2.tweet({ text: testText });
+      const tweetId = tweet.data?.id;
+      if (tweetId) {
+        res.json({ ok: true, tweetId, url: `https://x.com/agent3zero6/status/${tweetId}`, text: testText });
+      } else {
+        res.json({ ok: false, error: "Tweet sent but no ID returned", raw: JSON.stringify(tweet.data).slice(0, 500) });
+      }
+    } catch (e: any) {
+      res.status(500).json({
+        ok: false,
+        error: e.message,
+        code: e.code,
+        data: e.data ? JSON.stringify(e.data).slice(0, 500) : undefined,
+        hint: "Check X Developer Portal: App permissions must be 'Read and Write'. Free tier allows 17 tweets/24h.",
+      });
+    }
+  });
+
   app.get("/api/x/health", async (_req, res) => {
     try {
       const me = await xWrite.v2.me();
