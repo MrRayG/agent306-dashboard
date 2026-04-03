@@ -188,7 +188,7 @@ async function fetchHuggingFace(): Promise<IntakeItem[]> {
   const items: IntakeItem[] = [];
 
   // Trending models
-  const modelsRes = await safeFetch("https://huggingface.co/api/models?sort=trending&limit=20");
+  const modelsRes = await safeFetch("https://huggingface.co/api/models?sort=likes&direction=-1&limit=20");
   if (modelsRes) {
     try {
       const models = await modelsRes.json() as any[];
@@ -211,7 +211,7 @@ async function fetchHuggingFace(): Promise<IntakeItem[]> {
   }
 
   // Trending spaces
-  const spacesRes = await safeFetch("https://huggingface.co/api/spaces?sort=trending&limit=10");
+  const spacesRes = await safeFetch("https://huggingface.co/api/spaces?sort=likes&direction=-1&limit=10");
   if (spacesRes) {
     try {
       const spaces = await spacesRes.json() as any[];
@@ -344,10 +344,31 @@ async function fetchReddit(): Promise<IntakeItem[]> {
 
   const results = await Promise.allSettled(
     REDDIT_SUBS.map(async (sub) => {
-      const res = await safeFetch(`https://www.reddit.com/r/${sub}/hot.json?limit=15`, {
-        headers: { Accept: "application/json" },
+      // Reddit now blocks JSON API from cloud IPs — use old.reddit.com with explicit JSON accept
+      const res = await safeFetch(`https://old.reddit.com/r/${sub}/hot/.json?limit=15&raw_json=1`, {
+        headers: {
+          "Accept": "application/json",
+          "User-Agent": "Agent306:v1.0 (by /u/agent306bot)",
+        },
       });
-      if (!res) return [];
+      if (!res) {
+        // Fallback: try RSS feed
+        console.warn(`[DataIntake] Reddit JSON failed for r/${sub}, trying RSS...`);
+        try {
+          const rssItems = await rssParser.parseURL(`https://www.reddit.com/r/${sub}/hot/.rss?limit=15`);
+          return (rssItems.items ?? []).map((item: any) => ({
+            id: makeId("reddit", item.title ?? ""),
+            source: "reddit" as const,
+            title: item.title ?? "",
+            summary: (item.contentSnippet ?? item.title ?? "").slice(0, 300),
+            url: item.link ?? "",
+            category: `reddit_${sub.toLowerCase()}`,
+            publishedAt: item.isoDate ?? new Date().toISOString(),
+            relevanceScore: 0,
+            raw: { subreddit: sub },
+          }));
+        } catch { return []; }
+      }
 
       const subItems: IntakeItem[] = [];
       try {
