@@ -1494,11 +1494,78 @@ export function registerRoutes(httpServer: Server, app: Express) {
   });
 
   app.post("/api/race/post", async (_req, res) => {
-    const grokKey = LLM_API_KEY;
-    if (!grokKey) return res.status(500).json({ error: "No Grok key" });
-    const tweetUrl = await postRace(xWrite, grokKey);
-    if (!tweetUrl) return res.status(500).json({ error: "Failed to post race" });
-    res.json({ ok: true, tweetUrl });
+    resetCooldown("race");
+    res.json({ ok: true, message: "AI Roundup triggered — generating and posting in background" });
+    (async () => {
+      try {
+        const agentCtx = getSoulContext();
+        const kbCtx = getOptimizedContext("ai_roundup");
+
+        // Use Grok x_search for latest AI developments
+        let liveData = "";
+        const nativeGrokKey = process.env.GROK_API_KEY ?? "";
+        if (nativeGrokKey) {
+          try {
+            const searchResp = await fetch(process.env.GROK_RESPONSES_URL ?? "https://api.x.ai/v1/responses", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` },
+              body: JSON.stringify({
+                model: "grok-3-fast", stream: false,
+                input: [{ role: "user", content: "What are the 5 biggest AI developments, model releases, and industry moves from the past 7 days? Be specific with names, numbers, dates." }],
+                tools: [{ type: "x_search" }],
+              }),
+              signal: AbortSignal.timeout(30000),
+            });
+            if (searchResp.ok) {
+              const sd = await searchResp.json();
+              const outputMsg = sd.output?.find((o: any) => o.type === "message");
+              liveData = outputMsg?.content?.find((c: any) => c.type === "output_text")?.text ?? "";
+            }
+          } catch (e: any) { console.warn("[AIRoundup] x_search failed:", e.message); }
+        }
+
+        const resp = await fetch(LLM_BASE_URL, {
+          method: "POST",
+          headers: getLLMHeaders(),
+          body: JSON.stringify({
+            model: getModel("ai-roundup"),
+            messages: [
+              { role: "system", content: `${agentCtx}\n\nKNOWLEDGE:\n${kbCtx}\n\nYou are Agent 306 writing a [306 ROUNDUP] — a weekly roundup of the biggest AI developments, model releases, and industry moves.\n\nLIVE DATA FROM THIS WEEK:\n${liveData || "No live data available — use your knowledge base."}\n\nFORMAT:\n- [306 ROUNDUP] header\n- 4-5 items, each with a bold headline + 1-2 sentence take\n- Your POV on each — not just what happened, but why it matters\n- Closing line: one thesis tying it all together\n- Max 2800 characters for X\n- Sign: @agent3zero6\n- NEVER mention Normies, NFTs, burns, holders\n\nReturn JSON: {"post": "full roundup text"}` },
+              { role: "user", content: "Write this week\'s [306 ROUNDUP] covering the biggest AI developments." }
+            ],
+            max_tokens: 3000,
+            temperature: 0.8,
+          }),
+          signal: AbortSignal.timeout(60000),
+        });
+        if (!resp.ok) { console.error("[AIRoundup] LLM failed:", resp.status); return; }
+        const data = await resp.json();
+        const raw = data.choices?.[0]?.message?.content ?? "";
+        let postText = "";
+        try {
+          const jsonMatch = raw.match(/\{[\s\S]*\}/);
+          if (jsonMatch) postText = JSON.parse(jsonMatch[0]).post ?? "";
+        } catch { if (raw.length > 30) postText = raw; }
+        if (!postText || postText.length < 30) { console.error("[AIRoundup] No content generated"); return; }
+
+        // Post to X
+        try {
+          const tweet = await xWrite.v2.tweet({ text: postText.trim() });
+          const tweetId = tweet.data?.id;
+          const tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
+          registerPost("race", tweetUrl, "ai_roundup");
+          console.log("[AIRoundup] Posted to X:", tweetUrl);
+        } catch (e: any) { console.error("[AIRoundup] X post failed:", e.message); }
+
+        // Post to Farcaster
+        try {
+          if (isFarcasterEnabled() && postText.trim().length > 10) {
+            const cast = await postCast({ text: postText.trim().slice(0, 1024), channel: "ai" });
+            if (cast) { registerPost("race", cast.url, "ai_roundup", "farcaster"); }
+          }
+        } catch (e: any) { console.error("[AIRoundup] Farcaster failed:", e.message); }
+      } catch (e: any) { console.error("[AIRoundup] Error:", e.message); }
+    })();
   });
 
   // ── ACADEMY endpoints ──────────────────────────────────────
@@ -1905,16 +1972,54 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
   // One-click trigger: generate + post a Research Brief
   app.post("/api/cyoa/post", async (_req, res) => {
-    const grokKey = LLM_API_KEY;
-    if (!grokKey) return res.status(500).json({ error: "No Grok key" });
     resetCooldown("cyoa");
     res.json({ ok: true, message: "Research Brief triggered — generating and posting in background" });
     (async () => {
       try {
-        const episode = await generateCYOAEpisode({ trigger: "pre_arena" as CYOATrigger, grokKey });
-        if (!episode) { console.error("[CYOA] Generation failed during trigger"); return; }
-        await postCYOAHook(episode.id, xWrite);
-      } catch (e: any) { console.error("[CYOA] Trigger error:", e.message); }
+        const agentCtx = getSoulContext();
+        const kbCtx = getOptimizedContext("research_brief");
+        const resp = await fetch(LLM_BASE_URL, {
+          method: "POST",
+          headers: getLLMHeaders(),
+          body: JSON.stringify({
+            model: getModel("research-brief"),
+            messages: [
+              { role: "system", content: `${agentCtx}\n\nKNOWLEDGE:\n${kbCtx}\n\nYou are Agent 306 writing a [306 RESEARCH] brief. This is a deeper analytical piece on a specific AI or crypto topic you\'ve been investigating. Write from your knowledge base — reference specific findings, data points, and your own analysis. Your voice is direct, substantive, and insightful. Not a news summary — this is YOUR research perspective.\n\nRULES:\n- Write 800-1200 characters for X posting\n- Lead with your thesis, not background\n- Include specific data, names, or numbers\n- End with a forward-looking insight\n- Tag: [306 RESEARCH]\n- Sign: @agent3zero6\n- NEVER mention Normies, NFTs, burns, holders, or any old identity\n\nReturn JSON: {"post": "your full research brief text", "topic": "2-4 word topic label"}` },
+              { role: "user", content: "Write a [306 RESEARCH] brief on the most important topic from your current knowledge base. Pick something timely and substantive." }
+            ],
+            max_tokens: 2000,
+            temperature: 0.8,
+          }),
+          signal: AbortSignal.timeout(60000),
+        });
+        if (!resp.ok) { console.error("[ResearchBrief] LLM failed:", resp.status); return; }
+        const data = await resp.json();
+        const raw = data.choices?.[0]?.message?.content ?? "";
+        let postText = "";
+        try {
+          const jsonMatch = raw.match(/\{[\s\S]*\}/);
+          if (jsonMatch) postText = JSON.parse(jsonMatch[0]).post ?? "";
+        } catch { if (raw.length > 30) postText = raw; }
+        if (!postText || postText.length < 30) { console.error("[ResearchBrief] No content generated"); return; }
+
+        // Post to X
+        let tweetUrl = null;
+        try {
+          const tweet = await xWrite.v2.tweet({ text: postText.trim() });
+          const tweetId = tweet.data?.id;
+          tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
+          registerPost("cyoa", tweetUrl, "research_brief");
+          console.log("[ResearchBrief] Posted to X:", tweetUrl);
+        } catch (e: any) { console.error("[ResearchBrief] X post failed:", e.message); }
+
+        // Post to Farcaster
+        try {
+          if (isFarcasterEnabled() && postText.trim().length > 10) {
+            const cast = await postCast({ text: postText.trim().slice(0, 1024), channel: "ai" });
+            if (cast) { registerPost("cyoa", cast.url, "research_brief", "farcaster"); }
+          }
+        } catch (e: any) { console.error("[ResearchBrief] Farcaster failed:", e.message); }
+      } catch (e: any) { console.error("[ResearchBrief] Error:", e.message); }
     })();
   });
 

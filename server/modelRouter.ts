@@ -42,6 +42,8 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "exploration": "standard",
   "signal-collection": "standard",
   "news-dispatch": "standard",
+  "research-brief": "premium",
+  "ai-roundup": "standard",
   "signal_brief": "standard",
   "reply-generation": "standard",
   "community-boost": "standard",
