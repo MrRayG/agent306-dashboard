@@ -517,43 +517,36 @@ export default function AutoPilot() {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: "1.5rem" }}>
 
-        {/* Live burn feed */}
+        {/* X (@agent3zero6) Status */}
         <div style={card}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: "1rem" }}>
-            <Flame style={{ width: 13, height: 13, color: "#f97316" }} />
+            <Twitter style={{ width: 13, height: 13, color: "#f97316" }} />
             <span style={{ ...mono, fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.14em", color: "#f97316" }}>
-              Live Burn Feed
+              X · @agent3zero6
             </span>
-            <span style={{ ...mono, fontSize: "0.76rem", color: "rgba(227,229,228,0.48)", marginLeft: "auto" }}>on-chain</span>
+            <span style={{ ...mono, fontSize: "0.76rem", color: "rgba(74,222,128,0.7)", marginLeft: "auto" }}>connected</span>
           </div>
-          {recentBurns.length === 0 ? (
-            <p style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.48)" }}>Fetching burn history...</p>
-          ) : (
-            recentBurns.map((burn: any, i: number) => {
-              let pixelTotal = 0;
-              try { pixelTotal = JSON.parse(burn.pixelCounts ?? "[]").reduce((s: number, n: number) => s + n, 0); } catch {}
-              const ts = burn.timestamp ? new Date(Number(burn.timestamp) * 1000) : null;
-              return (
-                <div key={burn.commitId ?? i} style={{
-                  borderBottom: i < recentBurns.length - 1 ? "1px solid rgba(227,229,228,0.12)" : "none",
-                  paddingBottom: 8, marginBottom: 8,
-                  display: "flex", justifyContent: "space-between", alignItems: "flex-start",
-                }}>
-                  <div>
-                    <span style={{ ...mono, fontSize: "0.90rem", color: "#f97316" }}>
-                      #{burn.receiverTokenId}
-                    </span>
-                    <span style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.68)", marginLeft: 8 }}>
-                      +{burn.tokenCount} soul{burn.tokenCount > 1 ? "s" : ""} · {pixelTotal.toLocaleString()}px
-                    </span>
-                  </div>
-                  <span style={{ ...mono, fontSize: "0.76rem", color: "rgba(227,229,228,0.48)" }}>
-                    {ts ? timeAgo(ts.toISOString()) : `#${burn.commitId}`}
-                  </span>
-                </div>
-              );
-            })
-          )}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.68)" }}>Signal Brief</span>
+              <span style={{ ...mono, fontSize: "0.76rem", color: "#4ade80" }}>Auto · Daily</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.68)" }}>News Dispatch</span>
+              <span style={{ ...mono, fontSize: "0.76rem", color: "#4ade80" }}>Auto · Daily 8am</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.68)" }}>Deep Read Article</span>
+              <span style={{ ...mono, fontSize: "0.76rem", color: "#4ade80" }}>Auto · Weekly Mon</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.68)" }}>Reply Engine</span>
+              <span style={{ ...mono, fontSize: "0.76rem", color: "#4ade80" }}>Auto · Hourly</span>
+            </div>
+          </div>
+          <p style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.35)", marginTop: 12, lineHeight: 1.5 }}>
+            All content auto-posts to X via OAuth 1.0a. Manage content types in Command Center.
+          </p>
         </div>
 
         {/* Community Pulse */}
@@ -575,7 +568,7 @@ export default function AutoPilot() {
               const rawData = (() => { try { return JSON.parse(sig.rawData ?? "{}"); } catch { return {}; } })();
               const signalType = rawData.signal_type;
               const signalColors: Record<string, { bg: string; color: string; emoji: string }> = {
-                founder:    { bg: "rgba(227,229,228,0.22)",  color: "#efefef", emoji: "🌙" },
+                ai_leader:  { bg: "rgba(227,229,228,0.22)",  color: "#efefef", emoji: "🤖" },
                 pfp_holder: { bg: "rgba(249,115,22,0.20)",   color: "#f97316", emoji: "👑" },
                 awakening:  { bg: "rgba(167,139,250,0.18)",  color: "#a78bfa", emoji: "✨" },
                 hype:       { bg: "rgba(249,115,22,0.15)",   color: "#f97316", emoji: "🔥" },
@@ -583,8 +576,8 @@ export default function AutoPilot() {
                 ugc:        { bg: "rgba(167,139,250,0.15)",  color: "#a78bfa", emoji: "🔮" },
                 strength:   { bg: "rgba(74,222,128,0.15)",   color: "#4ade80", emoji: "💪" },
                 community:  { bg: "rgba(45,212,191,0.15)",   color: "#2dd4bf", emoji: "🤝" },
-                burn:       { bg: "rgba(249,115,22,0.15)",   color: "#f97316", emoji: "🔥" },
-                canvas_edit:{ bg: "rgba(167,139,250,0.12)",  color: "#a78bfa", emoji: "🎨" },
+                market:     { bg: "rgba(249,115,22,0.15)",   color: "#f97316", emoji: "📊" },
+                research:   { bg: "rgba(167,139,250,0.12)",  color: "#a78bfa", emoji: "🔬" },
               };
               const sc = signalColors[signalType ?? sig.type] ?? signalColors.community;
               return (
@@ -721,7 +714,7 @@ export default function AutoPilot() {
           <div>
             <p style={{ ...label, marginBottom: 2 }}>📡 Live Community Signals</p>
             <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.55)" }}>
-              Scans X every 30min for community posts, burn stories, founder posts — feeds directly into episode narrative
+              Scans X every 30min for AI news, tech signals, community engagement — feeds into content pipeline
             </p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -730,15 +723,15 @@ export default function AutoPilot() {
             </div>
             {status?.communitySignals && (
               <div style={{ fontFamily: "'Courier New'", fontSize: "0.78rem", color: "rgba(227,229,228,0.68)", background: "rgba(227,229,228,0.08)", border: "1px solid rgba(227,229,228,0.18)", padding: "3px 10px" }}>
-                {status.communitySignals.count} signals · {status.communitySignals.founderPosts} founder
+                {status.communitySignals.count} signals
               </div>
             )}
           </div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
           {[
-            { step: "01", title: "Founder Posts", desc: "Tracked accounts — always highest priority, shape the episode canon" },
-            { step: "02", title: "Burn Stories", desc: "Holders sharing their sacrifices, what they're building, why they burned" },
+            { step: "01", title: "AI Leaders", desc: "Tracked accounts (OpenAI, Anthropic, xAI, etc.) — highest priority signals" },
+            { step: "02", title: "Tech Signals", desc: "Model releases, API changes, funding rounds, policy shifts — real-time intel" },
             { step: "03", title: "Community Hype", desc: "Community energy — who's active, who's building, who's engaged" },
             { step: "04", title: "PFP Holders", desc: "Accounts spotted posting — active community members get named" },
           ].map(({ step, title, desc }) => (
@@ -799,127 +792,5 @@ export default function AutoPilot() {
         </div>
       </div>
 
-      {/* Burn Receipt Engine */}
-      <div style={{ ...card, marginTop: 16, background: "rgba(249,115,22,0.04)", borderColor: "rgba(249,115,22,0.2)" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.85rem" }}>
-          <div>
-            <p style={{ ...label, marginBottom: 2 }}>🔥 Burn Receipt Engine</p>
-            <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.55)" }}>
-              Real-time · every burn detected within 90s → personalized card + Agent 306 narrative → auto-post
-            </p>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{
-              fontFamily: "'Courier New'", fontSize: "0.78rem",
-              color: "#f97316", background: "rgba(249,115,22,0.1)",
-              border: "1px solid rgba(249,115,22,0.3)", padding: "3px 10px",
-            }}>
-              Real-time · 90s
-            </div>
-            <button
-              onClick={async () => {
-                try {
-                  const r = await apiRequest("POST", "/api/burns/test-receipt", { tokenId: 8553 });
-                  const d = await r.json();
-                  toast({ title: d.message || "Test receipt triggered for #8553" });
-                } catch { toast({ title: "Error triggering test receipt", variant: "destructive" }); }
-              }}
-              style={{
-                fontFamily: "'Courier New'", fontSize: "0.78rem",
-                textTransform: "uppercase", letterSpacing: "0.1em",
-                color: "#f97316", background: "transparent",
-                border: "1px solid rgba(249,115,22,0.3)", padding: "3px 10px", cursor: "pointer",
-              }}
-            >
-              Test Receipt
-            </button>
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
-          {[
-            { step: "01", title: "Burn Detected", desc: "Polls every 90s — catches burns within 1.5 min of on-chain confirmation" },
-            { step: "02", title: "Narrative", desc: "Agent 306 writes a personalized receipt story — scale-aware: small/major/legendary" },
-            { step: "03", title: "Image Card", desc: "Burned token → arrow → receiver token + stats. 1200x675 card" },
-            { step: "04", title: "Auto-Post", desc: "Tweet with image posted instantly. Holder gets public recognition on-chain" },
-          ].map(({ step, title, desc }) => (
-            <div key={step}>
-              <span style={{ ...mono, fontSize: "0.76rem", color: "#f97316" }}>{step}</span>
-              <p style={{ ...mono, fontSize: "0.90rem", color: "#efefef", margin: "2px 0" }}>{title}</p>
-              <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", lineHeight: 1.4 }}>{desc}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Weekly Leaderboard */}
-      <div style={{ ...card, marginTop: 12, background: "rgba(74,222,128,0.03)", borderColor: "rgba(74,222,128,0.15)" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.85rem" }}>
-          <div>
-            <p style={{ ...label, marginBottom: 2 }}>🏆 Weekly Leaderboard</p>
-            <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.55)" }}>
-              Every Monday 9am ET → ranked card with AP, level, movers → auto-post
-            </p>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{
-              fontFamily: "'Courier New'", fontSize: "0.78rem",
-              color: "#4ade80", background: "rgba(74,222,128,0.1)",
-              border: "1px solid rgba(74,222,128,0.25)", padding: "3px 10px",
-            }}>
-              Mon · 9am ET
-            </div>
-            <button
-              onClick={async () => {
-                try {
-                  const r = await apiRequest("POST", "/api/leaderboard/post");
-                  const d = await r.json();
-                  toast({ title: d.message || "Leaderboard post triggered" });
-                } catch { toast({ title: "Error triggering leaderboard", variant: "destructive" }); }
-              }}
-              style={{
-                fontFamily: "'Courier New'", fontSize: "0.78rem",
-                textTransform: "uppercase", letterSpacing: "0.1em",
-                color: "#4ade80", background: "transparent",
-                border: "1px solid rgba(74,222,128,0.3)", padding: "3px 10px", cursor: "pointer",
-              }}
-            >
-              Post Now
-            </button>
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-          {[
-            { step: "01", title: "Live Rankings", desc: "Fetches AP + Level for 40+ tracked tokens from on-chain data" },
-            { step: "02", title: "Movement", desc: "Compares vs. last week — who rose, who fell, who's new to the leaderboard" },
-            { step: "03", title: "Leaderboard Card", desc: "1200×900 card with top 12, power bars, rank change arrows, pixel avatars" },
-          ].map(({ step, title, desc }) => (
-            <div key={step}>
-              <span style={{ ...mono, fontSize: "0.76rem", color: "#4ade80" }}>{step}</span>
-              <p style={{ ...mono, fontSize: "0.90rem", color: "#efefef", margin: "2px 0" }}>{title}</p>
-              <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", lineHeight: 1.4 }}>{desc}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* How it works */}
-      <div style={{ ...card, marginTop: 12, background: "rgba(249,115,22,0.03)", borderColor: "rgba(249,115,22,0.12)" }}>
-        <p style={{ ...label, marginBottom: "0.75rem" }}>Episode Pipeline · Every 6 Hours</p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
-          {[
-            { step: "01", title: "Community Pulse", desc: "X scanned for hype, creativity, UGC — positive energy only" },
-            { step: "02", title: "Chain Data", desc: "Burns, pixels, AP leaders pulled live from Ethereum" },
-            { step: "03", title: "Story", desc: "Agent 306 weaves community energy + on-chain truth into the episode" },
-            { step: "04", title: "Post", desc: "Tweet + image auto-posted every 6h" },
-          ].map(({ step, title, desc }) => (
-            <div key={step}>
-              <span style={{ ...mono, fontSize: "0.76rem", color: "#f97316" }}>{step}</span>
-              <p style={{ ...mono, fontSize: "0.90rem", color: "#efefef", margin: "2px 0" }}>{title}</p>
-              <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", lineHeight: 1.4 }}>{desc}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
   );
 }
