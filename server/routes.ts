@@ -3319,11 +3319,26 @@ needsHelp: true only when you genuinely need his direction or information`,
   app.post("/api/knowledge/connections/find", requireDashAuth, async (req, res) => {
     try {
       const { entry } = req.body as { entry?: { id: string; title: string; summary: string; category: string } };
-      if (!entry?.id || !entry?.title) {
-        return res.status(400).json({ error: "entry with id, title, summary, category required" });
+      if (entry?.id && entry?.title) {
+        // Scan connections for a specific entry
+        const connections = await findGraphConnections(entry, "manual");
+        res.json({ connections, count: connections.length });
+      } else {
+        // No specific entry — scan a sample of recent knowledge entries for connections
+        const memState = getMemoryState();
+        const entries = memState?.knowledge?.entries ?? [];
+        const sample = entries.slice(-20); // Last 20 entries
+        let totalConnections: any[] = [];
+        for (const e of sample) {
+          if (e.id && e.title) {
+            try {
+              const conns = await findGraphConnections(e, "auto");
+              totalConnections.push(...conns);
+            } catch { /* skip failed entries */ }
+          }
+        }
+        res.json({ connections: totalConnections, count: totalConnections.length });
       }
-      const connections = await findGraphConnections(entry, "manual");
-      res.json({ connections, count: connections.length });
     } catch (e: any) {
       res.status(500).json({ error: "Connection finding failed: " + e.message });
     }

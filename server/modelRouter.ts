@@ -15,7 +15,7 @@ export type TaskComplexity = "routine" | "standard" | "premium";
 
 const MODEL_MAP: Record<TaskComplexity, string> = {
   routine:  process.env.MODEL_ROUTINE  ?? "google/gemini-2.5-flash-preview",
-  standard: process.env.MODEL_STANDARD ?? "x-ai/grok-3-fast",
+  standard: process.env.MODEL_STANDARD ?? "x-ai/grok-3",
   premium:  process.env.MODEL_PREMIUM  ?? "anthropic/claude-sonnet-4.6",
 };
 
