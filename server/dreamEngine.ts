@@ -534,11 +534,17 @@ export function getGrowthTimeline(): GrowthSnapshot[] {
 // ── Self-Improvement Plan ─────────────────────────────────────────────────────
 
 export async function generateSelfImprovementPlan(): Promise<ImprovementPlan | null> {
+  // Auto-take a snapshot if none exist yet
+  if (growthState.snapshots.length === 0) {
+    console.log("[DreamEngine] No snapshots yet — auto-taking first growth snapshot");
+    await takeGrowthSnapshot();
+  }
+
   const last7Snapshots = growthState.snapshots.slice(0, 7);
   const recentReflections = reflectionsState.reflections.slice(0, 10);
 
   if (last7Snapshots.length === 0) {
-    console.warn("[DreamEngine] No growth snapshots — cannot generate improvement plan");
+    console.warn("[DreamEngine] Snapshot failed — cannot generate improvement plan");
     return null;
   }
 

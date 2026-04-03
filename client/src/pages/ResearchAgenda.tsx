@@ -82,11 +82,22 @@ function countByStatus(threads: ResearchThread[], status: string) {
   return threads.filter(t => t.status === status).length;
 }
 
-function evidenceSummary(evidence: Evidence[]) {
-  const supporting = evidence.filter(e => e.type === "supporting").length;
-  const contradicting = evidence.filter(e => e.type === "contradicting").length;
-  const gaps = evidence.filter(e => e.type === "gap").length;
-  return { supporting, contradicting, gaps };
+function evidenceSummary(evidence: Evidence[] | Record<string, any[]> | undefined | null) {
+  if (!evidence) return { supporting: 0, contradicting: 0, gaps: 0 };
+  // Handle both array format and object format { supporting: [], contradicting: [], gaps: [] }
+  if (Array.isArray(evidence)) {
+    const supporting = evidence.filter(e => e.type === "supporting").length;
+    const contradicting = evidence.filter(e => e.type === "contradicting").length;
+    const gaps = evidence.filter(e => e.type === "gap").length;
+    return { supporting, contradicting, gaps };
+  }
+  // Object format from the API
+  const ev = evidence as Record<string, any[]>;
+  return {
+    supporting: Array.isArray(ev.supporting) ? ev.supporting.length : 0,
+    contradicting: Array.isArray(ev.contradicting) ? ev.contradicting.length : 0,
+    gaps: Array.isArray(ev.gaps) ? ev.gaps.length : 0,
+  };
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
