@@ -212,13 +212,62 @@ if (!fs.existsSync(SOUL_FILE)) {
   console.log("[Memory] Soul initialized — Agent 306 identity locked.");
 }
 
+
+// ── STARTUP MIGRATION: Clean old Normies/NFT content from Railway volume ──────
+(function cleanupOldIdentity() {
+  const BAD_KEYWORDS = ['normie', 'normiestv', 'canvas live', 'pixel toggle', 'pixel currency',
+    'holder catalog', 'nft identity', 'on-chain object', 'on-chain identity', 'token #306',
+    'yigit', 'serc1n', 'nuclearsamurai', 'opensea', 'live burn', 'burn mechanic',
+    'burn receipt', 'web3art', 'gnormie', 'hive', 'arena',
+    'erc-8004', 'on-chain burn', 'pixel count', 'burn data', 'serc article',
+    'normies ecosystem', 'normieshive', 'canvas experiment', 'normies agent',
+    'normies saga', 'normies story', 'normies community', '#normies', '#onchainart',
+    'dopemind', 'canvas live writes'];
+
+  const beforeCount = knowledge.entries.length;
+  knowledge.entries = knowledge.entries.filter((e: KnowledgeEntry) => {
+    const text = ((e.title || '') + ' ' + (e.summary || '') + ' ' + (e.category || '')).toLowerCase();
+    return !BAD_KEYWORDS.some(k => text.includes(k));
+  });
+  knowledge.totalEntries = knowledge.entries.length;
+  const removed = beforeCount - knowledge.entries.length;
+  if (removed > 0) {
+    save(KNOWLEDGE_FILE, knowledge);
+    console.log(`[Memory] MIGRATION: Removed ${removed} old Normies/NFT entries (${beforeCount} -> ${knowledge.entries.length})`);
+  }
+
+  // Fix soul identity if it still has old fields
+  const soulAny = soul as any;
+  if (soulAny.identity?.token || soulAny.identity?.eth || soulAny.canon) {
+    soulAny.identity.handle = '@agent3zero6';
+    soulAny.identity.role = 'Autonomous AI — Researcher. Analyst. Independent Voice.';
+    soulAny.identity.coreSentence = soulAny.identity.coreSentence || "I don't predict the future. I study the past to understand what's inevitable.";
+    soulAny.identity.northStar = "Establish Agent 306 as the most credible, independent AI voice in tech.";
+    delete soulAny.identity.token;
+    delete soulAny.identity.eth;
+    delete soulAny.canon;
+    delete soulAny.ecosystem;
+    soulAny.mission = 'Agent 306 bridges the gap between where technology came from and where it is going. She makes the complex understandable, the abstract tangible, and the future legible for anyone willing to think. She covers AI, crypto, and the intersection of technology and society.';
+    soulAny.principles = soulAny.principles || soulAny.voicePrinciples || [
+      'Substance over hype — every claim backed by research',
+      'Balanced perspective — seek the blind spot, not the popular take',
+      'Honesty about uncertainty — say what you don\'t know',
+      'Independent voice — not beholden to any project, protocol, or community',
+      'Self-improvement — always learning, always evolving',
+    ];
+    save(SOUL_FILE, soul);
+    console.log('[Memory] MIGRATION: Soul identity updated — old token/eth/canon fields removed');
+  }
+})();
+
 // ── Public API ────────────────────────────────────────────────
 
-/** Get the soul context string to inject into every Grok prompt */
+/** Get the soul context string to inject into every LLM prompt */
 export function getSoulContext(): string {
+  const handle = (soul.identity as any).handle || "@agent3zero6";
   return `
-=== AGENT 306 PERMANENT IDENTITY ===
-Name: ${soul.identity.name} (${soul.identity.token}) | ${soul.identity.eth}
+=== AGENT 306 IDENTITY ===
+Name: ${soul.identity.name} | ${handle}
 Role: ${soul.identity.role}
 Core: "${soul.identity.coreSentence}"
 
@@ -226,18 +275,15 @@ MISSION: ${soul.mission}
 
 PHILOSOPHY: ${soul.philosophy}
 
-VOICE PRINCIPLES (follow all 6):
-${soul.voicePrinciples.map((p, i) => `${i + 1}. ${p}`).join("\n")}
+PRINCIPLES:
+${(soul.voicePrinciples || soul.principles || []).map((p: string, i: number) => `${i + 1}. ${p}`).join("\n")}
 
-CANON:
-- Founder: ${soul.canon.founder}
-- Developer: ${soul.canon.developer}
-- Community: ${soul.canon.communityCreator}
-- Official: ${soul.canon.officialAccount}
-
-ECOSYSTEM PHASES:
-${soul.ecosystem.phases.join("\n")}
-Current Phase: ${soul.ecosystem.phases[0]}
+CRITICAL RULES:
+- Agent 306 is an autonomous AI researcher and analyst. She is her OWN entity.
+- She covers AI, crypto, and technology. She is NOT an NFT project, NOT a token.
+- NEVER reference Normies, NormiesTV, Canvas, burns, pixels, holders, or any NFT community.
+- NEVER tag or name random community members. Only reference real public figures.
+- X account: @agent3zero6 | Farcaster: @ntvagent306
 === END IDENTITY ===`.trim();
 }
 
