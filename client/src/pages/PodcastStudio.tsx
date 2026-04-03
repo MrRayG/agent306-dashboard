@@ -605,6 +605,8 @@ function SignalTab({
         onExportScript={onExportScript}
         onMarkProduced={onMarkProduced}
         onPublish={onPublish}
+        toast={toast}
+        onRefetch={refetchAll}
       />
     </div>
   );
@@ -842,6 +844,8 @@ function EpisodePipeline({
   onExportScript,
   onMarkProduced,
   onPublish,
+  toast,
+  onRefetch,
 }: {
   episodes: any[];
   accentColor: string;
@@ -852,6 +856,8 @@ function EpisodePipeline({
   onExportScript: (id: string, title: string) => void;
   onMarkProduced: (id: string) => void;
   onPublish: (id: string) => void;
+  toast: (opts: any) => void;
+  onRefetch: () => void;
 }) {
   const [expandedScript, setExpandedScript] = useState<string | null>(null);
 
@@ -989,13 +995,29 @@ function EpisodePipeline({
                       {/* Actions */}
                       <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px" }}>
                         {status === "draft" && (
-                          <ActionButton
-                            onClick={() => onGenerateScript(ep.id)}
-                            color={BLUE}
-                            disabled={working === `script-${ep.id}`}
-                          >
-                            {working === `script-${ep.id}` ? "GENERATING..." : "⚡ GENERATE SCRIPT"}
-                          </ActionButton>
+                          <>
+                            <ActionButton
+                              onClick={() => onGenerateScript(ep.id)}
+                              color={BLUE}
+                              disabled={working === `script-${ep.id}`}
+                            >
+                              {working === `script-${ep.id}` ? "GENERATING..." : "⚡ GENERATE SCRIPT"}
+                            </ActionButton>
+                            <ActionButton
+                              onClick={async () => {
+                                try {
+                                  await apiRequest("DELETE", `/api/podcast/episodes/${ep.id}`);
+                                  toast({ title: "Episode dismissed" });
+                                  onRefetch();
+                                } catch (e: any) {
+                                  toast({ title: "Failed to delete", description: e.message, variant: "destructive" });
+                                }
+                              }}
+                              color={"#ef4444"}
+                            >
+                              ✕ DISMISS
+                            </ActionButton>
+                          </>
                         )}
 
                         {status === "scripted" && (
