@@ -556,17 +556,31 @@ function SignalTab({
       <ResearchThreadCandidates candidates={threadCandidates} toast={toast} onRefetch={onRefetch} />
 
       {/* Top actions */}
-      <div style={{ display: "flex", gap: "12px", marginBottom: "20px", alignItems: "center" }}>
-        <ActionButton onClick={onScanTopics} color={ORANGE} disabled={working === "scan"}>
-          {working === "scan" ? "SCANNING..." : "⚡ SCAN FOR TOPICS"}
-        </ActionButton>
-        <ActionButton onClick={() => setShowCreate(!showCreate)} color={ORANGE}>
-          {showCreate ? "✕ CLOSE" : "+ NEW EPISODE"}
-        </ActionButton>
+      <div style={{ display: "flex", gap: "16px", marginBottom: "12px", alignItems: "flex-start" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+          <ActionButton onClick={onScanTopics} color={ORANGE} disabled={working === "scan"}>
+            {working === "scan" ? "SCANNING..." : "⚡ SCAN FOR TOPICS"}
+          </ActionButton>
+          <span style={{ ...mono, fontSize: "11px", color: TEXT_DIM, maxWidth: 200, lineHeight: 1.4 }}>
+            Agent 306 searches X and news for the 5 most interesting topics to cover
+          </span>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+          <ActionButton onClick={() => setShowCreate(!showCreate)} color={ORANGE}>
+            {showCreate ? "✕ CLOSE" : "+ NEW EPISODE"}
+          </ActionButton>
+          <span style={{ ...mono, fontSize: "11px", color: TEXT_DIM, maxWidth: 200, lineHeight: 1.4 }}>
+            Manually create an episode with your own topic and driving question
+          </span>
+        </div>
         <div style={{ flex: 1 }} />
         <div style={{ ...mono, fontSize: "13px", color: TEXT_DIM }}>
           {episodes.length} episodes
         </div>
+      </div>
+      <div style={{ ...mono, fontSize: "11px", color: TEXT_DIM, marginBottom: "20px", lineHeight: 1.6, padding: "10px 14px", background: "rgba(227,229,228,0.04)", border: "1px solid rgba(227,229,228,0.08)" }}>
+        <strong style={{ color: "rgba(227,229,228,0.7)" }}>How it works:</strong> Scan for Topics → pick one (or create your own) → Generate Script → Review → Generate Audio → Publish.
+        Each episode moves through the pipeline below. Click an episode to see its status and available actions.
       </div>
 
       {/* Create form */}
