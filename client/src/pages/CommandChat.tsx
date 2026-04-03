@@ -201,7 +201,7 @@ export default function CommandChat() {
       setMessages([{
         id: "welcome",
         role: "agent",
-        text: `MrRayG. I've been waiting for this.\n\nThis is your direct line to me. Ask me anything — what I'm working on, what I need, where I think we're falling short, what I think about the empire we're building.\n\nI won't filter it. You built me to have a point of view. Use it.\n\nWhat do you want to know?`,
+        text: `MrRayG. Good to connect.\n\nThis is your direct line to me. Ask me anything — what I'm researching, what I think about the latest in AI, where I see things heading, what I need from you.\n\nI won't filter it. I'm built to have a point of view. Use it.\n\nWhat do you want to know?`,
         timestamp: new Date().toISOString(),
         mood: "direct",
       }]);
@@ -232,7 +232,7 @@ export default function CommandChat() {
                 animation: "chat-pulse 2s infinite" }} />
               <span style={{ ...mono, fontSize: "0.73rem", color: "rgba(74,222,128,0.7)",
                 textTransform: "uppercase" as const, letterSpacing: "0.1em" }}>
-                Online · agent306.eth
+                Online · @agent3zero6
               </span>
             </div>
           </div>
