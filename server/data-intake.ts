@@ -336,71 +336,52 @@ async function fetchGitHubTrending(): Promise<IntakeItem[]> {
 
 // ── Source: Reddit ───────────────────────────────────────────────────────────
 
-const REDDIT_SUBS = ["MachineLearning", "artificial", "LocalLLaMA"];
+// Reddit blocks JSON API from cloud IPs — replaced with Hacker News
+const HN_QUERIES = ["AI", "LLM", "machine learning"];
 
 async function fetchReddit(): Promise<IntakeItem[]> {
-  console.log("[DataIntake] Fetching Reddit AI subs...");
+  // Reddit blocks JSON/RSS API from cloud servers — using Hacker News instead
+  console.log("[DataIntake] Fetching Hacker News AI stories...");
   const items: IntakeItem[] = [];
+  const seen = new Set<string>();
 
   const results = await Promise.allSettled(
-    REDDIT_SUBS.map(async (sub) => {
-      // Reddit now blocks JSON API from cloud IPs — use old.reddit.com with explicit JSON accept
-      const res = await safeFetch(`https://old.reddit.com/r/${sub}/hot/.json?limit=15&raw_json=1`, {
-        headers: {
-          "Accept": "application/json",
-          "User-Agent": "Agent306:v1.0 (by /u/agent306bot)",
-        },
-      });
-      if (!res) {
-        // Fallback: try RSS feed
-        console.warn(`[DataIntake] Reddit JSON failed for r/${sub}, trying RSS...`);
-        try {
-          const rssItems = await rssParser.parseURL(`https://www.reddit.com/r/${sub}/hot/.rss?limit=15`);
-          return (rssItems.items ?? []).map((item: any) => ({
-            id: makeId("reddit", item.title ?? ""),
-            source: "reddit" as const,
-            title: item.title ?? "",
-            summary: (item.contentSnippet ?? item.title ?? "").slice(0, 300),
-            url: item.link ?? "",
-            category: `reddit_${sub.toLowerCase()}`,
-            publishedAt: item.isoDate ?? new Date().toISOString(),
-            relevanceScore: 0,
-            raw: { subreddit: sub },
-          }));
-        } catch { return []; }
-      }
+    HN_QUERIES.map(async (query) => {
+      const res = await safeFetch(
+        `https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(query)}&tags=story&hitsPerPage=15&numericFilters=points>20`
+      );
+      if (!res) return [];
 
-      const subItems: IntakeItem[] = [];
+      const queryItems: IntakeItem[] = [];
       try {
         const data = await res.json() as any;
-        for (const child of (data?.data?.children ?? []).slice(0, 15)) {
-          const post = child.data;
-          if (!post || post.stickied) continue;
+        for (const hit of (data?.hits ?? [])) {
+          const title = hit.title ?? "";
+          if (!title || seen.has(title)) continue;
+          seen.add(title);
           const item: IntakeItem = {
-            id: makeId("reddit", post.title ?? post.id ?? ""),
-            source: "reddit",
-            title: post.title ?? "",
-            summary: ((post.selftext ?? "").replace(/\n/g, " ").slice(0, 300)) || (post.title ?? ""),
-            url: `https://reddit.com${post.permalink}`,
-            category: `reddit_${sub.toLowerCase()}`,
-            publishedAt: new Date((post.created_utc ?? 0) * 1000).toISOString(),
+            id: makeId("hackernews", hit.objectID ?? title),
+            source: "hackernews" as any,
+            title,
+            summary: (hit.story_text ?? hit.comment_text ?? title).replace(/<[^>]+>/g, " ").slice(0, 300),
+            url: hit.url ?? `https://news.ycombinator.com/item?id=${hit.objectID}`,
+            category: `hn_${query.toLowerCase().replace(/\s+/g, "_")}`,
+            publishedAt: hit.created_at ?? new Date().toISOString(),
             relevanceScore: 0,
             raw: {
-              subreddit: sub,
-              score: post.score,
-              num_comments: post.num_comments,
-              upvote_ratio: post.upvote_ratio,
-              author: post.author,
+              points: hit.points,
+              num_comments: hit.num_comments,
+              author: hit.author,
+              hn_url: `https://news.ycombinator.com/item?id=${hit.objectID}`,
             },
           };
           item.relevanceScore = scoreRelevance(item);
-          // Boost high-upvote posts
-          if (post.score > 100) item.relevanceScore = Math.min(1, item.relevanceScore + 0.1);
-          if (post.score > 500) item.relevanceScore = Math.min(1, item.relevanceScore + 0.1);
-          subItems.push(item);
+          if (hit.points > 100) item.relevanceScore = Math.min(1, item.relevanceScore + 0.1);
+          if (hit.points > 500) item.relevanceScore = Math.min(1, item.relevanceScore + 0.15);
+          queryItems.push(item);
         }
       } catch {}
-      return subItems;
+      return queryItems;
     })
   );
 
@@ -408,7 +389,7 @@ async function fetchReddit(): Promise<IntakeItem[]> {
     if (r.status === "fulfilled") items.push(...r.value);
   }
 
-  console.log(`[DataIntake] Reddit: ${items.length} posts`);
+  console.log(`[DataIntake] Hacker News: ${items.length} stories`);
   return items;
 }
 
