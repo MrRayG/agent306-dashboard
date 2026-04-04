@@ -4,6 +4,7 @@ import cors from "cors";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { syncEmbeddings } from "./embeddingEngine.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -111,6 +112,11 @@ app.use((req, res, next) => {
     },
     () => {
       log(`serving on port ${port}`);
+
+      // ASI-Evolve: sync embeddings on startup (non-blocking)
+      syncEmbeddings()
+        .then(r => console.log(`[Embeddings] Synced: ${r.synced} new, ${r.cached} cached`))
+        .catch(e => console.warn("[Embeddings] Sync failed:", e.message));
     },
   );
 })();

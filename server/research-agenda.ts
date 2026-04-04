@@ -21,9 +21,11 @@ import { LLM_BASE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { getModel } from "./modelRouter.js";
 import { getKnowledgeDigestForExploration, addKnowledge } from "./memoryEngine.js";
 import { getOptimizedContext } from "./contextWindow.js";
+import { getOptimizedContextAsync } from "./contextWindow.js";
 import { getResearchLab, addTopic, runResearchPipeline } from "./researchEngine.js";
 import { getExplorationState } from "./explorationEngine.js";
 import { getBriefingState } from "./dailyCycleEngine.js";
+import { analyzeResearchAdvance, getAnalysisContext } from "./analyzerEngine.js";
 
 const GROK_URL = LLM_BASE_URL;
 const AGENDA_FILE = dataPath("research-agenda.json");
@@ -51,6 +53,10 @@ export interface ResearchThread {
   podcastCandidate: boolean;
   // Link to research pipeline topic if one was spawned
   linkedTopicId?: string;
+  // ASI-Evolve: bandit tracking
+  advanceCount: number;
+  advanceScores: number[];
+  lastAdvanceScore?: number;
 }
 
 interface AgendaState {
@@ -150,7 +156,10 @@ export async function generateResearchAgenda(): Promise<ResearchThread[]> {
   const explorationState = getExplorationState();
   const briefingState = getBriefingState();
   const researchLab = getResearchLab();
-  const agentCtx = getOptimizedContext("research agenda AI trends audience tips");
+  const agentCtx = await getOptimizedContextAsync("research agenda AI trends audience tips");
+
+  // Recent analysis patterns from ASI-Evolve analyzer
+  const analysisCtx = getAnalysisContext("research_thread", 5);
 
   // Recent exploration findings
   const recentExploration = explorationState.history
@@ -228,7 +237,7 @@ ${activeCtx}
 ACTIVE PIPELINE TOPICS (do NOT duplicate):
 ${pipelineCtx}
 
-Generate 3-5 new research threads and any updates to existing threads. Respond with JSON only.`;
+${analysisCtx ? `LESSONS FROM PAST RESEARCH:\n${analysisCtx}\n` : ""}Generate 3-5 new research threads and any updates to existing threads. Respond with JSON only.`;
 
   try {
     const res = await fetch(GROK_URL, {
@@ -280,6 +289,8 @@ Generate 3-5 new research threads and any updates to existing threads. Respond w
         createdAt: new Date().toISOString(),
         lastUpdated: new Date().toISOString(),
         podcastCandidate: false,
+        advanceCount: 0,
+        advanceScores: [],
       };
       newThreads.push(thread);
     }
@@ -318,32 +329,34 @@ export function prioritizeThreads(): ResearchThread[] {
 
   if (activeThreads.length === 0) return [];
 
+  const C = 1.414; // UCB1 exploration constant (sqrt(2))
+  const totalAdvances = activeThreads.reduce((sum, t) => sum + (t.advanceCount || 0), 0) || 1;
+
   const now = Date.now();
 
   for (const thread of activeThreads) {
-    // Trending relevance: recently created/updated threads score higher
+    const n = Math.max(1, thread.advanceCount || 0);
+    const scores = thread.advanceScores || [];
+
+    // Exploitation: average quality from past advances (default 0.5 for unadvanced)
+    const exploitation = scores.length > 0
+      ? scores.reduce((a, b) => a + b, 0) / scores.length
+      : 0.5;
+
+    // Exploration bonus: higher for less-explored threads
+    const exploration = C * Math.sqrt(Math.log(totalAdvances) / n);
+
+    // Context multipliers (keep existing signals but as multipliers, not the base)
     const lastUpdatedMs = new Date(thread.lastUpdated).getTime();
     const daysSinceUpdate = (now - lastUpdatedMs) / (24 * 60 * 60 * 1000);
-    const trendingScore = Math.max(0, 1 - daysSinceUpdate / 14); // decays over 2 weeks
+    const trendingMultiplier = daysSinceUpdate < 3 ? 1.2 : daysSinceUpdate < 7 ? 1.0 : 0.8;
+    const gapMultiplier = thread.evidence.gaps.length > 3 ? 1.3 : 1.0;
+    const audienceMultiplier = thread.actionableTips.length >= 2 ? 1.1 : 1.0;
 
-    // Knowledge gap size: more gaps = more to discover = higher priority
-    const gapScore = Math.min(1, thread.evidence.gaps.length / 5);
-
-    // Audience impact: has tips = higher impact
-    const audienceScore = Math.min(1, thread.actionableTips.length / 3);
-
-    // Maturity trajectory: threads making progress (more evidence) score higher
-    const evidenceCount = thread.evidence.supporting.length + thread.evidence.contradicting.length;
-    const maturityTrajectory = thread.maturityScore > 0
-      ? Math.min(1, evidenceCount / 5 + thread.maturityScore)
-      : Math.min(1, evidenceCount / 5);
-
-    // Composite priority
+    // UCB1 + context multipliers
+    const ucb1Score = exploitation + exploration;
     thread.priority = Math.max(0, Math.min(1,
-      trendingScore * 0.25 +
-      gapScore * 0.30 +
-      audienceScore * 0.20 +
-      maturityTrajectory * 0.25,
+      ucb1Score * trendingMultiplier * gapMultiplier * audienceMultiplier / 4  // normalize to 0-1 range
     ));
   }
 
@@ -371,7 +384,8 @@ export async function advanceThread(threadId: string): Promise<ResearchThread | 
   console.log(`[ResearchAgenda] Advancing thread: "${thread.title}"`);
 
   const kbDigest = getKnowledgeDigestForExploration();
-  const agentCtx = getOptimizedContext(`research ${thread.title} ${thread.thesis}`);
+  const agentCtx = await getOptimizedContextAsync(`research ${thread.title} ${thread.thesis}`);
+  const analysisCtx = getAnalysisContext("research_thread", 5);
 
   // Build evidence context
   const evidenceCtx = [
@@ -396,7 +410,7 @@ export async function advanceThread(threadId: string): Promise<ResearchThread | 
 
   const systemPrompt = `${agentCtx}
 
-You are Agent 306 advancing a research thread. Research the NEXT knowledge gap in this thread.
+${analysisCtx ? `LESSONS FROM PAST RESEARCH:\n${analysisCtx}\n` : ""}You are Agent 306 advancing a research thread. Research the NEXT knowledge gap in this thread.
 
 You must respond with ONLY valid JSON:
 {
@@ -542,6 +556,8 @@ Research the next gap and advance this thread. Respond with JSON only.`;
         createdAt: new Date().toISOString(),
         lastUpdated: new Date().toISOString(),
         podcastCandidate: false,
+        advanceCount: 0,
+        advanceScores: [],
       };
       agenda.threads.push(subThread);
       thread.subThreads.push(subThread.id);
@@ -550,11 +566,29 @@ Research the next gap and advance this thread. Respond with JSON only.`;
 
     thread.lastUpdated = new Date().toISOString();
 
+    // ASI-Evolve: track advance count
+    thread.advanceCount = (thread.advanceCount || 0) + 1;
+
     // Check if thread should become a podcast candidate
     evaluateMaturityInternal(thread);
 
     saveAgenda(agenda);
     console.log(`[ResearchAgenda] Advanced "${thread.title}" — maturity: ${thread.maturityScore.toFixed(2)}, gaps: ${thread.evidence.gaps.length}`);
+
+    // ASI-Evolve: run analyzer and record score (non-blocking)
+    analyzeResearchAdvance(thread, parsed).then(analyzerNode => {
+      if (analyzerNode) {
+        const ag = loadAgenda();
+        const t = ag.threads.find(x => x.id === threadId);
+        if (t) {
+          if (!t.advanceScores) t.advanceScores = [];
+          t.advanceScores.push(analyzerNode.outcome.score);
+          t.lastAdvanceScore = analyzerNode.outcome.score;
+          saveAgenda(ag);
+        }
+      }
+    }).catch(e => console.warn("[Analyzer] Research analysis failed:", e.message));
+
     return thread;
   } catch (e: any) {
     console.error(`[ResearchAgenda] Advance failed for "${thread.title}":`, e.message);

@@ -28,6 +28,7 @@ import { getOptimizedContext } from "./contextWindow.js";
 import { getModel } from "./modelRouter.js";
 import { formatSkillsForPrompt } from "./skillEngine.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { analyzePodcastEpisode } from "./analyzerEngine.js";
 import { getResearchLab, getTopicById } from "./researchEngine.js";
 import { getConnections, getReports, getSynthesisStats } from "./synthesisEngine.js";
 import { getReflectionStats } from "./reflectionEngine.js";
@@ -403,6 +404,13 @@ The metadata fields are for Spotify and social media — write those for reading
     saveState(state);
 
     console.log(`[Podcast] Script generated for ${episode.title}`);
+
+    // ASI-Evolve: analyze the generated episode (non-blocking)
+    const fullScript = [parsed.coldOpen, parsed.actOne, parsed.actTwo, parsed.actThree, parsed.outro].filter(Boolean).join("\n\n");
+    analyzePodcastEpisode(episode.id, fullScript, episode.title).catch(e =>
+      console.warn("[Podcast] Analyzer failed:", e.message),
+    );
+
     return true;
   } catch (e: any) {
     console.error("[Podcast] Script generation error:", e.message);
