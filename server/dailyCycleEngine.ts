@@ -35,6 +35,7 @@ import { clusterKnowledge, detectContradictions as detectGraphContradictions } f
 import { runResearchAgendaCycle } from "./research-agenda.js";
 import { updateDreams, takeGrowthSnapshot, generateSelfImprovementPlan, seedDreams } from "./dreamEngine.js";
 import { runAutoPodcastPipeline } from "./podcastEngine.js";
+import { analyzeDailyCycle } from "./analyzerEngine.js";
 
 const GROK_URL     = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
@@ -637,6 +638,10 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
   saveState(state);
 
   console.log(`[DailyCycle] Briefing complete — action: "${result.todaysAction.action}"`);
+
+  // ASI-Evolve: analyze the daily cycle (non-blocking)
+  analyzeDailyCycle(briefing).catch(e => console.warn("[DailyCycle] Analyzer failed:", e.message));
+
   return briefing;
 }
 

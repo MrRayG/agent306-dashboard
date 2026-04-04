@@ -16,6 +16,7 @@
 import fs from "fs";
 import path from "path";
 import { dataPath } from "./dataPaths.js";
+import { queueEmbeddingSync } from "./embeddingEngine.js";
 
 // ── File paths (all on Railway /data volume) ──────────────────
 const SOUL_FILE        = dataPath("memory_soul.json");
@@ -643,6 +644,7 @@ export function addKnowledge(entry: Omit<KnowledgeEntry, "id" | "learnedAt">): v
       if (entry.source) exactMatch.source = entry.source;
       knowledge.lastIngested = now;
       save(KNOWLEDGE_FILE, knowledge);
+      queueEmbeddingSync(exactMatch.id);
     }
     return;
   }
@@ -661,6 +663,7 @@ export function addKnowledge(entry: Omit<KnowledgeEntry, "id" | "learnedAt">): v
       if (entry.source) fuzzyMatch.source = entry.source;
       knowledge.lastIngested = now;
       save(KNOWLEDGE_FILE, knowledge);
+      queueEmbeddingSync(fuzzyMatch.id);
     }
     return;
   }
@@ -685,6 +688,9 @@ export function addKnowledge(entry: Omit<KnowledgeEntry, "id" | "learnedAt">): v
     knowledge.totalEntries = knowledge.entries.length;
   }
   save(KNOWLEDGE_FILE, knowledge);
+
+  // ASI-Evolve: queue embedding sync for the new entry
+  queueEmbeddingSync(full.id);
 }
 
 /** Get all KB titles grouped by category (for exploration de-dup context, active only) */

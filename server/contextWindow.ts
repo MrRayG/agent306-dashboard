@@ -20,6 +20,7 @@ import {
   knowledge,
   type KnowledgeEntry,
 } from "./memoryEngine.js";
+import { semanticSearch } from "./embeddingEngine.js";
 
 // ── Stopwords — filtered from query matching ─────────────────────────────────
 const STOPWORDS = new Set([
@@ -161,6 +162,75 @@ export function getRelevantContext(
   }
   ctx += "=== END KNOWLEDGE ===\n";
   return ctx;
+}
+
+/**
+ * Async version of getRelevantContext that uses embedding-based semantic search.
+ * Falls back to keyword matching if embeddings are unavailable.
+ */
+export async function getRelevantContextAsync(
+  query: string,
+  options: RelevantContextOptions = {},
+): Promise<string> {
+  const maxEntries = options.maxEntries ?? 20;
+  const maxChars = options.maxTokens ?? 4000;
+
+  // Try semantic search first
+  try {
+    const results = await semanticSearch(query, {
+      maxResults: maxEntries,
+      minSimilarity: 0.3,
+      categories: options.categories,
+      excludeArchived: true,
+    });
+
+    if (results.length > 0) {
+      let ctx = `\n=== RELEVANT KNOWLEDGE (${results.length} entries, semantic match) ===\n`;
+      let totalChars = 0;
+      for (const { entry, similarity } of results) {
+        const line = `[${entry.category.toUpperCase()}] ${entry.title}: ${entry.summary}\n`;
+        if (totalChars + line.length > maxChars) break;
+        ctx += line;
+        totalChars += line.length;
+      }
+      ctx += "=== END KNOWLEDGE ===\n";
+      return ctx;
+    }
+  } catch (e: any) {
+    console.warn("[ContextWindow] Semantic search failed, falling back to keywords:", e.message);
+  }
+
+  // Fallback to keyword matching
+  return getRelevantContext(query, options);
+}
+
+/**
+ * Async version of getOptimizedContext that uses semantic search.
+ */
+export async function getOptimizedContextAsync(query: string, options?: RelevantContextOptions): Promise<string> {
+  let styleRules = "";
+  try {
+    const fs = require("fs");
+    const { dataPath } = require("./dataPaths.js");
+    const rulesFile = dataPath("style-rules.json");
+    if (fs.existsSync(rulesFile)) {
+      const data = JSON.parse(fs.readFileSync(rulesFile, "utf8"));
+      const rules = (data.rules ?? [])
+        .filter((r: any) => r.confidence === "high" || r.hitCount >= 2)
+        .slice(0, 10)
+        .map((r: any) => `- ${r.rule}`)
+        .join("\n");
+      if (rules) styleRules = `\nACTIVE STYLE RULES (learned from post performance):\n${rules}`;
+    }
+  } catch {}
+
+  return [
+    getCoreIdentity(),
+    await getRelevantContextAsync(query, options),
+    getSentimentArc(4),
+    getPerformanceContext(5),
+    styleRules,
+  ].filter(Boolean).join("\n\n");
 }
 
 /**

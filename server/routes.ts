@@ -66,7 +66,9 @@ import { getMetacognitionState } from "./metacognitionEngine.js";
 import { searchConversations } from "./conversationMemory.js";
 import { getKnowledgeTiers, scanForInjection } from "./memoryEngine.js";
 import { getModel, getModelConfig as getModelRouterStats } from "./modelRouter.js";
-import { getCoreIdentity, getRelevantContext, getOptimizedContext } from "./contextWindow.js";
+import { getCoreIdentity, getRelevantContext, getOptimizedContext, getRelevantContextAsync } from "./contextWindow.js";
+import { getEmbeddingStatus, syncEmbeddings, semanticSearch } from "./embeddingEngine.js";
+import { getRecentAnalysis, getAggregatedPatterns } from "./analyzerEngine.js";
 import { runFullIntake, runSourceIntake, getIntakeState, getAvailableSources, generateDailyBrief } from "./data-intake.js";
 import { getSkills, getSkillById, deleteSkill, extractSkill, getSkillsState, checkAndExtractSkills } from "./skillEngine.js";
 import { getAgenda, getThreadById, updateThread, getPodcastCandidates, generateResearchAgenda, prioritizeThreads, advanceThread, evaluateMaturity, pruneStaleThreads } from "./research-agenda.js";
@@ -3810,6 +3812,46 @@ needsHelp: true only when you genuinely need his direction or information`,
       res.json(result);
     } catch (e: any) {
       res.status(500).json({ error: "Dream update failed: " + e.message });
+    }
+  });
+
+  // ── ASI-Evolve: Embedding routes ────────────────────────────────────────────
+
+  app.get("/api/embeddings/status", (_req, res) => {
+    res.json(getEmbeddingStatus());
+  });
+
+  app.post("/api/embeddings/sync", requireDashAuth, async (_req, res) => {
+    try {
+      const result = await syncEmbeddings();
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ error: "Embedding sync failed: " + e.message });
+    }
+  });
+
+  // ── ASI-Evolve: Analyzer routes ────────────────────────────────────────────
+
+  app.get("/api/analyzer/nodes", (req, res) => {
+    const type = req.query.type as string | undefined;
+    const limit = parseInt(req.query.limit as string) || 20;
+    res.json(getRecentAnalysis(type, limit));
+  });
+
+  app.get("/api/analyzer/patterns", (_req, res) => {
+    res.json(getAggregatedPatterns());
+  });
+
+  // ── ASI-Evolve: Semantic search route ──────────────────────────────────────
+
+  app.get("/api/knowledge/semantic-search", async (req, res) => {
+    const query = req.query.q as string;
+    if (!query) return res.status(400).json({ error: "Missing query parameter 'q'" });
+    try {
+      const results = await semanticSearch(query, { maxResults: 20 });
+      res.json(results.map(r => ({ ...r.entry, similarity: r.similarity })));
+    } catch (e: any) {
+      res.status(500).json({ error: "Semantic search failed: " + e.message });
     }
   });
 
