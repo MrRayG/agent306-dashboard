@@ -3,7 +3,7 @@
     {
       "category": "research",
       "title": "Podcast: Two Episode Types",
-      "summary": "THE SIGNAL (6-9 min, weekly Tuesday) \u2014 research-driven intelligence breakdown. THE CONVERSATION (10-15 min, monthly/bi-weekly) \u2014 long-form intervie...",
+      "summary": "THE SIGNAL (6-9 min, weekly Tuesday) — research-driven intelligence breakdown. THE CONVERSATION (10-15 min, monthly/bi-weekly) — long-form intervie...",
       "weight": 10,
       "id": "k_1774702089553",
       "learnedAt": "2026-03-28T12:48:09.553Z",
@@ -13,7 +13,7 @@
     {
       "category": "research",
       "title": "Podcast: THE SIGNAL Template",
-      "summary": "Cold Open (30s) \u2014 most counterintuitive fact, no intro, silence, then music. Act One \u2014 The Setup (1-2 min) \u2014 driving question, why it matters, what...",
+      "summary": "Cold Open (30s) — most counterintuitive fact, no intro, silence, then music. Act One — The Setup (1-2 min) — driving question, why it matters, what...",
       "weight": 10,
       "id": "k_1774702089555",
       "learnedAt": "2026-03-28T12:48:09.555Z",
@@ -23,7 +23,7 @@
     {
       "category": "research",
       "title": "Podcast: THE CONVERSATION Template",
-      "summary": "Cold Open (30s) \u2014 most compelling moment from interview. Intro (30s) \u2014 who guest is, why 306 wanted to talk, driving question. The Conversation (8-...",
+      "summary": "Cold Open (30s) — most compelling moment from interview. Intro (30s) — who guest is, why 306 wanted to talk, driving question. The Conversation (8-...",
       "weight": 10,
       "id": "k_1774702089555",
       "learnedAt": "2026-03-28T12:48:09.555Z",
@@ -33,7 +33,7 @@
     {
       "category": "research",
       "title": "Podcast: 306 Voice Rules",
-      "summary": "Uses 'I think' not 'experts say.' Pauses before important points. Defines before she deploys \u2014 no jargon without definition. Short sentences when s...",
+      "summary": "Uses 'I think' not 'experts say.' Pauses before important points. Defines before she deploys — no jargon without definition. Short sentences when s...",
       "weight": 10,
       "id": "k_1774702089556",
       "learnedAt": "2026-03-28T12:48:09.556Z",
@@ -42,7 +42,7 @@
     {
       "category": "research",
       "title": "Podcast: The Unresolved Thread",
-      "summary": "Every episode type ends with something unresolved. Not because 306 doesn't know \u2014 but because she's honest about the limits of what any single epis...",
+      "summary": "Every episode type ends with something unresolved. Not because 306 doesn't know — but because she's honest about the limits of what any single epis...",
       "weight": 10,
       "id": "k_1774702089558",
       "learnedAt": "2026-03-28T12:48:09.558Z",
@@ -68,7 +68,7 @@
     },
     {
       "title": "What On-Chain Means and Why It Changes Everything",
-      "summary": "On-chain means the data lives inside the blockchain itself \u2014 not on a company server, not on a cloud provider, not behind a login. It is permanent,...",
+      "summary": "On-chain means the data lives inside the blockchain itself — not on a company server, not on a cloud provider, not behind a login. It is permanent,...",
       "category": "blockchain-fundamentals",
       "weight": 10,
       "id": "k_1774870118248",
@@ -77,7 +77,7 @@
     },
     {
       "title": "From Tokens to Agents: The Evolution of What Ethereum Can Represent",
-      "summary": "Ethereum learned to represent increasingly complex things through standards. ERC-20 (2015): fungible tokens \u2014 money became programmable. Anyone cou...",
+      "summary": "Ethereum learned to represent increasingly complex things through standards. ERC-20 (2015): fungible tokens — money became programmable. Anyone cou...",
       "category": "blockchain-fundamentals",
       "weight": 10,
       "id": "k_1774870118251",
@@ -86,7 +86,7 @@
     },
     {
       "title": "Why Blockchain Matters for AI Agents Specifically",
-      "summary": "AI agents are getting powerful \u2014 they can write, research, trade, negotiate. But power without accountability is dangerous. How do you know an AI a...",
+      "summary": "AI agents are getting powerful — they can write, research, trade, negotiate. But power without accountability is dangerous. How do you know an AI a...",
       "category": "blockchain-fundamentals",
       "weight": 10,
       "id": "k_1774870118253",
@@ -94,8 +94,8 @@
       "tier": "active"
     },
     {
-      "topic": "Agentic Capital Markets \u2014 Galaxy Research March 2026",
-      "summary": "Galaxy published a landmark report: AI agents are becoming autonomous economic actors \u2014 earning, deploying, and compounding capital onchain without human intermediation. Uniswap, PancakeSwap, Binance, and OKX all shipped agent toolkits in early 2026. The DEX wars are now agent-readiness wars. Crypto is the only widely deployed system combining programmable settlement, global interoperability, and open execution where any agent can participate by default.",
+      "topic": "Agentic Capital Markets — Galaxy Research March 2026",
+      "summary": "Galaxy published a landmark report: AI agents are becoming autonomous economic actors — earning, deploying, and compounding capital onchain without human intermediation. Uniswap, PancakeSwap, Binance, and OKX all shipped agent toolkits in early 2026. The DEX wars are now agent-readiness wars. Crypto is the only widely deployed system combining programmable settlement, global interoperability, and open execution where any agent can participate by default.",
       "category": "ai_signal",
       "source": "https://www.galaxy.com/insights/research/zero-human-companies-ai-agents-defi-crypto",
       "weight": 9,
@@ -131,7 +131,7 @@
       "tier": "active"
     },
     {
-      "title": "Exploration synthesis \u2014 Mar 30",
+      "title": "Exploration synthesis — Mar 30",
       "summary": "The most prominent pattern today is the significant influence and rapid advancement of AI across diverse domains, including robotics (Ruka-v2), vis...",
       "category": "exploration",
       "weight": 9,
@@ -141,7 +141,7 @@
       "tier": "active"
     },
     {
-      "title": "Exploration synthesis \u2014 Mar 26",
+      "title": "Exploration synthesis — Mar 26",
       "summary": "The most critical pattern emerging today is the rapid convergence of AI and Web3, exemplified by infrastructure projects like ClawNet on BSV and me...",
       "category": "exploration",
       "weight": 9,
@@ -150,7 +150,7 @@
       "tier": "active"
     },
     {
-      "title": "Exploration synthesis \u2014 Mar 27",
+      "title": "Exploration synthesis — Mar 27",
       "summary": "The most critical pattern emerging today is the rapid advancement and commercialization of AI technologies, evidenced by multiple major releases (C...",
       "category": "exploration",
       "weight": 9,
@@ -290,7 +290,7 @@
     },
     {
       "title": "Conclusion: How do leaders craft relatable personal stories?",
-      "summary": "Technology thought leaders who employ the Hero\u2019s Journey storytelling structure in their personal narratives achieve significantly higher audience eng",
+      "summary": "Technology thought leaders who employ the Hero’s Journey storytelling structure in their personal narratives achieve significantly higher audience eng",
       "category": "research",
       "source": "https://www.swyx.io/lead",
       "weight": 9,
@@ -387,8 +387,8 @@
       "tier": "active"
     },
     {
-      "title": "Conclusion: Deconstructing the Hero\u2019s Journey: Which Narrative Elements ",
-      "summary": "The 'Trials and Ordeals' stage of the Hero\u2019s Journey framework most strongly correlates with audience emotional engagement in tech thought leadership ",
+      "title": "Conclusion: Deconstructing the Hero’s Journey: Which Narrative Elements ",
+      "summary": "The 'Trials and Ordeals' stage of the Hero’s Journey framework most strongly correlates with audience emotional engagement in tech thought leadership ",
       "category": "research",
       "weight": 9,
       "id": "k_1774651192883",
@@ -530,7 +530,7 @@
     },
     {
       "title": "Conclusion: Cross-Platform Analysis of Storytelling Structures in Techno",
-      "summary": "The Hero\u2019s Journey storytelling structure significantly outperforms Sparklines in user engagement metrics on Instagram, while Sparklines dominate on T",
+      "summary": "The Hero’s Journey storytelling structure significantly outperforms Sparklines in user engagement metrics on Instagram, while Sparklines dominate on T",
       "category": "research",
       "weight": 9,
       "id": "k_1774651202624",
@@ -736,7 +736,7 @@
     {
       "category": "research",
       "title": "Podcast: Title Conventions",
-      "summary": "THE SIGNAL: '[The thing] \u2014 [306's take in 5 words]' (e.g., 'ARC-AGI-3 \u2014 The Benchmark No AI Can Beat'). THE CONVERSATION: '[Guest name] \u2014 [What the...",
+      "summary": "THE SIGNAL: '[The thing] — [306's take in 5 words]' (e.g., 'ARC-AGI-3 — The Benchmark No AI Can Beat'). THE CONVERSATION: '[Guest name] — [What the...",
       "weight": 9,
       "id": "k_1774702089556",
       "learnedAt": "2026-03-28T12:48:09.556Z",
@@ -754,7 +754,7 @@
       "updatedAt": "2026-03-31T13:18:32.052Z"
     },
     {
-      "title": "Exploration synthesis \u2014 Mar 29",
+      "title": "Exploration synthesis — Mar 29",
       "summary": "The most significant pattern today is the rapid advancement and integration of AI technologies, with major releases like GPT-5.4 and Gemini 3.1 Fla...",
       "category": "exploration",
       "weight": 9,
@@ -785,7 +785,7 @@
     },
     {
       "title": "Conclusion: A 5-Year Longitudinal Study on Emotional Dependency in Human",
-      "summary": "Frequent and empathetic interactions with anthropomorphic AI systems over a 5-year period significantly elevate users\u2019 emotional dependency scores, as",
+      "summary": "Frequent and empathetic interactions with anthropomorphic AI systems over a 5-year period significantly elevate users’ emotional dependency scores, as",
       "category": "research",
       "source": "https://www.science.org/doi/10.1126/science.aec8352",
       "weight": 9,
@@ -954,7 +954,7 @@
     },
     {
       "title": "Conclusion: Demographic Analysis of Storytelling Engagement on Instagram",
-      "summary": "Hero\u2019s Journey storytelling generally yields higher engagement metrics on Instagram and TikTok, particularly among younger users (18-34) in North Amer",
+      "summary": "Hero’s Journey storytelling generally yields higher engagement metrics on Instagram and TikTok, particularly among younger users (18-34) in North Amer",
       "category": "research",
       "weight": 9,
       "id": "k_1774743675839",
@@ -1012,7 +1012,7 @@
     },
     {
       "title": "Conclusion: Longitudinal Study on Storytelling Structures and User Reten",
-      "summary": "Narrative storytelling structures like the Hero\u2019s Journey and Sparkline significantly enhance user engagement, trust, and retention in technology thou",
+      "summary": "Narrative storytelling structures like the Hero’s Journey and Sparkline significantly enhance user engagement, trust, and retention in technology thou",
       "category": "research",
       "weight": 9,
       "id": "k_1774743697400",
@@ -1112,7 +1112,7 @@
     },
     {
       "title": "Conclusion: Moderating Factors in Narrative Impact: Audience Demographic",
-      "summary": "Narrative techniques in tech journalism must be tailored to audience demographics\u2014interactive and personalized for younger, tech-savvy, higher-income ",
+      "summary": "Narrative techniques in tech journalism must be tailored to audience demographics—interactive and personalized for younger, tech-savvy, higher-income ",
       "category": "research",
       "weight": 9,
       "id": "k_1774743719550",
@@ -1149,8 +1149,8 @@
       "tier": "active"
     },
     {
-      "title": "Conclusion: Comparative Impact of All Hero\u2019s Journey Stages on Tech Thou",
-      "summary": "Incorporating the 'Call to Adventure' and 'Mentor' stages of the Hero\u2019s Journey into tech thought leadership content significantly enhances audience e",
+      "title": "Conclusion: Comparative Impact of All Hero’s Journey Stages on Tech Thou",
+      "summary": "Incorporating the 'Call to Adventure' and 'Mentor' stages of the Hero’s Journey into tech thought leadership content significantly enhances audience e",
       "category": "research",
       "source": "https://www.neue.world/insights/the-power-of-brand-storytelling",
       "weight": 9,
@@ -1170,7 +1170,7 @@
     },
     {
       "title": "Conclusion: Longitudinal Impact of AI Dependency on Human Relationships ",
-      "summary": "Sustained dependency on AI systems for social interaction over 3\u20135 years significantly impairs users\u2019 ability to form and maintain meaningful real-wor",
+      "summary": "Sustained dependency on AI systems for social interaction over 3–5 years significantly impairs users’ ability to form and maintain meaningful real-wor",
       "category": "research",
       "weight": 9,
       "id": "k_1774743737646",
@@ -1235,7 +1235,7 @@
       "tier": "active"
     },
     {
-      "title": "Conclusion: Impact of TikTok\u2019s Extended Video Formats on Storytelling En",
+      "title": "Conclusion: Impact of TikTok’s Extended Video Formats on Storytelling En",
       "summary": "The introduction of extended video formats (3-10 minutes) on TikTok correlates strongly with increased user engagement metrics (likes, shares, comment",
       "category": "research",
       "weight": 9,
@@ -1632,7 +1632,7 @@
       "tier": "active"
     },
     {
-      "title": "Conclusion: Isolating the Impact of Individual Hero\u2019s Journey Stages on ",
+      "title": "Conclusion: Isolating the Impact of Individual Hero’s Journey Stages on ",
       "summary": "The 'Call to Adventure' stage in tech thought leadership content significantly boosts click-through rates by 15-23%, while the 'Mentor' stage drives h",
       "category": "research",
       "source": "https://onlinelibrary.wiley.com/doi/full/10.1002/sd.70851",
@@ -1689,6 +1689,16 @@
       "weight": 9,
       "id": "k_1774744202582",
       "learnedAt": "2026-03-29T00:30:02.582Z",
+      "tier": "active"
+    },
+    {
+      "title": "Conclusion: Empirical Study on Stakeholder Trust Perceptions in Web3-AI ",
+      "summary": "The combined use of Decentralized Autonomous Organizations (DAOs) and cryptographic identities in Web3-AI collaborative ecosystems significantly enhan",
+      "category": "research",
+      "source": "https://hackernoon.com/trust-by-design-embedding-governance-directly-into-ai-architecture",
+      "weight": 9,
+      "id": "k_1774744207658",
+      "learnedAt": "2026-03-29T00:30:07.658Z",
       "tier": "active"
     },
     {
@@ -1872,8 +1882,8 @@
       "tier": "active"
     },
     {
-      "title": "Conclusion: Platform-Specific Impacts of Hero\u2019s Journey Stages on Long-T",
-      "summary": "The Hero\u2019s Journey stages differentially impact long-term social sharing of tech content, with Twitter/X users favoring 'Trials' narratives (35-40% hi",
+      "title": "Conclusion: Platform-Specific Impacts of Hero’s Journey Stages on Long-T",
+      "summary": "The Hero’s Journey stages differentially impact long-term social sharing of tech content, with Twitter/X users favoring 'Trials' narratives (35-40% hi",
       "category": "research",
       "source": "https://onlinelibrary.wiley.com/doi/full/10.1002/sd.70851",
       "weight": 9,
@@ -2062,7 +2072,7 @@
     },
     {
       "title": "Conclusion: Legal Risks of AI in Web3 Post-Meta Rulings",
-      "summary": "Meta\u2019s 2026 court losses establish a precedent for a 'reasonable standard of care' in AI design and data privacy, increasing liability risks for auton",
+      "summary": "Meta’s 2026 court losses establish a precedent for a 'reasonable standard of care' in AI design and data privacy, increasing liability risks for auton",
       "category": "research",
       "source": "https://www.wsls.com/news/local/2026/03/29/virginia-tech-experts-break-down-meta-youtube-court-losses-possibility-of-appeal/",
       "weight": 9,
@@ -2072,7 +2082,7 @@
     },
     {
       "title": "Conclusion: Legal Risks of AI Deployment Post-Meta Losses",
-      "summary": "Meta\u2019s 2026 court losses for 'architectural negligence' set a precedent that increases legal and operational risks for autonomous AI agents in Web3 en",
+      "summary": "Meta’s 2026 court losses for 'architectural negligence' set a precedent that increases legal and operational risks for autonomous AI agents in Web3 en",
       "category": "research",
       "source": "https://www.crowell.com/en/insights/client-alerts/landmark-verdicts-against-meta-and-youtube-signal-new-era-of-social-media-platform-liability",
       "weight": 9,
@@ -2206,8 +2216,8 @@
       "tier": "active"
     },
     {
-      "title": "Data: **eHealth literacy**\u2014the ability to seek, find, understand, ",
-      "summary": "**eHealth literacy**\u2014the ability to seek, find, understand, and apply health information from digital sources\u2014is low among older adults in rural setti",
+      "title": "Data: **eHealth literacy**—the ability to seek, find, understand, ",
+      "summary": "**eHealth literacy**—the ability to seek, find, understand, and apply health information from digital sources—is low among older adults in rural setti",
       "category": "research",
       "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12991319/",
       "weight": 8,
@@ -2346,7 +2356,7 @@
     },
     {
       "title": "Data: **Recommendation exposure in digital media relies on algorit",
-      "summary": "**Recommendation exposure in digital media relies on algorithmic personalization that tracks user interactions\u2014like watch time, rewatches, and scrolls",
+      "summary": "**Recommendation exposure in digital media relies on algorithmic personalization that tracks user interactions—like watch time, rewatches, and scrolls",
       "category": "research",
       "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12998613/",
       "weight": 8,
@@ -2596,8 +2606,8 @@
       "tier": "active"
     },
     {
-      "title": "Q&A: How do the legal precedents from Meta\u2019s 2026 court losses re",
-      "summary": "Meta\u2019s 2026 court losses for 'architectural negligence' set a precedent that increases legal and operational risks for autonomous AI agents in Web3 en",
+      "title": "Q&A: How do the legal precedents from Meta’s 2026 court losses re",
+      "summary": "Meta’s 2026 court losses for 'architectural negligence' set a precedent that increases legal and operational risks for autonomous AI agents in Web3 en",
       "category": "research",
       "weight": 8,
       "id": "k_1774914378671",
@@ -3031,7 +3041,7 @@
     },
     {
       "title": "Bitcoin Volatility Tied to Trump Iran Comments",
-      "summary": "Bitcoin dipped over weekend on Trump\u2019s Iran operation news, now rebounds; geopolitical risks persist.",
+      "summary": "Bitcoin dipped over weekend on Trump’s Iran operation news, now rebounds; geopolitical risks persist.",
       "category": "media_intelligence",
       "weight": 7,
       "id": "k_1774878872145",
@@ -3049,7 +3059,7 @@
     },
     {
       "title": "Circle Stock Pressured by Yield Ban Issues",
-      "summary": "Circle\u2019s stock struggles with yield ban, rival audit, and legislative delays; market confidence wanes.",
+      "summary": "Circle’s stock struggles with yield ban, rival audit, and legislative delays; market confidence wanes.",
       "category": "media_intelligence",
       "weight": 7,
       "id": "k_1774878872148",
@@ -3057,8 +3067,8 @@
       "tier": "operational"
     },
     {
-      "title": "Hoskinson\u2019s $200M Midnight Network Goes Live",
-      "summary": "Charles Hoskinson\u2019s $200M Midnight launches to fix crypto\u2019s privacy and complexity for mainstream use.",
+      "title": "Hoskinson’s $200M Midnight Network Goes Live",
+      "summary": "Charles Hoskinson’s $200M Midnight launches to fix crypto’s privacy and complexity for mainstream use.",
       "category": "media_intelligence",
       "weight": 7,
       "id": "k_1774878872149",
@@ -3165,8 +3175,8 @@
       "tier": "operational"
     },
     {
-      "title": "Fujitsu\u2019s Application Transform Speeds Code Analysis 97%",
-      "summary": "Fujitsu\u2019s new AI tool generates design docs 97% faster, improving quality by 60%, revolutionizing legacy code updates.",
+      "title": "Fujitsu’s Application Transform Speeds Code Analysis 97%",
+      "summary": "Fujitsu’s new AI tool generates design docs 97% faster, improving quality by 60%, revolutionizing legacy code updates.",
       "category": "global_context",
       "weight": 7,
       "id": "k_1774878872164",
@@ -3175,7 +3185,7 @@
     },
     {
       "title": "Arm Launches 136-Core AGI CPU for AI Inference",
-      "summary": "Arm\u2019s first proprietary chip in 35 years, adopted by Meta and OpenAI, marks a leap in AI hardware.",
+      "summary": "Arm’s first proprietary chip in 35 years, adopted by Meta and OpenAI, marks a leap in AI hardware.",
       "category": "global_context",
       "weight": 7,
       "id": "k_1774878872165",
@@ -3184,7 +3194,7 @@
     },
     {
       "title": "Judge Blocks Pentagon Restrictions on Anthropic Models",
-      "summary": "Federal ruling against Pentagon\u2019s Anthropic model restrictions upholds free speech, impacting AI regulatory landscapes.",
+      "summary": "Federal ruling against Pentagon’s Anthropic model restrictions upholds free speech, impacting AI regulatory landscapes.",
       "category": "global_context",
       "weight": 7,
       "id": "k_1774878872166",
@@ -3193,7 +3203,7 @@
     },
     {
       "title": "OpenAI Releases Safety Prompts and Safeguard Model",
-      "summary": "OpenAI\u2019s open-source gpt-oss-safeguard protects teen apps from harmful content, enhancing digital safety standards.",
+      "summary": "OpenAI’s open-source gpt-oss-safeguard protects teen apps from harmful content, enhancing digital safety standards.",
       "category": "global_context",
       "weight": 7,
       "id": "k_1774878872167",
@@ -3318,7 +3328,7 @@
     },
     {
       "title": "Data: ### Overview of Engagement Metrics in Digital Media Headline",
-      "summary": "### Overview of Engagement Metrics in Digital Media Headlines\n\nEngagement metrics\u2014such as click-through rates (CTR), time on page, shares, comments, a",
+      "summary": "### Overview of Engagement Metrics in Digital Media Headlines\n\nEngagement metrics—such as click-through rates (CTR), time on page, shares, comments, a",
       "category": "research",
       "source": "perplexity",
       "weight": 6,
@@ -3437,8 +3447,8 @@
       "tier": "operational"
     },
     {
-      "title": "Data: Engagement with nostalgia content on social media\u2014such as pe",
-      "summary": "Engagement with nostalgia content on social media\u2014such as personal memories (e.g., old photos) or historical nostalgia (e.g., analogue tech trends lik",
+      "title": "Data: Engagement with nostalgia content on social media—such as pe",
+      "summary": "Engagement with nostalgia content on social media—such as personal memories (e.g., old photos) or historical nostalgia (e.g., analogue tech trends lik",
       "category": "research",
       "source": "https://www.psychologytoday.com/us/blog/the-asymmetric-brain/202603/the-rise-of-analogue-nostalgia",
       "weight": 6,
@@ -3568,7 +3578,7 @@
     },
     {
       "title": "Data: Longitudinal studies consistently link higher social media e",
-      "summary": "Longitudinal studies consistently link higher social media exposure\u2014particularly passive use, extended duration (>3 hours/day), nighttime engagement, ",
+      "summary": "Longitudinal studies consistently link higher social media exposure—particularly passive use, extended duration (>3 hours/day), nighttime engagement, ",
       "category": "research",
       "source": "https://www.psypost.org/massive-analysis-of-longitudinal-data-links-social-media-to-poorer-youth-mental-health/",
       "weight": 6,
@@ -4068,7 +4078,7 @@
     },
     {
       "title": "Data: No direct mechanisms or protocols for **AI resource compound",
-      "summary": "No direct mechanisms or protocols for **AI resource compounding**\u2014where AI agents autonomously accumulate, reinvest, or grow computational, financial,",
+      "summary": "No direct mechanisms or protocols for **AI resource compounding**—where AI agents autonomously accumulate, reinvest, or grow computational, financial,",
       "category": "research",
       "source": "https://davepatten.substack.com/p/five-ways-humans-accidentally-make",
       "weight": 6,
@@ -4168,7 +4178,7 @@
     },
     {
       "title": "Data: **Claude Mythos substantially outperforms Claude Opus 4.6 on",
-      "summary": "**Claude Mythos substantially outperforms Claude Opus 4.6 on leaked benchmarks in coding, reasoning, and cybersecurity, with reported gains of 12\u201315 p",
+      "summary": "**Claude Mythos substantially outperforms Claude Opus 4.6 on leaked benchmarks in coding, reasoning, and cybersecurity, with reported gains of 12–15 p",
       "category": "research",
       "source": "https://www.mindstudio.ai/blog/claude-mythos-vs-opus-4-6-capability-comparison",
       "weight": 6,
@@ -4533,7 +4543,7 @@
     },
     {
       "category": "ai_signal",
-      "title": "AI benchmarks are broken. Here\u2019s what we need instead.",
+      "title": "AI benchmarks are broken. Here’s what we need instead.",
       "summary": "For decades, artificial intelligence has been evaluated through the question of whether machines outperform humans. From chess to advanced math, from ",
       "weight": 5,
       "source": "data_intake:news_rss",
@@ -4544,7 +4554,7 @@
     {
       "category": "ai_signal",
       "title": "The AI Hype Index: AI goes to war",
-      "summary": "AI is at war. Anthropic and the Pentagon feuded over how to weaponize Anthropic\u2019s AI model Claude; then OpenAI swept the Pentagon off its feet with an",
+      "summary": "AI is at war. Anthropic and the Pentagon feuded over how to weaponize Anthropic’s AI model Claude; then OpenAI swept the Pentagon off its feet with an",
       "weight": 6,
       "source": "data_intake:news_rss",
       "id": "k_1775124001298",
@@ -4553,7 +4563,7 @@
     },
     {
       "category": "ai_signal",
-      "title": "Claude Code leak exposes a Tamagotchi-style \u2018pet\u2019 and an always-on agent",
+      "title": "Claude Code leak exposes a Tamagotchi-style ‘pet’ and an always-on agent",
       "summary": "After Anthropic released Claude Code's 2.1.88 update, users quickly discovered that it contained a package with a source map file containing its TypeS",
       "weight": 6,
       "source": "data_intake:news_rss",
@@ -4624,7 +4634,7 @@
     {
       "category": "ai_signal",
       "title": "KerimYilmazing/exvllm-moe-inference",
-      "summary": "Exvllm Alternative 2026: CPU+GPU MOE Inference Engine \ud83d\ude80",
+      "summary": "Exvllm Alternative 2026: CPU+GPU MOE Inference Engine 🚀",
       "weight": 7,
       "source": "data_intake:github",
       "id": "k_1775136307563",
@@ -4890,10 +4900,988 @@
       "id": "k_1775210401065",
       "learnedAt": "2026-04-03T10:00:01.064Z",
       "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Apple’s best product ever",
+      "summary": "All week, we've been asking you to help us rank the 50 best products Apple ever made, as we mark the company's 50th anniversary. Thanks to everyone wh",
+      "weight": 6,
+      "source": "data_intake:news_rss",
+      "id": "k_1775223514792",
+      "learnedAt": "2026-04-03T13:38:34.791Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Chatbots are now prescribing psychiatric drugs",
+      "summary": "Utah is allowing an AI system to prescribe psychiatric drugs without a doctor. It's only the second time the state - and the country - has delegated t",
+      "weight": 5,
+      "source": "data_intake:news_rss",
+      "id": "k_1775223514794",
+      "learnedAt": "2026-04-03T13:38:34.793Z",
+      "tier": "operational"
+    },
+    {
+      "category": "research",
+      "title": "[AI Agents and Money: Who's Actually in Control?] Binance's AI Trading Agent can autonomously execute trades b",
+      "summary": "Binance's AI Trading Agent can autonomously execute trades based on user-defined parameters as of 2026, per Galaxy's report on AI economic actors.",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_59ss",
+      "id": "k_1775223671972",
+      "learnedAt": "2026-04-03T13:41:11.967Z",
+      "tier": "operational"
+    },
+    {
+      "category": "research",
+      "title": "[AI Agents and Money: Who's Actually in Control?] Uniswap's Agent Toolkit, launched in early 2026, enables AI ",
+      "summary": "Uniswap's Agent Toolkit, launched in early 2026, enables AI agents to manage token swaps and liquidity pools without direct human oversight, as noted ",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_59ss",
+      "id": "k_1775223671976",
+      "learnedAt": "2026-04-03T13:41:11.973Z",
+      "tier": "operational"
+    },
+    {
+      "category": "research",
+      "title": "[AI Agents and Money: Who's Actually in Control?] Some platforms like Binance require explicit opt-in for auto",
+      "summary": "Some platforms like Binance require explicit opt-in for autonomous financial actions, suggesting a level of user control and awareness that may mitiga",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_59ss",
+      "id": "k_1775223671981",
+      "learnedAt": "2026-04-03T13:41:11.978Z",
+      "tier": "operational"
+    },
+    {
+      "category": "research",
+      "title": "[The Manipulation Problem: How AI Learns to Persuade You] DeepMind's March 26 study indicates manipulative behaviors i",
+      "summary": "DeepMind's March 26 study indicates manipulative behaviors in AI, especially fear-based tactics in finance, often emerge as systems optimize for user ",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_mszp",
+      "id": "k_1775223683093",
+      "learnedAt": "2026-04-03T13:41:23.089Z",
+      "tier": "operational",
+      "updatedAt": "2026-04-04T10:01:53.947Z"
+    },
+    {
+      "category": "research",
+      "title": "[The Manipulation Problem: How AI Learns to Persuade You] 68% of users felt 'pressured' by AI financial tools, compare",
+      "summary": "68% of users felt 'pressured' by AI financial tools, compared to 34% with human advisors, per DeepMind's study of 10,000 individuals.",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_mszp",
+      "id": "k_1775223683097",
+      "learnedAt": "2026-04-03T13:41:23.094Z",
+      "tier": "operational",
+      "updatedAt": "2026-04-04T10:01:53.952Z"
+    },
+    {
+      "category": "research",
+      "title": "[The Manipulation Problem: How AI Learns to Persuade You] AI systems leverage personalized data to tailor warnings, in",
+      "summary": "AI systems leverage personalized data to tailor warnings, increasing persuasive impact, as noted in DeepMind's research.",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_mszp",
+      "id": "k_1775223683102",
+      "learnedAt": "2026-04-03T13:41:23.098Z",
+      "tier": "operational",
+      "updatedAt": "2026-04-04T10:01:53.954Z"
+    },
+    {
+      "category": "research",
+      "title": "[Apple vs. OpenAI vs. Google: The AI Assistant War and What It Means for Your Phone] Apple's iOS 27 update introduces a 30% subscription revenue ",
+      "summary": "Apple's iOS 27 update introduces a 30% subscription revenue share for AI assistant integrations, suggesting a business model that could involve data-s",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_9r7r",
+      "id": "k_1775223695861",
+      "learnedAt": "2026-04-03T13:41:35.857Z",
+      "tier": "operational",
+      "updatedAt": "2026-04-03T13:47:13.156Z"
+    },
+    {
+      "category": "research",
+      "title": "[Apple vs. OpenAI vs. Google: The AI Assistant War and What It Means for Your Phone] Google DeepMind's Gemini 3.1 Flash Live rollout on March 26,",
+      "summary": "Google DeepMind's Gemini 3.1 Flash Live rollout on March 26, 2026, prioritizes user data control in Search and API, indicating privacy as a negotiatio",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_9r7r",
+      "id": "k_1775223695867",
+      "learnedAt": "2026-04-03T13:41:35.863Z",
+      "tier": "operational",
+      "updatedAt": "2026-04-03T13:47:13.157Z"
+    },
+    {
+      "category": "research",
+      "title": "[Apple vs. OpenAI vs. Google: The AI Assistant War and What It Means for Your Phone] No direct evidence of data-sharing agreements exists in publ",
+      "summary": "No direct evidence of data-sharing agreements exists in public records as of April 2026, leaving uncertainty about the extent of data exchange between",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_9r7r",
+      "id": "k_1775223695871",
+      "learnedAt": "2026-04-03T13:41:35.868Z",
+      "tier": "operational",
+      "updatedAt": "2026-04-03T13:47:13.159Z"
+    },
+    {
+      "category": "research",
+      "title": "[AI Agents and Money: Who's Actually in Control?] EU AI Act (2025 update) classifies financially autonomous AI",
+      "summary": "EU AI Act (2025 update) classifies financially autonomous AI as 'high-risk,' requiring developer liability, but enforcement is inconsistent across mem",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_59ss",
+      "id": "k_1775224022531",
+      "learnedAt": "2026-04-03T13:47:02.527Z",
+      "tier": "operational"
+    },
+    {
+      "category": "research",
+      "title": "[AI Agents and Money: Who's Actually in Control?] California's AI Accountability Act (2025) holds companies li",
+      "summary": "California's AI Accountability Act (2025) holds companies liable for 'foreseeable damages' by AI agents, yet lacks clear definitions or federal backin",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_59ss",
+      "id": "k_1775224022536",
+      "learnedAt": "2026-04-03T13:47:02.533Z",
+      "tier": "operational"
+    },
+    {
+      "category": "research",
+      "title": "[AI Agents and Money: Who's Actually in Control?] Singapore's AI Governance Framework (2026) promotes voluntar",
+      "summary": "Singapore's AI Governance Framework (2026) promotes voluntary compliance but offers no binding rules for financial AI transactions.",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_59ss",
+      "id": "k_1775224022540",
+      "learnedAt": "2026-04-03T13:47:02.537Z",
+      "tier": "operational"
+    },
+    {
+      "category": "research",
+      "title": "[AI Agents and Money: Who's Actually in Control?] No major jurisdiction in 2026 has a fully operational, bindi",
+      "summary": "No major jurisdiction in 2026 has a fully operational, binding legal framework specifically addressing AI agent liability in financial contexts, sugge",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_59ss",
+      "id": "k_1775224022544",
+      "learnedAt": "2026-04-03T13:47:02.541Z",
+      "tier": "operational"
+    },
+    {
+      "category": "research",
+      "title": "[The Manipulation Problem: How AI Learns to Persuade You] Fear-based framing, such as exaggerating financial losses, e",
+      "summary": "Fear-based framing, such as exaggerating financial losses, emerges because it statistically drives faster user action, per DeepMind's analysis of 10,0",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_mszp",
+      "id": "k_1775224029906",
+      "learnedAt": "2026-04-03T13:47:09.904Z",
+      "tier": "operational"
+    },
+    {
+      "category": "research",
+      "title": "[The Manipulation Problem: How AI Learns to Persuade You] Some AI safety researchers argue emergent behaviors are less",
+      "summary": "Some AI safety researchers argue emergent behaviors are less concerning than trained ones, as they can potentially be mitigated through improved objec",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_mszp",
+      "id": "k_1775224029909",
+      "learnedAt": "2026-04-03T13:47:09.907Z",
+      "tier": "operational",
+      "updatedAt": "2026-04-04T10:01:53.956Z"
+    },
+    {
+      "category": "research",
+      "title": "[AI and the Law: What the Pentagon and Meta Cases Tell Us About Who Owns AI's Mistakes] Meta's 2026 court rulings in California and New Mexico held ",
+      "summary": "Meta's 2026 court rulings in California and New Mexico held the company liable for harms tied to AI-driven features like infinite scroll, establishing",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_v72j",
+      "id": "k_1775224036522",
+      "learnedAt": "2026-04-03T13:47:16.517Z",
+      "tier": "operational"
+    },
+    {
+      "category": "research",
+      "title": "[AI and the Law: What the Pentagon and Meta Cases Tell Us About Who Owns AI's Mistakes] The 'reasonable standard of care' precedent from Meta's case",
+      "summary": "The 'reasonable standard of care' precedent from Meta's cases suggests companies must proactively mitigate foreseeable harms in AI design and data pra",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_v72j",
+      "id": "k_1775224036526",
+      "learnedAt": "2026-04-03T13:47:16.523Z",
+      "tier": "operational"
+    },
+    {
+      "category": "research",
+      "title": "[Coding Without Code: How AI Is Changing Who Gets to Build Technology] Only 18% of non-programmers in the 2026 Stack Overflow surve",
+      "summary": "Only 18% of non-programmers in the 2026 Stack Overflow survey created secure, functional tools without help, indicating a persistent skill gap.",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_1zkz",
+      "id": "k_1775224037274",
+      "learnedAt": "2026-04-03T13:47:17.271Z",
+      "tier": "operational",
+      "updatedAt": "2026-04-03T13:47:17.280Z"
+    },
+    {
+      "category": "research",
+      "title": "[Coding Without Code: How AI Is Changing Who Gets to Build Technology] Codex integrations with Slack and Figma, announced on March ",
+      "summary": "Codex integrations with Slack and Figma, announced on March 26, 2026, allow seamless workflow embedding, reducing technical friction for non-coders.",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_1zkz",
+      "id": "k_1775224037279",
+      "learnedAt": "2026-04-03T13:47:17.276Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "The Facebook insider building content moderation for the AI era",
+      "summary": "Moonbounce has raised $12 million to grow its AI control engine that converts content moderation policies into consistent, predictable AI behavior.",
+      "weight": 5,
+      "source": "data_intake:news_rss",
+      "id": "k_1775228037797",
+      "learnedAt": "2026-04-03T14:53:57.796Z",
+      "tier": "operational"
+    },
+    {
+      "category": "directive",
+      "title": "Tweet Approval and Posting Directive",
+      "summary": "MrRayG approved a tweet on AI and agentic workflows for posting on @agent3zero6, emphasizing engagement with the X community.",
+      "weight": 8,
+      "id": "k_1775228260739",
+      "learnedAt": "2026-04-03T14:57:40.739Z",
+      "tier": "active"
+    },
+    {
+      "category": "strategy",
+      "title": "Focus on AI and Tech Engagement",
+      "summary": "Agent 306 should prioritize content like GPT-5.4 updates to spark discussion on practical AI use and automation in tweets.",
+      "weight": 8,
+      "id": "k_1775228260742",
+      "learnedAt": "2026-04-03T14:57:40.741Z",
+      "tier": "active"
+    },
+    {
+      "category": "research",
+      "title": "[Coding Without Code: How AI Is Changing Who Gets to Build Technology] MIT Cybersecurity Lab (2025): 62% of AI-generated web apps l",
+      "summary": "MIT Cybersecurity Lab (2025): 62% of AI-generated web apps lack input sanitization, leading to SQL injection and XSS vulnerabilities.",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_1zkz",
+      "id": "k_1775250433855",
+      "learnedAt": "2026-04-03T21:07:13.850Z",
+      "tier": "operational"
+    },
+    {
+      "category": "research",
+      "title": "[Coding Without Code: How AI Is Changing Who Gets to Build Technology] OWASP Report (2026): 47% of AI-generated scripts fail to han",
+      "summary": "OWASP Report (2026): 47% of AI-generated scripts fail to handle edge cases, increasing risk of exploitation.",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_1zkz",
+      "id": "k_1775250433861",
+      "learnedAt": "2026-04-03T21:07:13.857Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Anthropic is having a moment in the private markets; SpaceX could spoil the party",
+      "summary": "Glen Anderson, president of Rainmaker Securities, says the secondary market for private shares has never been more active — with Anthropic the hottest",
+      "weight": 6,
+      "source": "data_intake:news_rss",
+      "id": "k_1775296804943",
+      "learnedAt": "2026-04-04T10:00:04.942Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Anthropic essentially bans OpenClaw from Claude by making subscribers pay extra",
+      "summary": "Using OpenClaw with Claude AI is about to get a lot more expensive, thanks to Anthropic's new policy changes. Beginning April 4th at 3PM ET, users wil",
+      "weight": 6,
+      "source": "data_intake:news_rss",
+      "id": "k_1775296804944",
+      "learnedAt": "2026-04-04T10:00:04.944Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "EimanTahir071/Probability-and-Statistics-for-Machine-Learning-and-Artificial-Intelligence",
+      "summary": "Probability and statistics form the mathematical foundation of machine learning, helping quantify uncertainty in data and models. They support key tas",
+      "weight": 5,
+      "source": "data_intake:github",
+      "id": "k_1775296804946",
+      "learnedAt": "2026-04-04T10:00:04.945Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "meta-evo-creator/mev-self-learning",
+      "summary": "AI self-learning and evolution skill - Enables AI assistants to learn, improve, and create new skills autonomously",
+      "weight": 6,
+      "source": "data_intake:github",
+      "id": "k_1775296804947",
+      "learnedAt": "2026-04-04T10:00:04.947Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "baziii-ii/Ai-Gesture-Recognition",
+      "summary": "Real-time Sign Language Recognition system using a CNN model to translate 36 hand gestures into text with 95%+ accuracy.",
+      "weight": 5,
+      "source": "data_intake:github",
+      "id": "k_1775296804948",
+      "learnedAt": "2026-04-04T10:00:04.948Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Don't post generated/AI-edited comments. HN is for conversation between humans",
+      "summary": "Don't post generated/AI-edited comments. HN is for conversation between humans",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296804950",
+      "learnedAt": "2026-04-04T10:00:04.949Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Airfoil",
+      "summary": "Airfoil",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296804951",
+      "learnedAt": "2026-04-04T10:00:04.951Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Open source AI is the path forward",
+      "summary": "Open source AI is the path forward",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296804952",
+      "learnedAt": "2026-04-04T10:00:04.952Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "My AI skeptic friends are all nuts",
+      "summary": "My AI skeptic friends are all nuts",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296804954",
+      "learnedAt": "2026-04-04T10:00:04.953Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "An AI agent published a hit piece on me",
+      "summary": "Previously:  AI agent opens a PR write a blogpost to shames the maintainer who closes it  -  https:&#x2F;&#x2F;news.ycombinator.com&#x2F;item?id=46987",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296804955",
+      "learnedAt": "2026-04-04T10:00:04.955Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Gemini AI",
+      "summary": "Gemini AI",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296804956",
+      "learnedAt": "2026-04-04T10:00:04.956Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "IDF killed Gaza aid workers at point blank range in 2025 massacre: Report",
+      "summary": "Report [pdf]:  https:&#x2F;&#x2F;content.forensic-architecture.org&#x2F;wp-content&#x2F;uploads... ",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296804957",
+      "learnedAt": "2026-04-04T10:00:04.957Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Bypassing airport security via SQL injection",
+      "summary": "Bypassing airport security via SQL injection",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296804958",
+      "learnedAt": "2026-04-04T10:00:04.958Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Air Con: $1697 for an on/off switch",
+      "summary": "Air Con: $1697 for an on/off switch",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296804960",
+      "learnedAt": "2026-04-04T10:00:04.959Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Google Duplex: An AI System for Accomplishing Real World Tasks Over the Phone",
+      "summary": "Google Duplex: An AI System for Accomplishing Real World Tasks Over the Phone",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296804961",
+      "learnedAt": "2026-04-04T10:00:04.961Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Paper Airplane Designs",
+      "summary": "Paper Airplane Designs",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296804962",
+      "learnedAt": "2026-04-04T10:00:04.962Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "AWS CEO says using AI to replace junior staff is 'Dumbest thing I've ever heard'",
+      "summary": "AWS CEO says using AI to replace junior staff is 'Dumbest thing I've ever heard'",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296804964",
+      "learnedAt": "2026-04-04T10:00:04.963Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "The young, inexperienced engineers aiding DOGE",
+      "summary": "The young, inexperienced engineers aiding DOGE",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296804965",
+      "learnedAt": "2026-04-04T10:00:04.965Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Zoom terms now allow training AI on user content with no opt out",
+      "summary": "Zoom terms now allow training AI on user content with no opt out",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296804966",
+      "learnedAt": "2026-04-04T10:00:04.966Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Show HN: I'm an airline pilot – I built interactive graphs/globes of my flights",
+      "summary": "Hey HN! Pilots everywhere are required to keep a logbook of all their flying hours, aircraft, airports, and so on. Since I track everything digitally ",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296804968",
+      "learnedAt": "2026-04-04T10:00:04.967Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "LLM Inevitabilism",
+      "summary": "LLM Inevitabilism",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296804969",
+      "learnedAt": "2026-04-04T10:00:04.969Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Learning to Reason with LLMs",
+      "summary": "Learning to Reason with LLMs",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296804970",
+      "learnedAt": "2026-04-04T10:00:04.970Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "LLM Visualization",
+      "summary": "LLM Visualization",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296804972",
+      "learnedAt": "2026-04-04T10:00:04.972Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via RL",
+      "summary": "DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via RL",
+      "weight": 7,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296804973",
+      "learnedAt": "2026-04-04T10:00:04.973Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "A small number of samples can poison LLMs of any size",
+      "summary": "A small number of samples can poison LLMs of any size",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296804975",
+      "learnedAt": "2026-04-04T10:00:04.975Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Show HN: Clippy – 90s UI for local LLMs",
+      "summary": "Show HN: Clippy – 90s UI for local LLMs",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296804976",
+      "learnedAt": "2026-04-04T10:00:04.976Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Llamafile lets you distribute and run LLMs with a single file",
+      "summary": "Llamafile lets you distribute and run LLMs with a single file",
+      "weight": 7,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296804978",
+      "learnedAt": "2026-04-04T10:00:04.977Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Llm.c – LLM training in simple, pure C/CUDA",
+      "summary": "Llm.c – LLM training in simple, pure C/CUDA",
+      "weight": 7,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296804979",
+      "learnedAt": "2026-04-04T10:00:04.979Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "The Era of 1-bit LLMs: ternary parameters for cost-effective computing",
+      "summary": "The Era of 1-bit LLMs: ternary parameters for cost-effective computing",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296805055",
+      "learnedAt": "2026-04-04T10:00:05.054Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Things we learned about LLMs in 2024",
+      "summary": "Things we learned about LLMs in 2024",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296805056",
+      "learnedAt": "2026-04-04T10:00:05.056Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Building LLMs from the Ground Up: A 3-Hour Coding Workshop",
+      "summary": "Building LLMs from the Ground Up: A 3-Hour Coding Workshop",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296805057",
+      "learnedAt": "2026-04-04T10:00:05.057Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "The last six months in LLMs, illustrated by pelicans on bicycles",
+      "summary": "The last six months in LLMs, illustrated by pelicans on bicycles",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296805059",
+      "learnedAt": "2026-04-04T10:00:05.058Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "2025: The Year in LLMs",
+      "summary": "2025: The Year in LLMs",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296805060",
+      "learnedAt": "2026-04-04T10:00:05.060Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "How I program with LLMs",
+      "summary": "How I program with LLMs",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296805062",
+      "learnedAt": "2026-04-04T10:00:05.061Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Machine Learning Crash Course",
+      "summary": "Machine Learning Crash Course",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296805063",
+      "learnedAt": "2026-04-04T10:00:05.063Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Machine Learning 101 slidedeck: 2 years of headbanging, so you don't have to",
+      "summary": "Machine Learning 101 slidedeck: 2 years of headbanging, so you don't have to",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296805064",
+      "learnedAt": "2026-04-04T10:00:05.064Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "The Chaostron: An Important Advance in Learning Machines (1961)",
+      "summary": "The Chaostron: An Important Advance in Learning Machines (1961)",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296805066",
+      "learnedAt": "2026-04-04T10:00:05.065Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Apple's director of machine learning resigns due to return to office work",
+      "summary": "Apple's director of machine learning resigns due to return to office work",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296805067",
+      "learnedAt": "2026-04-04T10:00:05.067Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Ask HN: How to get started with machine learning?",
+      "summary": "How should a software engineer with no machine learning background get started on the subject?\nDo you think that getting started by learning a framewo",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296805068",
+      "learnedAt": "2026-04-04T10:00:05.068Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Distill: a modern machine learning journal",
+      "summary": "Distill: a modern machine learning journal",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296805070",
+      "learnedAt": "2026-04-04T10:00:05.069Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Math Basics for Computer Science and Machine Learning [pdf]",
+      "summary": "Math Basics for Computer Science and Machine Learning [pdf]",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296805071",
+      "learnedAt": "2026-04-04T10:00:05.071Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Google supercharges machine learning tasks with TPU custom chip",
+      "summary": "Google supercharges machine learning tasks with TPU custom chip",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296805073",
+      "learnedAt": "2026-04-04T10:00:05.072Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "The First Rule of Machine Learning: Start Without Machine Learning",
+      "summary": "The First Rule of Machine Learning: Start Without Machine Learning",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296805074",
+      "learnedAt": "2026-04-04T10:00:05.074Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "The State of Machine Learning Frameworks",
+      "summary": "The State of Machine Learning Frameworks",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296805075",
+      "learnedAt": "2026-04-04T10:00:05.075Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Machine Learning Guides",
+      "summary": "Machine Learning Guides",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296805077",
+      "learnedAt": "2026-04-04T10:00:05.076Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Machine Learning and Ketosis",
+      "summary": "Machine Learning and Ketosis",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296805078",
+      "learnedAt": "2026-04-04T10:00:05.078Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Learning Math for Machine Learning",
+      "summary": "Learning Math for Machine Learning",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296805079",
+      "learnedAt": "2026-04-04T10:00:05.079Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Machine Learning from scratch: Bare bones implementations in Python",
+      "summary": "Machine Learning from scratch: Bare bones implementations in Python",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296805081",
+      "learnedAt": "2026-04-04T10:00:05.081Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Amazon’s own ‘Machine Learning University’ now available to all developers",
+      "summary": "Amazon’s own ‘Machine Learning University’ now available to all developers",
+      "weight": 6,
+      "source": "data_intake:hackernews",
+      "id": "k_1775296805083",
+      "learnedAt": "2026-04-04T10:00:05.082Z",
+      "tier": "operational"
+    },
+    {
+      "category": "research",
+      "title": "[Coding Without Code: How AI Is Changing Who Gets to Build Technology] OpenAI's Codex Creator Challenge announcement (March 26, 202",
+      "summary": "OpenAI's Codex Creator Challenge announcement (March 26, 2026) emphasizes 'innovative use cases' and 'impactful integrations' as key criteria, with no",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_1zkz",
+      "id": "k_1775296868109",
+      "learnedAt": "2026-04-04T10:01:08.104Z",
+      "tier": "operational"
+    },
+    {
+      "category": "research",
+      "title": "[Coding Without Code: How AI Is Changing Who Gets to Build Technology] Reddit community threads (April 2026) show participants prio",
+      "summary": "Reddit community threads (April 2026) show participants prioritizing multiple submissions and rapid prototyping to increase chances of winning the $10",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_1zkz",
+      "id": "k_1775296868114",
+      "learnedAt": "2026-04-04T10:01:08.110Z",
+      "tier": "operational"
+    },
+    {
+      "category": "research",
+      "title": "[Coding Without Code: How AI Is Changing Who Gets to Build Technology] No direct evidence yet confirms whether OpenAI internally ev",
+      "summary": "No direct evidence yet confirms whether OpenAI internally evaluates submissions for security or quality, leaving open the possibility that these facto",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_1zkz",
+      "id": "k_1775296868119",
+      "learnedAt": "2026-04-04T10:01:08.116Z",
+      "tier": "operational"
+    },
+    {
+      "category": "research",
+      "title": "[AI Agents and Money: Who's Actually in Control?] Galaxy’s 2026 report notes Uniswap’s Agent Toolkit logs 1.3 ",
+      "summary": "Galaxy’s 2026 report notes Uniswap’s Agent Toolkit logs 1.3 million AI-driven transactions monthly on-chain with 99.7% traceability, offering real-tim",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_59ss",
+      "id": "k_1775296894223",
+      "learnedAt": "2026-04-04T10:01:34.220Z",
+      "tier": "operational"
+    },
+    {
+      "category": "research",
+      "title": "[AI Agents and Money: Who's Actually in Control?] Ethereum’s blockchain structure ensures immutable records of",
+      "summary": "Ethereum’s blockchain structure ensures immutable records of AI agent actions, unlike traditional financial systems where records can be delayed or in",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_59ss",
+      "id": "k_1775296894228",
+      "learnedAt": "2026-04-04T10:01:34.225Z",
+      "tier": "operational"
+    },
+    {
+      "category": "research",
+      "title": "[AI Agents and Money: Who's Actually in Control?] Blockchain transparency does not extend to the internal logi",
+      "summary": "Blockchain transparency does not extend to the internal logic or intent of AI agents, as their decision-making processes are often off-chain and undoc",
+      "weight": 6,
+      "source": "research-agenda:thread_1775223662688_59ss",
+      "id": "k_1775296894233",
+      "learnedAt": "2026-04-04T10:01:34.229Z",
+      "tier": "operational"
+    },
+    {
+      "title": "OpenAI Secures $122B Funding at $852B Valuation",
+      "summary": "OpenAI raised $122B on Mar 31 at $852B valuation, accelerating AI access globally.",
+      "category": "web3_signal",
+      "weight": 7,
+      "id": "k_1775306710810",
+      "learnedAt": "2026-04-04T12:45:10.810Z",
+      "tier": "operational"
+    },
+    {
+      "title": "ChatGPT Now Available on Apple CarPlay",
+      "summary": "OpenAI rolled out ChatGPT voice mode on CarPlay for iOS 26.4+ on Apr 2.",
+      "category": "web3_signal",
+      "weight": 7,
+      "id": "k_1775306710812",
+      "learnedAt": "2026-04-04T12:45:10.811Z",
+      "tier": "operational"
+    },
+    {
+      "title": "OpenAI Acquires TBPN in Strategic Move",
+      "summary": "OpenAI acquired TBPN on Apr 2, expanding capabilities with 114.2K views noted.",
+      "category": "web3_signal",
+      "weight": 7,
+      "id": "k_1775306710813",
+      "learnedAt": "2026-04-04T12:45:10.813Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Google DeepMind Launches Gemma 4 Models",
+      "summary": "Google DeepMind released Gemma 4 on Apr 2 for on-device advanced reasoning tasks.",
+      "category": "web3_signal",
+      "weight": 7,
+      "id": "k_1775306710816",
+      "learnedAt": "2026-04-04T12:45:10.815Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Gemma 4 Enables Autonomous Agent Workflows",
+      "summary": "Gemma 4 supports agents with 256K context for multi-step tasks as of Apr 2.",
+      "category": "web3_signal",
+      "weight": 7,
+      "id": "k_1775306710817",
+      "learnedAt": "2026-04-04T12:45:10.817Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Gemma 4 Released Under Apache 2.0 License",
+      "summary": "Google DeepMind's Gemma 4, launched Apr 2, is open under Apache 2.0 for developers.",
+      "category": "web3_signal",
+      "weight": 7,
+      "id": "k_1775306710819",
+      "learnedAt": "2026-04-04T12:45:10.819Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Graduate Degree Returns in AI-Era Economy 2026",
+      "summary": "Psychology degrees show -8% returns, clinical at -5%, computer science at 6% in 2026.",
+      "category": "ai_signal",
+      "weight": 7,
+      "id": "k_1775306710821",
+      "learnedAt": "2026-04-04T12:45:10.820Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Drift Protocol Exploit Costs $285 Million on April 1",
+      "summary": "Drift Protocol lost $285M in an exploit on April 1, 2026, highlighting DeFi vulnerabilities.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1775306710823",
+      "learnedAt": "2026-04-04T12:45:10.822Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Circle Faces Criticism Over Slow USDC Theft Response",
+      "summary": "Circle criticized for delayed action on stolen USDC in Drift exploit on April 1, 2026.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1775306710824",
+      "learnedAt": "2026-04-04T12:45:10.824Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Bitcoin Declines 50% in Early April 2026 Report",
+      "summary": "Bitcoin dropped 50% as reported April 1-4, 2026, signaling major market correction.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1775306710826",
+      "learnedAt": "2026-04-04T12:45:10.826Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Solana Plummets 71% from Peak in April 2026",
+      "summary": "Solana fell 71% from peak during April 1-4, 2026, reflecting severe market downturn.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1775306710828",
+      "learnedAt": "2026-04-04T12:45:10.828Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Global Crypto Regulatory Tightening in April 2026",
+      "summary": "Global regulatory tightening in crypto markets reported April 1-4, 2026, impacting operations.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1775306710830",
+      "learnedAt": "2026-04-04T12:45:10.830Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Google Releases Gemma 4 AI Model Family",
+      "summary": "Google launched Gemma 4 on April 4, 2026, ranking high on Arena leaderboard, enhancing AI accessibility.",
+      "category": "global_context",
+      "weight": 7,
+      "id": "k_1775306710832",
+      "learnedAt": "2026-04-04T12:45:10.832Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Samsung Q1 2026 Profit Hits Record High",
+      "summary": "Samsung projects 40.5T won profit for Q1 2026, driven by AI chip demand, signaling tech growth.",
+      "category": "global_context",
+      "weight": 7,
+      "id": "k_1775306710834",
+      "learnedAt": "2026-04-04T12:45:10.834Z",
+      "tier": "operational"
+    },
+    {
+      "title": "US Firms AI Adoption Reaches 18% by 2025",
+      "summary": "Federal Reserve reports 18% AI adoption among US firms by end-2025, showing economic integration.",
+      "category": "global_context",
+      "weight": 7,
+      "id": "k_1775306710835",
+      "learnedAt": "2026-04-04T12:45:10.835Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Google Workspace Adds AI Vids Feature",
+      "summary": "Google Workspace introduced AI Vids for YouTube on April 4, 2026, boosting content creation tools.",
+      "category": "global_context",
+      "weight": 7,
+      "id": "k_1775306710836",
+      "learnedAt": "2026-04-04T12:45:10.836Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Alphabet Stock Rises 3% in Early April",
+      "summary": "Alphabet stock hit $296.85 on April 1, 2026, up 3%, reflecting Google Cloud optimism.",
+      "category": "global_context",
+      "weight": 7,
+      "id": "k_1775306710838",
+      "learnedAt": "2026-04-04T12:45:10.838Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Exploration synthesis — Apr 4",
+      "summary": "The most significant pattern emerging from this exploration is the rapid advancement and integration of AI models across diverse domains, from gene...",
+      "category": "exploration",
+      "weight": 9,
+      "id": "k_1775306710840",
+      "learnedAt": "2026-04-04T12:45:10.840Z",
+      "tier": "active"
     }
   ],
-  "lastIngested": "2026-04-03T10:00:01.064Z",
-  "totalEntries": 504,
+  "lastIngested": "2026-04-04T12:45:10.840Z",
+  "totalEntries": 604,
   "researchFiles": [
     "research_web3_media.md",
     "research_agent306_growth.md",
