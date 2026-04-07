@@ -185,6 +185,42 @@ export async function generateResearchAgenda(): Promise<ResearchThread[]> {
     .map(t => `- "${t.topic}" [${t.status}]`)
     .join("\n") || "No active research topics in pipeline.";
 
+  // ── Live AI news via Perplexity Sonar ──────────────────────────────────
+  let liveAINews = "";
+  const pplxKeyGen = process.env.PERPLEXITY_API_KEY ?? "";
+  if (pplxKeyGen && pplxKeyGen.length > 10) {
+    try {
+      const today = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+      const pplxRes = await fetch("https://api.perplexity.ai/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${pplxKeyGen}`,
+        },
+        body: JSON.stringify({
+          model: "sonar",
+          messages: [{
+            role: "system",
+            content: "You are a research assistant tracking AI and technology news. Return ONLY specific, dated facts. Include names, numbers, and dates."
+          }, {
+            role: "user",
+            content: `Today is ${today}. What are the TOP 10 most important AI and technology developments from the LAST 48 HOURS?\n\nInclude:\n- Major AI model releases, updates, or breakthroughs\n- Company announcements (OpenAI, Anthropic, Google, Meta, Microsoft, etc.)\n- Funding rounds, acquisitions, or partnerships\n- Regulatory actions or policy changes\n- Notable research papers or benchmark results\n- AI agent developments and autonomous systems news\n- Blockchain/Web3 and AI convergence news\n\nFor each: date, what happened, who was involved, why it matters. Only last 48 hours.`
+          }],
+          max_tokens: 1000,
+          temperature: 0.1,
+        }),
+        signal: AbortSignal.timeout(20000),
+      });
+      if (pplxRes.ok) {
+        const pplxData = await pplxRes.json() as any;
+        liveAINews = pplxData.choices?.[0]?.message?.content ?? "";
+        console.log(`[ResearchAgenda] Live AI news: ${liveAINews.length} chars`);
+      }
+    } catch (e: any) {
+      console.warn("[ResearchAgenda] Live news fetch failed:", e.message);
+    }
+  }
+
   const systemPrompt = `${agentCtx}
 
 You are Agent 306 planning your research agenda. Your audience is EVERYDAY PEOPLE who want to understand and use AI practically.
@@ -237,7 +273,7 @@ ${activeCtx}
 ACTIVE PIPELINE TOPICS (do NOT duplicate):
 ${pipelineCtx}
 
-${analysisCtx ? `LESSONS FROM PAST RESEARCH:\n${analysisCtx}\n` : ""}Generate 3-5 new research threads and any updates to existing threads. Respond with JSON only.`;
+${analysisCtx ? `LESSONS FROM PAST RESEARCH:\n${analysisCtx}\n` : ""}${liveAINews ? `LIVE AI NEWS (last 48 hours — from web search today):\n${liveAINews}\n\nIMPORTANT: Use these recent developments to inform your research agenda. Propose threads that investigate TODAY'S news, not old topics. Your audience wants to understand what's happening RIGHT NOW in AI.\n\n` : ""}Generate 3-5 new research threads and any updates to existing threads. Respond with JSON only.`;
 
   try {
     const res = await fetch(GROK_URL, {
@@ -387,6 +423,44 @@ export async function advanceThread(threadId: string): Promise<ResearchThread | 
   const agentCtx = await getOptimizedContextAsync(`research ${thread.title} ${thread.thesis}`);
   const analysisCtx = getAnalysisContext("research_thread", 5);
 
+  // ── Live web context via Perplexity Sonar ──────────────────────────────
+  let liveContext = "";
+  const pplxKey = process.env.PERPLEXITY_API_KEY ?? "";
+  if (pplxKey && pplxKey.length > 10) {
+    try {
+      const today = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+      const pplxRes = await fetch("https://api.perplexity.ai/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${pplxKey}`,
+        },
+        body: JSON.stringify({
+          model: "sonar",
+          messages: [{
+            role: "system",
+            content: "You are a research assistant. Return ONLY specific, dated facts from the last 48 hours. Include company names, numbers, quotes, and dates. No analysis — just facts."
+          }, {
+            role: "user",
+            content: `Today is ${today}. Find the most important developments from the LAST 48 HOURS related to: "${thread.title}"\n\nFocus on:\n- Breaking news, announcements, launches\n- New research papers or findings\n- Company moves, partnerships, funding\n- Regulatory changes\n- Notable expert opinions or debates\n\nOnly include things that happened in the last 48 hours. Be specific with dates, names, and numbers.`
+          }],
+          max_tokens: 800,
+          temperature: 0.1,
+        }),
+        signal: AbortSignal.timeout(20000),
+      });
+      if (pplxRes.ok) {
+        const pplxData = await pplxRes.json() as any;
+        liveContext = pplxData.choices?.[0]?.message?.content ?? "";
+        if (liveContext.length > 50) {
+          console.log(`[ResearchAgenda] Perplexity live context: ${liveContext.length} chars for "${thread.title}"`);
+        }
+      }
+    } catch (e: any) {
+      console.warn(`[ResearchAgenda] Perplexity live search failed:`, e.message);
+    }
+  }
+
   // Build evidence context
   const evidenceCtx = [
     thread.evidence.supporting.length > 0
@@ -453,7 +527,7 @@ ${subCtx}
 
 EXISTING KNOWLEDGE:
 ${kbDigest}
-
+${liveContext ? `\nLIVE DEVELOPMENTS (last 48 hours — from web search today):\n${liveContext}\n\nIMPORTANT: Incorporate these recent developments into your analysis. If any of these developments directly affect the thesis, update it. Prioritize recent facts over older knowledge.\n` : ""}
 Research the next gap and advance this thread. Respond with JSON only.`;
 
   try {

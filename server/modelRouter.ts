@@ -65,6 +65,7 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "skill-extraction": "premium",
   "daily-briefing": "premium",
   "improvement-plan": "premium",
+  "blog-post": "routine",
 };
 
 /**
