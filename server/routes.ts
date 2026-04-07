@@ -58,6 +58,11 @@ import { generateArticleCard } from "./articleImageCard.js";
 import { runDailyCycle, getBriefingState, scheduleDailyCycle } from "./dailyCycleEngine.js";
 import { getPublicStatus, getPublicProgress, getPublicActivity, getPublicGoals, getPublicResearch, getPublicMetacognition } from "./publicApi.js";
 import { getReflections, getStyleRules, deleteStyleRule, runReflection } from "./reflectionEngine.js";
+import {
+  getPublishedPosts, getPostBySlug, getAllPosts,
+  createBlogPost, generateBlogPost, publishPost, updatePost, deletePost,
+  getBlogState
+} from "./blogEngine.js";
 import { getDebates, getContradictions, runDebate, resolveContradiction, runConfidenceDecay, getDecayingEntries } from "./reasoningEngine.js";
 import { getConnections, getReports, runConnectionScan, generateSynthesis } from "./synthesisEngine.js";
 import { getKnowledgeMap, getClusters, getContradictions as getGraphContradictions, findConnections as findGraphConnections, clusterKnowledge, detectContradictions, generatePerspective } from "./knowledge-graph.js";
@@ -3853,6 +3858,60 @@ needsHelp: true only when you genuinely need his direction or information`,
     } catch (e: any) {
       res.status(500).json({ error: "Semantic search failed: " + e.message });
     }
+  });
+
+  // ── Public Blog API (for agent306.ai site) ────────────────────────────
+  app.get("/api/public/blog/posts", (req, res) => {
+    const limit = parseInt(req.query.limit as string) || 20;
+    res.json({ posts: getPublishedPosts(limit) });
+  });
+
+  app.get("/api/public/blog/posts/:slug", (req, res) => {
+    const post = getPostBySlug(req.params.slug);
+    if (!post) return res.status(404).json({ error: "Post not found" });
+    res.json(post);
+  });
+
+  // ── Dashboard Blog Management (auth-protected) ────────────────────────
+  app.get("/api/blog/state", requireDashAuth, (_req, res) => {
+    res.json(getBlogState());
+  });
+
+  app.get("/api/blog/posts", requireDashAuth, (_req, res) => {
+    res.json({ posts: getAllPosts() });
+  });
+
+  app.post("/api/blog/posts", requireDashAuth, async (req, res) => {
+    const { title, content, source, sourceId, tags, status } = req.body;
+    if (!title || !content) return res.status(400).json({ error: "title and content required" });
+    const post = createBlogPost({ title, content, source: source ?? "standalone", sourceId, tags, status });
+    res.json(post);
+  });
+
+  app.post("/api/blog/generate", requireDashAuth, async (req, res) => {
+    const { topic, sourceContent, source, sourceId, autoPublish } = req.body;
+    if (!topic || !sourceContent) return res.status(400).json({ error: "topic and sourceContent required" });
+    const post = await generateBlogPost({ topic, sourceContent, source: source ?? "standalone", sourceId, autoPublish });
+    if (!post) return res.status(500).json({ error: "Blog generation failed" });
+    res.json(post);
+  });
+
+  app.post("/api/blog/posts/:id/publish", requireDashAuth, (req, res) => {
+    const post = publishPost(req.params.id);
+    if (!post) return res.status(404).json({ error: "Post not found" });
+    res.json(post);
+  });
+
+  app.put("/api/blog/posts/:id", requireDashAuth, (req, res) => {
+    const post = updatePost(req.params.id, req.body);
+    if (!post) return res.status(404).json({ error: "Post not found" });
+    res.json(post);
+  });
+
+  app.delete("/api/blog/posts/:id", requireDashAuth, (req, res) => {
+    const ok = deletePost(req.params.id);
+    if (!ok) return res.status(404).json({ error: "Post not found" });
+    res.json({ success: true });
   });
 
   app.post("/api/seed", (_req, res) => {

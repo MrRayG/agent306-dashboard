@@ -1029,6 +1029,42 @@ export async function generateEpisodeFromThread(threadId: string): Promise<Episo
   const agentCtx = getOptimizedContext(topic.topic + " " + pitchText);
   const skillsCtx = formatSkillsForPrompt("episode");
 
+  // ── Fresh context via Perplexity Sonar ──────────────────────────────────
+  let freshContext = "";
+  const pplxKey = process.env.PERPLEXITY_API_KEY ?? "";
+  if (pplxKey && pplxKey.length > 10) {
+    try {
+      const today = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+      const pplxRes = await fetch("https://api.perplexity.ai/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${pplxKey}`,
+        },
+        body: JSON.stringify({
+          model: "sonar",
+          messages: [{
+            role: "system",
+            content: "You are a research assistant preparing facts for a podcast episode. Return specific, dated facts with sources."
+          }, {
+            role: "user",
+            content: `Today is ${today}. I'm producing a podcast episode about: "${pitchText}"\n\nFind the LATEST developments (last 48-72 hours) related to this topic:\n- Breaking news or announcements\n- New data, studies, or benchmarks\n- Expert opinions or industry reactions\n- Real-world examples or case studies\n\nBe specific — names, dates, numbers, quotes. These facts will be incorporated into the episode script.`
+          }],
+          max_tokens: 800,
+          temperature: 0.1,
+        }),
+        signal: AbortSignal.timeout(20000),
+      });
+      if (pplxRes.ok) {
+        const data = await pplxRes.json() as any;
+        freshContext = data.choices?.[0]?.message?.content ?? "";
+        console.log(`[Podcast Pipeline] Fresh context: ${freshContext.length} chars for "${pitchText}"`);
+      }
+    } catch (e: any) {
+      console.warn("[Podcast Pipeline] Fresh context fetch failed:", e.message);
+    }
+  }
+
   // Generate episode structure via LLM
   try {
     const res = await fetch(GROK_URL, {
@@ -1100,7 +1136,7 @@ ${currentKnowledge}
 
 PODCAST PITCH FROM RESEARCH:
 ${pitchText}
-
+${freshContext ? `\nLATEST DEVELOPMENTS (from today's research — use these to make the episode current):\n${freshContext}\n` : ""}
 Return JSON:
 {
   "title": "Episode title — [Topic] — [306's take in 5 words]",
