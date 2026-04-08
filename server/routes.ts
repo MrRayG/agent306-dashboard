@@ -886,6 +886,17 @@ setTimeout(() => {
   scheduleDailyCycle();
 }, 50_000);
 
+// ── EXPLORATION ENGINE — autonomous web scanning ──────────────────────────────
+setTimeout(() => {
+  const pplxKey = process.env.PERPLEXITY_API_KEY;
+  if (pplxKey) {
+    scheduleExploration(LLM_API_KEY, pplxKey);
+    console.log("[Scheduler] Exploration engine scheduled");
+  } else {
+    console.warn("[Scheduler] Exploration engine skipped — no PERPLEXITY_API_KEY");
+  }
+}, 60_000);
+
 // ── DREAM ENGINE — seed initial dreams on startup ────────────────────────────
 setTimeout(() => {
   seedDreams();

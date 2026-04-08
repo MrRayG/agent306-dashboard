@@ -26,15 +26,17 @@ import { getOptimizedContext } from "./contextWindow.js";
 import { getModel } from "./modelRouter.js";
 import { checkAndExtractSkills } from "./skillEngine.js";
 import { runReflection } from "./reflectionEngine.js";
-import { runConfidenceDecay, runDebate, checkContradictions, getDebates } from "./reasoningEngine.js";
+import { runConfidenceDecay, runDebate, checkContradictions, getDebates, autoResolveOldContradictions } from "./reasoningEngine.js";
 import { runConnectionScan } from "./synthesisEngine.js";
 import { extractInsights } from "./conversationLearningEngine.js";
 import { getMetacognitionState } from "./metacognitionEngine.js";
-import { getResearchLab, resolveHypothesis } from "./researchEngine.js";
+import { getResearchLab, resolveHypothesis, addHypothesis } from "./researchEngine.js";
 import { clusterKnowledge, detectContradictions as detectGraphContradictions } from "./knowledge-graph.js";
 import { runResearchAgendaCycle } from "./research-agenda.js";
-import { updateDreams, takeGrowthSnapshot, generateSelfImprovementPlan, seedDreams } from "./dreamEngine.js";
+import { updateDreams, takeGrowthSnapshot, generateSelfImprovementPlan, executeImprovementActions, seedDreams } from "./dreamEngine.js";
 import { runAutoPodcastPipeline } from "./podcastEngine.js";
+import { generateBlogPost, getBlogState } from "./blogEngine.js";
+import { getAgenda } from "./research-agenda.js";
 import { analyzeDailyCycle } from "./analyzerEngine.js";
 
 const GROK_URL     = LLM_BASE_URL;
@@ -217,6 +219,7 @@ async function callGrokForBriefing(context: {
   todaysAction: TodaysAction;
   goalProgress: GoalProgress[];
   archiveReport: ArchiveReport;
+  hypotheses_to_create: Array<{ claim: string; basis: string; metric?: string; prediction?: string; timeframe?: string; confidence?: string }>;
 } | null> {
   if (!GROK_API_KEY) {
     console.warn("[DailyCycle] No GROK_API_KEY — skipping");
@@ -267,6 +270,19 @@ You must respond with ONLY valid JSON matching this exact structure:
   "goalProgress": [{ "goalTitle": string, "status": string, "yesterday": string, "today": string, "devAsk": string|null, "staleDays": number }],
   "archiveReport": { "resolved": string[], "archived": string[], "cleared": number }
 }
+
+Also, if your analysis suggests any NEW testable hypotheses that Agent 306 should track, include them in a "hypotheses_to_create" array in your JSON response:
+"hypotheses_to_create": [
+  {
+    "claim": "specific testable claim",
+    "basis": "evidence or reasoning",
+    "metric": "how to measure",
+    "prediction": "expected outcome",
+    "timeframe": "when verifiable",
+    "confidence": "low|medium|high"
+  }
+]
+If no strong hypotheses emerge from today's analysis, return an empty array.
 
 Rules:
 - todaysAction MUST be ONE specific, actionable recommendation. Not a list.
@@ -328,6 +344,7 @@ Generate the daily briefing. Respond with JSON only.`;
       todaysAction:         parsed.todaysAction ?? { action: "Review the daily briefing", reasoning: "No specific action determined", priority: "medium" },
       goalProgress:         parsed.goalProgress ?? [],
       archiveReport:        parsed.archiveReport ?? { resolved: [], archived: [], cleared: 0 },
+      hypotheses_to_create: parsed.hypotheses_to_create ?? [],
     };
   } catch (e: any) {
     console.error("[DailyCycle] Grok call failed:", e.message);
@@ -567,6 +584,29 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
   // 4. Auto-ingest knowledge from research completions
   ingestResearchKnowledge(result.researchCompletions);
 
+  // 4a. Auto-create hypotheses from briefing (non-blocking)
+  try {
+    const briefingHypotheses = (result as any).hypotheses_to_create;
+    if (briefingHypotheses && Array.isArray(briefingHypotheses)) {
+      for (const h of briefingHypotheses) {
+        if (h.claim && h.basis) {
+          addHypothesis({
+            claim: h.claim,
+            basis: h.basis,
+            metric: h.metric || "To be determined",
+            prediction: h.prediction || h.claim,
+            timeframe: h.timeframe || "3 months",
+            confidence: h.confidence || "medium",
+            source: "daily_cycle",
+          });
+          console.log(`[DailyCycle] Auto-created hypothesis: "${h.claim}"`);
+        }
+      }
+    }
+  } catch (e: any) {
+    console.warn("[DailyCycle] Hypothesis creation from briefing failed:", e.message);
+  }
+
   // 4b. Self-improvement cycle (non-blocking — failures are logged, never crash)
   try {
     console.log("[DailyCycle] Running self-improvement engines...");
@@ -584,6 +624,8 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     await autoResolveHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis resolution failed:", e.message));
     // Contradiction detection: scan recent knowledge entries for conflicts
     await autoDetectContradictions().catch(e => console.warn("[DailyCycle] Contradiction detection failed:", e.message));
+    // Auto-resolve minor contradictions older than 3 days
+    try { autoResolveOldContradictions(); } catch (e: any) { console.warn("[DailyCycle] Auto-resolve contradictions failed:", e.message); }
     // Knowledge graph: cluster knowledge into themes and detect graph-level contradictions
     await clusterKnowledge().catch(e => console.warn("[DailyCycle] Knowledge clustering failed:", e.message));
     await detectGraphContradictions().catch(e => console.warn("[DailyCycle] Graph contradiction detection failed:", e.message));
@@ -603,6 +645,8 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     if (new Date().getUTCDay() === 1) {
       await generateSelfImprovementPlan().catch(e => console.warn("[DailyCycle] Improvement plan failed:", e.message));
     }
+    // Execute pending improvement actions (runs daily to process any pending items)
+    await executeImprovementActions().catch(e => console.warn("[DailyCycle] Improvement execution failed:", e.message));
   } catch (e: any) {
     console.warn("[DailyCycle] Self-improvement cycle error (non-fatal):", e.message);
   }
@@ -619,6 +663,40 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     }
   } catch (e: any) {
     console.warn("[DailyCycle] Podcast pipeline error (non-fatal):", e.message);
+  }
+
+  // 4d. Auto-generate blog drafts from approved research (max 1/cycle)
+  try {
+    const agenda = getAgenda();
+    const matureThreads = agenda.threads.filter(t =>
+      t.status === "mature" && t.evidence.supporting.length >= 3,
+    );
+
+    const blogState = getBlogState();
+    const existingSourceIds = new Set(blogState.posts.map(p => p.sourceId));
+    const unbloggedThreads = matureThreads.filter(t => !existingSourceIds.has(t.id));
+
+    if (unbloggedThreads.length > 0) {
+      const thread = unbloggedThreads[0];
+      const sourceContent = thread.thesis + "\n\n" +
+        (thread.evidence.supporting.length > 0 ? `Supporting evidence: ${thread.evidence.supporting.join(", ")}` : "") +
+        (thread.actionableTips.length > 0 ? `\n\nTips: ${thread.actionableTips.join("; ")}` : "");
+      const post = await generateBlogPost({
+        topic: thread.title,
+        sourceContent,
+        source: "research",
+        sourceId: thread.id,
+        autoPublish: false,
+      }).catch(e => {
+        console.warn("[DailyCycle] Blog generation failed:", e.message);
+        return null;
+      });
+      if (post) {
+        console.log(`[DailyCycle] Auto-generated blog draft: "${post.title}"`);
+      }
+    }
+  } catch (e: any) {
+    console.warn("[DailyCycle] Blog generation step failed:", e.message);
   }
 
   // 5. Build briefing

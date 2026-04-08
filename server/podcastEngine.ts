@@ -502,6 +502,23 @@ export function publishEpisode(episodeId: string, publishedTo: string[]): boolea
   saveState(state);
 
   console.log(`[Podcast] Published: ${EPISODE_META[episode.type].label} #${episode.episodeNumber} — "${episode.title}"`);
+
+  // Auto-post to Farcaster if enabled and social post content exists (fire-and-forget)
+  if (episode.metadata?.socialPost) {
+    (async () => {
+      try {
+        const { postCast, isFarcasterEnabled } = await import("./farcasterEngine.js");
+        if (isFarcasterEnabled()) {
+          const cast = await postCast({ text: episode.metadata!.socialPost.slice(0, 1024), channel: "ai" });
+          if (cast) {
+            console.log(`[Podcast] Auto-posted to Farcaster: "${episode.title}"`);
+          }
+        }
+      } catch (e: any) {
+        console.warn("[Podcast] Farcaster auto-post failed:", e.message);
+      }
+    })();
+  }
   return true;
 }
 
@@ -1358,6 +1375,13 @@ Score each aspect 1-10 and explain briefly:
  */
 export async function runAutoPodcastPipeline(): Promise<Episode | null> {
   console.log("[Podcast Pipeline] Checking for podcast-ready research threads...");
+
+  // Don't generate new episodes if too many are awaiting review
+  const scriptedCount = state.episodes.filter(e => e.status === "scripted").length;
+  if (scriptedCount >= 3) {
+    console.log(`[Podcast Pipeline] Skipping auto-pipeline — ${scriptedCount} episodes awaiting review`);
+    return null;
+  }
 
   // Check if we already generated an episode today
   const today = new Date().toISOString().slice(0, 10);

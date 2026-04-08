@@ -224,7 +224,7 @@ Analyze what worked or didn't work about this post. If you spot a strong enough 
 
 // ── Style rule management ─────────────────────────────────────────────────────
 
-function addStyleRule(rule: string, sourceId: string): void {
+export function addStyleRule(rule: string, sourceId: string): void {
   // Check for similar existing rule
   const existing = styleRules.rules.find(r =>
     r.rule.toLowerCase().includes(rule.toLowerCase().slice(0, 30)) ||
@@ -287,6 +287,68 @@ export async function runReflection(): Promise<Reflection[]> {
       signals: lesson.signals,
     });
     if (ref) results.push(ref);
+  }
+
+  // Also reflect on podcast episode quality → style rules
+  try {
+    const podcastStatePath = dataPath("podcast_state.json");
+    if (fs.existsSync(podcastStatePath)) {
+      const podcastState = JSON.parse(fs.readFileSync(podcastStatePath, "utf8"));
+      const recentEpisodes = (podcastState.episodes || [])
+        .filter((ep: any) => ep.reflection && ep.reflection.scores)
+        .slice(-5);
+
+      if (recentEpisodes.length > 0) {
+        // Find consistently low-scoring dimensions
+        const dimensions: Record<string, number[]> = {};
+        for (const ep of recentEpisodes) {
+          for (const [dim, score] of Object.entries(ep.reflection.scores)) {
+            if (!dimensions[dim]) dimensions[dim] = [];
+            dimensions[dim].push(score as number);
+          }
+        }
+
+        const weakDimensions = Object.entries(dimensions)
+          .map(([dim, scores]) => ({
+            dimension: dim,
+            avg: scores.reduce((a, b) => a + b, 0) / scores.length,
+          }))
+          .filter(d => d.avg < 7) // Below 7/10 needs improvement
+          .sort((a, b) => a.avg - b.avg);
+
+        if (weakDimensions.length > 0) {
+          const podcastRuleRes = await fetch(GROK_URL, {
+            method: "POST",
+            headers: getLLMHeaders(),
+            body: JSON.stringify({
+              model: getModel("reflection"),
+              messages: [{
+                role: "system",
+                content: `You generate concise style improvement rules for podcast scripts. Each rule should be ONE actionable instruction. Output JSON: {"rules": ["rule 1", "rule 2"]}`
+              }, {
+                role: "user",
+                content: `These podcast dimensions are consistently scoring low:\n${weakDimensions.map(d => `- ${d.dimension}: ${d.avg.toFixed(1)}/10`).join("\n")}\n\nRecent episode improvements suggested:\n${recentEpisodes.slice(-2).map((ep: any) => ep.reflection?.improvements?.join("; ")).filter(Boolean).join("\n")}\n\nGenerate 1-2 specific style rules to improve the weakest areas.`
+              }],
+              temperature: 0.3,
+              max_tokens: 300,
+            }),
+            signal: AbortSignal.timeout(15000),
+          });
+
+          if (podcastRuleRes.ok) {
+            const data = await podcastRuleRes.json() as any;
+            const content = data.choices?.[0]?.message?.content ?? "";
+            const parsed = JSON.parse(content.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
+            for (const rule of (parsed.rules || [])) {
+              addStyleRule(rule, "podcast_reflection");
+              console.log(`[Reflection] Added podcast style rule: "${rule}"`);
+            }
+          }
+        }
+      }
+    }
+  } catch (e: any) {
+    console.warn("[Reflection] Podcast reflection integration failed:", e.message);
   }
 
   return results;

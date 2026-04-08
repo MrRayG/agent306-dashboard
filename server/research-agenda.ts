@@ -22,7 +22,7 @@ import { getModel } from "./modelRouter.js";
 import { getKnowledgeDigestForExploration, addKnowledge } from "./memoryEngine.js";
 import { getOptimizedContext } from "./contextWindow.js";
 import { getOptimizedContextAsync } from "./contextWindow.js";
-import { getResearchLab, addTopic, runResearchPipeline } from "./researchEngine.js";
+import { getResearchLab, addTopic, addHypothesis, runResearchPipeline } from "./researchEngine.js";
 import { getExplorationState } from "./explorationEngine.js";
 import { getBriefingState } from "./dailyCycleEngine.js";
 import { analyzeResearchAdvance, getAnalysisContext } from "./analyzerEngine.js";
@@ -737,6 +737,75 @@ Research the next gap and advance this thread. Respond with JSON only.`;
       }
     }).catch(e => console.warn("[Analyzer] Research analysis failed:", e.message));
 
+    // Auto-promote threads that meet quality thresholds (non-blocking)
+    try { autoPromoteThreads(); } catch (e: any) {
+      console.warn("[ResearchAgenda] Auto-promote check failed:", e.message);
+    }
+
+    // Auto-extract hypotheses from research findings (non-blocking fire-and-forget)
+    (async () => {
+      try {
+        const lab = getResearchLab();
+        const existingHypotheses = lab.hypotheses.filter(h => h.relatedTopicId === thread.id);
+        if (existingHypotheses.length >= 2) return; // Already has enough hypotheses
+
+        const hypothesisRes = await fetch(GROK_URL, {
+          method: "POST",
+          headers: getLLMHeaders(),
+          body: JSON.stringify({
+            model: getModel("routine"),
+            messages: [{
+              role: "system",
+              content: `You extract testable, falsifiable hypotheses from research findings. Output JSON array:
+[{
+  "claim": "A specific, testable claim about the future or current state",
+  "basis": "The evidence supporting this claim",
+  "metric": "How this could be measured or verified",
+  "prediction": "What you expect to happen",
+  "timeframe": "When this should be verifiable (e.g., '3 months', '6 months')",
+  "confidence": "low" | "medium" | "high"
+}]
+Return [] if no strong hypotheses emerge. Maximum 2 hypotheses. Only include hypotheses that are genuinely falsifiable — no vague predictions.`
+            }, {
+              role: "user",
+              content: `Research thread: "${thread.title}"
+Thesis: ${thread.thesis}
+Latest findings: ${JSON.stringify(thread.evidence?.supporting?.slice(-3))}
+Gaps: ${JSON.stringify(thread.evidence?.gaps)}
+
+Extract 0-2 testable hypotheses from these findings.`
+            }],
+            temperature: 0.2,
+            max_tokens: 600,
+          }),
+          signal: AbortSignal.timeout(20000),
+        });
+
+        if (hypothesisRes.ok) {
+          const data = await hypothesisRes.json() as any;
+          const content = data.choices?.[0]?.message?.content ?? "[]";
+          const hypotheses = JSON.parse(content.match(/\[[\s\S]*\]/)?.[0] ?? "[]");
+          for (const h of hypotheses) {
+            if (h.claim && h.basis) {
+              addHypothesis({
+                claim: h.claim,
+                basis: h.basis,
+                metric: h.metric || "To be determined",
+                prediction: h.prediction || h.claim,
+                timeframe: h.timeframe || "3 months",
+                confidence: h.confidence || "medium",
+                relatedTopicId: thread.id,
+                source: "research_thread",
+              });
+              console.log(`[ResearchAgenda] Auto-created hypothesis: "${h.claim}"`);
+            }
+          }
+        }
+      } catch (e: any) {
+        console.warn("[ResearchAgenda] Hypothesis extraction failed:", e.message);
+      }
+    })();
+
     return thread;
   } catch (e: any) {
     console.error(`[ResearchAgenda] Advance failed for "${thread.title}":`, e.message);
@@ -779,6 +848,40 @@ export function evaluateMaturity(threadId: string): { podcastCandidate: boolean;
     return { podcastCandidate: true, reason: "Thread is mature — ready for podcast episode" };
   }
   return { podcastCandidate: false, reason: `Not ready: ${reasons.join("; ")}` };
+}
+
+// ── 4b. Auto-promote high-confidence threads ────────────────────────────────
+
+export function autoPromoteThreads(): { promoted: string[] } {
+  const agenda = loadAgenda();
+  const promoted: string[] = [];
+
+  for (const thread of agenda.threads) {
+    // Only promote threads that are still in exploring/active status
+    if (thread.status !== "exploring" && thread.status !== "active") continue;
+
+    // Criteria for auto-promotion:
+    // 1. Has been advanced at least 3 times (has real data)
+    // 2. Has substantial evidence (3+ supporting data points)
+    // 3. Maturity score indicates readiness (>= 0.6)
+    // 4. More supporting than contradicting evidence
+    const advanceCount = thread.advanceCount || 0;
+    const supportingEvidence = thread.evidence?.supporting?.length || 0;
+    const contradicting = thread.evidence?.contradicting?.length || 0;
+    const maturityReady = thread.maturityScore >= 0.6;
+
+    if (advanceCount >= 3 && supportingEvidence >= 3 && maturityReady && supportingEvidence > contradicting) {
+      thread.status = "mature";
+      thread.podcastCandidate = true;
+      promoted.push(thread.id);
+      console.log(`[ResearchAgenda] Auto-promoted thread: "${thread.title}" (advances: ${advanceCount}, evidence: ${supportingEvidence}, maturity: ${thread.maturityScore})`);
+    }
+  }
+
+  if (promoted.length > 0) {
+    saveAgenda(agenda);
+  }
+  return { promoted };
 }
 
 // ── 5. Prune Stale Threads ───────────────────────────────────────────────────

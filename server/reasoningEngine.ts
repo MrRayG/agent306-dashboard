@@ -329,6 +329,31 @@ export function getDecayingEntries(): Array<{
     }));
 }
 
+// ── Auto-resolve old contradictions ──────────────────────────────────────────
+
+export function autoResolveOldContradictions(): { resolved: number } {
+  let resolved = 0;
+
+  for (const contradiction of contradictions.contradictions) {
+    if (contradiction.status !== "open") continue;
+
+    const ageMs = Date.now() - new Date(contradiction.createdAt).getTime();
+    const ageDays = ageMs / (24 * 60 * 60 * 1000);
+
+    // Auto-resolve minor contradictions older than 3 days
+    if (ageDays >= 3 && contradiction.severity === "minor") {
+      contradiction.status = "resolved";
+      contradiction.resolution = "keep_both";
+      contradiction.resolvedAt = new Date().toISOString();
+      resolved++;
+      console.log(`[Reasoning] Auto-resolved contradiction: "${contradiction.description.slice(0, 80)}" (${ageDays.toFixed(0)} days old, minor severity)`);
+    }
+  }
+
+  if (resolved > 0) saveContradictions(contradictions);
+  return { resolved };
+}
+
 // ── Getters ───────────────────────────────────────────────────────────────────
 
 export function getDebates(): Debate[] {
