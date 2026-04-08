@@ -10,6 +10,7 @@ import AutoPilot from "@/pages/AutoPilot";
 import NewsEngine from "@/pages/NewsEngine";
 import PodcastStudio from "@/pages/PodcastStudio";
 import ArticleStudio from "@/pages/ArticleStudio";
+import BlogStudio from "@/pages/BlogStudio";
 import CommandChat from "@/pages/CommandChat";
 import AgentStatus from "@/pages/AgentStatus";
 import VoiceStudio from "@/pages/VoiceStudio";
@@ -33,6 +34,7 @@ const nav = [
   { href: "/news",     label: "News Engine",   desc: "What's hot"         },
   { href: "/podcast",   label: "Podcast Studio",   desc: "Guest queue + interviews" },
   { href: "/article",   label: "Article Studio",   desc: "The Deep Read · weekly AI" },
+  { href: "/blog",      label: "Blog Studio",      desc: "306's daily log" },
   { href: "/command",   label: "Command Center",    desc: "All engines · Status" },
   { href: "/status",    label: "Agent Status",      desc: "Evolution · Exploration" },
   { href: "/chat",      label: "Talk to 306",       desc: "Direct line"            },
@@ -161,6 +163,7 @@ function App() {
             <Route path="/news"      component={NewsEngine}    />
             <Route path="/podcast"  component={PodcastStudio}   />
             <Route path="/article"  component={ArticleStudio}   />
+            <Route path="/blog"     component={BlogStudio}      />
             <Route path="/command"   component={CommandCenter}     />
             <Route path="/status"    component={AgentStatus}       />
             <Route path="/chat"      component={CommandChat}       />

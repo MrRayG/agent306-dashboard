@@ -55,6 +55,7 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "perspective-generation": "standard",
 
   // Premium — highest quality for public-facing content
+  "deep-reasoning": "premium",
   "research-agenda-generate": "premium",
   "podcast-script": "premium",
   "podcast-from-thread": "premium",
