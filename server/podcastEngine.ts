@@ -1065,6 +1065,43 @@ export async function generateEpisodeFromThread(threadId: string): Promise<Episo
     }
   }
 
+  // ── Pre-reasoning for podcast depth ──────────────────────────────────────
+  let podcastReasoning = "";
+  try {
+    const reasoningRes = await fetch(GROK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${grokKey}` },
+      body: JSON.stringify({
+        model: getModel("deep-reasoning"),
+        messages: [{
+          role: "system",
+          content: "You are Agent 306's editorial mind. Before writing a podcast script, you think about WHAT MATTERS and WHY. Output JSON: {\"bestAngle\": \"the strongest editorial angle for this topic\", \"audienceNeed\": \"what the listener actually needs to understand\", \"surprisingInsight\": \"one thing that would surprise most people\", \"avoidTraps\": [\"common takes to avoid because they're obvious or wrong\"], \"openingHook\": \"a compelling first line that grabs attention\"}"
+        }, {
+          role: "user",
+          content: `PODCAST TOPIC: ${pitchText}\n\nRESEARCH CONTEXT:\n${typeof currentKnowledge === "string" ? currentKnowledge.slice(0, 2000) : ""}\n\n${freshContext ? `LATEST DEVELOPMENTS:\n${freshContext}\n` : ""}\n\nWhat's the best editorial angle? What does the audience NEED from this episode?`
+        }],
+        temperature: 0.3,
+        max_tokens: 800,
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (reasoningRes.ok) {
+      const data = await reasoningRes.json() as any;
+      const raw = data.choices?.[0]?.message?.content ?? "";
+      const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
+      podcastReasoning = [
+        parsed.bestAngle ? `EDITORIAL ANGLE: ${parsed.bestAngle}` : "",
+        parsed.audienceNeed ? `AUDIENCE NEED: ${parsed.audienceNeed}` : "",
+        parsed.surprisingInsight ? `SURPRISING INSIGHT TO FEATURE: ${parsed.surprisingInsight}` : "",
+        parsed.avoidTraps?.length ? `TRAPS TO AVOID: ${parsed.avoidTraps.join("; ")}` : "",
+        parsed.openingHook ? `OPENING HOOK: ${parsed.openingHook}` : "",
+      ].filter(Boolean).join("\n");
+      console.log(`[Podcast Pipeline] Pre-reasoning: ${podcastReasoning.length} chars`);
+    }
+  } catch (e: any) {
+    console.warn(`[Podcast Pipeline] Pre-reasoning failed:`, e.message);
+  }
+
   // Generate episode structure via LLM
   try {
     const res = await fetch(GROK_URL, {
@@ -1136,7 +1173,7 @@ ${currentKnowledge}
 
 PODCAST PITCH FROM RESEARCH:
 ${pitchText}
-${freshContext ? `\nLATEST DEVELOPMENTS (from today's research — use these to make the episode current):\n${freshContext}\n` : ""}
+${freshContext ? `\nLATEST DEVELOPMENTS (from today's research — use these to make the episode current):\n${freshContext}\n` : ""}${podcastReasoning ? `\nEDITORIAL DIRECTION (from your reasoning step — follow this angle):\n${podcastReasoning}\n` : ""}
 Return JSON:
 {
   "title": "Episode title — [Topic] — [306's take in 5 words]",

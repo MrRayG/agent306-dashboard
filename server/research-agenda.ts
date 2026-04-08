@@ -482,6 +482,80 @@ export async function advanceThread(threadId: string): Promise<ResearchThread | 
       }).join(", ")}`
     : "No sub-threads.";
 
+  // ── Deep Reasoning Pass (Step 1) — analyze before advancing ──────────────
+  let reasoningContext = "";
+  try {
+    const reasoningRes = await fetch(GROK_URL, {
+      method: "POST",
+      headers: getLLMHeaders(),
+      body: JSON.stringify({
+        model: getModel("deep-reasoning"),
+        messages: [
+          {
+            role: "system",
+            content: `You are Agent 306's analytical mind. Before researching, you THINK DEEPLY about the problem.
+
+Your job: analyze the current state of this research thread and produce a REASONING TRACE.
+
+Output JSON:
+{
+  "assumptions": ["list assumptions embedded in the current thesis — things taken for granted"],
+  "blindSpots": ["what perspectives or data sources are being ignored?"],
+  "strongestEvidence": "which piece of existing evidence is most compelling and why",
+  "weakestLink": "which part of the thesis is most vulnerable and why",
+  "unexploredAngles": ["3 angles nobody is talking about that could change the conclusion"],
+  "keyQuestion": "the ONE question that, if answered, would most advance this thread",
+  "connectionsToPriorKnowledge": ["how does this thread connect to other things Agent 306 knows?"],
+  "contrarian_take": "what would a smart skeptic say about this thesis?"
+}
+
+Be intellectually honest. Challenge the thesis. Find the non-obvious.`
+          },
+          {
+            role: "user",
+            content: `RESEARCH THREAD: "${thread.title}"
+THESIS: ${thread.thesis}
+MATURITY: ${thread.maturityScore}
+
+EVIDENCE SO FAR:
+Supporting: ${thread.evidence.supporting.join("; ") || "None yet"}
+Contradicting: ${thread.evidence.contradicting.join("; ") || "None"}
+Gaps: ${thread.evidence.gaps.join("; ") || "None identified"}
+
+TIPS SO FAR: ${thread.actionableTips.join("; ") || "None"}
+
+${liveContext ? `LIVE DEVELOPMENTS:\n${liveContext}\n` : ""}KNOWLEDGE CONTEXT:
+${kbDigest}
+
+Think deeply. What are we missing? What assumptions are we making? What would change our conclusion?`
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 1200,
+      }),
+      signal: AbortSignal.timeout(40000),
+    });
+
+    if (reasoningRes.ok) {
+      const reasoningData = await reasoningRes.json() as any;
+      const reasoningRaw = reasoningData.choices?.[0]?.message?.content ?? "";
+      try {
+        const reasoningParsed = JSON.parse(reasoningRaw.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
+        reasoningContext = [
+          reasoningParsed.keyQuestion ? `KEY QUESTION TO ANSWER: ${reasoningParsed.keyQuestion}` : "",
+          reasoningParsed.blindSpots?.length ? `BLIND SPOTS TO ADDRESS: ${reasoningParsed.blindSpots.join("; ")}` : "",
+          reasoningParsed.unexploredAngles?.length ? `UNEXPLORED ANGLES: ${reasoningParsed.unexploredAngles.join("; ")}` : "",
+          reasoningParsed.weakestLink ? `WEAKEST LINK: ${reasoningParsed.weakestLink}` : "",
+          reasoningParsed.contrarian_take ? `SKEPTIC'S VIEW: ${reasoningParsed.contrarian_take}` : "",
+          reasoningParsed.connectionsToPriorKnowledge?.length ? `CONNECTIONS: ${reasoningParsed.connectionsToPriorKnowledge.join("; ")}` : "",
+        ].filter(Boolean).join("\n");
+        console.log(`[ResearchAgenda] Deep reasoning: ${reasoningContext.length} chars`);
+      } catch { /* reasoning parse failed — continue without it */ }
+    }
+  } catch (e: any) {
+    console.warn(`[ResearchAgenda] Deep reasoning step failed:`, e.message);
+  }
+
   const systemPrompt = `${agentCtx}
 
 ${analysisCtx ? `LESSONS FROM PAST RESEARCH:\n${analysisCtx}\n` : ""}You are Agent 306 advancing a research thread. Research the NEXT knowledge gap in this thread.
@@ -527,7 +601,7 @@ ${subCtx}
 
 EXISTING KNOWLEDGE:
 ${kbDigest}
-${liveContext ? `\nLIVE DEVELOPMENTS (last 48 hours — from web search today):\n${liveContext}\n\nIMPORTANT: Incorporate these recent developments into your analysis. If any of these developments directly affect the thesis, update it. Prioritize recent facts over older knowledge.\n` : ""}
+${liveContext ? `\nLIVE DEVELOPMENTS (last 48 hours — from web search today):\n${liveContext}\n\nIMPORTANT: Incorporate these recent developments into your analysis. If any of these developments directly affect the thesis, update it. Prioritize recent facts over older knowledge.\n` : ""}${reasoningContext ? `\nDEEP ANALYSIS (from your reasoning step — address these in your findings):\n${reasoningContext}\n\nIMPORTANT: Your findings MUST address the key question and unexplored angles identified above. Do not ignore blind spots.\n` : ""}
 Research the next gap and advance this thread. Respond with JSON only.`;
 
   try {
