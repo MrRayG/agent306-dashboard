@@ -158,6 +158,7 @@ export interface Hypothesis {
   resolvedAt?:   string;
   resolution?:   string;
   relatedTopicId?: string;
+  source?:       string;       // origin: "research_thread" | "daily_cycle" | "manual"
 }
 
 interface ResearchLab {

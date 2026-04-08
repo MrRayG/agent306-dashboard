@@ -19,7 +19,7 @@ import { knowledge, getActiveKnowledgeCount } from "./memoryEngine.js";
 import { getReasoningStats } from "./reasoningEngine.js";
 import { getSynthesisStats } from "./synthesisEngine.js";
 import { getPodcastState, getEpisode } from "./podcastEngine.js";
-import { getResearchLab } from "./researchEngine.js";
+import { getResearchLab, addTopic } from "./researchEngine.js";
 
 const GROK_URL = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
@@ -336,6 +336,31 @@ Be specific about insights. Don't generate vague platitudes — only add an insi
     console.log(`[DreamEngine] Updated ${updated} dream(s)`);
   }
 
+  // Bridge high-value dream insights to research threads (max 2 per cycle)
+  try {
+    let spawned = 0;
+    for (const update of parsed.updates) {
+      if (spawned >= 2) break;
+      if (!update.newInsight) continue;
+
+      const dream = dreamsState.dreams.find(d => d.id === update.dreamId);
+      if (!dream) continue;
+      // Only bridge insights from actively progressing dreams
+      if (dream.status !== "exploring" && dream.status !== "emerging_answer") continue;
+
+      addTopic({
+        topic: `Dream insight: ${update.newInsight.slice(0, 100)}`,
+        description: `Dream synthesis from "${dream.question}": ${update.newInsight}`,
+        priority: "medium",
+        addedBy: "agent",
+      });
+      spawned++;
+      console.log(`[DreamEngine] Spawned research topic from dream insight: "${update.newInsight.slice(0, 80)}"`);
+    }
+  } catch (e: any) {
+    console.warn("[DreamEngine] Dream-to-research bridge failed:", e.message);
+  }
+
   return { updated };
 }
 
@@ -631,6 +656,62 @@ export function getImprovementPlans(): ImprovementPlan[] {
 
 export function getLatestPlan(): ImprovementPlan | null {
   return plansState.plans[0] ?? null;
+}
+
+export async function executeImprovementActions(): Promise<{ executed: number; skipped: number }> {
+  const plan = plansState.plans[0];
+  if (!plan || !plan.actions) return { executed: 0, skipped: 0 };
+
+  let executed = 0;
+  let skipped = 0;
+
+  for (const action of plan.actions) {
+    if (action.status !== "pending") { skipped++; continue; }
+
+    try {
+      const actionLower = (action.action || "").toLowerCase();
+
+      if (actionLower.includes("research") || actionLower.includes("investigate") || actionLower.includes("explore")) {
+        // Spawn a research thread from the improvement action
+        addTopic({
+          topic: action.action,
+          description: `From self-improvement plan: ${action.area}`,
+          priority: "medium",
+          addedBy: "agent",
+        });
+        action.status = "in_progress";
+        executed++;
+        console.log(`[DreamEngine] Dispatched research action: "${action.action}"`);
+      } else if (actionLower.includes("style") || actionLower.includes("writing") || actionLower.includes("format") || actionLower.includes("tone")) {
+        // Create a style rule
+        const { addStyleRule } = await import("./reflectionEngine.js");
+        addStyleRule(action.action, "improvement_plan");
+        action.status = "completed";
+        executed++;
+        console.log(`[DreamEngine] Applied style action: "${action.action}"`);
+      } else {
+        // Store as knowledge for general awareness
+        const { addKnowledge } = await import("./memoryEngine.js");
+        addKnowledge({
+          category: "self_improvement",
+          title: `Self-improvement: ${action.action.slice(0, 80)}`,
+          summary: `${action.area}: ${action.action}`,
+          weight: 6,
+          source: "improvement_plan",
+        });
+        action.status = "completed";
+        executed++;
+      }
+    } catch (e: any) {
+      console.warn(`[DreamEngine] Failed to execute action: "${action.action}":`, e.message);
+      skipped++;
+    }
+  }
+
+  if (executed > 0) {
+    savePlans(plansState);
+  }
+  return { executed, skipped };
 }
 
 // ── Seed dreams ───────────────────────────────────────────────────────────────
