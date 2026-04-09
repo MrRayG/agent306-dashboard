@@ -74,7 +74,12 @@ function loadRelationships(): RelationshipsState {
 }
 
 function saveRelationships(s: RelationshipsState): void {
-  try { fs.writeFileSync(RELATIONSHIPS_FILE, JSON.stringify(s, null, 2)); } catch {}
+  try {
+    fs.writeFileSync(RELATIONSHIPS_FILE, JSON.stringify(s, null, 2));
+    console.log(`[Relationships] Saved ${Object.keys(s.relationships).length} relationships to ${RELATIONSHIPS_FILE}`);
+  } catch (e: any) {
+    console.error(`[Relationships] FAILED to save: ${e.message} — path: ${RELATIONSHIPS_FILE}`);
+  }
 }
 
 let insights = loadInsights();

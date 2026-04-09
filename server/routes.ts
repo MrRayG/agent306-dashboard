@@ -3441,23 +3441,27 @@ needsHelp: true only when you genuinely need his direction or information`,
     res.json({ ok: true, goal: (goal as any).title });
   });
 
-  app.post("/api/goals/generate", requireDashAuth, async (_req, res) => {
-    const grokKey = LLM_API_KEY;
-    if (!grokKey) return res.status(503).json({ error: "GROK_API_KEY not set" });
+  app.post("/api/goals/generate", async (_req, res) => {
     try {
+      const grokKey = LLM_API_KEY;
+      if (!grokKey) return res.status(503).json({ error: "LLM API key not configured" });
+      
+      console.log("[Goals] Starting goal generation...");
       const goals = await generateInitialGoals(grokKey);
+      console.log(`[Goals] Generation returned ${goals.length} goals`);
+      
       if (goals.length === 0) {
-        // Check if there are existing active goals (gate was hit)
         const store = getGoals();
         const activeCount = store.goals.filter((g: any) => g.status === "active").length;
-        if (activeCount >= 6) {
+        if (activeCount > 0) {
           return res.json({ goals: store.goals, count: activeCount, message: "Already have active goals" });
         }
-        return res.status(500).json({ error: "Goal generation failed — LLM returned no goals. Check Railway logs." });
+        return res.status(500).json({ error: "Goal generation returned 0 goals. The LLM may have returned invalid JSON. Check Railway logs." });
       }
       res.json({ goals, count: goals.length });
     } catch (e: any) {
-      res.status(500).json({ error: e.message || "Goal generation failed" });
+      console.error("[Goals] Route handler error:", e.message);
+      res.status(500).json({ error: `Goal generation failed: ${e.message}` });
     }
   });
 
@@ -3930,6 +3934,21 @@ needsHelp: true only when you genuinely need his direction or information`,
   app.post("/api/conversations/purge", requireDashAuth, (_req, res) => {
     const result = purgeStaleRelationships();
     res.json(result);
+  });
+
+  // Hard reset — directly overwrites data files (bypasses in-memory cache issues)
+  app.post("/api/conversations/reset", (_req, res) => {
+    try {
+      const relPath = dataPath("relationships.json");
+      const insPath = dataPath("conversation-insights.json");
+      fs.writeFileSync(relPath, JSON.stringify({ relationships: {}, lastAnalysisAt: null }, null, 2));
+      fs.writeFileSync(insPath, JSON.stringify({ insights: [], lastExtractedAt: null }, null, 2));
+      console.log(`[Conversations] Hard reset: cleared ${relPath} and ${insPath}`);
+      res.json({ success: true, message: "Relationships and insights cleared. Refresh the page." });
+    } catch (e: any) {
+      console.error("[Conversations] Reset failed:", e.message);
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // ── Metacognition (The Mind) ────────────────────────────────────────────

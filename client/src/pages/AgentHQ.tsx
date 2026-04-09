@@ -2012,13 +2012,20 @@ function GoalsTab({ goals, stats, topics, refetch }: {
   });
 
   const generateMut = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/goals/generate", {}).then(r => r.json()),
+    mutationFn: async () => {
+      const r = await apiRequest("POST", "/api/goals/generate", {});
+      return await r.json();
+    },
     onSuccess: (data: any) => {
       refetch();
       const count = data?.count ?? data?.goals?.length ?? 0;
-      toast({ title: count > 0 ? `${count} goals generated` : "Goals generation complete", description: "Agent 306 set her own development goals." });
+      if (count > 0) {
+        toast({ title: `${count} goals generated`, description: "Agent 306 set her own development goals." });
+      } else {
+        toast({ title: "No goals generated", description: data?.message || data?.error || "Check Railway logs", variant: "destructive" });
+      }
     },
-    onError: () => toast({ title: "Error generating goals", variant: "destructive" }),
+    onError: (e: any) => toast({ title: "Goal generation failed", description: String(e.message || e).slice(0, 200), variant: "destructive" }),
   });
 
   const scanGoalsMut = useMutation({
