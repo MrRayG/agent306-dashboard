@@ -21,6 +21,49 @@ import {
   type KnowledgeEntry,
 } from "./memoryEngine.js";
 import { semanticSearch } from "./embeddingEngine.js";
+import * as fs from "fs";
+import { dataPath } from "./dataPaths.js";
+
+// ── Operator Directives — persistent standing orders from MrRayG ────────────
+const DIRECTIVES_FILE = dataPath("operator_directives.json");
+
+export function addOperatorDirective(title: string, summary: string): void {
+  let directives: Array<{ title: string; summary: string; addedAt: string }> = [];
+  try {
+    if (fs.existsSync(DIRECTIVES_FILE)) {
+      directives = JSON.parse(fs.readFileSync(DIRECTIVES_FILE, "utf8"));
+    }
+  } catch {}
+
+  // Dedup by title similarity
+  const isDuplicate = directives.some(d =>
+    d.title.toLowerCase() === title.toLowerCase() ||
+    d.summary.toLowerCase().includes(summary.toLowerCase().slice(0, 50))
+  );
+  if (isDuplicate) return;
+
+  directives.push({ title, summary, addedAt: new Date().toISOString() });
+
+  // Keep most recent 30 directives
+  if (directives.length > 30) directives = directives.slice(-30);
+
+  try {
+    fs.writeFileSync(DIRECTIVES_FILE, JSON.stringify(directives, null, 2));
+    console.log(`[Chat] Stored operator directive: "${title}"`);
+  } catch (e: any) {
+    console.warn("[Chat] Failed to write operator directive:", e.message);
+  }
+}
+
+export function getOperatorDirectives(): string {
+  try {
+    if (!fs.existsSync(DIRECTIVES_FILE)) return "";
+    const directives = JSON.parse(fs.readFileSync(DIRECTIVES_FILE, "utf8"));
+    if (!directives.length) return "";
+    const lines = directives.slice(-15).map((d: any) => `- ${d.title}: ${d.summary}`).join("\n");
+    return `\nOPERATOR DIRECTIVES (from MrRayG — these are standing orders):\n${lines}\n`;
+  } catch { return ""; }
+}
 
 // ── Stopwords — filtered from query matching ─────────────────────────────────
 const STOPWORDS = new Set([
@@ -226,6 +269,7 @@ export async function getOptimizedContextAsync(query: string, options?: Relevant
 
   return [
     getCoreIdentity(),
+    getOperatorDirectives(),
     await getRelevantContextAsync(query, options),
     getSentimentArc(4),
     getPerformanceContext(5),
@@ -267,6 +311,7 @@ export function getOptimizedContext(query: string, options?: RelevantContextOpti
 
   return [
     getCoreIdentity(),
+    getOperatorDirectives(),
     getRelevantContext(query, options),
     getSentimentArc(4),
     getPerformanceContext(5),
