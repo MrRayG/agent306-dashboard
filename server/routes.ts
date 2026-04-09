@@ -21,7 +21,7 @@ import { scheduleWeeklyLeaderboard, postWeeklyLeaderboard, fetchLiveLeaderboard 
 import { scheduleFollowingSync, syncFollowing, getFollowingState, buildFollowingQuery, getPfpHolderUsernames, getFollowingUsernames } from "./followingSync";
 import { generateBoost } from "./boostEngine";
 import { generateVoiceClip, getVoiceQuota, getClip, getRecentClips } from "./voiceEngine";
-import { getMemoryState, recordPost, ratePost, performance as perfMemory, decayKnowledge, addKnowledge, archiveKnowledge, searchArchive, getArchiveStats } from "./memoryEngine.js";
+import { getMemoryState, recordPost, ratePost, performance as perfMemory, decayKnowledge, addKnowledge, archiveKnowledge, searchArchive, getArchiveStats, knowledge as knowledgeState } from "./memoryEngine.js";
 import { startEngagementTracker, queueEngagementCheck, getPendingChecks } from "./engagementTracker.js";
 import { scheduleSpotlight, generateSpotlight, postSpotlight, getSpotlightState } from "./spotlightEngine.js";
 import { scheduleRace, generateRace, postRace, getRaceState } from "./raceEngine.js";
@@ -3801,14 +3801,13 @@ needsHelp: true only when you genuinely need his direction or information`,
         res.json({ connections, count: connections.length });
       } else {
         // No specific entry — scan a sample of recent knowledge entries for connections
-        const memState = getMemoryState();
-        const entries = memState?.knowledge?.entries ?? [];
+        const entries = knowledgeState?.entries ?? [];
         const sample = entries.slice(-20); // Last 20 entries
         let totalConnections: any[] = [];
         for (const e of sample) {
           if (e.id && e.title) {
             try {
-              const conns = await findGraphConnections(e, "auto");
+              const conns = await findGraphConnections(e, "auto_ingest");
               totalConnections.push(...conns);
             } catch { /* skip failed entries */ }
           }
@@ -3817,6 +3816,34 @@ needsHelp: true only when you genuinely need his direction or information`,
       }
     } catch (e: any) {
       res.status(500).json({ error: "Connection finding failed: " + e.message });
+    }
+  });
+
+  app.post("/api/knowledge/graph/rebuild", requireDashAuth, async (_req, res) => {
+    try {
+      console.log("[Knowledge Graph] Starting full rebuild...");
+
+      // Run clustering first (groups related entries)
+      const clusters = await clusterKnowledge();
+      console.log(`[Knowledge Graph] Created ${clusters?.length ?? 0} clusters`);
+
+      // Then detect contradictions
+      const contradictions = await detectContradictions();
+      console.log(`[Knowledge Graph] Found ${contradictions?.length ?? 0} contradictions`);
+
+      // Then run a connection scan
+      const connections = await runConnectionScan();
+      console.log(`[Knowledge Graph] Discovered ${connections?.length ?? 0} connections`);
+
+      res.json({
+        success: true,
+        clusters: clusters?.length ?? 0,
+        contradictions: contradictions?.length ?? 0,
+        connections: connections?.length ?? 0,
+      });
+    } catch (e: any) {
+      console.error("[Knowledge Graph] Rebuild failed:", e.message);
+      res.status(500).json({ error: e.message });
     }
   });
 
