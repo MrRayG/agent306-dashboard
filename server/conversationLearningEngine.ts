@@ -20,6 +20,38 @@ const CONVERSATION_MEMORY_FILE = dataPath("conversation_memory.json");
 
 const GROK_RATE_MS = 5000;
 
+// ── Stale-Handle Filter (Normies-era purge) ──────────────────────────────────
+// Handles from the old Normies Discord that should never appear in relationship
+// analysis. These were purged on startup but the underlying conversation_memory
+// data kept regenerating them on every "Analyze Relationships" click.
+
+const BAD_HANDLES = new Set([
+  "serc1n", "dopemind10", "tryaskom", "spoliticusmedia", "persy41430289",
+  "nuclearsamurai", "gnormie",
+]);
+
+// Broader keyword list — any conversation entry or LLM result mentioning these
+// is from the old Normies/NFT era and should be filtered out.
+const STALE_KEYWORDS = [
+  "normie", "normiestv", "canvas live", "pixel toggle", "pixel currency",
+  "holder catalog", "nft identity", "on-chain object", "on-chain identity",
+  "token #306", "yigit", "serc1n", "nuclearsamurai", "opensea", "live burn",
+  "burn mechanic", "burn receipt", "web3art", "gnormie",
+  "erc-8004", "on-chain burn", "pixel count", "burn data", "serc article",
+  "normies ecosystem", "normieshive", "canvas experiment", "normies agent",
+  "normies saga", "normies story", "normies community", "#normies",
+  "#onchainart", "dopemind", "canvas live writes",
+];
+
+function isStaleHandle(username: string): boolean {
+  return BAD_HANDLES.has(username.toLowerCase().replace(/^@/, ""));
+}
+
+function containsStaleKeyword(text: string): boolean {
+  const lower = text.toLowerCase();
+  return STALE_KEYWORDS.some(k => lower.includes(k));
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface ConversationInsight {
@@ -148,7 +180,9 @@ function loadConversationMemory(): Record<string, {
 
 export async function extractInsights(): Promise<ConversationInsight[]> {
   const conversations = loadConversationMemory();
-  const users = Object.values(conversations);
+  // Filter out stale Normies-era handles
+  const users = Object.values(conversations)
+    .filter(u => !isStaleHandle(u.username));
   if (users.length === 0) return [];
 
   // Get recent conversations (entries from last 7 days)
@@ -157,7 +191,7 @@ export async function extractInsights(): Promise<ConversationInsight[]> {
 
   for (const user of users) {
     const recent = user.entries.filter(e =>
-      new Date(e.timestamp).getTime() > cutoff
+      new Date(e.timestamp).getTime() > cutoff && !containsStaleKeyword(e.text)
     );
     if (recent.length === 0) continue;
 
@@ -249,7 +283,9 @@ What new facts, corrections, or perspectives did Agent 306 learn from these inte
 
 export async function analyzeRelationships(): Promise<Relationship[]> {
   const conversations = loadConversationMemory();
-  const users = Object.values(conversations);
+  // Filter out stale Normies-era handles before sending anything to the LLM
+  const users = Object.values(conversations)
+    .filter(u => !isStaleHandle(u.username));
   if (users.length === 0) return [];
 
   // Build summary for Grok
@@ -257,12 +293,15 @@ export async function analyzeRelationships(): Promise<Relationship[]> {
     .sort((a, b) => b.totalInteractions - a.totalInteractions)
     .slice(0, 30)
     .map(u => {
-      const recentEntries = u.entries.slice(-5);
+      // Also filter individual entries that mention stale keywords
+      const cleanEntries = u.entries.filter(e => !containsStaleKeyword(e.text));
+      const recentEntries = cleanEntries.slice(-5);
       const sampleTexts = recentEntries
         .map(e => `${e.direction === "them" ? "THEM" : "US"}: ${e.text.slice(0, 100)}`)
         .join(" | ");
       return `@${u.username}: ${u.totalInteractions} interactions, first: ${u.firstInteraction.slice(0, 10)}, last: ${u.lastInteraction.slice(0, 10)}, recent: "${sampleTexts}"`;
     })
+    .filter(s => !containsStaleKeyword(s))
     .join("\n");
 
   const systemPrompt = `Analyze community relationships for Agent 306.
@@ -300,6 +339,12 @@ Classify each member's relationship with Agent 306.`;
   for (const r of result.relationships) {
     if (!r.username) continue;
     const key = r.username.toLowerCase().replace(/^@/, "");
+
+    // Post-analysis safety net: skip stale handles even if LLM returned them
+    if (isStaleHandle(key)) continue;
+    if (containsStaleKeyword(key)) continue;
+    if (r.notableContribution && containsStaleKeyword(r.notableContribution)) continue;
+
     const convo = conversations[key];
     if (!convo) continue;
 
@@ -357,6 +402,68 @@ export function purgeStaleRelationships(): { purged: number } {
   saveRelationships(relationships);
   saveInsights(insights);
   return { purged: before };
+}
+
+/**
+ * One-time startup purge: remove stale Normies-era users from conversation_memory.json.
+ * This is the SOURCE data that analyzeRelationships() reads — without cleaning it,
+ * every "Analyze Relationships" click regenerates old handles.
+ * Uses the same idempotent flag pattern as memoryEngine.ts cleanupOldIdentity().
+ */
+export function purgeStaleConversationMemory(): { purgedUsers: number; purgedEntries: number } {
+  const FLAG_FILE = dataPath("migration_conversation_memory_cleanup.json");
+  if (fs.existsSync(FLAG_FILE)) return { purgedUsers: 0, purgedEntries: 0 };
+
+  if (!fs.existsSync(CONVERSATION_MEMORY_FILE)) {
+    fs.writeFileSync(FLAG_FILE, JSON.stringify({ completedAt: new Date().toISOString(), version: 1 }, null, 2));
+    return { purgedUsers: 0, purgedEntries: 0 };
+  }
+
+  let state: { conversations: Record<string, any>; totalUsers: number; totalEntries: number };
+  try {
+    state = JSON.parse(fs.readFileSync(CONVERSATION_MEMORY_FILE, "utf8"));
+  } catch {
+    fs.writeFileSync(FLAG_FILE, JSON.stringify({ completedAt: new Date().toISOString(), version: 1 }, null, 2));
+    return { purgedUsers: 0, purgedEntries: 0 };
+  }
+
+  let purgedUsers = 0;
+  let purgedEntries = 0;
+
+  // Remove entire user records for known bad handles
+  for (const key of Object.keys(state.conversations ?? {})) {
+    if (isStaleHandle(key)) {
+      purgedEntries += state.conversations[key].entries?.length ?? 0;
+      delete state.conversations[key];
+      purgedUsers++;
+    }
+  }
+
+  // For remaining users, remove individual entries that contain stale keywords
+  for (const key of Object.keys(state.conversations ?? {})) {
+    const convo = state.conversations[key];
+    const before = convo.entries?.length ?? 0;
+    convo.entries = (convo.entries ?? []).filter(
+      (e: any) => !containsStaleKeyword(e.text ?? "")
+    );
+    const removed = before - convo.entries.length;
+    if (removed > 0) {
+      purgedEntries += removed;
+      convo.totalInteractions = convo.entries.length;
+    }
+  }
+
+  if (purgedUsers > 0 || purgedEntries > 0) {
+    state.totalUsers = Object.keys(state.conversations).length;
+    state.totalEntries = Object.values(state.conversations)
+      .reduce((sum: number, c: any) => sum + (c.entries?.length ?? 0), 0);
+    fs.writeFileSync(CONVERSATION_MEMORY_FILE, JSON.stringify(state, null, 2));
+    console.log(`[ConvoLearning] MIGRATION: Purged ${purgedUsers} stale users, ${purgedEntries} stale entries from conversation_memory.json`);
+  }
+
+  fs.writeFileSync(FLAG_FILE, JSON.stringify({ completedAt: new Date().toISOString(), version: 1 }, null, 2));
+  console.log("[ConvoLearning] MIGRATION: Conversation memory cleanup complete — flag written");
+  return { purgedUsers, purgedEntries };
 }
 
 export function getConversationLearningStats() {
