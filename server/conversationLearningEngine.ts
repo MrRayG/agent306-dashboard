@@ -92,6 +92,7 @@ async function callGrok(systemPrompt: string, userPrompt: string): Promise<any |
   if (wait > 0) await new Promise(r => setTimeout(r, wait));
   lastGrokCall = Date.now();
 
+  let raw = "";
   try {
     const res = await fetch(GROK_URL, {
       method: "POST",
@@ -109,9 +110,13 @@ async function callGrok(systemPrompt: string, userPrompt: string): Promise<any |
     });
     if (!res.ok) return null;
     const data = await res.json() as any;
-    const raw = data.choices?.[0]?.message?.content ?? "{}";
-    return JSON.parse(raw);
-  } catch {
+    raw = data.choices?.[0]?.message?.content ?? "{}";
+    // Strip markdown code blocks that LLMs frequently wrap JSON in
+    const jsonMatch = raw.match(/```(?:json)?\n?([\s\S]*?)\n?```/) || raw.match(/\{[\s\S]*\}/);
+    const cleaned = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : raw;
+    return JSON.parse(cleaned);
+  } catch (e: any) {
+    console.error(`[ConversationLearning] LLM JSON parse failed:`, e.message, `— raw response: ${raw?.slice(0, 200)}`);
     return null;
   }
 }
@@ -329,6 +334,24 @@ export function getInsights(): ConversationInsight[] {
 export function getRelationships(): Relationship[] {
   return Object.values(relationships.relationships)
     .sort((a, b) => b.totalInteractions - a.totalInteractions);
+}
+
+export function purgeStaleRelationships(): { purged: number } {
+  const before = Object.keys(relationships.relationships).length;
+
+  // Remove all relationships — Agent 306 is no longer in the Normies community
+  // Fresh relationships will build from new Farcaster/X interactions
+  relationships.relationships = {};
+  relationships.lastAnalysisAt = null;
+
+  insights.insights = insights.insights.filter((i) => {
+    const content = JSON.stringify(i).toLowerCase();
+    return !content.includes("normies") && !content.includes("serc1n") && !content.includes("dopemind");
+  });
+
+  saveRelationships(relationships);
+  saveInsights(insights);
+  return { purged: before };
 }
 
 export function getConversationLearningStats() {

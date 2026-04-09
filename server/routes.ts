@@ -66,7 +66,7 @@ import {
 import { getDebates, getContradictions, runDebate, resolveContradiction, runConfidenceDecay, getDecayingEntries } from "./reasoningEngine.js";
 import { getConnections, getReports, runConnectionScan, generateSynthesis } from "./synthesisEngine.js";
 import { getKnowledgeMap, getClusters, getContradictions as getGraphContradictions, findConnections as findGraphConnections, clusterKnowledge, detectContradictions, generatePerspective } from "./knowledge-graph.js";
-import { getInsights, getRelationships, extractInsights, analyzeRelationships } from "./conversationLearningEngine.js";
+import { getInsights, getRelationships, extractInsights, analyzeRelationships, purgeStaleRelationships } from "./conversationLearningEngine.js";
 import { getMetacognitionState } from "./metacognitionEngine.js";
 import { searchConversations } from "./conversationMemory.js";
 import { getKnowledgeTiers, scanForInjection } from "./memoryEngine.js";
@@ -3925,6 +3925,11 @@ needsHelp: true only when you genuinely need his direction or information`,
     } catch (e: any) {
       res.status(500).json({ error: "Analysis failed: " + e.message });
     }
+  });
+
+  app.post("/api/conversations/purge", requireDashAuth, (_req, res) => {
+    const result = purgeStaleRelationships();
+    res.json(result);
   });
 
   // ── Metacognition (The Mind) ────────────────────────────────────────────
