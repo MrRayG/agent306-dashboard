@@ -26,11 +26,15 @@ import { getOptimizedContext } from "./contextWindow.js";
 import { getModel } from "./modelRouter.js";
 import { checkAndExtractSkills } from "./skillEngine.js";
 import { runReflection } from "./reflectionEngine.js";
-import { runConfidenceDecay, runDebate, checkContradictions, getDebates, autoResolveOldContradictions } from "./reasoningEngine.js";
+import {
+  runConfidenceDecay, runDebate, checkContradictions, getDebates, autoResolveOldContradictions,
+  evaluateHypothesis, calculateTrustScore, crossReferenceContradictionsWithHypotheses,
+  decomposeHypothesis,
+} from "./reasoningEngine.js";
 import { runConnectionScan } from "./synthesisEngine.js";
 import { extractInsights } from "./conversationLearningEngine.js";
 import { getMetacognitionState } from "./metacognitionEngine.js";
-import { getResearchLab, resolveHypothesis, addHypothesis } from "./researchEngine.js";
+import { getResearchLab, resolveHypothesis, addHypothesis, testHypothesis } from "./researchEngine.js";
 import { clusterKnowledge, detectContradictions as detectGraphContradictions } from "./knowledge-graph.js";
 import { runResearchAgendaCycle } from "./research-agenda.js";
 import { updateDreams, takeGrowthSnapshot, generateSelfImprovementPlan, executeImprovementActions, seedDreams } from "./dreamEngine.js";
@@ -407,12 +411,12 @@ async function autoDebateManuscripts(): Promise<number> {
 
 async function autoResolveHypotheses(): Promise<number> {
   const lab = getResearchLab();
-  const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const oneDayAgo = Date.now() - 1 * 24 * 60 * 60 * 1000;
 
-  // Find "forming" hypotheses older than 7 days
+  // Find "forming" or "testing" hypotheses older than 24 hours (was 7 days — too slow for 327+ backlog)
   const mature = lab.hypotheses
-    .filter(h => h.status === "forming" && new Date(h.formedAt).getTime() < sevenDaysAgo)
-    .slice(0, 10);
+    .filter(h => (h.status === "forming" || h.status === "testing") && new Date(h.formedAt).getTime() < oneDayAgo)
+    .slice(0, 50);
 
   if (mature.length === 0) return 0;
 
@@ -429,16 +433,19 @@ async function autoResolveHypotheses(): Promise<number> {
     try {
       const res = await fetch(GROK_URL, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${GROK_API_KEY}`,
-        },
+        headers: getLLMHeaders(),
         body: JSON.stringify({
-          model: getModel("hypothesis_resolution"),
+          model: getModel("hypothesis-resolution"),
           messages: [
             {
               role: "system",
-              content: `You evaluate whether a hypothesis should be confirmed, rejected, or expired based on available evidence. Respond with ONLY valid JSON:
+              content: `You evaluate whether a hypothesis should be confirmed, rejected, or expired based on available evidence.
+
+Let's evaluate this hypothesis step by step.
+
+Consider the evidence strength, logical coherence, and whether the prediction aligns with current knowledge.
+
+Respond with ONLY valid JSON:
 {"status": "confirmed" | "rejected" | "expired", "resolution": "brief explanation of your reasoning"}`,
             },
             {
@@ -451,6 +458,7 @@ Metric: ${hyp.metric}
 Timeframe: ${hyp.timeframe}
 Confidence: ${hyp.confidence}
 Formed: ${hyp.formedAt}
+Trust Score: ${calculateTrustScore(hyp as any)}
 
 CURRENT KNOWLEDGE BASE:
 ${kbContext}
@@ -529,6 +537,168 @@ async function autoDetectContradictions(): Promise<number> {
 
   if (found > 0) console.log(`[DailyCycle] Found ${found} contradictions in recent knowledge`);
   return found;
+}
+
+// ── Auto-test forming hypotheses (NEW — forming → testing transition) ────────
+
+async function autoTestHypotheses(): Promise<number> {
+  const lab = getResearchLab();
+  const oneDayAgo = Date.now() - 1 * 24 * 60 * 60 * 1000;
+
+  // Find "forming" hypotheses older than 24 hours that should be evaluated
+  const candidates = lab.hypotheses
+    .filter(h => h.status === "forming" && new Date(h.formedAt).getTime() < oneDayAgo)
+    .slice(0, 50);
+
+  if (candidates.length === 0) return 0;
+
+  // Gather knowledge context
+  const { knowledge: kb } = await import("./memoryEngine.js");
+  const kbContext = kb.entries
+    .filter(e => (e.status ?? "active") === "active")
+    .slice(0, 30)
+    .map(e => `- [${e.category}] ${e.title}: ${e.summary}`)
+    .join("\n");
+
+  let tested = 0;
+  for (const hyp of candidates) {
+    try {
+      // Run full evaluation pipeline (Technique 2: AAA)
+      const assessment = await evaluateHypothesis(
+        { id: hyp.id, claim: hyp.claim, basis: hyp.basis, metric: hyp.metric, prediction: hyp.prediction, timeframe: hyp.timeframe, confidence: hyp.confidence },
+        kbContext,
+      );
+
+      if (!assessment) continue;
+
+      // Store evaluation result on the hypothesis
+      const freshLab = getResearchLab();
+      const freshHyp = freshLab.hypotheses.find(h => h.id === hyp.id);
+      if (freshHyp) {
+        (freshHyp as any).evaluationResult = {
+          verdict: assessment.verdict,
+          confidence: assessment.confidence,
+          evidenceQuality: assessment.evidenceQuality,
+          reasoningChain: assessment.reasoningChain,
+          gapsIdentified: assessment.gapsIdentified,
+        };
+        (freshHyp as any).rubricScores = assessment.rubricScores;
+
+        // Technique 5: MAD — decompose low-confidence hypotheses
+        if (assessment.confidence < 0.7) {
+          const decomposition = await decomposeHypothesis(
+            { claim: hyp.claim, basis: hyp.basis, prediction: hyp.prediction },
+            kbContext,
+          );
+          if (decomposition && !decomposition.aggregateSupport) {
+            assessment.gapsIdentified.push("MAD decomposition: sub-questions not fully supported");
+            assessment.confidence = Math.max(0, assessment.confidence - 0.1);
+          }
+        }
+
+        // Determine transition based on rubric scores (Technique 7)
+        const rubricAvg = (
+          assessment.rubricScores.evidenceStrength +
+          assessment.rubricScores.logicalCoherence +
+          assessment.rubricScores.falsifiability +
+          assessment.rubricScores.noveltyInsight +
+          assessment.rubricScores.actionability
+        ) / 5;
+
+        if (rubricAvg < 4) {
+          // Too weak — reject directly
+          resolveHypothesis(hyp.id, "rejected", `Auto-rejected: rubric avg ${rubricAvg.toFixed(1)} < 4. ${assessment.reasoningChain.slice(0, 200)}`);
+          console.log(`[DailyCycle] Hypothesis auto-rejected (rubric avg ${rubricAvg.toFixed(1)}): "${hyp.claim.slice(0, 50)}"`);
+        } else if (assessment.verdict === "testing" || rubricAvg >= 5) {
+          // Transition to testing
+          testHypothesis(hyp.id);
+          console.log(`[DailyCycle] Hypothesis transitioned to testing (rubric avg ${rubricAvg.toFixed(1)}): "${hyp.claim.slice(0, 50)}"`);
+        }
+        // else: keep forming, needs more evidence
+
+        tested++;
+      }
+
+      // Rate limit: 5s between LLM calls
+      if (candidates.indexOf(hyp) < candidates.length - 1) {
+        await new Promise(r => setTimeout(r, 5000));
+      }
+    } catch (e: any) {
+      console.warn(`[DailyCycle] Hypothesis evaluation failed for "${hyp.claim.slice(0, 50)}":`, e.message);
+    }
+  }
+
+  if (tested > 0) console.log(`[DailyCycle] Evaluated ${tested} forming hypotheses`);
+  return tested;
+}
+
+// ── Auto-debate hypotheses in "testing" state (Technique 1: CoT + Self-Reflection) ──
+
+async function autoDebateHypotheses(): Promise<number> {
+  const lab = getResearchLab();
+  const existingDebates = getDebates();
+  const debatedHypIds = new Set(
+    existingDebates.filter(d => d.topicType === "hypothesis").map(d => d.topicId),
+  );
+
+  // Find "testing" hypotheses that haven't been debated yet
+  const candidates = lab.hypotheses
+    .filter(h => h.status === "testing" && !debatedHypIds.has(h.id))
+    .slice(0, 10);
+
+  let debated = 0;
+  for (const hyp of candidates) {
+    try {
+      const debateText = `Claim: ${hyp.claim}\nBasis: ${hyp.basis}\nPrediction: ${hyp.prediction}\nMetric: ${hyp.metric}\nTimeframe: ${hyp.timeframe}`;
+      const result = await runDebate(hyp.id, "hypothesis", hyp.claim, debateText);
+
+      if (result) {
+        debated++;
+        // Wire debate result back to hypothesis status
+        const freshLab = getResearchLab();
+        const freshHyp = freshLab.hypotheses.find(h => h.id === hyp.id);
+        if (freshHyp) {
+          (freshHyp as any).debateOutcome = result.critique.overallAssessment;
+
+          if (result.critique.overallAssessment === "solid") {
+            // Calculate trust score before confirming
+            const trustScore = calculateTrustScore(freshHyp as any);
+            (freshHyp as any).trustScore = trustScore;
+
+            if (trustScore >= 80) {
+              resolveHypothesis(hyp.id, "confirmed", `Auto-confirmed: debate "solid", trust score ${trustScore}. ${result.critique.suggestions.join("; ").slice(0, 200)}`);
+              console.log(`[DailyCycle] Hypothesis auto-confirmed (trust: ${trustScore}): "${hyp.claim.slice(0, 50)}"`);
+            }
+          } else if (result.critique.overallAssessment === "flawed") {
+            const trustScore = calculateTrustScore(freshHyp as any);
+            (freshHyp as any).trustScore = trustScore;
+
+            if (trustScore <= 20) {
+              resolveHypothesis(hyp.id, "rejected", `Auto-rejected: debate "flawed", trust score ${trustScore}. Weaknesses: ${result.critique.weaknesses.join("; ").slice(0, 200)}`);
+              console.log(`[DailyCycle] Hypothesis auto-rejected (trust: ${trustScore}): "${hyp.claim.slice(0, 50)}"`);
+            }
+          }
+          // "needs_work" → keep testing, the next cycle will re-evaluate
+        }
+      }
+
+      // Rate limit: 5s between Grok calls
+      if (candidates.indexOf(hyp) < candidates.length - 1) {
+        await new Promise(r => setTimeout(r, 5000));
+      }
+    } catch (e: any) {
+      console.warn(`[DailyCycle] Hypothesis debate failed for "${hyp.claim.slice(0, 50)}":`, e.message);
+    }
+  }
+
+  if (debated > 0) console.log(`[DailyCycle] Debated ${debated} testing hypotheses`);
+  return debated;
+}
+
+// ── Auto red-flag check (Technique 3) ───────────────────────────────────────
+
+async function autoRedFlagCheck(): Promise<number> {
+  return crossReferenceContradictionsWithHypotheses();
 }
 
 // ── Main: Run Daily Cycle ─────────────────────────────────────────────────────
@@ -621,10 +791,16 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     await extractInsights().catch(e => console.warn("[DailyCycle] Insight extraction failed:", e.message));
     // Auto-debate: critique recent manuscripts that haven't been debated
     await autoDebateManuscripts().catch(e => console.warn("[DailyCycle] Auto-debate failed:", e.message));
-    // Auto-resolve: evaluate mature hypotheses (forming > 7 days)
+    // NEW: Auto-test forming hypotheses → evaluate & transition to "testing" (forming > 24h)
+    await autoTestHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis testing failed:", e.message));
+    // NEW: Auto-debate hypotheses in "testing" state → The Forge → adversarial evaluation
+    await autoDebateHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis debate failed:", e.message));
+    // Auto-resolve: evaluate mature hypotheses with trust scores → confirm/reject
     await autoResolveHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis resolution failed:", e.message));
     // Contradiction detection: scan recent knowledge entries for conflicts
     await autoDetectContradictions().catch(e => console.warn("[DailyCycle] Contradiction detection failed:", e.message));
+    // NEW: Red-flag check — cross-reference contradictions with active hypotheses
+    await autoRedFlagCheck().catch(e => console.warn("[DailyCycle] Red-flag check failed:", e.message));
     // Auto-resolve minor contradictions older than 3 days
     try { autoResolveOldContradictions(); } catch (e: any) { console.warn("[DailyCycle] Auto-resolve contradictions failed:", e.message); }
     // Knowledge graph: cluster knowledge into themes and detect graph-level contradictions

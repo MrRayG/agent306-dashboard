@@ -54,6 +54,12 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
 
   "perspective-generation": "standard",
 
+  // Reasoning pipeline — diverse models for hypothesis evaluation
+  "hypothesis-evaluation": "premium",        // Claude Sonnet 4.6 — primary reasoning
+  "adversarial-evaluation": "standard",      // Grok-3 — different model for diversity
+  "hypothesis-decomposition": "routine",     // Gemini Flash — fast decomposition
+  "trust-scoring": "routine",                // Gemini Flash — formulaic calculation
+
   // Premium — highest quality for public-facing content
   "deep-reasoning": "premium",
   "research-agenda-generate": "premium",
@@ -71,11 +77,14 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
 
 /**
  * Get the appropriate model for a task.
+ * Normalizes underscores to hyphens so both "hypothesis_resolution" and
+ * "hypothesis-resolution" resolve to the same routing entry.
  * @param task - Task identifier (e.g., "podcast-script", "reflection")
  * @returns OpenRouter model string (e.g., "anthropic/claude-sonnet-4.6")
  */
 export function getModel(task: string): string {
-  const complexity = TASK_COMPLEXITY[task] ?? "standard";
+  const normalized = task.replace(/_/g, "-");
+  const complexity = TASK_COMPLEXITY[normalized] ?? "standard";
   return MODEL_MAP[complexity];
 }
 

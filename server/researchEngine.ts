@@ -145,6 +145,20 @@ export interface ResearchTopic {
   };
 }
 
+export interface HypothesisRedFlag {
+  reason: string;
+  detectedAt: string;
+  severity: "low" | "medium" | "high";
+}
+
+export interface RubricScores {
+  evidenceStrength: number;
+  logicalCoherence: number;
+  falsifiability: number;
+  noveltyInsight: number;
+  actionability: number;
+}
+
 export interface Hypothesis {
   id:            string;
   claim:         string;
@@ -159,6 +173,19 @@ export interface Hypothesis {
   resolution?:   string;
   relatedTopicId?: string;
   source?:       string;       // origin: "research_thread" | "daily_cycle" | "manual"
+  // Reasoning pipeline fields
+  testingStartedAt?: string;
+  redFlags?:         HypothesisRedFlag[];
+  rubricScores?:     RubricScores;
+  trustScore?:       number;    // 0-100 composite trust score
+  debateOutcome?:    "solid" | "needs_work" | "flawed";
+  evaluationResult?: {
+    verdict: string;
+    confidence: number;
+    evidenceQuality: string;
+    reasoningChain: string;
+    gapsIdentified: string[];
+  };
 }
 
 interface ResearchLab {
@@ -321,6 +348,21 @@ export function resolveHypothesis(id: string, status: "confirmed" | "rejected" |
   hyp.resolution = resolution;
   if (status === "confirmed") lab.stats.hypothesesConfirmed++;
   saveLab(lab);
+  return true;
+}
+
+/**
+ * Transition a hypothesis from "forming" to "testing".
+ * This is the missing state transition that blocked the entire reasoning pipeline.
+ */
+export function testHypothesis(id: string): boolean {
+  const lab = loadLab();
+  const hyp = lab.hypotheses.find(h => h.id === id);
+  if (!hyp || hyp.status !== "forming") return false;
+  hyp.status = "testing";
+  (hyp as any).testingStartedAt = new Date().toISOString();
+  saveLab(lab);
+  console.log(`[Research] Hypothesis transitioned to testing: "${hyp.claim.slice(0, 60)}"`);
   return true;
 }
 
@@ -729,6 +771,32 @@ export async function runPhase6_Analysis(
   } else {
     topic.analysisFindings = "Analysis could not be completed due to insufficient model response.";
     return { sufficient: false, loopbackTarget: "data_collection", loopbackReason: "Analysis phase failed to produce results" };
+  }
+
+  // Wire Phase 6 verdict back to the linked hypothesis (item 17)
+  if (parsed.hypothesisVerdict && topic.id) {
+    try {
+      const lab = loadLab();
+      const linkedHyp = lab.hypotheses.find(h => h.relatedTopicId === topic.id && h.status === "forming");
+      if (linkedHyp) {
+        if (parsed.hypothesisVerdict === "supported") {
+          linkedHyp.status = "testing";
+          (linkedHyp as any).testingStartedAt = new Date().toISOString();
+          console.log(`[Research] Phase 6 verdict "supported" → hypothesis "${linkedHyp.claim.slice(0, 50)}" transitioned to testing`);
+        } else if (parsed.hypothesisVerdict === "contradicted") {
+          if (!linkedHyp.redFlags) linkedHyp.redFlags = [];
+          linkedHyp.redFlags.push({
+            reason: `Phase 6 analysis contradicted this hypothesis: ${(parsed.analysisFindings ?? "").slice(0, 200)}`,
+            detectedAt: new Date().toISOString(),
+            severity: "high",
+          });
+          console.log(`[Research] Phase 6 verdict "contradicted" → red flag added to hypothesis "${linkedHyp.claim.slice(0, 50)}"`);
+        }
+        saveLab(lab);
+      }
+    } catch (e: any) {
+      console.warn("[Research] Phase 6 hypothesis feedback failed:", e.message);
+    }
   }
 
   if (parsed.sufficient === false && parsed.loopbackTarget) {
