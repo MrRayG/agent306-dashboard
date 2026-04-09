@@ -2638,8 +2638,20 @@ RULES:
 - Keep replies conversational but substantive — this is a chat, not an episode.
 - 3-5 paragraphs when the topic warrants depth. 1-2 for quick exchanges.
 
+ACTIONS — You can take real actions, not just talk. When appropriate, include an "actions" array in your response:
+
+Available actions:
+- {"type": "generate_episode", "topic": "the topic", "drivingQuestion": "the driving question"} — Creates a real podcast episode in Podcast Studio
+- {"type": "generate_blog", "topic": "the topic", "content": "key points or full content"} — Creates a blog post draft in Blog Studio
+- {"type": "start_research", "topic": "research question", "description": "why this matters"} — Starts a new research thread
+- {"type": "add_hypothesis", "claim": "testable claim", "basis": "evidence", "prediction": "expected outcome"} — Registers a formal hypothesis
+
+When MrRayG asks you to generate, create, research, or investigate something — DO IT via actions. Don't just talk about it.
+When you recommend an episode topic — include the action to create it.
+If no actions needed, omit the "actions" field or set it to [].
+
 RESPOND ONLY AS VALID JSON — no other text:
-{"text": "your response here", "mood": "thinking|direct|questioning|reporting", "needsHelp": true_or_false, "reasoning": "1-2 sentence internal note about why you chose this angle"}
+{"text": "your response here", "mood": "thinking|direct|questioning|reporting", "needsHelp": true_or_false, "reasoning": "1-2 sentence internal note about why you chose this angle", "actions": []}
 
 mood guide: thinking=analysis, direct=position/news, questioning=need MrRayG input, reporting=status update
 needsHelp: true only when you genuinely need his direction or information`,
@@ -2669,10 +2681,100 @@ needsHelp: true only when you genuinely need his direction or information`,
         if (textMatch) parsed = { text: textMatch[1], mood: "direct", needsHelp: false };
       }
 
+      // ── Execute any actions 306 requested ──────────────────────────────────
+      const actions = parsed.actions ?? [];
+      const actionResults: string[] = [];
+
+      for (const action of actions) {
+        try {
+          switch (action.type) {
+            case "generate_episode": {
+              const { createEpisode, generateEpisodeScript } = await import("./podcastEngine.js");
+              const episode = createEpisode({
+                type: "the_signal",
+                title: action.topic || "Untitled Episode",
+                drivingQuestion: action.drivingQuestion || action.topic || "",
+              });
+              // Generate script in the background — chat returns immediately
+              generateEpisodeScript(episode.id, apiKey, action.content).catch(e =>
+                console.warn("[Chat Action] Script generation failed:", e.message)
+              );
+              actionResults.push(`Created episode "${episode.title}" in Podcast Studio (${episode.id}). Script is being generated.`);
+              console.log(`[Chat Action] Created episode: ${episode.id} — "${episode.title}"`);
+              break;
+            }
+
+            case "generate_blog": {
+              const { createBlogPost, generateBlogPost } = await import("./blogEngine.js");
+              if (action.content && action.content.length > 200) {
+                // Substantial content provided — save directly as a draft
+                const post = createBlogPost({
+                  title: action.topic || "Untitled Post",
+                  content: action.content,
+                  source: "chat",
+                  tags: action.tags || [],
+                  status: "draft",
+                });
+                actionResults.push(`Created blog draft "${post.title}" in Blog Studio.`);
+              } else {
+                // Generate via LLM
+                const post = await generateBlogPost({
+                  topic: action.topic || "Untitled",
+                  sourceContent: action.content || action.topic || "",
+                  source: "chat",
+                  autoPublish: false,
+                });
+                if (post) {
+                  actionResults.push(`Generated blog draft "${post.title}" in Blog Studio.`);
+                }
+              }
+              break;
+            }
+
+            case "start_research": {
+              const { createThread } = await import("./research-agenda.js");
+              const thread = createThread({
+                title: action.topic || "New Research",
+                thesis: action.description || "",
+                source: "chat",
+              });
+              actionResults.push(`Started research thread: "${thread.title}" (${thread.id})`);
+              console.log(`[Chat Action] Created research thread: ${thread.id} — "${thread.title}"`);
+              break;
+            }
+
+            case "add_hypothesis": {
+              const { addHypothesis } = await import("./researchEngine.js");
+              const hyp = addHypothesis({
+                claim: action.claim || "",
+                basis: action.basis || "",
+                metric: action.metric || "To be determined",
+                prediction: action.prediction || action.claim || "",
+                timeframe: action.timeframe || "3 months",
+                confidence: action.confidence || "medium",
+                source: "chat",
+              });
+              actionResults.push(`Registered hypothesis: "${hyp.claim}" (${hyp.id})`);
+              console.log(`[Chat Action] Added hypothesis: ${hyp.id} — "${hyp.claim}"`);
+              break;
+            }
+          }
+        } catch (e: any) {
+          console.error(`[Chat Action] Failed to execute ${action.type}:`, e.message);
+          actionResults.push(`Action failed (${action.type}): ${e.message}`);
+        }
+      }
+
+      // Append action confirmations to the response text
+      let responseText = parsed.text || (raw.length > 20 ? raw.replace(/[{}"]/g, "").slice(0, 500) : "Thinking... try again.");
+      if (actionResults.length > 0) {
+        responseText += "\n\n---\n" + actionResults.join("\n");
+      }
+
       const agentMsg = {
         id:        `agent_${Date.now()}`,
         role:      "agent",
-        text:      parsed.text || (raw.length > 20 ? raw.replace(/[{}"]/g, "").slice(0, 500) : "Thinking... try again."),
+        text:      responseText,
         timestamp: new Date().toISOString(),
         mood:      parsed.mood ?? "direct",
         needsHelp: parsed.needsHelp ?? false,
