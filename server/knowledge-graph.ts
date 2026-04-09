@@ -127,7 +127,40 @@ async function callLLM(
       }),
       signal: AbortSignal.timeout(60000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => "");
+      console.error(`[KnowledgeGraph] LLM API error (${task}): ${res.status} ${res.statusText} — model: ${getModel(task)} — ${errBody.slice(0, 300)}`);
+      
+      // Retry with standard model if routine model failed
+      if (getModel(task) !== "x-ai/grok-3") {
+        console.log(`[KnowledgeGraph] Retrying ${task} with x-ai/grok-3...`);
+        const retryRes = await fetch(LLM_BASE_URL, {
+          method: "POST",
+          headers: getLLMHeaders(),
+          body: JSON.stringify({
+            model: "x-ai/grok-3",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt },
+            ],
+            max_tokens: maxTokens,
+            temperature,
+          }),
+          signal: AbortSignal.timeout(60000),
+        });
+        if (retryRes.ok) {
+          const retryData = await retryRes.json() as any;
+          raw = retryData.choices?.[0]?.message?.content ?? "{}";
+          const jsonMatch2 = raw.match(/```(?:json)?\n?([\s\S]*?)\n?```/) || raw.match(/\{[\s\S]*\}/);
+          const cleaned2 = jsonMatch2 ? (jsonMatch2[1] ?? jsonMatch2[0]) : raw;
+          console.log(`[KnowledgeGraph] Retry succeeded for ${task}`);
+          return JSON.parse(cleaned2);
+        } else {
+          console.error(`[KnowledgeGraph] Retry also failed: ${retryRes.status}`);
+        }
+      }
+      return null;
+    }
     const data = await res.json() as any;
     raw = data.choices?.[0]?.message?.content ?? "{}";
     // Strip markdown code blocks that LLMs frequently wrap JSON in
