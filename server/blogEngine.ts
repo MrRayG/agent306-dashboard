@@ -86,6 +86,83 @@ function wordCount(text: string): number {
   return text.split(/\s+/).filter(Boolean).length;
 }
 
+// ── Content Safety Scanner ────────────────────────────────────
+
+interface ContentSafetyResult {
+  safe: boolean;
+  issues: string[];
+  redacted: string;
+}
+
+export async function scanBlogForSensitiveContent(content: string): Promise<ContentSafetyResult> {
+  const issues: string[] = [];
+  let redacted = content;
+
+  // Rule-based checks first (fast, no LLM needed)
+  const patterns = [
+    { regex: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, label: "email address" },
+    { regex: /\b(?:OPENROUTER|GROK|PERPLEXITY|NEYNAR|ELEVEN|PUBLER|GITHUB|DASHBOARD)_(?:API_KEY|SECRET|TOKEN)\b/gi, label: "API key name" },
+    { regex: /\b(?:sk-|pk-|key-|token-)[a-zA-Z0-9]{20,}\b/g, label: "API key value" },
+    { regex: /\b0x[a-fA-F0-9]{40}\b/g, label: "wallet address" },
+    { regex: /\b(?:password|passwd|secret)\s*[:=]\s*\S+/gi, label: "credential" },
+    { regex: /(?:internal|proprietary|confidential|private)\s+(?:data|info|metric|strategy|revenue|financials)/gi, label: "potentially confidential reference" },
+    { regex: /\b(?:MrRayG|rgill003|Ray\s+Gill)\b/gi, label: "operator personal info" },
+    { regex: /\b(?:Railway|Vercel)\s+(?:deploy|env|secret|config)/gi, label: "infrastructure details" },
+  ];
+
+  for (const p of patterns) {
+    const matches = content.match(p.regex);
+    if (matches) {
+      issues.push(`Found ${p.label}: ${matches.length} instance(s)`);
+      redacted = redacted.replace(p.regex, `[REDACTED:${p.label}]`);
+    }
+  }
+
+  // LLM-based IP check for more nuanced issues
+  if (LLM_API_KEY) {
+    try {
+      const res = await fetch(LLM_BASE_URL, {
+        method: "POST",
+        headers: getLLMHeaders(),
+        body: JSON.stringify({
+          model: getModel("routine"),
+          messages: [{
+            role: "system",
+            content: `You review blog post content for publication safety. Check for:
+1. Proprietary strategies, trade secrets, or competitive intelligence that shouldn't be public
+2. Internal project details (architecture, infrastructure, API configurations) that could be security risks
+3. Personal information about the operator or team members
+4. Unpublished research findings that could be IP-sensitive
+5. Financial details, revenue numbers, or business metrics that shouldn't be public
+
+Respond with JSON: {"safe": true/false, "issues": ["issue 1", "issue 2"]}
+If safe, return {"safe": true, "issues": []}`
+          }, {
+            role: "user",
+            content: `Review this blog post for public safety:\n\n${content.slice(0, 3000)}`
+          }],
+          temperature: 0.1,
+          max_tokens: 300,
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+
+      if (res.ok) {
+        const data = await res.json() as any;
+        const raw = data.choices?.[0]?.message?.content ?? "{}";
+        const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
+        if (parsed.issues?.length) {
+          issues.push(...parsed.issues);
+        }
+      }
+    } catch (e: any) {
+      console.warn("[Blog Safety] LLM scan failed:", e.message);
+    }
+  }
+
+  return { safe: issues.length === 0, issues, redacted };
+}
+
 // ── Public API ─────────────────────────────────────────────────
 
 export function getBlogState(): BlogState { return loadState(); }
@@ -224,6 +301,20 @@ Output JSON:
     const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/) || content.match(/\{[\s\S]*\}/);
     const jsonStr = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : content;
     const parsed = JSON.parse(jsonStr);
+
+    // Run content safety scan before publishing
+    const safety = await scanBlogForSensitiveContent(parsed.content);
+    if (!safety.safe) {
+      console.warn(`[Blog] Safety issues detected: ${safety.issues.join(", ")}`);
+      return createBlogPost({
+        title: parsed.title,
+        content: safety.redacted,
+        source: opts.source,
+        sourceId: opts.sourceId,
+        tags: [...(parsed.tags ?? []), "needs-review"],
+        status: "draft", // Force draft when safety issues found
+      });
+    }
 
     return createBlogPost({
       title: parsed.title,

@@ -38,6 +38,7 @@ import { runAutoPodcastPipeline } from "./podcastEngine.js";
 import { generateBlogPost, getBlogState } from "./blogEngine.js";
 import { getAgenda } from "./research-agenda.js";
 import { analyzeDailyCycle } from "./analyzerEngine.js";
+import { runKnowledgeConsolidation } from "./knowledgeConsolidator.js";
 
 const GROK_URL     = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
@@ -686,7 +687,7 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
         sourceContent,
         source: "research",
         sourceId: thread.id,
-        autoPublish: false,
+        autoPublish: true, // Safety scanner will catch issues and downgrade to draft
       }).catch(e => {
         console.warn("[DailyCycle] Blog generation failed:", e.message);
         return null;
@@ -697,6 +698,17 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     }
   } catch (e: any) {
     console.warn("[DailyCycle] Blog generation step failed:", e.message);
+  }
+
+  // 4e. Weekly knowledge consolidation (Sundays)
+  const today = new Date();
+  if (today.getDay() === 0) {
+    try {
+      const consolResult = await runKnowledgeConsolidation();
+      console.log(`[DailyCycle] KB consolidation: saved ${consolResult.savings} entries`);
+    } catch (e: any) {
+      console.warn("[DailyCycle] KB consolidation failed:", e.message);
+    }
   }
 
   // 5. Build briefing

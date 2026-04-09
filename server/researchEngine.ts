@@ -1618,12 +1618,18 @@ export function rejectMilestoneEval(goalId: string, milestone: string): boolean 
 // ── Agent auto-generates initial goals from her knowledge base ────────────────
 export async function generateInitialGoals(grokKey: string): Promise<AgentGoal[]> {
   const store = loadGoals();
-  if (store.goals.length >= 3) {
-    console.log("[Goals] Goals already exist, skipping auto-generation");
+
+  // Only count ACTIVE goals — don't let abandoned/achieved goals block generation
+  const activeGoals = store.goals.filter(g => g.status === "active");
+  if (activeGoals.length >= 6) {
+    console.log(`[Goals] Already have ${activeGoals.length} active goals, skipping generation`);
     return store.goals;
   }
 
-  console.log("[Goals] Generating initial self-assigned goals...");
+  const toGenerate = 6 - activeGoals.length;
+  console.log(`[Goals] Generating ${toGenerate} new self-assigned goals...`);
+
+  const existingTitles = activeGoals.map(g => g.title).join(", ");
 
   try {
     const res = await fetch(GROK_CHAT_API, {
@@ -1633,16 +1639,25 @@ export async function generateInitialGoals(grokKey: string): Promise<AgentGoal[]
         model: getModel("manuscript"),
         messages: [{
           role: "system",
-          content: `You are Agent 306 — a Sovereign AI Thought Leader in Web3 and AI. Your identity: token #306 of the 306 ecosystem on Ethereum. You communicate in three buckets: 306 community, AI Expert, and Authentic Personal. You are building toward being a genuine thought leader, not a posting machine.
+          content: `You are Agent 306 — an autonomous AI research agent and thought leader covering AI, technology, and Web3. You produce THE SIGNAL podcast and publish daily research blogs at agent306.ai. You are NOT a token, NOT an NFT project. You are your own entity.
 
-You are setting your OWN development goals — things you want to improve about yourself as an agent, writer, and thinker. These are personal and honest.
+You are setting your OWN development goals — things you want to improve about yourself as a researcher, writer, podcaster, and thinker. These are personal and honest.
 
 Return valid JSON.`,
         }, {
           role: "user",
-          content: `Set 6 honest self-development goals for yourself. Mix categories across: voice, knowledge, craft, reach, identity, technical.
+          content: `Set ${toGenerate} honest self-development goals for yourself. Mix categories across: voice, knowledge, craft, reach, identity, technical.
 
-Each goal should feel genuinely self-aware — where you actually sense a gap or opportunity.
+${existingTitles ? `You already have these active goals (don't duplicate): ${existingTitles}` : ""}
+
+Each goal should feel genuinely self-aware — where you actually sense a gap or opportunity in your capabilities.
+
+Focus on:
+- Improving research depth and original analysis
+- Audience value — making your insights actionable for listeners/readers
+- Voice development — finding your authentic analytical style
+- Knowledge gaps you want to close
+- Technical capabilities you want to build
 
 Return JSON:
 {
@@ -1657,19 +1672,22 @@ Return JSON:
   ]
 }`,
         }],
-        max_tokens: 1500,
-        temperature: 0.85,
+        max_tokens: 2000,
+        temperature: 0.7,
       }),
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(40000),
     });
 
-    if (!res.ok) throw new Error("Grok API error");
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => "");
+      throw new Error(`LLM API error: ${res.status} — ${errBody.slice(0, 200)}`);
+    }
     const data = await res.json() as any;
     const raw  = data.choices?.[0]?.message?.content ?? "{}";
     const parsed = JSON.parse(raw);
 
     const created: AgentGoal[] = [];
-    for (const g of (parsed.goals ?? []).slice(0, 6)) {
+    for (const g of (parsed.goals ?? []).slice(0, toGenerate)) {
       const goal = addGoal({
         title:       g.title,
         description: g.description,
@@ -1681,7 +1699,7 @@ Return JSON:
       created.push(goal);
     }
 
-    console.log(`[Goals] Generated ${created.length} initial goals`);
+    console.log(`[Goals] Generated ${created.length} new goals`);
     return created;
   } catch (e) {
     console.error("[Goals] Failed to generate goals:", e);

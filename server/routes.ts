@@ -2665,7 +2665,7 @@ ACTIONS — You can take real actions, not just talk. When appropriate, include 
 
 Available actions:
 - {"type": "generate_episode", "topic": "the topic", "drivingQuestion": "the driving question"} — Creates a real podcast episode in Podcast Studio
-- {"type": "generate_blog", "topic": "the topic", "content": "key points or full content"} — Creates a blog post draft in Blog Studio
+- {"type": "generate_blog", "topic": "title for the blog post", "content": "the full blog post content if you have it — otherwise just provide the topic and it will be auto-generated"} — Creates a blog post in Blog Studio. If you wrote blog-worthy content in your response, include it here too.
 - {"type": "start_research", "topic": "research question", "description": "why this matters"} — Starts a new research thread
 - {"type": "add_hypothesis", "claim": "testable claim", "basis": "evidence", "prediction": "expected outcome"} — Registers a formal hypothesis
 
@@ -2796,21 +2796,29 @@ needsHelp: true only when you genuinely need his direction or information`,
 
             case "generate_blog": {
               const { createBlogPost, generateBlogPost } = await import("./blogEngine.js");
-              if (action.content && action.content.length > 200) {
-                // Substantial content provided — save directly as a draft
+
+              // If 306 wrote the blog content in her chat text (which is the natural behavior),
+              // use that as the blog content. Fall back to action.content if provided.
+              const blogContent = (action.content && action.content.length > 200)
+                ? action.content
+                : (parsed.text && parsed.text.length > 300)
+                  ? parsed.text
+                  : action.content || "";
+
+              if (blogContent.length > 200) {
                 const post = createBlogPost({
-                  title: action.topic || "Untitled Post",
-                  content: action.content,
+                  title: action.topic || action.title || "Untitled Post",
+                  content: blogContent,
                   source: "chat",
                   tags: action.tags || [],
                   status: "draft",
                 });
                 actionResults.push(`Created blog draft "${post.title}" in Blog Studio.`);
+                console.log(`[Chat Action] Created blog post: ${post.id} — "${post.title}"`);
               } else {
-                // Generate via LLM
                 const post = await generateBlogPost({
                   topic: action.topic || "Untitled",
-                  sourceContent: action.content || action.topic || "",
+                  sourceContent: blogContent || action.topic || "",
                   source: "chat",
                   autoPublish: false,
                 });
@@ -3350,7 +3358,7 @@ needsHelp: true only when you genuinely need his direction or information`,
     res.json({ ok: true, goal: (goal as any).title });
   });
 
-  app.post("/api/goals/generate", async (_req, res) => {
+  app.post("/api/goals/generate", requireDashAuth, async (_req, res) => {
     const grokKey = LLM_API_KEY;
     if (!grokKey) return res.status(503).json({ error: "GROK_API_KEY not set" });
     const goals = await generateInitialGoals(grokKey);
@@ -3807,6 +3815,23 @@ needsHelp: true only when you genuinely need his direction or information`,
   // ── Knowledge Tiers ──────────────────────────────────────────────────────
   app.get("/api/knowledge/tiers", (_req, res) => {
     res.json(getKnowledgeTiers());
+  });
+
+  // ── Knowledge Consolidation ──────────────────────────────────────────────
+  app.get("/api/knowledge/efficiency", requireDashAuth, (_req, res) => {
+    const { getKBEfficiencyStats } = require("./knowledgeConsolidator.js");
+    const stats = getKBEfficiencyStats();
+    res.json(stats);
+  });
+
+  app.post("/api/knowledge/consolidate", requireDashAuth, async (_req, res) => {
+    try {
+      const { runKnowledgeConsolidation } = require("./knowledgeConsolidator.js");
+      const result = await runKnowledgeConsolidation();
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // ── Conversation Search (FTS5) ──────────────────────────────────────────
