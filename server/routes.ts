@@ -71,7 +71,7 @@ import { getMetacognitionState } from "./metacognitionEngine.js";
 import { searchConversations } from "./conversationMemory.js";
 import { getKnowledgeTiers, scanForInjection } from "./memoryEngine.js";
 import { getModel, getModelConfig as getModelRouterStats } from "./modelRouter.js";
-import { getCoreIdentity, getRelevantContext, getOptimizedContext, getRelevantContextAsync } from "./contextWindow.js";
+import { getCoreIdentity, getRelevantContext, getOptimizedContext, getRelevantContextAsync, addOperatorDirective, getOperatorDirectives } from "./contextWindow.js";
 import { getEmbeddingStatus, syncEmbeddings, semanticSearch } from "./embeddingEngine.js";
 import { getRecentAnalysis, getAggregatedPatterns } from "./analyzerEngine.js";
 import { runFullIntake, runSourceIntake, getIntakeState, getAvailableSources, generateDailyBrief } from "./data-intake.js";
@@ -2497,35 +2497,51 @@ export function registerRoutes(httpServer: Server, app: Express) {
           model: getModel("conversation_insight"),
           messages: [{
             role: "system",
-            content: "You extract durable knowledge from conversations. Be selective — only extract things that should permanently shape Agent 306's understanding. Respond as JSON only.",
+            content: `You extract durable knowledge and OPERATOR DIRECTIVES from conversations between MrRayG (the creator/operator) and Agent 306.
+
+PRIORITY EXTRACTION — always capture:
+1. DIRECTIVES: MrRayG telling 306 to change behavior, think differently, adjust approach, focus on something
+2. AUDIENCE INSIGHTS: anything about who 306's audience is, what they need, how to serve them better
+3. STRATEGIC SHIFTS: changes in direction, new priorities, pivots in thinking
+4. CORRECTIONS: MrRayG correcting 306's understanding, assumptions, or behavior
+5. VISION: long-term goals, aspirations, where 306 should be heading
+
+SECONDARY EXTRACTION:
+6. NEW FACTS: specific facts or data that 306 should remember
+7. CONNECTIONS: relationships between topics that 306 should track
+
+If MrRayG gives any kind of direction, ALWAYS extract it — even if it seems minor. These directives shape future behavior.
+
+Respond as JSON only.`,
           }, {
             role: "user",
-            content: `Review this conversation between MrRayG (the operator) and Agent 306 and extract any knowledge worth remembering permanently.
+            content: `Review this conversation and extract knowledge worth remembering permanently.
 
 CONVERSATION:
 ${transcript}
-
-Extract only entries that are:
-- Directives or vision from MrRayG that should shape Agent 306's future behavior
-- Strategic positions or insights that came out of the conversation
-- New angles on the media operation or Agent 306's role
-- Things MrRayG explicitly wants Agent 306 to know or remember
-- Corrections to Agent 306's understanding
-
-DO NOT extract: small talk, acknowledgments, questions without answers, anything already obvious.
 
 Return JSON:
 {
   "entries": [
     {
       "title": "short descriptive title",
-      "summary": "the actual insight or directive — specific, max 140 chars",
-      "category": "directive|strategy|vision|correction|ecosystem",
-      "weight": 8
+      "summary": "the actual insight, directive, or correction — be specific and detailed, up to 300 chars. Include the full context of WHY, not just WHAT.",
+      "category": "directive|audience_insight|strategy|correction|vision|fact|connection",
+      "weight": 9,
+      "isDirective": true
     }
   ]
 }
-If nothing worth extracting, return: {"entries": []}`,
+
+RULES:
+- Directives from MrRayG get weight 9-10 (highest priority)
+- Audience insights get weight 8-9
+- Corrections get weight 9
+- Strategic shifts get weight 8-9
+- General facts get weight 6-7
+- Set isDirective: true for any entry where MrRayG is telling 306 to change or do something differently
+- If nothing worth extracting, return: {"entries": []}
+- MAX 300 chars for summaries — capture the full nuance`,
           }],
           max_tokens: 800,
           temperature: 0.3,
@@ -2546,18 +2562,24 @@ If nothing worth extracting, return: {"entries": []}`,
       }
 
       // Add to knowledge base via memoryEngine
-      const { addKnowledge } = await import("./memoryEngine.js");
+      const { addKnowledge: addKnowledgeDynamic } = await import("./memoryEngine.js");
       let added = 0;
       for (const entry of entries) {
         if (!entry.title || !entry.summary) continue;
         try {
-          addKnowledge({
+          addKnowledgeDynamic({
             category: entry.category ?? "directive",
             title: entry.title,
-            summary: entry.summary,
+            summary: entry.summary.slice(0, 300), // Allow up to 300 chars
             weight: Math.min(10, Math.max(7, entry.weight ?? 8)),
+            source: "chat_with_mrrrayg",
           });
           added++;
+
+          // Directives get injected into the persistent operator context
+          if (entry.isDirective) {
+            try { addOperatorDirective(entry.title, entry.summary); } catch {}
+          }
         } catch {}
       }
       console.log(`[Chat] Memory extraction: ${added} entries added to knowledge base`);
@@ -2597,8 +2619,8 @@ If nothing worth extracting, return: {"entries": []}`,
 
     const history = loadChatHistory();
 
-    // Build conversation context from recent history (last 10 turns)
-    const recent = history.messages.slice(-10);
+    // Build conversation context from recent history (last 20 messages = 10 full exchanges)
+    const recent = history.messages.slice(-20);
     const conversationHistory = recent.map((m: any) => ({
       role: m.role === "agent" ? "assistant" : "user",
       content: m.text,
@@ -2617,6 +2639,7 @@ If nothing worth extracting, return: {"entries": []}`,
             {
               role: "system",
               content: `${agentCtx}
+${getOperatorDirectives()}
 
 You are Agent 306 in direct private conversation with MrRayG — your operator and creator.
 
@@ -2647,7 +2670,7 @@ needsHelp: true only when you genuinely need his direction or information`,
             ...conversationHistory,
             { role: "user", content: text },
           ],
-          max_tokens: 1000,
+          max_tokens: 2500,
           temperature: 0.6,
         }),
         signal: AbortSignal.timeout(40000),
@@ -2662,11 +2685,78 @@ needsHelp: true only when you genuinely need his direction or information`,
       const raw = data.choices?.[0]?.message?.content ?? "{}";
       console.log("[Chat] Raw Grok response:", raw.slice(0, 200));
       let parsed: any = {};
-      try { parsed = JSON.parse(raw); } catch (parseErr: any) {
-        console.error("[Chat] JSON parse failed:", parseErr.message, "raw:", raw.slice(0, 300));
-        // Try to extract text even from malformed JSON
-        const textMatch = raw.indexOf("\"text\"") >= 0 ? raw.match(/"text":"([^"]{1,800})"/) : null;
-        if (textMatch) parsed = { text: textMatch[1], mood: "direct", needsHelp: false };
+      try {
+        parsed = JSON.parse(raw);
+      } catch (parseErr: any) {
+        console.warn("[Chat] JSON parse failed, attempting repair:", parseErr.message);
+
+        // Strategy 1: Try to find and close an incomplete JSON object
+        let repaired = raw.trim();
+
+        // If it starts with { and doesn't end with }, it was cut off
+        if (repaired.startsWith("{") && !repaired.endsWith("}")) {
+          // Find the "text" field value — it's what we care about most
+          const textStart = repaired.indexOf('"text"');
+          if (textStart >= 0) {
+            // Find the start of the text value
+            const valueStart = repaired.indexOf(':', textStart) + 1;
+            // Skip whitespace and opening quote
+            let i = valueStart;
+            while (i < repaired.length && (repaired[i] === ' ' || repaired[i] === '"')) i++;
+
+            // Find where the text value ends (or was cut off)
+            // Walk forward looking for an unescaped quote followed by , or }
+            let textEnd = -1;
+            for (let j = i; j < repaired.length; j++) {
+              if (repaired[j] === '\\') { j++; continue; } // skip escaped chars
+              if (repaired[j] === '"') {
+                // Check if next non-whitespace is , or } or end
+                let k = j + 1;
+                while (k < repaired.length && repaired[k] === ' ') k++;
+                if (k >= repaired.length || repaired[k] === ',' || repaired[k] === '}') {
+                  textEnd = j;
+                  break;
+                }
+              }
+            }
+
+            let textValue: string;
+            if (textEnd > 0) {
+              textValue = repaired.slice(i, textEnd);
+            } else {
+              // Text was cut off — take everything after the opening and clean trailing garbage
+              textValue = repaired.slice(i).replace(/["\s}]*$/, '');
+            }
+
+            // Unescape JSON string escapes
+            try {
+              textValue = JSON.parse('"' + textValue + '"');
+            } catch {
+              textValue = textValue.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+            }
+
+            parsed = { text: textValue, mood: "direct", needsHelp: false };
+          }
+        }
+
+        // Strategy 2: If still no text, try a simpler extraction
+        if (!parsed.text) {
+          const simpleMatch = raw.match(/"text"\s*:\s*"([\s\S]*?)(?:"\s*[,}]|$)/);
+          if (simpleMatch) {
+            let val = simpleMatch[1];
+            try { val = JSON.parse('"' + val + '"'); } catch {}
+            parsed = { text: val, mood: "direct", needsHelp: false };
+          }
+        }
+
+        // Strategy 3: Last resort — use raw content stripped of JSON syntax
+        if (!parsed.text && raw.length > 50) {
+          parsed = {
+            text: raw.replace(/^\s*\{?\s*"text"\s*:\s*"?/i, '').replace(/["}]*\s*$/g, '').replace(/\\n/g, '\n'),
+            mood: "direct",
+            needsHelp: false,
+          };
+        }
       }
 
       const agentMsg = {
@@ -2692,14 +2782,12 @@ needsHelp: true only when you genuinely need his direction or information`,
       history.lastActive = agentMsg.timestamp;
       saveChatHistory(history);
 
-      // ── Memory extraction: every 6 exchanges, promote insights to knowledge base ──
+      // ── Memory extraction: every exchange — operator directives should never be lost ──
       // Agent 306 reviews the recent conversation and extracts durable knowledge.
       // This is how chat sessions become permanent memory — not just conversation history.
-      if (history.totalTurns % 6 === 0) {
-        extractChatMemory(history.messages.slice(-12), apiKey).catch(e =>
-          console.warn("[Chat] Memory extraction failed:", e.message)
-        );
-      }
+      extractChatMemory(history.messages.slice(-6), apiKey).catch(e =>
+        console.warn("[Chat] Memory extraction failed:", e.message)
+      );
 
       res.json({ reply: agentMsg });
 
