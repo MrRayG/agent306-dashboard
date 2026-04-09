@@ -691,6 +691,18 @@ export function addKnowledge(entry: Omit<KnowledgeEntry, "id" | "learnedAt">): v
 
   // ASI-Evolve: queue embedding sync for the new entry
   queueEmbeddingSync(full.id);
+
+  // Discover knowledge graph connections for the new entry (non-blocking)
+  import("./knowledge-graph.js").then(({ findConnections }) =>
+    findConnections({
+      id: full.id,
+      title: full.title ?? "",
+      summary: full.summary ?? "",
+      category: full.category ?? "uncategorized",
+    }, "auto_ingest")
+  ).catch(e =>
+    console.warn("[Memory] Knowledge graph connection discovery failed:", e.message)
+  );
 }
 
 /** Get all KB titles grouped by category (for exploration de-dup context, active only) */

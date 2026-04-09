@@ -1026,7 +1026,7 @@ function ResearchQueueTab({ topics, goals, refetch }: { topics: ResearchTopic[];
   });
 
   const scanMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/research/scan", {}),
+    mutationFn: () => apiRequest("POST", "/api/research/scan", {}).then(r => r.json()),
     onSuccess: (data: any) => {
       if (data?.skipped) {
         toast({ title: "Scan ran recently", description: `Last scan: ${data.lastScanAt ? new Date(data.lastScanAt).toLocaleTimeString() : "unknown"}` });
@@ -2012,10 +2012,11 @@ function GoalsTab({ goals, stats, topics, refetch }: {
   });
 
   const generateMut = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/goals/generate", {}),
+    mutationFn: () => apiRequest("POST", "/api/goals/generate", {}).then(r => r.json()),
     onSuccess: (data: any) => {
       refetch();
-      toast({ title: `${data.count} goals generated`, description: "Agent 306 set her own development goals." });
+      const count = data?.count ?? data?.goals?.length ?? 0;
+      toast({ title: count > 0 ? `${count} goals generated` : "Goals generation complete", description: "Agent 306 set her own development goals." });
     },
     onError: () => toast({ title: "Error generating goals", variant: "destructive" }),
   });
@@ -2842,6 +2843,17 @@ function NexusTab({ connections, reports, refetchConnections, refetchReports }: 
     onSuccess: () => { toast({ title: "Synthesis report generated" }); refetchReports(); },
     onError: (e: any) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
   });
+  const rebuildGraphMut = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/knowledge/graph/rebuild", {}).then(r => r.json()),
+    onSuccess: (data: any) => {
+      refetchConnections();
+      toast({
+        title: "Knowledge graph rebuilt",
+        description: `${data.clusters} clusters, ${data.connections} connections, ${data.contradictions} contradictions`,
+      });
+    },
+    onError: (e: any) => toast({ title: "Graph rebuild failed", description: e.message, variant: "destructive" }),
+  });
 
   const STRENGTH_COLOR: Record<string, string> = { strong: GREEN, moderate: YELLOW, weak: DIM };
 
@@ -2861,6 +2873,10 @@ function NexusTab({ connections, reports, refetchConnections, refetchReports }: 
           <button onClick={() => synthMut.mutate()} disabled={synthMut.isPending}
             style={{ ...mono, fontSize: "0.64rem", padding: "4px 10px", background: "transparent", border: `1px solid ${PURPLE}40`, color: PURPLE, cursor: "pointer" }}>
             {synthMut.isPending ? "GENERATING..." : "GENERATE SYNTHESIS"}
+          </button>
+          <button onClick={() => rebuildGraphMut.mutate()} disabled={rebuildGraphMut.isPending}
+            style={{ ...mono, fontSize: "0.64rem", padding: "4px 10px", background: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.25)", color: "#f97316", cursor: "pointer", textTransform: "uppercase" as const, letterSpacing: "0.1em" }}>
+            {rebuildGraphMut.isPending ? "REBUILDING..." : "REBUILD GRAPH"}
           </button>
         </div>
       </div>
