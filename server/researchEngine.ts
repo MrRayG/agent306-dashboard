@@ -1311,8 +1311,13 @@ interface GoalsStore {
 
 function loadGoals(): GoalsStore {
   try {
-    if (fs.existsSync(GOALS_FILE))
-      return JSON.parse(fs.readFileSync(GOALS_FILE, "utf8"));
+    if (fs.existsSync(GOALS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(GOALS_FILE, "utf8"));
+      // Ensure stats object exists (old files may not have it)
+      if (!data.stats) data.stats = { total: 0, active: 0, achieved: 0 };
+      if (!data.goals) data.goals = [];
+      return data;
+    }
   } catch {}
   return {
     goals: [],
@@ -1323,6 +1328,7 @@ function loadGoals(): GoalsStore {
 
 function saveGoals(store: GoalsStore) {
   store.lastUpdated = new Date().toISOString();
+  if (!store.stats) store.stats = { total: 0, active: 0, achieved: 0 };
   store.stats.total    = store.goals.length;
   store.stats.active   = store.goals.filter(g => g.status === "active").length;
   store.stats.achieved = store.goals.filter(g => g.status === "achieved").length;
