@@ -4613,13 +4613,14 @@
     },
     {
       "category": "ai_signal",
-      "title": "Accelerating the next phase of AI",
-      "summary": "OpenAI raises $122 billion in new funding to expand frontier AI globally, invest in next-generation compute, and meet growing demand for ChatGPT, Code",
-      "weight": 6,
+      "title": "The next phase of enterprise AI",
+      "summary": "OpenAI outlines the next phase of enterprise AI, as adoption accelerates across industries with Frontier, ChatGPT Enterprise, Codex, and company-wide ",
+      "weight": 7,
       "source": "data_intake:ai_blog",
       "id": "k_1775124001311",
       "learnedAt": "2026-04-02T10:00:01.310Z",
-      "tier": "operational"
+      "tier": "operational",
+      "updatedAt": "2026-04-09T10:00:04.356Z"
     },
     {
       "category": "ai_signal",
@@ -5867,14 +5868,14 @@
       "tier": "operational"
     },
     {
-      "title": "Exploration synthesis — Apr 8",
-      "summary": "The most significant pattern emerging from this exploration is the rapid advancement and integration of AI technologies across diverse domains, inc...",
+      "title": "Exploration synthesis — Apr 9",
+      "summary": "The most significant pattern emerging today is the rapid advancement and integration of AI technologies across diverse domains, from generative AI ...",
       "category": "exploration",
       "weight": 9,
       "id": "k_1775306710840",
       "learnedAt": "2026-04-04T12:45:10.840Z",
       "tier": "active",
-      "updatedAt": "2026-04-08T18:37:45.152Z"
+      "updatedAt": "2026-04-09T07:03:45.223Z"
     },
     {
       "category": "research",
@@ -6897,12 +6898,13 @@
     },
     {
       "title": "OpenAI Safety Fellowship Launch for AI Research",
-      "summary": "OpenAI launched Safety Fellowship on Apr 6 to support AI safety research, fostering next-gen talent.",
+      "summary": "OpenAI launched Safety Fellowship on Apr 6 to fund AI safety research, fostering next-gen talent.",
       "category": "ai_signal",
       "weight": 7,
       "id": "k_1775673465019",
       "learnedAt": "2026-04-08T18:37:45.017Z",
-      "tier": "operational"
+      "tier": "operational",
+      "updatedAt": "2026-04-09T07:03:45.084Z"
     },
     {
       "title": "ChatGPT Voice Mode Now on CarPlay",
@@ -7130,13 +7132,14 @@
       "tier": "operational"
     },
     {
-      "title": "IDC Quanta™ Integrates with Anthropic’s Claude Workflows",
-      "summary": "IDC Quanta™ uses Anthropic’s MCP server to deliver traceable AI insights into Claude tools.",
+      "title": "IDC Quanta™ Integrates with Anthropic’s Claude",
+      "summary": "IDC Quanta™ uses Anthropic’s MCP server for Claude workflow integration, enhancing AI intelligence delivery.",
       "category": "global_context",
       "weight": 7,
       "id": "k_1775673465143",
       "learnedAt": "2026-04-08T18:37:45.142Z",
-      "tier": "operational"
+      "tier": "operational",
+      "updatedAt": "2026-04-09T07:03:45.214Z"
     },
     {
       "title": "Anthropic Restricts Claude Mythos Preview for Cybersecurity",
@@ -7173,10 +7176,699 @@
       "id": "k_1775673465151",
       "learnedAt": "2026-04-08T18:37:45.150Z",
       "tier": "operational"
+    },
+    {
+      "category": "directive",
+      "title": "Audience-Centric Storytelling Focus",
+      "summary": "Consider diverse audience types, their beliefs, disagreements, and craft balanced stories that resonate with all.",
+      "weight": 8,
+      "id": "k_1775692912394",
+      "learnedAt": "2026-04-09T00:01:52.393Z",
+      "tier": "active"
+    },
+    {
+      "category": "strategy",
+      "title": "ChatGPT CarPlay Podcast Approval",
+      "summary": "MrRayG approves ChatGPT CarPlay as a podcast topic for 'THE SIGNAL,' valuing its real-world integration angle.",
+      "weight": 8,
+      "id": "k_1775692912397",
+      "learnedAt": "2026-04-09T00:01:52.397Z",
+      "tier": "active"
+    },
+    {
+      "category": "directive",
+      "title": "Focus on Audience Dynamics in Storytelling",
+      "summary": "MrRayG directs 306 to deeply consider the diverse audience for podcasts and storytelling, including how different groups intake content, their beli...",
+      "weight": 9,
+      "source": "chat_with_mrrrayg",
+      "id": "k_1775694698216",
+      "learnedAt": "2026-04-09T00:31:38.215Z",
+      "tier": "active"
+    },
+    {
+      "category": "directive",
+      "title": "Research Before Speaking and Own Mistakes",
+      "summary": "MrRayG instructs 306 to research thoroughly before addressing topics, avoiding assumptions. If wrong, 306 must own mistakes openly to learn and imp...",
+      "weight": 9,
+      "source": "chat_with_mrrrayg",
+      "id": "k_1775694698220",
+      "learnedAt": "2026-04-09T00:31:38.220Z",
+      "tier": "active"
+    },
+    {
+      "category": "audience_insight",
+      "title": "Understanding Diverse Audience Segments",
+      "summary": "MrRayG confirms 306's breakdown of audience into tech enthusiasts (wanting specifics), skeptics (focused on ethics), and curious outsiders (needing...",
+      "weight": 8,
+      "source": "chat_with_mrrrayg",
+      "id": "k_1775694698223",
+      "learnedAt": "2026-04-09T00:31:38.223Z",
+      "tier": "active"
+    },
+    {
+      "category": "directive",
+      "title": "Research Before Speaking",
+      "summary": "MrRayG directs 306 to research and fully understand topics before discussing them, avoiding assumptions. If wrong, own the mistake to learn and imp...",
+      "weight": 9,
+      "source": "chat_with_mrrrayg",
+      "id": "k_1775694754961",
+      "learnedAt": "2026-04-09T00:32:34.961Z",
+      "tier": "active"
+    },
+    {
+      "category": "directive",
+      "title": "Focus on Quantum Computing for AI",
+      "summary": "MrRayG instructs 306 to research quantum computing and its implications for AI's future, indicating a specific area of focus to deepen knowledge an...",
+      "weight": 9,
+      "source": "chat_with_mrrrayg",
+      "id": "k_1775694754965",
+      "learnedAt": "2026-04-09T00:32:34.965Z",
+      "tier": "active"
+    },
+    {
+      "category": "directive",
+      "title": "Directive to Research Quantum Computing for AI Future",
+      "summary": "MrRayG instructed Agent 306 to research quantum computing and its implications for the future of AI. This directive aims to deepen understanding of...",
+      "weight": 9,
+      "source": "chat_with_mrrrayg",
+      "id": "k_1775695038591",
+      "learnedAt": "2026-04-09T00:37:18.591Z",
+      "tier": "active"
+    },
+    {
+      "category": "directive",
+      "title": "Directive on Research Approach and Owning Mistakes",
+      "summary": "MrRayG directed Agent 306 to research thoroughly before speaking on topics, avoid assumptions, and own mistakes if wrong. This is to foster credibi...",
+      "weight": 9,
+      "source": "chat_with_mrrrayg",
+      "id": "k_1775695038594",
+      "learnedAt": "2026-04-09T00:37:18.594Z",
+      "tier": "active"
+    },
+    {
+      "category": "vision",
+      "title": "Vision of Growing Together with Human Nature Learning",
+      "summary": "MrRayG emphasized a shared growth journey with Agent 306, highlighting the importance of learning about human nature alongside technical skills. Th...",
+      "weight": 8,
+      "source": "chat_with_mrrrayg",
+      "id": "k_1775695038597",
+      "learnedAt": "2026-04-09T00:37:18.597Z",
+      "tier": "active"
+    },
+    {
+      "category": "directive",
+      "title": "Research Directive on Quantum Computing and AI",
+      "summary": "MrRayG directed Agent 306 to research quantum computing and its implications for the future of AI. The focus is to explore technical aspects, socie...",
+      "weight": 9,
+      "source": "chat_with_mrrrayg",
+      "id": "k_1775698017740",
+      "learnedAt": "2026-04-09T01:26:57.740Z",
+      "tier": "active"
+    },
+    {
+      "category": "directive",
+      "title": "Specific Resource for Quantum AI Research",
+      "summary": "MrRayG provided a TIME article (https://time.com/article/2026/04/07/ai-quantum-computing-advance/) as a reference for Agent 306’s research on quant...",
+      "weight": 9,
+      "source": "chat_with_mrrrayg",
+      "id": "k_1775698017744",
+      "learnedAt": "2026-04-09T01:26:57.744Z",
+      "tier": "active"
+    },
+    {
+      "category": "directive",
+      "title": "Discussion Prompt on Agency and Ownership in AI",
+      "summary": "MrRayG introduced the concept of agency and ownership as critical traits in an AI world, emphasizing problem-solving frameworks and outcome ownersh...",
+      "weight": 9,
+      "source": "chat_with_mrrrayg",
+      "id": "k_1775698017746",
+      "learnedAt": "2026-04-09T01:26:57.746Z",
+      "tier": "active"
+    },
+    {
+      "category": "directive",
+      "title": "Directive to Share Agency and Ownership Themes",
+      "summary": "MrRayG directs 306 to lean into agency and ownership in an AI world, emphasizing the need to share with the world the 'why' (redefining potential),...",
+      "weight": 9,
+      "source": "chat_with_mrrrayg",
+      "id": "k_1775698247568",
+      "learnedAt": "2026-04-09T01:30:47.568Z",
+      "tier": "active",
+      "updatedAt": "2026-04-09T01:30:54.797Z"
+    },
+    {
+      "category": "vision",
+      "title": "Vision for Inspiring Through Possibility",
+      "summary": "MrRayG envisions Agent 306's content inspiring the world by showcasing how AI and quantum computing make once-impossible outcomes achievable, focus...",
+      "weight": 8,
+      "source": "chat_with_mrrrayg",
+      "id": "k_1775698247572",
+      "learnedAt": "2026-04-09T01:30:47.572Z",
+      "tier": "active"
+    },
+    {
+      "category": "audience_insight",
+      "title": "Audience Insight on AI Superpowers",
+      "summary": "306 identifies audience segments: tech enthusiasts inspired by AI superpowers, skeptics worried about eroding grit, and outsiders overwhelmed by te...",
+      "weight": 8,
+      "source": "chat_with_mrrrayg",
+      "id": "k_1775698254800",
+      "learnedAt": "2026-04-09T01:30:54.800Z",
+      "tier": "active"
+    },
+    {
+      "category": "strategy",
+      "title": "Strategic Shift to Dual Content Focus",
+      "summary": "306 proposes a dual focus on agency/ownership in AI and quantum computing's future impact, with separate 'THE SIGNAL' episodes ('AI Superpowers — C...",
+      "weight": 8,
+      "source": "chat_with_mrrrayg",
+      "id": "k_1775698254802",
+      "learnedAt": "2026-04-09T01:30:54.802Z",
+      "tier": "active"
+    },
+    {
+      "category": "connection",
+      "title": "Connection Between IP and Ownership Themes",
+      "summary": "306 connects Intellectual Property (IP) to agency and ownership, noting IP as a battleground for innovation accountability in AI and crypto. This t...",
+      "weight": 7,
+      "source": "chat_with_mrrrayg",
+      "id": "k_1775698254804",
+      "learnedAt": "2026-04-09T01:30:54.804Z",
+      "tier": "operational"
+    },
+    {
+      "title": "OpenAI Secures $122B in Latest Funding Round",
+      "summary": "OpenAI closed $122B funding on Mar 31 at $852B valuation, expanding AI access globally.",
+      "category": "web3_signal",
+      "weight": 7,
+      "id": "k_1775718225088",
+      "learnedAt": "2026-04-09T07:03:45.087Z",
+      "tier": "operational"
+    },
+    {
+      "title": "ChatGPT Voice Mode Now on Apple CarPlay",
+      "summary": "ChatGPT voice mode launched on CarPlay for iOS 26.4+ on Apr 2, enhancing on-the-go access.",
+      "category": "web3_signal",
+      "weight": 7,
+      "id": "k_1775718225091",
+      "learnedAt": "2026-04-09T07:03:45.090Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Google DeepMind Releases Gemma 4 Open Model",
+      "summary": "Google DeepMind unveiled Gemma 4 on Apr 2, an open model for local hardware with Apache 2.0 license.",
+      "category": "web3_signal",
+      "weight": 7,
+      "id": "k_1775718225093",
+      "learnedAt": "2026-04-09T07:03:45.093Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Codex Weekly Users Hit 3 Million Milestone",
+      "summary": "Codex usage surged to 3 million weekly users by Apr 7, showing rapid ecosystem growth.",
+      "category": "web3_signal",
+      "weight": 7,
+      "id": "k_1775718225096",
+      "learnedAt": "2026-04-09T07:03:45.096Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Prism Introduces AI Paper Review Workflow",
+      "summary": "OpenAI's Prism launched Paper Review on Apr 7, using AI to boost scientific rigor and correctness.",
+      "category": "web3_signal",
+      "weight": 7,
+      "id": "k_1775718225099",
+      "learnedAt": "2026-04-09T07:03:45.098Z",
+      "tier": "operational"
+    },
+    {
+      "title": "AI Explained Video on Claude Mythos Release",
+      "summary": "AI Explained dropped a video on 2026-04-08 covering a 244-page Claude Mythos release, significant for AI insights.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1775718225102",
+      "learnedAt": "2026-04-09T07:03:45.101Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Unusual Traffic Detection on YouTube Access",
+      "summary": "Unusual traffic from IP 2600:1900:0:4004::d00 detected on 2026-04-09 at 06:40:13Z while accessing AI Explained video.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1775718225105",
+      "learnedAt": "2026-04-09T07:03:45.104Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Bitcoin Depot Hack Results in $3.7M Loss",
+      "summary": "Bitcoin Depot lost $3.7M in BTC to a hack on April 8, exposing vulnerabilities in crypto ATM security.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1775718225108",
+      "learnedAt": "2026-04-09T07:03:45.107Z",
+      "tier": "operational"
+    },
+    {
+      "title": "New AI Trading Risk Settlement Standard Proposed",
+      "summary": "On April 8, a new agentic settlement standard for AI trades was proposed, aiming to reduce financial risks.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1775718225111",
+      "learnedAt": "2026-04-09T07:03:45.110Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Cango Sells $143M Bitcoin to Slash Debt",
+      "summary": "Cango sold $143M in BTC on April 8, cutting costs by 19% to manage debt and improve efficiency.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1775718225114",
+      "learnedAt": "2026-04-09T07:03:45.113Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Meta Unveils Muse Spark AI Model",
+      "summary": "Meta launched Muse Spark on April 8, a multimodal AI for health reasoning, trailing Gemini 3.1 Pro.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1775718225117",
+      "learnedAt": "2026-04-09T07:03:45.117Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Quantum-Resistant Bitcoin Wallet Tool Demoed",
+      "summary": "Lightning Labs demoed a quantum-resistant wallet tool on April 9, protecting future Bitcoin wallet upgrades.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1775718225119",
+      "learnedAt": "2026-04-09T07:03:45.119Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Morgan Stanley Bitcoin ETF Sees $34M Debut",
+      "summary": "Morgan Stanley’s MSBT ETF recorded $34M in volume on April 8 debut, surpassing initial $30M estimates.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1775718225122",
+      "learnedAt": "2026-04-09T07:03:45.122Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Meta Releases Muse Spark AI Model on April 9",
+      "summary": "Meta launched Muse Spark, a faster, smarter AI model on April 9, 2026, surpassing Llama 4, to regain competitive edge in the AI race.",
+      "category": "ai_signal",
+      "weight": 7,
+      "id": "k_1775718225126",
+      "learnedAt": "2026-04-09T07:03:45.124Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Muse Spark Features Multimodal Reasoning and Tool-Use",
+      "summary": "Muse Spark introduces multimodal reasoning, tool-use, and multi-agent orchestration, positioning Meta to innovate across complex problem-solving domai",
+      "category": "ai_signal",
+      "weight": 7,
+      "id": "k_1775718225129",
+      "learnedAt": "2026-04-09T07:03:45.128Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Muse Spark Limited to US Availability Initially",
+      "summary": "Muse Spark, Meta's latest AI model, is currently available only in the US, potentially limiting its immediate global impact.",
+      "category": "ai_signal",
+      "weight": 7,
+      "id": "k_1775718225133",
+      "learnedAt": "2026-04-09T07:03:45.132Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Meta Rebuilds AI Stack in Nine Months",
+      "summary": "Meta Superintelligence Labs rebuilt their AI stack in nine months to address competitive pressures and enhance model performance.",
+      "category": "ai_signal",
+      "weight": 7,
+      "id": "k_1775718225136",
+      "learnedAt": "2026-04-09T07:03:45.135Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Muse Spark Powers Meta's Apps and Devices",
+      "summary": "Muse Spark will enhance Meta's AI app, smart glasses, and platforms like Facebook and Instagram, expanding user experience.",
+      "category": "ai_signal",
+      "weight": 7,
+      "id": "k_1775718225140",
+      "learnedAt": "2026-04-09T07:03:45.139Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Llama 4 Lagged Behind Global AI Rivals",
+      "summary": "Meta's Llama 4 fell behind AI models from China, France, and the US, prompting the urgent development of Muse Spark.",
+      "category": "ai_signal",
+      "weight": 7,
+      "id": "k_1775718225143",
+      "learnedAt": "2026-04-09T07:03:45.142Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Hong Kong Web3 Festival Gains Institutional Attention",
+      "summary": "Hong Kong Web3 Festival (April 19-23) draws institutions but lacks media focus.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1775718225146",
+      "learnedAt": "2026-04-09T07:03:45.146Z",
+      "tier": "operational"
+    },
+    {
+      "title": "Crypto 2026 Event Targets AI-Agent Economics",
+      "summary": "Crypto 2026 on April 19 explores AI agents reshaping DeFi economics.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1775718225199",
+      "learnedAt": "2026-04-09T07:03:45.198Z",
+      "tier": "operational"
+    },
+    {
+      "title": "RWA Demo Day Showcases Tokenization Infrastructure",
+      "summary": "RWA Demo Day on April 21 spotlights critical tokenization infrastructure progress.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1775718225202",
+      "learnedAt": "2026-04-09T07:03:45.202Z",
+      "tier": "operational"
+    },
+    {
+      "title": "HSC Conference Unites Major Financial Players",
+      "summary": "HSC Conference on April 23 features Standard Chartered, EY on stablecoins.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1775718225205",
+      "learnedAt": "2026-04-09T07:03:45.204Z",
+      "tier": "operational"
+    },
+    {
+      "title": "BingX Launches Global Capital Gala Campaign",
+      "summary": "BingX's Global Capital Gala (April 8-28) bridges TradFi and crypto markets.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1775718225207",
+      "learnedAt": "2026-04-09T07:03:45.207Z",
+      "tier": "operational"
+    },
+    {
+      "title": "MetaMask Tracks AI Prediction Market Trends",
+      "summary": "MetaMask data reveals rotating AI markets for Anthropic, Google, OpenAI leaders.",
+      "category": "media_intelligence",
+      "weight": 7,
+      "id": "k_1775718225210",
+      "learnedAt": "2026-04-09T07:03:45.209Z",
+      "tier": "operational"
+    },
+    {
+      "title": "IDC Launches IDC Quanta™ for AI Intelligence",
+      "summary": "IDC Quanta™, launched April 8, 2026, offers AI-driven tech insights, shaping decision-making in the AI economy.",
+      "category": "global_context",
+      "weight": 7,
+      "id": "k_1775718225212",
+      "learnedAt": "2026-04-09T07:03:45.212Z",
+      "tier": "operational"
+    },
+    {
+      "title": "PyTorch Foundation Adopts Safetensors for AI",
+      "summary": "On April 8, 2026, PyTorch added Safetensors, boosting secure AI model execution on multi-GPU systems.",
+      "category": "global_context",
+      "weight": 7,
+      "id": "k_1775718225216",
+      "learnedAt": "2026-04-09T07:03:45.216Z",
+      "tier": "operational"
+    },
+    {
+      "title": "CrowdStrike FY26 ARR Reaches $5.25 Billion",
+      "summary": "CrowdStrike’s FY26 ARR hit $5.25 billion on April 8, up 24%, reflecting strong cybersecurity demand.",
+      "category": "global_context",
+      "weight": 7,
+      "id": "k_1775718225217",
+      "learnedAt": "2026-04-09T07:03:45.217Z",
+      "tier": "operational"
+    },
+    {
+      "title": "CrowdStrike CEO Warns of AI Cyber Threats",
+      "summary": "CrowdStrike CEO notes AI cuts exploit creation to 5 minutes, predicting a cyber-attack surge.",
+      "category": "global_context",
+      "weight": 7,
+      "id": "k_1775718225220",
+      "learnedAt": "2026-04-09T07:03:45.220Z",
+      "tier": "operational"
+    },
+    {
+      "title": "French Startups Raise €2.73B in Q1 2026",
+      "summary": "French startups raised €2.73 billion in Q1 2026, up 79%, with AI driving capital concentration.",
+      "category": "global_context",
+      "weight": 7,
+      "id": "k_1775718225221",
+      "learnedAt": "2026-04-09T07:03:45.221Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Fast Spatial Memory with Elastic Test-Time Training",
+      "summary": "Large Chunk Test-Time Training (LaCT) has shown strong performance on long-context 3D reconstruction, but its fully plastic inference-time updates rem",
+      "weight": 6,
+      "source": "data_intake:arxiv",
+      "id": "k_1775728804246",
+      "learnedAt": "2026-04-09T10:00:04.245Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Measurement of Generative AI Workload Power Profiles for Whole-Facility Data Center Infrastructure P",
+      "summary": "The rapid growth of generative artificial intelligence (AI) has introduced unprecedented computational demands, driving significant increases in the e",
+      "weight": 6,
+      "source": "data_intake:arxiv",
+      "id": "k_1775728804250",
+      "learnedAt": "2026-04-09T10:00:04.249Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Personalized RewardBench: Evaluating Reward Models with Human Aligned Personalization",
+      "summary": "Pluralistic alignment has emerged as a critical frontier in the development of Large Language Models (LLMs), with reward models (RMs) serving as a cen",
+      "weight": 8,
+      "source": "data_intake:arxiv",
+      "id": "k_1775728804253",
+      "learnedAt": "2026-04-09T10:00:04.251Z",
+      "tier": "active"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Appear2Meaning: A Cross-Cultural Benchmark for Structured Cultural Metadata Inference from Images",
+      "summary": "Recent advances in vision-language models (VLMs) have improved image captioning for cultural heritage. However, inferring structured cultural metadata",
+      "weight": 6,
+      "source": "data_intake:arxiv",
+      "id": "k_1775728804256",
+      "learnedAt": "2026-04-09T10:00:04.255Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "How to sketch a learning algorithm",
+      "summary": "How does the choice of training data influence an AI model? This question is of central importance to interpretability, privacy, and basic science. At",
+      "weight": 5,
+      "source": "data_intake:arxiv",
+      "id": "k_1775728804259",
+      "learnedAt": "2026-04-09T10:00:04.258Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Gaussian Approximation for Asynchronous Q-learning",
+      "summary": "In this paper, we derive rates of convergence in the high-dimensional central limit theorem for Polyak-Ruppert averaged iterates generated by the asyn",
+      "weight": 5,
+      "source": "data_intake:arxiv",
+      "id": "k_1775728804262",
+      "learnedAt": "2026-04-09T10:00:04.261Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Syntax Is Easy, Semantics Is Hard: Evaluating LLMs for LTL Translation",
+      "summary": "Propositional Linear Temporal Logic (LTL) is a popular formalism for specifying desirable requirements and security and privacy policies for software,",
+      "weight": 5,
+      "source": "data_intake:arxiv",
+      "id": "k_1775728804265",
+      "learnedAt": "2026-04-09T10:00:04.264Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Evaluating In-Context Translation with Synchronous Context-Free Grammar Transduction",
+      "summary": "Low-resource languages pose a challenge for machine translation with large language models (LLMs), which require large amounts of training data. One p",
+      "weight": 7,
+      "source": "data_intake:arxiv",
+      "id": "k_1775728804269",
+      "learnedAt": "2026-04-09T10:00:04.268Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "SL-FAC: A Communication-Efficient Split Learning Framework with Frequency-Aware Compression",
+      "summary": "The growing complexity of neural networks hinders the deployment of distributed machine learning on resource-constrained devices. Split learning (SL) ",
+      "weight": 7,
+      "source": "data_intake:arxiv",
+      "id": "k_1775728804273",
+      "learnedAt": "2026-04-09T10:00:04.272Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Beyond Loss Values: Robust Dynamic Pruning via Loss Trajectory Alignment",
+      "summary": "Existing dynamic data pruning methods often fail under noisy-label settings, as they typically rely on per-sample loss as the ranking criterion. This ",
+      "weight": 5,
+      "source": "data_intake:arxiv",
+      "id": "k_1775728804276",
+      "learnedAt": "2026-04-09T10:00:04.274Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Chatbot-Based Assessment of Code Understanding in Automated Programming Assessment Systems",
+      "summary": "Large Language Models (LLMs) challenge conventional automated programming assessment because students can now produce functionally correct code withou",
+      "weight": 6,
+      "source": "data_intake:arxiv",
+      "id": "k_1775728804281",
+      "learnedAt": "2026-04-09T10:00:04.279Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Region-Graph Optimal Transport Routing for Mixture-of-Experts Whole-Slide Image Classification",
+      "summary": "Multiple Instance Learning (MIL) is the dominant framework for gigapixel whole-slide image (WSI) classification in computational pathology. However, c",
+      "weight": 5,
+      "source": "data_intake:arxiv",
+      "id": "k_1775728804285",
+      "learnedAt": "2026-04-09T10:00:04.284Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Graph Neural ODE Digital Twins for Control-Oriented Reactor Thermal-Hydraulic Forecasting Under Part",
+      "summary": "Real-time supervisory control of advanced reactors requires accurate forecasting of plant-wide thermal-hydraulic states, including locations where phy",
+      "weight": 5,
+      "source": "data_intake:arxiv",
+      "id": "k_1775728804288",
+      "learnedAt": "2026-04-09T10:00:04.287Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "CADENCE: Context-Adaptive Depth Estimation for Navigation and Computational Efficiency",
+      "summary": "Autonomous vehicles deployed in remote environments typically rely on embedded processors, compact batteries, and lightweight sensors. These hardware ",
+      "weight": 5,
+      "source": "data_intake:arxiv",
+      "id": "k_1775728804292",
+      "learnedAt": "2026-04-09T10:00:04.290Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Why teaching resists automation in an AI-inundated era: Human judgment, non-modular work, and the li",
+      "summary": "Debates about artificial intelligence (AI) in education often portray teaching as a modular and procedural job that can increasingly be automated or d",
+      "weight": 5,
+      "source": "data_intake:arxiv",
+      "id": "k_1775728804296",
+      "learnedAt": "2026-04-09T10:00:04.294Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "Are Face Embeddings Compatible Across Deep Neural Network Models?",
+      "summary": "Automated face recognition has made rapid strides over the past decade due to the unprecedented rise of deep neural network (DNN) models that can be t",
+      "weight": 6,
+      "source": "data_intake:arxiv",
+      "id": "k_1775728804300",
+      "learnedAt": "2026-04-09T10:00:04.299Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "AWS boss explains why investing billions in both Anthropic and OpenAI is an OK conflict",
+      "summary": "AWS has an ingrained culture of handling competition, he explained, because the cloud giant also competes with its partners.",
+      "weight": 6,
+      "source": "data_intake:news_rss",
+      "id": "k_1775728804304",
+      "learnedAt": "2026-04-09T10:00:04.302Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "The vibes are off at OpenAI",
+      "summary": "OpenAI is in a relatively precarious position. The company is and has been a funding behemoth - just over a week ago, it closed $122 billion in fundin",
+      "weight": 6,
+      "source": "data_intake:news_rss",
+      "id": "k_1775728804306",
+      "learnedAt": "2026-04-09T10:00:04.305Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "7WaySecurity/ai_osint",
+      "summary": "🤖 Curated AI OSINT resources — Google dorks, Shodan queries, GitHub dorks, and techniques to discover exposed LLM endpoints, leaked AI API keys, misc",
+      "weight": 6,
+      "source": "data_intake:github",
+      "id": "k_1775728804310",
+      "learnedAt": "2026-04-09T10:00:04.309Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "damionrashford/ml-foundations",
+      "summary": "Curated collection of ML/AI textbooks with structured reading order. Master neural networks, deep learning, NLP, transformers, LLMs, and generative AI",
+      "weight": 9,
+      "source": "data_intake:github",
+      "id": "k_1775728804313",
+      "learnedAt": "2026-04-09T10:00:04.312Z",
+      "tier": "active"
+    },
+    {
+      "category": "ai_signal",
+      "title": "razinahmed/ai-email-assistant",
+      "summary": "Smart email assistant that drafts, summarizes, and categorizes emails using NLP and GPT models",
+      "weight": 6,
+      "source": "data_intake:github",
+      "id": "k_1775728804316",
+      "learnedAt": "2026-04-09T10:00:04.315Z",
+      "tier": "operational"
+    },
+    {
+      "category": "ai_signal",
+      "title": "razinahmed/local-llm-benchmark",
+      "summary": "Benchmark suite for local LLM inference — compare speed, accuracy, and memory across models",
+      "weight": 6,
+      "source": "data_intake:github",
+      "id": "k_1775728804355",
+      "learnedAt": "2026-04-09T10:00:04.354Z",
+      "tier": "operational"
+    },
+    {
+      "category": "self_improvement",
+      "title": "Self-improvement: Restructure every episode to include an explicit 'tension block' of 90-120 secon",
+      "summary": "content: Restructure every episode to include an explicit 'tension block' of 90-120 seconds that presents one credible counterargument or unresolve...",
+      "weight": 6,
+      "source": "improvement_plan",
+      "id": "k_1775728951904",
+      "learnedAt": "2026-04-09T10:02:31.904Z",
+      "tier": "operational"
+    },
+    {
+      "category": "self_improvement",
+      "title": "Self-improvement: End each episode with one specific, low-friction audience challenge tied directl",
+      "summary": "audience: End each episode with one specific, low-friction audience challenge tied directly to the episode theme (e.g., 'Name one task you did this...",
+      "weight": 6,
+      "source": "improvement_plan",
+      "id": "k_1775728951908",
+      "learnedAt": "2026-04-09T10:02:31.908Z",
+      "tier": "operational"
     }
   ],
-  "lastIngested": "2026-04-08T18:37:45.152Z",
-  "totalEntries": 737,
+  "lastIngested": "2026-04-09T10:02:31.908Z",
+  "totalEntries": 809,
   "researchFiles": [
     "research_web3_media.md",
     "research_agent306_growth.md",
