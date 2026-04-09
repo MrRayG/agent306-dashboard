@@ -104,6 +104,19 @@ export default function KnowledgeGraph() {
     onError: () => toast({ title: "Failed to find connections", variant: "destructive" }),
   });
 
+  const rebuildMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/knowledge/graph/rebuild", {}).then(r => r.json()),
+    onSuccess: (data: any) => {
+      toast({
+        title: "Knowledge graph rebuilt",
+        description: `${data.clusters} clusters, ${data.connections} connections, ${data.contradictions} contradictions`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/knowledge/graph"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/knowledge/contradictions"] });
+    },
+    onError: (e: any) => toast({ title: "Rebuild failed", description: e.message, variant: "destructive" }),
+  });
+
   const contradictionsMutation = useMutation({
     mutationFn: () => apiRequest("GET", "/api/knowledge/contradictions").then(r => r.json()),
     onSuccess: () => {
@@ -164,6 +177,18 @@ export default function KnowledgeGraph() {
             }}
           >
             {clusterMutation.isPending ? "Clustering..." : "Refresh Clusters"}
+          </button>
+          <button
+            onClick={() => rebuildMutation.mutate()}
+            disabled={rebuildMutation.isPending}
+            style={{
+              ...mono, fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.12em",
+              background: "#f97316", color: "#0e0f10", border: "none",
+              padding: "0.5rem 1rem", cursor: rebuildMutation.isPending ? "wait" : "pointer",
+              opacity: rebuildMutation.isPending ? 0.6 : 1,
+            }}
+          >
+            {rebuildMutation.isPending ? "Rebuilding..." : "Rebuild Graph"}
           </button>
         </div>
       </div>

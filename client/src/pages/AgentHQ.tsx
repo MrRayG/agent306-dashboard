@@ -2833,6 +2833,7 @@ function NexusTab({ connections, reports, refetchConnections, refetchReports }: 
   connections: any[]; reports: any[]; refetchConnections: () => void; refetchReports: () => void;
 }) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const scanMut = useMutation({
     mutationFn: () => apiRequest("POST", "/api/synthesis/scan").then(r => r.json()),
     onSuccess: (d: any) => { toast({ title: `Found ${d.count} new connections` }); refetchConnections(); },
@@ -2847,6 +2848,9 @@ function NexusTab({ connections, reports, refetchConnections, refetchReports }: 
     mutationFn: () => apiRequest("POST", "/api/knowledge/graph/rebuild", {}).then(r => r.json()),
     onSuccess: (data: any) => {
       refetchConnections();
+      refetchReports();
+      queryClient.invalidateQueries({ queryKey: ["/api/knowledge/graph"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/knowledge/contradictions"] });
       toast({
         title: "Knowledge graph rebuilt",
         description: `${data.clusters} clusters, ${data.connections} connections, ${data.contradictions} contradictions`,
@@ -2932,9 +2936,15 @@ function NetworkTab({ insights, relationships, refetchInsights, refetchRelations
   insights: any[]; relationships: any[]; refetchInsights: () => void; refetchRelationships: () => void;
 }) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const extractMut = useMutation({
     mutationFn: () => apiRequest("POST", "/api/conversations/extract").then(r => r.json()),
-    onSuccess: (d: any) => { toast({ title: `Extracted ${d.count} insights` }); refetchInsights(); },
+    onSuccess: (d: any) => {
+      toast({ title: `Extracted ${d.count} insights` });
+      refetchInsights();
+      // Insights may be added to KB — refresh knowledge graph data
+      queryClient.invalidateQueries({ queryKey: ["/api/knowledge/graph"] });
+    },
     onError: (e: any) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
   });
   const analyzeMut = useMutation({

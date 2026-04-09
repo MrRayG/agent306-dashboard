@@ -3444,8 +3444,21 @@ needsHelp: true only when you genuinely need his direction or information`,
   app.post("/api/goals/generate", requireDashAuth, async (_req, res) => {
     const grokKey = LLM_API_KEY;
     if (!grokKey) return res.status(503).json({ error: "GROK_API_KEY not set" });
-    const goals = await generateInitialGoals(grokKey);
-    res.json({ goals, count: goals.length });
+    try {
+      const goals = await generateInitialGoals(grokKey);
+      if (goals.length === 0) {
+        // Check if there are existing active goals (gate was hit)
+        const store = getGoals();
+        const activeCount = store.goals.filter((g: any) => g.status === "active").length;
+        if (activeCount >= 6) {
+          return res.json({ goals: store.goals, count: activeCount, message: "Already have active goals" });
+        }
+        return res.status(500).json({ error: "Goal generation failed — LLM returned no goals. Check Railway logs." });
+      }
+      res.json({ goals, count: goals.length });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message || "Goal generation failed" });
+    }
   });
 
   // ── Grok Milestone Evaluation ──────────────────────────────────────────────
