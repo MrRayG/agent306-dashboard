@@ -92,6 +92,51 @@ function saveStyleRules(s: StyleRulesState): void {
 let reflections = loadReflections();
 let styleRules = loadStyleRules();
 
+// ── Purge stale Normies-era reflections (idempotent, runs once) ──────────────
+(function purgeStaleReflections() {
+  const FLAG_FILE = dataPath("migration_reflections_cleanup_complete.json");
+  if (fs.existsSync(FLAG_FILE)) return;
+
+  const BAD_KEYWORDS = ['normie', 'normiestv', 'canvas live', 'pixel toggle', 'pixel currency',
+    'holder catalog', 'nft identity', 'on-chain object', 'on-chain identity', 'token #306',
+    'yigit', 'serc1n', 'nuclearsamurai', 'opensea', 'live burn', 'burn mechanic',
+    'burn receipt', 'web3art', 'gnormie',
+    'erc-8004', 'on-chain burn', 'pixel count', 'burn data', 'serc article',
+    'normies ecosystem', 'normieshive', 'canvas experiment', 'normies agent',
+    'normies saga', 'normies story', 'normies community', '#normies', '#onchainart',
+    'dopemind', 'canvas live writes'];
+
+  const beforeReflections = reflections.reflections.length;
+  reflections.reflections = reflections.reflections.filter(r => {
+    const text = ((r.postText || '') + ' ' + (r.analysis?.whyWorked || '') + ' ' + (r.analysis?.styleNote || '') + ' ' + (r.analysis?.patterns?.join(' ') || '')).toLowerCase();
+    return !BAD_KEYWORDS.some(k => text.includes(k));
+  });
+  const removedReflections = beforeReflections - reflections.reflections.length;
+
+  const beforeRules = styleRules.rules.length;
+  styleRules.rules = styleRules.rules.filter(r => {
+    const text = ((r.rule || '') + ' ' + (r.source || '')).toLowerCase();
+    return !BAD_KEYWORDS.some(k => text.includes(k));
+  });
+  const removedRules = beforeRules - styleRules.rules.length;
+
+  if (removedReflections > 0) {
+    saveReflections(reflections);
+    console.log(`[Reflection] MIGRATION: Purged ${removedReflections} stale Normies-era reflections (${beforeReflections} -> ${reflections.reflections.length})`);
+  }
+  if (removedRules > 0) {
+    saveStyleRules(styleRules);
+    console.log(`[Reflection] MIGRATION: Purged ${removedRules} stale Normies-era style rules (${beforeRules} -> ${styleRules.rules.length})`);
+  }
+
+  try {
+    fs.writeFileSync(FLAG_FILE, JSON.stringify({ completedAt: new Date().toISOString(), version: 1, removedReflections, removedRules }, null, 2));
+    console.log("[Reflection] MIGRATION: Reflections cleanup complete — flag written");
+  } catch (e: any) {
+    console.warn("[Reflection] Could not write migration flag:", e.message);
+  }
+})();
+
 // Register style rules provider so memoryEngine can inject rules into agent context
 setStyleRulesProvider(() => {
   if (styleRules.rules.length === 0) return "";

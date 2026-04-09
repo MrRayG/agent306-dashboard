@@ -34,7 +34,7 @@ import {
 import { runConnectionScan } from "./synthesisEngine.js";
 import { extractInsights } from "./conversationLearningEngine.js";
 import { getMetacognitionState } from "./metacognitionEngine.js";
-import { getResearchLab, resolveHypothesis, addHypothesis, testHypothesis } from "./researchEngine.js";
+import { getResearchLab, resolveHypothesis, addHypothesis, testHypothesis, runResearchPipeline } from "./researchEngine.js";
 import { clusterKnowledge, detectContradictions as detectGraphContradictions } from "./knowledge-graph.js";
 import { runResearchAgendaCycle } from "./research-agenda.js";
 import { updateDreams, takeGrowthSnapshot, generateSelfImprovementPlan, executeImprovementActions, seedDreams } from "./dreamEngine.js";
@@ -856,6 +856,32 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     console.log(`[DailyCycle] Research agenda: ${agendaResult.newThreads} new threads, ${agendaResult.advanced.length} advanced, ${agendaResult.pruned} pruned, ${agendaResult.podcastCandidates} podcast candidates`);
   } catch (e: any) {
     console.warn("[DailyCycle] Research agenda cycle failed (non-fatal):", e.message);
+  }
+
+  // 2c. Auto-run research pipeline on queued/in-progress topics
+  try {
+    const lab = getResearchLab();
+    const queuedTopics = lab.topics
+      .filter(t => t.status === "queued" || (t.status === "researching" && t.researchPhase !== "interpretation"))
+      .slice(0, 3); // max 3 per cycle to avoid Railway timeout
+
+    if (queuedTopics.length > 0) {
+      const grokKey = GROK_API_KEY;
+      const pplxKey = process.env.PERPLEXITY_API_KEY;
+      if (grokKey) {
+        for (const topic of queuedTopics) {
+          try {
+            console.log(`[DailyCycle] Auto-running pipeline for topic: "${topic.topic}" (phase: ${topic.researchPhase || "start"})`);
+            await runResearchPipeline(topic.id, grokKey, pplxKey);
+            console.log(`[DailyCycle] Pipeline completed for topic: "${topic.topic}"`);
+          } catch (e: any) {
+            console.warn(`[DailyCycle] Pipeline failed for "${topic.topic}":`, e.message);
+          }
+        }
+      }
+    }
+  } catch (e: any) {
+    console.warn("[DailyCycle] Research pipeline auto-run failed (non-fatal):", e.message);
   }
 
   // 3. Make ONE Grok call
