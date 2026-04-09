@@ -1631,6 +1631,7 @@ export async function generateInitialGoals(grokKey: string): Promise<AgentGoal[]
 
   const existingTitles = activeGoals.map(g => g.title).join(", ");
 
+  let raw = "";
   try {
     const res = await fetch(GROK_CHAT_API, {
       method: "POST",
@@ -1683,8 +1684,11 @@ Return JSON:
       throw new Error(`LLM API error: ${res.status} — ${errBody.slice(0, 200)}`);
     }
     const data = await res.json() as any;
-    const raw  = data.choices?.[0]?.message?.content ?? "{}";
-    const parsed = JSON.parse(raw);
+    raw  = data.choices?.[0]?.message?.content ?? "{}";
+    // Handle markdown-wrapped JSON (LLMs often wrap in ```json ... ```)
+    const jsonMatch = raw.match(/```json\n?([\s\S]*?)\n?```/) || raw.match(/```\n?([\s\S]*?)\n?```/) || raw.match(/\{[\s\S]*\}/);
+    const jsonStr = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : raw;
+    const parsed = JSON.parse(jsonStr);
 
     const created: AgentGoal[] = [];
     for (const g of (parsed.goals ?? []).slice(0, toGenerate)) {
@@ -1701,8 +1705,9 @@ Return JSON:
 
     console.log(`[Goals] Generated ${created.length} new goals`);
     return created;
-  } catch (e) {
-    console.error("[Goals] Failed to generate goals:", e);
+  } catch (e: any) {
+    console.error("[Goals] Failed to generate goals:", e.message);
+    console.error("[Goals] Raw LLM response:", raw?.slice(0, 500));
     return [];
   }
 }
