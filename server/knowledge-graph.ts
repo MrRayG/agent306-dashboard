@@ -132,13 +132,13 @@ async function callLLM(
       console.error(`[KnowledgeGraph] LLM API error (${task}): ${res.status} ${res.statusText} — model: ${getModel(task)} — ${errBody.slice(0, 300)}`);
       
       // Retry with standard model if routine model failed
-      if (getModel(task) !== "x-ai/grok-3") {
-        console.log(`[KnowledgeGraph] Retrying ${task} with x-ai/grok-3...`);
+      if (getModel(task) !== "x-ai/grok-4.20") {
+        console.log(`[KnowledgeGraph] Retrying ${task} with x-ai/grok-4.20...`);
         const retryRes = await fetch(LLM_BASE_URL, {
           method: "POST",
           headers: getLLMHeaders(),
           body: JSON.stringify({
-            model: "x-ai/grok-3",
+            model: "x-ai/grok-4.20",
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: userPrompt },
