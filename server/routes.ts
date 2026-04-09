@@ -37,7 +37,7 @@ import { getAgentReachStatus } from "./agentReachEngine.js";
 import { postCast, isFarcasterEnabled, getFarcasterState, setFarcasterEnabled, createSigner, getSignerStatus, fetchMentions, determineChannel, getStoredSignerUuid, storeSignerUuid } from "./farcasterEngine.js";
 import {
   getResearchLab, addTopic, updateTopicStatus, getTopicById,
-  addHypothesis, resolveHypothesis,
+  addHypothesis, resolveHypothesis, testHypothesis,
   runResearchCycle, approveForPublication, declinePublication,
   markPublished, requestRevisions, provideInput, skipInput,
   // Goals
@@ -63,7 +63,10 @@ import {
   createBlogPost, generateBlogPost, publishPost, updatePost, deletePost,
   getBlogState, purgeConversationalPosts,
 } from "./blogEngine.js";
-import { getDebates, getContradictions, runDebate, resolveContradiction, runConfidenceDecay, getDecayingEntries } from "./reasoningEngine.js";
+import {
+  getDebates, getContradictions, runDebate, resolveContradiction, runConfidenceDecay, getDecayingEntries,
+  evaluateHypothesis, getAllTrustScores,
+} from "./reasoningEngine.js";
 import { getConnections, getReports, runConnectionScan, generateSynthesis } from "./synthesisEngine.js";
 import { getKnowledgeMap, getClusters, getContradictions as getGraphContradictions, findConnections as findGraphConnections, clusterKnowledge, detectContradictions, generatePerspective } from "./knowledge-graph.js";
 import { getInsights, getRelationships, extractInsights, analyzeRelationships, purgeStaleRelationships } from "./conversationLearningEngine.js";
@@ -3276,6 +3279,90 @@ needsHelp: true only when you genuinely need his direction or information`,
     if (!status || !resolution) return res.status(400).json({ error: "status and resolution required" });
     const ok = resolveHypothesis(id, status, resolution);
     res.json({ ok });
+  });
+
+  // POST /api/research/hypothesis/test/:id — manual transition to "testing"
+  app.post("/api/research/hypothesis/test/:id", requireDashAuth, (req, res) => {
+    const ok = testHypothesis(req.params.id);
+    if (!ok) return res.status(400).json({ error: "Hypothesis not found or not in 'forming' status" });
+    res.json({ ok, status: "testing" });
+  });
+
+  // POST /api/research/hypothesis/evaluate/:id — run full evaluation pipeline
+  app.post("/api/research/hypothesis/evaluate/:id", requireDashAuth, async (req, res) => {
+    try {
+      const lab = getResearchLab();
+      const hyp = lab.hypotheses.find(h => h.id === req.params.id);
+      if (!hyp) return res.status(404).json({ error: "Hypothesis not found" });
+
+      const { knowledge: kb } = await import("./memoryEngine.js");
+      const kbContext = kb.entries
+        .filter((e: any) => (e.status ?? "active") === "active")
+        .slice(0, 30)
+        .map((e: any) => `- [${e.category}] ${e.title}: ${e.summary}`)
+        .join("\n");
+
+      const assessment = await evaluateHypothesis(
+        { id: hyp.id, claim: hyp.claim, basis: hyp.basis, metric: hyp.metric, prediction: hyp.prediction, timeframe: hyp.timeframe, confidence: hyp.confidence },
+        kbContext,
+      );
+      if (!assessment) return res.status(500).json({ error: "Evaluation failed" });
+      res.json({ assessment });
+    } catch (e: any) {
+      res.status(500).json({ error: "Evaluation error: " + e.message });
+    }
+  });
+
+  // GET /api/reasoning/trust-scores — view all hypothesis trust scores
+  app.get("/api/reasoning/trust-scores", async (_req, res) => {
+    try {
+      const scores = await getAllTrustScores();
+      res.json({ trustScores: scores });
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to calculate trust scores" });
+    }
+  });
+
+  // POST /api/reasoning/batch-evaluate — batch evaluate up to 50 hypotheses
+  app.post("/api/reasoning/batch-evaluate", requireDashAuth, async (_req, res) => {
+    try {
+      const lab = getResearchLab();
+      const forming = lab.hypotheses.filter(h => h.status === "forming").slice(0, 50);
+      if (forming.length === 0) return res.json({ evaluated: 0, message: "No forming hypotheses to evaluate" });
+
+      res.json({ started: true, count: forming.length, message: `Evaluating ${forming.length} hypotheses in background` });
+
+      // Run in background
+      const { knowledge: kb } = await import("./memoryEngine.js");
+      const kbContext = kb.entries
+        .filter((e: any) => (e.status ?? "active") === "active")
+        .slice(0, 30)
+        .map((e: any) => `- [${e.category}] ${e.title}: ${e.summary}`)
+        .join("\n");
+
+      let evaluated = 0;
+      for (const hyp of forming) {
+        try {
+          const assessment = await evaluateHypothesis(
+            { id: hyp.id, claim: hyp.claim, basis: hyp.basis, metric: hyp.metric, prediction: hyp.prediction, timeframe: hyp.timeframe, confidence: hyp.confidence },
+            kbContext,
+          );
+          if (assessment) {
+            evaluated++;
+            if (assessment.verdict === "testing") {
+              testHypothesis(hyp.id);
+            }
+          }
+          // Rate limit
+          await new Promise(r => setTimeout(r, 5000));
+        } catch (e: any) {
+          console.warn(`[BatchEval] Failed for "${hyp.claim.slice(0, 50)}":`, e.message);
+        }
+      }
+      console.log(`[BatchEval] Complete: ${evaluated}/${forming.length} hypotheses evaluated`);
+    } catch (e: any) {
+      console.error("[BatchEval] Error:", e.message);
+    }
   });
 
   // ── RESEARCH INPUT MANAGEMENT ─────────────────────────────────────────────
