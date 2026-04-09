@@ -67,7 +67,12 @@ function loadConnections(): GraphConnectionsState {
 }
 
 function saveConnections(s: GraphConnectionsState): void {
-  try { fs.writeFileSync(CONNECTIONS_FILE, JSON.stringify(s, null, 2)); } catch {}
+  try {
+    fs.writeFileSync(CONNECTIONS_FILE, JSON.stringify(s, null, 2));
+    console.log(`[KnowledgeGraph] Saved ${s.connections.length} connections to ${CONNECTIONS_FILE}`);
+  } catch (e: any) {
+    console.error(`[KnowledgeGraph] FAILED to save connections: ${e.message}`);
+  }
 }
 
 function loadClusters(): ClustersState {
@@ -79,7 +84,12 @@ function loadClusters(): ClustersState {
 }
 
 function saveClusters(s: ClustersState): void {
-  try { fs.writeFileSync(CLUSTERS_FILE, JSON.stringify(s, null, 2)); } catch {}
+  try {
+    fs.writeFileSync(CLUSTERS_FILE, JSON.stringify(s, null, 2));
+    console.log(`[KnowledgeGraph] Saved ${s.clusters.length} clusters to ${CLUSTERS_FILE}`);
+  } catch (e: any) {
+    console.error(`[KnowledgeGraph] FAILED to save clusters: ${e.message}`);
+  }
 }
 
 let graphState = loadConnections();
@@ -254,8 +264,13 @@ What connections exist between the new entry and existing knowledge?`;
 // ── 2. clusterKnowledge — group entries into thematic clusters ───────────────
 
 export async function clusterKnowledge(): Promise<KnowledgeCluster[]> {
+  console.log(`[KnowledgeGraph] clusterKnowledge: total entries=${knowledge.entries?.length ?? 0}`);
   const active = knowledge.entries.filter(e => (e.status ?? "active") === "active");
-  if (active.length < 5) return [];
+  console.log(`[KnowledgeGraph] clusterKnowledge: active entries=${active.length}`);
+  if (active.length < 5) {
+    console.log(`[KnowledgeGraph] clusterKnowledge: skipping — not enough active entries (need 5, have ${active.length})`);
+    return [];
+  }
 
   // Select top entries by weight to cluster (limit to keep prompt manageable)
   const topEntries = active
@@ -303,8 +318,14 @@ ${connHints || "No connections mapped yet."}
 
 Group these entries into coherent thematic clusters.`;
 
+  console.log(`[KnowledgeGraph] clusterKnowledge: calling LLM with ${topEntries.length} entries...`);
   const result = await callLLM(systemPrompt, userPrompt, "cluster-scan", 2500, 0.4);
-  if (!result?.clusters) return [];
+  console.log(`[KnowledgeGraph] clusterKnowledge: LLM returned ${result ? Object.keys(result).join(",") : "null"}`);
+  if (result?.clusters) console.log(`[KnowledgeGraph] clusterKnowledge: ${result.clusters.length} raw clusters`);
+  if (!result?.clusters) {
+    console.warn(`[KnowledgeGraph] clusterKnowledge: LLM returned no clusters`);
+    return [];
+  }
 
   const validIds = new Set(topEntries.map(e => e.id));
   const newClusters: KnowledgeCluster[] = [];
