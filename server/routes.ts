@@ -61,7 +61,7 @@ import { getReflections, getStyleRules, deleteStyleRule, runReflection } from ".
 import {
   getPublishedPosts, getPostBySlug, getAllPosts,
   createBlogPost, generateBlogPost, publishPost, updatePost, deletePost,
-  getBlogState
+  getBlogState, purgeConversationalPosts,
 } from "./blogEngine.js";
 import { getDebates, getContradictions, runDebate, resolveContradiction, runConfidenceDecay, getDecayingEntries } from "./reasoningEngine.js";
 import { getConnections, getReports, runConnectionScan, generateSynthesis } from "./synthesisEngine.js";
@@ -2786,19 +2786,22 @@ needsHelp: true only when you genuinely need his direction or information`,
         // Blog detection: user asked for a blog AND 306 wrote substantial content
         if (
           (userMsg.includes("blog") || userMsg.includes("write a post") || userMsg.includes("write a blog") || userMsg.includes("post about") || userMsg.includes("daily blog") || userMsg.includes("publish")) &&
-          parsed.text.length > 400
+          parsed.text.length > 300
         ) {
-          const headingMatch = parsed.text.match(/^#+\s+(.+)$/m) || parsed.text.match(/\*\*(.{10,80})\*\*/);
           let autoTitle = "";
+          const headingMatch = parsed.text.match(/^#+\s+(.+)$/m) || parsed.text.match(/\*\*(.{10,80})\*\*/);
           if (headingMatch) {
             autoTitle = headingMatch[1].trim();
           } else {
-            autoTitle = parsed.text.split(/[.\n]/)[0].trim().slice(0, 80);
+            // Try to extract topic, not conversational text
+            const titleMatch = parsed.text.match(/titled?\s+['"](.{10,80})['"]/i) ||
+                               parsed.text.match(/(?:about|on|topic[:\s]+)(.{10,80}?)(?:\.|$)/i);
+            autoTitle = titleMatch ? titleMatch[1].trim() : "Agent 306 Blog Post";
           }
 
           actions.push({
             type: "generate_blog",
-            topic: autoTitle || "Agent 306 Blog Post",
+            topic: autoTitle,
             content: parsed.text,
           });
           console.log(`[Chat Actions] Auto-detected blog action: "${autoTitle}"`);
@@ -2847,11 +2850,18 @@ needsHelp: true only when you genuinely need his direction or information`,
           (userMsg.includes("post") || userMsg.includes("share") || userMsg.includes("publish") || userMsg.includes("blog") || userMsg.includes("write"))
         ) {
           const headingMatch = parsed.text.match(/^#+\s+(.+)$/m) || parsed.text.match(/\*\*(.{10,80})\*\*/);
-          const autoTitle = headingMatch ? headingMatch[1].trim() : parsed.text.split(/[.\n]/)[0].trim().slice(0, 80);
+          let autoTitle = "";
+          if (headingMatch) {
+            autoTitle = headingMatch[1].trim();
+          } else {
+            const titleMatch = parsed.text.match(/titled?\s+['"](.{10,80})['"]/i) ||
+                               parsed.text.match(/(?:about|on|topic[:\s]+)(.{10,80}?)(?:\.|$)/i);
+            autoTitle = titleMatch ? titleMatch[1].trim() : "Agent 306 Insights";
+          }
 
           actions.push({
             type: "generate_blog",
-            topic: autoTitle || "Agent 306 Insights",
+            topic: autoTitle,
             content: parsed.text,
           });
           console.log(`[Chat Actions] Auto-detected long-form blog content: "${autoTitle}"`);
@@ -2878,36 +2888,26 @@ needsHelp: true only when you genuinely need his direction or information`,
             }
 
             case "generate_blog": {
-              const { createBlogPost, generateBlogPost } = await import("./blogEngine.js");
+              const { generateBlogPost } = await import("./blogEngine.js");
 
-              // If 306 wrote the blog content in her chat text (which is the natural behavior),
-              // use that as the blog content. Fall back to action.content if provided.
-              const blogContent = (action.content && action.content.length > 200)
-                ? action.content
-                : (parsed.text && parsed.text.length > 300)
-                  ? parsed.text
-                  : action.content || "";
+              // Chat text is NEVER blog-ready — it's conversational, addressed to MrRayG.
+              // Always run through generateBlogPost() which uses the blog LLM to create
+              // a proper public-facing post from the source material.
+              const sourceContent = action.content || parsed.text || "";
+              const topic = action.topic || action.title || "Agent 306 Blog Post";
 
-              if (blogContent.length > 200) {
-                const post = createBlogPost({
-                  title: action.topic || action.title || "Untitled Post",
-                  content: blogContent,
-                  source: "chat",
-                  tags: action.tags || [],
-                  status: "draft",
-                });
-                actionResults.push(`Created blog draft "${post.title}" in Blog Studio.`);
-                console.log(`[Chat Action] Created blog post: ${post.id} — "${post.title}"`);
+              const post = await generateBlogPost({
+                topic,
+                sourceContent: sourceContent.slice(0, 4000),
+                source: "chat",
+                autoPublish: false, // Always draft — MrRayG reviews before publishing
+              });
+
+              if (post) {
+                actionResults.push(`Generated blog draft "${post.title}" in Blog Studio. Review and publish when ready.`);
+                console.log(`[Chat Action] Generated blog draft: ${post.id} — "${post.title}"`);
               } else {
-                const post = await generateBlogPost({
-                  topic: action.topic || "Untitled",
-                  sourceContent: blogContent || action.topic || "",
-                  source: "chat",
-                  autoPublish: false,
-                });
-                if (post) {
-                  actionResults.push(`Generated blog draft "${post.title}" in Blog Studio.`);
-                }
+                actionResults.push(`Blog generation failed — try again or create manually in Blog Studio.`);
               }
               break;
             }
@@ -4229,6 +4229,11 @@ needsHelp: true only when you genuinely need his direction or information`,
     const ok = deletePost(req.params.id);
     if (!ok) return res.status(404).json({ error: "Post not found" });
     res.json({ success: true });
+  });
+
+  app.post("/api/blog/purge-conversational", requireDashAuth, (_req, res) => {
+    const result = purgeConversationalPosts();
+    res.json(result);
   });
 
   app.post("/api/seed", (_req, res) => {

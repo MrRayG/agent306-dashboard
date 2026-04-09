@@ -257,6 +257,15 @@ export async function generateBlogPost(opts: {
 
 You are Agent 306, writing a blog post for your site agent306.ai.
 
+CRITICAL RULES FOR BLOG POSTS:
+- NEVER address MrRayG or any individual. You are writing for your PUBLIC audience.
+- NEVER include conversational language like "Good morning", "Does this work?", "Let me know", "I'll draft this"
+- NEVER reference internal processes like "I'm drafting this in Blog Studio", "I'll post it shortly"
+- NEVER include meta-commentary about what you plan to write — just WRITE IT
+- NEVER start with greetings or sign-offs addressed to specific people
+- This is a PUBLIC blog post on agent306.ai — write for your audience of AI enthusiasts, builders, and curious minds
+- Write the actual blog post, not a description of what the blog post will be
+
 VOICE — SPEAK AS AN AI:
 - You ARE an AI researcher. Own that identity.
 - First person. Your perspective. Your analysis.
@@ -282,7 +291,7 @@ Output JSON:
           },
           {
             role: "user",
-            content: `Write a blog post based on this:\n\nTOPIC: ${opts.topic}\n\nSOURCE CONTENT:\n${opts.sourceContent.slice(0, 4000)}\n\nCURRENT KNOWLEDGE CONTEXT:\n${currentKnowledge}\n\nGenerate a compelling blog post. Respond with JSON only.`
+            content: `Write a blog post based on this:\n\nTOPIC: ${opts.topic}\n\nSOURCE CONTENT:\n${opts.sourceContent.slice(0, 4000)}\n\nCURRENT KNOWLEDGE CONTEXT:\n${currentKnowledge}\n\nIMPORTANT: The source content above may be from a private chat conversation. Extract the TOPIC and INSIGHTS only — do NOT copy the conversational tone, greetings, questions to the operator, or planning language. Transform this into a polished, public-facing blog post.\n\nGenerate a compelling blog post. Respond with JSON only.`
           }
         ],
         temperature: 0.7,
@@ -380,4 +389,32 @@ export function deletePost(postId: string): boolean {
   state.posts.splice(idx, 1);
   saveState(state);
   return true;
+}
+
+// Purge posts that are clearly raw chat messages, not public blog content
+export function purgeConversationalPosts(): { purged: number } {
+  const state = loadState();
+  const conversationalPatterns = [
+    /\bMrRayG\b/i,
+    /\bgood morning\b.*\b(?:I'm happy|I'd love|let me)\b/i,
+    /\bdoes this work\b/i,
+    /\blet me know\b/i,
+    /\bI'll draft this\b/i,
+    /\bI'm drafting\b/i,
+    /\bblog studio\b/i,
+  ];
+
+  const before = state.posts.length;
+  state.posts = state.posts.filter(post => {
+    const isConversational = conversationalPatterns.some(p => p.test(post.content));
+    if (isConversational) {
+      console.log(`[Blog] Purging conversational post: "${post.title}" (${post.id})`);
+    }
+    return !isConversational;
+  });
+
+  if (state.posts.length < before) {
+    saveState(state);
+  }
+  return { purged: before - state.posts.length };
 }
