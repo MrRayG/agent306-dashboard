@@ -3,7 +3,7 @@
  * 
  * Routes tasks to appropriate models via OpenRouter:
  *   routine  → google/gemini-2.5-flash  (cheapest, fast)
- *   standard → x-ai/grok-3-fast        (current default via OpenRouter)
+ *   standard → x-ai/grok-4.20          (current default via OpenRouter)
  *   premium  → anthropic/claude-sonnet-4.6  (highest quality for scripts/synthesis)
  * 
  * OpenRouter model names use provider/model format.
@@ -15,7 +15,7 @@ export type TaskComplexity = "routine" | "standard" | "premium";
 
 const MODEL_MAP: Record<TaskComplexity, string> = {
   routine:  process.env.MODEL_ROUTINE  ?? "google/gemini-2.5-flash-preview",
-  standard: process.env.MODEL_STANDARD ?? "x-ai/grok-3",
+  standard: process.env.MODEL_STANDARD ?? "x-ai/grok-4.20",
   premium:  process.env.MODEL_PREMIUM  ?? "anthropic/claude-sonnet-4.6",
 };
 
@@ -56,7 +56,7 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
 
   // Reasoning pipeline — diverse models for hypothesis evaluation
   "hypothesis-evaluation": "premium",        // Claude Sonnet 4.6 — primary reasoning
-  "adversarial-evaluation": "standard",      // Grok-3 — different model for diversity
+  "adversarial-evaluation": "standard",      // Grok 4.20 — different model for diversity
   "hypothesis-decomposition": "routine",     // Gemini Flash — fast decomposition
   "trust-scoring": "routine",                // Gemini Flash — formulaic calculation
 
