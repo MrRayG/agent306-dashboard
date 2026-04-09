@@ -666,6 +666,25 @@ Research the next gap and advance this thread. Respond with JSON only.`;
     // Add new gaps
     if (parsed.newGaps?.length) thread.evidence.gaps.push(...parsed.newGaps);
 
+    // Bridge significant gaps to pipeline topics
+    if (parsed.newGaps?.length) {
+      for (const gap of parsed.newGaps.slice(0, 2)) { // max 2 per thread advance
+        if (typeof gap === "string" && gap.length > 30) {
+          try {
+            addTopic({
+              topic: gap.slice(0, 100),
+              description: `Knowledge gap from research thread "${thread.title}": ${gap}`,
+              priority: "medium",
+              addedBy: "agent",
+            });
+            console.log(`[ResearchAgenda] Spawned pipeline topic from gap: "${gap.slice(0, 60)}..."`);
+          } catch (e: any) {
+            console.warn(`[ResearchAgenda] Failed to spawn topic from gap:`, e.message);
+          }
+        }
+      }
+    }
+
     // Add tips
     if (parsed.newTips?.length) {
       const existingTips = new Set(thread.actionableTips);
