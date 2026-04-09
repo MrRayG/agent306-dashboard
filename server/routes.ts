@@ -2775,6 +2775,89 @@ needsHelp: true only when you genuinely need his direction or information`,
       const actions = parsed.actions ?? [];
       const actionResults: string[] = [];
 
+      // ── Auto-detect actions from conversation context ──────────────────────
+      // If the LLM didn't include explicit actions but the conversation implies one,
+      // infer and add them. This catches cases where 306 "talks about" doing something
+      // instead of actually doing it.
+      if (actions.length === 0 && parsed.text) {
+        const userMsg = text.toLowerCase();
+        const agentMsg = (parsed.text || "").toLowerCase();
+
+        // Blog detection: user asked for a blog AND 306 wrote substantial content
+        if (
+          (userMsg.includes("blog") || userMsg.includes("write a post") || userMsg.includes("write a blog") || userMsg.includes("post about") || userMsg.includes("daily blog") || userMsg.includes("publish")) &&
+          parsed.text.length > 400
+        ) {
+          const headingMatch = parsed.text.match(/^#+\s+(.+)$/m) || parsed.text.match(/\*\*(.{10,80})\*\*/);
+          let autoTitle = "";
+          if (headingMatch) {
+            autoTitle = headingMatch[1].trim();
+          } else {
+            autoTitle = parsed.text.split(/[.\n]/)[0].trim().slice(0, 80);
+          }
+
+          actions.push({
+            type: "generate_blog",
+            topic: autoTitle || "Agent 306 Blog Post",
+            content: parsed.text,
+          });
+          console.log(`[Chat Actions] Auto-detected blog action: "${autoTitle}"`);
+        }
+
+        // Episode detection: user asked for an episode/podcast
+        if (
+          (userMsg.includes("episode") || userMsg.includes("podcast") || userMsg.includes("generate a signal") || userMsg.includes("record") || userMsg.includes("script")) &&
+          (userMsg.includes("about") || userMsg.includes("on ") || userMsg.includes("topic") || userMsg.includes("generate") || userMsg.includes("create"))
+        ) {
+          const topicMatch = userMsg.match(/(?:about|on|topic[:\s]+)(.{5,100}?)(?:\.|$|\?|!)/i);
+          const topic = topicMatch ? topicMatch[1].trim() : (parsed.text.match(/\*\*(.{10,80})\*\*/)?.[1] || "").trim();
+
+          if (topic) {
+            actions.push({
+              type: "generate_episode",
+              topic: topic,
+              drivingQuestion: topic,
+            });
+            console.log(`[Chat Actions] Auto-detected episode action: "${topic}"`);
+          }
+        }
+
+        // Research detection: user asked to research/investigate something
+        if (
+          (userMsg.includes("research") || userMsg.includes("investigate") || userMsg.includes("look into") || userMsg.includes("dig into") || userMsg.includes("explore")) &&
+          !userMsg.includes("what research")
+        ) {
+          const topicMatch = userMsg.match(/(?:research|investigate|look into|dig into|explore)\s+(.{5,100}?)(?:\.|$|\?|!)/i);
+          if (topicMatch) {
+            actions.push({
+              type: "start_research",
+              topic: topicMatch[1].trim(),
+              description: `Research requested by MrRayG: ${topicMatch[1].trim()}`,
+            });
+            console.log(`[Chat Actions] Auto-detected research action: "${topicMatch[1].trim()}"`);
+          }
+        }
+
+        // Long-form content detection: 306 wrote a very long structured response
+        // and user mentioned post/share/publish/blog/write
+        if (
+          actions.length === 0 &&
+          parsed.text &&
+          parsed.text.length > 800 &&
+          (userMsg.includes("post") || userMsg.includes("share") || userMsg.includes("publish") || userMsg.includes("blog") || userMsg.includes("write"))
+        ) {
+          const headingMatch = parsed.text.match(/^#+\s+(.+)$/m) || parsed.text.match(/\*\*(.{10,80})\*\*/);
+          const autoTitle = headingMatch ? headingMatch[1].trim() : parsed.text.split(/[.\n]/)[0].trim().slice(0, 80);
+
+          actions.push({
+            type: "generate_blog",
+            topic: autoTitle || "Agent 306 Insights",
+            content: parsed.text,
+          });
+          console.log(`[Chat Actions] Auto-detected long-form blog content: "${autoTitle}"`);
+        }
+      }
+
       for (const action of actions) {
         try {
           switch (action.type) {

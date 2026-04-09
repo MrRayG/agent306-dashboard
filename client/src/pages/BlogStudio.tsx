@@ -117,15 +117,17 @@ export default function BlogStudio() {
   const [genSource, setGenSource] = useState("");
   const [genSourceType, setGenSourceType] = useState("standalone");
 
-  const { data: blogState } = useQuery<BlogState>({
+  const { data: blogStateData } = useQuery<{ posts: any[]; stats: BlogState }>({
     queryKey: ["/api/blog/state"],
     refetchInterval: 30_000,
   });
+  const stats = blogStateData?.stats;
 
-  const { data: posts } = useQuery<BlogPost[]>({
+  const { data: postsData } = useQuery<{ posts: BlogPost[] }>({
     queryKey: ["/api/blog/posts"],
     refetchInterval: 30_000,
   });
+  const posts = postsData?.posts ?? [];
 
   // ── Mutations ──
   const createMutation = useMutation({
@@ -181,8 +183,8 @@ export default function BlogStudio() {
     onError: (e: any) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
   });
 
-  const lastPublished = blogState?.lastPublishedAt
-    ? new Date(blogState.lastPublishedAt).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })
+  const lastPublished = stats?.lastPublishedAt
+    ? new Date(stats.lastPublishedAt).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })
     : "None yet";
 
   return (
@@ -201,8 +203,8 @@ export default function BlogStudio() {
       {/* Stats bar */}
       <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1.5rem", flexWrap: "wrap" as const }}>
         {[
-          { label: "Published", value: `${blogState?.totalPublished ?? 0} posts`, color: "#f97316", dim: "rgba(249,115,22,0.5)", bg: "rgba(249,115,22,0.04)", border: "rgba(249,115,22,0.12)" },
-          { label: "Drafts", value: `${blogState?.totalDrafts ?? 0} drafts`, color: "#a78bfa", dim: "rgba(167,139,250,0.5)", bg: "rgba(167,139,250,0.03)", border: "rgba(167,139,250,0.1)" },
+          { label: "Published", value: `${stats?.totalPublished ?? 0} posts`, color: "#f97316", dim: "rgba(249,115,22,0.5)", bg: "rgba(249,115,22,0.04)", border: "rgba(249,115,22,0.12)" },
+          { label: "Drafts", value: `${stats?.totalDrafts ?? 0} drafts`, color: "#a78bfa", dim: "rgba(167,139,250,0.5)", bg: "rgba(167,139,250,0.03)", border: "rgba(167,139,250,0.1)" },
           { label: "Last Published", value: lastPublished, color: "#efefef", dim: "rgba(227,229,228,0.48)", bg: "rgba(227,229,228,0.05)", border: "rgba(227,229,228,0.14)" },
         ].map(s => (
           <div key={s.label} style={{ flex: 1, minWidth: 160, background: s.bg, border: `1px solid ${s.border}`, padding: "0.7rem 1rem" }}>
@@ -394,10 +396,10 @@ export default function BlogStudio() {
       {/* ── POSTS LIST ── */}
       <div>
         <p style={{ ...mono, fontSize: "0.73rem", color: "rgba(249,115,22,0.5)", textTransform: "uppercase" as const, letterSpacing: "0.15em", marginBottom: "1rem" }}>
-          Posts ({posts?.length ?? 0})
+          Posts ({posts.length})
         </p>
 
-        {!posts?.length
+        {posts.length === 0
           ? (
             <div style={{ padding: "2rem", border: "1px solid rgba(227,229,228,0.14)", textAlign: "center" as const }}>
               <p style={{ ...mono, fontSize: "0.88rem", color: "rgba(227,229,228,0.48)", margin: 0 }}>No blog posts yet.</p>
