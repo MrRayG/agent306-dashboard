@@ -1326,7 +1326,12 @@ function saveGoals(store: GoalsStore) {
   store.stats.total    = store.goals.length;
   store.stats.active   = store.goals.filter(g => g.status === "active").length;
   store.stats.achieved = store.goals.filter(g => g.status === "achieved").length;
-  try { fs.writeFileSync(GOALS_FILE, JSON.stringify(store, null, 2)); } catch {}
+  try {
+    fs.writeFileSync(GOALS_FILE, JSON.stringify(store, null, 2));
+    console.log(`[Goals] Saved ${store.goals.length} goals to ${GOALS_FILE}`);
+  } catch (e: any) {
+    console.error(`[Goals] FAILED to save goals: ${e.message} — path: ${GOALS_FILE}`);
+  }
 }
 
 export function getGoals(): GoalsStore { return loadGoals(); }
@@ -1690,17 +1695,35 @@ Return JSON:
     }
     const data = await res.json() as any;
     raw  = data.choices?.[0]?.message?.content ?? "{}";
+    console.log(`[Goals] Raw LLM response (first 500): ${raw.slice(0, 500)}`);
+    
     // Handle markdown-wrapped JSON (LLMs often wrap in ```json ... ```)
     const jsonMatch = raw.match(/```json\n?([\s\S]*?)\n?```/) || raw.match(/```\n?([\s\S]*?)\n?```/) || raw.match(/\{[\s\S]*\}/);
     const jsonStr = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : raw;
-    const parsed = JSON.parse(jsonStr);
+    console.log(`[Goals] Cleaned JSON (first 300): ${jsonStr.slice(0, 300)}`);
+    
+    let parsed: any;
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch (parseErr: any) {
+      console.error(`[Goals] JSON parse failed: ${parseErr.message}`);
+      console.error(`[Goals] Attempted to parse: ${jsonStr.slice(0, 500)}`);
+      throw new Error(`JSON parse failed: ${parseErr.message}`);
+    }
+    
+    console.log(`[Goals] Parsed keys: ${Object.keys(parsed).join(", ")}`);
+    console.log(`[Goals] Goals array length: ${parsed.goals?.length ?? "undefined"}`);
 
     const created: AgentGoal[] = [];
     for (const g of (parsed.goals ?? []).slice(0, toGenerate)) {
+      if (!g.title) {
+        console.warn(`[Goals] Skipping goal with no title: ${JSON.stringify(g).slice(0, 100)}`);
+        continue;
+      }
       const goal = addGoal({
         title:       g.title,
-        description: g.description,
-        category:    g.category as GoalCategory,
+        description: g.description ?? "",
+        category:    (g.category as GoalCategory) ?? "knowledge",
         priority:    g.priority ?? "medium",
         milestones:  g.milestones ?? [],
         setBy:       "agent",
