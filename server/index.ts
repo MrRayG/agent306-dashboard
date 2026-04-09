@@ -6,7 +6,7 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { syncEmbeddings } from "./embeddingEngine.js";
 import { purgeConversationalPosts } from "./blogEngine.js";
-import { purgeStaleRelationships } from "./conversationLearningEngine.js";
+import { purgeStaleRelationships, purgeStaleConversationMemory } from "./conversationLearningEngine.js";
 import { getResearchLab } from "./researchEngine.js";
 import { getAgenda } from "./research-agenda.js";
 
@@ -120,6 +120,11 @@ app.use((req, res, next) => {
       // Purge any conversational posts that leaked from chat (one-time cleanup)
       const purged = purgeConversationalPosts();
       if (purged.purged > 0) console.log(`[Blog] Purged ${purged.purged} conversational posts on startup`);
+
+      // Purge stale Normies conversation memory at the SOURCE (one-time cleanup)
+      const convoPurged = purgeStaleConversationMemory();
+      if (convoPurged.purgedUsers > 0 || convoPurged.purgedEntries > 0)
+        console.log(`[Startup] Purged ${convoPurged.purgedUsers} stale users, ${convoPurged.purgedEntries} stale entries from conversation memory`);
 
       // Purge stale Normies relationships (one-time cleanup)
       const relPurged = purgeStaleRelationships();
