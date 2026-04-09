@@ -216,10 +216,16 @@ if (!fs.existsSync(SOUL_FILE)) {
 
 // ── STARTUP MIGRATION: Clean old Normies/NFT content from Railway volume ──────
 (function cleanupOldIdentity() {
+  // Idempotent guard — only run this migration once
+  const FLAG_FILE = dataPath("migration_identity_cleanup_complete.json");
+  if (fs.existsSync(FLAG_FILE)) {
+    return; // Migration already completed
+  }
+
   const BAD_KEYWORDS = ['normie', 'normiestv', 'canvas live', 'pixel toggle', 'pixel currency',
     'holder catalog', 'nft identity', 'on-chain object', 'on-chain identity', 'token #306',
     'yigit', 'serc1n', 'nuclearsamurai', 'opensea', 'live burn', 'burn mechanic',
-    'burn receipt', 'web3art', 'gnormie', 'hive', 'arena',
+    'burn receipt', 'web3art', 'gnormie',
     'erc-8004', 'on-chain burn', 'pixel count', 'burn data', 'serc article',
     'normies ecosystem', 'normieshive', 'canvas experiment', 'normies agent',
     'normies saga', 'normies story', 'normies community', '#normies', '#onchainart',
@@ -271,11 +277,11 @@ if (!fs.existsSync(SOUL_FILE)) {
         if (BAD_KEYWORDS.some(k => stringify.includes(k))) {
           // Reset the research files to clean state
           if (rf === 'research_lab.json') {
-            const cleanLab = { topics: [], hypotheses: [], syntheses: [] };
+            const cleanLab = { topics: [], hypotheses: [], lastUpdated: new Date().toISOString(), stats: { totalResearched: 0, totalPublished: 0, totalDeclined: 0, hypothesesFormed: 0, hypothesesConfirmed: 0 } };
             fs.writeFileSync(rfPath, JSON.stringify(cleanLab, null, 2));
             console.log(`[Memory] MIGRATION: Cleaned old research topics from ${rf}`);
           } else if (rf === 'research-agenda.json') {
-            const cleanAgenda = { threads: [], lastGenerated: null, stats: { totalGenerated: 0, totalPruned: 0 } };
+            const cleanAgenda = { threads: [], lastGeneratedAt: null, lastPrunedAt: null, stats: { totalGenerated: 0, totalPublished: 0, totalAbandoned: 0, totalPodcastCandidates: 0 } };
             fs.writeFileSync(rfPath, JSON.stringify(cleanAgenda, null, 2));
             console.log(`[Memory] MIGRATION: Cleaned old research agenda from ${rf}`);
           }
@@ -315,6 +321,14 @@ if (!fs.existsSync(SOUL_FILE)) {
         console.warn(`[Memory] Could not clean ${af}:`, e.message);
       }
     }
+  }
+
+  // Mark migration as complete so it never runs again
+  try {
+    fs.writeFileSync(FLAG_FILE, JSON.stringify({ completedAt: new Date().toISOString(), version: 1 }, null, 2));
+    console.log("[Memory] MIGRATION: Identity cleanup complete — flag written");
+  } catch (e: any) {
+    console.warn("[Memory] Could not write migration flag:", e.message);
   }
 })();
 

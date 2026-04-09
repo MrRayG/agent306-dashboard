@@ -276,18 +276,25 @@ You must respond with ONLY valid JSON matching this exact structure:
   "archiveReport": { "resolved": string[], "archived": string[], "cleared": number }
 }
 
-Also, if your analysis suggests any NEW testable hypotheses that Agent 306 should track, include them in a "hypotheses_to_create" array in your JSON response:
+IMPORTANT: Generate 3-5 testable hypotheses based on today's analysis. Each hypothesis should be:
+- Specific and falsifiable
+- Related to current AI/tech developments
+- Testable within 30-90 days
+- Based on evidence from the knowledge base or today's exploration findings
+
+Include them in a "hypotheses_to_create" array in your JSON response:
 "hypotheses_to_create": [
   {
     "claim": "specific testable claim",
     "basis": "evidence or reasoning",
     "metric": "how to measure",
     "prediction": "expected outcome",
-    "timeframe": "when verifiable",
+    "timeframe": "30-90 days",
     "confidence": "low|medium|high"
   }
 ]
-If no strong hypotheses emerge from today's analysis, return an empty array.
+Format each as: { "claim": "...", "basis": "...", "metric": "...", "prediction": "...", "timeframe": "30-90 days", "confidence": "low|medium|high" }
+You MUST generate at least 3 hypotheses per cycle. Only return fewer if there is genuinely no new information to analyze.
 
 Rules:
 - todaysAction MUST be ONE specific, actionable recommendation. Not a list.
@@ -701,6 +708,114 @@ async function autoRedFlagCheck(): Promise<number> {
   return crossReferenceContradictionsWithHypotheses();
 }
 
+// ── Cold-start: seed hypotheses when none exist ─────────────────────────────
+
+async function generateSeedHypotheses(): Promise<number> {
+  if (!GROK_API_KEY) return 0;
+
+  const lab = getResearchLab();
+  if (lab.hypotheses.length > 0) return 0; // Not a cold start
+
+  console.log("[DailyCycle] Cold start detected: 0 hypotheses. Generating seeds...");
+
+  // Gather knowledge context for seeding
+  const { getKnowledgeDigestForExploration } = require("./memoryEngine.js");
+  const digest: string = getKnowledgeDigestForExploration();
+  const kbContext = digest.slice(0, 6000); // Top knowledge entries
+
+  const systemPrompt = `You are Agent 306, an autonomous AI researcher covering AI, crypto, and technology.
+You currently have ZERO hypotheses in your research lab — this is a cold start.
+Generate 5-10 diverse, testable hypotheses spanning your knowledge domains (AI, crypto, tech, society).
+
+Each hypothesis must be:
+- Specific and falsifiable
+- Testable within 30-90 days
+- Based on current trends and evidence
+- Covering different domains (don't cluster all in one area)
+
+Respond with ONLY a JSON array:
+[
+  {
+    "claim": "specific testable claim",
+    "basis": "evidence or reasoning supporting this",
+    "metric": "how to measure or verify",
+    "prediction": "expected outcome",
+    "timeframe": "30-90 days",
+    "confidence": "low|medium|high"
+  }
+]`;
+
+  const userPrompt = `KNOWLEDGE BASE CONTEXT:\n${kbContext}\n\nGenerate 5-10 seed hypotheses based on this knowledge and current tech trends. Respond with JSON array only.`;
+
+  try {
+    const res = await fetch(GROK_URL, {
+      method: "POST",
+      headers: getLLMHeaders(),
+      body: JSON.stringify({
+        model: getModel("daily_briefing"),
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user",   content: userPrompt },
+        ],
+        temperature: 0.7,
+        max_tokens: 3000,
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+
+    if (!res.ok) {
+      console.error(`[DailyCycle] Seed hypothesis LLM error: ${res.status}`);
+      return 0;
+    }
+
+    const data = await res.json() as any;
+    const content = data.choices?.[0]?.message?.content ?? "";
+    const jsonMatch = content.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) return 0;
+
+    const hypotheses = JSON.parse(jsonMatch[0]);
+    let created = 0;
+    for (const h of hypotheses) {
+      if (h.claim && h.basis) {
+        addHypothesis({
+          claim: h.claim,
+          basis: h.basis,
+          metric: h.metric || "To be determined",
+          prediction: h.prediction || h.claim,
+          timeframe: h.timeframe || "60 days",
+          confidence: h.confidence || "medium",
+          source: "cold_start_seed",
+        });
+        created++;
+      }
+    }
+    console.log(`[DailyCycle] Cold-start: seeded ${created} hypotheses`);
+    return created;
+  } catch (e: any) {
+    console.error("[DailyCycle] Seed hypothesis generation failed:", e.message);
+    return 0;
+  }
+}
+
+// ── Cold-start: seed research threads when none exist ───────────────────────
+
+async function seedResearchThreadsIfEmpty(): Promise<number> {
+  const agenda = getAgenda();
+  const activeThreads = agenda.threads.filter((t: any) => t.status !== "abandoned" && t.status !== "published");
+  if (activeThreads.length > 0) return 0;
+
+  console.log("[DailyCycle] Cold start detected: 0 active research threads. Triggering generation...");
+  try {
+    const { generateResearchAgenda } = require("./research-agenda.js");
+    const newThreads = await generateResearchAgenda();
+    console.log(`[DailyCycle] Cold-start: generated ${newThreads.length} research threads`);
+    return newThreads.length;
+  } catch (e: any) {
+    console.error("[DailyCycle] Cold-start thread generation failed:", e.message);
+    return 0;
+  }
+}
+
 // ── Main: Run Daily Cycle ─────────────────────────────────────────────────────
 
 export async function runDailyCycle(): Promise<DailyBriefing | null> {
@@ -713,6 +828,14 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     console.log(`[DailyCycle] Data intake complete — ${intakeItems.length} new items ingested`);
   } catch (e: any) {
     console.warn("[DailyCycle] Data intake failed (non-fatal):", e.message);
+  }
+
+  // 0b. Cold-start checks: seed hypotheses and research threads if empty
+  try {
+    await generateSeedHypotheses();
+    await seedResearchThreadsIfEmpty();
+  } catch (e: any) {
+    console.warn("[DailyCycle] Cold-start seeding failed (non-fatal):", e.message);
   }
 
   // 1. Gather all inputs

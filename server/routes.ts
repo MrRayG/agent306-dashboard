@@ -3443,7 +3443,7 @@ needsHelp: true only when you genuinely need his direction or information`,
   });
 
   // Reset the entire research lab (topics + hypotheses + stats)
-  app.post("/api/research/reset", (_req, res) => {
+  app.post("/api/research/reset", requireDashAuth, (_req, res) => {
     const result = resetResearchLab();
     res.json({ ok: true, ...result });
   });
