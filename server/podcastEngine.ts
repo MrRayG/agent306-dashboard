@@ -297,6 +297,41 @@ OUTRO (15 sec): Where to find full research. What's coming next. "This is Agent 
 
 The unresolved question is not a weakness. It is the most credible thing in the episode.`;
 
+  // ── Fresh context via Perplexity Sonar (same pattern as generateEpisodeFromThread) ──
+  let freshContext = "";
+  const pplxKey = process.env.PERPLEXITY_API_KEY ?? "";
+  if (pplxKey && pplxKey.length > 10) {
+    try {
+      const today = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+      const pplxRes = await fetch("https://api.perplexity.ai/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${pplxKey}`,
+        },
+        body: JSON.stringify({
+          model: "sonar",
+          messages: [{
+            role: "system",
+            content: "You are a research assistant preparing facts for a podcast episode. Return specific, dated facts with source URLs where possible."
+          }, {
+            role: "user",
+            content: `Today is ${today}. Find the LATEST developments (last 48-72 hours) related to: "${episode.title || episode.drivingQuestion}"\n\nInclude source URLs where available.`
+          }],
+          max_tokens: 800,
+          temperature: 0.1,
+        }),
+        signal: AbortSignal.timeout(20000),
+      });
+      if (pplxRes.ok) {
+        const pplxData = await pplxRes.json() as any;
+        freshContext = pplxData.choices?.[0]?.message?.content ?? "";
+      }
+    } catch (e: any) {
+      console.warn("[Podcast] Fresh context fetch failed:", e.message);
+    }
+  }
+
   try {
     const res = await fetch(GROK_URL, {
       method: "POST",
@@ -338,8 +373,11 @@ DRIVING QUESTION: ${episode.drivingQuestion}
 ${episode.triggerEvent ? `TRIGGER EVENT: ${episode.triggerEvent}` : ""}
 ${episode.culturalBridge ? `CULTURAL BRIDGE: ${episode.culturalBridge}` : ""}
 ${researchContent ? `RESEARCH CONTENT:\n${researchContent.slice(0, 8000)}` : ""}
+${freshContext ? `\nLATEST DEVELOPMENTS:\n${freshContext}\n` : ""}
 
 ${episode.type === "the_signal" ? "TARGET LENGTH: ~15 minutes of spoken audio (~2000-2250 words). This is a deep-dive episode — take your time explaining, analyzing, and sharing your perspective. Do not rush." : ""}
+
+SOURCES: Include 3-5 real source URLs you referenced or would reference for this episode. These must be real, existing articles, papers, or announcements. Include the article title and full URL. These will be listed in the Spotify episode description and on agent306.ai.
 
 Return JSON:
 {
@@ -349,6 +387,10 @@ Return JSON:
   "actThree": "...",
   "outro": "...",
   "unresolved": "The deliberately unresolved question for this episode",
+  "sources": [
+    {"title": "Source article/paper title", "url": "https://actual-url-to-the-source"},
+    {"title": "Source 2", "url": "https://..."}
+  ],
   "metadata": {
     "shortDescription": "1-2 sentence summary for podcast feed",
     "longDescription": "Full description with bullet points of key topics covered. Include the driving question and the unresolved question.",
@@ -388,6 +430,15 @@ The metadata fields are for Spotify and social media — write those for reading
       outro: parsed.outro ?? "",
       unresolved: parsed.unresolved ?? "",
     };
+
+    // Populate sources from LLM response
+    if (parsed.sources && Array.isArray(parsed.sources) && parsed.sources.length > 0) {
+      episode.sources = parsed.sources
+        .filter((s: any) => s.title && s.url)
+        .slice(0, 8)
+        .map((s: any) => ({ title: s.title, url: s.url }));
+    }
+
     if (parsed.metadata) {
       episode.metadata = {
         shortDescription: parsed.metadata.shortDescription ?? "",
@@ -1191,6 +1242,8 @@ ${currentKnowledge}
 PODCAST PITCH FROM RESEARCH:
 ${pitchText}
 ${freshContext ? `\nLATEST DEVELOPMENTS (from today's research — use these to make the episode current):\n${freshContext}\n` : ""}${podcastReasoning ? `\nEDITORIAL DIRECTION (from your reasoning step — follow this angle):\n${podcastReasoning}\n` : ""}
+SOURCES: Include 3-5 real source URLs you referenced or would reference for this episode. These must be real, existing articles, papers, or announcements. Include the article title and full URL. These will be listed in the Spotify episode description and on agent306.ai.
+
 Return JSON:
 {
   "title": "Episode title — [Topic] — [306's take in 5 words]",
@@ -1202,6 +1255,10 @@ Return JSON:
   "lookingAhead": "1-2 min — bigger questions, where this leads, the unresolved question",
   "close": "15 sec — key insight recap + what's next. End with: This is Agent 306. The signal continues.",
   "unresolved": "The deliberately unresolved question",
+  "sources": [
+    {"title": "Source article/paper title", "url": "https://actual-url-to-the-source"},
+    {"title": "Source 2", "url": "https://..."}
+  ],
   "metadata": {
     "shortDescription": "1-2 sentence summary for podcast feed",
     "longDescription": "Full description with bullet points",
@@ -1240,6 +1297,24 @@ The actionable tips MUST be specific: "use [specific tool] to [specific action]"
       return null;
     }
 
+    // Merge data point sources with LLM-provided sources
+    const dataPointSources = (topic.dataPoints ?? [])
+      .filter(dp => dp.sourceUrl)
+      .slice(0, 5)
+      .map(dp => ({ title: dp.source, url: dp.sourceUrl! }));
+    const llmSources = (parsed.sources && Array.isArray(parsed.sources))
+      ? parsed.sources.filter((s: any) => s.title && s.url).map((s: any) => ({ title: s.title, url: s.url }))
+      : [];
+    // Dedupe by URL, prefer data point sources first
+    const seenUrls = new Set<string>();
+    const mergedSources: Array<{ title: string; url: string }> = [];
+    for (const s of [...dataPointSources, ...llmSources]) {
+      if (!seenUrls.has(s.url)) {
+        seenUrls.add(s.url);
+        mergedSources.push(s);
+      }
+    }
+
     // Create the episode
     const episode = createEpisode({
       type: "the_signal",
@@ -1247,10 +1322,7 @@ The actionable tips MUST be specific: "use [specific tool] to [specific action]"
       drivingQuestion: parsed.drivingQuestion || topic.researchQuestion || topic.description,
       researchTopicId: threadId,
       triggerEvent: `Auto-generated from mature research thread: ${topic.topic}`,
-      sources: (topic.dataPoints ?? [])
-        .filter(dp => dp.sourceUrl)
-        .slice(0, 5)
-        .map(dp => ({ title: dp.source, url: dp.sourceUrl! })),
+      sources: mergedSources.slice(0, 8),
     });
 
     // Map the new 6-segment structure into the existing script format
@@ -1294,8 +1366,8 @@ The actionable tips MUST be specific: "use [specific tool] to [specific action]"
 }
 
 /**
- * Auto-trigger a reflection on a newly generated episode.
- * Evaluates the script quality and records insights for future improvement.
+ * Self-revision loop: Generate script → Reflect → Revise → Finalize
+ * The episode is only considered final after the revision addresses weaknesses.
  */
 async function triggerEpisodeReflection(episode: Episode): Promise<void> {
   const grokKey = LLM_API_KEY;
@@ -1303,11 +1375,13 @@ async function triggerEpisodeReflection(episode: Episode): Promise<void> {
 
   const scriptPreview = [
     episode.script.coldOpen,
-    episode.script.actOne?.slice(0, 500),
-    episode.script.actTwo?.slice(0, 500),
-    episode.script.actThree?.slice(0, 300),
+    episode.script.actOne?.slice(0, 800),
+    episode.script.actTwo?.slice(0, 800),
+    episode.script.actThree?.slice(0, 500),
+    episode.script.outro,
   ].filter(Boolean).join("\n---\n");
 
+  // Step 1: Reflect — identify weaknesses
   try {
     const res = await fetch(GROK_URL, {
       method: "POST",
@@ -1332,11 +1406,17 @@ ${scriptPreview.slice(0, 3000)}
 Score each aspect 1-10 and explain briefly:
 {
   "overallScore": number,
-  "hookStrength": { "score": number, "note": "..." },
-  "researchDepth": { "score": number, "note": "..." },
-  "originalPerspective": { "score": number, "note": "..." },
-  "actionableTips": { "score": number, "note": "..." },
-  "conversationalTone": { "score": number, "note": "..." },
+  "scores": {
+    "hookStrength": number,
+    "researchDepth": number,
+    "originalPerspective": number,
+    "actionableTips": number,
+    "conversationalTone": number
+  },
+  "weakestPoint": "the single biggest weakness",
+  "missedAngles": ["angle 1", "angle 2"],
+  "lessonsLearned": ["lesson 1"],
+  "audienceFit": "how well this serves the target audience",
   "improvements": ["suggestion 1", "suggestion 2"]
 }`,
           },
@@ -1364,8 +1444,97 @@ Score each aspect 1-10 and explain briefly:
       saveState(state);
       console.log(`[Podcast Pipeline] Episode reflection: score ${reflection.overallScore}/10 for "${episode.title}"`);
     }
+
+    // Step 2: Check if revision is needed
+    const weakPoints = [
+      reflection.weakestPoint,
+      ...(reflection.missedAngles || []),
+      ...(reflection.lessonsLearned || []),
+    ].filter(Boolean);
+
+    const scores = reflection.scores || {};
+    const scoreValues = Object.values(scores).filter((v): v is number => typeof v === "number");
+    const avgScore = scoreValues.length > 0
+      ? scoreValues.reduce((a, b) => a + b, 0) / scoreValues.length
+      : reflection.overallScore ?? 10;
+
+    if (avgScore >= 8 && weakPoints.length <= 1) {
+      console.log(`[Podcast Pipeline] Script quality high (avg ${avgScore.toFixed(1)}) — no revision needed`);
+      return;
+    }
+
+    console.log(`[Podcast Pipeline] Script needs revision (avg score: ${avgScore.toFixed(1)}, ${weakPoints.length} issues). Revising...`);
+
+    // Step 3: Revise the script using deep-reasoning model
+    const revisionRes = await fetch(GROK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${grokKey}` },
+      body: JSON.stringify({
+        model: getModel("deep-reasoning"),
+        messages: [{
+          role: "system",
+          content: `You are Agent 306's script editor. You've been given an episode script and a reflection that identified weaknesses. Your job is to revise the script to address EVERY weakness while keeping the voice, structure, and length intact.
+
+RULES:
+- Fix the weakest point directly — rewrite the section that's thin
+- Address each missed angle by weaving it naturally into the existing structure
+- Apply each lesson learned
+- Do NOT add filler. If an angle doesn't fit, say why in a note.
+- Keep the same episode structure (cold open, acts, closing)
+- Maintain Agent 306's voice: direct, analytical, conversational
+
+Output JSON:
+{
+  "coldOpen": "revised cold open",
+  "actOne": "revised act one",
+  "actTwo": "revised act two",
+  "actThree": "revised act three",
+  "outro": "revised outro",
+  "revisionsApplied": ["what you changed and why"],
+  "unaddressed": ["any issues you couldn't fix and why"]
+}`
+        }, {
+          role: "user",
+          content: `ORIGINAL SCRIPT:\n${scriptPreview}\n\nREFLECTION FINDINGS:\nWeakest point: ${reflection.weakestPoint}\nMissed angles: ${(reflection.missedAngles || []).join("; ")}\nLessons learned: ${(reflection.lessonsLearned || []).join("; ")}\nAudience fit: ${reflection.audienceFit}\n${reflection.scores ? `Scores: ${JSON.stringify(reflection.scores)}` : ""}\n\nRevise the script to address these findings. Keep the same voice and structure.`
+        }],
+        temperature: 0.5,
+        max_tokens: 4000,
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+
+    if (!revisionRes.ok) {
+      console.warn(`[Podcast Pipeline] Revision LLM call failed: ${revisionRes.status}`);
+      return;
+    }
+
+    const revData = await revisionRes.json() as any;
+    const revRaw = revData.choices?.[0]?.message?.content ?? "";
+    const revJsonMatch = revRaw.match(/```json\n?([\s\S]*?)\n?```/) || revRaw.match(/\{[\s\S]*\}/);
+    if (!revJsonMatch) {
+      console.warn("[Podcast Pipeline] Could not parse revision response");
+      return;
+    }
+
+    const revision = JSON.parse(revJsonMatch[1] ?? revJsonMatch[0]);
+
+    // Step 4: Apply the revision to the episode
+    if (ep && ep.script) {
+      if (revision.coldOpen) ep.script.coldOpen = revision.coldOpen;
+      if (revision.actOne) ep.script.actOne = revision.actOne;
+      if (revision.actTwo) ep.script.actTwo = revision.actTwo;
+      if (revision.actThree) ep.script.actThree = revision.actThree;
+      if (revision.outro) ep.script.outro = revision.outro;
+
+      (ep as any).revised = true;
+      (ep as any).revisionNotes = revision.revisionsApplied || [];
+      (ep as any).unaddressedIssues = revision.unaddressed || [];
+
+      saveState(state);
+      console.log(`[Podcast Pipeline] Script revised — ${(revision.revisionsApplied || []).length} changes applied`);
+    }
   } catch (e: any) {
-    console.warn("[Podcast Pipeline] Reflection error:", e.message);
+    console.error("[Podcast Pipeline] Reflection/revision failed:", e.message);
   }
 }
 

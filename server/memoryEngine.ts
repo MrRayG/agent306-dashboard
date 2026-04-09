@@ -67,7 +67,7 @@ export interface KnowledgeEntry {
 // ── KB size configuration ─────────────────────────────────────
 // MAX_KB_ENTRIES: hard ceiling on knowledge base size.
 // Set via AGENT_MAX_KB_ENTRIES env var, defaults to 500.
-const MAX_KB_ENTRIES = Math.max(100, Math.min(2000, Number(process.env.AGENT_MAX_KB_ENTRIES) || 500));
+const MAX_KB_ENTRIES = Math.max(100, Math.min(5000, Number(process.env.AGENT_MAX_KB_ENTRIES) || 2000));
 
 export interface KnowledgeMemory {
   entries: KnowledgeEntry[];
@@ -631,7 +631,7 @@ export function addKnowledge(entry: Omit<KnowledgeEntry, "id" | "learnedAt">): v
     entry = { ...entry, title: titleScan.sanitized, summary: summaryScan.sanitized };
   }
 
-  const summary = (entry.summary ?? "").length > 150 ? (entry.summary ?? "").slice(0, 147) + "..." : (entry.summary ?? "");
+  const summary = (entry.summary ?? "").length > 300 ? (entry.summary ?? "").slice(0, 297) + "..." : (entry.summary ?? "");
 
   // ── 1. Exact title match → refresh if content changed ──────────────────
   const exactMatch = knowledge.entries.find(e => e.title === entry.title);
