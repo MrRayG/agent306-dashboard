@@ -7,6 +7,8 @@ import { createServer } from "http";
 import { syncEmbeddings } from "./embeddingEngine.js";
 import { purgeConversationalPosts } from "./blogEngine.js";
 import { purgeStaleRelationships } from "./conversationLearningEngine.js";
+import { getResearchLab } from "./researchEngine.js";
+import { getAgenda } from "./research-agenda.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -122,6 +124,17 @@ app.use((req, res, next) => {
       // Purge stale Normies relationships (one-time cleanup)
       const relPurged = purgeStaleRelationships();
       if (relPurged.purged > 0) console.log(`[Startup] Purged ${relPurged.purged} stale relationships`);
+
+      // Research pipeline health check
+      try {
+        const lab = getResearchLab();
+        const agenda = getAgenda();
+        const activeThreads = agenda.threads.filter((t: any) => t.status !== "abandoned" && t.status !== "published");
+        console.log(`[Research] Startup: ${lab.hypotheses.length} hypotheses, ${lab.topics.length} topics, ${activeThreads.length} active threads`);
+        if (lab.hypotheses.length === 0) console.warn("[Research] WARNING: Zero hypotheses — cold-start seeding will trigger on next daily cycle");
+      } catch (e: any) {
+        console.warn("[Research] Startup health check failed:", e.message);
+      }
 
       // ASI-Evolve: sync embeddings on startup (non-blocking)
       syncEmbeddings()
