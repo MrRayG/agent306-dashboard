@@ -101,6 +101,7 @@ async function callLLM(
   if (wait > 0) await new Promise(r => setTimeout(r, wait));
   lastLLMCall = Date.now();
 
+  let raw = "";
   try {
     const res = await fetch(LLM_BASE_URL, {
       method: "POST",
@@ -118,10 +119,13 @@ async function callLLM(
     });
     if (!res.ok) return null;
     const data = await res.json() as any;
-    const raw = data.choices?.[0]?.message?.content ?? "{}";
-    return JSON.parse(raw);
+    raw = data.choices?.[0]?.message?.content ?? "{}";
+    // Strip markdown code blocks that LLMs frequently wrap JSON in
+    const jsonMatch = raw.match(/```(?:json)?\n?([\s\S]*?)\n?```/) || raw.match(/\{[\s\S]*\}/);
+    const cleaned = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : raw;
+    return JSON.parse(cleaned);
   } catch (e: any) {
-    console.warn(`[KnowledgeGraph] LLM call failed (${task}):`, e.message);
+    console.error(`[KnowledgeGraph] LLM JSON parse failed (${task}):`, e.message, `— raw response: ${raw?.slice(0, 200)}`);
     return null;
   }
 }

@@ -6,6 +6,7 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { syncEmbeddings } from "./embeddingEngine.js";
 import { purgeConversationalPosts } from "./blogEngine.js";
+import { purgeStaleRelationships } from "./conversationLearningEngine.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -117,6 +118,10 @@ app.use((req, res, next) => {
       // Purge any conversational posts that leaked from chat (one-time cleanup)
       const purged = purgeConversationalPosts();
       if (purged.purged > 0) console.log(`[Blog] Purged ${purged.purged} conversational posts on startup`);
+
+      // Purge stale Normies relationships (one-time cleanup)
+      const relPurged = purgeStaleRelationships();
+      if (relPurged.purged > 0) console.log(`[Startup] Purged ${relPurged.purged} stale relationships`);
 
       // ASI-Evolve: sync embeddings on startup (non-blocking)
       syncEmbeddings()

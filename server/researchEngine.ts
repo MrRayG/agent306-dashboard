@@ -406,6 +406,7 @@ async function callGrok(
   userPrompt: string,
   opts?: { model?: string; maxTokens?: number; temperature?: number; skipPreamble?: boolean }
 ): Promise<any | null> {
+  let raw = "";
   try {
     const res = await fetch(GROK_CHAT_API, {
       method: "POST",
@@ -423,9 +424,13 @@ async function callGrok(
     });
     if (!res.ok) return null;
     const data = await res.json() as any;
-    const raw = data.choices?.[0]?.message?.content ?? "{}";
-    return JSON.parse(raw);
-  } catch {
+    raw = data.choices?.[0]?.message?.content ?? "{}";
+    // Strip markdown code blocks that LLMs frequently wrap JSON in
+    const jsonMatch = raw.match(/```(?:json)?\n?([\s\S]*?)\n?```/) || raw.match(/\{[\s\S]*\}/);
+    const cleaned = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : raw;
+    return JSON.parse(cleaned);
+  } catch (e: any) {
+    console.error(`[ResearchEngine] LLM JSON parse failed:`, e.message, `— raw response: ${raw?.slice(0, 200)}`);
     return null;
   }
 }
