@@ -247,6 +247,7 @@ export default function PodcastStudio() {
 
   function refetchAll() {
     qc.invalidateQueries({ queryKey: ["podcast-state"] });
+    qc.invalidateQueries({ queryKey: ["/api/research/podcast-candidates"] });
   }
 
   // ─── Episode actions ─────────────────────────────────────────────────────
@@ -672,10 +673,10 @@ function ResearchThreadCandidates({
 
   async function generateFromThread(threadId: string) {
     setGenerating(threadId);
-    toast({ title: "Generating episode...", description: "Creating episode from research thread" });
+    toast({ title: "Generating episode...", description: "Creating draft — script will generate in the background" });
     try {
       await apiRequest("POST", `/api/podcast/generate-from-thread/${threadId}`, {});
-      toast({ title: "Episode generated from thread" });
+      toast({ title: "Episode created", description: "Draft episode added — script is generating in the background" });
       onRefetch();
     } catch (e: any) {
       toast({ title: "Error", description: e.message || "Failed to generate episode", variant: "destructive" });
@@ -989,6 +990,23 @@ function EpisodePipeline({
                       {status === "produced" && ep.producedAt && (
                         <div style={{ ...pixel, fontSize: "11px", color: PURPLE, marginBottom: "6px" }}>
                           Produced {formatDate(ep.producedAt)}
+                        </div>
+                      )}
+
+                      {/* Auto-generating indicator for episodes created from threads */}
+                      {status === "draft" && ep.triggerEvent?.startsWith("Auto-generated from") && (
+                        <div
+                          style={{
+                            ...mono,
+                            fontSize: "12px",
+                            color: BLUE,
+                            padding: "6px 10px",
+                            background: `${BLUE}10`,
+                            borderLeft: `2px solid ${BLUE}40`,
+                            marginBottom: "4px",
+                          }}
+                        >
+                          Script generating in the background...
                         </div>
                       )}
 
