@@ -29,6 +29,7 @@ import { scheduleMidnightReplies, runMidnightReplies } from "./replyEngine.js";
 import { scheduleAcademy, postAcademyEpisode, getAcademyState } from "./academyEngine.js";
 import { scheduleSignalBrief, postSignalBrief, getSignalBriefState } from "./signalBriefEngine.js";
 import { getPodcastState, EPISODE_META, createEpisode, generateEpisodeScript, regenerateEpisodeScript, reviewEpisode, markProduced, publishEpisode, submitGuestRequest, reviewGuest, generateInterviewQuestions, submitAnswers, createConversationEpisode, getEpisodesByType, getEpisodesByStatus, getGuestsByStatus, getEpisode, getGuest, formatScriptForProduction, formatConversationForProduction, generateEpisodeFromThread, getThreadCandidates, getPipelineStatus, deleteEpisode, clearAllEpisodes, getTimingInstruction } from "./podcastEngine.js";
+import { generateAudio, getAudioFilePath } from "./audioEngine.js";
 import { getVideoStats } from "./videoEngine.js";
 import { requestPost, registerPost, releasePost, getCoordinatorState, resetCooldown } from "./postCoordinator.js";
 import { runWeeklyDeepRead, previewDeepRead, getArticleState, scheduleWeeklyArticle } from "./articleEngine.js";
@@ -836,7 +837,7 @@ const podcastKnowledge = [
   // Title formats
   { category: "research" as const, title: "Podcast: Title Conventions", summary: "THE SIGNAL: '[The thing] — [306's take in 5 words]' (e.g., 'ARC-AGI-3 — The Benchmark No AI Can Beat'). THE CONVERSATION: '[Guest name] — [What the conversation revealed]'.", weight: 9 },
   // Production
-  { category: "research" as const, title: "Podcast: Production Workflow", summary: "Flow: Draft (topic set) -> Scripted (script generated) -> Reviewed (MrRayG approval) -> Produced (audio via NotebookLM + ElevenLabs) -> Published (agent306.ai, Farcaster). For THE CONVERSATION: guest submits -> approved -> questions generated -> answered -> episode created -> scripted -> reviewed -> produced -> published.", weight: 9 },
+  { category: "research" as const, title: "Podcast: Production Workflow", summary: "Flow: Draft (topic set) -> Scripted (script generated) -> Reviewed (MrRayG approval) -> Audio Ready (ElevenLabs TTS) -> Published (agent306.ai, Farcaster). For THE CONVERSATION: guest submits -> approved -> questions generated -> answered -> episode created -> scripted -> reviewed -> audio_ready -> published.", weight: 9 },
   // Unifying principle
   { category: "research" as const, title: "Podcast: The Unresolved Thread", summary: "Every episode type ends with something unresolved. Not because 306 doesn't know — but because she's honest about the limits of what any single episode can answer. THE SIGNAL leaves an open question. THE CONVERSATION ends with 306's reaction, not a summary. This is what makes people come back. They're following a story that hasn't ended yet.", weight: 10 },
   // Preserved from v1
@@ -1706,6 +1707,48 @@ export function registerRoutes(httpServer: Server, app: Express) {
     const script = formatScriptForProduction(req.params.id);
     if (!script) return res.status(404).json({ error: "No script available" });
     res.type("text/plain").send(script);
+  });
+
+  // ── Audio generation (ElevenLabs TTS) ─────────────────────────────────────
+
+  app.post("/api/podcast/episodes/:id/generate-audio", (req, res) => {
+    const episode = getEpisode(req.params.id);
+    if (!episode) return res.status(404).json({ error: "Episode not found" });
+    if (episode.status !== "reviewed") {
+      return res.status(400).json({ error: `Episode must be in "reviewed" status (current: ${episode.status})` });
+    }
+
+    if (!process.env.ELEVENLABS_API_KEY) {
+      console.warn("[AudioEngine] ELEVENLABS_API_KEY not set");
+      return res.status(500).json({ error: "ElevenLabs API key not configured" });
+    }
+
+    // Return immediately — generation runs in background (same async pattern as script generation)
+    res.json({ status: "generating", episodeId: req.params.id });
+
+    // Fire-and-forget background generation
+    generateAudio(req.params.id).catch((e) =>
+      console.error(`[AudioEngine] Background audio generation failed for ${req.params.id}:`, e.message),
+    );
+  });
+
+  app.get("/api/podcast/episodes/:id/audio", (req, res) => {
+    const filepath = getAudioFilePath(req.params.id);
+    if (!filepath) {
+      return res.status(404).json({ error: "Audio file not found" });
+    }
+
+    const stat = fs.statSync(filepath);
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Content-Length", stat.size);
+
+    if (req.query.download === "true") {
+      res.setHeader("Content-Disposition", `attachment; filename="episode_${req.params.id}.mp3"`);
+    } else {
+      res.setHeader("Content-Disposition", "inline");
+    }
+
+    fs.createReadStream(filepath).pipe(res);
   });
 
   // ── Guests (THE CONVERSATION pipeline) ─────────────────────────────────────
