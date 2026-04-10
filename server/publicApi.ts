@@ -99,6 +99,16 @@ const PHASE_ORDER = [
   "research_design", "data_collection", "analysis", "interpretation",
 ];
 
+// ── Stale-label sanitizer ────────────────────────────────────
+// Strip any legacy Normies/Hive-era references from public-facing labels.
+const STALE_PATTERNS = /\bTHE HIVE\b|Normies|NormiesTV|gnormie|serc1n|dopemind/gi;
+
+function sanitizeLabel(label: string): string {
+  return STALE_PATTERNS.test(label)
+    ? "Preparing podcast: THE SIGNAL"
+    : label;
+}
+
 // ── 1. Status ────────────────────────────────────────────────
 
 export function getPublicStatus() {
@@ -146,7 +156,7 @@ export function getPublicStatus() {
 
     return {
       currentStatus,
-      statusLabel,
+      statusLabel: sanitizeLabel(statusLabel),
       lastUpdated: new Date().toISOString(),
       uptime: true,
     };

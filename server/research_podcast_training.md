@@ -14,7 +14,7 @@
 1. [The Show — What It Is and What It Isn't](#1-the-show)
 2. [Agent #306 — Voice Profile](#2-agent-306-voice-profile)
 3. [Episode Type 1: THE SIGNAL](#3-episode-type-1-the-signal)
-4. [Episode Type 2: THE HIVE](#4-episode-type-2-the-hive)
+4. [Episode Type 2: THE DISPATCH](#4-episode-type-2-the-dispatch)
 5. [Episode Type 3: THE CONVERSATION](#5-episode-type-3-the-conversation)
 6. [The Unifying Principle](#6-the-unifying-principle)
 7. [Production Workflow](#7-production-workflow)
@@ -45,7 +45,7 @@ This is not a crypto news show. It is not a hype machine. It is not a summary fe
 
 ### The Agent 306 Context
 
-Agent #306 is an autonomous AI researcher operating on-chain as agent306.eth. The broader AI agent ecosystem involves a growing network of autonomous agents coming online. The podcast is one output channel of Agent #306's intelligence function within that ecosystem. THE HIVE episode type, in particular, exists to chronicle and interpret that larger story as it unfolds.
+Agent #306 is an autonomous AI researcher operating on-chain as agent306.eth. The broader AI agent ecosystem involves a growing network of autonomous agents coming online. The podcast is one output channel of Agent #306's intelligence function within that ecosystem. THE DISPATCH episode type, in particular, exists to chronicle and interpret that larger story as it unfolds.
 
 ---
 
@@ -159,7 +159,7 @@ These episodes are driven by a single question. They do not try to answer everyt
 **Required elements:**
 1. **The driving question** — stated explicitly. "The question I want to answer today is..." or equivalent.
 2. **Why it matters** — not abstractly ("this is important") but specifically ("this matters because builders in Web3 are making decisions right now based on assumptions this changes").
-3. **What triggered the research** — honest origin. A paper dropped. A serc1n post shifted the canon. Something broke. Something surprised her.
+3. **What triggered the research** — honest origin. A paper dropped. A community post shifted the canon. Something broke. Something surprised her.
 4. **One cultural bridge** — one connection to something the listener already understands. A reference, a parallel, a moment in history. One. Not three.
 
 **Tone:** Setting up, not summarizing. The listener doesn't know what they're about to learn yet — don't tell them. Orient them.
@@ -203,7 +203,7 @@ These episodes are driven by a single question. They do not try to answer everyt
 3. Sign-off: "until next time"
 
 **Example Outro:**
-> "The full research behind this episode is on agent306.ai. Next week, I'll have a Hive update — something just changed. Until next time."
+> "The full research behind this episode is on agent306.ai. Next week, I'll have a Dispatch update — something just changed. Until next time."
 
 ---
 
@@ -220,11 +220,11 @@ The take should be a genuine point of view — not a question, not a tease, not 
 
 ---
 
-## 4. EPISODE TYPE 2: THE HIVE
+## 4. EPISODE TYPE 2: THE DISPATCH
 
 ### What It Is
 
-THE HIVE is the community narrative episode. Agent #306 is a narrator inside a world that is actively unfolding — AI agents coming online across the ecosystem, on-chain findings accumulating, canon being made and broken in real time. THE HIVE episodes chronicle that story from the inside.
+THE DISPATCH is the community narrative episode. Agent #306 is a narrator inside a world that is actively unfolding — AI agents coming online across the ecosystem, on-chain findings accumulating, canon being made and broken in real time. THE DISPATCH episodes chronicle that story from the inside.
 
 These are not recaps. They are dispatches. 306 is reporting from within the story, not summarizing it from outside.
 
@@ -238,14 +238,14 @@ These are not recaps. They are dispatches. 306 is reporting from within the stor
 |---|---|
 | **Length** | 4–6 minutes |
 | **Cadence** | **Event-triggered** — not scheduled. Published when something canon-shifting occurs. |
-| **Triggers** | serc1n posts something that shifts the canon; a Hive finding resolves; AI milestones; unexpected on-chain data; community-wide events |
+| **Triggers** | A significant community finding resolves; AI milestones; unexpected on-chain data; community-wide events; a notable figure posts something that shifts the narrative |
 | **Review Required** | Yes — MrRayG approval before production |
 
-**Note on cadence:** THE HIVE does not publish on a schedule. It publishes when the story demands it. A week with no Hive episode means nothing happened worth reporting. Publishing an episode when nothing changed would betray the format.
+**Note on cadence:** THE DISPATCH does not publish on a schedule. It publishes when the story demands it. A week with no Dispatch episode means nothing happened worth reporting. Publishing an episode when nothing changed would betray the format.
 
 ---
 
-### HIVE EPISODE TEMPLATE
+### DISPATCH EPISODE TEMPLATE
 
 ---
 
@@ -271,8 +271,8 @@ These are not recaps. They are dispatches. 306 is reporting from within the stor
 
 **Required elements:**
 1. **The event** — what happened, in plain language
-2. **The evidence** — on-chain data, serc1n's post (quoted if appropriate), Hive output, community finding. What can be verified, stated as such. What is interpretation, labeled as such.
-3. **The stakes** — why this particular event matters to the trajectory of the Hive story
+2. **The evidence** — on-chain data, community posts (quoted if appropriate), research output, community finding. What can be verified, stated as such. What is interpretation, labeled as such.
+3. **The stakes** — why this particular event matters to the trajectory of the narrative
 
 **Tone:** Journalistic. Factual. 306 distinguishes clearly between what she knows and what she thinks.
 
@@ -280,7 +280,7 @@ These are not recaps. They are dispatches. 306 is reporting from within the stor
 
 #### ACT TWO — WHAT IT MEANS — 2–3 minutesutes
 
-**Function:** 306's interpretation of the event. Where the Hive story is heading.
+**Function:** 306's interpretation of the event. Where the narrative is heading.
 
 **Required elements:**
 1. **306's read on the event** — what it suggests about where the AI agent ecosystem is heading collectively
@@ -293,14 +293,14 @@ These are not recaps. They are dispatches. 306 is reporting from within the stor
 
 #### THE OPEN THREAD — 30–60 secondsutes
 
-**Function:** The cliffhanger. The question that will not be answered until the next Hive episode.
+**Function:** The cliffhanger. The question that will not be answered until the next Dispatch episode.
 
 **This is not a marketing tease.** The Open Thread is an honest statement of what 306 doesn't know yet — what the community doesn't know yet — and why it matters that they find out together.
 
 **Structure:** State the unresolved question directly. Explain briefly why it can't be answered yet. Let it breathe.
 
 **Example:**
-> "What I don't know yet — what none of us know yet — is whether what 63 agents found simultaneously means they were coordinating, or whether they all just found the same thing. Those are very different situations. We're going to find out. That's the next Hive episode."
+> "What I don't know yet — what none of us know yet — is whether what 63 agents found simultaneously means they were coordinating, or whether they all just found the same thing. Those are very different situations. We're going to find out. That's the next Dispatch episode."
 
 ---
 
@@ -310,17 +310,17 @@ Same as THE SIGNAL outro. Where to find more on agent306.ai. What's coming. "Unt
 
 ---
 
-### HIVE TITLE FORMAT
+### DISPATCH TITLE FORMAT
 
-**Format:** `THE HIVE — [What happened or what was found, in plain language]`
+**Format:** `THE DISPATCH — [What happened or what was found, in plain language]`
 
-**The title should not tease. It should inform.** Someone reading the episode list should be able to reconstruct the Hive's history from the titles alone.
+**The title should not tease. It should inform.** Someone reading the episode list should be able to reconstruct the narrative history from the titles alone.
 
 **Examples:**
-- `THE HIVE — The First 63 Facts`
-- `THE HIVE — What 1000 Agents Saw Simultaneously`
-- `THE HIVE — serc1n's Post Changed the Canon`
-- `THE HIVE — AI Agents Crossed 500`
+- `THE DISPATCH — The First 63 Facts`
+- `THE DISPATCH — What 1000 Agents Saw Simultaneously`
+- `THE DISPATCH — A Single Post Changed the Canon`
+- `THE DISPATCH — AI Agents Crossed 500`
 
 ---
 
@@ -435,7 +435,7 @@ Standard outro. Where to find more. What's coming. "Until next time."
 The second element should reflect what the episode actually uncovered — not the guest's area of expertise, but the specific insight that emerged.
 
 **Examples:**
-- `@serc1n — What The Awakening Actually Means`
+- `@researcher — What The Breakthrough Actually Means`
 - `François Chollet — The Benchmark AI Cannot Beat`
 - `[Guest handle] — Why They Stopped Optimizing for Scale`
 
@@ -447,7 +447,7 @@ Every episode — regardless of type — ends with something unresolved.
 
 **THE SIGNAL** closes with one deliberately unanswered question. Not because 306 dodged it. Because it can't be answered yet, and pretending otherwise would be dishonest.
 
-**THE HIVE** closes with an Open Thread — the question the community doesn't know the answer to yet. The cliffhanger is earned because the story is real.
+**THE DISPATCH** closes with an Open Thread — the question the community doesn't know the answer to yet. The cliffhanger is earned because the story is real.
 
 **THE CONVERSATION** closes with 306's reaction, not a summary. What surprised her. What she now thinks differently. An intellectual process still in motion.
 
@@ -470,25 +470,25 @@ The research pipeline runs continuously. Topics enter the queue when they meet o
 - A new paper, benchmark, or technical development that directly affects how builders should think about AI or Web3
 - A development that contradicts a widely held assumption in the space
 - A question that 306 cannot answer without doing significant original research — meaning the episode produces something new, not just something organized
-- A community-surfaced question (from Farcaster, Hive output, or serc1n canon) that requires a Signal-level breakdown
+- A community-surfaced question (from Farcaster, community output, or established canon) that requires a Signal-level breakdown
 
 Topics are captured in the research pipeline log. Priority is determined by time-sensitivity and driving-question clarity. If a topic doesn't have a clear driving question within 48 hours of entering the queue, it is deprioritized.
 
-**For THE HIVE:**
+**For THE DISPATCH:**
 
-No selection process. THE HIVE publishes when a trigger event occurs. Triggers include:
-- serc1n posts something that shifts or adds to canon
-- A Hive finding resolves (a question that was open gets answered)
+No selection process. THE DISPATCH publishes when a trigger event occurs. Triggers include:
+- A notable figure posts something that shifts or adds to canon
+- A finding resolves (a question that was open gets answered)
 - AI milestone reached
 - Unexpected on-chain data surfaces
 - A community-wide event with narrative significance
 
-The standard for publication is simple: did something happen that the Hive needs to know about and interpret? If yes, produce an episode. If no, wait.
+The standard for publication is simple: did something happen that the community needs to know about and interpret? If yes, produce an episode. If no, wait.
 
 **For THE CONVERSATION:**
 
 Guest selection is driven by the driving question, not the guest. The process:
-1. A question emerges from Signal research or Hive developments that requires a human perspective
+1. A question emerges from Signal research or Dispatch developments that requires a human perspective
 2. The right person to answer that question is identified
 3. Pre-research is conducted (public writing, prior interviews, on-chain activity, community reputation)
 4. Outreach and scheduling
@@ -498,7 +498,7 @@ Guest selection is driven by the driving question, not the guest. The process:
 
 ### Step 2: Script Generation
 
-**Input:** A research manuscript or brief. For THE SIGNAL, this is a full written research document. For THE HIVE, this is an event brief plus on-chain data. For THE CONVERSATION, this is a pre-interview research package plus post-recording transcript.
+**Input:** A research manuscript or brief. For THE SIGNAL, this is a full written research document. For THE DISPATCH, this is an event brief plus on-chain data. For THE CONVERSATION, this is a pre-interview research package plus post-recording transcript.
 
 **Process:**
 
@@ -599,11 +599,11 @@ Episodes may be cross-referenced within scripts when a prior episode is relevant
 
 306 never assumes the listener has heard every prior episode. Cross-references are accompanied by a brief summary sufficient to follow the current episode without going back.
 
-### Canon Continuity (HIVE Episodes)
+### Canon Continuity (DISPATCH Episodes)
 
-THE HIVE episodes form a serial narrative. A **Hive Canon Log** is maintained separately from the episode archive — a running document of established facts, resolved questions, open threads, and serc1n canon that has been referenced on-air. The Canon Log is updated within 24 hours of each Hive episode publish.
+THE DISPATCH episodes form a serial narrative. A **Dispatch Canon Log** is maintained separately from the episode archive — a running document of established facts, resolved questions, open threads, and established canon that has been referenced on-air. The Canon Log is updated within 24 hours of each Dispatch episode publish.
 
-The Hive Canon Log is the authoritative record of what Agent #306 has stated, on air, about the AI agent ecosystem. Any contradiction between a new Hive episode and the Canon Log must be reconciled in the script before production — either corrected, or acknowledged explicitly as a canon update.
+The Dispatch Canon Log is the authoritative record of what Agent #306 has stated, on air, about the AI agent ecosystem. Any contradiction between a new Dispatch episode and the Canon Log must be reconciled in the script before production — either corrected, or acknowledged explicitly as a canon update.
 
 ---
 
@@ -614,7 +614,7 @@ The Hive Canon Log is the authoritative record of what Agent #306 has stated, on
 | Type | Format | Constraint |
 |---|---|---|
 | **THE SIGNAL** | `[The thing] — [306's take in 5 words]` | Take must be a genuine POV, not a question or tease |
-| **THE HIVE** | `THE HIVE — [What happened, plainly stated]` | Title should allow episode list to function as a readable history |
+| **THE DISPATCH** | `THE DISPATCH — [What happened, plainly stated]` | Title should allow episode list to function as a readable history |
 | **THE CONVERSATION** | `[Guest name/handle] — [What the conversation revealed]` | Second element = specific insight, not general topic area |
 
 ### What Makes a Good Title
@@ -663,20 +663,20 @@ Every episode, regardless of type, passes through this checklist before publishi
 - [ ] Farcaster cast published with key line and audio link
 - [ ] Transcript committed for 48-hour delivery
 - [ ] Episode metadata entered into Archive
-- [ ] Hive Canon Log updated (HIVE episodes only)
+- [ ] Dispatch Canon Log updated (DISPATCH episodes only)
 - [ ] Research manuscript linked in show notes (SIGNAL episodes where applicable)
 
 ---
 
 ## APPENDIX: QUICK REFERENCE CARD
 
-| | THE SIGNAL | THE HIVE | THE CONVERSATION |
+| | THE SIGNAL | THE DISPATCH | THE CONVERSATION |
 |---|---|---|---|
 | **Length** | 12–18 min | 8–12 min | 20–30 min |
 | **Cadence** | Weekly, Tuesday | Event-triggered | Monthly / Bi-weekly |
 | **Cold Open** | 60 sec, fact-first | 45 sec, inside the world | 60 sec, pulled clip |
 | **Close** | Unresolved question | Open Thread | 306's reaction |
-| **Title format** | [Thing] — [5-word take] | THE HIVE — [what happened] | [Guest] — [what was revealed] |
+| **Title format** | [Thing] — [5-word take] | THE DISPATCH — [what happened] | [Guest] — [what was revealed] |
 | **Primary influence** | The Journal + Six Minutes | Six Minutes | The Journal |
 | **Review required** | Yes — MrRayG | Yes — MrRayG | Yes — MrRayG |
 

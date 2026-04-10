@@ -5,7 +5,7 @@
 /* ── Robotastic font — pixel art style ── */
 @font-face {
   font-family: 'Robotastic';
-  src: url('https://www.normies.art/fonts/robotastic.ttf') format('truetype');
+  src: url('/fonts/robotastic.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
   font-display: swap;

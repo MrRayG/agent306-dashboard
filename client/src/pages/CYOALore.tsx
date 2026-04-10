@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
-type Trigger = "burn" | "pre_arena" | "zombie" | "serc_post" | "rivalry" | "manual";
+type Trigger = "burn" | "pre_arena" | "zombie" | "research_signal" | "rivalry" | "manual";
 type OptionLetter = "A" | "B" | "C" | "D";
 
 interface CYOAOption {
@@ -23,7 +23,7 @@ const TRIGGER_CONFIG: Record<Trigger, { label: string; color: string; desc: stri
   burn:      { label: "Deprecation Study",  color: "#f97316", desc: "What emerges when an old model is retired?",     emoji: "🔬" },
   pre_arena: { label: "Benchmark Preview",  color: "#a78bfa", desc: "New benchmarks drop soon. What's the hypothesis?", emoji: "📊" },
   zombie:    { label: "Legacy Revival",     color: "#4ade80", desc: "A deprecated approach resurfaces. What did it teach us?", emoji: "🔄" },
-  serc_post: { label: "Research Signal",    color: "#f97316", desc: "A new paper or announcement just dropped...",    emoji: "🎯" },
+  research_signal: { label: "Research Signal",    color: "#f97316", desc: "A new paper or announcement just dropped...",    emoji: "🎯" },
   rivalry:   { label: "Model Comparison",   color: "#2dd4bf", desc: "Two approaches are neck-and-neck. What's next?", emoji: "📈" },
   manual:    { label: "Custom",             color: "#efefef", desc: "Editor-created research brief",                  emoji: "✍️" },
 };
@@ -69,7 +69,7 @@ export default function ResearchBriefs() {
       trigger,
       tokenId: tokenId ? Number(tokenId) : undefined,
       tokenCount: tokenCount ? Number(tokenCount) : undefined,
-      serc1nPost: researchSignal || undefined,
+      researchSignalText: researchSignal || undefined,
       rivalTokenId: comparisonModelId ? Number(comparisonModelId) : undefined,
     }).then(r => r.json()),
     onSuccess: (data) => {
@@ -186,7 +186,7 @@ export default function ResearchBriefs() {
                   style={{ width: "100%", background: "rgba(227,229,228,0.08)", border: "1px solid rgba(227,229,228,0.20)", padding: "6px 10px", color: "#efefef", ...mono, fontSize: "0.93rem", boxSizing: "border-box" as const }} />
               </div>
             )}
-            {trigger === "serc_post" && (
+            {trigger === "research_signal" && (
               <div style={{ marginBottom: 10 }}>
                 <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", marginBottom: 4 }}>RESEARCH PAPER / ANNOUNCEMENT</p>
                 <textarea value={researchSignal} onChange={e => setResearchSignal(e.target.value)} placeholder="Paste the research signal or announcement here..." rows={3}
