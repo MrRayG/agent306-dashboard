@@ -300,7 +300,23 @@ ${analysisCtx ? `LESSONS FROM PAST RESEARCH:\n${analysisCtx}\n` : ""}${liveAINew
     const content = data.choices?.[0]?.message?.content ?? "";
     const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/) || content.match(/\{[\s\S]*\}/);
     const jsonStr = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : content;
-    const parsed = JSON.parse(jsonStr);
+
+    // Attempt to repair truncated JSON
+    let cleanJson = jsonStr.replace(/```json\n?/g, '').replace(/```/g, '').trim();
+    // Strip trailing incomplete elements (truncated responses)
+    cleanJson = cleanJson.replace(/,\s*[^}\]]*$/, '');
+    // Ensure proper closing
+    if (cleanJson.includes('{') && !cleanJson.endsWith('}')) {
+      const lastBrace = cleanJson.lastIndexOf('}');
+      if (lastBrace > 0) cleanJson = cleanJson.slice(0, lastBrace + 1);
+      const openBraces = (cleanJson.match(/{/g) || []).length;
+      const closeBraces = (cleanJson.match(/}/g) || []).length;
+      const openBrackets = (cleanJson.match(/\[/g) || []).length;
+      const closeBrackets = (cleanJson.match(/\]/g) || []).length;
+      cleanJson += '}'.repeat(Math.max(0, openBraces - closeBraces));
+      cleanJson += ']'.repeat(Math.max(0, openBrackets - closeBrackets));
+    }
+    const parsed = JSON.parse(cleanJson);
 
     const newThreads: ResearchThread[] = [];
 
@@ -954,10 +970,10 @@ export async function runResearchAgendaCycle(): Promise<{
   console.log("[ResearchAgenda] Starting daily research agenda cycle...");
 
   // 1. Generate new threads
-  const newThreads = await generateResearchAgenda();
+  const newThreads = await generateResearchAgenda() || [];
 
   // 2. Prioritize
-  const prioritized = prioritizeThreads();
+  const prioritized = prioritizeThreads() || [];
 
   // 3. Advance top 3 threads
   const advanced: string[] = [];
@@ -979,7 +995,7 @@ export async function runResearchAgendaCycle(): Promise<{
   const { count: prunedCount } = pruneStaleThreads();
 
   // 5. Count podcast candidates
-  const candidates = getPodcastCandidates();
+  const candidates = getPodcastCandidates() || [];
   const agenda = loadAgenda();
   agenda.stats.totalPodcastCandidates = candidates.length;
   saveAgenda(agenda);
