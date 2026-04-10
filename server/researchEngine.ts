@@ -21,6 +21,7 @@ import { dataPath } from "./dataPaths.js";
 import { addKnowledge } from "./memoryEngine.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 const GROK_CHAT_API    = LLM_BASE_URL;
 const PERPLEXITY_API   = "https://api.perplexity.ai";
@@ -477,12 +478,9 @@ async function callGrok(
     if (!res.ok) return null;
     const data = await res.json() as any;
     raw = data.choices?.[0]?.message?.content ?? "{}";
-    // Strip markdown code blocks that LLMs frequently wrap JSON in
-    const jsonMatch = raw.match(/```(?:json)?\n?([\s\S]*?)\n?```/) || raw.match(/\{[\s\S]*\}/);
-    const cleaned = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : raw;
-    return JSON.parse(cleaned);
+    return safeParseLLMJson(raw, "ResearchEngine");
   } catch (e: any) {
-    console.error(`[ResearchEngine] LLM JSON parse failed:`, e.message, `— raw response: ${raw?.slice(0, 200)}`);
+    console.error(`[ResearchEngine] LLM call failed:`, e.message, `— raw response: ${raw?.slice(0, 200)}`);
     return null;
   }
 }
@@ -1780,19 +1778,8 @@ Return JSON:
     raw  = data.choices?.[0]?.message?.content ?? "{}";
     console.log(`[Goals] Raw LLM response (first 500): ${raw.slice(0, 500)}`);
     
-    // Handle markdown-wrapped JSON (LLMs often wrap in ```json ... ```)
-    const jsonMatch = raw.match(/```json\n?([\s\S]*?)\n?```/) || raw.match(/```\n?([\s\S]*?)\n?```/) || raw.match(/\{[\s\S]*\}/);
-    const jsonStr = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : raw;
-    console.log(`[Goals] Cleaned JSON (first 300): ${jsonStr.slice(0, 300)}`);
-    
-    let parsed: any;
-    try {
-      parsed = JSON.parse(jsonStr);
-    } catch (parseErr: any) {
-      console.error(`[Goals] JSON parse failed: ${parseErr.message}`);
-      console.error(`[Goals] Attempted to parse: ${jsonStr.slice(0, 500)}`);
-      throw new Error(`JSON parse failed: ${parseErr.message}`);
-    }
+    const parsed = safeParseLLMJson(raw, "Goals.generate");
+    if (!parsed) throw new Error("Goals LLM response could not be parsed as JSON");
     
     console.log(`[Goals] Parsed keys: ${Object.keys(parsed).join(", ")}`);
     console.log(`[Goals] Goals array length: ${parsed.goals?.length ?? "undefined"}`);

@@ -17,6 +17,7 @@ import { dataPath } from "./dataPaths.js";
 import { LLM_BASE_URL, getLLMHeaders } from "./llmConfig.js";
 import { getModel } from "./modelRouter.js";
 import type { ResearchThread } from "./research-agenda.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 const ANALYZER_FILE = dataPath("analyzer_nodes.json");
 const MAX_NODES = 200;
@@ -179,9 +180,7 @@ Produce your structured analysis as JSON.`,
 
     const data = await res.json() as any;
     const content = data.choices?.[0]?.message?.content ?? "";
-    const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/) || content.match(/\{[\s\S]*\}/);
-    const jsonStr = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : content;
-    const parsed = JSON.parse(jsonStr);
+    const parsed = safeParseLLMJson(content, "Analyzer");
 
     const tokensUsed = (data.usage?.total_tokens as number | undefined) || 0;
 

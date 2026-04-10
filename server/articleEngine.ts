@@ -25,6 +25,7 @@ import { getOptimizedContext } from "./contextWindow.js";
 import { getModel } from "./modelRouter.js";
 import { TwitterApi } from "twitter-api-v2";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 const GROK_CHAT_API     = LLM_BASE_URL;
 const GROK_RESPONSE_API = LLM_RESPONSE_URL;
@@ -191,8 +192,8 @@ function parseDiscoveryJSON(rawText: string): {
     return null;
   }
   try {
-    const parsed = JSON.parse(rawText.slice(firstBrace, lastBrace + 1));
-    if (!parsed.title || !parsed.url) return null;
+    const parsed = safeParseLLMJson(rawText, "Article.extract");
+    if (!parsed?.title || !parsed?.url) return null;
     return parsed;
   } catch {
     return null;
@@ -408,16 +409,7 @@ Return JSON:
   console.log("[ArticleEngine] Raw LLM response length:", raw.length, "chars");
 
   // Try JSON parse first — the model may or may not wrap in JSON
-  let parsed: any = {};
-  try {
-    // Find JSON block in response (model may include markdown fences)
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      parsed = JSON.parse(jsonMatch[0]);
-    }
-  } catch (e: any) {
-    console.warn("[ArticleEngine] JSON parse failed, attempting text extraction:", e.message);
-  }
+  let parsed: any = safeParseLLMJson(raw, "Article.post") ?? {};
 
   // If JSON parse produced a body, use it
   if (parsed.body && parsed.body.length > 100) {

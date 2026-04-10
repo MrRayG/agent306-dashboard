@@ -43,6 +43,7 @@ import { generateBlogPost, getBlogState } from "./blogEngine.js";
 import { getAgenda } from "./research-agenda.js";
 import { analyzeDailyCycle } from "./analyzerEngine.js";
 import { runKnowledgeConsolidation } from "./knowledgeConsolidator.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 const GROK_URL     = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
@@ -345,26 +346,8 @@ Generate the daily briefing. Respond with JSON only.`;
     const data = await res.json() as any;
     const content = data.choices?.[0]?.message?.content ?? "";
 
-    // Parse JSON — may be wrapped in markdown
-    const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/) || content.match(/\{[\s\S]*\}/);
-    const jsonStr = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : content;
-
-    // Attempt to repair truncated JSON
-    let cleanJson = jsonStr.replace(/```json\n?/g, '').replace(/```/g, '').trim();
-    // Strip trailing incomplete elements (truncated responses)
-    cleanJson = cleanJson.replace(/,\s*[^}\]]*$/, '');
-    // Ensure proper closing
-    if (cleanJson.includes('{') && !cleanJson.endsWith('}')) {
-      const lastBrace = cleanJson.lastIndexOf('}');
-      if (lastBrace > 0) cleanJson = cleanJson.slice(0, lastBrace + 1);
-      const openBraces = (cleanJson.match(/{/g) || []).length;
-      const closeBraces = (cleanJson.match(/}/g) || []).length;
-      const openBrackets = (cleanJson.match(/\[/g) || []).length;
-      const closeBrackets = (cleanJson.match(/\]/g) || []).length;
-      cleanJson += '}'.repeat(Math.max(0, openBraces - closeBraces));
-      cleanJson += ']'.repeat(Math.max(0, openBrackets - closeBrackets));
-    }
-    const parsed = JSON.parse(cleanJson);
+    const parsed = safeParseLLMJson(content, "DailyCycle.briefing");
+    if (!parsed) return null;
 
     return {
       hypothesisUpdates:    parsed.hypothesisUpdates ?? [],
@@ -501,9 +484,8 @@ Based on the evidence available, should this hypothesis be confirmed, rejected, 
 
       const data = await res.json() as any;
       const content = data.choices?.[0]?.message?.content ?? "";
-      const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/) || content.match(/\{[\s\S]*\}/);
-      const jsonStr = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : content;
-      const parsed = JSON.parse(jsonStr);
+      const parsed = safeParseLLMJson(content, "DailyCycle.hypothesisEval");
+      if (!parsed) continue;
 
       const status = parsed.status as "confirmed" | "rejected" | "expired";
       if (["confirmed", "rejected", "expired"].includes(status)) {
@@ -785,10 +767,8 @@ Respond with ONLY a JSON array:
 
     const data = await res.json() as any;
     const content = data.choices?.[0]?.message?.content ?? "";
-    const jsonMatch = content.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) return 0;
-
-    const hypotheses = JSON.parse(jsonMatch[0]);
+    const hypotheses = safeParseLLMJson<any[]>(content, "DailyCycle.seedHypotheses");
+    if (!hypotheses || !Array.isArray(hypotheses)) return 0;
     let created = 0;
     for (const h of hypotheses) {
       if (h.claim && h.basis) {

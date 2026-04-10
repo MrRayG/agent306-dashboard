@@ -19,6 +19,7 @@ import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { getOptimizedContextAsync } from "./contextWindow.js";
 import { getKnowledgeContext } from "./memoryEngine.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 const BLOG_FILE = dataPath("blog_state.json");
 
@@ -150,7 +151,7 @@ If safe, return {"safe": true, "issues": []}`
       if (res.ok) {
         const data = await res.json() as any;
         const raw = data.choices?.[0]?.message?.content ?? "{}";
-        const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
+        const parsed = safeParseLLMJson(raw, "Blog.safety") ?? {};
         if (parsed.issues?.length) {
           issues.push(...parsed.issues);
         }
@@ -386,9 +387,7 @@ Write the full blog post following the blog structure template. Hook the reader 
 
     const data = await res.json() as any;
     const content = data.choices?.[0]?.message?.content ?? "";
-    const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/) || content.match(/\{[\s\S]*\}/);
-    const jsonStr = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : content;
-    const parsed = JSON.parse(jsonStr);
+    const parsed = safeParseLLMJson(content, "Blog.post");
 
     // Run content safety scan before publishing
     const safety = await scanBlogForSensitiveContent(parsed.content);

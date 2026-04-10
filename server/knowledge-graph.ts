@@ -16,6 +16,7 @@ import { knowledge, addKnowledge } from "./memoryEngine.js";
 import { getOptimizedContext, getRelevantContext } from "./contextWindow.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { getConnections as getSynthesisConnections } from "./synthesisEngine.js";
 
 const CONNECTIONS_FILE = dataPath("knowledge-connections-graph.json");
@@ -151,10 +152,8 @@ async function callLLM(
         if (retryRes.ok) {
           const retryData = await retryRes.json() as any;
           raw = retryData.choices?.[0]?.message?.content ?? "{}";
-          const jsonMatch2 = raw.match(/```(?:json)?\n?([\s\S]*?)\n?```/) || raw.match(/\{[\s\S]*\}/);
-          const cleaned2 = jsonMatch2 ? (jsonMatch2[1] ?? jsonMatch2[0]) : raw;
           console.log(`[KnowledgeGraph] Retry succeeded for ${task}`);
-          return JSON.parse(cleaned2);
+          return safeParseLLMJson(raw, `KnowledgeGraph.retry.${task}`);
         } else {
           console.error(`[KnowledgeGraph] Retry also failed: ${retryRes.status}`);
         }
@@ -163,23 +162,7 @@ async function callLLM(
     }
     const data = await res.json() as any;
     raw = data.choices?.[0]?.message?.content ?? "{}";
-    // More robust JSON extraction — handles markdown code blocks and edge cases
-    let cleaned = raw.trim();
-    // Strip markdown code blocks (greedy, handles nested blocks)
-    cleaned = cleaned.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '');
-    try {
-      return JSON.parse(cleaned);
-    } catch {
-      // Fallback: extract outermost JSON object or array
-      const objMatch = cleaned.match(/(\{[\s\S]*\})/);
-      const arrMatch = cleaned.match(/(\[[\s\S]*\])/);
-      const fallback = objMatch?.[1] || arrMatch?.[1];
-      if (fallback) {
-        try { return JSON.parse(fallback); } catch {}
-      }
-      console.error(`[KnowledgeGraph] LLM JSON parse failed (${task}):`, cleaned?.slice(0, 200));
-      return null;
-    }
+    return safeParseLLMJson(raw, `KnowledgeGraph.${task}`);
   } catch (e: any) {
     console.error(`[KnowledgeGraph] LLM call failed (${task}):`, e.message, `— raw response: ${raw?.slice(0, 200)}`);
     return null;

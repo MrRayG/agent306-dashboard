@@ -27,6 +27,7 @@ import { getOptimizedContext } from "./contextWindow.js";
 import { getModel } from "./modelRouter.js";
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 const GROK_URL = LLM_BASE_URL;
 const ACADEMY_STATE_FILE = dataPath("academy_state.json");
@@ -275,8 +276,8 @@ Return JSON only:
 
     if (!res.ok) { console.error("[Academy] Grok failed:", res.status); return null; }
     const data = await res.json() as any;
-    const parsed = JSON.parse(data.choices?.[0]?.message?.content ?? "{}");
-    if (!parsed.post) return null;
+    const parsed = safeParseLLMJson(data.choices?.[0]?.message?.content, "Academy");
+    if (!parsed?.post) return null;
     return parsed;
   } catch (e: any) {
     console.error("[Academy] Generation error:", e.message);

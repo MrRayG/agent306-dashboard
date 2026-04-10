@@ -13,6 +13,7 @@ import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 const GROK_URL = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
@@ -168,9 +169,8 @@ What made this work? Extract a reusable template.`,
 
     const data = await res.json() as any;
     const raw = data.choices?.[0]?.message?.content ?? "{}";
-    const parsed = JSON.parse(raw);
-
-    if (!parsed.name || !parsed.pattern) return null;
+    const parsed = safeParseLLMJson(raw, "Skills.extraction");
+    if (!parsed?.name || !parsed?.pattern) return null;
 
     const skill: AgentSkill = {
       id: `skill_${Date.now()}`,

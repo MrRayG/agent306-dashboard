@@ -18,6 +18,7 @@ import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
 import fs from "fs";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 const ONCHAIN_API = ""; // removed — on-chain API disabled
 
@@ -172,7 +173,7 @@ export async function generateSpotlight(grokKey: string): Promise<{
     });
 
     const data = await res.json() as any;
-    const content = JSON.parse(data.choices?.[0]?.message?.content ?? "{}");
+    const content = safeParseLLMJson(data.choices?.[0]?.message?.content, "Spotlight") ?? {} as any;
 
     if (!content.tweet) return null;
 

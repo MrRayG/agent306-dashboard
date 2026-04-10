@@ -20,6 +20,7 @@ import { getReasoningStats } from "./reasoningEngine.js";
 import { getSynthesisStats } from "./synthesisEngine.js";
 import { getPodcastState, getEpisode } from "./podcastEngine.js";
 import { getResearchLab, addTopic } from "./researchEngine.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 const GROK_URL = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
@@ -207,9 +208,7 @@ async function callLLM(
 
     const data = await res.json() as any;
     const content = data.choices?.[0]?.message?.content ?? "";
-    const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/) || content.match(/\{[\s\S]*\}/);
-    const jsonStr = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : content;
-    return JSON.parse(jsonStr);
+    return safeParseLLMJson(content, "Dream");
   } catch (e: any) {
     console.error(`[DreamEngine] LLM call failed (${task}):`, e.message);
     return null;

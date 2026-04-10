@@ -14,6 +14,7 @@ import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./ll
 
 import { dataPath } from "./dataPaths.js";
 import { getModel } from "./modelRouter.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 const REPLY_STATE_FILE = dataPath("replies.json");
 const GROK_KEY = LLM_API_KEY;
 
@@ -265,17 +266,8 @@ Return JSON array (max 10):
       return [];
     }
 
-    // Parse JSON array from response
-    const firstBracket = rawText.indexOf("[");
-    const lastBracket = rawText.lastIndexOf("]");
-
-    if (firstBracket === -1 || lastBracket <= firstBracket) {
-      console.log("[ReplyWatcher] Grok: No JSON array found in response");
-      return [];
-    }
-
-    const parsed = JSON.parse(rawText.slice(firstBracket, lastBracket + 1));
-    if (!Array.isArray(parsed)) return [];
+    const parsed = safeParseLLMJson<any[]>(rawText, "ReplyWatcher.grok");
+    if (!Array.isArray(parsed) || parsed.length === 0) return [];
 
     const results: CommunityReply[] = parsed
       .filter((r: any) => r.username && r.text && r.text.length > 5)
@@ -347,12 +339,8 @@ Return JSON array:
     const rawText = outputMsg?.content?.find((c: any) => c.type === "output_text")?.text ?? "";
     if (!rawText) return [];
 
-    const firstBracket = rawText.indexOf("[");
-    const lastBracket = rawText.lastIndexOf("]");
-    if (firstBracket === -1) return [];
-
-    const parsed = JSON.parse(rawText.slice(firstBracket, lastBracket + 1));
-    if (!Array.isArray(parsed)) return [];
+    const parsed = safeParseLLMJson<any[]>(rawText, "ReplyWatcher.claude");
+    if (!Array.isArray(parsed) || parsed.length === 0) return [];
 
     const results: CommunityReply[] = parsed
       .filter((r: any) => r.text && r.text.length > 5)

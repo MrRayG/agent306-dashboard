@@ -33,6 +33,7 @@
 import { getSlimAgentContext } from "./memoryEngine.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 const GROK_CHAT_API     = LLM_BASE_URL;
 const GROK_RESPONSE_API = LLM_RESPONSE_URL;
@@ -126,11 +127,7 @@ Return JSON:
 
     if (!rawText) return null;
 
-    const firstBrace = rawText.indexOf("{");
-    const lastBrace  = rawText.lastIndexOf("}");
-    if (firstBrace === -1 || lastBrace <= firstBrace) return null;
-
-    return JSON.parse(rawText.slice(firstBrace, lastBrace + 1));
+    return safeParseLLMJson(rawText, "Boost.context");
   } catch {
     return null;
   }
@@ -330,8 +327,7 @@ Return JSON:
 
   const data    = await res.json();
   const raw     = data.choices?.[0]?.message?.content ?? "{}";
-  let parsed: any = {};
-  try { parsed = JSON.parse(raw); } catch {}
+  let parsed: any = safeParseLLMJson(raw, "Boost.generate") ?? {};
 
   const context: BoostContext = {
     url,

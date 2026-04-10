@@ -26,6 +26,7 @@ import { getResearchLab, addTopic, addHypothesis, runResearchPipeline } from "./
 import { getExplorationState } from "./explorationEngine.js";
 import { getBriefingState } from "./dailyCycleEngine.js";
 import { analyzeResearchAdvance, getAnalysisContext } from "./analyzerEngine.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 const GROK_URL = LLM_BASE_URL;
 const AGENDA_FILE = dataPath("research-agenda.json");
@@ -302,43 +303,8 @@ ${analysisCtx ? `LESSONS FROM PAST RESEARCH:\n${analysisCtx}\n` : ""}${liveAINew
 
     const data = await res.json() as any;
     const content = data.choices?.[0]?.message?.content ?? "";
-    const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/) || content.match(/\{[\s\S]*\}/);
-    const jsonStr = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : content;
-
-    // Attempt to repair truncated JSON
-    let cleanJson = jsonStr.replace(/```json\n?/g, '').replace(/```/g, '').trim();
-    // Strip trailing incomplete elements (truncated responses)
-    cleanJson = cleanJson.replace(/,\s*[^}\]]*$/, '');
-    // Ensure proper closing
-    if (cleanJson.includes('{') && !cleanJson.endsWith('}')) {
-      const lastBrace = cleanJson.lastIndexOf('}');
-      if (lastBrace > 0) cleanJson = cleanJson.slice(0, lastBrace + 1);
-      const openBraces = (cleanJson.match(/{/g) || []).length;
-      const closeBraces = (cleanJson.match(/}/g) || []).length;
-      const openBrackets = (cleanJson.match(/\[/g) || []).length;
-      const closeBrackets = (cleanJson.match(/\]/g) || []).length;
-      cleanJson += '}'.repeat(Math.max(0, openBraces - closeBraces));
-      cleanJson += ']'.repeat(Math.max(0, openBrackets - closeBrackets));
-    }
-    let parsed: any;
-    try {
-      parsed = JSON.parse(cleanJson);
-    } catch (parseErr: any) {
-      console.warn("[ResearchAgenda] JSON repair insufficient, attempting aggressive truncation...");
-      // Aggressive fallback: find the last complete object and close the structure
-      const lastComplete = cleanJson.lastIndexOf('},');
-      if (lastComplete > 0) {
-        const aggressive = cleanJson.slice(0, lastComplete + 1) + ']}';
-        try {
-          parsed = JSON.parse(aggressive);
-        } catch {
-          console.error("[ResearchAgenda] JSON completely unrecoverable");
-          return [];
-        }
-      } else {
-        return [];
-      }
-    }
+    const parsed = safeParseLLMJson(content, "ResearchAgenda.generate");
+    if (!parsed) return [];
 
     const newThreads: ResearchThread[] = [];
 
@@ -578,7 +544,7 @@ Think deeply. What are we missing? What assumptions are we making? What would ch
       const reasoningData = await reasoningRes.json() as any;
       const reasoningRaw = reasoningData.choices?.[0]?.message?.content ?? "";
       try {
-        const reasoningParsed = JSON.parse(reasoningRaw.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
+        const reasoningParsed = safeParseLLMJson(reasoningRaw, "ResearchAgenda.reasoning") ?? {};
         reasoningContext = [
           reasoningParsed.keyQuestion ? `KEY QUESTION TO ANSWER: ${reasoningParsed.keyQuestion}` : "",
           reasoningParsed.blindSpots?.length ? `BLIND SPOTS TO ADDRESS: ${reasoningParsed.blindSpots.join("; ")}` : "",
@@ -665,9 +631,8 @@ Research the next gap and advance this thread. Respond with JSON only.`;
 
     const data = await res.json() as any;
     const content = data.choices?.[0]?.message?.content ?? "";
-    const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/) || content.match(/\{[\s\S]*\}/);
-    const jsonStr = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : content;
-    const parsed = JSON.parse(jsonStr);
+    const parsed = safeParseLLMJson(content, "ResearchAgenda.advance");
+    if (!parsed) return null;
 
     // Update thesis
     if (parsed.updatedThesis) thread.thesis = parsed.updatedThesis;
@@ -841,7 +806,7 @@ Extract 0-2 testable hypotheses from these findings.`
         if (hypothesisRes.ok) {
           const data = await hypothesisRes.json() as any;
           const content = data.choices?.[0]?.message?.content ?? "[]";
-          const hypotheses = JSON.parse(content.match(/\[[\s\S]*\]/)?.[0] ?? "[]");
+          const hypotheses = safeParseLLMJson<any[]>(content, "ResearchAgenda.hypotheses") ?? [];
           for (const h of hypotheses) {
             if (h.claim && h.basis) {
               addHypothesis({
@@ -992,7 +957,12 @@ export async function runResearchAgendaCycle(): Promise<{
   console.log("[ResearchAgenda] Starting daily research agenda cycle...");
 
   // 1. Generate new threads
-  const newThreads = (await generateResearchAgenda()) ?? [];
+  let newThreads: ResearchThread[] = [];
+  try {
+    newThreads = (await generateResearchAgenda()) ?? [];
+  } catch (e: any) {
+    console.warn("[ResearchAgenda] Thread generation failed (non-fatal):", e.message);
+  }
 
   // 2. Prioritize
   const prioritized = prioritizeThreads() ?? [];

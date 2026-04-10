@@ -23,6 +23,7 @@ import { addKnowledge, getKnowledgeDigestForExploration } from "./memoryEngine.j
 import { fetchTwitterFeed, fetchYouTubeTranscripts, fetchRSSFeeds, isAgentReachEnabled } from "./agentReachEngine.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 const GROK_CHAT_API      = LLM_BASE_URL;
 const GROK_RESPONSE_API  = LLM_RESPONSE_URL;
@@ -254,8 +255,7 @@ Rules:
     if (!res.ok) return { findings: [], knowledge: [] };
     const data = await res.json() as any;
     const raw = data.choices?.[0]?.message?.content ?? "{}";
-    let parsed: any = {};
-    try { parsed = JSON.parse(raw); } catch { return { findings: [], knowledge: [] }; }
+    const parsed: any = safeParseLLMJson(raw, "Exploration.internal") ?? {};
 
     return {
       findings: (parsed.findings ?? []).filter((f: any) => typeof f === "string" && f.length > 10),
@@ -314,8 +314,7 @@ async function fetchAcademicResearch(grokKey: string, existingKBDigest?: string)
     if (!res.ok) return { findings: [], knowledge: [] };
     const data = await res.json() as any;
     const raw = data.choices?.[0]?.message?.content ?? "{}";
-    let parsed: any = {};
-    try { parsed = JSON.parse(raw); } catch { return { findings: [], knowledge: [] }; }
+    const parsed: any = safeParseLLMJson(raw, "Exploration.external") ?? {};
     return {
       findings: (parsed.findings ?? []).filter((f: any) => typeof f === "string"),
       knowledge: (parsed.knowledge ?? []).filter((e: any) => e.topic && e.summary),

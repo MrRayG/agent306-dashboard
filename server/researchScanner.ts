@@ -24,6 +24,7 @@ import { dataPath } from "./dataPaths.js";
 import { addTopic, getResearchLab } from "./researchEngine.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 const GROK_CHAT_API  = LLM_BASE_URL;
 const KNOWLEDGE_FILE = dataPath("memory_knowledge.json");
@@ -213,9 +214,8 @@ Return valid JSON only.`,
 
     const data   = await res.json() as any;
     const raw    = data.choices?.[0]?.message?.content ?? "{}";
-    let parsed: any = {};
-    try { parsed = JSON.parse(raw); } catch {
-      console.error("[Scanner] Failed to parse Grok response");
+    const parsed: any = safeParseLLMJson(raw, "Scanner.gaps") ?? {};
+    if (!parsed || Object.keys(parsed).length === 0) {
       result.durationMs = Date.now() - startTime;
       return result;
     }
@@ -403,8 +403,8 @@ Return JSON:
 
       const data   = await res.json() as any;
       const raw    = data.choices?.[0]?.message?.content ?? "{}";
-      let parsed: any = {};
-      try { parsed = JSON.parse(raw); } catch {
+      const parsed: any = safeParseLLMJson(raw, "Scanner.topics") ?? {};
+      if (!parsed || Object.keys(parsed).length === 0) {
         result.skipped    = true;
         result.skipReason = "Parse error";
         results.push(result);

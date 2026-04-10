@@ -11,6 +11,7 @@ import { getFullAgentContext, knowledge } from "./memoryEngine.js";
 import { getOptimizedContext } from "./contextWindow.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 const GROK_URL = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
@@ -118,10 +119,7 @@ async function callGrok(systemPrompt: string, userPrompt: string): Promise<any |
     if (!res.ok) return null;
     const data = await res.json() as any;
     raw = data.choices?.[0]?.message?.content ?? "{}";
-    // Strip markdown code blocks that LLMs frequently wrap JSON in
-    const jsonMatch = raw.match(/```(?:json)?\n?([\s\S]*?)\n?```/) || raw.match(/\{[\s\S]*\}/);
-    const cleaned = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : raw;
-    return JSON.parse(cleaned);
+    return safeParseLLMJson(raw, "Reasoning.debate");
   } catch (e: any) {
     console.error(`[ReasoningEngine] LLM JSON parse failed:`, e.message, `— raw response: ${raw?.slice(0, 200)}`);
     return null;
@@ -726,9 +724,7 @@ async function callGrokWithModel(taskName: string, systemPrompt: string, userPro
     if (!res.ok) return null;
     const data = await res.json() as any;
     raw = data.choices?.[0]?.message?.content ?? "{}";
-    const jsonMatch = raw.match(/```(?:json)?\n?([\s\S]*?)\n?```/) || raw.match(/\{[\s\S]*\}/);
-    const cleaned = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : raw;
-    return JSON.parse(cleaned);
+    return safeParseLLMJson(raw, "Reasoning.task");
   } catch (e: any) {
     console.error(`[ReasoningEngine] LLM call failed (${taskName}):`, e.message, `— raw: ${raw?.slice(0, 200)}`);
     return null;

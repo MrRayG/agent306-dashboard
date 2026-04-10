@@ -6,6 +6,7 @@
 
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 const GROK_API_KEY = LLM_API_KEY;
 const GROK_MODEL   = "grok-4-1-fast";
@@ -44,22 +45,15 @@ function parseGrokSocialResponse(data: any): Array<{
   if (!rawText) return [];
 
   // Strategy 1: find a JSON array anywhere in the response
-  // Match the OUTERMOST array (greedy from first [ to last ])
-  const firstBracket = rawText.indexOf("[");
-  const lastBracket = rawText.lastIndexOf("]");
-  if (firstBracket !== -1 && lastBracket > firstBracket) {
-    try {
-      const parsed = JSON.parse(rawText.slice(firstBracket, lastBracket + 1));
-      if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].username) {
-        return parsed.map((p: any) => ({
-          username: String(p.username ?? "").replace(/^@/, ""),
-          text: String(p.text ?? p.content ?? ""),
-          likes: Number(p.likes ?? p.like_count ?? 0),
-          url: String(p.url ?? p.link ?? ""),
-          signal_type: String(p.signal_type ?? p.type ?? "community"),
-        })).filter(p => p.username && p.text.length > 5);
-      }
-    } catch {}
+  const parsedArr = safeParseLLMJson<any[]>(rawText, "GrokEngine.posts");
+  if (Array.isArray(parsedArr) && parsedArr.length > 0 && parsedArr[0]?.username) {
+    return parsedArr.map((p: any) => ({
+      username: String(p.username ?? "").replace(/^@/, ""),
+      text: String(p.text ?? p.content ?? ""),
+      likes: Number(p.likes ?? p.like_count ?? 0),
+      url: String(p.url ?? p.link ?? ""),
+      signal_type: String(p.signal_type ?? p.type ?? "community"),
+    })).filter(p => p.username && p.text.length > 5);
   }
 
   // Strategy 2: line-by-line markdown extraction
@@ -621,20 +615,15 @@ Remember: respond only with the JSON format specified.`;
   const content = data.choices?.[0]?.message?.content ?? "";
 
   // Parse JSON from response — Grok may wrap in markdown code blocks
-  const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/) ||
-                    content.match(/\{[\s\S]*\}/);
-  const jsonStr = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : content;
-
-  try {
-    const parsed = JSON.parse(jsonStr);
+  const parsed = safeParseLLMJson(content, "GrokEngine.briefing");
+  if (parsed) {
     if (!parsed.thread) parsed.thread = [];
     if (parsed.spotlightToken === undefined) parsed.spotlightToken = null;
-    // Fallback: if Grok didn't generate farcasterText, derive from narrative
     if (!parsed.farcasterText) {
       parsed.farcasterText = (parsed.narrative ?? parsed.tweet ?? "").slice(0, 1000);
     }
     return parsed;
-  } catch {
+  } else {
     return {
       tweet: content.slice(0, 258) + " 🧵",
       farcasterText: content.slice(0, 1000),
