@@ -17,35 +17,41 @@ const DIMMER = "rgba(227,229,228,0.30)";
 const DIMMEST = "rgba(227,229,228,0.14)";
 const TEXT = "#e3e5e4";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── Types (must match server/knowledge-graph.ts response shapes) ──────────────
 interface GraphStats {
-  totalEntries: number;
   totalConnections: number;
   totalClusters: number;
-  contradictions: number;
+  connectionsByType: Record<string, number>;
+  avgConfidence: number;
+  lastScanAt: string | null;
+  lastClusteredAt: string | null;
+  contradictionCount: number;
 }
 
 interface Cluster {
+  id: string;
   theme: string;
-  entryCount: number;
-  maturity: number;
+  entryIds: string[];
+  maturityScore: number;
   openQuestions: string[];
-  lastUpdated: string | null;
+  lastUpdated: string;
 }
 
-interface Contradiction {
-  entry1: { title: string; summary?: string };
-  entry2: { title: string; summary?: string };
+interface KnowledgeConnection {
+  id: string;
+  fromEntryId: string;
+  toEntryId: string;
+  relationshipType: string;
   confidence: number;
-  type: string;
+  reasoning: string;
+  createdAt: string;
+  discoveredBy: string;
 }
 
 interface GraphResponse {
   stats: GraphStats;
   clusters: Cluster[];
-  contradictions: Contradiction[];
-  connections: unknown[];
-  entries: unknown[];
+  connections: KnowledgeConnection[];
 }
 
 interface PerspectiveResponse {
@@ -77,7 +83,7 @@ export default function KnowledgeGraph() {
     refetchInterval: 120_000,
   });
 
-  const { data: contradictionsData } = useQuery<{ contradictions: Contradiction[] }>({
+  const { data: contradictionsData } = useQuery<{ contradictions: KnowledgeConnection[] }>({
     queryKey: ["/api/knowledge/contradictions"],
     refetchInterval: 120_000,
   });
@@ -135,9 +141,9 @@ export default function KnowledgeGraph() {
     onError: () => toast({ title: "Failed to generate perspective", variant: "destructive" }),
   });
 
-  const stats = graphData?.stats ?? { totalEntries: 0, totalConnections: 0, totalClusters: 0, contradictions: 0 };
+  const stats = graphData?.stats ?? { totalConnections: 0, totalClusters: 0, connectionsByType: {}, avgConfidence: 0, lastScanAt: null, lastClusteredAt: null, contradictionCount: 0 };
   const clusters = graphData?.clusters ?? [];
-  const contradictions = contradictionsData?.contradictions ?? graphData?.contradictions ?? [];
+  const contradictions = contradictionsData?.contradictions ?? [];
 
   return (
     <div style={{ padding: "2rem 2.5rem", maxWidth: 960, margin: "0 auto" }}>
@@ -210,10 +216,10 @@ export default function KnowledgeGraph() {
         <>
           {/* ── Stats Bar ──────────────────────────────────────────── */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem", marginBottom: "1.5rem" }}>
-            <StatCard label="Entries" value={stats.totalEntries} color={GREEN} />
             <StatCard label="Connections" value={stats.totalConnections} color={TEAL} />
             <StatCard label="Clusters" value={stats.totalClusters} color={PURPLE} />
-            <StatCard label="Contradictions" value={stats.contradictions ?? contradictions.length} color={RED} />
+            <StatCard label="Contradictions" value={stats.contradictionCount ?? contradictions.length} color={RED} />
+            <StatCard label="Avg Confidence" value={Math.round((stats.avgConfidence ?? 0) * 100)} color={GREEN} suffix="%" />
           </div>
 
           {/* ── Clusters Panel ─────────────────────────────────────── */}
@@ -231,14 +237,17 @@ export default function KnowledgeGraph() {
               </div>
             ) : (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-                {clusters.map((cluster, i) => (
-                  <div key={i} style={{ border: `1px solid ${DIMMEST}`, padding: "1rem 1.25rem" }}>
+                {clusters.map((cluster, i) => {
+                  const maturity = cluster.maturityScore ?? 0;
+                  const entryCount = cluster.entryIds?.length ?? 0;
+                  return (
+                  <div key={cluster.id ?? i} style={{ border: `1px solid ${DIMMEST}`, padding: "1rem 1.25rem" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
                       <span style={{ ...mono, fontSize: "0.83rem", color: TEXT }}>
                         {cluster.theme}
                       </span>
                       <span style={{ ...mono, fontSize: "0.68rem", color: DIM }}>
-                        {cluster.entryCount} entries
+                        {entryCount} entries
                       </span>
                     </div>
 
@@ -249,14 +258,14 @@ export default function KnowledgeGraph() {
                           Maturity
                         </span>
                         <span style={{ ...mono, fontSize: "0.63rem", color: DIM }}>
-                          {(cluster.maturity * 100).toFixed(0)}%
+                          {(maturity * 100).toFixed(0)}%
                         </span>
                       </div>
                       <div style={{ height: 4, background: DIMMEST, width: "100%" }}>
                         <div style={{
                           height: 4,
-                          width: `${Math.min(cluster.maturity * 100, 100)}%`,
-                          background: cluster.maturity >= 0.7 ? GREEN : cluster.maturity >= 0.4 ? YELLOW : PURPLE,
+                          width: `${Math.min(maturity * 100, 100)}%`,
+                          background: maturity >= 0.7 ? GREEN : maturity >= 0.4 ? YELLOW : PURPLE,
                           transition: "width 0.3s ease",
                         }} />
                       </div>
@@ -282,7 +291,8 @@ export default function KnowledgeGraph() {
                       </p>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </section>
@@ -306,7 +316,7 @@ export default function KnowledgeGraph() {
             ) : (
               <div style={{ border: `1px solid ${DIMMEST}` }}>
                 {contradictions.map((c, i) => (
-                  <div key={i} style={{
+                  <div key={c.id ?? i} style={{
                     padding: "0.75rem 1.25rem",
                     borderBottom: i < contradictions.length - 1 ? `1px solid ${DIMMEST}` : undefined,
                   }}>
@@ -315,34 +325,35 @@ export default function KnowledgeGraph() {
                         ...mono, fontSize: "0.63rem", textTransform: "uppercase", letterSpacing: "0.1em",
                         color: RED, background: "rgba(248,113,113,0.1)", padding: "2px 6px",
                       }}>
-                        {c.type || "contradicts"}
+                        {c.relationshipType || "contradicts"}
                       </span>
                       <span style={{ ...mono, fontSize: "0.68rem", color: DIM }}>
-                        {(c.confidence * 100).toFixed(0)}% confidence
+                        {((c.confidence ?? 0) * 100).toFixed(0)}% confidence
                       </span>
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                       <div>
-                        <p style={{ ...mono, fontSize: "0.73rem", color: TEXT, margin: 0, lineHeight: 1.4 }}>
-                          {c.entry1.title}
+                        <p style={{ ...mono, fontSize: "0.68rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 2px" }}>
+                          Entry
                         </p>
-                        {c.entry1.summary && (
-                          <p style={{ ...mono, fontSize: "0.63rem", color: DIM, marginTop: 3, lineHeight: 1.3 }}>
-                            {c.entry1.summary}
-                          </p>
-                        )}
+                        <p style={{ ...mono, fontSize: "0.73rem", color: TEXT, margin: 0, lineHeight: 1.4 }}>
+                          {c.fromEntryId}
+                        </p>
                       </div>
                       <div>
-                        <p style={{ ...mono, fontSize: "0.73rem", color: TEXT, margin: 0, lineHeight: 1.4 }}>
-                          {c.entry2.title}
+                        <p style={{ ...mono, fontSize: "0.68rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 2px" }}>
+                          Contradicts
                         </p>
-                        {c.entry2.summary && (
-                          <p style={{ ...mono, fontSize: "0.63rem", color: DIM, marginTop: 3, lineHeight: 1.3 }}>
-                            {c.entry2.summary}
-                          </p>
-                        )}
+                        <p style={{ ...mono, fontSize: "0.73rem", color: TEXT, margin: 0, lineHeight: 1.4 }}>
+                          {c.toEntryId}
+                        </p>
                       </div>
                     </div>
+                    {c.reasoning && (
+                      <p style={{ ...mono, fontSize: "0.63rem", color: DIM, marginTop: "0.4rem", lineHeight: 1.4 }}>
+                        {c.reasoning}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -421,11 +432,11 @@ export default function KnowledgeGraph() {
 
 // ── Shared Sub-Components ────────────────────────────────────────────────────
 
-function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
+function StatCard({ label, value, color, suffix }: { label: string; value: number; color: string; suffix?: string }) {
   return (
     <div style={{ border: `1px solid ${DIMMEST}`, padding: "0.75rem 1rem", textAlign: "center" }}>
       <p style={{ ...mono, fontSize: "1.5rem", color, margin: 0, fontWeight: 700 }}>
-        {value}
+        {value}{suffix ?? ""}
       </p>
       <p style={{ ...mono, fontSize: "0.63rem", color: DIMMER, textTransform: "uppercase", letterSpacing: "0.12em", marginTop: 3 }}>
         {label}
