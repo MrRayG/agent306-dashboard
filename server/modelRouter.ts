@@ -73,6 +73,17 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "daily-briefing": "premium",
   "improvement-plan": "premium",
   "blog-post": "standard",
+
+  // Research analysis framework (9-prompt, 4-phase)
+  "analysis-intake": "standard",           // Phase 1: landscape mapping
+  "analysis-contradictions": "premium",    // Phase 2: deep critical thinking
+  "analysis-citation-chains": "premium",   // Phase 2: intellectual lineage
+  "analysis-gap-scan": "premium",          // Phase 2: gap identification
+  "analysis-methodology-audit": "premium", // Phase 2: methodology comparison
+  "analysis-synthesis": "premium",         // Phase 3: master synthesis
+  "analysis-knowledge-map": "premium",     // Phase 3: knowledge map building
+  "analysis-so-what": "standard",          // Phase 4: quality check
+  "analysis-assumptions": "standard",      // Phase 4: assumption killer
 };
 
 /**
