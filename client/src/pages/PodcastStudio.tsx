@@ -240,6 +240,11 @@ export default function PodcastStudio() {
     refetchInterval: 60_000,
   });
 
+  const { data: audioAssets } = useQuery<{ intro: boolean; outro: boolean }>({
+    queryKey: ["/api/podcast/audio-assets"],
+    refetchInterval: 60_000,
+  });
+
   const episodes: any[] = state?.episodes ?? [];
   const guests: any[] = state?.guests ?? [];
 
@@ -361,6 +366,45 @@ export default function PodcastStudio() {
     }
   }
 
+  // ─── Audio asset & preview actions ────────────────────────────────────────
+
+  async function uploadAudioAsset(type: "intro" | "outro", file: File) {
+    setWorking(`upload-${type}`);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const headers: Record<string, string> = {};
+      const dashSecret = (import.meta as any).env?.VITE_DASHBOARD_SECRET ?? "";
+      if (dashSecret) headers["x-dashboard-secret"] = dashSecret;
+
+      const res = await fetch(`/api/podcast/audio-assets/${type}`, {
+        method: "POST",
+        headers,
+        body: formData,
+      });
+      if (!res.ok) throw new Error(await res.text());
+
+      toast({ title: `${type.charAt(0).toUpperCase() + type.slice(1)} music uploaded` });
+      qc.invalidateQueries({ queryKey: ["/api/podcast/audio-assets"] });
+    } catch (e: any) {
+      toast({ title: "Upload failed", description: e.message, variant: "destructive" });
+    }
+    setWorking(null);
+  }
+
+  async function generatePreview(id: string) {
+    setWorking(`preview-${id}`);
+    toast({ title: "Generating preview clip...", description: "LLM selecting passage + TTS running" });
+    try {
+      await apiRequest("POST", `/api/podcast/episodes/${id}/generate-preview`, {});
+      toast({ title: "Preview generation started", description: "Will appear when complete — check back shortly" });
+      refetchAll();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+    setWorking(null);
+  }
+
   // ─── Guest actions ───────────────────────────────────────────────────────
   async function reviewGuest(guestId: string, decision: "approved" | "declined", notes?: string) {
     setWorking(`guest-review-${guestId}`);
@@ -473,6 +517,13 @@ export default function PodcastStudio() {
       {/* ─── Pipeline Status Bar ──────────────────────────────────────── */}
       <PipelineStatusBar status={pipelineStatus} />
 
+      {/* ─── Audio Assets Panel ─────────────────────────────────────────── */}
+      <AudioAssetsPanel
+        assets={audioAssets ?? { intro: false, outro: false }}
+        working={working}
+        onUpload={uploadAudioAsset}
+      />
+
       {/* ─── Tab bar ────────────────────────────────────────────────────── */}
       <div
         style={{
@@ -521,6 +572,7 @@ export default function PodcastStudio() {
             onGenerateAudio={generateAudio}
             onMarkProduced={markProduced}
             onPublish={publishEpisode}
+            onGeneratePreview={generatePreview}
             onRefetch={refetchAll}
             toast={toast}
           />
@@ -536,6 +588,114 @@ export default function PodcastStudio() {
           />
         )}
       </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// AUDIO ASSETS PANEL
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function AudioAssetsPanel({
+  assets,
+  working,
+  onUpload,
+}: {
+  assets: { intro: boolean; outro: boolean };
+  working: string | null;
+  onUpload: (type: "intro" | "outro", file: File) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div style={{ marginBottom: "24px" }}>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        style={{
+          ...pixel,
+          fontSize: "12px",
+          color: TEAL,
+          background: `${TEAL}08`,
+          border: `1px solid ${TEAL}30`,
+          padding: "10px 16px",
+          cursor: "pointer",
+          width: "100%",
+          textAlign: "left",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
+        <span>AUDIO ASSETS — INTRO / OUTRO MUSIC</span>
+        <span style={{ ...mono, fontSize: "11px", color: TEXT_DIM }}>
+          {assets.intro && assets.outro
+            ? "Both uploaded"
+            : assets.intro
+              ? "Intro only"
+              : assets.outro
+                ? "Outro only"
+                : "None uploaded"}{" "}
+          {expanded ? "▲" : "▼"}
+        </span>
+      </button>
+
+      {expanded && (
+        <div
+          style={{
+            background: SURFACE,
+            border: `1px solid ${TEAL}20`,
+            borderTop: "none",
+            padding: "16px",
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "16px",
+          }}
+        >
+          {(["intro", "outro"] as const).map((type) => (
+            <div key={type} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              <div style={{ ...pixel, fontSize: "11px", color: TEAL }}>
+                {type.toUpperCase()} MUSIC
+              </div>
+              <div style={{ ...mono, fontSize: "12px", color: assets[type] ? GREEN : TEXT_DIM }}>
+                {assets[type] ? "✓ Uploaded" : "Not uploaded"}
+              </div>
+              {assets[type] && (
+                <audio
+                  controls
+                  src={`/api/podcast/audio-assets/${type}/audio`}
+                  style={{ width: "100%", height: "32px" }}
+                />
+              )}
+              <label
+                style={{
+                  ...mono,
+                  fontSize: "12px",
+                  color: TEAL,
+                  background: `${TEAL}18`,
+                  border: `1px solid ${TEAL}66`,
+                  padding: "6px 12px",
+                  cursor: working === `upload-${type}` ? "not-allowed" : "pointer",
+                  opacity: working === `upload-${type}` ? 0.5 : 1,
+                  textAlign: "center",
+                }}
+              >
+                {working === `upload-${type}` ? "UPLOADING..." : assets[type] ? "REPLACE" : "UPLOAD MP3"}
+                <input
+                  type="file"
+                  accept="audio/*"
+                  style={{ display: "none" }}
+                  disabled={working === `upload-${type}`}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) onUpload(type, file);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -558,6 +718,7 @@ function SignalTab({
   onGenerateAudio,
   onMarkProduced,
   onPublish,
+  onGeneratePreview,
   onRefetch,
   toast,
 }: {
@@ -574,6 +735,7 @@ function SignalTab({
   onGenerateAudio: (id: string) => void;
   onMarkProduced: (id: string) => void;
   onPublish: (id: string) => void;
+  onGeneratePreview: (id: string) => void;
   onRefetch: () => void;
   toast: any;
 }) {
@@ -660,6 +822,7 @@ function SignalTab({
         onGenerateAudio={onGenerateAudio}
         onMarkProduced={onMarkProduced}
         onPublish={onPublish}
+        onGeneratePreview={onGeneratePreview}
         toast={toast}
         onRefetch={onRefetch}
       />
@@ -900,6 +1063,7 @@ function EpisodePipeline({
   onGenerateAudio,
   onMarkProduced,
   onPublish,
+  onGeneratePreview,
   toast,
   onRefetch,
 }: {
@@ -913,6 +1077,7 @@ function EpisodePipeline({
   onGenerateAudio: (id: string) => void;
   onMarkProduced: (id: string) => void;
   onPublish: (id: string) => void;
+  onGeneratePreview: (id: string) => void;
   toast: (opts: any) => void;
   onRefetch: () => void;
 }) {
@@ -1090,45 +1255,169 @@ function EpisodePipeline({
                         </div>
                       )}
 
-                      {/* Audio player for audio_ready episodes */}
+                      {/* Audio players for audio_ready episodes */}
                       {status === "audio_ready" && (
-                        <div
-                          style={{
-                            padding: "10px 12px",
-                            background: `${TEAL}08`,
-                            borderLeft: `2px solid ${TEAL}40`,
-                            marginBottom: "8px",
-                          }}
-                        >
-                          <div style={{ ...pixel, fontSize: "10px", color: TEAL, marginBottom: "6px" }}>
-                            AUDIO PREVIEW
-                          </div>
-                          <audio
-                            controls
-                            src={`/api/podcast/episodes/${ep.id}/audio`}
-                            style={{ width: "100%", height: "36px", marginBottom: "6px" }}
-                          />
-                          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                            <a
-                              href={`/api/podcast/episodes/${ep.id}/audio?download=true`}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "8px" }}>
+                          {/* Full Episode (stitched with music) */}
+                          {ep.fullAudioUrl && (
+                            <div
                               style={{
-                                ...mono,
-                                fontSize: "12px",
-                                color: TEAL,
-                                textDecoration: "none",
-                                padding: "4px 10px",
-                                border: `1px solid ${TEAL}66`,
-                                background: `${TEAL}18`,
+                                padding: "10px 12px",
+                                background: `${GREEN}08`,
+                                borderLeft: `2px solid ${GREEN}40`,
                               }}
                             >
-                              ↓ DOWNLOAD MP3
-                            </a>
-                            {ep.audioGeneratedAt && (
-                              <span style={{ ...mono, fontSize: "11px", color: TEXT_FAINT }}>
-                                Generated {formatDate(ep.audioGeneratedAt)}
-                              </span>
-                            )}
+                              <div style={{ ...pixel, fontSize: "10px", color: GREEN, marginBottom: "6px" }}>
+                                FULL EPISODE (WITH MUSIC)
+                              </div>
+                              <audio
+                                controls
+                                src={`/api/podcast/episodes/${ep.id}/audio/full`}
+                                style={{ width: "100%", height: "36px", marginBottom: "6px" }}
+                              />
+                              <a
+                                href={`/api/podcast/episodes/${ep.id}/audio/full?download=true`}
+                                style={{
+                                  ...mono,
+                                  fontSize: "12px",
+                                  color: GREEN,
+                                  textDecoration: "none",
+                                  padding: "4px 10px",
+                                  border: `1px solid ${GREEN}66`,
+                                  background: `${GREEN}18`,
+                                }}
+                              >
+                                ↓ DOWNLOAD FULL MP3
+                              </a>
+                            </div>
+                          )}
+
+                          {/* Voice Only */}
+                          <div
+                            style={{
+                              padding: "10px 12px",
+                              background: `${TEAL}08`,
+                              borderLeft: `2px solid ${TEAL}40`,
+                            }}
+                          >
+                            <div style={{ ...pixel, fontSize: "10px", color: TEAL, marginBottom: "6px" }}>
+                              {ep.fullAudioUrl ? "VOICE ONLY" : "AUDIO PREVIEW"}
+                            </div>
+                            <audio
+                              controls
+                              src={`/api/podcast/episodes/${ep.id}/audio`}
+                              style={{ width: "100%", height: "36px", marginBottom: "6px" }}
+                            />
+                            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                              <a
+                                href={`/api/podcast/episodes/${ep.id}/audio?download=true`}
+                                style={{
+                                  ...mono,
+                                  fontSize: "12px",
+                                  color: TEAL,
+                                  textDecoration: "none",
+                                  padding: "4px 10px",
+                                  border: `1px solid ${TEAL}66`,
+                                  background: `${TEAL}18`,
+                                }}
+                              >
+                                ↓ DOWNLOAD MP3
+                              </a>
+                              {ep.audioGeneratedAt && (
+                                <span style={{ ...mono, fontSize: "11px", color: TEXT_FAINT }}>
+                                  Generated {formatDate(ep.audioGeneratedAt)}
+                                </span>
+                              )}
+                            </div>
                           </div>
+
+                          {/* Social Preview Clip */}
+                          {ep.previewAudioUrl ? (
+                            <div
+                              style={{
+                                padding: "10px 12px",
+                                background: `${PURPLE}08`,
+                                borderLeft: `2px solid ${PURPLE}40`,
+                              }}
+                            >
+                              <div style={{ ...pixel, fontSize: "10px", color: PURPLE, marginBottom: "6px" }}>
+                                30-SEC SOCIAL PREVIEW
+                              </div>
+                              <audio
+                                controls
+                                src={`/api/podcast/episodes/${ep.id}/audio/preview`}
+                                style={{ width: "100%", height: "36px", marginBottom: "6px" }}
+                              />
+                              {ep.previewText && (
+                                <div
+                                  style={{
+                                    ...mono,
+                                    fontSize: "13px",
+                                    color: "rgba(227,229,228,0.65)",
+                                    lineHeight: 1.6,
+                                    padding: "8px 12px",
+                                    background: "rgba(227,229,228,0.04)",
+                                    borderLeft: `2px solid ${PURPLE}30`,
+                                    marginBottom: "6px",
+                                    fontStyle: "italic",
+                                  }}
+                                >
+                                  "{ep.previewText}"
+                                </div>
+                              )}
+                              <div style={{ display: "flex", gap: "8px" }}>
+                                {ep.previewText && (
+                                  <button
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(ep.previewText);
+                                      toast({ title: "Preview text copied to clipboard" });
+                                    }}
+                                    style={{
+                                      ...mono,
+                                      fontSize: "12px",
+                                      color: PURPLE,
+                                      background: `${PURPLE}18`,
+                                      border: `1px solid ${PURPLE}66`,
+                                      padding: "4px 10px",
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    COPY TEXT
+                                  </button>
+                                )}
+                                <a
+                                  href={`/api/podcast/episodes/${ep.id}/audio/preview?download=true`}
+                                  style={{
+                                    ...mono,
+                                    fontSize: "12px",
+                                    color: PURPLE,
+                                    textDecoration: "none",
+                                    padding: "4px 10px",
+                                    border: `1px solid ${PURPLE}66`,
+                                    background: `${PURPLE}18`,
+                                  }}
+                                >
+                                  ↓ DOWNLOAD PREVIEW
+                                </a>
+                              </div>
+                            </div>
+                          ) : (
+                            working === `preview-${ep.id}` && (
+                              <div
+                                style={{
+                                  ...mono,
+                                  fontSize: "12px",
+                                  color: PURPLE,
+                                  padding: "6px 10px",
+                                  background: `${PURPLE}10`,
+                                  borderLeft: `2px solid ${PURPLE}40`,
+                                  animation: "pulse 2s ease-in-out infinite",
+                                }}
+                              >
+                                Generating social preview clip...
+                              </div>
+                            )
+                          )}
                         </div>
                       )}
 
@@ -1283,6 +1572,15 @@ function EpisodePipeline({
                             >
                               ↓ EXPORT SCRIPT
                             </ActionButton>
+                            {!ep.previewAudioUrl && (
+                              <ActionButton
+                                onClick={() => onGeneratePreview(ep.id)}
+                                color={PURPLE}
+                                disabled={working === `preview-${ep.id}`}
+                              >
+                                {working === `preview-${ep.id}` ? "GENERATING..." : "GENERATE PREVIEW"}
+                              </ActionButton>
+                            )}
                           </>
                         )}
 
