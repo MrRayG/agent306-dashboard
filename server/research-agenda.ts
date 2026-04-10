@@ -427,6 +427,263 @@ export function prioritizeThreads(): ResearchThread[] {
   return activeThreads;
 }
 
+// ── 3a. Parallel Search → Map → Reduce helpers ──────────────────────────────
+
+/**
+ * Generate 3-5 targeted sub-queries for a research thread.
+ * Uses standard-tier LLM to diversify search angles beyond the single
+ * Perplexity query that advanceThread() originally used.
+ */
+async function generateSubQueries(thread: ResearchThread): Promise<string[]> {
+  const existingSummary = [
+    thread.evidence.supporting.length > 0
+      ? `Supporting evidence (${thread.evidence.supporting.length} items)`
+      : "No supporting evidence yet",
+    thread.evidence.contradicting.length > 0
+      ? `Contradicting evidence (${thread.evidence.contradicting.length} items)`
+      : "No contradicting evidence",
+    thread.evidence.gaps.length > 0
+      ? `Knowledge gaps: ${thread.evidence.gaps.slice(0, 5).join("; ")}`
+      : "No identified gaps",
+  ].join("\n");
+
+  const today = new Date().toLocaleDateString("en-US", {
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
+  });
+
+  const res = await fetch(GROK_URL, {
+    method: "POST",
+    headers: getLLMHeaders(),
+    body: JSON.stringify({
+      model: getModel("parallel-search-subqueries"),
+      messages: [
+        {
+          role: "system",
+          content: `You generate targeted web search queries for research. Output ONLY a JSON array of 3-5 query strings.
+
+Each query should approach the topic from a DIFFERENT angle:
+1. Latest developments/news (recency-focused, last 48 hours)
+2. Contrarian/opposing viewpoints and criticisms
+3. Technical deep-dive / methodology / how it works
+4. Real-world applications / case studies / adoption data
+5. Expert opinions / key figures / thought leaders
+
+Rules:
+- Each query must be a natural search query (like you'd type into a search engine)
+- Avoid re-searching what's already known (see existing evidence below)
+- Be specific — include names, technologies, or concepts from the thesis
+- Return a JSON array of strings, nothing else`
+        },
+        {
+          role: "user",
+          content: `Today is ${today}.
+
+RESEARCH THREAD: "${thread.title}"
+THESIS: ${thread.thesis}
+STATUS: ${thread.status} (maturity: ${thread.maturityScore.toFixed(2)})
+
+EXISTING EVIDENCE:
+${existingSummary}
+
+Generate 3-5 diverse search queries to advance this research thread.`
+        }
+      ],
+      temperature: 0.4,
+      max_tokens: 500,
+    }),
+    signal: AbortSignal.timeout(20000),
+  });
+
+  if (!res.ok) {
+    console.warn(`[ParallelSearch] Sub-query generation LLM error: ${res.status}`);
+    return [];
+  }
+
+  const data = await res.json() as any;
+  const content = data.choices?.[0]?.message?.content ?? "";
+  const queries = safeParseLLMJson<string[]>(content, "ParallelSearch.subQueries");
+
+  if (!Array.isArray(queries) || queries.length === 0) {
+    console.warn("[ParallelSearch] Failed to parse sub-queries, got:", content.slice(0, 200));
+    return [];
+  }
+
+  return queries.filter((q): q is string => typeof q === "string" && q.length > 5).slice(0, 5);
+}
+
+/**
+ * Fire multiple Perplexity queries in parallel using Promise.allSettled().
+ * Each query gets a 500ms stagger to respect rate limits while still running
+ * concurrently. Returns results from all successful queries.
+ */
+async function parallelPerplexitySearch(
+  queries: string[],
+  threadTitle: string,
+): Promise<{ query: string; content: string }[]> {
+  const pplxKey = process.env.PERPLEXITY_API_KEY ?? "";
+  if (!pplxKey || pplxKey.length <= 10) {
+    console.warn("[ParallelSearch] No Perplexity API key — skipping parallel search");
+    return [];
+  }
+
+  const today = new Date().toLocaleDateString("en-US", {
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
+  });
+
+  console.log(`[ParallelSearch] Thread "${threadTitle}": fanning out ${queries.length} sub-queries`);
+
+  const promises = queries.map((query, idx) =>
+    new Promise<{ query: string; content: string }>(async (resolve, reject) => {
+      // Stagger by 500ms per query to respect rate limits
+      if (idx > 0) await new Promise(r => setTimeout(r, idx * 500));
+
+      try {
+        const pplxRes = await fetch("https://api.perplexity.ai/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${pplxKey}`,
+          },
+          body: JSON.stringify({
+            model: "sonar",
+            messages: [
+              {
+                role: "system",
+                content: "You are a research assistant. Return ONLY specific, dated facts. Include company names, numbers, quotes, and dates. No analysis — just facts.",
+              },
+              {
+                role: "user",
+                content: `Today is ${today}. ${query}`,
+              },
+            ],
+            max_tokens: 800,
+            temperature: 0.1,
+          }),
+          signal: AbortSignal.timeout(25000),
+        });
+
+        if (!pplxRes.ok) {
+          reject(new Error(`Perplexity HTTP ${pplxRes.status} for query: "${query.slice(0, 60)}"`));
+          return;
+        }
+
+        const pplxData = await pplxRes.json() as any;
+        const content = pplxData.choices?.[0]?.message?.content ?? "";
+        if (content.length < 20) {
+          reject(new Error(`Empty Perplexity response for query: "${query.slice(0, 60)}"`));
+          return;
+        }
+        resolve({ query, content });
+      } catch (e: any) {
+        reject(e);
+      }
+    })
+  );
+
+  const results = await Promise.allSettled(promises);
+  const succeeded: { query: string; content: string }[] = [];
+  let failCount = 0;
+
+  for (const r of results) {
+    if (r.status === "fulfilled") {
+      succeeded.push(r.value);
+    } else {
+      failCount++;
+      console.warn(`[ParallelSearch] Query failed:`, r.reason?.message ?? r.reason);
+    }
+  }
+
+  console.log(`[ParallelSearch] Thread "${threadTitle}": ${succeeded.length}/${queries.length} queries succeeded`);
+  return succeeded;
+}
+
+/**
+ * Reduce/synthesize multiple parallel search results into a single unified
+ * context string. Uses premium-tier LLM for high-quality synthesis.
+ * Returns a string suitable for injection into the advanceThread prompt.
+ */
+async function reduceFindings(
+  thread: ResearchThread,
+  rawResults: { query: string; content: string }[],
+): Promise<string> {
+  if (rawResults.length === 0) return "";
+  if (rawResults.length === 1) return rawResults[0].content;
+
+  const combinedResults = rawResults
+    .map((r, i) => `--- SEARCH ${i + 1}: "${r.query}" ---\n${r.content}`)
+    .join("\n\n");
+
+  const res = await fetch(GROK_URL, {
+    method: "POST",
+    headers: getLLMHeaders(),
+    body: JSON.stringify({
+      model: getModel("parallel-search-reduce"),
+      messages: [
+        {
+          role: "system",
+          content: `You synthesize multiple web search results into a unified research briefing. Output ONLY valid JSON:
+
+{
+  "synthesis": "A comprehensive summary combining all search results. Deduplicate overlapping facts. Note contradictions explicitly. Prioritize genuinely new information.",
+  "contradictions": ["Any direct contradictions found between sources"],
+  "mostImportantInsight": "The single most important NEW finding across all searches",
+  "sourceCount": number
+}
+
+Rules:
+- Preserve ALL specific facts: dates, names, numbers, quotes
+- If sources contradict each other, note BOTH sides
+- Rank by novelty — what's genuinely new vs already widely known
+- Be comprehensive — don't drop facts to be brief`
+        },
+        {
+          role: "user",
+          content: `RESEARCH THREAD: "${thread.title}"
+THESIS: ${thread.thesis}
+
+Below are results from ${rawResults.length} parallel web searches. Synthesize them into one unified briefing.
+
+${combinedResults}`
+        }
+      ],
+      temperature: 0.2,
+      max_tokens: 2000,
+    }),
+    signal: AbortSignal.timeout(40000),
+  });
+
+  if (!res.ok) {
+    console.warn(`[ParallelSearch] Reduce LLM error: ${res.status} — falling back to concatenation`);
+    return rawResults.map(r => r.content).join("\n\n");
+  }
+
+  const data = await res.json() as any;
+  const content = data.choices?.[0]?.message?.content ?? "";
+  const parsed = safeParseLLMJson<{
+    synthesis: string;
+    contradictions?: string[];
+    mostImportantInsight?: string;
+    sourceCount?: number;
+  }>(content, "ParallelSearch.reduce");
+
+  if (!parsed?.synthesis) {
+    console.warn("[ParallelSearch] Reduce parse failed — falling back to concatenation");
+    return rawResults.map(r => r.content).join("\n\n");
+  }
+
+  const parts = [parsed.synthesis];
+  if (parsed.contradictions?.length) {
+    parts.push(`\nCONTRADICTIONS FOUND: ${parsed.contradictions.join("; ")}`);
+  }
+  if (parsed.mostImportantInsight) {
+    parts.push(`\nMOST IMPORTANT NEW INSIGHT: ${parsed.mostImportantInsight}`);
+  }
+
+  const reduced = parts.join("\n");
+  console.log(`[ParallelSearch] Thread "${thread.title}": reduced ${rawResults.length} results to ${reduced.length} chars`);
+  return reduced;
+}
+
 // ── 3. Advance Thread ────────────────────────────────────────────────────────
 
 export async function advanceThread(threadId: string): Promise<ResearchThread | null> {
@@ -446,41 +703,66 @@ export async function advanceThread(threadId: string): Promise<ResearchThread | 
   const agentCtx = await getOptimizedContextAsync(`research ${thread.title} ${thread.thesis}`);
   const analysisCtx = getAnalysisContext("research_thread", 5);
 
-  // ── Live web context via Perplexity Sonar ──────────────────────────────
+  // ── Live web context via Parallel Search → Map → Reduce ─────────────────
   let liveContext = "";
-  const pplxKey = process.env.PERPLEXITY_API_KEY ?? "";
-  if (pplxKey && pplxKey.length > 10) {
-    try {
-      const today = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-      const pplxRes = await fetch("https://api.perplexity.ai/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${pplxKey}`,
-        },
-        body: JSON.stringify({
-          model: "sonar",
-          messages: [{
-            role: "system",
-            content: "You are a research assistant. Return ONLY specific, dated facts from the last 48 hours. Include company names, numbers, quotes, and dates. No analysis — just facts."
-          }, {
-            role: "user",
-            content: `Today is ${today}. Find the most important developments from the LAST 48 HOURS related to: "${thread.title}"\n\nFocus on:\n- Breaking news, announcements, launches\n- New research papers or findings\n- Company moves, partnerships, funding\n- Regulatory changes\n- Notable expert opinions or debates\n\nOnly include things that happened in the last 48 hours. Be specific with dates, names, and numbers.`
-          }],
-          max_tokens: 800,
-          temperature: 0.1,
-        }),
-        signal: AbortSignal.timeout(20000),
-      });
-      if (pplxRes.ok) {
-        const pplxData = await pplxRes.json() as any;
-        liveContext = pplxData.choices?.[0]?.message?.content ?? "";
-        if (liveContext.length > 50) {
-          console.log(`[ResearchAgenda] Perplexity live context: ${liveContext.length} chars for "${thread.title}"`);
-        }
+  try {
+    // Step 1: Generate diverse sub-queries
+    const subQueries = await generateSubQueries(thread);
+
+    if (subQueries.length > 0) {
+      // Step 2: Fan out parallel Perplexity searches
+      const rawResults = await parallelPerplexitySearch(subQueries, thread.title);
+
+      if (rawResults.length > 0) {
+        // Step 3: Reduce/synthesize all results
+        liveContext = await reduceFindings(thread, rawResults);
+        console.log(`[ParallelSearch] Thread "${thread.title}": reduced to ${liveContext.length} chars from ${rawResults.length} sources`);
+      } else {
+        console.warn(`[ParallelSearch] Thread "${thread.title}": all sub-queries failed, falling back to single query`);
       }
-    } catch (e: any) {
-      console.warn(`[ResearchAgenda] Perplexity live search failed:`, e.message);
+    } else {
+      console.warn(`[ParallelSearch] Thread "${thread.title}": sub-query generation failed, falling back to single query`);
+    }
+  } catch (e: any) {
+    console.warn(`[ParallelSearch] Thread "${thread.title}": parallel search failed (${e.message}), falling back to single query`);
+  }
+
+  // Fallback: single Perplexity query if parallel search produced nothing
+  if (!liveContext) {
+    const pplxKey = process.env.PERPLEXITY_API_KEY ?? "";
+    if (pplxKey && pplxKey.length > 10) {
+      try {
+        const today = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+        const pplxRes = await fetch("https://api.perplexity.ai/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${pplxKey}`,
+          },
+          body: JSON.stringify({
+            model: "sonar",
+            messages: [{
+              role: "system",
+              content: "You are a research assistant. Return ONLY specific, dated facts from the last 48 hours. Include company names, numbers, quotes, and dates. No analysis — just facts."
+            }, {
+              role: "user",
+              content: `Today is ${today}. Find the most important developments from the LAST 48 HOURS related to: "${thread.title}"\n\nFocus on:\n- Breaking news, announcements, launches\n- New research papers or findings\n- Company moves, partnerships, funding\n- Regulatory changes\n- Notable expert opinions or debates\n\nOnly include things that happened in the last 48 hours. Be specific with dates, names, and numbers.`
+            }],
+            max_tokens: 800,
+            temperature: 0.1,
+          }),
+          signal: AbortSignal.timeout(20000),
+        });
+        if (pplxRes.ok) {
+          const pplxData = await pplxRes.json() as any;
+          liveContext = pplxData.choices?.[0]?.message?.content ?? "";
+          if (liveContext.length > 50) {
+            console.log(`[ResearchAgenda] Perplexity fallback context: ${liveContext.length} chars for "${thread.title}"`);
+          }
+        }
+      } catch (e: any) {
+        console.warn(`[ResearchAgenda] Perplexity fallback search failed:`, e.message);
+      }
     }
   }
 
