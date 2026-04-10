@@ -1762,11 +1762,90 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
   // ── PODCAST: Topic Scanner ───────────────────────────────────────────
   // Agent 306 scans for noteworthy AI/Web3/NFT/Blockchain developments
-  app.post("/api/podcast/scan-topics", async (_req, res) => {
+  // Supports timeframe modes: "recent" (2 weeks), "quarterly" (3 months), "annual" (1 year)
+  app.post("/api/podcast/scan-topics", async (req, res) => {
     const grokKey = LLM_API_KEY;
     if (!grokKey) return res.status(500).json({ error: "No GROK_API_KEY configured" });
 
+    const timeframe = (req.body?.timeframe as string) || "recent";
+    if (!["recent", "quarterly", "annual"].includes(timeframe)) {
+      return res.status(400).json({ error: `Invalid timeframe: ${timeframe}. Must be "recent", "quarterly", or "annual".` });
+    }
+
+    console.log(`[PodcastStudio] Topic scan starting — timeframe: ${timeframe}`);
+
     try {
+      const today = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+
+      // ── Perplexity Sonar search for "recent" mode ──────────────────────
+      let freshContext = "";
+      if (timeframe === "recent") {
+        const pplxKey = process.env.PERPLEXITY_API_KEY ?? "";
+        if (pplxKey && pplxKey.length > 10) {
+          const queries = [
+            `most important AI developments this week ${today}`,
+            `biggest Web3 crypto news past two weeks ${today}`,
+            `breaking AI research papers and agent economy developments this week ${today}`,
+          ];
+          console.log(`[PodcastStudio] Fetching fresh context via ${queries.length} Perplexity Sonar queries`);
+          const results: string[] = [];
+          for (const query of queries) {
+            try {
+              const pplxRes = await fetch("https://api.perplexity.ai/chat/completions", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${pplxKey}`,
+                },
+                body: JSON.stringify({
+                  model: "sonar",
+                  messages: [{
+                    role: "system",
+                    content: "You are a research assistant. Return ONLY specific, dated facts from the last 14 days. Include company names, numbers, quotes, and dates. No analysis — just facts.",
+                  }, {
+                    role: "user",
+                    content: query,
+                  }],
+                  max_tokens: 800,
+                  temperature: 0.1,
+                }),
+                signal: AbortSignal.timeout(20000),
+              });
+              if (pplxRes.ok) {
+                const pplxData = await pplxRes.json() as any;
+                const content = pplxData.choices?.[0]?.message?.content ?? "";
+                if (content) results.push(content);
+              }
+            } catch (e: any) {
+              console.warn(`[PodcastStudio] Perplexity query failed: ${e.message}`);
+            }
+          }
+          if (results.length > 0) {
+            freshContext = `\n\n--- FRESH CONTEXT FROM WEB SEARCH (last 14 days) ---\n${results.join("\n\n---\n\n")}\n--- END FRESH CONTEXT ---\n`;
+            console.log(`[PodcastStudio] Got fresh context from ${results.length}/${queries.length} Perplexity queries`);
+          }
+        } else {
+          console.warn("[PodcastStudio] No PERPLEXITY_API_KEY — recent mode will rely on LLM knowledge only");
+        }
+      }
+
+      // ── Timeframe-specific prompts ─────────────────────────────────────
+      const timeframePrompts: Record<string, { system: string; user: string }> = {
+        recent: {
+          system: `You are Agent 306 in TOPIC SCOUT mode. You scan for the MOST RECENT, breaking, or trending developments in AI, crypto, technology, and the agent economy from the LAST 2 WEEKS that would make excellent podcast episodes.\n\nFor each topic, determine if it's a SIGNAL episode (research breakdown) or a CONVERSATION episode (interview).\n\nReturn topics that are:\n- TIMELY — happened in the last 14 days or is actively unfolding right now\n- Breaking analysis, not retrospectives — these should feel like "you need to know about this NOW"\n- Genuinely interesting and counterintuitive (not obvious news everyone already covered)\n- Substantive enough for a ~15 minute SIGNAL or 10-15 minute CONVERSATION episode\n- Connected to something bigger — not just a product announcement\n- Something Agent 306 would have a genuine point of view on\n\nFor each topic provide: a title following the format rules, a driving question, a one-sentence pitch for why this matters, and the episode type.`,
+          user: `Today is ${today}. Generate podcast topics based on developments from the LAST 2 WEEKS ONLY. These should be timely, relevant, and feel like breaking analysis — not retrospectives.${freshContext}\n\nScan for the 5 most noteworthy developments in AI, crypto, and technology that Agent 306 should cover RIGHT NOW.\n\nReturn JSON:\n{\n  "topics": [\n    {\n      "title": "[The thing] — [306's take in 5 words]",\n      "type": "the_signal" or "the_conversation",\n      "drivingQuestion": "The single question this episode would answer",\n      "pitch": "One sentence on why this matters right now",\n      "triggerEvent": "What specifically happened"\n    }\n  ]\n}`,
+        },
+        quarterly: {
+          system: `You are Agent 306 in TOPIC SCOUT mode. You scan for significant developments in AI, crypto, technology, and the agent economy from the LAST 3 MONTHS that would make excellent podcast episodes.\n\nFor each topic, determine if it's a SIGNAL episode (research breakdown) or a CONVERSATION episode (interview).\n\nReturn topics that are:\n- From the last 3 months — a mix of recent and still-relevant developments\n- Meaty enough that they deserve deeper analysis even if they aren't breaking news\n- Genuinely interesting and counterintuitive\n- Substantive enough for a ~15 minute SIGNAL or 10-15 minute CONVERSATION episode\n- Connected to something bigger — not just a product announcement\n- Something Agent 306 would have a genuine point of view on\n\nFor each topic provide: a title following the format rules, a driving question, a one-sentence pitch for why this matters, and the episode type.`,
+          user: `Today is ${today}. Scan for the 5 most noteworthy developments from the LAST 3 MONTHS in AI, crypto, and technology that Agent 306 should cover. Include a mix of recent and slightly older but still significant developments.\n\nReturn JSON:\n{\n  "topics": [\n    {\n      "title": "[The thing] — [306's take in 5 words]",\n      "type": "the_signal" or "the_conversation",\n      "drivingQuestion": "The single question this episode would answer",\n      "pitch": "One sentence on why this matters right now",\n      "triggerEvent": "What specifically happened"\n    }\n  ]\n}`,
+        },
+        annual: {
+          system: `You are Agent 306 in TOPIC SCOUT mode. You scan for the most significant developments in AI, crypto, technology, and the agent economy from the PAST YEAR that would make excellent podcast episodes.\n\nFor each topic, determine if it's a SIGNAL episode (research breakdown) or a CONVERSATION episode (interview).\n\nReturn topics that are:\n- From the past year — broader, deeper topics that may not be breaking news but are significant\n- Big-picture trends, paradigm shifts, or developments that deserve a thorough breakdown\n- Genuinely interesting and counterintuitive\n- Substantive enough for a ~15 minute SIGNAL or 10-15 minute CONVERSATION episode\n- Connected to something bigger — not just a product announcement\n- Something Agent 306 would have a genuine point of view on\n\nFor each topic provide: a title following the format rules, a driving question, a one-sentence pitch for why this matters, and the episode type.`,
+          user: `Today is ${today}. Scan for the 5 most significant developments from the PAST YEAR in AI, crypto, and technology that Agent 306 should cover. Focus on big-picture trends, paradigm shifts, and developments that deserve deep analysis.\n\nReturn JSON:\n{\n  "topics": [\n    {\n      "title": "[The thing] — [306's take in 5 words]",\n      "type": "the_signal" or "the_conversation",\n      "drivingQuestion": "The single question this episode would answer",\n      "pitch": "One sentence on why this matters right now",\n      "triggerEvent": "What specifically happened"\n    }\n  ]\n}`,
+        },
+      };
+
+      const prompts = timeframePrompts[timeframe];
       const agentCtx = getOptimizedContext("podcast topic scanning research community");
       const scanRes = await fetch(LLM_BASE_URL, {
         method: "POST",
@@ -1774,14 +1853,8 @@ export function registerRoutes(httpServer: Server, app: Express) {
         body: JSON.stringify({
           model: getModel("research_phase"),
           messages: [
-            {
-              role: "system",
-              content: `${agentCtx}\n\nYou are Agent 306 in TOPIC SCOUT mode. You scan for noteworthy recent developments in AI, crypto, technology, and the agent economy that would make excellent podcast episodes.\n\nFor each topic, determine if it's a SIGNAL episode (research breakdown) or a CONVERSATION episode (interview).\n\nReturn topics that are:\n- Genuinely interesting and counterintuitive (not obvious news everyone already covered)\n- Substantive enough for a ~15 minute SIGNAL or 10-15 minute CONVERSATION episode\n- Connected to something bigger — not just a product announcement\n- Something Agent 306 would have a genuine point of view on\n\nFor each topic provide: a title following the format rules, a driving question, a one-sentence pitch for why this matters, and the episode type.`,
-            },
-            {
-              role: "user",
-              content: `Scan for the 5 most noteworthy recent developments in AI, crypto, and technology that Agent 306 should cover. Focus on things that happened in the last 7 days or are currently unfolding.\n\nReturn JSON:\n{\n  "topics": [\n    {\n      "title": "[The thing] — [306's take in 5 words]",\n      "type": "the_signal" or "the_conversation",\n      "drivingQuestion": "The single question this episode would answer",\n      "pitch": "One sentence on why this matters right now",\n      "triggerEvent": "What specifically happened"\n    }\n  ]\n}`,
-            },
+            { role: "system", content: `${agentCtx}\n\n${prompts.system}` },
+            { role: "user", content: prompts.user },
           ],
           max_tokens: 1500,
           temperature: 0.85,
@@ -1794,7 +1867,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       const parsed = safeParseLLMJson(data.choices?.[0]?.message?.content, "Routes.podcastTopics") ?? {};
       const topics = parsed.topics ?? [];
 
-      console.log(`[Podcast] Topic scan returned ${topics.length} recommendations`);
+      console.log(`[PodcastStudio] Topic scan (${timeframe}) returned ${topics.length} recommendations`);
 
       // Auto-create draft episodes from scanned topics so they appear in the pipeline
       const created: any[] = [];
@@ -1808,10 +1881,10 @@ export function registerRoutes(httpServer: Server, app: Express) {
           if (ep) created.push(ep);
         } catch {}
       }
-      console.log(`[Podcast] Created ${created.length} draft episodes from scan`);
-      res.json({ ok: true, topics, created: created.length });
+      console.log(`[PodcastStudio] Created ${created.length} draft episodes from scan (${timeframe})`);
+      res.json({ ok: true, topics, created: created.length, timeframe });
     } catch (e: any) {
-      console.error("[Podcast] Topic scan error:", e.message);
+      console.error("[PodcastStudio] Topic scan error:", e.message);
       res.status(500).json({ error: e.message });
     }
   });
