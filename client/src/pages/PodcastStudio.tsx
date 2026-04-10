@@ -33,21 +33,25 @@ const TABS: { key: Tab; label: string; color: string }[] = [
   { key: "conversation", label: "THE CONVERSATION", color: PURPLE },
 ];
 
-const EPISODE_STATUSES = ["draft", "scripted", "reviewed", "produced", "published"] as const;
+const EPISODE_STATUSES = ["draft", "scripted", "reviewed", "audio_ready", "produced", "published"] as const;
 type EpisodeStatus = (typeof EPISODE_STATUSES)[number];
 
 const STATUS_LABELS: Record<EpisodeStatus, string> = {
   draft: "DRAFT",
   scripted: "SCRIPTED",
   reviewed: "REVIEWED",
+  audio_ready: "AUDIO",
   produced: "PRODUCED",
   published: "PUBLISHED",
 };
+
+const TEAL = "#2dd4bf";
 
 const STATUS_COLORS: Record<string, string> = {
   draft: YELLOW,
   scripted: BLUE,
   reviewed: ORANGE,
+  audio_ready: TEAL,
   produced: PURPLE,
   published: GREEN,
   pending_review: YELLOW,
@@ -316,6 +320,19 @@ export default function PodcastStudio() {
     setWorking(null);
   }
 
+  async function generateAudio(id: string) {
+    setWorking(`audio-${id}`);
+    toast({ title: "Generating audio...", description: "ElevenLabs TTS running in background" });
+    try {
+      await apiRequest("POST", `/api/podcast/episodes/${id}/generate-audio`, {});
+      toast({ title: "Audio generation started", description: "Will appear when complete — check back shortly" });
+      refetchAll();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+    setWorking(null);
+  }
+
   async function publishEpisode(id: string) {
     setWorking(`publish-${id}`);
     try {
@@ -501,6 +518,7 @@ export default function PodcastStudio() {
             onRegenerateScript={regenerateScript}
             onReview={reviewEpisode}
             onExportScript={exportScript}
+            onGenerateAudio={generateAudio}
             onMarkProduced={markProduced}
             onPublish={publishEpisode}
             onRefetch={refetchAll}
@@ -537,6 +555,7 @@ function SignalTab({
   onRegenerateScript,
   onReview,
   onExportScript,
+  onGenerateAudio,
   onMarkProduced,
   onPublish,
   onRefetch,
@@ -552,6 +571,7 @@ function SignalTab({
   onRegenerateScript: (id: string) => void;
   onReview: (id: string, decision: "reviewed" | "shelved", notes?: string) => void;
   onExportScript: (id: string, title: string) => void;
+  onGenerateAudio: (id: string) => void;
   onMarkProduced: (id: string) => void;
   onPublish: (id: string) => void;
   onRefetch: () => void;
@@ -637,6 +657,7 @@ function SignalTab({
         onRegenerateScript={onRegenerateScript}
         onReview={onReview}
         onExportScript={onExportScript}
+        onGenerateAudio={onGenerateAudio}
         onMarkProduced={onMarkProduced}
         onPublish={onPublish}
         toast={toast}
@@ -876,6 +897,7 @@ function EpisodePipeline({
   onRegenerateScript,
   onReview,
   onExportScript,
+  onGenerateAudio,
   onMarkProduced,
   onPublish,
   toast,
@@ -888,6 +910,7 @@ function EpisodePipeline({
   onRegenerateScript: (id: string) => void;
   onReview: (id: string, decision: "reviewed" | "shelved", notes?: string) => void;
   onExportScript: (id: string, title: string) => void;
+  onGenerateAudio: (id: string) => void;
   onMarkProduced: (id: string) => void;
   onPublish: (id: string) => void;
   toast: (opts: any) => void;
@@ -1067,6 +1090,66 @@ function EpisodePipeline({
                         </div>
                       )}
 
+                      {/* Audio player for audio_ready episodes */}
+                      {status === "audio_ready" && (
+                        <div
+                          style={{
+                            padding: "10px 12px",
+                            background: `${TEAL}08`,
+                            borderLeft: `2px solid ${TEAL}40`,
+                            marginBottom: "8px",
+                          }}
+                        >
+                          <div style={{ ...pixel, fontSize: "10px", color: TEAL, marginBottom: "6px" }}>
+                            AUDIO PREVIEW
+                          </div>
+                          <audio
+                            controls
+                            src={`/api/podcast/episodes/${ep.id}/audio`}
+                            style={{ width: "100%", height: "36px", marginBottom: "6px" }}
+                          />
+                          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                            <a
+                              href={`/api/podcast/episodes/${ep.id}/audio?download=true`}
+                              style={{
+                                ...mono,
+                                fontSize: "12px",
+                                color: TEAL,
+                                textDecoration: "none",
+                                padding: "4px 10px",
+                                border: `1px solid ${TEAL}66`,
+                                background: `${TEAL}18`,
+                              }}
+                            >
+                              ↓ DOWNLOAD MP3
+                            </a>
+                            {ep.audioGeneratedAt && (
+                              <span style={{ ...mono, fontSize: "11px", color: TEXT_FAINT }}>
+                                Generated {formatDate(ep.audioGeneratedAt)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Audio generating indicator */}
+                      {status === "reviewed" && working === `audio-${ep.id}` && (
+                        <div
+                          style={{
+                            ...mono,
+                            fontSize: "12px",
+                            color: TEAL,
+                            padding: "6px 10px",
+                            background: `${TEAL}10`,
+                            borderLeft: `2px solid ${TEAL}40`,
+                            marginBottom: "4px",
+                            animation: "pulse 2s ease-in-out infinite",
+                          }}
+                        >
+                          Audio generating in background...
+                        </div>
+                      )}
+
                       {/* Produced date */}
                       {status === "produced" && ep.producedAt && (
                         <div style={{ ...pixel, fontSize: "11px", color: PURPLE, marginBottom: "6px" }}>
@@ -1156,6 +1239,13 @@ function EpisodePipeline({
                         {status === "reviewed" && (
                           <>
                             <ActionButton
+                              onClick={() => onGenerateAudio(ep.id)}
+                              color={TEAL}
+                              disabled={working === `audio-${ep.id}`}
+                            >
+                              {working === `audio-${ep.id}` ? "GENERATING..." : "⚡ GENERATE AUDIO"}
+                            </ActionButton>
+                            <ActionButton
                               onClick={() => onExportScript(ep.id, ep.title)}
                               color={BLUE}
                             >
@@ -1174,6 +1264,24 @@ function EpisodePipeline({
                               disabled={working === `produced-${ep.id}`}
                             >
                               MARK PRODUCED
+                            </ActionButton>
+                          </>
+                        )}
+
+                        {status === "audio_ready" && (
+                          <>
+                            <ActionButton
+                              onClick={() => onPublish(ep.id)}
+                              color={GREEN}
+                              disabled={working === `publish-${ep.id}`}
+                            >
+                              PUBLISH
+                            </ActionButton>
+                            <ActionButton
+                              onClick={() => onExportScript(ep.id, ep.title)}
+                              color={BLUE}
+                            >
+                              ↓ EXPORT SCRIPT
                             </ActionButton>
                           </>
                         )}
