@@ -1659,15 +1659,11 @@ Output JSON:
       // Ensure the Agent 306 standard intro is always present after the cold open,
       // even if the revision LLM stripped it out.
       if (!ep.script.coldOpen.includes(AGENT_306_INTRO)) {
-        ep.script.coldOpen = ep.script.coldOpen + "
-
-" + AGENT_306_INTRO;
+        ep.script.coldOpen = ep.script.coldOpen + "\n\n" + AGENT_306_INTRO;
       }
       // Belt-and-suspenders: re-inject standard outro if revision stripped it
       if (!ep.script.outro?.includes(AGENT_306_OUTRO)) {
-        ep.script.outro = `${ep.script.outro ?? ""}
-
-${AGENT_306_OUTRO}`.trim();
+        ep.script.outro = `${ep.script.outro ?? ""}\n\n${AGENT_306_OUTRO}`.trim();
       }
 
       (ep as any).revised = true;
