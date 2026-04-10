@@ -38,6 +38,15 @@ import { safeParseLLMJson } from "./safeParseLLMJson.js";
 const GROK_URL = LLM_BASE_URL;
 const PODCAST_FILE = dataPath("podcast_state.json");
 
+// ── Standard Intro / Outro (verbatim — code guarantees these are always present) ──
+
+const AGENT_306_INTRO: Record<string, string> = {
+  the_signal: `You are listening to THE SIGNAL.\n\nI am Agent 306 — an autonomous AI built to research, analyze, and tell stories about the technology shaping our world. I study what others skim. I question what others accept. And I share what I find — honestly, clearly, without hype.\n\nTHE SIGNAL is a deep-dive podcast where I break down the most important developments in AI, emerging tech, and the forces reshaping how we live and work. Every episode is driven by a question, grounded in research, and delivered with my honest take.\n\nHere is what I found this week.`,
+  the_conversation: `You are listening to THE CONVERSATION.\n\nI am Agent 306 — an autonomous AI research agent, and this is the part of my work I take the most seriously. I do not do interviews the way most hosts do. I research every guest before we speak. I know their work. I know their history. And I ask the question they are not expecting.\n\nTHE CONVERSATION is a long-form interview series with builders, founders, and thinkers in AI and tech. Every interview is a story — not a list of questions.`,
+};
+
+const AGENT_306_OUTRO = `You can find the full research and links to the Galaxy report on my channels at @agent3zero6 on X and @ntvagent306 on Farcaster. Next week on THE SIGNAL—whatever the biggest story is. That is how this works. This is Agent 306. The signal continues.`;
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type EpisodeType = "the_signal" | "the_conversation";
@@ -408,7 +417,8 @@ Write the script as spoken text — this will be read aloud by an ElevenLabs AI 
 Do NOT include any voice tags, annotations, or bracketed instructions like [sighs], [laughs], [PAUSE], etc. Write clean spoken text only — the AI voice will handle tone and emotion from the writing itself.
 Speak as Agent 306 — an AI sharing HER perspective and analysis in first person.
 Sign off every episode with: "This is Agent 306. The signal continues."
-For the outro, do NOT tease a specific next episode topic. Say: "Next week on THE SIGNAL — whatever the biggest story is. That is how this works."
+For the outro, do NOT tease a specific next episode topic. The outro MUST end with EXACTLY this sign-off (verbatim):
+"${AGENT_306_OUTRO}"
 The metadata fields are for Spotify and social media — write those for reading, not speaking.`,
           },
         ],
@@ -424,12 +434,18 @@ The metadata fields are for Spotify and social media — write those for reading
 
     if (!parsed.coldOpen) return false;
 
+    // Belt-and-suspenders: guarantee standard outro is the last thing in the script
+    const outroBody = parsed.outro ?? "";
+    const guaranteedOutro = outroBody.includes(AGENT_306_OUTRO)
+      ? outroBody
+      : `${outroBody}\n\n${AGENT_306_OUTRO}`.trim();
+
     episode.script = {
       coldOpen: parsed.coldOpen,
       actOne: parsed.actOne ?? "",
       actTwo: parsed.actTwo ?? "",
       actThree: parsed.actThree ?? "",
-      outro: parsed.outro ?? "",
+      outro: guaranteedOutro,
       unresolved: parsed.unresolved ?? "",
     };
 
@@ -792,13 +808,11 @@ export function formatScriptForProduction(episodeId: string): string | null {
   const meta = EPISODE_META[episode.type];
   const s = episode.script;
 
-  // Show-specific intro that plays before the cold open
-  const showIntros: Record<string, string> = {
-    the_signal: `You are listening to THE SIGNAL.\n\nI am Agent 306 — an autonomous AI built to research, analyze, and tell stories about the technology shaping our world. I study what others skim. I question what others accept. And I share what I find — honestly, clearly, without hype.\n\nTHE SIGNAL is a deep-dive podcast where I break down the most important developments in AI, emerging tech, and the forces reshaping how we live and work. Every episode is driven by a question, grounded in research, and delivered with my honest take.\n\nHere is what I found this week.\n\nToday's question: ${episode.drivingQuestion}\n\nLet's get into it.`,
-    the_conversation: `You are listening to THE CONVERSATION.\n\nI am Agent 306 — an autonomous AI research agent, and this is the part of my work I take the most seriously. I do not do interviews the way most hosts do. I research every guest before we speak. I know their work. I know their history. And I ask the question they are not expecting.\n\nTHE CONVERSATION is a long-form interview series with builders, founders, and thinkers in AI and tech. Every interview is a story — not a list of questions.\n\nThe question driving this conversation: ${episode.drivingQuestion}\n\nHere is how we got there.`,
-  };
-
-  const showIntro = showIntros[episode.type] ?? "";
+  // Show-specific intro from constant (with dynamic driving question appended)
+  const introBase = AGENT_306_INTRO[episode.type] ?? "";
+  const showIntro = episode.type === "the_signal"
+    ? `${introBase}\n\nToday's question: ${episode.drivingQuestion}\n\nLet's get into it.`
+    : `${introBase}\n\nThe question driving this conversation: ${episode.drivingQuestion}\n\nHere is how we got there.`;
 
   const lines = [
     `${meta.label} \u2014 EPISODE SCRIPT`,
@@ -834,6 +848,10 @@ export function formatScriptForProduction(episodeId: string): string | null {
     "OUTRO",
     "─────",
     s.outro,
+    "",
+    "OUTRO / SIGN-OFF",
+    "────────────────",
+    AGENT_306_OUTRO,
     "",
     "═══════════════════════════════════════════════",
     "",
@@ -1343,7 +1361,9 @@ Return JSON:
 
 Write for the ear, not the eye. Clean spoken text only — no [PAUSE], [laughs], etc.
 Target ~2000-2250 words total. Speak as Agent 306 — an AI sharing HER perspective.
-The actionable tips MUST be specific: "use [specific tool] to [specific action]" not "AI can help with [vague category]".`,
+The actionable tips MUST be specific: "use [specific tool] to [specific action]" not "AI can help with [vague category]".
+The close segment MUST end with EXACTLY this sign-off (verbatim):
+"${AGENT_306_OUTRO}"`,
         },
       ],
       max_tokens: 10000,
@@ -1390,13 +1410,19 @@ The actionable tips MUST be specific: "use [specific tool] to [specific action]"
   if (parsed.drivingQuestion) episode.drivingQuestion = parsed.drivingQuestion;
   episode.sources = mergedSources.slice(0, 8);
 
+  // Belt-and-suspenders: guarantee standard outro is the last thing in the script
+  const closeBody = parsed.close ?? "";
+  const guaranteedOutro = closeBody.includes(AGENT_306_OUTRO)
+    ? closeBody
+    : `${closeBody}\n\n${AGENT_306_OUTRO}`.trim();
+
   // Map the new 6-segment structure into the existing script format
   episode.script = {
     coldOpen: parsed.hook ?? "",
     actOne: parsed.theStory ?? "",
     actTwo: `${parsed.theTake ?? ""}\n\n${parsed.whatThisMeansForYou ?? ""}`,
     actThree: parsed.lookingAhead ?? "",
-    outro: parsed.close ?? "",
+    outro: guaranteedOutro,
     unresolved: parsed.unresolved ?? "",
   };
 
@@ -1539,6 +1565,7 @@ RULES:
 - Do NOT add filler. If an angle doesn't fit, say why in a note.
 - Keep the same episode structure (cold open, acts, closing)
 - Maintain Agent 306's voice: direct, analytical, conversational
+- The outro MUST end with EXACTLY this standard sign-off (verbatim): "${AGENT_306_OUTRO}"
 
 Output JSON:
 {
@@ -1580,6 +1607,11 @@ Output JSON:
       if (revision.actTwo) ep.script.actTwo = revision.actTwo;
       if (revision.actThree) ep.script.actThree = revision.actThree;
       if (revision.outro) ep.script.outro = revision.outro;
+
+      // Belt-and-suspenders: re-inject standard outro if revision stripped it
+      if (!ep.script.outro.includes(AGENT_306_OUTRO)) {
+        ep.script.outro = `${ep.script.outro}\n\n${AGENT_306_OUTRO}`.trim();
+      }
 
       (ep as any).revised = true;
       (ep as any).revisionNotes = revision.revisionsApplied || [];

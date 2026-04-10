@@ -959,6 +959,54 @@ function EpisodePipeline({
                         </div>
                       </div>
 
+                      {/* Episode description */}
+                      {ep.metadata?.shortDescription && (
+                        <div
+                          style={{
+                            ...mono,
+                            fontSize: "13px",
+                            color: TEXT_DIM,
+                            lineHeight: 1.5,
+                            marginBottom: "6px",
+                            marginTop: "4px",
+                          }}
+                        >
+                          {ep.metadata.shortDescription}
+                        </div>
+                      )}
+
+                      {/* Sources */}
+                      {ep.sources && ep.sources.length > 0 && (
+                        <div style={{ marginBottom: "8px", marginTop: "4px" }}>
+                          <div style={{ ...pixel, fontSize: "10px", color: TEXT_FAINT, marginBottom: "4px" }}>
+                            SOURCES
+                          </div>
+                          {ep.sources.slice(0, 5).map((src: any, i: number) => (
+                            <div
+                              key={i}
+                              style={{
+                                ...mono,
+                                fontSize: "12px",
+                                color: BLUE,
+                                lineHeight: 1.6,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              <a
+                                href={src.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ color: BLUE, textDecoration: "none" }}
+                              >
+                                {src.title}
+                              </a>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
                       {/* Script preview for scripted episodes */}
                       {status === "scripted" && ep.script?.coldOpen && (
                         <div
@@ -1171,7 +1219,7 @@ function ScriptViewer({ script }: { script: any }) {
       )}
 
       {/* Unresolved question */}
-      {script.unresolvedQuestion && (
+      {script.unresolved && (
         <div
           style={{
             padding: "12px 16px",
@@ -1184,7 +1232,7 @@ function ScriptViewer({ script }: { script: any }) {
             UNRESOLVED QUESTION
           </div>
           <div style={{ ...mono, fontSize: "15px", color: TEXT, lineHeight: 1.6 }}>
-            {script.unresolvedQuestion}
+            {script.unresolved}
           </div>
         </div>
       )}
