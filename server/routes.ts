@@ -1822,9 +1822,13 @@ export function registerRoutes(httpServer: Server, app: Express) {
   app.post("/api/podcast/generate-from-thread/:threadId", async (req, res) => {
     try {
       const episode = await generateEpisodeFromThread(req.params.threadId);
-      if (!episode) return res.status(500).json({ error: "Failed to generate episode from thread" });
+      if (!episode) {
+        console.error(`[PodcastStudio] Failed to generate episode from thread ${req.params.threadId} — returned null`);
+        return res.status(500).json({ error: "Failed to generate episode from thread" });
+      }
       res.json({ ok: true, episode });
     } catch (e: any) {
+      console.error(`[PodcastStudio] Episode generation error for thread ${req.params.threadId}:`, e.message);
       res.status(500).json({ error: e.message });
     }
   });
