@@ -51,7 +51,7 @@ const DEFAULT_TWITTER_ACCOUNTS = [
 ];
 
 const DEFAULT_YOUTUBE_CHANNELS: { name: string; channelId: string }[] = [
-  { name: "Bankless", channelId: "UCPMdKoKQHaACff9JKxmRIJA" },
+  { name: "Bankless", channelId: "UCAl9Ld79qaZxp9JzEOwd3aA" },
   { name: "The Defiant", channelId: "UCL0J4MLEdLP0-UyLu0hCktg" },
   { name: "AI Explained", channelId: "UCNJ1Ymd5yFuUPtn21xtRbbw" },
 ];
