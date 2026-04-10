@@ -372,7 +372,10 @@ async function researchWithPerplexity(query: string, pplxKey: string): Promise<{
   try {
     const res = await fetch(`${PERPLEXITY_API}/chat/completions`, {
       method: "POST",
-      headers: getLLMHeaders(),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${pplxKey}`,
+      },
       body: JSON.stringify({
         model: "sonar-pro",
         messages: [{
