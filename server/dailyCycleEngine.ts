@@ -434,11 +434,10 @@ async function autoDebateManuscripts(): Promise<number> {
 
 async function autoResolveHypotheses(): Promise<number> {
   const lab = getResearchLab();
-  const oneDayAgo = Date.now() - 1 * 24 * 60 * 60 * 1000;
+  const fourHoursAgo = Date.now() - 4 * 60 * 60 * 1000; // 4h maturation period before resolution
 
-  // Find "forming" or "testing" hypotheses older than 24 hours (was 7 days — too slow for 327+ backlog)
   const mature = lab.hypotheses
-    .filter(h => (h.status === "forming" || h.status === "testing") && new Date(h.formedAt).getTime() < oneDayAgo)
+    .filter(h => (h.status === "forming" || h.status === "testing") && new Date(h.formedAt).getTime() < fourHoursAgo)
     .slice(0, 50);
 
   if (mature.length === 0) return 0;
@@ -566,11 +565,11 @@ async function autoDetectContradictions(): Promise<number> {
 
 async function autoTestHypotheses(): Promise<number> {
   const lab = getResearchLab();
-  const oneDayAgo = Date.now() - 1 * 24 * 60 * 60 * 1000;
+  const fourHoursAgo = Date.now() - 4 * 60 * 60 * 1000; // 4h maturation period before testing
 
-  // Find "forming" hypotheses older than 24 hours that should be evaluated
+  // Find "forming" hypotheses older than 4 hours that should be evaluated
   const candidates = lab.hypotheses
-    .filter(h => h.status === "forming" && new Date(h.formedAt).getTime() < oneDayAgo)
+    .filter(h => h.status === "forming" && new Date(h.formedAt).getTime() < fourHoursAgo)
     .slice(0, 50);
 
   if (candidates.length === 0) return 0;
