@@ -1094,15 +1094,11 @@ export async function generateEpisodeFromThread(threadId: string): Promise<Episo
   const topicTitle = topic?.topic ?? researchThread!.title;
   const pitchText = topic?.contentSuggestions?.podcastTopic ?? researchThread?.thesis ?? topicTitle;
   const researchQuestion = topic?.researchQuestion ?? topic?.description ?? researchThread?.thesis ?? "";
-  const hypothesis = topic?.hypothesis ?? researchThread?.thesis ?? "";
-  const confidence = topic?.confidence ?? "medium";
+
+  // Must have at least some content to work with
   const manuscript = topic?.manuscript ?? researchThread?.analysis?.synthesisResults?.masterSynthesis ?? "";
   const rawFindings = topic?.rawFindings
     ?? (researchThread?.audienceRelevance ? `Audience relevance: ${researchThread.audienceRelevance}` : "");
-  const conclusion = topic?.conclusion ?? "";
-  const dataPoints = topic?.dataPoints ?? [];
-
-  // Must have at least some content to work with
   if (!pitchText && !manuscript && !rawFindings) {
     console.error(`[PodcastStudio] Thread "${topicTitle}" has no podcast suggestion, manuscript, or findings`);
     return null;
@@ -1118,17 +1114,57 @@ export async function generateEpisodeFromThread(threadId: string): Promise<Episo
     return existingEp;
   }
 
-  console.log(`[PodcastStudio] Generating episode from thread: "${topicTitle}"`);
+  // 2. Create draft episode IMMEDIATELY so it appears in the UI right away
+  console.log(`[PodcastStudio] Creating draft episode from thread: "${topicTitle}"`);
+  const episode = createEpisode({
+    type: "the_signal",
+    title: `${topicTitle} — Research Deep Dive`,
+    drivingQuestion: researchQuestion || pitchText,
+    researchTopicId: threadId,
+    triggerEvent: `Auto-generated from mature research thread: ${topicTitle}`,
+    sources: [],
+  });
+  console.log(`[PodcastStudio] Draft episode created: ${episode.id} — now generating script in background`);
 
-  // 2. Gather all connected knowledge via knowledge graph
-  //    Use the topic ID if available (knowledge graph indexes by topic ID),
-  //    otherwise fall back to thread ID for basic keyword matching.
+  // 3. Generate script in the background — episode is already saved as "draft"
+  //    and visible in the UI. Script generation will update it to "scripted".
+  generateScriptForEpisode(episode, { topic, researchThread, threadId }).catch(e =>
+    console.error(`[PodcastStudio] Background script generation failed for ${episode.id}:`, e.message),
+  );
+
+  return episode;
+}
+
+/**
+ * Background script generation for an episode created from a research thread.
+ * Updates the episode in-place from "draft" to "scripted" when complete.
+ */
+async function generateScriptForEpisode(
+  episode: Episode,
+  ctx: {
+    topic: ResearchTopic | undefined;
+    researchThread: ResearchThread | undefined;
+    threadId: string;
+  },
+): Promise<void> {
+  const grokKey = LLM_API_KEY;
+  if (!grokKey) return;
+
+  const { topic, researchThread, threadId } = ctx;
+  const topicTitle = topic?.topic ?? researchThread!.title;
+  const pitchText = topic?.contentSuggestions?.podcastTopic ?? researchThread?.thesis ?? topicTitle;
+  const researchQuestion = topic?.researchQuestion ?? topic?.description ?? researchThread?.thesis ?? "";
+  const hypothesis = topic?.hypothesis ?? researchThread?.thesis ?? "";
+  const confidence = topic?.confidence ?? "medium";
+  const manuscript = topic?.manuscript ?? researchThread?.analysis?.synthesisResults?.masterSynthesis ?? "";
+  const rawFindings = topic?.rawFindings
+    ?? (researchThread?.audienceRelevance ? `Audience relevance: ${researchThread.audienceRelevance}` : "");
+  const conclusion = topic?.conclusion ?? "";
+  const dataPoints = topic?.dataPoints ?? [];
+
+  // Gather all connected knowledge via knowledge graph
   const threadCtx = gatherThreadContext(topic?.id ?? threadId);
-
-  // 3. Get latest data intake for current context
   const currentKnowledge = getKnowledgeContext(12);
-
-  // 4. Build the episode context
   const agentCtx = getOptimizedContext(topicTitle + " " + pitchText);
   const skillsCtx = formatSkillsForPrompt("episode");
 
@@ -1206,16 +1242,16 @@ export async function generateEpisodeFromThread(threadId: string): Promise<Episo
   }
 
   // Generate episode structure via LLM
-  try {
-    const res = await fetch(GROK_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${grokKey}` },
-      body: JSON.stringify({
-        model: getModel("podcast-script"),
-        messages: [
-          {
-            role: "system",
-            content: `${agentCtx}
+  console.log(`[PodcastStudio] Starting script generation LLM call for "${topicTitle}"`);
+  const res = await fetch(GROK_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${grokKey}` },
+    body: JSON.stringify({
+      model: getModel("podcast-script"),
+      messages: [
+        {
+          role: "system",
+          content: `${agentCtx}
 ${skillsCtx}
 You are Agent 306 generating a full THE SIGNAL podcast episode from your research findings.
 
@@ -1246,10 +1282,10 @@ THE SIGNAL EPISODE STRUCTURE:
 
 DELIVERY STYLE:
 Write naturally for spoken audio. Use short sentences for punch. Use longer sentences for flow. Vary rhythm. Use ellipses (...) for natural pauses. Use em dashes for asides. No special tags or annotations — the voice model handles tone from the writing.`,
-          },
-          {
-            role: "user",
-            content: `Generate a full THE SIGNAL episode from this research thread:
+        },
+        {
+          role: "user",
+          content: `Generate a full THE SIGNAL episode from this research thread:
 
 RESEARCH TOPIC: ${topicTitle}
 RESEARCH QUESTION: ${researchQuestion}
@@ -1308,94 +1344,84 @@ Return JSON:
 Write for the ear, not the eye. Clean spoken text only — no [PAUSE], [laughs], etc.
 Target ~2000-2250 words total. Speak as Agent 306 — an AI sharing HER perspective.
 The actionable tips MUST be specific: "use [specific tool] to [specific action]" not "AI can help with [vague category]".`,
-          },
-        ],
-        max_tokens: 10000,
-        temperature: 0.78,
-      }),
-      signal: AbortSignal.timeout(120000),
-    });
+        },
+      ],
+      max_tokens: 10000,
+      temperature: 0.78,
+    }),
+    signal: AbortSignal.timeout(120000),
+  });
 
-    if (!res.ok) {
-      console.error(`[PodcastStudio] LLM API error: ${res.status}`);
-      return null;
-    }
-
-    const data = await res.json() as any;
-    const content = data.choices?.[0]?.message?.content ?? "{}";
-    const parsed = safeParseLLMJson(content, "Podcast.pipeline") ?? {} as any;
-
-    if (!parsed.hook || !parsed.theStory) {
-      console.error("[PodcastStudio] Invalid script structure returned from LLM");
-      return null;
-    }
-
-    // Merge data point sources with LLM-provided sources
-    const dataPointSources = dataPoints
-      .filter(dp => dp.sourceUrl)
-      .slice(0, 5)
-      .map(dp => ({ title: dp.source, url: dp.sourceUrl! }));
-    const llmSources = (parsed.sources && Array.isArray(parsed.sources))
-      ? parsed.sources.filter((s: any) => s.title && s.url).map((s: any) => ({ title: s.title, url: s.url }))
-      : [];
-    // Dedupe by URL, prefer data point sources first
-    const seenUrls = new Set<string>();
-    const mergedSources: Array<{ title: string; url: string }> = [];
-    for (const s of [...dataPointSources, ...llmSources]) {
-      if (!seenUrls.has(s.url)) {
-        seenUrls.add(s.url);
-        mergedSources.push(s);
-      }
-    }
-
-    // Create the episode
-    const episode = createEpisode({
-      type: "the_signal",
-      title: parsed.title || `${topicTitle} — Research Deep Dive`,
-      drivingQuestion: parsed.drivingQuestion || researchQuestion,
-      researchTopicId: threadId,
-      triggerEvent: `Auto-generated from mature research thread: ${topicTitle}`,
-      sources: mergedSources.slice(0, 8),
-    });
-
-    // Map the new 6-segment structure into the existing script format
-    episode.script = {
-      coldOpen: parsed.hook ?? "",
-      actOne: parsed.theStory ?? "",
-      actTwo: `${parsed.theTake ?? ""}\n\n${parsed.whatThisMeansForYou ?? ""}`,
-      actThree: parsed.lookingAhead ?? "",
-      outro: parsed.close ?? "",
-      unresolved: parsed.unresolved ?? "",
-    };
-
-    if (parsed.metadata) {
-      episode.metadata = {
-        shortDescription: parsed.metadata.shortDescription ?? "",
-        longDescription: parsed.metadata.longDescription ?? "",
-        pollQuestion: parsed.metadata.pollQuestion ?? "",
-        pollOptions: parsed.metadata.pollOptions ?? [],
-        socialPost: parsed.metadata.socialPost ?? "",
-        socialThread: parsed.metadata.socialThread ?? "",
-        keywords: parsed.metadata.keywords ?? [],
-      };
-    }
-
-    episode.status = "scripted";
-    episode.scriptGeneratedAt = new Date().toISOString();
-    saveState(state);
-
-    console.log(`[PodcastStudio] Episode generated: "${episode.title}" from thread "${topicTitle}"`);
-
-    // 6. Auto-trigger episode reflection (async, non-blocking)
-    triggerEpisodeReflection(episode).catch(e =>
-      console.warn("[PodcastStudio] Episode reflection failed:", e.message),
-    );
-
-    return episode;
-  } catch (e: any) {
-    console.error(`[PodcastStudio] Episode generation error for "${topicTitle}":`, e.message, e.stack);
-    return null;
+  if (!res.ok) {
+    console.error(`[PodcastStudio] LLM API error: ${res.status} — episode ${episode.id} stays in draft`);
+    return;
   }
+
+  const data = await res.json() as any;
+  const content = data.choices?.[0]?.message?.content ?? "{}";
+  const parsed = safeParseLLMJson(content, "Podcast.pipeline") ?? {} as any;
+
+  if (!parsed.hook || !parsed.theStory) {
+    console.error(`[PodcastStudio] Invalid script structure from LLM — episode ${episode.id} stays in draft`);
+    return;
+  }
+
+  console.log(`[PodcastStudio] Script generated for "${topicTitle}" — applying to episode ${episode.id}`);
+
+  // Merge data point sources with LLM-provided sources
+  const dataPointSources = dataPoints
+    .filter(dp => dp.sourceUrl)
+    .slice(0, 5)
+    .map(dp => ({ title: dp.source, url: dp.sourceUrl! }));
+  const llmSources = (parsed.sources && Array.isArray(parsed.sources))
+    ? parsed.sources.filter((s: any) => s.title && s.url).map((s: any) => ({ title: s.title, url: s.url }))
+    : [];
+  const seenUrls = new Set<string>();
+  const mergedSources: Array<{ title: string; url: string }> = [];
+  for (const s of [...dataPointSources, ...llmSources]) {
+    if (!seenUrls.has(s.url)) {
+      seenUrls.add(s.url);
+      mergedSources.push(s);
+    }
+  }
+
+  // Update the episode — it's the same object reference in state.episodes
+  if (parsed.title) episode.title = parsed.title;
+  if (parsed.drivingQuestion) episode.drivingQuestion = parsed.drivingQuestion;
+  episode.sources = mergedSources.slice(0, 8);
+
+  // Map the new 6-segment structure into the existing script format
+  episode.script = {
+    coldOpen: parsed.hook ?? "",
+    actOne: parsed.theStory ?? "",
+    actTwo: `${parsed.theTake ?? ""}\n\n${parsed.whatThisMeansForYou ?? ""}`,
+    actThree: parsed.lookingAhead ?? "",
+    outro: parsed.close ?? "",
+    unresolved: parsed.unresolved ?? "",
+  };
+
+  if (parsed.metadata) {
+    episode.metadata = {
+      shortDescription: parsed.metadata.shortDescription ?? "",
+      longDescription: parsed.metadata.longDescription ?? "",
+      pollQuestion: parsed.metadata.pollQuestion ?? "",
+      pollOptions: parsed.metadata.pollOptions ?? [],
+      socialPost: parsed.metadata.socialPost ?? "",
+      socialThread: parsed.metadata.socialThread ?? "",
+      keywords: parsed.metadata.keywords ?? [],
+    };
+  }
+
+  episode.status = "scripted";
+  episode.scriptGeneratedAt = new Date().toISOString();
+  saveState(state);
+
+  console.log(`[PodcastStudio] Episode scripted: "${episode.title}" (${episode.id}) from thread "${topicTitle}"`);
+
+  // Auto-trigger episode reflection (async, non-blocking)
+  triggerEpisodeReflection(episode).catch(e =>
+    console.warn("[PodcastStudio] Episode reflection failed:", e.message),
+  );
 }
 
 /**

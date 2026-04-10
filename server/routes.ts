@@ -1818,14 +1818,18 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
   // ── PODCAST PIPELINE — Research Thread → Episode ─────────────────────────
 
-  // Manually trigger episode generation from a specific research thread
+  // Manually trigger episode generation from a specific research thread.
+  // Creates a draft episode immediately (so the UI shows it right away),
+  // then generates the script in the background.
   app.post("/api/podcast/generate-from-thread/:threadId", async (req, res) => {
     try {
+      console.log(`[PodcastStudio] Generate-from-thread request for ${req.params.threadId}`);
       const episode = await generateEpisodeFromThread(req.params.threadId);
       if (!episode) {
-        console.error(`[PodcastStudio] Failed to generate episode from thread ${req.params.threadId} — returned null`);
+        console.error(`[PodcastStudio] Failed to create episode from thread ${req.params.threadId} — returned null`);
         return res.status(500).json({ error: "Failed to generate episode from thread" });
       }
+      console.log(`[PodcastStudio] Returning episode ${episode.id} (status: ${episode.status}) — script generating in background`);
       res.json({ ok: true, episode });
     } catch (e: any) {
       console.error(`[PodcastStudio] Episode generation error for thread ${req.params.threadId}:`, e.message);
