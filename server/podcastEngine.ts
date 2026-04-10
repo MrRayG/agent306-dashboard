@@ -29,7 +29,8 @@ import { getModel } from "./modelRouter.js";
 import { formatSkillsForPrompt } from "./skillEngine.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { analyzePodcastEpisode } from "./analyzerEngine.js";
-import { getResearchLab, getTopicById } from "./researchEngine.js";
+import { getResearchLab, getTopicById, type ResearchTopic } from "./researchEngine.js";
+import { getThreadById, type ResearchThread } from "./research-agenda.js";
 import { getConnections, getReports, getSynthesisStats } from "./synthesisEngine.js";
 import { getReflectionStats } from "./reflectionEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
@@ -1062,40 +1063,73 @@ function gatherThreadContext(threadId: string): {
 export async function generateEpisodeFromThread(threadId: string): Promise<Episode | null> {
   const grokKey = LLM_API_KEY;
   if (!grokKey) {
-    console.error("[Podcast Pipeline] No LLM API key configured");
+    console.error("[PodcastStudio] No LLM API key configured");
     return null;
   }
 
-  // 1. Pull the mature research thread
-  const topic = getTopicById(threadId);
-  if (!topic) {
-    console.error(`[Podcast Pipeline] Thread ${threadId} not found`);
+  // 1. Resolve the thread/topic — the UI sends ResearchThread IDs (thread_...),
+  //    while the auto-pipeline may send ResearchTopic IDs (research_...).
+  //    Try ResearchThread first, then fall back to ResearchTopic.
+  let topic: ResearchTopic | undefined;
+  let researchThread: ResearchThread | undefined;
+
+  researchThread = getThreadById(threadId);
+  if (researchThread) {
+    // Found a ResearchThread — check for a linked ResearchTopic
+    if (researchThread.linkedTopicId) {
+      topic = getTopicById(researchThread.linkedTopicId);
+    }
+    console.log(`[PodcastStudio] Resolved thread "${researchThread.title}" (linkedTopic: ${topic?.id ?? "none"})`);
+  } else {
+    // Not a ResearchThread ID — try as a ResearchTopic ID (auto-pipeline path)
+    topic = getTopicById(threadId);
+  }
+
+  if (!researchThread && !topic) {
+    console.error(`[PodcastStudio] Thread ${threadId} not found as ResearchThread or ResearchTopic`);
     return null;
   }
 
-  if (!topic.contentSuggestions?.podcastTopic && !topic.manuscript) {
-    console.error(`[Podcast Pipeline] Thread "${topic.topic}" has no podcast suggestion or manuscript`);
+  // Derive episode fields from whichever source we have
+  const topicTitle = topic?.topic ?? researchThread!.title;
+  const pitchText = topic?.contentSuggestions?.podcastTopic ?? researchThread?.thesis ?? topicTitle;
+  const researchQuestion = topic?.researchQuestion ?? topic?.description ?? researchThread?.thesis ?? "";
+  const hypothesis = topic?.hypothesis ?? researchThread?.thesis ?? "";
+  const confidence = topic?.confidence ?? "medium";
+  const manuscript = topic?.manuscript ?? researchThread?.analysis?.synthesisResults?.masterSynthesis ?? "";
+  const rawFindings = topic?.rawFindings
+    ?? (researchThread?.audienceRelevance ? `Audience relevance: ${researchThread.audienceRelevance}` : "");
+  const conclusion = topic?.conclusion ?? "";
+  const dataPoints = topic?.dataPoints ?? [];
+
+  // Must have at least some content to work with
+  if (!pitchText && !manuscript && !rawFindings) {
+    console.error(`[PodcastStudio] Thread "${topicTitle}" has no podcast suggestion, manuscript, or findings`);
     return null;
   }
 
-  // Check if already has an episode
-  const existingEp = state.episodes.find(e => e.researchTopicId === threadId);
+  // Check if already has an episode (check both IDs)
+  const existingEp = state.episodes.find(e =>
+    e.researchTopicId === threadId ||
+    (researchThread?.linkedTopicId && e.researchTopicId === researchThread.linkedTopicId),
+  );
   if (existingEp) {
-    console.log(`[Podcast Pipeline] Thread "${topic.topic}" already has episode ${existingEp.id}`);
+    console.log(`[PodcastStudio] Thread "${topicTitle}" already has episode ${existingEp.id}`);
     return existingEp;
   }
 
-  console.log(`[Podcast Pipeline] Generating episode from thread: "${topic.topic}"`);
+  console.log(`[PodcastStudio] Generating episode from thread: "${topicTitle}"`);
 
   // 2. Gather all connected knowledge via knowledge graph
-  const threadCtx = gatherThreadContext(threadId);
+  //    Use the topic ID if available (knowledge graph indexes by topic ID),
+  //    otherwise fall back to thread ID for basic keyword matching.
+  const threadCtx = gatherThreadContext(topic?.id ?? threadId);
 
   // 3. Get latest data intake for current context
   const currentKnowledge = getKnowledgeContext(12);
 
-  // 4. Build the episode title from research
-  const pitchText = topic.contentSuggestions?.podcastTopic ?? topic.topic;
-  const agentCtx = getOptimizedContext(topic.topic + " " + pitchText);
+  // 4. Build the episode context
+  const agentCtx = getOptimizedContext(topicTitle + " " + pitchText);
   const skillsCtx = formatSkillsForPrompt("episode");
 
   // ── Fresh context via Perplexity Sonar ──────────────────────────────────
@@ -1127,10 +1161,10 @@ export async function generateEpisodeFromThread(threadId: string): Promise<Episo
       if (pplxRes.ok) {
         const data = await pplxRes.json() as any;
         freshContext = data.choices?.[0]?.message?.content ?? "";
-        console.log(`[Podcast Pipeline] Fresh context: ${freshContext.length} chars for "${pitchText}"`);
+        console.log(`[PodcastStudio] Fresh context: ${freshContext.length} chars for "${pitchText}"`);
       }
     } catch (e: any) {
-      console.warn("[Podcast Pipeline] Fresh context fetch failed:", e.message);
+      console.warn("[PodcastStudio] Fresh context fetch failed:", e.message);
     }
   }
 
@@ -1165,10 +1199,10 @@ export async function generateEpisodeFromThread(threadId: string): Promise<Episo
         parsed.avoidTraps?.length ? `TRAPS TO AVOID: ${parsed.avoidTraps.join("; ")}` : "",
         parsed.openingHook ? `OPENING HOOK: ${parsed.openingHook}` : "",
       ].filter(Boolean).join("\n");
-      console.log(`[Podcast Pipeline] Pre-reasoning: ${podcastReasoning.length} chars`);
+      console.log(`[PodcastStudio] Pre-reasoning: ${podcastReasoning.length} chars`);
     }
   } catch (e: any) {
-    console.warn(`[Podcast Pipeline] Pre-reasoning failed:`, e.message);
+    console.warn(`[PodcastStudio] Pre-reasoning failed:`, e.message);
   }
 
   // Generate episode structure via LLM
@@ -1217,16 +1251,16 @@ Write naturally for spoken audio. Use short sentences for punch. Use longer sent
             role: "user",
             content: `Generate a full THE SIGNAL episode from this research thread:
 
-RESEARCH TOPIC: ${topic.topic}
-RESEARCH QUESTION: ${topic.researchQuestion ?? topic.description}
-THESIS/HYPOTHESIS: ${topic.hypothesis ?? "No formal hypothesis — topic-based episode"}
-CONFIDENCE: ${topic.confidence ?? "medium"}
+RESEARCH TOPIC: ${topicTitle}
+RESEARCH QUESTION: ${researchQuestion}
+THESIS/HYPOTHESIS: ${hypothesis || "No formal hypothesis — topic-based episode"}
+CONFIDENCE: ${confidence}
 
 RESEARCH FINDINGS:
-${(topic.manuscript ?? topic.rawFindings ?? topic.conclusion ?? "No detailed findings available").slice(0, 6000)}
+${(manuscript || rawFindings || conclusion || "No detailed findings available").slice(0, 6000)}
 
 EVIDENCE CHAIN (Data Points):
-${(topic.dataPoints ?? []).slice(0, 8).map(dp => `- [${dp.type}/${dp.relevance}] ${dp.content.slice(0, 200)}`).join("\n") || "No structured data points"}
+${dataPoints.slice(0, 8).map(dp => `- [${dp.type}/${dp.relevance}] ${dp.content.slice(0, 200)}`).join("\n") || "No structured data points"}
 
 CONNECTED KNOWLEDGE (from knowledge graph):
 ${threadCtx.relatedKnowledge}
@@ -1283,7 +1317,7 @@ The actionable tips MUST be specific: "use [specific tool] to [specific action]"
     });
 
     if (!res.ok) {
-      console.error(`[Podcast Pipeline] LLM API error: ${res.status}`);
+      console.error(`[PodcastStudio] LLM API error: ${res.status}`);
       return null;
     }
 
@@ -1292,12 +1326,12 @@ The actionable tips MUST be specific: "use [specific tool] to [specific action]"
     const parsed = safeParseLLMJson(content, "Podcast.pipeline") ?? {} as any;
 
     if (!parsed.hook || !parsed.theStory) {
-      console.error("[Podcast Pipeline] Invalid script structure returned");
+      console.error("[PodcastStudio] Invalid script structure returned from LLM");
       return null;
     }
 
     // Merge data point sources with LLM-provided sources
-    const dataPointSources = (topic.dataPoints ?? [])
+    const dataPointSources = dataPoints
       .filter(dp => dp.sourceUrl)
       .slice(0, 5)
       .map(dp => ({ title: dp.source, url: dp.sourceUrl! }));
@@ -1317,10 +1351,10 @@ The actionable tips MUST be specific: "use [specific tool] to [specific action]"
     // Create the episode
     const episode = createEpisode({
       type: "the_signal",
-      title: parsed.title || `${topic.topic} — Research Deep Dive`,
-      drivingQuestion: parsed.drivingQuestion || topic.researchQuestion || topic.description,
+      title: parsed.title || `${topicTitle} — Research Deep Dive`,
+      drivingQuestion: parsed.drivingQuestion || researchQuestion,
       researchTopicId: threadId,
-      triggerEvent: `Auto-generated from mature research thread: ${topic.topic}`,
+      triggerEvent: `Auto-generated from mature research thread: ${topicTitle}`,
       sources: mergedSources.slice(0, 8),
     });
 
@@ -1350,16 +1384,16 @@ The actionable tips MUST be specific: "use [specific tool] to [specific action]"
     episode.scriptGeneratedAt = new Date().toISOString();
     saveState(state);
 
-    console.log(`[Podcast Pipeline] Episode generated: "${episode.title}" from thread "${topic.topic}"`);
+    console.log(`[PodcastStudio] Episode generated: "${episode.title}" from thread "${topicTitle}"`);
 
     // 6. Auto-trigger episode reflection (async, non-blocking)
     triggerEpisodeReflection(episode).catch(e =>
-      console.warn("[Podcast Pipeline] Episode reflection failed:", e.message),
+      console.warn("[PodcastStudio] Episode reflection failed:", e.message),
     );
 
     return episode;
   } catch (e: any) {
-    console.error("[Podcast Pipeline] Episode generation error:", e.message);
+    console.error(`[PodcastStudio] Episode generation error for "${topicTitle}":`, e.message, e.stack);
     return null;
   }
 }
