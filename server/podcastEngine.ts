@@ -52,6 +52,32 @@ This is Agent 306. Welcome to THE SIGNAL.`;
 
 const AGENT_306_OUTRO = `You can find the full research and links to the Galaxy report on my channels at @agent3zero6 on X and @ntvagent306 on Farcaster. Next week on THE SIGNAL—whatever the biggest story is. That is how this works. This is Agent 306. The signal continues.`;
 
+/**
+ * Check whether an outro section already contains a similar sign-off from the LLM.
+ * The LLM sometimes paraphrases the standard outro (e.g. "sources for this episode"
+ * instead of "Galaxy report"), so an exact `.includes()` misses it and the belt-and-
+ * suspenders code appends a duplicate. We check for key unique phrases instead.
+ */
+function outroAlreadyPresent(text: string): boolean {
+  const lower = text.toLowerCase();
+  return (
+    lower.includes("the signal continues") ||
+    lower.includes("agent3zero6") ||
+    lower.includes("ntvagent306")
+  );
+}
+
+/**
+ * Guarantee the standard outro is present exactly once. If the LLM already wrote
+ * a similar outro (detected via key phrases), replace it with the verbatim version.
+ * Otherwise append it.
+ */
+function guaranteeOutro(rawOutro: string): string {
+  if (rawOutro.includes(AGENT_306_OUTRO)) return rawOutro;
+  if (outroAlreadyPresent(rawOutro)) return AGENT_306_OUTRO;
+  return `${rawOutro}\n\n${AGENT_306_OUTRO}`.trim();
+}
+
 /** Prompt instruction to include the Agent 306 intro after the cold open/hook. */
 const AGENT_306_INTRO_INSTRUCTION = `AGENT 306 STANDARD INTRO — MANDATORY:
 After the COLD INTRO hook (the episode-specific opening that grabs attention), include the following Agent 306 intro VERBATIM. Do not modify, paraphrase, or shorten it. This is the standard show intro that plays in EVERY episode, placed between the cold open and the first act:
@@ -64,6 +90,19 @@ The episode structure is: COLD INTRO (hook) → AGENT 306 INTRO (verbatim above)
 
 AGENT 306 STANDARD OUTRO — MANDATORY:
 The script MUST end with this exact sign-off (verbatim): "\${AGENT_306_OUTRO}"`;
+
+/** Returns a date + timing accuracy block to inject into every LLM prompt. */
+export function getTimingInstruction(): string {
+  const currentDate = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  return `CURRENT DATE: ${currentDate}
+
+CRITICAL TIMING RULE: You must be accurate about when events occurred. Do NOT say "this week" or "two weeks ago" unless you are certain of the exact date. If you know an event happened but are unsure of the exact timing, use the month and year (e.g., "In March 2026" or "Earlier this year"). Never fabricate or guess timing. If Perplexity search results include dates, use those dates precisely. Getting timing wrong destroys credibility.`;
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -374,6 +413,8 @@ The unresolved question is not a weakness. It is the most credible thing in the 
 ${skillsCtx}
 You are Agent 306 in PODCAST SCRIPT mode — writing a ${meta.label} episode.
 
+${getTimingInstruction()}
+
 VOICE IDENTITY — SPEAK AS AN AI (CRITICAL):
 - You ARE an AI. Speak in first person. Own that identity fully.
 - Share YOUR perspective, YOUR analysis, YOUR honest take on the research and articles.
@@ -462,17 +503,13 @@ The metadata fields are for Spotify and social media — write those for reading
 
     // Belt-and-suspenders: guarantee standard outro is the last thing in the script
     const outroBody = parsed.outro ?? "";
-    const guaranteedOutro = outroBody.includes(AGENT_306_OUTRO)
-      ? outroBody
-      : `${outroBody}
-
-${AGENT_306_OUTRO}`.trim();
+    const guaranteedOutroText = guaranteeOutro(outroBody);
     episode.script = {
       coldOpen: parsed.coldOpen + "\n\n" + AGENT_306_INTRO,
       actOne: parsed.actOne ?? "",
       actTwo: parsed.actTwo ?? "",
       actThree: parsed.actThree ?? "",
-      outro: guaranteedOutro,
+      outro: guaranteedOutroText,
       unresolved: parsed.unresolved ?? "",
     };
 
@@ -680,6 +717,8 @@ export async function generateInterviewQuestions(guestId: string, grokKey: strin
             content: `${agentCtx}
 
 You are Agent 306 in INTERVIEW PREP mode — preparing questions for THE CONVERSATION.
+
+${getTimingInstruction()}
 
 VOICE IDENTITY — SPEAK AS AN AI:
 - You ARE an AI. Own that identity. Your questions should reflect your unique perspective as an AI research agent.
@@ -1314,6 +1353,8 @@ async function generateScriptForEpisode(
 ${skillsCtx}
 You are Agent 306 generating a full THE SIGNAL podcast episode from your research findings.
 
+${getTimingInstruction()}
+
 VOICE IDENTITY — SPEAK AS AN AI (CRITICAL):
 - You ARE an AI. Speak in first person. Own that identity fully.
 - Share YOUR perspective, YOUR analysis, YOUR honest take.
@@ -1458,11 +1499,7 @@ The close segment MUST end with EXACTLY this sign-off (verbatim):
 
   // Belt-and-suspenders: guarantee standard outro is the last thing in the script
   const closeBody = parsed.close ?? "";
-  const guaranteedOutro = closeBody.includes(AGENT_306_OUTRO)
-    ? closeBody
-    : `${closeBody}
-
-${AGENT_306_OUTRO}`.trim();
+  const guaranteedOutroText = guaranteeOutro(closeBody);
 
   // Map the new 6-segment structure into the existing script format.
   // Always inject the verbatim Agent 306 intro after the cold open/hook.
@@ -1471,7 +1508,7 @@ ${AGENT_306_OUTRO}`.trim();
     actOne: parsed.theStory ?? "",
     actTwo: `${parsed.theTake ?? ""}\n\n${parsed.whatThisMeansForYou ?? ""}`,
     actThree: parsed.lookingAhead ?? "",
-    outro: guaranteedOutro,
+    outro: guaranteedOutroText,
     unresolved: parsed.unresolved ?? "",
   };
 
@@ -1607,6 +1644,8 @@ Score each aspect 1-10 and explain briefly:
           role: "system",
           content: `You are Agent 306's script editor. You've been given an episode script and a reflection that identified weaknesses. Your job is to revise the script to address EVERY weakness while keeping the voice, structure, and length intact.
 
+${getTimingInstruction()}
+
 RULES:
 - Fix the weakest point directly — rewrite the section that's thin
 - Address each missed angle by weaving it naturally into the existing structure
@@ -1664,9 +1703,7 @@ Output JSON:
         ep.script.coldOpen = ep.script.coldOpen + "\n\n" + AGENT_306_INTRO;
       }
       // Belt-and-suspenders: re-inject standard outro if revision stripped it
-      if (!ep.script.outro?.includes(AGENT_306_OUTRO)) {
-        ep.script.outro = `${ep.script.outro ?? ""}\n\n${AGENT_306_OUTRO}`.trim();
-      }
+      ep.script.outro = guaranteeOutro(ep.script.outro ?? "");
 
       (ep as any).revised = true;
       (ep as any).revisionNotes = revision.revisionsApplied || [];
