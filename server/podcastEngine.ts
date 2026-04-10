@@ -32,6 +32,7 @@ import { analyzePodcastEpisode } from "./analyzerEngine.js";
 import { getResearchLab, getTopicById } from "./researchEngine.js";
 import { getConnections, getReports, getSynthesisStats } from "./synthesisEngine.js";
 import { getReflectionStats } from "./reflectionEngine.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 const GROK_URL = LLM_BASE_URL;
 const PODCAST_FILE = dataPath("podcast_state.json");
@@ -418,7 +419,7 @@ The metadata fields are for Spotify and social media — write those for reading
 
     if (!res.ok) return false;
     const data = await res.json() as any;
-    const parsed = JSON.parse(data.choices?.[0]?.message?.content ?? "{}");
+    const parsed = safeParseLLMJson(data.choices?.[0]?.message?.content, "Podcast.script") ?? {} as any;
 
     if (!parsed.coldOpen) return false;
 
@@ -683,7 +684,7 @@ Return JSON: { "drivingQuestion": "...", "questions": ["Q1", "Q2", "Q3", "Q4", "
 
     if (!res.ok) return null;
     const data = await res.json() as any;
-    const parsed = JSON.parse(data.choices?.[0]?.message?.content ?? "{}");
+    const parsed = safeParseLLMJson(data.choices?.[0]?.message?.content, "Podcast.guestQuestions") ?? {} as any;
     const questions: string[] = parsed.questions ?? [];
 
     if (questions.length === 0) return null;
@@ -1156,7 +1157,7 @@ export async function generateEpisodeFromThread(threadId: string): Promise<Episo
     if (reasoningRes.ok) {
       const data = await reasoningRes.json() as any;
       const raw = data.choices?.[0]?.message?.content ?? "";
-      const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
+      const parsed = safeParseLLMJson(raw, "Podcast.reasoning") ?? {} as any;
       podcastReasoning = [
         parsed.bestAngle ? `EDITORIAL ANGLE: ${parsed.bestAngle}` : "",
         parsed.audienceNeed ? `AUDIENCE NEED: ${parsed.audienceNeed}` : "",
@@ -1288,9 +1289,7 @@ The actionable tips MUST be specific: "use [specific tool] to [specific action]"
 
     const data = await res.json() as any;
     const content = data.choices?.[0]?.message?.content ?? "{}";
-    const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/) || content.match(/\{[\s\S]*\}/);
-    const jsonStr = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : content;
-    const parsed = JSON.parse(jsonStr);
+    const parsed = safeParseLLMJson(content, "Podcast.pipeline") ?? {} as any;
 
     if (!parsed.hook || !parsed.theStory) {
       console.error("[Podcast Pipeline] Invalid script structure returned");
@@ -1430,9 +1429,7 @@ Score each aspect 1-10 and explain briefly:
     if (!res.ok) return;
     const data = await res.json() as any;
     const content = data.choices?.[0]?.message?.content ?? "{}";
-    const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/) || content.match(/\{[\s\S]*\}/);
-    const jsonStr = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : content;
-    const reflection = JSON.parse(jsonStr);
+    const reflection = safeParseLLMJson(content, "Podcast.reflection") ?? {} as any;
 
     // Store reflection in podcast state
     const ep = state.episodes.find(e => e.id === episode.id);
@@ -1510,13 +1507,11 @@ Output JSON:
 
     const revData = await revisionRes.json() as any;
     const revRaw = revData.choices?.[0]?.message?.content ?? "";
-    const revJsonMatch = revRaw.match(/```json\n?([\s\S]*?)\n?```/) || revRaw.match(/\{[\s\S]*\}/);
-    if (!revJsonMatch) {
+    const revision = safeParseLLMJson(revRaw, "Podcast.revision");
+    if (!revision) {
       console.warn("[Podcast Pipeline] Could not parse revision response");
       return;
     }
-
-    const revision = JSON.parse(revJsonMatch[1] ?? revJsonMatch[0]);
 
     // Step 4: Apply the revision to the episode
     if (ep && ep.script) {

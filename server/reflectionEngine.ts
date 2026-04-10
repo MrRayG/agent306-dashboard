@@ -12,6 +12,7 @@ import { performance, getFullAgentContext, setStyleRulesProvider } from "./memor
 import { getOptimizedContext } from "./contextWindow.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 const GROK_URL = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
@@ -180,10 +181,7 @@ async function callGrok(systemPrompt: string, userPrompt: string): Promise<any |
     if (!res.ok) return null;
     const data = await res.json() as any;
     raw = data.choices?.[0]?.message?.content ?? "{}";
-    // Strip markdown code blocks that LLMs frequently wrap JSON in
-    const jsonMatch = raw.match(/```(?:json)?\n?([\s\S]*?)\n?```/) || raw.match(/\{[\s\S]*\}/);
-    const cleaned = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : raw;
-    return JSON.parse(cleaned);
+    return safeParseLLMJson(raw, "Reflection.insights");
   } catch (e: any) {
     console.error(`[ReflectionEngine] LLM JSON parse failed:`, e.message, `— raw response: ${raw?.slice(0, 200)}`);
     return null;
@@ -388,7 +386,7 @@ export async function runReflection(): Promise<Reflection[]> {
           if (podcastRuleRes.ok) {
             const data = await podcastRuleRes.json() as any;
             const content = data.choices?.[0]?.message?.content ?? "";
-            const parsed = JSON.parse(content.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
+            const parsed = safeParseLLMJson(content, "Reflection.styleRules") ?? {};
             for (const rule of (parsed.rules || [])) {
               addStyleRule(rule, "podcast_reflection");
               console.log(`[Reflection] Added podcast style rule: "${rule}"`);

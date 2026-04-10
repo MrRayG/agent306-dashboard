@@ -13,6 +13,7 @@ import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./ll
 
 const ONCHAIN_API = ""; // removed — on-chain API disabled
 import { dataPath } from "./dataPaths.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 const LEADERBOARD_STATE = dataPath("leaderboard.json");
 
 const W = 1200;
@@ -448,7 +449,7 @@ Return JSON: {"t1": "...", "t2": "...", "t3": "..."}`;
         });
         if (grokResp.ok) {
           const data = await grokResp.json();
-          tweets = JSON.parse(data.choices?.[0]?.message?.content ?? "{}");
+          tweets = safeParseLLMJson<typeof tweets>(data.choices?.[0]?.message?.content, "Leaderboard.tweets") ?? { t1: "", t2: "", t3: "" };
         }
       } catch { /* keep fallback */ }
     }

@@ -29,6 +29,7 @@ import { getOptimizedContext } from "./contextWindow.js";
 import { getModel } from "./modelRouter.js";
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 const GROK_URL          = LLM_BASE_URL;
 const GROK_SEARCH_URL   = LLM_RESPONSE_URL;
@@ -157,7 +158,8 @@ Return JSON:
     const lastBrace  = rawText.lastIndexOf("}");
     if (firstBrace === -1 || lastBrace <= firstBrace) return defaultSignals;
 
-    const parsed = JSON.parse(rawText.slice(firstBrace, lastBrace + 1));
+    const parsed = safeParseLLMJson(rawText.slice(firstBrace, lastBrace + 1), "SignalBrief.signals");
+    if (!parsed) return defaultSignals;
     return {
       aiSignal:       parsed.aiSignal       || defaultSignals.aiSignal,
       web3Signal:     parsed.web3Signal     || defaultSignals.web3Signal,
@@ -270,8 +272,7 @@ Return JSON:
     // Robust JSON parsing with fallback
     let parsed: any = {};
     try {
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+      parsed = safeParseLLMJson(raw, "SignalBrief.post") ?? {};
     } catch (e: any) {
       console.warn("[SignalBrief] JSON parse failed:", e.message);
       // If JSON fails but we have text, use it directly as the post

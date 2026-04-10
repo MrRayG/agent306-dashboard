@@ -20,6 +20,7 @@ import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./ll
 
 import { dataPath } from "./dataPaths.js";
 import { getModel } from "./modelRouter.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 const CYOA_STATE_FILE = dataPath("cyoa_state.json");
 
 export type CYOATrigger =
@@ -197,20 +198,8 @@ YOU MUST RETURN EXACTLY THIS JSON — use these exact field names, nothing else:
     const data = await resp.json();
     const raw = data.choices?.[0]?.message?.content?.trim() ?? "";
     console.log(`[CYOA] Raw response (first 200): ${raw.slice(0, 200)}`);
-    // Strip all markdown, find the JSON object
-    let jsonStr = raw
-      .replace(/```json\s*/gi, "")
-      .replace(/```\s*/g, "")
-      .trim();
-    // Find the outermost { ... } object
-    const objStart = jsonStr.indexOf("{");
-    const objEnd = jsonStr.lastIndexOf("}");
-    if (objStart !== -1 && objEnd > objStart) {
-      jsonStr = jsonStr.slice(objStart, objEnd + 1);
-    } else {
-      throw new Error(`No JSON object found in response: ${raw.slice(0, 100)}`);
-    }
-    const parsed = JSON.parse(jsonStr);
+    const parsed = safeParseLLMJson(raw, "CYOA.episode");
+    if (!parsed) throw new Error(`No JSON object found in response: ${raw.slice(0, 100)}`);
 
     const episode: CYOAEpisode = {
       id: `cyoa_${Date.now()}`,

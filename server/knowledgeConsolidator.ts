@@ -12,6 +12,7 @@ import fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { LLM_BASE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { getModel } from "./modelRouter.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 interface ConsolidationResult {
   groupsFound: number;
@@ -126,7 +127,7 @@ Output JSON:
 
     const data = await res.json() as any;
     const raw = data.choices?.[0]?.message?.content ?? "";
-    const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
+    const parsed = safeParseLLMJson(raw, "KnowledgeConsolidator") ?? {};
 
     if (!parsed.consolidated?.length) return entries;
 

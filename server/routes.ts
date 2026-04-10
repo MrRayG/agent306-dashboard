@@ -87,6 +87,7 @@ import {
   getImprovementPlans, getLatestPlan, generateSelfImprovementPlan,
   seedDreams,
 } from "./dreamEngine.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 // On-chain API removed
 // const ONCHAIN_API = "";
@@ -479,8 +480,7 @@ Respond as JSON only: { "score": number, "reason": "brief reason", "rewrite": "i
         if (qualityCheck.ok) {
           const qData = await qualityCheck.json();
           const qText = qData.choices?.[0]?.message?.content?.trim() ?? "{}";
-          const qClean = qText.replace(/```json\n?|```/g, "").trim();
-          const q = JSON.parse(qClean);
+          const q = safeParseLLMJson(qText, "Routes.qualityGate") ?? {};
           console.log(`[Agent306] Quality gate EP${epNum}: score ${q.score}/10 — ${q.reason}`);
 
           if (q.score >= 7) {
@@ -699,16 +699,10 @@ Return JSON: {"post": "..."}`
     if (grokResp.ok) {
       const data = await grokResp.json();
       const raw = data.choices?.[0]?.message?.content ?? "";
-      try {
-        const jsonMatch = raw.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          postText = parsed.post ?? "";
-        }
-      } catch {
-        // If JSON fails but raw has content, use it directly
-        if (raw.length > 30) postText = raw;
-      }
+      const parsed = safeParseLLMJson(raw, "Routes.grokPost") ?? {};
+      postText = parsed.post ?? "";
+      // If JSON fails but raw has content, use it directly
+      if (!postText && raw.length > 30) postText = raw;
     } else {
       console.error("[Agent306:News] LLM call failed:", grokResp.status);
     }
@@ -977,8 +971,7 @@ Return JSON only:
     if (resp.ok) {
       const data  = await resp.json();
       const raw   = data.choices?.[0]?.message?.content?.trim() ?? "{}";
-      const clean = raw.replace(/```json\n?|```/g, "").trim();
-      const parsed = JSON.parse(clean);
+      const parsed = safeParseLLMJson(raw, "Routes.editorial") ?? {};
       editorialCache = {
         summary:          parsed.summary     ?? "",
         storyAngles:      parsed.storyAngles ?? [],
@@ -1585,10 +1578,8 @@ export function registerRoutes(httpServer: Server, app: Express) {
         const data = await resp.json();
         const raw = data.choices?.[0]?.message?.content ?? "";
         let postText = "";
-        try {
-          const jsonMatch = raw.match(/\{[\s\S]*\}/);
-          if (jsonMatch) postText = JSON.parse(jsonMatch[0]).post ?? "";
-        } catch { if (raw.length > 30) postText = raw; }
+        postText = safeParseLLMJson(raw, "Routes.aiRoundup")?.post ?? "";
+        if (!postText && raw.length > 30) postText = raw;
         if (!postText || postText.length < 30) { console.error("[AIRoundup] No content generated"); return; }
 
         // Post to X
@@ -1800,7 +1791,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
       if (!scanRes.ok) return res.status(500).json({ error: "Grok scan failed" });
       const data = await scanRes.json() as any;
-      const parsed = JSON.parse(data.choices?.[0]?.message?.content ?? "{}");
+      const parsed = safeParseLLMJson(data.choices?.[0]?.message?.content, "Routes.podcastTopics") ?? {};
       const topics = parsed.topics ?? [];
 
       console.log(`[Podcast] Topic scan returned ${topics.length} recommendations`);
@@ -2065,10 +2056,8 @@ export function registerRoutes(httpServer: Server, app: Express) {
         const data = await resp.json();
         const raw = data.choices?.[0]?.message?.content ?? "";
         let postText = "";
-        try {
-          const jsonMatch = raw.match(/\{[\s\S]*\}/);
-          if (jsonMatch) postText = JSON.parse(jsonMatch[0]).post ?? "";
-        } catch { if (raw.length > 30) postText = raw; }
+        postText = safeParseLLMJson(raw, "Routes.researchBrief")?.post ?? "";
+        if (!postText && raw.length > 30) postText = raw;
         if (!postText || postText.length < 30) { console.error("[ResearchBrief] No content generated"); return; }
 
         // Post to X
@@ -2555,8 +2544,8 @@ RULES:
       if (!res.ok) return;
       const data = await res.json() as any;
       const raw = data.choices?.[0]?.message?.content ?? "{}";
-      let parsed: any = {};
-      try { parsed = JSON.parse(raw); } catch { return; }
+      let parsed: any = safeParseLLMJson(raw, "Routes.memoryExtraction") ?? {};
+      if (!parsed || Object.keys(parsed).length === 0) return;
 
       const entries = parsed.entries ?? [];
       if (entries.length === 0) {

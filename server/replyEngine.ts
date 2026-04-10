@@ -11,6 +11,7 @@ import { getSlimAgentContext } from "./memoryEngine.js"; // slim = soul + top 3 
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 const GROK_KEY   = LLM_API_KEY;
 const GROK_URL   = LLM_BASE_URL;
@@ -286,8 +287,7 @@ Respond as JSON only: { "score": number, "reason": "brief", "rewrite": "improved
     if (!res.ok) return { pass: true, rewrite: null };
     const data  = await res.json() as any;
     const raw   = data.choices?.[0]?.message?.content?.trim() ?? "{}";
-    const clean = raw.replace(/```json\n?|```/g, "").trim();
-    const q     = JSON.parse(clean);
+    const q     = safeParseLLMJson(raw, "ReplyEngine.qualityGate") ?? {} as any;
 
     if (q.score >= 7) return { pass: true, rewrite: null };
     if (q.score >= 3 && q.rewrite) return { pass: true, rewrite: q.rewrite };
