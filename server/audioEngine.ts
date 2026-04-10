@@ -10,8 +10,12 @@
 
 import fs from "fs";
 import path from "path";
+import { execSync } from "child_process";
 import { dataPath, DATA_DIR } from "./dataPaths.js";
 import { getEpisode, type Episode } from "./podcastEngine.js";
+import { LLM_BASE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { getModel } from "./modelRouter.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 // ── ElevenLabs Configuration ────────────────────────────────────────────────
 
@@ -24,9 +28,25 @@ const MAX_CHUNK_CHARS = 4500;
 /** Directory for generated audio files */
 const AUDIO_DIR = path.join(DATA_DIR, "audio");
 
-// Ensure audio directory exists
+/** Directory for static audio assets (intro/outro music) */
+const ASSETS_DIR = path.join(AUDIO_DIR, "assets");
+
+// Ensure audio directories exist
 if (!fs.existsSync(AUDIO_DIR)) {
   fs.mkdirSync(AUDIO_DIR, { recursive: true });
+}
+if (!fs.existsSync(ASSETS_DIR)) {
+  fs.mkdirSync(ASSETS_DIR, { recursive: true });
+}
+
+/** Check if ffmpeg is available on this system */
+function isFfmpegAvailable(): boolean {
+  try {
+    execSync("which ffmpeg", { stdio: "pipe" });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ── State file (same pattern as podcastEngine) ──────────────────────────────
@@ -231,6 +251,13 @@ export async function generateAudio(episodeId: string): Promise<boolean> {
       console.log(`[AudioEngine] Episode "${freshEpisode.title}" status → audio_ready`);
     }
 
+    // Auto-stitch intro/outro music if assets exist
+    try {
+      await stitchFullEpisode(episodeId);
+    } catch (e: any) {
+      console.warn(`[AudioEngine] Music stitching skipped: ${e.message}`);
+    }
+
     return true;
   } catch (err: any) {
     console.error(`[AudioEngine] Failed to generate audio for ${episodeId}:`, err.message);
@@ -261,4 +288,257 @@ export function getAudioFilePath(episodeId: string): string | null {
   }
 
   return null;
+}
+
+// ── Audio asset management ─────────────────────────────────────────────────
+
+/** Get the path to the intro music asset */
+function getIntroPath(): string {
+  return path.join(ASSETS_DIR, "intro.mp3");
+}
+
+/** Get the path to the outro music asset */
+function getOutroPath(): string {
+  return path.join(ASSETS_DIR, "outro.mp3");
+}
+
+/** Check which audio assets are available */
+export function getAudioAssets(): { intro: boolean; outro: boolean } {
+  return {
+    intro: fs.existsSync(getIntroPath()),
+    outro: fs.existsSync(getOutroPath()),
+  };
+}
+
+/** Save an uploaded audio asset (intro or outro) */
+export function saveAudioAsset(type: "intro" | "outro", buffer: Buffer): void {
+  const filepath = type === "intro" ? getIntroPath() : getOutroPath();
+  fs.writeFileSync(filepath, buffer);
+  console.log(`[AudioEngine] Saved ${type} music asset — ${buffer.length} bytes`);
+}
+
+/** Get file path for an audio asset */
+export function getAudioAssetPath(type: "intro" | "outro"): string | null {
+  const filepath = type === "intro" ? getIntroPath() : getOutroPath();
+  return fs.existsSync(filepath) ? filepath : null;
+}
+
+// ── Intro/Outro music stitching ────────────────────────────────────────────
+
+/**
+ * Stitch intro music + voice audio + outro music into a full production episode.
+ * Uses ffmpeg concat filter. Falls back gracefully if ffmpeg or assets unavailable.
+ */
+export async function stitchFullEpisode(episodeId: string): Promise<boolean> {
+  const assets = getAudioAssets();
+  if (!assets.intro && !assets.outro) {
+    console.log(`[AudioEngine] No intro/outro assets found — skipping stitching for ${episodeId}`);
+    return false;
+  }
+
+  if (!isFfmpegAvailable()) {
+    console.warn(`[AudioEngine] ffmpeg not available — cannot stitch episode ${episodeId}`);
+    return false;
+  }
+
+  const voicePath = path.join(AUDIO_DIR, `episode_${episodeId}.mp3`);
+  if (!fs.existsSync(voicePath)) {
+    console.error(`[AudioEngine] Voice audio not found for episode ${episodeId}`);
+    return false;
+  }
+
+  console.log(`[AudioEngine] Stitching intro + voice + outro for episode ${episodeId}`);
+
+  // Build ffmpeg inputs and filter based on available assets
+  const inputs: string[] = [];
+  const filterParts: string[] = [];
+  let streamIndex = 0;
+
+  if (assets.intro) {
+    inputs.push(`-i "${getIntroPath()}"`);
+    filterParts.push(`[${streamIndex}:a]`);
+    streamIndex++;
+  }
+
+  inputs.push(`-i "${voicePath}"`);
+  filterParts.push(`[${streamIndex}:a]`);
+  streamIndex++;
+
+  if (assets.outro) {
+    inputs.push(`-i "${getOutroPath()}"`);
+    filterParts.push(`[${streamIndex}:a]`);
+    streamIndex++;
+  }
+
+  const outputPath = path.join(AUDIO_DIR, `episode_${episodeId}_full.mp3`);
+  const filterComplex = `${filterParts.join("")}concat=n=${streamIndex}:v=0:a=1[out]`;
+  const cmd = `ffmpeg ${inputs.join(" ")} -filter_complex "${filterComplex}" -map "[out]" -y "${outputPath}"`;
+
+  try {
+    execSync(cmd, { stdio: "pipe", timeout: 120000 });
+    console.log(`[AudioEngine] Stitched full episode saved to ${outputPath}`);
+
+    // Update episode state with full audio URL
+    const state = loadState();
+    const episode = state.episodes.find((e) => e.id === episodeId);
+    if (episode) {
+      (episode as any).fullAudioUrl = `data/audio/episode_${episodeId}_full.mp3`;
+      saveState(state);
+      console.log(`[AudioEngine] Episode ${episodeId} updated with fullAudioUrl`);
+    }
+
+    return true;
+  } catch (err: any) {
+    console.error(`[AudioEngine] ffmpeg stitching failed for ${episodeId}:`, err.message);
+    return false;
+  }
+}
+
+/**
+ * Get the file path for a full (stitched) episode audio.
+ */
+export function getFullAudioFilePath(episodeId: string): string | null {
+  const filepath = path.join(AUDIO_DIR, `episode_${episodeId}_full.mp3`);
+  return fs.existsSync(filepath) ? filepath : null;
+}
+
+// ── Social preview clip generation ─────────────────────────────────────────
+
+/**
+ * Generate a 30-second social preview clip from an episode.
+ * Uses LLM to identify the most compelling passage, then TTS to generate audio.
+ */
+export async function generateSocialPreview(episodeId: string): Promise<boolean> {
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) {
+    console.error("[AudioEngine] ELEVENLABS_API_KEY not set — cannot generate preview");
+    return false;
+  }
+
+  const state = loadState();
+  const episode = state.episodes.find((e) => e.id === episodeId);
+  if (!episode) {
+    console.error(`[AudioEngine] Episode ${episodeId} not found`);
+    return false;
+  }
+
+  if (!episode.script) {
+    console.error(`[AudioEngine] Episode ${episodeId} has no script`);
+    return false;
+  }
+
+  console.log(`[AudioEngine] Generating social preview for "${episode.title}"`);
+
+  try {
+    // Step 1: Use LLM to pick the most compelling 30-second passage
+    const speechText = formatScriptForSpeech(episode);
+    if (!speechText) {
+      console.error(`[AudioEngine] Empty speech text for episode ${episodeId}`);
+      return false;
+    }
+
+    const previewText = await selectPreviewPassage(speechText);
+    if (!previewText) {
+      console.error(`[AudioEngine] Failed to select preview passage for ${episodeId}`);
+      return false;
+    }
+
+    console.log(`[AudioEngine] Selected preview passage: ${previewText.length} chars`);
+
+    // Step 2: Generate TTS for the preview passage
+    const audioBuffer = await callElevenLabsTTS(previewText, apiKey);
+    console.log(`[AudioEngine] Preview audio generated: ${audioBuffer.length} bytes`);
+
+    // Step 3: Save the preview audio
+    const filename = `episode_${episodeId}_preview.mp3`;
+    const filepath = path.join(AUDIO_DIR, filename);
+    fs.writeFileSync(filepath, audioBuffer);
+    console.log(`[AudioEngine] Preview saved to ${filepath}`);
+
+    // Step 4: Update episode state
+    const freshState = loadState();
+    const freshEpisode = freshState.episodes.find((e) => e.id === episodeId);
+    if (freshEpisode) {
+      (freshEpisode as any).previewAudioUrl = `data/audio/${filename}`;
+      (freshEpisode as any).previewText = previewText;
+      saveState(freshState);
+      console.log(`[AudioEngine] Episode ${episodeId} updated with preview data`);
+    }
+
+    return true;
+  } catch (err: any) {
+    console.error(`[AudioEngine] Failed to generate social preview for ${episodeId}:`, err.message);
+    return false;
+  }
+}
+
+/**
+ * Use LLM to select the most compelling ~30-second passage from a script.
+ */
+async function selectPreviewPassage(scriptText: string): Promise<string | null> {
+  if (!LLM_API_KEY) {
+    console.error("[AudioEngine] No LLM API key configured for preview passage selection");
+    return null;
+  }
+
+  const model = getModel("social-preview");
+
+  const response = await fetch(LLM_BASE_URL, {
+    method: "POST",
+    headers: getLLMHeaders(),
+    body: JSON.stringify({
+      model,
+      messages: [
+        {
+          role: "system",
+          content: "You are a podcast producer selecting the best clip for social media promotion. Return ONLY the exact text passage — no quotes, no commentary, no labels.",
+        },
+        {
+          role: "user",
+          content: `Given this podcast script, identify the single most compelling, provocative, or insight-dense passage that would make someone want to listen to the full episode.
+
+The passage should:
+- Be 50-80 words (approximately 30 seconds of speech)
+- Start with a strong statement, not mid-sentence
+- End on a hook or cliffhanger if possible
+- Represent the core thesis or most surprising finding
+
+Return ONLY the exact text passage, nothing else.
+
+SCRIPT:
+${scriptText}`,
+        },
+      ],
+      temperature: 0.3,
+      max_tokens: 500,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "Unknown error");
+    console.error(`[AudioEngine] LLM API error for preview selection: ${response.status} — ${errorText}`);
+    return null;
+  }
+
+  const data = await response.json();
+  const text = data?.choices?.[0]?.message?.content?.trim();
+
+  if (!text || text.length < 20) {
+    console.error("[AudioEngine] LLM returned empty or too-short preview passage");
+    return null;
+  }
+
+  // Clean up any accidental quotes or labels
+  return text
+    .replace(/^["']|["']$/g, "")
+    .replace(/^(passage|clip|preview|text):\s*/i, "")
+    .trim();
+}
+
+/**
+ * Get the file path for a preview audio clip.
+ */
+export function getPreviewAudioFilePath(episodeId: string): string | null {
+  const filepath = path.join(AUDIO_DIR, `episode_${episodeId}_preview.mp3`);
+  return fs.existsSync(filepath) ? filepath : null;
 }

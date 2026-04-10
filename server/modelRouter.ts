@@ -52,6 +52,7 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "parallel-search-subqueries": "standard",
   "parallel-search-reduce": "premium",
   "episode-reflection": "standard",
+  "social-preview": "standard",
   "x_search": "standard",
 
   "perspective-generation": "standard",

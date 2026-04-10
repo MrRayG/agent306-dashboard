@@ -29,7 +29,8 @@ import { scheduleMidnightReplies, runMidnightReplies } from "./replyEngine.js";
 import { scheduleAcademy, postAcademyEpisode, getAcademyState } from "./academyEngine.js";
 import { scheduleSignalBrief, postSignalBrief, getSignalBriefState } from "./signalBriefEngine.js";
 import { getPodcastState, EPISODE_META, createEpisode, generateEpisodeScript, regenerateEpisodeScript, reviewEpisode, markProduced, publishEpisode, submitGuestRequest, reviewGuest, generateInterviewQuestions, submitAnswers, createConversationEpisode, getEpisodesByType, getEpisodesByStatus, getGuestsByStatus, getEpisode, getGuest, formatScriptForProduction, formatConversationForProduction, generateEpisodeFromThread, getThreadCandidates, getPipelineStatus, deleteEpisode, clearAllEpisodes, getTimingInstruction } from "./podcastEngine.js";
-import { generateAudio, getAudioFilePath } from "./audioEngine.js";
+import { generateAudio, getAudioFilePath, getAudioAssets, saveAudioAsset, getAudioAssetPath, stitchFullEpisode, getFullAudioFilePath, generateSocialPreview, getPreviewAudioFilePath } from "./audioEngine.js";
+import multer from "multer";
 import { getVideoStats } from "./videoEngine.js";
 import { requestPost, registerPost, releasePost, getCoordinatorState, resetCooldown } from "./postCoordinator.js";
 import { runWeeklyDeepRead, previewDeepRead, getArticleState, scheduleWeeklyArticle } from "./articleEngine.js";
@@ -993,6 +994,19 @@ Return JSON only:
 // Module-scope so episode generator + routes both can access
 const pinnedAngles: string[] = [];
 
+// Multer for audio asset uploads (in-memory, max 20MB)
+const audioUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith("audio/")) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only audio files are allowed"));
+    }
+  },
+});
+
 export function registerRoutes(httpServer: Server, app: Express) {
   // ── Dashboard auth ──────────────────────────────────────────────────────
   // Checks x-dashboard-secret header against DASHBOARD_SECRET env var.
@@ -1744,6 +1758,109 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
     if (req.query.download === "true") {
       res.setHeader("Content-Disposition", `attachment; filename="episode_${req.params.id}.mp3"`);
+    } else {
+      res.setHeader("Content-Disposition", "inline");
+    }
+
+    fs.createReadStream(filepath).pipe(res);
+  });
+
+  // ── Full episode audio (stitched with intro/outro) ────────────────────────
+
+  app.get("/api/podcast/episodes/:id/audio/full", (req, res) => {
+    const filepath = getFullAudioFilePath(req.params.id);
+    if (!filepath) {
+      return res.status(404).json({ error: "Full episode audio not found" });
+    }
+
+    const stat = fs.statSync(filepath);
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Content-Length", stat.size);
+
+    if (req.query.download === "true") {
+      res.setHeader("Content-Disposition", `attachment; filename="episode_${req.params.id}_full.mp3"`);
+    } else {
+      res.setHeader("Content-Disposition", "inline");
+    }
+
+    fs.createReadStream(filepath).pipe(res);
+  });
+
+  // ── Audio asset management (intro/outro music) ────────────────────────────
+
+  app.get("/api/podcast/audio-assets", (_req, res) => {
+    res.json(getAudioAssets());
+  });
+
+  app.post("/api/podcast/audio-assets/:type", (req, res, next) => {
+    const assetType = req.params.type;
+    if (assetType !== "intro" && assetType !== "outro") {
+      return res.status(400).json({ error: "Type must be 'intro' or 'outro'" });
+    }
+
+    audioUpload.single("file")(req, res, (err: any) => {
+      if (err) {
+        return res.status(400).json({ error: err.message });
+      }
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      saveAudioAsset(assetType, req.file.buffer);
+      res.json({ ok: true, type: assetType, size: req.file.buffer.length });
+    });
+  });
+
+  app.get("/api/podcast/audio-assets/:type/audio", (req, res) => {
+    const assetType = req.params.type;
+    if (assetType !== "intro" && assetType !== "outro") {
+      return res.status(400).json({ error: "Type must be 'intro' or 'outro'" });
+    }
+
+    const filepath = getAudioAssetPath(assetType);
+    if (!filepath) {
+      return res.status(404).json({ error: `${assetType} asset not found` });
+    }
+
+    const stat = fs.statSync(filepath);
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Content-Length", stat.size);
+    res.setHeader("Content-Disposition", "inline");
+    fs.createReadStream(filepath).pipe(res);
+  });
+
+  // ── Social preview clip generation ────────────────────────────────────────
+
+  app.post("/api/podcast/episodes/:id/generate-preview", (req, res) => {
+    const episode = getEpisode(req.params.id);
+    if (!episode) return res.status(404).json({ error: "Episode not found" });
+    if (!episode.script) {
+      return res.status(400).json({ error: "Episode has no script" });
+    }
+
+    if (!process.env.ELEVENLABS_API_KEY) {
+      return res.status(500).json({ error: "ElevenLabs API key not configured" });
+    }
+
+    res.json({ status: "generating", episodeId: req.params.id });
+
+    generateSocialPreview(req.params.id).catch((e) =>
+      console.error(`[AudioEngine] Background preview generation failed for ${req.params.id}:`, e.message),
+    );
+  });
+
+  app.get("/api/podcast/episodes/:id/audio/preview", (req, res) => {
+    const filepath = getPreviewAudioFilePath(req.params.id);
+    if (!filepath) {
+      return res.status(404).json({ error: "Preview audio not found" });
+    }
+
+    const stat = fs.statSync(filepath);
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Content-Length", stat.size);
+
+    if (req.query.download === "true") {
+      res.setHeader("Content-Disposition", `attachment; filename="episode_${req.params.id}_preview.mp3"`);
     } else {
       res.setHeader("Content-Disposition", "inline");
     }
