@@ -28,7 +28,7 @@ import { scheduleRace, generateRace, postRace, getRaceState } from "./raceEngine
 import { scheduleMidnightReplies, runMidnightReplies } from "./replyEngine.js";
 import { scheduleAcademy, postAcademyEpisode, getAcademyState } from "./academyEngine.js";
 import { scheduleSignalBrief, postSignalBrief, getSignalBriefState } from "./signalBriefEngine.js";
-import { getPodcastState, EPISODE_META, createEpisode, generateEpisodeScript, regenerateEpisodeScript, reviewEpisode, markProduced, publishEpisode, submitGuestRequest, reviewGuest, generateInterviewQuestions, submitAnswers, createConversationEpisode, getEpisodesByType, getEpisodesByStatus, getGuestsByStatus, getEpisode, getGuest, formatScriptForProduction, formatConversationForProduction, generateEpisodeFromThread, getThreadCandidates, getPipelineStatus, deleteEpisode, clearAllEpisodes } from "./podcastEngine.js";
+import { getPodcastState, EPISODE_META, createEpisode, generateEpisodeScript, regenerateEpisodeScript, reviewEpisode, markProduced, publishEpisode, submitGuestRequest, reviewGuest, generateInterviewQuestions, submitAnswers, createConversationEpisode, getEpisodesByType, getEpisodesByStatus, getGuestsByStatus, getEpisode, getGuest, formatScriptForProduction, formatConversationForProduction, generateEpisodeFromThread, getThreadCandidates, getPipelineStatus, deleteEpisode, clearAllEpisodes, getTimingInstruction } from "./podcastEngine.js";
 import { getVideoStats } from "./videoEngine.js";
 import { requestPost, registerPost, releasePost, getCoordinatorState, resetCooldown } from "./postCoordinator.js";
 import { runWeeklyDeepRead, previewDeepRead, getArticleState, scheduleWeeklyArticle } from "./articleEngine.js";
@@ -1847,13 +1847,14 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
       const prompts = timeframePrompts[timeframe];
       const agentCtx = getOptimizedContext("podcast topic scanning research community");
+      const timingBlock = getTimingInstruction();
       const scanRes = await fetch(LLM_BASE_URL, {
         method: "POST",
         headers: getLLMHeaders(),
         body: JSON.stringify({
           model: getModel("research_phase"),
           messages: [
-            { role: "system", content: `${agentCtx}\n\n${prompts.system}` },
+            { role: "system", content: `${agentCtx}\n\n${timingBlock}\n\n${prompts.system}` },
             { role: "user", content: prompts.user },
           ],
           max_tokens: 1500,
