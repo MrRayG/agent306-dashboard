@@ -1030,7 +1030,7 @@ export function getThreadCandidates(): Array<{
   const lab = getResearchLab();
   const existingTopicIds = new Set(
     state.episodes
-      .filter(e => e.researchTopicId)
+      .filter(e => e.researchTopicId && e.status !== "shelved")
       .map(e => e.researchTopicId),
   );
 
@@ -1161,10 +1161,12 @@ export async function generateEpisodeFromThread(threadId: string): Promise<Episo
     return null;
   }
 
-  // Check if already has an episode (check both IDs)
+  // Check if already has an active episode (shelved episodes don't count)
   const existingEp = state.episodes.find(e =>
-    e.researchTopicId === threadId ||
-    (researchThread?.linkedTopicId && e.researchTopicId === researchThread.linkedTopicId),
+    e.status !== "shelved" && (
+      e.researchTopicId === threadId ||
+      (researchThread?.linkedTopicId && e.researchTopicId === researchThread.linkedTopicId)
+    ),
   );
   if (existingEp) {
     console.log(`[PodcastStudio] Thread "${topicTitle}" already has episode ${existingEp.id}`);
