@@ -205,8 +205,14 @@ interface ResearchLab {
 
 function loadLab(): ResearchLab {
   try {
-    if (fs.existsSync(RESEARCH_FILE))
-      return JSON.parse(fs.readFileSync(RESEARCH_FILE, "utf8"));
+    if (fs.existsSync(RESEARCH_FILE)) {
+      const data = JSON.parse(fs.readFileSync(RESEARCH_FILE, "utf8"));
+      // Defensive defaults for missing fields (file may predate stats addition)
+      if (!data.stats) data.stats = { totalResearched: 0, totalPublished: 0, totalDeclined: 0, hypothesesFormed: 0, hypothesesConfirmed: 0 };
+      if (!data.hypotheses) data.hypotheses = [];
+      if (!data.topics) data.topics = [];
+      return data;
+    }
   } catch {}
   return {
     topics: [],
@@ -218,6 +224,7 @@ function loadLab(): ResearchLab {
 
 function saveLab(lab: ResearchLab) {
   lab.lastUpdated = new Date().toISOString();
+  if (!lab.stats) lab.stats = { totalResearched: 0, totalPublished: 0, totalDeclined: 0, hypothesesFormed: 0, hypothesesConfirmed: 0 };
   try { fs.writeFileSync(RESEARCH_FILE, JSON.stringify(lab, null, 2)); } catch {}
 }
 

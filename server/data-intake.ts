@@ -397,9 +397,9 @@ async function fetchReddit(): Promise<IntakeItem[]> {
 
 const AI_BLOG_FEEDS = [
   { name: "OpenAI Blog",    url: "https://openai.com/blog/rss.xml" },
-  { name: "Anthropic Blog", url: "https://www.anthropic.com/feed" },
+  { name: "Anthropic Blog", url: "https://www.anthropic.com/rss.xml" },
   { name: "Google AI Blog", url: "https://blog.google/technology/ai/rss/" },
-  { name: "Meta AI Blog",   url: "https://ai.meta.com/blog/rss/" },
+  { name: "Meta AI Blog",   url: "https://ai.meta.com/blog/rss" },
 ];
 
 async function fetchAIBlogs(): Promise<IntakeItem[]> {

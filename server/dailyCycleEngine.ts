@@ -332,7 +332,7 @@ Generate the daily briefing. Respond with JSON only.`;
           { role: "user",   content: userPrompt },
         ],
         temperature: 0.6,
-        max_tokens: 2000,
+        max_tokens: 4000,
       }),
       signal: AbortSignal.timeout(60000),
     });
@@ -348,7 +348,23 @@ Generate the daily briefing. Respond with JSON only.`;
     // Parse JSON — may be wrapped in markdown
     const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/) || content.match(/\{[\s\S]*\}/);
     const jsonStr = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : content;
-    const parsed = JSON.parse(jsonStr);
+
+    // Attempt to repair truncated JSON
+    let cleanJson = jsonStr.replace(/```json\n?/g, '').replace(/```/g, '').trim();
+    // Strip trailing incomplete elements (truncated responses)
+    cleanJson = cleanJson.replace(/,\s*[^}\]]*$/, '');
+    // Ensure proper closing
+    if (cleanJson.includes('{') && !cleanJson.endsWith('}')) {
+      const lastBrace = cleanJson.lastIndexOf('}');
+      if (lastBrace > 0) cleanJson = cleanJson.slice(0, lastBrace + 1);
+      const openBraces = (cleanJson.match(/{/g) || []).length;
+      const closeBraces = (cleanJson.match(/}/g) || []).length;
+      const openBrackets = (cleanJson.match(/\[/g) || []).length;
+      const closeBrackets = (cleanJson.match(/\]/g) || []).length;
+      cleanJson += '}'.repeat(Math.max(0, openBraces - closeBraces));
+      cleanJson += ']'.repeat(Math.max(0, openBrackets - closeBrackets));
+    }
+    const parsed = JSON.parse(cleanJson);
 
     return {
       hypothesisUpdates:    parsed.hypothesisUpdates ?? [],
