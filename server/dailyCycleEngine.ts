@@ -334,7 +334,7 @@ Generate the daily briefing. Respond with JSON only.`;
         temperature: 0.6,
         max_tokens: 4000,
       }),
-      signal: AbortSignal.timeout(60000),
+      signal: AbortSignal.timeout(120000),
     });
 
     if (!res.ok) {
@@ -492,7 +492,7 @@ Based on the evidence available, should this hypothesis be confirmed, rejected, 
           temperature: 0.3,
           max_tokens: 500,
         }),
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(60000),
       });
 
       if (!res.ok) {
@@ -776,7 +776,7 @@ Respond with ONLY a JSON array:
         temperature: 0.7,
         max_tokens: 3000,
       }),
-      signal: AbortSignal.timeout(60000),
+      signal: AbortSignal.timeout(120000),
     });
 
     if (!res.ok) {

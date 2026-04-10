@@ -396,10 +396,11 @@ async function fetchReddit(): Promise<IntakeItem[]> {
 // ── Source: Official AI Blogs ────────────────────────────────────────────────
 
 const AI_BLOG_FEEDS = [
-  { name: "OpenAI Blog",    url: "https://openai.com/blog/rss.xml" },
-  { name: "Anthropic Blog", url: "https://www.anthropic.com/rss.xml" },
-  { name: "Google AI Blog", url: "https://blog.google/technology/ai/rss/" },
-  { name: "Meta AI Blog",   url: "https://ai.meta.com/blog/rss" },
+  { name: "OpenAI Blog",        url: "https://openai.com/blog/rss.xml" },
+  { name: "Google AI Blog",     url: "https://blog.google/technology/ai/rss/" },
+  { name: "Hugging Face Blog",  url: "https://huggingface.co/blog/feed.xml" },
+  { name: "Meta Engineering",   url: "https://engineering.fb.com/feed/" },
+  // Anthropic has no RSS feed — removed to prevent 404 errors
 ];
 
 async function fetchAIBlogs(): Promise<IntakeItem[]> {

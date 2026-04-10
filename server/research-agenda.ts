@@ -286,7 +286,7 @@ ${analysisCtx ? `LESSONS FROM PAST RESEARCH:\n${analysisCtx}\n` : ""}${liveAINew
           { role: "user", content: userPrompt },
         ],
         temperature: 0.7,
-        max_tokens: 2000,
+        max_tokens: 4000,
       }),
       signal: AbortSignal.timeout(60000),
     });
@@ -316,7 +316,25 @@ ${analysisCtx ? `LESSONS FROM PAST RESEARCH:\n${analysisCtx}\n` : ""}${liveAINew
       cleanJson += '}'.repeat(Math.max(0, openBraces - closeBraces));
       cleanJson += ']'.repeat(Math.max(0, openBrackets - closeBrackets));
     }
-    const parsed = JSON.parse(cleanJson);
+    let parsed: any;
+    try {
+      parsed = JSON.parse(cleanJson);
+    } catch (parseErr: any) {
+      console.warn("[ResearchAgenda] JSON repair insufficient, attempting aggressive truncation...");
+      // Aggressive fallback: find the last complete object and close the structure
+      const lastComplete = cleanJson.lastIndexOf('},');
+      if (lastComplete > 0) {
+        const aggressive = cleanJson.slice(0, lastComplete + 1) + ']}';
+        try {
+          parsed = JSON.parse(aggressive);
+        } catch {
+          console.error("[ResearchAgenda] JSON completely unrecoverable");
+          return [];
+        }
+      } else {
+        return [];
+      }
+    }
 
     const newThreads: ResearchThread[] = [];
 
@@ -631,7 +649,7 @@ Research the next gap and advance this thread. Respond with JSON only.`;
           { role: "user", content: userPrompt },
         ],
         temperature: 0.5,
-        max_tokens: 2000,
+        max_tokens: 4000,
       }),
       signal: AbortSignal.timeout(60000),
     });
