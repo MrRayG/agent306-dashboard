@@ -163,12 +163,25 @@ async function callLLM(
     }
     const data = await res.json() as any;
     raw = data.choices?.[0]?.message?.content ?? "{}";
-    // Strip markdown code blocks that LLMs frequently wrap JSON in
-    const jsonMatch = raw.match(/```(?:json)?\n?([\s\S]*?)\n?```/) || raw.match(/\{[\s\S]*\}/);
-    const cleaned = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : raw;
-    return JSON.parse(cleaned);
+    // More robust JSON extraction — handles markdown code blocks and edge cases
+    let cleaned = raw.trim();
+    // Strip markdown code blocks (greedy, handles nested blocks)
+    cleaned = cleaned.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '');
+    try {
+      return JSON.parse(cleaned);
+    } catch {
+      // Fallback: extract outermost JSON object or array
+      const objMatch = cleaned.match(/(\{[\s\S]*\})/);
+      const arrMatch = cleaned.match(/(\[[\s\S]*\])/);
+      const fallback = objMatch?.[1] || arrMatch?.[1];
+      if (fallback) {
+        try { return JSON.parse(fallback); } catch {}
+      }
+      console.error(`[KnowledgeGraph] LLM JSON parse failed (${task}):`, cleaned?.slice(0, 200));
+      return null;
+    }
   } catch (e: any) {
-    console.error(`[KnowledgeGraph] LLM JSON parse failed (${task}):`, e.message, `— raw response: ${raw?.slice(0, 200)}`);
+    console.error(`[KnowledgeGraph] LLM call failed (${task}):`, e.message, `— raw response: ${raw?.slice(0, 200)}`);
     return null;
   }
 }

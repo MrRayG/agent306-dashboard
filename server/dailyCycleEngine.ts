@@ -334,7 +334,7 @@ Generate the daily briefing. Respond with JSON only.`;
         temperature: 0.6,
         max_tokens: 4000,
       }),
-      signal: AbortSignal.timeout(120000),
+      signal: AbortSignal.timeout(240000),
     });
 
     if (!res.ok) {
@@ -901,7 +901,7 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
   }
 
   // 3. Make ONE Grok call
-  const result = await callGrokForBriefing({
+  let result = await callGrokForBriefing({
     activeHypotheses,
     expiredHypotheses,
     resolvedNames,
@@ -913,8 +913,15 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
   });
 
   if (!result) {
-    console.warn("[DailyCycle] Briefing generation failed");
-    return null;
+    console.warn("[DailyCycle] Briefing generation failed — continuing with fallback");
+    result = {
+      hypothesisUpdates: [],
+      researchCompletions: [],
+      todaysAction: { action: "Continue research", reasoning: "Briefing unavailable — continuing autonomous research", priority: "medium" },
+      goalProgress: [],
+      archiveReport: { resolved: [], archived: [], cleared: 0 },
+      hypotheses_to_create: [],
+    };
   }
 
   // 4. Auto-ingest knowledge from research completions
@@ -957,14 +964,18 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     // Auto-debate: critique recent manuscripts that haven't been debated
     await autoDebateManuscripts().catch(e => console.warn("[DailyCycle] Auto-debate failed:", e.message));
     // NEW: Auto-test forming hypotheses → evaluate & transition to "testing" (forming > 24h)
+    console.log("[Reasoning] Starting reasoning chain — autoTestHypotheses...");
     await autoTestHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis testing failed:", e.message));
     // NEW: Auto-debate hypotheses in "testing" state → The Forge → adversarial evaluation
+    console.log("[Reasoning] autoDebateHypotheses...");
     await autoDebateHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis debate failed:", e.message));
     // Auto-resolve: evaluate mature hypotheses with trust scores → confirm/reject
+    console.log("[Reasoning] autoResolveHypotheses...");
     await autoResolveHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis resolution failed:", e.message));
     // Contradiction detection: scan recent knowledge entries for conflicts
     await autoDetectContradictions().catch(e => console.warn("[DailyCycle] Contradiction detection failed:", e.message));
     // NEW: Red-flag check — cross-reference contradictions with active hypotheses
+    console.log("[Reasoning] autoRedFlagCheck...");
     await autoRedFlagCheck().catch(e => console.warn("[DailyCycle] Red-flag check failed:", e.message));
     // Auto-resolve minor contradictions older than 3 days
     try { autoResolveOldContradictions(); } catch (e: any) { console.warn("[DailyCycle] Auto-resolve contradictions failed:", e.message); }

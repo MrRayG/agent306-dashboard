@@ -75,8 +75,12 @@ interface AgendaState {
 
 function loadAgenda(): AgendaState {
   try {
-    if (fs.existsSync(AGENDA_FILE))
-      return JSON.parse(fs.readFileSync(AGENDA_FILE, "utf8"));
+    if (fs.existsSync(AGENDA_FILE)) {
+      const parsed = JSON.parse(fs.readFileSync(AGENDA_FILE, "utf8"));
+      // Ensure threads is always a valid array (guard against corrupted state files)
+      if (!Array.isArray(parsed?.threads)) parsed.threads = [];
+      return parsed;
+    }
   } catch {}
   return {
     threads: [],
@@ -133,7 +137,7 @@ export function updateThread(id: string, updates: Partial<ResearchThread>): Rese
 }
 
 export function getPodcastCandidates(): ResearchThread[] {
-  return loadAgenda().threads.filter(t => t.podcastCandidate && t.status !== "abandoned");
+  return (loadAgenda().threads ?? []).filter(t => t.podcastCandidate && t.status !== "abandoned");
 }
 
 // ── 1. Generate Research Agenda ──────────────────────────────────────────────
@@ -988,10 +992,10 @@ export async function runResearchAgendaCycle(): Promise<{
   console.log("[ResearchAgenda] Starting daily research agenda cycle...");
 
   // 1. Generate new threads
-  const newThreads = await generateResearchAgenda() || [];
+  const newThreads = (await generateResearchAgenda()) ?? [];
 
   // 2. Prioritize
-  const prioritized = prioritizeThreads() || [];
+  const prioritized = prioritizeThreads() ?? [];
 
   // 3. Advance top 3 threads
   const advanced: string[] = [];
@@ -1013,7 +1017,7 @@ export async function runResearchAgendaCycle(): Promise<{
   const { count: prunedCount } = pruneStaleThreads();
 
   // 5. Count podcast candidates
-  const candidates = getPodcastCandidates() || [];
+  const candidates = getPodcastCandidates() ?? [];
   const agenda = loadAgenda();
   agenda.stats.totalPodcastCandidates = candidates.length;
   saveAgenda(agenda);
