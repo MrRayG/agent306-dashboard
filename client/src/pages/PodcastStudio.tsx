@@ -217,6 +217,7 @@ export default function PodcastStudio() {
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<Tab>("signal");
   const [working, setWorking] = useState<string | null>(null);
+  const [scanTimeframe, setScanTimeframe] = useState<"recent" | "quarterly" | "annual">("recent");
 
   // ─── Data fetching ───────────────────────────────────────────────────────
   const { data: state } = useQuery<any>({
@@ -251,11 +252,12 @@ export default function PodcastStudio() {
   }
 
   // ─── Episode actions ─────────────────────────────────────────────────────
+  const timeframeLabels = { recent: "Last 2 Weeks", quarterly: "Last 3 Months", annual: "Past Year" };
   async function scanTopics() {
     setWorking("scan");
-    toast({ title: "Scanning for topics...", description: "Agent 306 is searching — this may take a moment" });
+    toast({ title: "Scanning for topics...", description: `Searching ${timeframeLabels[scanTimeframe].toLowerCase()} — this may take a moment` });
     try {
-      await apiRequest("POST", "/api/podcast/scan-topics", {});
+      await apiRequest("POST", "/api/podcast/scan-topics", { timeframe: scanTimeframe });
       toast({ title: "Topic scan complete", description: "Check drafts for new suggestions" });
       refetchAll();
     } catch (e: any) {
@@ -493,6 +495,8 @@ export default function PodcastStudio() {
             working={working}
             threadCandidates={threadCandidates}
             onScanTopics={scanTopics}
+            scanTimeframe={scanTimeframe}
+            onScanTimeframeChange={setScanTimeframe}
             onGenerateScript={generateScript}
             onRegenerateScript={regenerateScript}
             onReview={reviewEpisode}
@@ -527,6 +531,8 @@ function SignalTab({
   working,
   threadCandidates,
   onScanTopics,
+  scanTimeframe,
+  onScanTimeframeChange,
   onGenerateScript,
   onRegenerateScript,
   onReview,
@@ -540,6 +546,8 @@ function SignalTab({
   working: string | null;
   threadCandidates: any;
   onScanTopics: () => void;
+  scanTimeframe: "recent" | "quarterly" | "annual";
+  onScanTimeframeChange: (tf: "recent" | "quarterly" | "annual") => void;
   onGenerateScript: (id: string) => void;
   onRegenerateScript: (id: string) => void;
   onReview: (id: string, decision: "reviewed" | "shelved", notes?: string) => void;
@@ -559,11 +567,36 @@ function SignalTab({
       {/* Top actions */}
       <div style={{ display: "flex", gap: "16px", marginBottom: "12px", alignItems: "flex-start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-          <ActionButton onClick={onScanTopics} color={ORANGE} disabled={working === "scan"}>
-            {working === "scan" ? "SCANNING..." : "⚡ SCAN FOR TOPICS"}
-          </ActionButton>
-          <span style={{ ...mono, fontSize: "11px", color: TEXT_DIM, maxWidth: 200, lineHeight: 1.4 }}>
-            Agent 306 searches X and news for the 5 most interesting topics to cover
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <ActionButton onClick={onScanTopics} color={ORANGE} disabled={working === "scan"}>
+              {working === "scan" ? "SCANNING..." : "⚡ SCAN FOR TOPICS"}
+            </ActionButton>
+            <select
+              value={scanTimeframe}
+              onChange={(e) => onScanTimeframeChange(e.target.value as "recent" | "quarterly" | "annual")}
+              disabled={working === "scan"}
+              style={{
+                ...mono,
+                fontSize: "11px",
+                background: SURFACE,
+                color: TEXT,
+                border: BORDER,
+                padding: "6px 8px",
+                cursor: "pointer",
+                outline: "none",
+              }}
+            >
+              <option value="recent">Last 2 Weeks (Recommended)</option>
+              <option value="quarterly">Last 3 Months</option>
+              <option value="annual">Past Year</option>
+            </select>
+          </div>
+          <span style={{ ...mono, fontSize: "11px", color: TEXT_DIM, maxWidth: 280, lineHeight: 1.4 }}>
+            {scanTimeframe === "recent"
+              ? "Searches for breaking developments from the past 2 weeks using live web search"
+              : scanTimeframe === "quarterly"
+              ? "Scans for significant developments from the past 3 months"
+              : "Finds major trends and paradigm shifts from the past year"}
           </span>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
