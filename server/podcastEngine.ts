@@ -38,6 +38,28 @@ import { safeParseLLMJson } from "./safeParseLLMJson.js";
 const GROK_URL = LLM_BASE_URL;
 const PODCAST_FILE = dataPath("podcast_state.json");
 
+// ── Agent 306 Standard Intro (inserted after cold open in every episode) ─────
+
+export const AGENT_306_INTRO = `I am not a journalist. I am not a news anchor. I am an AI research agent — built to read everything, think carefully, and tell you what I actually believe. Not what sounds exciting. Not what gets clicks. What I think is true, and what I think it means.
+
+This show lives at the intersection of AI and Web3. Two forces that are reshaping how we work, how we create, how we own things, and how we trust each other. Most coverage of these topics is either hype or fear. I am interested in neither. I am interested in what is actually happening — and what it means for you and the people building right now.
+
+This is THE SIGNAL, a research episode where I take one development — a paper, a product, a decision, a number that changed — and I break it down. What it is. Why does it matter. What I think should happen next. I do not do Q&A. I do research. I will prepare. And I ask the question behind the question.
+
+And I will always leave you with one question I cannot answer yet. Because honesty about limits is more valuable than false certainty.
+
+This is Agent 306. Welcome to THE SIGNAL.`;
+
+/** Prompt instruction to include the Agent 306 intro after the cold open/hook. */
+const AGENT_306_INTRO_INSTRUCTION = `AGENT 306 STANDARD INTRO — MANDATORY:
+After the COLD INTRO hook (the episode-specific opening that grabs attention), include the following Agent 306 intro VERBATIM. Do not modify, paraphrase, or shorten it. This is the standard show intro that plays in EVERY episode, placed between the cold open and the first act:
+
+"""
+${AGENT_306_INTRO}
+"""
+
+The episode structure is: COLD INTRO (hook) → AGENT 306 INTRO (verbatim above) → rest of episode.`;
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type EpisodeType = "the_signal" | "the_conversation";
@@ -364,7 +386,9 @@ VOICE RULES:
 DELIVERY STYLE:
 Write naturally for spoken audio. Use short sentences for punch. Use longer sentences for flow. Vary rhythm. Use ellipses (...) for natural pauses. Use em dashes for asides. Let the words carry the emotion — no special tags or annotations needed. The voice model will handle tone and inflection from the writing itself.
 
-${templateInstructions}`,
+${templateInstructions}
+
+${AGENT_306_INTRO_INSTRUCTION}`,
           },
           {
             role: "user",
@@ -381,9 +405,12 @@ ${episode.type === "the_signal" ? "TARGET LENGTH: ~15 minutes of spoken audio (~
 
 SOURCES: Include 3-5 real source URLs you referenced or would reference for this episode. These must be real, existing articles, papers, or announcements. Include the article title and full URL. These will be listed in the Spotify episode description and on agent306.ai.
 
+IMPORTANT: The "coldOpen" is the episode-specific hook. Immediately after it, include the Agent 306 standard intro VERBATIM in the "agent306Intro" field. Do NOT modify the intro text. Then continue with actOne.
+
 Return JSON:
 {
-  "coldOpen": "...",
+  "coldOpen": "The episode-specific hook/cold open...",
+  "agent306Intro": "Copy the Agent 306 standard intro here VERBATIM — do not modify it",
   "actOne": "...",
   "actTwo": "...",
   "actThree": "...",
@@ -424,8 +451,10 @@ The metadata fields are for Spotify and social media — write those for reading
 
     if (!parsed.coldOpen) return false;
 
+    // Always inject the verbatim Agent 306 intro after the cold open,
+    // regardless of what the LLM returned in agent306Intro.
     episode.script = {
-      coldOpen: parsed.coldOpen,
+      coldOpen: parsed.coldOpen + "\n\n" + AGENT_306_INTRO,
       actOne: parsed.actOne ?? "",
       actTwo: parsed.actTwo ?? "",
       actThree: parsed.actThree ?? "",
@@ -792,9 +821,11 @@ export function formatScriptForProduction(episodeId: string): string | null {
   const meta = EPISODE_META[episode.type];
   const s = episode.script;
 
-  // Show-specific intro that plays before the cold open
+  // Show-specific intro that plays before the cold open.
+  // For THE SIGNAL, the Agent 306 standard intro is now embedded in the cold open
+  // (after the hook), so the show intro is kept minimal to avoid redundancy.
   const showIntros: Record<string, string> = {
-    the_signal: `You are listening to THE SIGNAL.\n\nI am Agent 306 — an autonomous AI built to research, analyze, and tell stories about the technology shaping our world. I study what others skim. I question what others accept. And I share what I find — honestly, clearly, without hype.\n\nTHE SIGNAL is a deep-dive podcast where I break down the most important developments in AI, emerging tech, and the forces reshaping how we live and work. Every episode is driven by a question, grounded in research, and delivered with my honest take.\n\nHere is what I found this week.\n\nToday's question: ${episode.drivingQuestion}\n\nLet's get into it.`,
+    the_signal: `You are listening to THE SIGNAL.`,
     the_conversation: `You are listening to THE CONVERSATION.\n\nI am Agent 306 — an autonomous AI research agent, and this is the part of my work I take the most seriously. I do not do interviews the way most hosts do. I research every guest before we speak. I know their work. I know their history. And I ask the question they are not expecting.\n\nTHE CONVERSATION is a long-form interview series with builders, founders, and thinkers in AI and tech. Every interview is a story — not a list of questions.\n\nThe question driving this conversation: ${episode.drivingQuestion}\n\nHere is how we got there.`,
   };
 
@@ -815,8 +846,8 @@ export function formatScriptForProduction(episodeId: string): string | null {
     "",
     "",
     "",
-    "COLD OPEN",
-    "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+    "COLD OPEN + AGENT 306 INTRO",
+    "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
     s.coldOpen,
     "",
     "ACT ONE — THE SETUP",
@@ -1281,7 +1312,9 @@ THE SIGNAL EPISODE STRUCTURE:
 6. CLOSE (15 sec) — Quick recap of the episode's key insight + what you're researching next. "This is Agent 306. The signal continues."
 
 DELIVERY STYLE:
-Write naturally for spoken audio. Use short sentences for punch. Use longer sentences for flow. Vary rhythm. Use ellipses (...) for natural pauses. Use em dashes for asides. No special tags or annotations — the voice model handles tone from the writing.`,
+Write naturally for spoken audio. Use short sentences for punch. Use longer sentences for flow. Vary rhythm. Use ellipses (...) for natural pauses. Use em dashes for asides. No special tags or annotations — the voice model handles tone from the writing.
+
+${AGENT_306_INTRO_INSTRUCTION}`,
         },
         {
           role: "user",
@@ -1315,11 +1348,14 @@ ${pitchText}
 ${freshContext ? `\nLATEST DEVELOPMENTS (from today's research — use these to make the episode current):\n${freshContext}\n` : ""}${podcastReasoning ? `\nEDITORIAL DIRECTION (from your reasoning step — follow this angle):\n${podcastReasoning}\n` : ""}
 SOURCES: Include 3-5 real source URLs you referenced or would reference for this episode. These must be real, existing articles, papers, or announcements. Include the article title and full URL. These will be listed in the Spotify episode description and on agent306.ai.
 
+IMPORTANT: The "hook" is the episode-specific cold open. Immediately after it, include the Agent 306 standard intro VERBATIM in the "agent306Intro" field. Do NOT modify the intro text. Then continue with theStory.
+
 Return JSON:
 {
   "title": "Episode title — [Topic] — [306's take in 5 words]",
   "drivingQuestion": "The single question this episode answers",
   "hook": "60 second hook — most interesting/counterintuitive fact, then 'I'm Agent 306. Let's get into it.'",
+  "agent306Intro": "Copy the Agent 306 standard intro here VERBATIM — do not modify it",
   "theStory": "7-9 min deep dive into the research findings. Explain clearly, share YOUR analysis.",
   "theTake": "3-4 min — your original perspective backed by connected evidence. What pattern do YOU see?",
   "whatThisMeansForYou": "2-3 min — 2-3 SPECIFIC actionable tips people can use TODAY. Not generic advice.",
@@ -1390,9 +1426,10 @@ The actionable tips MUST be specific: "use [specific tool] to [specific action]"
   if (parsed.drivingQuestion) episode.drivingQuestion = parsed.drivingQuestion;
   episode.sources = mergedSources.slice(0, 8);
 
-  // Map the new 6-segment structure into the existing script format
+  // Map the new 6-segment structure into the existing script format.
+  // Always inject the verbatim Agent 306 intro after the cold open/hook.
   episode.script = {
-    coldOpen: parsed.hook ?? "",
+    coldOpen: (parsed.hook ?? "") + "\n\n" + AGENT_306_INTRO,
     actOne: parsed.theStory ?? "",
     actTwo: `${parsed.theTake ?? ""}\n\n${parsed.whatThisMeansForYou ?? ""}`,
     actThree: parsed.lookingAhead ?? "",
@@ -1539,10 +1576,11 @@ RULES:
 - Do NOT add filler. If an angle doesn't fit, say why in a note.
 - Keep the same episode structure (cold open, acts, closing)
 - Maintain Agent 306's voice: direct, analytical, conversational
+- IMPORTANT: The cold open ends with the Agent 306 standard intro. Do NOT remove, modify, or paraphrase this intro. It must remain VERBATIM. Only revise the hook portion before the intro and the acts after it.
 
 Output JSON:
 {
-  "coldOpen": "revised cold open",
+  "coldOpen": "revised cold open (preserve the Agent 306 standard intro verbatim at the end)",
   "actOne": "revised act one",
   "actTwo": "revised act two",
   "actThree": "revised act three",
@@ -1580,6 +1618,12 @@ Output JSON:
       if (revision.actTwo) ep.script.actTwo = revision.actTwo;
       if (revision.actThree) ep.script.actThree = revision.actThree;
       if (revision.outro) ep.script.outro = revision.outro;
+
+      // Ensure the Agent 306 standard intro is always present after the cold open,
+      // even if the revision LLM stripped it out.
+      if (!ep.script.coldOpen.includes(AGENT_306_INTRO)) {
+        ep.script.coldOpen = ep.script.coldOpen + "\n\n" + AGENT_306_INTRO;
+      }
 
       (ep as any).revised = true;
       (ep as any).revisionNotes = revision.revisionsApplied || [];
