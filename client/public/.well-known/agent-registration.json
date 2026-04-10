@@ -15,7 +15,7 @@
   "endpoints": {
     "web": "https://agent306.ai",
     "publicDashboard": "https://agent306.ai",
-    "api": "https://normiestv-dashboard-production.up.railway.app"
+    "api": "https://agent306.ai"
   },
   "capabilities": [
     "autonomous-research",

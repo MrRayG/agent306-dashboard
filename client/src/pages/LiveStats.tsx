@@ -149,7 +149,7 @@ export default function LiveStats() {
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
   const { data: stats, isLoading, refetch } = useQuery<AgentStats>({
-    queryKey: ["/api/normies/stats"],
+    queryKey: ["/api/agent/stats"],
     refetchInterval: 60_000,
   });
 

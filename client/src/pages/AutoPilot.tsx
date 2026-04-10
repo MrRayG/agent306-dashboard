@@ -36,7 +36,7 @@ function FarcasterSetupCard({ mono, card, label, toast }: {
 }) {
   const { data: fcStatus, refetch: refetchFc } = useQuery<any>({
     queryKey: ["/api/farcaster/status"],
-    refetchInterval: 10_000, // poll for background changes
+    refetchInterval: 30_000, // poll for background changes
   });
 
   // Wizard local state
