@@ -37,6 +37,7 @@ import { getMetacognitionState } from "./metacognitionEngine.js";
 import { getResearchLab, resolveHypothesis, addHypothesis, testHypothesis, runResearchPipeline } from "./researchEngine.js";
 import { clusterKnowledge, detectContradictions as detectGraphContradictions } from "./knowledge-graph.js";
 import { runResearchAgendaCycle } from "./research-agenda.js";
+import { runResearchAnalysisCycle } from "./researchAnalysisEngine.js";
 import { updateDreams, takeGrowthSnapshot, generateSelfImprovementPlan, executeImprovementActions, seedDreams } from "./dreamEngine.js";
 import { runAutoPodcastPipeline } from "./podcastEngine.js";
 import { generateBlogPost, getBlogState } from "./blogEngine.js";
@@ -877,6 +878,15 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     }
   } catch (e: any) {
     console.warn("[DailyCycle] Research pipeline auto-run failed (non-fatal):", e.message);
+  }
+
+  // 2d. Research Analysis Framework — run structured analysis on eligible threads (max 3/cycle)
+  try {
+    console.log("[DailyCycle] Running research analysis cycle...");
+    const analysisResult = await runResearchAnalysisCycle();
+    console.log(`[DailyCycle] Research analysis: ${analysisResult.analyzed.length} threads analyzed (phases: ${analysisResult.phases.join(", ") || "none"})`);
+  } catch (e: any) {
+    console.warn("[DailyCycle] Research analysis cycle failed (non-fatal):", e.message);
   }
 
   // 3. Make ONE Grok call

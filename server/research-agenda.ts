@@ -58,6 +58,25 @@ export interface ResearchThread {
   advanceCount: number;
   advanceScores: number[];
   lastAdvanceScore?: number;
+  // Research analysis framework (4-phase, 9-prompt)
+  analysis?: {
+    intakeComplete?: boolean;
+    intakeResults?: any;
+    deepAnalysisComplete?: boolean;
+    deepAnalysisResults?: {
+      contradictions?: any;
+      citationChains?: any;
+      gaps?: any;
+      methodologyAudit?: any;
+    };
+    synthesisComplete?: boolean;
+    synthesisResults?: {
+      masterSynthesis?: string;
+      knowledgeMap?: any;
+    };
+    lastAnalysisPhase?: string;
+    lastAnalysisDate?: string;
+  };
 }
 
 interface AgendaState {
