@@ -614,6 +614,10 @@ async function autoTestHypotheses(): Promise<number> {
           // Too weak — reject directly
           resolveHypothesis(hyp.id, "rejected", `Auto-rejected: rubric avg ${rubricAvg.toFixed(1)} < 4. ${assessment.reasoningChain.slice(0, 200)}`);
           console.log(`[DailyCycle] Hypothesis auto-rejected (rubric avg ${rubricAvg.toFixed(1)}): "${hyp.claim.slice(0, 50)}"`);
+        } else if (rubricAvg >= 8 && assessment.confidence >= 0.85) {
+          // Exceptionally strong — fast-track confirm
+          resolveHypothesis(hyp.id, "confirmed", `Fast-track confirmed: rubric avg ${rubricAvg.toFixed(1)}, confidence ${assessment.confidence.toFixed(2)}. ${assessment.reasoningChain.slice(0, 200)}`);
+          console.log(`[DailyCycle] Hypothesis fast-track confirmed (rubric avg ${rubricAvg.toFixed(1)}, confidence ${assessment.confidence.toFixed(2)}): "${hyp.claim.slice(0, 50)}"`);
         } else if (assessment.verdict === "testing" || rubricAvg >= 5) {
           // Transition to testing
           testHypothesis(hyp.id);
@@ -670,7 +674,7 @@ async function autoDebateHypotheses(): Promise<number> {
             const trustScore = calculateTrustScore(freshHyp as any);
             (freshHyp as any).trustScore = trustScore;
 
-            if (trustScore >= 80) {
+            if (trustScore >= 65) {
               resolveHypothesis(hyp.id, "confirmed", `Auto-confirmed: debate "solid", trust score ${trustScore}. ${result.critique.suggestions.join("; ").slice(0, 200)}`);
               console.log(`[DailyCycle] Hypothesis auto-confirmed (trust: ${trustScore}): "${hyp.claim.slice(0, 50)}"`);
             }

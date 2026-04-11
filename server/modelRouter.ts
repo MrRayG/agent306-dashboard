@@ -26,7 +26,7 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "contradiction-scan": "routine",
   "connection-scan": "routine",
   "conversation-insights": "routine",
-  "hypothesis-resolution": "routine",
+  "hypothesis-resolution": "premium",
   "knowledge-categorization": "routine",
   "tier-assignment": "routine",
   "injection-scan": "routine",
