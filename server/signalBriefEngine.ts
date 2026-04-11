@@ -324,7 +324,7 @@ export async function postSignalBrief(xWrite: any, grokKey: string): Promise<str
   try {
     const { postCast, isFarcasterEnabled } = await import("./farcasterEngine.js");
     if (isFarcasterEnabled() && generated.post.trim().length > 10) {
-      const cast = await postCast({ text: generated.post.trim().slice(0, 1024), channel: "ai" });
+      const cast = await postCast({ text: generated.post.trim().slice(0, 2500), channel: "ai" });
       if (cast) {
         castUrl = cast.url;
         const { registerPost: regPost } = await import("./postCoordinator.js");

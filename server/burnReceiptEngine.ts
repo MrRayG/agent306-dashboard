@@ -688,7 +688,7 @@ export async function processBurnReceipt(
   try {
     const { postCast, isFarcasterEnabled, determineChannel } = await import("./farcasterEngine.js");
     if (isFarcasterEnabled()) {
-      const cast = await postCast({ text: tweetText.slice(0, 1024), channel: "nft" });
+      const cast = await postCast({ text: tweetText.slice(0, 2500), channel: "nft" });
       if (cast) {
         registerPost(`burn_${burn.commitId}`, cast.url, "burn_receipt", "farcaster");
         console.log(`[BurnReceipt] Farcaster cast posted: ${cast.url}`);

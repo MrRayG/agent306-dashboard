@@ -278,13 +278,18 @@ export async function postCast(options: {
     return null;
   }
 
-  // Strip unverified @mentions, then enforce 1024 char limit
-  const text = stripUnverifiedMentions(options.text).slice(0, 1024);
+  // Strip unverified @mentions, then enforce 2500 char limit (Farcaster Pro)
+  const text = stripUnverifiedMentions(options.text).slice(0, 2500);
 
   const body: any = {
     signer_uuid: getSignerUuid(),
     text,
   };
+
+  // Farcaster Pro: casts over 1024 chars must be tagged as LONG_CAST
+  if (text.length > 1024) {
+    body.type = "long";
+  }
 
   if (options.channel) {
     body.channel_id = options.channel;
@@ -340,17 +345,24 @@ export async function replyCast(options: {
 }): Promise<CastResult | null> {
   if (!isFarcasterEnabled()) return null;
 
-  // Strip unverified @mentions, then enforce 1024 char limit
-  const text = stripUnverifiedMentions(options.text).slice(0, 1024);
+  // Strip unverified @mentions, then enforce 2500 char limit (Farcaster Pro)
+  const text = stripUnverifiedMentions(options.text).slice(0, 2500);
+
+  const replyBody: any = {
+    signer_uuid: getSignerUuid(),
+    text,
+    parent: options.parentHash,
+  };
+
+  // Farcaster Pro: casts over 1024 chars must be tagged as LONG_CAST
+  if (text.length > 1024) {
+    replyBody.type = "long";
+  }
 
   try {
     const res = await neynarFetch("/cast", {
       method: "POST",
-      body: JSON.stringify({
-        signer_uuid: getSignerUuid(),
-        text,
-        parent: options.parentHash,
-      }),
+      body: JSON.stringify(replyBody),
     });
 
     if (!res.ok) {

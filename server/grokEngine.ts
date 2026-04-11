@@ -366,7 +366,7 @@ ${recentMemory.length > 0 ? `PREVIOUS EPISODES (your memory):\n${recentMemory.ma
 Respond with valid JSON:
 {
   "tweet": "<max 240 chars, ONE idea, human voice, passes the human test>",
-  "farcasterText": "<max 1000 chars, richer version for Farcaster — expand on the tweet with more context, detail, and voice. Include character traits, story depth, and community connections that don't fit in 240 chars. This goes to a crypto/NFT-native audience on Farcaster who appreciate depth.>",
+  "farcasterText": "<max 2500 chars, richer version for Farcaster — expand on the tweet with more context, detail, and voice. Include character traits, story depth, and community connections that don't fit in 240 chars. This goes to a crypto/NFT-native audience on Farcaster who appreciate depth. Farcaster Pro allows long-form casts, so use the space when the story warrants it.>",
   "thread": [],
   "narrative": "<2-3 paragraph full story for dashboard>",
   "title": "<5-8 word episode title>",
@@ -620,13 +620,13 @@ Remember: respond only with the JSON format specified.`;
     if (!parsed.thread) parsed.thread = [];
     if (parsed.spotlightToken === undefined) parsed.spotlightToken = null;
     if (!parsed.farcasterText) {
-      parsed.farcasterText = (parsed.narrative ?? parsed.tweet ?? "").slice(0, 1000);
+      parsed.farcasterText = (parsed.narrative ?? parsed.tweet ?? "").slice(0, 2500);
     }
     return parsed;
   } else {
     return {
       tweet: content.slice(0, 258) + " 🧵",
-      farcasterText: content.slice(0, 1000),
+      farcasterText: content.slice(0, 2500),
       thread: [],
       narrative: content,
       title: `EP ${String(episodeNumber).padStart(3, "0")} — The Story Moves`,
