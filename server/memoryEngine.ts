@@ -16,7 +16,10 @@
 import fs from "fs";
 import path from "path";
 import { dataPath } from "./dataPaths.js";
-import { queueEmbeddingSync } from "./embeddingEngine.js";
+import { queueEmbeddingSync, semanticSearch } from "./embeddingEngine.js";
+import { getModel } from "./modelRouter.js";
+import { LLM_BASE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 // ── File paths (all on Railway /data volume) ──────────────────
 const SOUL_FILE        = dataPath("memory_soul.json");
@@ -62,6 +65,7 @@ export interface KnowledgeEntry {
   weight: number; // 1-10, how relevant/important
   status?: "active" | "archived"; // defaults to "active" for backward compat
   tier?: "core" | "active" | "operational" | "archived"; // knowledge tier for context selection
+  summarizedFrom?: string[]; // IDs of entries consolidated into this summary
 }
 
 // ── KB size configuration ─────────────────────────────────────
@@ -682,7 +686,16 @@ export function addKnowledge(entry: Omit<KnowledgeEntry, "id" | "learnedAt">): v
     return;
   }
 
-  // ── 3. Genuinely new entry → insert ────────────────────────────────────
+  // ── 3. Cross-category semantic dedup (best-effort, non-blocking) ────────
+  // Runs after insert so addKnowledge stays synchronous for callers.
+  // If a high-similarity match is found, the new entry is merged into the existing one.
+  const semanticDedupQuery = `${entry.title} ${summary}`;
+  const semanticDedupWeight = entry.weight;
+  const semanticDedupTitle = entry.title;
+  const semanticDedupSummary = summary;
+  const semanticDedupSource = entry.source;
+
+  // ── 4. Genuinely new entry → insert ────────────────────────────────────
   const full: KnowledgeEntry = {
     ...entry,
     summary,
@@ -695,10 +708,25 @@ export function addKnowledge(entry: Omit<KnowledgeEntry, "id" | "learnedAt">): v
   knowledge.totalEntries = knowledge.entries.length;
   knowledge.lastIngested = now;
 
-  // Prune if over the configurable cap
+  // Prune if over the configurable cap — summarize before evicting
   if (knowledge.entries.length > MAX_KB_ENTRIES) {
     knowledge.entries.sort((a, b) => b.weight - a.weight);
+    const evicted = knowledge.entries.slice(MAX_KB_ENTRIES);
     knowledge.entries = knowledge.entries.slice(0, MAX_KB_ENTRIES);
+
+    // Non-blocking: summarize evicted entries and add summaries back
+    if (evicted.length > 0) {
+      summarizeEvictedEntries(evicted).then(summaries => {
+        if (summaries.length > 0) {
+          knowledge.entries.push(...summaries);
+          knowledge.totalEntries = knowledge.entries.length;
+          save(KNOWLEDGE_FILE, knowledge);
+          console.log(`[Memory] Archived ${evicted.length} entries into ${summaries.length} theme summaries`);
+          for (const s of summaries) queueEmbeddingSync(s.id);
+        }
+      }).catch(e => console.warn("[Memory] Eviction summarization failed:", e.message));
+    }
+
     knowledge.totalEntries = knowledge.entries.length;
   }
   save(KNOWLEDGE_FILE, knowledge);
@@ -717,6 +745,38 @@ export function addKnowledge(entry: Omit<KnowledgeEntry, "id" | "learnedAt">): v
   ).catch(e =>
     console.warn("[Memory] Knowledge graph connection discovery failed:", e.message)
   );
+
+  // Cross-category semantic dedup: merge if a high-similarity entry exists (non-blocking)
+  semanticSearch(semanticDedupQuery, { maxResults: 3, minSimilarity: 0.85 })
+    .then(results => {
+      // Filter out the entry we just added
+      const dupes = results.filter(r => r.entry.id !== full.id && r.similarity >= 0.85);
+      if (dupes.length === 0) return;
+
+      const best = dupes[0];
+      // Merge: update existing entry if new one has higher weight or different content
+      if (semanticDedupWeight > best.entry.weight) {
+        best.entry.weight = semanticDedupWeight;
+      }
+      if (best.entry.summary !== semanticDedupSummary) {
+        best.entry.summary = semanticDedupSummary;
+        best.entry.updatedAt = now;
+      }
+      if (semanticDedupSource) best.entry.source = semanticDedupSource;
+
+      // Remove the duplicate new entry
+      const idx = knowledge.entries.findIndex(e => e.id === full.id);
+      if (idx !== -1) {
+        knowledge.entries.splice(idx, 1);
+        knowledge.totalEntries = knowledge.entries.length;
+        save(KNOWLEDGE_FILE, knowledge);
+        queueEmbeddingSync(best.entry.id);
+        console.log(`[Memory] Semantic dedup: "${semanticDedupTitle}" merged with "${best.entry.title}" (similarity: ${best.similarity.toFixed(3)})`);
+      }
+    })
+    .catch(() => {
+      // Best-effort: if embedding not available yet, skip semantic dedup
+    });
 }
 
 /** Get all KB titles grouped by category (for exploration de-dup context, active only) */
@@ -923,6 +983,104 @@ function getCategoryBreakdown(): Record<string, number> {
   return breakdown;
 }
 
+// ── Archive Summarization ──────────────────────────────────────────────────
+
+/**
+ * Summarize a group of entries being evicted/archived into a single meta-knowledge entry.
+ * Uses the LLM (knowledge-categorization task → routine/cheap model) to synthesize.
+ * Returns summary entries to be added back to the KB.
+ */
+async function summarizeEvictedEntries(
+  entries: KnowledgeEntry[],
+): Promise<KnowledgeEntry[]> {
+  // Group evicted entries by category
+  const byCategory: Record<string, KnowledgeEntry[]> = {};
+  for (const e of entries) {
+    const cat = e.category ?? "other";
+    if (!byCategory[cat]) byCategory[cat] = [];
+    byCategory[cat].push(e);
+  }
+
+  const summaries: KnowledgeEntry[] = [];
+
+  for (const [category, group] of Object.entries(byCategory)) {
+    // Only summarize if 3+ entries in the category group
+    if (group.length < 3) continue;
+
+    if (!LLM_API_KEY) {
+      // No LLM available — create a basic concatenation summary
+      const maxWeight = Math.max(...group.map(e => e.weight));
+      const titles = group.map(e => e.title).join("; ");
+      summaries.push({
+        id: `k_${Date.now()}_sum_${category}`,
+        category,
+        title: `[Summary] ${category}: ${titles.slice(0, 80)}`,
+        summary: group.map(e => e.summary).join(" | ").slice(0, 297) + "...",
+        source: "archive_summary",
+        learnedAt: new Date().toISOString(),
+        weight: Math.max(1, maxWeight - 1),
+        status: "active",
+        tier: "operational",
+        summarizedFrom: group.map(e => e.id),
+      });
+      continue;
+    }
+
+    try {
+      const entryList = group.map(e => `- ${e.title}: ${e.summary}`).join("\n");
+      const res = await fetch(LLM_BASE_URL, {
+        method: "POST",
+        headers: getLLMHeaders(),
+        body: JSON.stringify({
+          model: getModel("knowledge-categorization"),
+          messages: [
+            {
+              role: "system",
+              content: "You consolidate knowledge entries into concise summaries. Return JSON: { \"theme\": \"short theme name\", \"summary\": \"300-char max synthesis of key insights\" }",
+            },
+            {
+              role: "user",
+              content: `Summarize these ${group.length} "${category}" knowledge entries into one consolidated insight:\n\n${entryList}`,
+            },
+          ],
+          max_tokens: 300,
+          temperature: 0.2,
+        }),
+        signal: AbortSignal.timeout(30000),
+      });
+
+      if (!res.ok) {
+        console.warn(`[Memory] Archive summarization LLM failed for ${category}: ${res.status}`);
+        continue;
+      }
+
+      const data = await res.json() as any;
+      const raw = data.choices?.[0]?.message?.content ?? "{}";
+      const parsed = safeParseLLMJson<{ theme?: string; summary?: string }>(raw, "Memory.archiveSummary");
+
+      if (parsed?.summary) {
+        const maxWeight = Math.max(...group.map(e => e.weight));
+        summaries.push({
+          id: `k_${Date.now()}_sum_${category}`,
+          category,
+          title: `[Summary] ${category}: ${parsed.theme ?? category}`,
+          summary: parsed.summary.slice(0, 300),
+          source: "archive_summary",
+          learnedAt: new Date().toISOString(),
+          weight: Math.max(1, maxWeight - 1),
+          status: "active",
+          tier: "operational",
+          summarizedFrom: group.map(e => e.id),
+        });
+      }
+    } catch (e: any) {
+      console.warn(`[Memory] Archive summarization failed for ${category}:`, e.message);
+    }
+  }
+
+  return summaries;
+}
+
 /** Decay knowledge entry weights over time so stale entries don't dominate context forever.
  *  Uses updatedAt (if set) instead of learnedAt, so refreshed entries stay relevant longer.
  *  Auto-archives entries when weight drops below 3.
@@ -985,12 +1143,154 @@ export function decayKnowledge(): void {
     knowledge.lastIngested = new Date().toISOString();
     save(KNOWLEDGE_FILE, knowledge);
     console.log(`[Memory] Knowledge decay applied.${archived > 0 ? ` ${archived} entries archived.` : ""}`);
+
+    // Summarize newly archived entries before they get evicted
+    if (archived > 0) {
+      const newlyArchived = knowledge.entries.filter(
+        e => (e.status ?? "active") === "archived" && !e.summarizedFrom && e.source !== "archive_summary"
+      );
+      if (newlyArchived.length >= 3) {
+        summarizeEvictedEntries(newlyArchived).then(summaries => {
+          if (summaries.length > 0) {
+            // Remove the archived entries that were summarized
+            const summarizedIds = new Set(summaries.flatMap(s => s.summarizedFrom ?? []));
+            knowledge.entries = knowledge.entries.filter(e => !summarizedIds.has(e.id));
+            knowledge.entries.push(...summaries);
+            knowledge.totalEntries = knowledge.entries.length;
+            save(KNOWLEDGE_FILE, knowledge);
+            console.log(`[Memory] Archived ${summarizedIds.size} entries into ${summaries.length} theme summaries`);
+            for (const s of summaries) queueEmbeddingSync(s.id);
+          }
+        }).catch(e => console.warn("[Memory] Decay summarization failed:", e.message));
+      }
+    }
   }
 }
 
 /** Get count of active entries */
 export function getActiveKnowledgeCount(): number {
   return knowledge.entries.filter(e => (e.status ?? "active") === "active").length;
+}
+
+// ── Hot Context Builder ─────────────────────────────────────────────────────
+
+/**
+ * Build targeted context for hypothesis evaluation.
+ * Gathers direct evidence (knowledge graph connections), cluster context,
+ * and recent semantically relevant entries for a given hypothesis.
+ */
+export async function getHypothesisContext(hypothesisId: string): Promise<{
+  directEvidence: KnowledgeEntry[];
+  clusterContext: KnowledgeEntry[];
+  recentRelevant: KnowledgeEntry[];
+}> {
+  const empty = { directEvidence: [], clusterContext: [], recentRelevant: [] };
+
+  // 1. Find the hypothesis in the research lab
+  let hypothesis: { claim: string; basis: string; relatedTopicId?: string } | undefined;
+  try {
+    const { getResearchLab } = await import("./researchEngine.js");
+    const lab = getResearchLab();
+    hypothesis = lab.hypotheses.find((h: any) => h.id === hypothesisId);
+  } catch (e: any) {
+    console.warn("[Memory] Failed to load research lab for hypothesis context:", e.message);
+    return empty;
+  }
+
+  if (!hypothesis) {
+    console.warn(`[Memory] Hypothesis ${hypothesisId} not found in research lab`);
+    return empty;
+  }
+
+  // 2. Gather direct evidence: entries linked via knowledge graph connections
+  let directEvidence: KnowledgeEntry[] = [];
+  try {
+    const { getGraphConnections } = await import("./knowledge-graph.js");
+    const connections = getGraphConnections();
+    const connectedIds = new Set<string>();
+    for (const c of connections) {
+      // Find connections that reference KB entries related to this hypothesis
+      // Since hypotheses don't have direct KB IDs, we look for entries connected
+      // to any entry whose title/summary matches the hypothesis claim or basis
+      connectedIds.add(c.fromEntryId);
+      connectedIds.add(c.toEntryId);
+    }
+
+    // Find KB entries whose titles relate to the hypothesis claim
+    const claimWords = new Set(hypothesis.claim.toLowerCase().split(/\s+/).filter(w => w.length > 3));
+    const relatedEntryIds = new Set<string>();
+    for (const entry of knowledge.entries) {
+      if ((entry.status ?? "active") === "archived") continue;
+      const titleWords = new Set((entry.title ?? "").toLowerCase().split(/\s+/));
+      const overlap = Array.from(claimWords).filter(w => titleWords.has(w)).length;
+      if (overlap >= 2 && connectedIds.has(entry.id)) {
+        relatedEntryIds.add(entry.id);
+      }
+    }
+
+    // Get all entries connected TO those related entries
+    for (const c of connections) {
+      if (relatedEntryIds.has(c.fromEntryId)) relatedEntryIds.add(c.toEntryId);
+      if (relatedEntryIds.has(c.toEntryId)) relatedEntryIds.add(c.fromEntryId);
+    }
+
+    directEvidence = knowledge.entries.filter(e => relatedEntryIds.has(e.id));
+  } catch (e: any) {
+    console.warn("[Memory] Failed to load knowledge graph for hypothesis context:", e.message);
+  }
+
+  // 3. Get cluster context: entries from the same thematic cluster
+  let clusterContext: KnowledgeEntry[] = [];
+  try {
+    const { getClusters } = await import("./knowledge-graph.js");
+    const clusters = getClusters();
+
+    // Find clusters that contain any of the direct evidence entries
+    const directIds = new Set(directEvidence.map(e => e.id));
+    const relevantCluster = clusters.find(c =>
+      c.entryIds.some(id => directIds.has(id))
+    );
+
+    if (relevantCluster) {
+      const clusterIds = new Set(relevantCluster.entryIds);
+      // Exclude entries already in directEvidence
+      clusterContext = knowledge.entries.filter(
+        e => clusterIds.has(e.id) && !directIds.has(e.id) && (e.status ?? "active") !== "archived"
+      );
+    }
+
+    // Fallback: if no cluster found via direct evidence, search by hypothesis topic
+    if (clusterContext.length === 0 && hypothesis.relatedTopicId) {
+      const topicCluster = clusters.find(c =>
+        c.theme.toLowerCase().includes(hypothesis.claim.toLowerCase().split(/\s+/).slice(0, 3).join(" "))
+      );
+      if (topicCluster) {
+        clusterContext = knowledge.entries.filter(
+          e => topicCluster.entryIds.includes(e.id) && (e.status ?? "active") !== "archived"
+        );
+      }
+    }
+  } catch (e: any) {
+    console.warn("[Memory] Failed to load clusters for hypothesis context:", e.message);
+  }
+
+  // 4. Get recent semantically relevant entries via embedding search
+  let recentRelevant: KnowledgeEntry[] = [];
+  try {
+    const query = `${hypothesis.claim} ${hypothesis.basis}`;
+    const results = await semanticSearch(query, { maxResults: 10, minSimilarity: 0.5 });
+    const usedIds = new Set([
+      ...directEvidence.map(e => e.id),
+      ...clusterContext.map(e => e.id),
+    ]);
+    recentRelevant = results
+      .map(r => r.entry)
+      .filter(e => !usedIds.has(e.id));
+  } catch (e: any) {
+    console.warn("[Memory] Semantic search failed for hypothesis context:", e.message);
+  }
+
+  return { directEvidence, clusterContext, recentRelevant };
 }
 
 // Backfill tiers on startup
