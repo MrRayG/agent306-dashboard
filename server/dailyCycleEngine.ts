@@ -46,9 +46,11 @@ import { getAgenda } from "./research-agenda.js";
 import { analyzeDailyCycle } from "./analyzerEngine.js";
 import { runKnowledgeConsolidation } from "./knowledgeConsolidator.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import { TriadCoordinator } from "./triad/coordinator.js";
 
 const GROK_URL     = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
+const TRIAD_ENABLED = (process.env.TRIAD_ENABLED ?? "false").toLowerCase() === "true";
 const BRIEFING_FILE = dataPath("daily_briefing.json");
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -1190,6 +1192,25 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
   ]);
 
   console.log(`[DailyCycle] Phase E (content generation) completed in ${((Date.now() - phaseEStart) / 1000).toFixed(1)}s`);
+
+  // ── Phase E+: Agentic Triad (opt-in via TRIAD_ENABLED=true) ───────────────
+  if (TRIAD_ENABLED) {
+    try {
+      console.log("[DailyCycle] Running Agentic Triad cycle (Agent 3→0→6)...");
+      const coordinator = new TriadCoordinator();
+      const triadResult = await coordinator.runTriadCycle();
+      console.log(`[DailyCycle] Triad cycle: ${JSON.stringify({
+        factSheets: triadResult.factSheets.length,
+        logicMaps: triadResult.logicMaps.length,
+        drafts: triadResult.drafts.length,
+        approved: triadResult.reviews.filter(r => r.verdict === "approved").length,
+        researchRequests: triadResult.researchRequests.length,
+        elapsed: triadResult.elapsed,
+      })}`);
+    } catch (e: any) {
+      console.warn("[DailyCycle] Triad cycle failed (non-fatal):", e.message);
+    }
+  }
 
   // ── Phase F: Sequential wrap-up ────────────────────────────────────────────
 
