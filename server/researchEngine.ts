@@ -376,7 +376,7 @@ export function testHypothesis(id: string): boolean {
 
 // ── Research execution ────────────────────────────────────────────────────────
 
-async function researchWithPerplexity(query: string, pplxKey: string): Promise<{ text: string; sources: string[] }> {
+export async function researchWithPerplexity(query: string, pplxKey: string): Promise<{ text: string; sources: string[] }> {
   try {
     const res = await fetch(`${PERPLEXITY_API}/chat/completions`, {
       method: "POST",

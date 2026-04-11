@@ -34,7 +34,7 @@ import {
 import { runConnectionScan } from "./synthesisEngine.js";
 import { extractInsights } from "./conversationLearningEngine.js";
 import { getMetacognitionState } from "./metacognitionEngine.js";
-import { getResearchLab, resolveHypothesis, addHypothesis, testHypothesis, runResearchPipeline } from "./researchEngine.js";
+import { getResearchLab, resolveHypothesis, addHypothesis, testHypothesis, runResearchPipeline, researchWithPerplexity } from "./researchEngine.js";
 import { clusterKnowledge, detectContradictions as detectGraphContradictions } from "./knowledge-graph.js";
 import { runResearchAgendaCycle } from "./research-agenda.js";
 import { runResearchAnalysisCycle } from "./researchAnalysisEngine.js";
@@ -418,7 +418,7 @@ async function autoDebateManuscripts(): Promise<number> {
 
 async function autoResolveHypotheses(): Promise<number> {
   const lab = getResearchLab();
-  const fourHoursAgo = Date.now() - 4 * 60 * 60 * 1000; // 4h maturation period before resolution
+  const fourHoursAgo = Date.now() - 4 * 60 * 60 * 1000;
 
   const mature = lab.hypotheses
     .filter(h => (h.status === "forming" || h.status === "testing") && new Date(h.formedAt).getTime() < fourHoursAgo)
@@ -434,9 +434,35 @@ async function autoResolveHypotheses(): Promise<number> {
     .map(e => `- [${e.category}] ${e.title}: ${e.summary}`)
     .join("\n");
 
+  const pplxKey = process.env.PERPLEXITY_API_KEY ?? "";
+
   let resolved = 0;
   for (const hyp of mature) {
     try {
+      // ── NEW: Active evidence gathering via Perplexity Sonar ──
+      let liveEvidence = "";
+      if (pplxKey && pplxKey.length > 10) {
+        try {
+          const searchQuery = `Evidence for or against: ${hyp.claim}. ${hyp.prediction}. Look for recent data, studies, announcements, or expert analysis.`;
+          const pplxResult = await researchWithPerplexity(searchQuery, pplxKey);
+          if (pplxResult.text && pplxResult.text.length > 50) {
+            liveEvidence = pplxResult.text.slice(0, 2000);
+            const sourceList = pplxResult.sources.length > 0
+              ? `\nSources: ${pplxResult.sources.slice(0, 5).join(", ")}`
+              : "";
+            console.log(`[DailyCycle] Live evidence gathered for "${hyp.claim.slice(0, 50)}" — ${liveEvidence.length} chars${sourceList}`);
+          }
+        } catch (e: any) {
+          console.warn(`[DailyCycle] Evidence search failed for "${hyp.claim.slice(0, 50)}":`, e.message);
+        }
+        // Rate limit between Perplexity calls
+        await new Promise(r => setTimeout(r, 3000));
+      }
+
+      const evidenceSection = liveEvidence
+        ? `\nLIVE EVIDENCE (freshly gathered from web search):\n${liveEvidence}`
+        : "\nNote: No live search was performed. Evaluate based on knowledge base only.";
+
       const res = await fetch(GROK_URL, {
         method: "POST",
         headers: getLLMHeaders(),
@@ -445,14 +471,21 @@ async function autoResolveHypotheses(): Promise<number> {
           messages: [
             {
               role: "system",
-              content: `You evaluate whether a hypothesis should be confirmed, rejected, or expired based on available evidence.
+              content: `You evaluate whether a hypothesis should be confirmed, rejected, or kept for further investigation based on ALL available evidence.
 
 Let's evaluate this hypothesis step by step.
 
-Consider the evidence strength, logical coherence, and whether the prediction aligns with current knowledge.
+CRITICAL RULES:
+- Absence of evidence in the knowledge base alone is NEVER grounds for rejection.
+- A hypothesis should be REJECTED only if evidence actively CONTRADICTS it or the claim is logically incoherent.
+- A hypothesis should be CONFIRMED if the live evidence or knowledge base supports it — even partially.
+- Use "insufficient_evidence" when there's no contradicting evidence but not enough supporting evidence yet. This keeps the hypothesis alive for future cycles.
+- Use "expired" only if the timeframe has clearly passed AND the prediction was not met.
+
+Consider the evidence strength, logical coherence, and whether the prediction aligns with current knowledge AND the live evidence gathered.
 
 Respond with ONLY valid JSON:
-{"status": "confirmed" | "rejected" | "expired", "resolution": "brief explanation of your reasoning"}`,
+{"status": "confirmed" | "rejected" | "insufficient_evidence" | "expired", "resolution": "brief explanation citing specific evidence", "evidence_quality": "strong" | "moderate" | "weak" | "none"}`,
             },
             {
               role: "user",
@@ -466,10 +499,11 @@ Confidence: ${hyp.confidence}
 Formed: ${hyp.formedAt}
 Trust Score: ${calculateTrustScore(hyp as any)}
 
-CURRENT KNOWLEDGE BASE:
+KNOWLEDGE BASE:
 ${kbContext}
+${evidenceSection}
 
-Based on the evidence available, should this hypothesis be confirmed, rejected, or marked as expired? Consider whether enough time has passed and whether the prediction aligns with current knowledge.`,
+Based on ALL evidence (knowledge base + live search), what is your verdict? Remember: "no evidence found" is NOT rejection — use "insufficient_evidence" to keep investigating.`,
             },
           ],
           temperature: 0.3,
@@ -479,7 +513,7 @@ Based on the evidence available, should this hypothesis be confirmed, rejected, 
       });
 
       if (!res.ok) {
-        console.warn(`[DailyCycle] Grok hypothesis eval failed: ${res.status}`);
+        console.warn(`[DailyCycle] Hypothesis eval failed: ${res.status}`);
         continue;
       }
 
@@ -488,13 +522,17 @@ Based on the evidence available, should this hypothesis be confirmed, rejected, 
       const parsed = safeParseLLMJson(content, "DailyCycle.hypothesisEval");
       if (!parsed) continue;
 
-      const status = parsed.status as "confirmed" | "rejected" | "expired";
-      if (["confirmed", "rejected", "expired"].includes(status)) {
-        resolveHypothesis(hyp.id, status, parsed.resolution ?? "Auto-resolved by daily cycle");
+      const status = parsed.status as string;
+      if (status === "confirmed" || status === "rejected" || status === "expired") {
+        resolveHypothesis(hyp.id, status as "confirmed" | "rejected" | "expired", parsed.resolution ?? "Auto-resolved by daily cycle");
         resolved++;
+        console.log(`[DailyCycle] Hypothesis ${status}: "${hyp.claim.slice(0, 50)}" — evidence quality: ${parsed.evidence_quality ?? "unknown"}`);
+      } else if (status === "insufficient_evidence") {
+        // Keep alive — log but don't resolve
+        console.log(`[DailyCycle] Hypothesis kept alive (insufficient evidence): "${hyp.claim.slice(0, 50)}" — ${(parsed.resolution ?? "").slice(0, 100)}`);
       }
 
-      // Rate limit: 5s between Grok calls
+      // Rate limit: 5s between resolution calls
       if (mature.indexOf(hyp) < mature.length - 1) {
         await new Promise(r => setTimeout(r, 5000));
       }
