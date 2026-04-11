@@ -471,15 +471,15 @@ async function autoResolveHypotheses(): Promise<number> {
         researchWithSemanticScholar(hyp.claim),
       ]);
 
-      if (pplxSettled.status === "fulfilled" && pplxSettled.value.text.length > 50) {
+      if (pplxSettled.status === "fulfilled" && (pplxSettled.value?.text?.length ?? 0) > 50) {
         liveEvidence = pplxSettled.value.text.slice(0, 2000);
-        const sourceList = pplxSettled.value.sources.length > 0
+        const sourceList = (pplxSettled.value?.sources?.length ?? 0) > 0
           ? `\nSources: ${pplxSettled.value.sources.slice(0, 5).join(", ")}`
           : "";
         console.log(`[DailyCycle] Live evidence gathered for "${hyp.claim.slice(0, 50)}" — ${liveEvidence.length} chars${sourceList}`);
       }
 
-      if (scholarSettled.status === "fulfilled" && scholarSettled.value.papers.length > 0) {
+      if (scholarSettled.status === "fulfilled" && (scholarSettled.value?.papers?.length ?? 0) > 0) {
         const papers = scholarSettled.value.papers.slice(0, 5);
         academicEvidence = papers
           .map(p => `- "${p.title}" (${p.year}, ${p.citationCount} citations): ${p.abstract.slice(0, 200)}`)
@@ -1218,7 +1218,7 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
       try {
         const agenda = getAgenda();
         const matureThreads = agenda.threads.filter(t =>
-          t.status === "mature" && t.evidence.supporting.length >= 3,
+          t.status === "mature" && (t.evidence?.supporting?.length ?? 0) >= 3,
         );
 
         const blogState = getBlogState();
@@ -1228,8 +1228,8 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
         if (unbloggedThreads.length > 0) {
           const thread = unbloggedThreads[0];
           const sourceContent = thread.thesis + "\n\n" +
-            (thread.evidence.supporting.length > 0 ? `Supporting evidence: ${thread.evidence.supporting.join(", ")}` : "") +
-            (thread.actionableTips.length > 0 ? `\n\nTips: ${thread.actionableTips.join("; ")}` : "");
+            ((thread.evidence?.supporting?.length ?? 0) > 0 ? `Supporting evidence: ${thread.evidence.supporting.join(", ")}` : "") +
+            ((thread.actionableTips?.length ?? 0) > 0 ? `\n\nTips: ${thread.actionableTips.join("; ")}` : "");
           const post = await generateBlogPost({
             topic: thread.title,
             sourceContent,

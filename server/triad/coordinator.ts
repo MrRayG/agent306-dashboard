@@ -194,7 +194,7 @@ export class TriadCoordinator {
 
     // Step 3: Collect mature threads and convert to FactSheets
     const agenda = getAgenda();
-    const matureThreads = agenda.threads.filter(t =>
+    const matureThreads = (agenda?.threads ?? []).filter(t =>
       (t.status === "mature" || t.status === "active") && t.maturityScore >= 0.5,
     );
 
@@ -230,9 +230,9 @@ export class TriadCoordinator {
       `Thread: "${thread.title}"`,
       `Thesis: ${thread.thesis}`,
       `Maturity: ${thread.maturityScore}`,
-      `Supporting evidence IDs: ${thread.evidence.supporting.join(", ") || "none"}`,
-      `Contradicting evidence IDs: ${thread.evidence.contradicting.join(", ") || "none"}`,
-      `Gaps: ${thread.evidence.gaps.join("; ") || "none"}`,
+      `Supporting evidence IDs: ${(thread.evidence?.supporting ?? []).join(", ") || "none"}`,
+      `Contradicting evidence IDs: ${(thread.evidence?.contradicting ?? []).join(", ") || "none"}`,
+      `Gaps: ${(thread.evidence?.gaps ?? []).join("; ") || "none"}`,
       thread.analysis?.synthesisResults?.masterSynthesis
         ? `Master synthesis: ${thread.analysis.synthesisResults.masterSynthesis}`
         : "",
@@ -302,7 +302,7 @@ Include at least 2 evidence items. Be precise about credibility — only "verifi
           date: e.date || new Date().toISOString().slice(0, 10),
           excerpt: (e.excerpt || "").slice(0, 300),
         })),
-        gaps: parsed.gaps || thread.evidence.gaps || [],
+        gaps: parsed.gaps || thread.evidence?.gaps || [],
         sourceCount: parsed.sourceCount || 0,
         maturityScore: thread.maturityScore,
         generatedAt: new Date().toISOString(),
@@ -501,6 +501,7 @@ Respond with JSON:
         }
 
         const searchResult = await researchMultiSource(req.query, PPLX_KEY);
+        if (!searchResult) continue;
         const newEvidence: FactSheet["evidence"][0][] = [];
 
         // Package Perplexity results
