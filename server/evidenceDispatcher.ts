@@ -325,8 +325,8 @@ async function executeSearch(query: string, sourceType: SourceType, queryModifie
       try {
         const result = await researchWithPerplexity(fullQuery, pplxKey);
         return {
-          content: result.text.slice(0, 3000),
-          citations: result.sources ?? [],
+          content: (result?.text ?? "").slice(0, 3000),
+          citations: result?.sources ?? [],
           source: sourceType,
           addedToKB: false,
         };
@@ -339,11 +339,12 @@ async function executeSearch(query: string, sourceType: SourceType, queryModifie
     case "semantic_scholar": {
       try {
         const result = await researchWithSemanticScholar(fullQuery);
-        const content = result.papers
+        const papers = result?.papers ?? [];
+        const content = papers
           .slice(0, 5)
           .map(p => `"${p.title}" (${p.year}, ${p.citationCount} citations): ${(p.abstract ?? "").slice(0, 200)}`)
           .join("\n");
-        const citations = result.papers.slice(0, 5).map(p => p.url).filter(Boolean);
+        const citations = papers.slice(0, 5).map(p => p.url).filter(Boolean);
         return {
           content: content || "",
           citations,

@@ -99,6 +99,15 @@ function loadAgenda(): AgendaState {
       const parsed = JSON.parse(fs.readFileSync(AGENDA_FILE, "utf8"));
       // Ensure threads is always a valid array (guard against corrupted state files)
       if (!Array.isArray(parsed?.threads)) parsed.threads = [];
+      // Sanitize each thread's evidence structure to prevent .length on undefined
+      for (const t of parsed.threads) {
+        if (!t.evidence) t.evidence = { supporting: [], contradicting: [], gaps: [] };
+        if (!Array.isArray(t.evidence.supporting)) t.evidence.supporting = [];
+        if (!Array.isArray(t.evidence.contradicting)) t.evidence.contradicting = [];
+        if (!Array.isArray(t.evidence.gaps)) t.evidence.gaps = [];
+        if (!Array.isArray(t.actionableTips)) t.actionableTips = [];
+        if (!Array.isArray(t.subThreads)) t.subThreads = [];
+      }
       return parsed;
     }
   } catch {}
@@ -412,8 +421,8 @@ export function prioritizeThreads(): ResearchThread[] {
     const lastUpdatedMs = new Date(thread.lastUpdated).getTime();
     const daysSinceUpdate = (now - lastUpdatedMs) / (24 * 60 * 60 * 1000);
     const trendingMultiplier = daysSinceUpdate < 3 ? 1.2 : daysSinceUpdate < 7 ? 1.0 : 0.8;
-    const gapMultiplier = thread.evidence.gaps.length > 3 ? 1.3 : 1.0;
-    const audienceMultiplier = thread.actionableTips.length >= 2 ? 1.1 : 1.0;
+    const gapMultiplier = (thread.evidence?.gaps?.length ?? 0) > 3 ? 1.3 : 1.0;
+    const audienceMultiplier = (thread.actionableTips?.length ?? 0) >= 2 ? 1.1 : 1.0;
 
     // UCB1 + context multipliers
     const ucb1Score = exploitation + exploration;
@@ -439,13 +448,13 @@ export function prioritizeThreads(): ResearchThread[] {
  */
 async function generateSubQueries(thread: ResearchThread): Promise<string[]> {
   const existingSummary = [
-    thread.evidence.supporting.length > 0
+    (thread.evidence?.supporting?.length ?? 0) > 0
       ? `Supporting evidence (${thread.evidence.supporting.length} items)`
       : "No supporting evidence yet",
-    thread.evidence.contradicting.length > 0
+    (thread.evidence?.contradicting?.length ?? 0) > 0
       ? `Contradicting evidence (${thread.evidence.contradicting.length} items)`
       : "No contradicting evidence",
-    thread.evidence.gaps.length > 0
+    (thread.evidence?.gaps?.length ?? 0) > 0
       ? `Knowledge gaps: ${thread.evidence.gaps.slice(0, 5).join("; ")}`
       : "No identified gaps",
   ].join("\n");
@@ -700,6 +709,14 @@ export async function advanceThread(threadId: string): Promise<ResearchThread | 
   if (!thread) return null;
   if (thread.status === "published" || thread.status === "abandoned") return null;
 
+  // Defensive: ensure evidence structure exists (guards against corrupted state files)
+  if (!thread.evidence) thread.evidence = { supporting: [], contradicting: [], gaps: [] };
+  if (!Array.isArray(thread.evidence.supporting)) thread.evidence.supporting = [];
+  if (!Array.isArray(thread.evidence.contradicting)) thread.evidence.contradicting = [];
+  if (!Array.isArray(thread.evidence.gaps)) thread.evidence.gaps = [];
+  if (!Array.isArray(thread.actionableTips)) thread.actionableTips = [];
+  if (!Array.isArray(thread.subThreads)) thread.subThreads = [];
+
   console.log(`[ResearchAgenda] Advancing thread: "${thread.title}"`);
 
   const kbDigest = getKnowledgeDigestForExploration();
@@ -771,19 +788,19 @@ export async function advanceThread(threadId: string): Promise<ResearchThread | 
 
   // Build evidence context
   const evidenceCtx = [
-    thread.evidence.supporting.length > 0
+    (thread.evidence?.supporting?.length ?? 0) > 0
       ? `Supporting evidence IDs: ${thread.evidence.supporting.join(", ")}`
       : "No supporting evidence yet.",
-    thread.evidence.contradicting.length > 0
+    (thread.evidence?.contradicting?.length ?? 0) > 0
       ? `Contradicting evidence IDs: ${thread.evidence.contradicting.join(", ")}`
       : "No contradicting evidence.",
-    thread.evidence.gaps.length > 0
+    (thread.evidence?.gaps?.length ?? 0) > 0
       ? `Knowledge gaps: ${thread.evidence.gaps.join("; ")}`
       : "No identified gaps remaining.",
   ].join("\n");
 
   // Sub-threads context
-  const subCtx = thread.subThreads.length > 0
+  const subCtx = (thread.subThreads?.length ?? 0) > 0
     ? `Sub-threads: ${thread.subThreads.map(id => {
         const sub = agenda.threads.find(t => t.id === id);
         return sub ? `"${sub.title}" [${sub.status}]` : id;
@@ -1142,10 +1159,10 @@ Extract 0-2 testable hypotheses from these findings.`
 // ── 4. Evaluate Maturity ─────────────────────────────────────────────────────
 
 function evaluateMaturityInternal(thread: ResearchThread): void {
-  const hasEnoughEvidence = thread.evidence.supporting.length >= 3;
-  const fewGaps = thread.evidence.gaps.length <= 2;
+  const hasEnoughEvidence = (thread.evidence?.supporting?.length ?? 0) >= 3;
+  const fewGaps = (thread.evidence?.gaps?.length ?? 0) <= 2;
   const highMaturity = thread.maturityScore >= 0.7;
-  const hasTips = thread.actionableTips.length >= 2;
+  const hasTips = (thread.actionableTips?.length ?? 0) >= 2;
 
   if (hasEnoughEvidence && fewGaps && highMaturity && hasTips) {
     if (!thread.podcastCandidate) {
@@ -1162,10 +1179,13 @@ export function evaluateMaturity(threadId: string): { podcastCandidate: boolean;
   if (!thread) return { podcastCandidate: false, reason: "Thread not found" };
 
   const reasons: string[] = [];
-  if (thread.evidence.supporting.length < 3) reasons.push(`needs more supporting evidence (${thread.evidence.supporting.length}/3)`);
-  if (thread.evidence.gaps.length > 2) reasons.push(`too many gaps remaining (${thread.evidence.gaps.length})`);
+  const supportingLen = thread.evidence?.supporting?.length ?? 0;
+  const gapsLen = thread.evidence?.gaps?.length ?? 0;
+  const tipsLen = thread.actionableTips?.length ?? 0;
+  if (supportingLen < 3) reasons.push(`needs more supporting evidence (${supportingLen}/3)`);
+  if (gapsLen > 2) reasons.push(`too many gaps remaining (${gapsLen})`);
   if (thread.maturityScore < 0.7) reasons.push(`maturity too low (${thread.maturityScore.toFixed(2)}/0.70)`);
-  if (thread.actionableTips.length < 2) reasons.push(`needs more actionable tips (${thread.actionableTips.length}/2)`);
+  if (tipsLen < 2) reasons.push(`needs more actionable tips (${tipsLen}/2)`);
 
   evaluateMaturityInternal(thread);
   saveAgenda(agenda);
