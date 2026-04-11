@@ -674,7 +674,7 @@ async function autoDebateHypotheses(): Promise<number> {
             const trustScore = calculateTrustScore(freshHyp as any);
             (freshHyp as any).trustScore = trustScore;
 
-            if (trustScore >= 65) {
+            if (trustScore >= 75) {
               resolveHypothesis(hyp.id, "confirmed", `Auto-confirmed: debate "solid", trust score ${trustScore}. ${result.critique.suggestions.join("; ").slice(0, 200)}`);
               console.log(`[DailyCycle] Hypothesis auto-confirmed (trust: ${trustScore}): "${hyp.claim.slice(0, 50)}"`);
             }
