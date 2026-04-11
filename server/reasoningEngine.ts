@@ -12,6 +12,7 @@ import { getOptimizedContext } from "./contextWindow.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import { semanticSearch } from "./embeddingEngine.js";
 
 const GROK_URL = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
@@ -200,12 +201,30 @@ Critique this ${topicType}. Find every weakness.`;
 export async function checkContradictions(
   newEntry: { id: string; title: string; summary: string; category: string },
 ): Promise<Contradiction | null> {
-  // Get entries in the same or related categories
-  const candidates = knowledge.entries
-    .filter(e => e.id !== newEntry.id && (e.status ?? "active") === "active")
-    .slice(0, 30) // limit context
-    .map(e => `[${e.id}] "${e.title}": ${e.summary}`)
-    .join("\n");
+  // Semantic search for entries most related to the new entry
+  let candidates = "";
+  try {
+    const searchQuery = `${newEntry.title} ${newEntry.summary}`;
+    const semanticResults = await semanticSearch(searchQuery, { maxResults: 30, excludeArchived: true });
+    const filtered = semanticResults.filter(r => r.entry.id !== newEntry.id);
+    if (filtered.length > 0) {
+      candidates = filtered
+        .map(r => `[${r.entry.id}] "${r.entry.title}": ${r.entry.summary} (relevance: ${r.similarity.toFixed(2)})`)
+        .join("\n");
+      console.log(`[Reasoning] Semantic contradiction candidates for "${newEntry.title.slice(0, 50)}": ${filtered.length} entries, top score: ${filtered[0]?.similarity?.toFixed(2) ?? "N/A"}`);
+    }
+  } catch (e: any) {
+    console.warn(`[Reasoning] Semantic search failed for contradiction check, using fallback:`, e.message);
+  }
+
+  // Fallback to blind slice if semantic search returned nothing
+  if (!candidates) {
+    candidates = knowledge.entries
+      .filter(e => e.id !== newEntry.id && (e.status ?? "active") === "active")
+      .slice(0, 30)
+      .map(e => `[${e.id}] "${e.title}": ${e.summary}`)
+      .join("\n");
+  }
 
   if (!candidates) return null;
 
