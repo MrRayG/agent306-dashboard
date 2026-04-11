@@ -28,7 +28,7 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "contradiction-scan": "routine",
   "connection-scan": "routine",
   "conversation-insights": "routine",
-  "hypothesis-resolution": "multi-agent",    // Grok 4.20 Multi-Agent — built-in 4-agent debate for confirm/reject
+  "hypothesis-resolution": "premium",         // Claude Sonnet 4.6 — multi-agent model uses Responses API (incompatible with Chat Completions JSON output)
   "knowledge-categorization": "routine",
   "tier-assignment": "routine",
   "injection-scan": "routine",
