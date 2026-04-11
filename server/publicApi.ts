@@ -8,13 +8,14 @@
  */
 
 import { knowledge, performance } from "./memoryEngine.js";
-import { getResearchLab, getGoals } from "./researchEngine.js";
+import { getResearchLab, getGoals, getAspirations } from "./researchEngine.js";
 import { getPodcastState } from "./podcastEngine.js";
 import { getExplorationState } from "./explorationEngine.js";
 import { getAgentReachStatus } from "./agentReachEngine.js";
 import { getBriefingState } from "./dailyCycleEngine.js";
 import { getMetacognitionState } from "./metacognitionEngine.js";
 import { getLatestSnapshot, getEvolutionHistory } from "./evolutionTracker.js";
+import { getBreakthroughs } from "./breakthroughDetector.js";
 
 // ── In-memory cache (30-second TTL) ─────────────────────────
 
@@ -487,6 +488,60 @@ export function getPublicMetacognition() {
         knowledgeConnections: meta.synthesisStats.totalConnections,
         evolutionDay: history.totalDays,
       },
+      generatedAt: new Date().toISOString(),
+    };
+  });
+}
+
+// -- 7. Breakthroughs -------------------------------------------------------
+
+export function getPublicBreakthroughs() {
+  return cached("breakthroughs", () => {
+    const store = getBreakthroughs();
+    const breakthroughs = store.breakthroughs.map(b => ({
+      id:             b.id,
+      type:           b.type,
+      title:          b.title,
+      description:    b.description,
+      noveltyScore:   b.noveltyScore,
+      impactScore:    b.impactScore,
+      compositeScore: b.compositeScore,
+      detectedAt:     new Date(b.detectedAt).toISOString(),
+      published:      b.published,
+    }));
+
+    return {
+      breakthroughs,
+      total: breakthroughs.length,
+      generatedAt: new Date().toISOString(),
+    };
+  });
+}
+
+// -- 8. Aspirations ---------------------------------------------------------
+
+export function getPublicAspirations() {
+  return cached("aspirations", () => {
+    const store = getAspirations();
+    const aspirations = store.aspirations
+      .filter(a => a.status === "active" || a.status === "achieved")
+      .map(a => ({
+        id:             a.id,
+        horizon:        a.horizon,
+        vision:         a.vision,
+        progress:       a.progress,
+        status:         a.status,
+        targetDate:     new Date(a.targetDate).toISOString(),
+        selfAssessment: a.selfAssessment,
+        milestones:     a.milestones.map(m => ({
+          description: m.description,
+          achieved:    m.achieved,
+        })),
+      }));
+
+    return {
+      aspirations,
+      total: aspirations.length,
       generatedAt: new Date().toISOString(),
     };
   });

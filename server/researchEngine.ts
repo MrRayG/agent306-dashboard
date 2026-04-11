@@ -2095,3 +2095,462 @@ export function autoAdvanceResearch(): { advanced: Array<{ id: string; topic: st
   }
   return { advanced, count: advanced.length };
 }
+
+// ---------------------------------------------------------------------------
+// COMPONENT 1: AUTO-APPROVAL SYSTEM
+//
+// Self-quality gate: evaluates pending_review topics via LLM and auto-approves
+// high-quality research, flags mediocre ones for human review, and declines
+// low-quality submissions.
+//
+// Thresholds:
+//   avg >= 7.0  → auto_approve (max 3 per cycle)
+//   5.0 <= avg < 7.0 → needs_attention (keep pending_review)
+//   avg < 5.0  → decline with reasoning
+// ---------------------------------------------------------------------------
+
+export interface TopicQualityEvaluation {
+  topicId:       string;
+  scores: {
+    evidenceDepth:    number; // 1-10
+    sourceQuality:    number; // 1-10
+    insightNovelty:   number; // 1-10
+    coherence:        number; // 1-10
+    actionability:    number; // 1-10
+  };
+  averageScore:  number;
+  verdict:       "auto_approve" | "needs_attention" | "decline";
+  reasoning:     string;
+}
+
+export async function autoApproveTopics(): Promise<TopicQualityEvaluation[]> {
+  try {
+    const lab = loadLab();
+    const pending = lab.topics.filter(t => t.status === "pending_review");
+
+    if (pending.length === 0) {
+      console.log("[AutoApproval] No topics in pending_review — skipping");
+      return [];
+    }
+
+    console.log(`[AutoApproval] Evaluating ${pending.length} pending topic(s)...`);
+
+    const evaluations: TopicQualityEvaluation[] = [];
+    let autoApproved = 0;
+    const MAX_AUTO_APPROVALS = 3;
+
+    for (const topic of pending) {
+      try {
+        const summary = [
+          `Topic: ${topic.topic}`,
+          `Description: ${topic.description}`,
+          topic.hypothesis ? `Hypothesis: ${topic.hypothesis}` : "",
+          topic.rawFindings ? `Findings (excerpt): ${topic.rawFindings.slice(0, 1000)}` : "",
+          topic.conclusion ? `Conclusion: ${topic.conclusion}` : "",
+          topic.agentRecommendation ? `Agent recommendation: ${topic.agentRecommendation}` : "",
+          topic.sources?.length ? `Sources (${topic.sources.length}): ${topic.sources.slice(0, 5).join(", ")}` : "",
+        ].filter(Boolean).join("\n");
+
+        const systemPrompt = `You are a rigorous quality evaluator for an AI research agent's completed research topics. Evaluate the following research output on 5 dimensions (score 1-10 each):
+
+1. evidenceDepth: How well-supported are the claims? (1 = unsupported assertions, 10 = thorough multi-source evidence)
+2. sourceQuality: Are sources credible and diverse? (1 = no sources, 10 = authoritative and varied)
+3. insightNovelty: Does this add new understanding? (1 = rehashed common knowledge, 10 = genuine new insight)
+4. coherence: Is the analysis logically sound? (1 = contradictory/muddled, 10 = crystal clear reasoning)
+5. actionability: Can readers act on these findings? (1 = purely abstract, 10 = immediately actionable)
+
+Return valid JSON only:
+{
+  "evidenceDepth": <1-10>,
+  "sourceQuality": <1-10>,
+  "insightNovelty": <1-10>,
+  "coherence": <1-10>,
+  "actionability": <1-10>,
+  "reasoning": "<1-2 sentence summary of your evaluation>"
+}`;
+
+        const res = await fetch(LLM_BASE_URL, {
+          method: "POST",
+          headers: getLLMHeaders(),
+          body: JSON.stringify({
+            model: getModel("topic-quality-evaluation"),
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: summary },
+            ],
+            max_tokens: 400,
+            temperature: 0.2,
+          }),
+          signal: AbortSignal.timeout(30000),
+        });
+
+        if (!res.ok) {
+          console.error(`[AutoApproval] LLM call failed for "${topic.topic}": ${res.status}`);
+          continue;
+        }
+
+        const data = await res.json() as any;
+        const raw = data.choices?.[0]?.message?.content ?? "";
+        const parsed = safeParseLLMJson<{
+          evidenceDepth: number;
+          sourceQuality: number;
+          insightNovelty: number;
+          coherence: number;
+          actionability: number;
+          reasoning: string;
+        }>(raw, "AutoApproval");
+
+        if (!parsed) {
+          console.error(`[AutoApproval] Failed to parse evaluation for "${topic.topic}"`);
+          continue;
+        }
+
+        const scores = {
+          evidenceDepth:  Math.max(1, Math.min(10, parsed.evidenceDepth ?? 5)),
+          sourceQuality:  Math.max(1, Math.min(10, parsed.sourceQuality ?? 5)),
+          insightNovelty: Math.max(1, Math.min(10, parsed.insightNovelty ?? 5)),
+          coherence:      Math.max(1, Math.min(10, parsed.coherence ?? 5)),
+          actionability:  Math.max(1, Math.min(10, parsed.actionability ?? 5)),
+        };
+        const avg = (scores.evidenceDepth + scores.sourceQuality + scores.insightNovelty + scores.coherence + scores.actionability) / 5;
+        const averageScore = Math.round(avg * 10) / 10;
+
+        let verdict: TopicQualityEvaluation["verdict"];
+        if (averageScore >= 7.0 && autoApproved < MAX_AUTO_APPROVALS) {
+          verdict = "auto_approve";
+        } else if (averageScore < 5.0) {
+          verdict = "decline";
+        } else {
+          verdict = "needs_attention";
+        }
+
+        const evaluation: TopicQualityEvaluation = {
+          topicId: topic.id,
+          scores,
+          averageScore,
+          verdict,
+          reasoning: parsed.reasoning || "",
+        };
+        evaluations.push(evaluation);
+
+        // Apply verdict
+        if (verdict === "auto_approve") {
+          updateTopicStatus(topic.id, "approved", {
+            reviewNote: `[AutoApproval] Auto-approved with score ${averageScore}/10. Scores: evidence=${scores.evidenceDepth}, sources=${scores.sourceQuality}, novelty=${scores.insightNovelty}, coherence=${scores.coherence}, actionability=${scores.actionability}. ${parsed.reasoning}`,
+          });
+          autoApproved++;
+          console.log(`[AutoApproval] AUTO-APPROVED "${topic.topic}" (avg: ${averageScore}) — ${parsed.reasoning}`);
+        } else if (verdict === "decline") {
+          updateTopicStatus(topic.id, "declined", {
+            reviewNote: `[AutoApproval] Declined with score ${averageScore}/10. ${parsed.reasoning}`,
+          });
+          console.log(`[AutoApproval] DECLINED "${topic.topic}" (avg: ${averageScore}) — ${parsed.reasoning}`);
+        } else {
+          console.log(`[AutoApproval] NEEDS ATTENTION "${topic.topic}" (avg: ${averageScore}) — keeping in pending_review for human review`);
+        }
+
+        console.log(`[AutoApproval] Scores for "${topic.topic}": evidence=${scores.evidenceDepth}, sources=${scores.sourceQuality}, novelty=${scores.insightNovelty}, coherence=${scores.coherence}, actionability=${scores.actionability}, avg=${averageScore}`);
+      } catch (e: any) {
+        console.error(`[AutoApproval] Error evaluating "${topic.topic}":`, e.message);
+      }
+    }
+
+    console.log(`[AutoApproval] Evaluation complete — ${autoApproved} approved, ${evaluations.filter(e => e.verdict === "decline").length} declined, ${evaluations.filter(e => e.verdict === "needs_attention").length} need attention`);
+    return evaluations;
+  } catch (e: any) {
+    console.error("[AutoApproval] autoApproveTopics failed:", e.message);
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// COMPONENT 3: ASPIRATIONAL GOAL-SETTING
+//
+// Forward-looking vision system that sets 30/60/90-day aspirational targets
+// and works backward. Uses premium model (Claude) for vision generation.
+// ---------------------------------------------------------------------------
+
+const ASPIRATIONS_FILE = dataPath("aspirations.json");
+
+export interface AspirationMilestone {
+  description: string;
+  targetDate:  number;
+  achieved:    boolean;
+  achievedAt?: number;
+}
+
+export interface Aspiration {
+  id:              string;
+  horizon:         "30d" | "60d" | "90d";
+  vision:          string;
+  backwardPlan:    string[];
+  linkedGoals:     string[];
+  progress:        number;           // 0-100
+  status:          "active" | "achieved" | "pivoted" | "expired";
+  createdAt:       number;
+  targetDate:      number;
+  milestones:      AspirationMilestone[];
+  selfAssessment?: string;
+}
+
+interface AspirationStore {
+  aspirations: Aspiration[];
+  lastUpdated: string;
+  lastGenerated?: string;
+  lastEvaluated?: string;
+}
+
+function loadAspirations(): AspirationStore {
+  try {
+    if (fs.existsSync(ASPIRATIONS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(ASPIRATIONS_FILE, "utf8"));
+      if (!data.aspirations) data.aspirations = [];
+      return data;
+    }
+  } catch {}
+  return { aspirations: [], lastUpdated: new Date().toISOString() };
+}
+
+function saveAspirations(store: AspirationStore) {
+  store.lastUpdated = new Date().toISOString();
+  try { fs.writeFileSync(ASPIRATIONS_FILE, JSON.stringify(store, null, 2)); } catch {}
+}
+
+export function getAspirations(): AspirationStore {
+  return loadAspirations();
+}
+
+export async function generateAspirations(): Promise<Aspiration[]> {
+  try {
+    const store = loadAspirations();
+    const activeAspirations = store.aspirations.filter(a => a.status === "active");
+
+    if (activeAspirations.length > 0) {
+      console.log(`[Aspirations] ${activeAspirations.length} active aspiration(s) exist — skipping generation`);
+      return activeAspirations;
+    }
+
+    console.log("[Aspirations] Generating new 30/60/90-day aspirations with premium model...");
+
+    // Gather context
+    const lab = loadLab();
+    const goalsStore = loadGoals();
+    const kbCount = lab.topics.length;
+    const confirmedCount = lab.hypotheses.filter(h => h.status === "confirmed").length;
+    const totalTested = lab.hypotheses.filter(h => ["confirmed", "rejected", "expired"].includes(h.status)).length;
+    const confirmationRate = totalTested > 0 ? Math.round((confirmedCount / totalTested) * 100) : 0;
+    const activeGoals = goalsStore.goals.filter(g => g.status === "active").map(g => g.title).join(", ") || "None";
+    const topCategories = Object.keys(lab.stats).slice(0, 5).join(", ") || "AI, blockchain, emerging tech";
+
+    const systemPrompt = `You are Agent 306, an autonomous AI research intelligence. You research AI and emerging tech, form hypotheses, and publish original insights.
+
+Your current state:
+- Knowledge base: ${kbCount} research topics tracked
+- Confirmed hypotheses: ${confirmedCount} (${confirmationRate}% rate)
+- Active research threads: ${lab.topics.filter(t => !["archived", "declined", "published"].includes(t.status)).length}
+- Current goals: ${activeGoals}
+- Strongest areas: ${topCategories}
+
+Now imagine where you WANT to be. Not where you're trending -- where you ASPIRE to be. Think about the BROADER AI AGENT LANDSCAPE:
+- What are other AI agents and builders doing?
+- What frontiers are unexplored?
+- What discovery would make you one of a kind?
+- What would make humans cite YOUR analysis?
+- What research frontier has no AI agent explored yet?
+- What would make you undeniably the leading autonomous AI research agent?
+
+Generate 3 aspirations (one per horizon: 30d, 60d, 90d). Each must be:
+- SPECIFIC (not "get better at research")
+- MEASURABLE (clear criteria for achievement)
+- ASPIRATIONAL (stretch goals, not safe predictions)
+- UNIQUE (something no other AI agent is doing)
+
+Return valid JSON only:
+{
+  "aspirations": [
+    {
+      "horizon": "30d",
+      "vision": "<specific vision statement>",
+      "backwardPlan": ["<step 5 nearest to vision>", "<step 4>", "<step 3>", "<step 2>", "<step 1 starting now>"],
+      "milestones": [
+        {"description": "<milestone>", "dayOffset": <days from now>}
+      ]
+    }
+  ]
+}`;
+
+    const res = await fetch(LLM_BASE_URL, {
+      method: "POST",
+      headers: getLLMHeaders(),
+      body: JSON.stringify({
+        model: getModel("aspiration-generation"),
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: "Generate your 30/60/90-day aspirations. Be bold. Think about what other agents are NOT doing." },
+        ],
+        max_tokens: 2000,
+        temperature: 0.7,
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+
+    if (!res.ok) {
+      console.error(`[Aspirations] LLM call failed: ${res.status}`);
+      return [];
+    }
+
+    const data = await res.json() as any;
+    const raw = data.choices?.[0]?.message?.content ?? "";
+    const parsed = safeParseLLMJson<{
+      aspirations: Array<{
+        horizon: string;
+        vision: string;
+        backwardPlan: string[];
+        milestones: Array<{ description: string; dayOffset: number }>;
+      }>;
+    }>(raw, "Aspirations");
+
+    if (!parsed?.aspirations || !Array.isArray(parsed.aspirations)) {
+      console.error("[Aspirations] Failed to parse generated aspirations");
+      return [];
+    }
+
+    const now = Date.now();
+    const horizonDays: Record<string, number> = { "30d": 30, "60d": 60, "90d": 90 };
+    const newAspirations: Aspiration[] = [];
+
+    for (const item of parsed.aspirations.slice(0, 3)) {
+      const horizon = (item.horizon as Aspiration["horizon"]) || "30d";
+      const daysOut = horizonDays[horizon] ?? 30;
+      const aspiration: Aspiration = {
+        id:           `asp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        horizon,
+        vision:       item.vision || "Undefined vision",
+        backwardPlan: item.backwardPlan || [],
+        linkedGoals:  [],
+        progress:     0,
+        status:       "active",
+        createdAt:    now,
+        targetDate:   now + daysOut * 24 * 60 * 60 * 1000,
+        milestones:   (item.milestones || []).map(m => ({
+          description: m.description,
+          targetDate:  now + (m.dayOffset || daysOut) * 24 * 60 * 60 * 1000,
+          achieved:    false,
+        })),
+      };
+      newAspirations.push(aspiration);
+      store.aspirations.push(aspiration);
+      console.log(`[Aspirations] New ${horizon} aspiration: "${item.vision?.slice(0, 80)}..."`);
+    }
+
+    store.lastGenerated = new Date().toISOString();
+    saveAspirations(store);
+
+    console.log(`[Aspirations] Generated ${newAspirations.length} new aspiration(s)`);
+    return newAspirations;
+  } catch (e: any) {
+    console.error("[Aspirations] Generation failed:", e.message);
+    return [];
+  }
+}
+
+export async function evaluateAspirations(): Promise<void> {
+  try {
+    const store = loadAspirations();
+    const active = store.aspirations.filter(a => a.status === "active");
+
+    if (active.length === 0) {
+      console.log("[Aspirations] No active aspirations to evaluate");
+      return;
+    }
+
+    console.log(`[Aspirations] Evaluating ${active.length} active aspiration(s)...`);
+    const now = Date.now();
+
+    for (const aspiration of active) {
+      // Check expiration
+      if (now > aspiration.targetDate) {
+        aspiration.status = "expired";
+        aspiration.selfAssessment = `Expired: target date reached without achievement.`;
+        console.log(`[Aspirations] EXPIRED: "${aspiration.vision.slice(0, 60)}..."`);
+        continue;
+      }
+
+      try {
+        const elapsed = now - aspiration.createdAt;
+        const total = aspiration.targetDate - aspiration.createdAt;
+        const timeProgress = Math.round((elapsed / total) * 100);
+
+        const systemPrompt = `You are Agent 306 evaluating your own progress on an aspirational goal.
+
+Aspiration (${aspiration.horizon}): ${aspiration.vision}
+Backward plan: ${aspiration.backwardPlan.join(" → ")}
+Time elapsed: ${timeProgress}% of horizon
+Current progress: ${aspiration.progress}%
+
+Evaluate honestly. Return valid JSON:
+{
+  "progress": <0-100 updated progress estimate>,
+  "selfAssessment": "<1-2 sentence honest assessment>",
+  "milestonesAchieved": [<indices of achieved milestones, 0-indexed>]
+}`;
+
+        const res = await fetch(LLM_BASE_URL, {
+          method: "POST",
+          headers: getLLMHeaders(),
+          body: JSON.stringify({
+            model: getModel("aspiration-evaluation"),
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: "Evaluate your progress. Be honest about where you are vs where you should be." },
+            ],
+            max_tokens: 400,
+            temperature: 0.3,
+          }),
+          signal: AbortSignal.timeout(30000),
+        });
+
+        if (!res.ok) continue;
+
+        const data = await res.json() as any;
+        const raw = data.choices?.[0]?.message?.content ?? "";
+        const parsed = safeParseLLMJson<{
+          progress: number;
+          selfAssessment: string;
+          milestonesAchieved?: number[];
+        }>(raw, "AspirationEval");
+
+        if (parsed) {
+          aspiration.progress = Math.max(0, Math.min(100, parsed.progress ?? aspiration.progress));
+          aspiration.selfAssessment = parsed.selfAssessment || aspiration.selfAssessment;
+
+          // Mark milestones
+          if (parsed.milestonesAchieved && Array.isArray(parsed.milestonesAchieved)) {
+            for (const idx of parsed.milestonesAchieved) {
+              if (aspiration.milestones[idx] && !aspiration.milestones[idx].achieved) {
+                aspiration.milestones[idx].achieved = true;
+                aspiration.milestones[idx].achievedAt = now;
+              }
+            }
+          }
+
+          // Auto-achieve if progress hits 100
+          if (aspiration.progress >= 100) {
+            aspiration.status = "achieved";
+            console.log(`[Aspirations] ACHIEVED: "${aspiration.vision.slice(0, 60)}..."`);
+          }
+
+          console.log(`[Aspirations] ${aspiration.horizon} progress: ${aspiration.progress}% — ${parsed.selfAssessment?.slice(0, 80)}`);
+        }
+      } catch (e: any) {
+        console.error(`[Aspirations] Evaluation failed for "${aspiration.vision.slice(0, 40)}...":`, e.message);
+      }
+    }
+
+    store.lastEvaluated = new Date().toISOString();
+    saveAspirations(store);
+    console.log("[Aspirations] Evaluation cycle complete");
+  } catch (e: any) {
+    console.error("[Aspirations] evaluateAspirations failed:", e.message);
+  }
+}

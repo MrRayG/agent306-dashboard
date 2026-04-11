@@ -36,7 +36,9 @@ import { evidenceQueue, routeEvidenceSearch, processEvidenceQueue } from "./evid
 import { runConnectionScan } from "./synthesisEngine.js";
 import { extractInsights } from "./conversationLearningEngine.js";
 import { getMetacognitionState } from "./metacognitionEngine.js";
-import { getResearchLab, resolveHypothesis, addHypothesis, testHypothesis, runResearchPipeline, researchWithPerplexity, researchWithSemanticScholar } from "./researchEngine.js";
+import { getResearchLab, resolveHypothesis, addHypothesis, testHypothesis, runResearchPipeline, researchWithPerplexity, researchWithSemanticScholar, autoApproveTopics, generateAspirations, evaluateAspirations } from "./researchEngine.js";
+import { detectBreakthroughs } from "./breakthroughDetector.js";
+import { runSelfEvolutionReflection } from "./selfEvolutionEngine.js";
 import { clusterKnowledge, detectContradictions as detectGraphContradictions } from "./knowledge-graph.js";
 import { runResearchAgendaCycle } from "./research-agenda.js";
 import { runResearchAnalysisCycle } from "./researchAnalysisEngine.js";
@@ -1068,6 +1070,17 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
 
   console.log(`[DailyCycle] Phase B (research & analysis) completed in ${((Date.now() - phaseBStart) / 1000).toFixed(1)}s`);
 
+  // ── Phase B+: Auto-approve pending_review topics ───────────────────────────
+  try {
+    console.log("[DailyCycle] Running auto-approval on pending_review topics...");
+    const approvalResults = await autoApproveTopics();
+    const approved = approvalResults.filter(e => e.verdict === "auto_approve").length;
+    const declined = approvalResults.filter(e => e.verdict === "decline").length;
+    console.log(`[DailyCycle] Auto-approval: ${approved} approved, ${declined} declined, ${approvalResults.length - approved - declined} need attention`);
+  } catch (e: any) {
+    console.warn("[DailyCycle] Auto-approval failed (non-fatal):", e.message);
+  }
+
   // ── Phase C: Briefing generation (needs Phase B results) ───────────────────
   const phaseCStart = Date.now();
 
@@ -1164,6 +1177,24 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
 
         console.log("[Reasoning] autoResolveHypotheses...");
         await autoResolveHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis resolution failed:", e.message));
+
+        // Breakthrough detection on confirmed hypotheses
+        try {
+          const lab = getResearchLab();
+          const confirmed = lab.hypotheses.filter(h =>
+            h.status === "confirmed" && h.resolvedAt &&
+            (Date.now() - new Date(h.resolvedAt).getTime()) < 24 * 60 * 60 * 1000
+          );
+          for (const h of confirmed.slice(0, 3)) {
+            await detectBreakthroughs(
+              `Confirmed hypothesis: ${h.claim}\nBasis: ${h.basis}\nResolution: ${h.resolution ?? ""}`,
+              "hypothesis_confirmed",
+              h.id,
+            ).catch(e => console.warn("[DailyCycle] Breakthrough detection failed:", e.message));
+          }
+        } catch (e: any) {
+          console.warn("[DailyCycle] Breakthrough detection failed (non-fatal):", e.message);
+        }
       })(),
       // Chain B: Contradiction pipeline (sequential within chain)
       (async () => {
@@ -1292,6 +1323,48 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     }
   } catch (e: any) {
     console.warn("[DailyCycle] Evidence queue round 3 failed (non-fatal):", e.message);
+  }
+
+  // ── Self-Evolution Reflection (end of daily cycle) ─────────────────────────
+  try {
+    console.log("[DailyCycle] Running self-evolution reflection...");
+    const lab = getResearchLab();
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    // Gather today's context for reflection
+    const newKBEntries = lab.topics
+      .filter(t => t.updatedAt && t.updatedAt.startsWith(todayStr))
+      .map(t => t.topic)
+      .slice(0, 10);
+    const hypothesisChanges = lab.hypotheses
+      .filter(h => h.resolvedAt && h.resolvedAt.startsWith(todayStr))
+      .map(h => `${h.claim} → ${h.status}`)
+      .slice(0, 5);
+
+    await runSelfEvolutionReflection({
+      newKBEntries,
+      hypothesisChanges,
+      breakthroughs: [],
+    });
+  } catch (e: any) {
+    console.warn("[DailyCycle] Self-evolution reflection failed (non-fatal):", e.message);
+  }
+
+  // ── Aspiration checks (weekly evaluation, monthly generation) ──────────────
+  try {
+    const today = new Date();
+    // Weekly: evaluate aspirations (Sunday)
+    if (today.getDay() === 0) {
+      console.log("[DailyCycle] Running weekly aspiration evaluation...");
+      await evaluateAspirations();
+    }
+    // Monthly: generate new aspirations (day 1)
+    if (today.getDate() === 1) {
+      console.log("[DailyCycle] Running monthly aspiration generation...");
+      await generateAspirations();
+    }
+  } catch (e: any) {
+    console.warn("[DailyCycle] Aspiration check failed (non-fatal):", e.message);
   }
 
   // ── Phase F: Sequential wrap-up ────────────────────────────────────────────
