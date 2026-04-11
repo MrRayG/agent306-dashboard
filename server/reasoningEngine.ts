@@ -13,6 +13,7 @@ import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { semanticSearch } from "./embeddingEngine.js";
+import { evidenceQueue, routeEvidenceSearch } from "./evidenceDispatcher.js";
 
 const GROK_URL = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
@@ -193,6 +194,24 @@ Critique this ${topicType}. Find every weakness.`;
   saveDebates(debates);
 
   console.log(`[Reasoning] Debate on "${title}" — assessment: ${debate.critique.overallAssessment}`);
+
+  // Evidence-first pipeline: convert debate suggestions to evidence requests (max 2)
+  if (topicType === "hypothesis" && debate.critique.suggestions.length > 0) {
+    try {
+      for (const suggestion of debate.critique.suggestions.slice(0, 2)) {
+        evidenceQueue.add({
+          source: "debate_suggestion",
+          query: suggestion,
+          targetId: topicId,
+          priority: 4,
+          searchRoute: routeEvidenceSearch(title),
+        });
+      }
+    } catch (e: any) {
+      console.warn(`[Reasoning] Failed to queue evidence from debate suggestions:`, e.message);
+    }
+  }
+
   return debate;
 }
 
@@ -478,6 +497,23 @@ Assess whether this hypothesis has enough evidence to move from "forming" to act
     console.log(`[Reasoning] Adversarial evaluation found counter-argument — confidence downgraded to ${assessment.confidence.toFixed(2)}`);
   }
 
+  // Evidence-first pipeline: queue evidence requests for identified gaps
+  if (assessment.gapsIdentified.length > 0) {
+    try {
+      for (const gap of assessment.gapsIdentified) {
+        evidenceQueue.add({
+          source: "hypothesis_test",
+          query: gap,
+          targetId: hypothesis.id,
+          priority: assessment.verdict === "needs_more_evidence" ? 8 : 4,
+          searchRoute: routeEvidenceSearch(hypothesis.claim),
+        });
+      }
+    } catch (e: any) {
+      console.warn(`[Reasoning] Failed to queue evidence for gaps:`, e.message);
+    }
+  }
+
   return assessment;
 }
 
@@ -652,6 +688,218 @@ export function calculateTrustScore(hypothesis: {
 
   // Clamp to 0-100
   return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+// ── Evidence Triage — classify hypotheses by evidence availability ───────────
+
+export interface EvidenceTriage {
+  hypothesisId: string;
+  bucket: "evidence_rich" | "evidence_sparse" | "evidence_absent";
+  kbMatchCount: number;
+  kbFreshness: "fresh" | "stale" | "none";
+  recommendedSources: Array<"perplexity_web" | "semantic_scholar" | "grok_x_search" | "perplexity_news">;
+  searchQueries: string[];
+}
+
+/**
+ * Lightweight evidence availability check before rubric evaluation.
+ * Runs semanticSearch() against the hypothesis claim and classifies into
+ * evidence_rich / evidence_sparse / evidence_absent based on match count and freshness.
+ */
+export async function triageHypothesisEvidence(
+  hypothesis: { id: string; claim: string; prediction: string },
+): Promise<EvidenceTriage> {
+  const defaultTriage: EvidenceTriage = {
+    hypothesisId: hypothesis.id,
+    bucket: "evidence_absent",
+    kbMatchCount: 0,
+    kbFreshness: "none",
+    recommendedSources: [],
+    searchQueries: [],
+  };
+
+  try {
+    const searchQuery = `${hypothesis.claim} ${hypothesis.prediction}`;
+    const results = await semanticSearch(searchQuery, { maxResults: 20, excludeArchived: true });
+
+    // Count entries with relevance > 0.6
+    const relevantResults = results.filter(r => r.similarity > 0.6);
+    const matchCount = relevantResults.length;
+
+    // Check freshness of top matches
+    let freshness: "fresh" | "stale" | "none" = "none";
+    if (relevantResults.length > 0) {
+      const newestEntry = relevantResults[0].entry;
+      const entryDate = new Date(newestEntry.updatedAt ?? newestEntry.learnedAt ?? 0);
+      const ageDays = (Date.now() - entryDate.getTime()) / (24 * 60 * 60 * 1000);
+      if (ageDays < 7) freshness = "fresh";
+      else if (ageDays < 30) freshness = "stale";
+      // 30+ days or no date = "none"
+    }
+
+    // Classify bucket
+    let bucket: EvidenceTriage["bucket"];
+    if (matchCount >= 3 && freshness === "fresh") {
+      bucket = "evidence_rich";
+    } else if (matchCount >= 1) {
+      bucket = "evidence_sparse";
+    } else {
+      bucket = "evidence_absent";
+    }
+
+    // Generate search queries for sparse/absent using routine model
+    let searchQueries: string[] = [];
+    if (bucket !== "evidence_rich") {
+      try {
+        const result = await callGrokWithModel("evidence-search-query-gen",
+          `Generate 2-3 targeted search queries to find evidence about this hypothesis. Return ONLY valid JSON: {"queries": ["query1", "query2"]}`,
+          `Hypothesis claim: ${hypothesis.claim}\nPrediction: ${hypothesis.prediction}`,
+        );
+        if (result?.queries && Array.isArray(result.queries)) {
+          searchQueries = result.queries.slice(0, 3);
+        }
+      } catch (e: any) {
+        console.warn(`[Reasoning] Search query generation failed:`, e.message);
+        // Fallback: use the claim itself
+        searchQueries = [hypothesis.claim];
+      }
+    }
+
+    // Determine recommended sources from the route
+    const route = routeEvidenceSearch(hypothesis.claim);
+    const recommendedSources = route.sources.map(s => s.type);
+
+    const triage: EvidenceTriage = {
+      hypothesisId: hypothesis.id,
+      bucket,
+      kbMatchCount: matchCount,
+      kbFreshness: freshness,
+      recommendedSources,
+      searchQueries,
+    };
+
+    console.log(`[Reasoning] Evidence triage for "${hypothesis.claim.slice(0, 50)}": ${bucket} (${matchCount} matches, freshness: ${freshness})`);
+    return triage;
+  } catch (e: any) {
+    console.error(`[Reasoning] Evidence triage failed:`, e.message);
+    return defaultTriage;
+  }
+}
+
+// ── Rejection Velocity Tracking ─────────────────────────────────────────────
+
+interface RejectionEvent {
+  hypothesisId: string;
+  reason: string;     // "insufficient_evidence", "low_rubric", "debate_flawed", "adversarial_counter"
+  timestamp: number;
+  wasConfirmed: boolean;
+}
+
+export interface RejectionMetrics {
+  last24h: {
+    total: number;
+    rejected: number;
+    confirmed: number;
+    rejectionRate: number;
+    topRejectionReasons: Array<{
+      reason: string;
+      count: number;
+      percentage: number;
+    }>;
+  };
+  velocity: {
+    currentRate: number;
+    previousRate: number;
+    trend: "accelerating" | "stable" | "decelerating";
+  };
+  interventionTriggered: boolean;
+}
+
+// In-memory rolling 48h window of rejection events
+const rejectionEvents: RejectionEvent[] = [];
+
+/**
+ * Record a rejection or confirmation event for velocity tracking.
+ */
+export function recordRejectionEvent(hypothesisId: string, reason: string, wasConfirmed: boolean): void {
+  rejectionEvents.push({
+    hypothesisId,
+    reason,
+    timestamp: Date.now(),
+    wasConfirmed,
+  });
+}
+
+/**
+ * Compute rejection metrics from the rolling 48h window.
+ * Sets interventionTriggered when rejection rate > 70% with evidence-related reasons.
+ */
+export function trackRejectionVelocity(): RejectionMetrics {
+  const now = Date.now();
+  const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000;
+  const fortyEightHoursAgo = now - 48 * 60 * 60 * 1000;
+
+  // Prune events older than 48h
+  while (rejectionEvents.length > 0 && rejectionEvents[0].timestamp < fortyEightHoursAgo) {
+    rejectionEvents.shift();
+  }
+
+  // Last 24h events
+  const recent = rejectionEvents.filter(e => e.timestamp > twentyFourHoursAgo);
+  const rejected = recent.filter(e => !e.wasConfirmed);
+  const confirmed = recent.filter(e => e.wasConfirmed);
+  const rejectionRate = recent.length > 0 ? rejected.length / recent.length : 0;
+
+  // Top rejection reasons
+  const reasonCounts: Record<string, number> = {};
+  for (const e of rejected) {
+    reasonCounts[e.reason] = (reasonCounts[e.reason] ?? 0) + 1;
+  }
+  const topReasons = Object.entries(reasonCounts)
+    .map(([reason, count]) => ({
+      reason,
+      count,
+      percentage: rejected.length > 0 ? count / rejected.length : 0,
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+
+  // Previous 24h (24-48h ago) for velocity trend
+  const previous = rejectionEvents.filter(e => e.timestamp <= twentyFourHoursAgo && e.timestamp > fortyEightHoursAgo);
+  const previousRejected = previous.filter(e => !e.wasConfirmed);
+  const previousRate = previous.length > 0 ? previousRejected.length / previous.length : 0;
+
+  let trend: "accelerating" | "stable" | "decelerating";
+  if (rejectionRate > previousRate + 0.1) trend = "accelerating";
+  else if (rejectionRate < previousRate - 0.1) trend = "decelerating";
+  else trend = "stable";
+
+  // Intervention check: rejection rate > 70% AND top reason is evidence-related
+  const evidenceRelatedReasons = ["insufficient_evidence", "low_rubric", "weak_evidence"];
+  const topReasonIsEvidence = topReasons.length > 0 && evidenceRelatedReasons.includes(topReasons[0].reason);
+  const interventionTriggered = rejectionRate > 0.7 && topReasonIsEvidence;
+
+  const metrics: RejectionMetrics = {
+    last24h: {
+      total: recent.length,
+      rejected: rejected.length,
+      confirmed: confirmed.length,
+      rejectionRate,
+      topRejectionReasons: topReasons,
+    },
+    velocity: {
+      currentRate: rejectionRate,
+      previousRate,
+      trend,
+    },
+    interventionTriggered,
+  };
+
+  if (interventionTriggered) {
+    console.warn(`[Reasoning] INTERVENTION TRIGGERED — rejection rate: ${(rejectionRate * 100).toFixed(0)}%, top reason: ${topReasons[0]?.reason}`);
+  }
+
+  return metrics;
 }
 
 // ── Technique 3: Red-Flagging (cross-reference contradictions with hypotheses) ─

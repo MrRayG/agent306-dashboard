@@ -64,6 +64,8 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "adversarial-evaluation": "standard",      // Grok 4.20 — different model for diversity
   "hypothesis-decomposition": "routine",     // Gemini Flash — fast decomposition
   "trust-scoring": "routine",                // Gemini Flash — formulaic calculation
+  "evidence-triage": "routine",              // Gemini Flash — lightweight evidence availability check
+  "evidence-search-query-gen": "routine",    // Gemini Flash — generate search queries from claims
 
   // Premium — highest quality for public-facing content
   "deep-reasoning": "premium",
