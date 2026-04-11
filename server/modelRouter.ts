@@ -2,21 +2,23 @@
  * Smart Model Router for Agent 306.
  * 
  * Routes tasks to appropriate models via OpenRouter:
- *   routine  → google/gemini-2.5-flash  (cheapest, fast)
- *   standard → x-ai/grok-4.20          (current default via OpenRouter)
- *   premium  → anthropic/claude-sonnet-4.6  (highest quality for scripts/synthesis)
+ *   routine     → google/gemini-2.5-flash          (cheapest, fast)
+ *   standard    → x-ai/grok-4.20                  (current default via OpenRouter)
+ *   premium     → anthropic/claude-sonnet-4.6      (highest quality for scripts/synthesis)
+ *   multi-agent → x-ai/grok-4.20-multi-agent      (4-agent collaborative debate)
  * 
  * OpenRouter model names use provider/model format.
  * If a model is unavailable, OpenRouter returns an error — 
  * callers should handle gracefully.
  */
 
-export type TaskComplexity = "routine" | "standard" | "premium";
+export type TaskComplexity = "routine" | "standard" | "premium" | "multi-agent";
 
 const MODEL_MAP: Record<TaskComplexity, string> = {
-  routine:  process.env.MODEL_ROUTINE  ?? "google/gemini-2.5-flash-lite",
-  standard: process.env.MODEL_STANDARD ?? "x-ai/grok-4.20",
-  premium:  process.env.MODEL_PREMIUM  ?? "anthropic/claude-sonnet-4.6",
+  routine:       process.env.MODEL_ROUTINE     ?? "google/gemini-2.5-flash-lite",
+  standard:      process.env.MODEL_STANDARD    ?? "x-ai/grok-4.20",
+  premium:       process.env.MODEL_PREMIUM     ?? "anthropic/claude-sonnet-4.6",
+  "multi-agent": process.env.MODEL_MULTI_AGENT ?? "x-ai/grok-4.20-multi-agent",
 };
 
 const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
@@ -26,7 +28,7 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "contradiction-scan": "routine",
   "connection-scan": "routine",
   "conversation-insights": "routine",
-  "hypothesis-resolution": "routine",
+  "hypothesis-resolution": "multi-agent",    // Grok 4.20 Multi-Agent — built-in 4-agent debate for confirm/reject
   "knowledge-categorization": "routine",
   "tier-assignment": "routine",
   "injection-scan": "routine",

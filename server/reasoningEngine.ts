@@ -454,7 +454,7 @@ Assess whether this hypothesis has enough evidence to move from "forming" to act
   // Technique 8: Adversarial Evaluation — devil's advocate pass with different model
   const adversarialResult = await runAdversarialEvaluation(hypothesis, assessment);
   if (adversarialResult && adversarialResult.strongCounterFound) {
-    assessment.confidence = Math.max(0, assessment.confidence - 0.2);
+    assessment.confidence = Math.max(0, assessment.confidence - 0.1);
     assessment.gapsIdentified.push(`Adversarial counter: ${adversarialResult.counterArgument}`);
     console.log(`[Reasoning] Adversarial evaluation found counter-argument — confidence downgraded to ${assessment.confidence.toFixed(2)}`);
   }
