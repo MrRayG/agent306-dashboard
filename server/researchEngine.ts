@@ -406,6 +406,96 @@ export async function researchWithPerplexity(query: string, pplxKey: string): Pr
   } catch { return { text: "", sources: [] }; }
 }
 
+// ── Semantic Scholar API ─────────────────────────────────────────────────────
+
+export interface SemanticScholarPaper {
+  title: string;
+  abstract: string;
+  year: number;
+  citationCount: number;
+  url: string;
+  authors: string[];
+}
+
+export async function researchWithSemanticScholar(
+  query: string
+): Promise<{ papers: SemanticScholarPaper[] }> {
+  try {
+    const params = new URLSearchParams({
+      query,
+      limit: "10",
+      fields: "title,abstract,year,citationCount,url,authors",
+    });
+    const res = await fetch(
+      `https://api.semanticscholar.org/graph/v1/paper/search?${params}`,
+      { signal: AbortSignal.timeout(15000) }
+    );
+    if (!res.ok) return { papers: [] };
+    const data = await res.json() as any;
+    const raw: any[] = data?.data ?? [];
+    const papers: SemanticScholarPaper[] = raw
+      .filter((p: any) => p.title && p.abstract)
+      .map((p: any) => ({
+        title:         p.title ?? "",
+        abstract:      p.abstract ?? "",
+        year:          p.year ?? 0,
+        citationCount: p.citationCount ?? 0,
+        url:           p.url ?? `https://www.semanticscholar.org/paper/${p.paperId ?? ""}`,
+        authors:       (p.authors ?? []).map((a: any) => a.name ?? "").filter(Boolean),
+      }))
+      .sort((a: SemanticScholarPaper, b: SemanticScholarPaper) => b.citationCount - a.citationCount);
+    return { papers };
+  } catch {
+    return { papers: [] };
+  }
+}
+
+// ── Multi-source research ────────────────────────────────────────────────────
+
+export interface MultiSourceResult {
+  perplexity: { text: string; sources: string[] };
+  academic: { papers: SemanticScholarPaper[] };
+  combined: string;
+}
+
+export async function researchMultiSource(
+  query: string,
+  pplxKey: string
+): Promise<MultiSourceResult> {
+  const [pplxSettled, scholarSettled] = await Promise.allSettled([
+    researchWithPerplexity(query, pplxKey),
+    researchWithSemanticScholar(query),
+  ]);
+
+  const perplexity = pplxSettled.status === "fulfilled"
+    ? pplxSettled.value
+    : { text: "", sources: [] };
+  const academic = scholarSettled.status === "fulfilled"
+    ? scholarSettled.value
+    : { papers: [] };
+
+  // Build combined summary for LLM consumption
+  let combined = "";
+  if (perplexity.text) {
+    combined += `WEB EVIDENCE:\n${perplexity.text}\n\n`;
+  }
+  if (academic.papers.length > 0) {
+    combined += `ACADEMIC EVIDENCE:\n${academic.papers
+      .slice(0, 5)
+      .map(p => `- "${p.title}" (${p.year}, ${p.citationCount} citations): ${p.abstract.slice(0, 200)}`)
+      .join("\n")}\n`;
+  }
+  if (!combined) {
+    combined = "No evidence found from either web search or academic sources.";
+  }
+
+  const pplxChars = perplexity.text.length;
+  const paperCount = academic.papers.length;
+  console.log(`[Research] Multi-source query "${query.slice(0, 50)}": Perplexity ${pplxChars} chars, Scholar ${paperCount} papers`);
+
+  return { perplexity, academic, combined };
+}
+
 // ── Pipeline helpers ─────────────────────────────────────────────────────────
 
 export function addPhaseEntry(
@@ -519,28 +609,64 @@ export async function runPhase2_LiteratureReview(
 
   let existingWork = "";
   const allSources: string[] = [];
+  let academicContext = "";
 
-  // Search Perplexity first
-  if (pplxKey) {
-    const pplxResult = await researchWithPerplexity(
-      `Comprehensive overview of existing research, analysis, and expert opinions on: ${topic.researchQuestion ?? topic.topic}. What is already well-established? What are the open questions and debates?`,
-      pplxKey
-    );
-    logSearchAttempt(topic, "perplexity", topic.researchQuestion ?? topic.topic, pplxResult.text.length > 50, pplxResult.text.slice(0, 200));
+  // Search Perplexity + Semantic Scholar in parallel
+  const litQuery = topic.researchQuestion ?? topic.topic;
+  const [pplxSettled, scholarSettled] = await Promise.allSettled([
+    pplxKey
+      ? researchWithPerplexity(
+          `Comprehensive overview of existing research, analysis, and expert opinions on: ${litQuery}. What is already well-established? What are the open questions and debates?`,
+          pplxKey
+        )
+      : Promise.resolve({ text: "", sources: [] as string[] }),
+    researchWithSemanticScholar(litQuery),
+  ]);
+
+  if (pplxSettled.status === "fulfilled") {
+    const pplxResult = pplxSettled.value;
+    logSearchAttempt(topic, "perplexity", litQuery, pplxResult.text.length > 50, pplxResult.text.slice(0, 200));
     if (pplxResult.text) {
       existingWork += pplxResult.text;
       allSources.push(...pplxResult.sources);
     }
   }
 
-  // Also ask Grok for its knowledge
+  if (scholarSettled.status === "fulfilled" && scholarSettled.value.papers.length > 0) {
+    const papers = scholarSettled.value.papers;
+    logSearchAttempt(topic, "academic", litQuery, true, `${papers.length} papers, top: ${papers[0]?.title?.slice(0, 80)}`);
+    academicContext = papers.slice(0, 5)
+      .map(p => `- "${p.title}" (${p.year}, ${p.citationCount} citations): ${p.abstract.slice(0, 200)}`)
+      .join("\n");
+    // Add Semantic Scholar URLs as sources
+    for (const p of papers.slice(0, 5)) {
+      if (p.url && !allSources.includes(p.url)) allSources.push(p.url);
+    }
+    // Add academic papers as data points
+    if (!topic.dataPoints) topic.dataPoints = [];
+    for (const p of papers.slice(0, 3)) {
+      topic.dataPoints.push({
+        source:      "semantic_scholar",
+        sourceUrl:   p.url,
+        content:     `${p.title} (${p.year}, ${p.citationCount} citations) — ${p.abstract.slice(0, 300)}`,
+        type:        "academic",
+        relevance:   p.citationCount > 50 ? "high" : "medium",
+        collectedAt: new Date().toISOString(),
+      });
+    }
+    console.log(`[Research] Phase 2: Semantic Scholar found ${papers.length} papers for "${litQuery.slice(0, 50)}"`);
+  } else {
+    logSearchAttempt(topic, "academic", litQuery, false, "No papers found or API error");
+  }
+
+  // Also ask Grok for its knowledge (include academic context)
   const grokResult = await callGrok(
     grokKey,
     "You are Agent 306 performing a literature review. Summarize what is known and identify gaps. Return valid JSON only.",
-    `Research question: ${topic.researchQuestion ?? topic.topic}\n\n${existingWork ? `Perplexity found:\n${existingWork.slice(0, 2000)}\n\n` : ""}Summarize what is already known about this topic. Identify specific knowledge gaps, conflicting viewpoints, and unanswered questions.\n\nReturn JSON:\n{\n  "existingWorkSummary": "comprehensive summary of what is known",\n  "gaps": ["gap 1", "gap 2", "gap 3"],\n  "conflictingViews": "any notable disagreements among experts",\n  "recommendation": "archive_if_no_gaps | proceed"\n}`,
+    `Research question: ${litQuery}\n\n${existingWork ? `Perplexity found:\n${existingWork.slice(0, 2000)}\n\n` : ""}${academicContext ? `Academic papers found:\n${academicContext}\n\n` : ""}Summarize what is already known about this topic. Identify specific knowledge gaps, conflicting viewpoints, and unanswered questions.\n\nReturn JSON:\n{\n  "existingWorkSummary": "comprehensive summary of what is known",\n  "gaps": ["gap 1", "gap 2", "gap 3"],\n  "conflictingViews": "any notable disagreements among experts",\n  "recommendation": "archive_if_no_gaps | proceed"\n}`,
     { maxTokens: 2000 },
   );
-  logSearchAttempt(topic, "grok", `Literature review: ${topic.researchQuestion ?? topic.topic}`, !!grokResult, grokResult?.existingWorkSummary?.slice(0, 200));
+  logSearchAttempt(topic, "grok", `Literature review: ${litQuery}`, !!grokResult, grokResult?.existingWorkSummary?.slice(0, 200));
 
   if (grokResult) {
     topic.existingWork = grokResult.existingWorkSummary ?? existingWork;
@@ -639,12 +765,19 @@ export async function runPhase5_DataCollection(
     ];
   }
 
-  // Execute queries via Perplexity
-  if (pplxKey) {
-    for (const query of queries) {
-      const result = await researchWithPerplexity(query, pplxKey);
-      logSearchAttempt(topic, "perplexity", query, result.text.length > 50, result.text.slice(0, 200));
+  // Execute queries via Perplexity + Semantic Scholar in parallel per query
+  for (const query of queries) {
+    const [pplxSettled, scholarSettled] = await Promise.allSettled([
+      pplxKey
+        ? researchWithPerplexity(query, pplxKey)
+        : Promise.resolve({ text: "", sources: [] as string[] }),
+      researchWithSemanticScholar(query),
+    ]);
 
+    // Process Perplexity results
+    if (pplxSettled.status === "fulfilled") {
+      const result = pplxSettled.value;
+      logSearchAttempt(topic, "perplexity", query, result.text.length > 50, result.text.slice(0, 200));
       if (result.text && result.text.length > 50) {
         topic.dataPoints.push({
           source:      "perplexity",
@@ -654,12 +787,30 @@ export async function runPhase5_DataCollection(
           relevance:   "high",
           collectedAt: new Date().toISOString(),
         });
-        // Store individual source URLs as separate data points for citation
         for (const url of result.sources.slice(1)) {
           if (!topic.sources) topic.sources = [];
           if (!topic.sources.includes(url)) topic.sources.push(url);
         }
       }
+    }
+
+    // Process Semantic Scholar results
+    if (scholarSettled.status === "fulfilled" && scholarSettled.value.papers.length > 0) {
+      const papers = scholarSettled.value.papers;
+      logSearchAttempt(topic, "academic", query, true, `${papers.length} papers`);
+      for (const p of papers.slice(0, 2)) {
+        topic.dataPoints.push({
+          source:      "semantic_scholar",
+          sourceUrl:   p.url,
+          content:     `${p.title} (${p.year}, ${p.citationCount} citations) — ${p.abstract.slice(0, 300)}`,
+          type:        "academic",
+          relevance:   p.citationCount > 50 ? "high" : "medium",
+          collectedAt: new Date().toISOString(),
+        });
+        if (!topic.sources) topic.sources = [];
+        if (p.url && !topic.sources.includes(p.url)) topic.sources.push(p.url);
+      }
+      console.log(`[Research] Phase 5: Scholar found ${papers.length} papers for "${query.slice(0, 50)}"`);
     }
   }
 

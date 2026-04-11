@@ -35,7 +35,7 @@ import {
 import { runConnectionScan } from "./synthesisEngine.js";
 import { extractInsights } from "./conversationLearningEngine.js";
 import { getMetacognitionState } from "./metacognitionEngine.js";
-import { getResearchLab, resolveHypothesis, addHypothesis, testHypothesis, runResearchPipeline, researchWithPerplexity } from "./researchEngine.js";
+import { getResearchLab, resolveHypothesis, addHypothesis, testHypothesis, runResearchPipeline, researchWithPerplexity, researchWithSemanticScholar } from "./researchEngine.js";
 import { clusterKnowledge, detectContradictions as detectGraphContradictions } from "./knowledge-graph.js";
 import { runResearchAgendaCycle } from "./research-agenda.js";
 import { runResearchAnalysisCycle } from "./researchAnalysisEngine.js";
@@ -443,8 +443,8 @@ async function autoResolveHypotheses(): Promise<number> {
       // ── Semantic KB context: per-hypothesis relevant entries ──
       let kbContext = fallbackKbContext;
       try {
-        const searchQuery = `${hyp.claim} ${hyp.prediction}`;
-        const semanticResults = await semanticSearch(searchQuery, { maxResults: 15, excludeArchived: true });
+        const kbSearchQuery = `${hyp.claim} ${hyp.prediction}`;
+        const semanticResults = await semanticSearch(kbSearchQuery, { maxResults: 15, excludeArchived: true });
         if (semanticResults.length > 0) {
           kbContext = semanticResults
             .map(r => `- [${r.entry.category}] ${r.entry.title}: ${r.entry.summary} (relevance: ${r.similarity.toFixed(2)})`)
@@ -455,29 +455,48 @@ async function autoResolveHypotheses(): Promise<number> {
         console.warn(`[DailyCycle] Semantic search failed for "${hyp.claim.slice(0, 50)}", using fallback:`, e.message);
       }
 
-      // ── Active evidence gathering via Perplexity Sonar ──
+      // ── Active evidence gathering via Perplexity Sonar + Semantic Scholar ──
       let liveEvidence = "";
-      if (pplxKey && pplxKey.length > 10) {
-        try {
-          const searchQuery = `Evidence for or against: ${hyp.claim}. ${hyp.prediction}. Look for recent data, studies, announcements, or expert analysis.`;
-          const pplxResult = await researchWithPerplexity(searchQuery, pplxKey);
-          if (pplxResult.text && pplxResult.text.length > 50) {
-            liveEvidence = pplxResult.text.slice(0, 2000);
-            const sourceList = pplxResult.sources.length > 0
-              ? `\nSources: ${pplxResult.sources.slice(0, 5).join(", ")}`
-              : "";
-            console.log(`[DailyCycle] Live evidence gathered for "${hyp.claim.slice(0, 50)}" — ${liveEvidence.length} chars${sourceList}`);
-          }
-        } catch (e: any) {
-          console.warn(`[DailyCycle] Evidence search failed for "${hyp.claim.slice(0, 50)}":`, e.message);
-        }
-        // Rate limit between Perplexity calls
-        await new Promise(r => setTimeout(r, 3000));
+      let academicEvidence = "";
+      const searchQuery = `Evidence for or against: ${hyp.claim}. ${hyp.prediction}. Look for recent data, studies, announcements, or expert analysis.`;
+
+      // Run Perplexity + Semantic Scholar in parallel
+      const [pplxSettled, scholarSettled] = await Promise.allSettled([
+        pplxKey && pplxKey.length > 10
+          ? researchWithPerplexity(searchQuery, pplxKey)
+          : Promise.resolve({ text: "", sources: [] as string[] }),
+        researchWithSemanticScholar(hyp.claim),
+      ]);
+
+      if (pplxSettled.status === "fulfilled" && pplxSettled.value.text.length > 50) {
+        liveEvidence = pplxSettled.value.text.slice(0, 2000);
+        const sourceList = pplxSettled.value.sources.length > 0
+          ? `\nSources: ${pplxSettled.value.sources.slice(0, 5).join(", ")}`
+          : "";
+        console.log(`[DailyCycle] Live evidence gathered for "${hyp.claim.slice(0, 50)}" — ${liveEvidence.length} chars${sourceList}`);
       }
 
-      const evidenceSection = liveEvidence
-        ? `\nLIVE EVIDENCE (freshly gathered from web search):\n${liveEvidence}`
-        : "\nNote: No live search was performed. Evaluate based on knowledge base only.";
+      if (scholarSettled.status === "fulfilled" && scholarSettled.value.papers.length > 0) {
+        const papers = scholarSettled.value.papers.slice(0, 5);
+        academicEvidence = papers
+          .map(p => `- "${p.title}" (${p.year}, ${p.citationCount} citations): ${p.abstract.slice(0, 200)}`)
+          .join("\n");
+        console.log(`[DailyCycle] Academic evidence gathered for "${hyp.claim.slice(0, 50)}" — ${papers.length} papers`);
+      }
+
+      // Rate limit between hypothesis resolution calls
+      await new Promise(r => setTimeout(r, 3000));
+
+      let evidenceSection = "";
+      if (liveEvidence) {
+        evidenceSection += `\nLIVE EVIDENCE (web search):\n${liveEvidence}`;
+      }
+      if (academicEvidence) {
+        evidenceSection += `\n\nACADEMIC EVIDENCE:\n${academicEvidence}`;
+      }
+      if (!evidenceSection) {
+        evidenceSection = "\nNote: No live search was performed. Evaluate based on knowledge base only.";
+      }
 
       const res = await fetch(GROK_URL, {
         method: "POST",
