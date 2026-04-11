@@ -89,6 +89,11 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "analysis-knowledge-map": "premium",     // Phase 3: knowledge map building
   "analysis-so-what": "standard",          // Phase 4: quality check
   "analysis-assumptions": "standard",      // Phase 4: assumption killer
+
+  // Agentic Triad tasks
+  "triad-fact-synthesis": "standard",       // Agent 3: package research → FactSheet
+  "triad-reasoning": "premium",            // Agent 0: analyze evidence → LogicMap
+  "triad-grounding-review": "premium",     // Agent 0: review Agent 6 output for grounding violations
 };
 
 /**
