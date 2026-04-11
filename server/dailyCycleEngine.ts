@@ -430,7 +430,7 @@ async function autoResolveHypotheses(): Promise<number> {
   const { knowledge: kb } = await import("./memoryEngine.js");
   const kbContext = kb.entries
     .filter(e => (e.status ?? "active") === "active")
-    .slice(0, 30)
+    .slice(0, 15)
     .map(e => `- [${e.category}] ${e.title}: ${e.summary}`)
     .join("\n");
 
@@ -490,13 +490,13 @@ Respond with ONLY valid JSON:
             {
               role: "user",
               content: `HYPOTHESIS:
-Claim: ${hyp.claim}
-Basis: ${hyp.basis}
-Prediction: ${hyp.prediction}
-Metric: ${hyp.metric}
-Timeframe: ${hyp.timeframe}
-Confidence: ${hyp.confidence}
-Formed: ${hyp.formedAt}
+Claim: ${hyp.claim ?? "unknown"}
+Basis: ${hyp.basis ?? "unknown"}
+Prediction: ${hyp.prediction ?? "unknown"}
+Metric: ${hyp.metric ?? "unknown"}
+Timeframe: ${hyp.timeframe ?? "unknown"}
+Confidence: ${hyp.confidence ?? "unknown"}
+Formed: ${hyp.formedAt ?? "unknown"}
 Trust Score: ${calculateTrustScore(hyp as any)}
 
 KNOWLEDGE BASE:
@@ -513,7 +513,8 @@ Based on ALL evidence (knowledge base + live search), what is your verdict? Reme
       });
 
       if (!res.ok) {
-        console.warn(`[DailyCycle] Hypothesis eval failed: ${res.status}`);
+        const errBody = await res.text().catch(() => "");
+        console.warn(`[DailyCycle] Hypothesis eval failed: ${res.status} — ${errBody.slice(0, 200)}`);
         continue;
       }
 

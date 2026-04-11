@@ -652,10 +652,10 @@ export async function crossReferenceContradictionsWithHypotheses(): Promise<numb
     for (const contradiction of openContradictions) {
       for (const hyp of activeHypotheses) {
         // Check if contradiction involves the hypothesis's claim or evidence
-        const claimLower = hyp.claim.toLowerCase();
-        const descLower = contradiction.description.toLowerCase();
-        const entryALower = contradiction.entryA.title.toLowerCase();
-        const entryBLower = contradiction.entryB.title.toLowerCase();
+        const claimLower = (hyp.claim ?? "").toLowerCase();
+        const descLower = (contradiction.description ?? "").toLowerCase();
+        const entryALower = (contradiction.entryA?.title ?? "").toLowerCase();
+        const entryBLower = (contradiction.entryB?.title ?? "").toLowerCase();
 
         const claimWords = claimLower.split(/\s+/).filter((w: string) => w.length > 4);
         const overlap = claimWords.filter((w: string) =>
