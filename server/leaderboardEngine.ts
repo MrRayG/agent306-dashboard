@@ -494,7 +494,7 @@ Return JSON: {"t1": "...", "t2": "...", "t3": "..."}`;
     try {
       const { postCast, isFarcasterEnabled } = await import("./farcasterEngine.js");
       if (isFarcasterEnabled()) {
-        const combinedText = [tweets.t1, tweets.t2, tweets.t3].filter(Boolean).join("\n\n").slice(0, 1024);
+        const combinedText = [tweets.t1, tweets.t2, tweets.t3].filter(Boolean).join("\n\n").slice(0, 2500);
         const cast = await postCast({ text: combinedText, channel: "nft" });
         if (cast) {
           registerPost("leaderboard", cast.url, "leaderboard", "farcaster");

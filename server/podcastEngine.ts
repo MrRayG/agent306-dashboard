@@ -644,7 +644,7 @@ export function publishEpisode(episodeId: string, publishedTo: string[]): boolea
       try {
         const { postCast, isFarcasterEnabled } = await import("./farcasterEngine.js");
         if (isFarcasterEnabled()) {
-          const cast = await postCast({ text: episode.metadata!.socialPost.slice(0, 1024), channel: "ai" });
+          const cast = await postCast({ text: episode.metadata!.socialPost.slice(0, 2500), channel: "ai" });
           if (cast) {
             console.log(`[Podcast] Auto-posted to Farcaster: "${episode.title}"`);
           }

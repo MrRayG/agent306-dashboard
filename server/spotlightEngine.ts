@@ -243,7 +243,7 @@ export async function postSpotlight(xWrite: any, grokKey: string): Promise<strin
     try {
       const { postCast, isFarcasterEnabled } = await import("./farcasterEngine.js");
       if (isFarcasterEnabled()) {
-        const cast = await postCast({ text: spotlight.tweet.slice(0, 1024), channel: "nft" });
+        const cast = await postCast({ text: spotlight.tweet.slice(0, 2500), channel: "nft" });
         if (cast) {
           castUrl = cast.url;
           registerPost("spotlight", cast.url, "spotlight", "farcaster");

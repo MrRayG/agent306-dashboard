@@ -206,7 +206,7 @@ export async function postRace(xWrite: any, grokKey: string): Promise<string | n
     try {
       const { postCast, isFarcasterEnabled } = await import("./farcasterEngine.js");
       if (isFarcasterEnabled()) {
-        const cast = await postCast({ text: race.tweet.slice(0, 1024), channel: "nft" });
+        const cast = await postCast({ text: race.tweet.slice(0, 2500), channel: "nft" });
         if (cast) {
           registerPost("race", cast.url, "race", "farcaster");
           console.log(`[Race] Farcaster cast posted: ${cast.url}`);

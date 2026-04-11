@@ -733,7 +733,7 @@ Return JSON: {"post": "..."}`
         const tweetUrl = lastTweetId ? `https://x.com/agent3zero6/status/${lastTweetId}` : undefined;
         const channel = postText.match(/\bai\b|agent|llm|model/i) ? "ai" : undefined;
         const cast = await postCast({
-          text: postText.trim().slice(0, 1024),
+          text: postText.trim().slice(0, 2500),
           channel,
           embeds: tweetUrl ? [{ url: tweetUrl }] : undefined,
         });
@@ -1609,7 +1609,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
         // Post to Farcaster
         try {
           if (isFarcasterEnabled() && postText.trim().length > 10) {
-            const cast = await postCast({ text: postText.trim().slice(0, 1024), channel: "ai" });
+            const cast = await postCast({ text: postText.trim().slice(0, 2500), channel: "ai" });
             if (cast) { registerPost("race", cast.url, "ai_roundup", "farcaster"); }
           }
         } catch (e: any) { console.error("[AIRoundup] Farcaster failed:", e.message); }
@@ -2206,7 +2206,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       // Post to Farcaster
       try {
         if (isFarcasterEnabled()) {
-          const cast = await postCast({ text: tweet.trim().slice(0, 1024), channel: "nft" });
+          const cast = await postCast({ text: tweet.trim().slice(0, 2500), channel: "nft" });
           castUrl = cast?.url ?? null;
           if (castUrl) console.log(`[CommunityBoost] Farcaster cast: ${castUrl}`);
         }
@@ -2315,7 +2315,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
         // Post to Farcaster
         try {
           if (isFarcasterEnabled() && postText.trim().length > 10) {
-            const cast = await postCast({ text: postText.trim().slice(0, 1024), channel: "ai" });
+            const cast = await postCast({ text: postText.trim().slice(0, 2500), channel: "ai" });
             if (cast) { registerPost("cyoa", cast.url, "research_brief", "farcaster"); }
           }
         } catch (e: any) { console.error("[ResearchBrief] Farcaster failed:", e.message); }
