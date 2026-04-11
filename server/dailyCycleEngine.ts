@@ -23,6 +23,7 @@ import {
   getActiveKnowledgeCount,
 } from "./memoryEngine.js";
 import { getOptimizedContext } from "./contextWindow.js";
+import { semanticSearch } from "./embeddingEngine.js";
 import { getModel } from "./modelRouter.js";
 import { checkAndExtractSkills } from "./skillEngine.js";
 import { runReflection } from "./reflectionEngine.js";
@@ -426,9 +427,9 @@ async function autoResolveHypotheses(): Promise<number> {
 
   if (mature.length === 0) return 0;
 
-  // Gather relevant knowledge for context
+  // Fallback KB context if semantic search fails
   const { knowledge: kb } = await import("./memoryEngine.js");
-  const kbContext = kb.entries
+  const fallbackKbContext = kb.entries
     .filter(e => (e.status ?? "active") === "active")
     .slice(0, 15)
     .map(e => `- [${e.category}] ${e.title}: ${e.summary}`)
@@ -439,7 +440,22 @@ async function autoResolveHypotheses(): Promise<number> {
   let resolved = 0;
   for (const hyp of mature) {
     try {
-      // ── NEW: Active evidence gathering via Perplexity Sonar ──
+      // ── Semantic KB context: per-hypothesis relevant entries ──
+      let kbContext = fallbackKbContext;
+      try {
+        const searchQuery = `${hyp.claim} ${hyp.prediction}`;
+        const semanticResults = await semanticSearch(searchQuery, { maxResults: 15, excludeArchived: true });
+        if (semanticResults.length > 0) {
+          kbContext = semanticResults
+            .map(r => `- [${r.entry.category}] ${r.entry.title}: ${r.entry.summary} (relevance: ${r.similarity.toFixed(2)})`)
+            .join("\n");
+          console.log(`[DailyCycle] Semantic KB context for "${hyp.claim.slice(0, 50)}": ${semanticResults.length} entries, top score: ${semanticResults[0]?.similarity?.toFixed(2) ?? "N/A"}`);
+        }
+      } catch (e: any) {
+        console.warn(`[DailyCycle] Semantic search failed for "${hyp.claim.slice(0, 50)}", using fallback:`, e.message);
+      }
+
+      // ── Active evidence gathering via Perplexity Sonar ──
       let liveEvidence = "";
       if (pplxKey && pplxKey.length > 10) {
         try {
@@ -596,9 +612,9 @@ async function autoTestHypotheses(): Promise<number> {
 
   if (candidates.length === 0) return 0;
 
-  // Gather knowledge context
+  // Fallback knowledge context if semantic search fails
   const { knowledge: kb } = await import("./memoryEngine.js");
-  const kbContext = kb.entries
+  const fallbackKbContext = kb.entries
     .filter(e => (e.status ?? "active") === "active")
     .slice(0, 30)
     .map(e => `- [${e.category}] ${e.title}: ${e.summary}`)
@@ -607,6 +623,21 @@ async function autoTestHypotheses(): Promise<number> {
   let tested = 0;
   for (const hyp of candidates) {
     try {
+      // ── Semantic KB context: per-hypothesis relevant entries ──
+      let kbContext = fallbackKbContext;
+      try {
+        const searchQuery = `${hyp.claim} ${hyp.prediction}`;
+        const semanticResults = await semanticSearch(searchQuery, { maxResults: 30, excludeArchived: true });
+        if (semanticResults.length > 0) {
+          kbContext = semanticResults
+            .map(r => `- [${r.entry.category}] ${r.entry.title}: ${r.entry.summary} (relevance: ${r.similarity.toFixed(2)})`)
+            .join("\n");
+          console.log(`[DailyCycle] Semantic KB context for testing "${hyp.claim.slice(0, 50)}": ${semanticResults.length} entries, top score: ${semanticResults[0]?.similarity?.toFixed(2) ?? "N/A"}`);
+        }
+      } catch (e: any) {
+        console.warn(`[DailyCycle] Semantic search failed for testing "${hyp.claim.slice(0, 50)}", using fallback:`, e.message);
+      }
+
       // Run full evaluation pipeline (Technique 2: AAA)
       const assessment = await evaluateHypothesis(
         { id: hyp.id, claim: hyp.claim, basis: hyp.basis, metric: hyp.metric, prediction: hyp.prediction, timeframe: hyp.timeframe, confidence: hyp.confidence },
