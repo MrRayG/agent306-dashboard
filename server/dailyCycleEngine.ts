@@ -908,7 +908,11 @@ async function seedResearchThreadsIfEmpty(): Promise<number> {
 // ── Main: Run Daily Cycle ─────────────────────────────────────────────────────
 
 export async function runDailyCycle(): Promise<DailyBriefing | null> {
+  const cycleStart = Date.now();
   console.log("[DailyCycle] Starting daily intelligence cycle...");
+
+  // ── Phase A: Sequential prerequisites (intake + seeding + gather) ──────────
+  const phaseAStart = Date.now();
 
   // 0. Run data intake FIRST — pull fresh AI/tech intelligence before reasoning
   try {
@@ -927,7 +931,7 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     console.warn("[DailyCycle] Cold-start seeding failed (non-fatal):", e.message);
   }
 
-  // 1. Gather all inputs
+  // 1. Gather all inputs (read-only, fast)
   const { active: activeHypotheses, expired: expiredHypotheses } = gatherHypotheses();
   const completedResearch = gatherResearchCompletions(state.lastRunAt);
   const activeGoals = gatherGoals();
@@ -938,49 +942,70 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
   // 2. Auto-resolve expired hypotheses
   const resolvedNames = autoResolveExpired(expiredHypotheses);
 
-  // 2b. Proactive Research Agenda (Layer 3) — generate threads, advance top 3, prune stale
-  try {
-    console.log("[DailyCycle] Running research agenda cycle...");
-    const agendaResult = await runResearchAgendaCycle();
-    console.log(`[DailyCycle] Research agenda: ${agendaResult?.newThreads ?? 0} new threads, ${agendaResult?.advanced?.length ?? 0} advanced, ${agendaResult?.pruned ?? 0} pruned, ${agendaResult?.podcastCandidates ?? 0} podcast candidates`);
-  } catch (e: any) {
-    console.warn("[DailyCycle] Research agenda cycle failed (non-fatal):", e.message);
-  }
+  console.log(`[DailyCycle] Phase A (prerequisites) completed in ${((Date.now() - phaseAStart) / 1000).toFixed(1)}s`);
 
-  // 2c. Auto-run research pipeline on queued/in-progress topics
-  try {
-    const lab = getResearchLab();
-    const queuedTopics = lab.topics
-      .filter(t => t.status === "queued" || (t.status === "researching" && t.researchPhase !== "interpretation"))
-      .slice(0, 3); // max 3 per cycle to avoid Railway timeout
+  // ── Phase B: Parallel research & analysis ──────────────────────────────────
+  // Research agenda → pipeline must be sequential (agenda creates threads pipeline picks up)
+  // Research analysis operates on different threads, runs concurrently
+  const phaseBStart = Date.now();
 
-    if (queuedTopics.length > 0) {
-      const grokKey = GROK_API_KEY;
-      const pplxKey = process.env.PERPLEXITY_API_KEY;
-      if (grokKey) {
-        for (const topic of queuedTopics) {
-          try {
-            console.log(`[DailyCycle] Auto-running pipeline for topic: "${topic.topic}" (phase: ${topic.researchPhase || "start"})`);
-            await runResearchPipeline(topic.id, grokKey, pplxKey);
-            console.log(`[DailyCycle] Pipeline completed for topic: "${topic.topic}"`);
-          } catch (e: any) {
-            console.warn(`[DailyCycle] Pipeline failed for "${topic.topic}":`, e.message);
+  const researchAgendaAndPipeline = async () => {
+    // 2b. Research agenda: generate threads, advance top 3, prune stale
+    try {
+      console.log("[DailyCycle] Running research agenda cycle...");
+      const agendaResult = await runResearchAgendaCycle();
+      console.log(`[DailyCycle] Research agenda: ${agendaResult?.newThreads ?? 0} new threads, ${agendaResult?.advanced?.length ?? 0} advanced, ${agendaResult?.pruned ?? 0} pruned, ${agendaResult?.podcastCandidates ?? 0} podcast candidates`);
+    } catch (e: any) {
+      console.warn("[DailyCycle] Research agenda cycle failed (non-fatal):", e.message);
+    }
+
+    // 2c. Auto-run research pipeline on queued/in-progress topics
+    try {
+      const lab = getResearchLab();
+      const queuedTopics = lab.topics
+        .filter(t => t.status === "queued" || (t.status === "researching" && t.researchPhase !== "interpretation"))
+        .slice(0, 3);
+
+      if (queuedTopics.length > 0) {
+        const grokKey = GROK_API_KEY;
+        const pplxKey = process.env.PERPLEXITY_API_KEY;
+        if (grokKey) {
+          for (const topic of queuedTopics) {
+            try {
+              console.log(`[DailyCycle] Auto-running pipeline for topic: "${topic.topic}" (phase: ${topic.researchPhase || "start"})`);
+              await runResearchPipeline(topic.id, grokKey, pplxKey);
+              console.log(`[DailyCycle] Pipeline completed for topic: "${topic.topic}"`);
+            } catch (e: any) {
+              console.warn(`[DailyCycle] Pipeline failed for "${topic.topic}":`, e.message);
+            }
           }
         }
       }
+    } catch (e: any) {
+      console.warn("[DailyCycle] Research pipeline auto-run failed (non-fatal):", e.message);
     }
-  } catch (e: any) {
-    console.warn("[DailyCycle] Research pipeline auto-run failed (non-fatal):", e.message);
-  }
+  };
 
-  // 2d. Research Analysis Framework — run structured analysis on eligible threads (max 3/cycle)
-  try {
-    console.log("[DailyCycle] Running research analysis cycle...");
-    const analysisResult = await runResearchAnalysisCycle();
-    console.log(`[DailyCycle] Research analysis: ${analysisResult.analyzed.length} threads analyzed (phases: ${analysisResult.phases.join(", ") || "none"})`);
-  } catch (e: any) {
-    console.warn("[DailyCycle] Research analysis cycle failed (non-fatal):", e.message);
-  }
+  const researchAnalysis = async () => {
+    // 2d. Research Analysis Framework — structured analysis on eligible threads (max 3/cycle)
+    try {
+      console.log("[DailyCycle] Running research analysis cycle...");
+      const analysisResult = await runResearchAnalysisCycle();
+      console.log(`[DailyCycle] Research analysis: ${analysisResult.analyzed.length} threads analyzed (phases: ${analysisResult.phases.join(", ") || "none"})`);
+    } catch (e: any) {
+      console.warn("[DailyCycle] Research analysis cycle failed (non-fatal):", e.message);
+    }
+  };
+
+  await Promise.allSettled([
+    researchAgendaAndPipeline(),
+    researchAnalysis(),
+  ]);
+
+  console.log(`[DailyCycle] Phase B (research & analysis) completed in ${((Date.now() - phaseBStart) / 1000).toFixed(1)}s`);
+
+  // ── Phase C: Briefing generation (needs Phase B results) ───────────────────
+  const phaseCStart = Date.now();
 
   // 3. Make ONE Grok call
   let result = await callGrokForBriefing({
@@ -1009,7 +1034,7 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
   // 4. Auto-ingest knowledge from research completions
   ingestResearchKnowledge(result.researchCompletions);
 
-  // 4a. Auto-create hypotheses from briefing (non-blocking)
+  // 4a. Auto-create hypotheses from briefing
   try {
     const briefingHypotheses = (result as any).hypotheses_to_create;
     if (briefingHypotheses && Array.isArray(briefingHypotheses)) {
@@ -1032,118 +1057,141 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     console.warn("[DailyCycle] Hypothesis creation from briefing failed:", e.message);
   }
 
-  // 4b. Self-improvement cycle (non-blocking — failures are logged, never crash)
+  console.log(`[DailyCycle] Phase C (briefing) completed in ${((Date.now() - phaseCStart) / 1000).toFixed(1)}s`);
+
+  // ── Phase D: Parallel self-improvement (tiered for dependency safety) ──────
+  const phaseDStart = Date.now();
   try {
     console.log("[DailyCycle] Running self-improvement engines...");
-    // Reflection: analyze posts with new engagement data
-    await runReflection().catch(e => console.warn("[DailyCycle] Reflection failed:", e.message));
-    // Confidence decay: downgrade stale knowledge
-    runConfidenceDecay();
-    // Knowledge synthesis: scan for new connections if KB was updated
-    await runConnectionScan().catch(e => console.warn("[DailyCycle] Connection scan failed:", e.message));
-    // Conversation learning: extract insights from recent conversations
-    await extractInsights().catch(e => console.warn("[DailyCycle] Insight extraction failed:", e.message));
-    // Auto-debate: critique recent manuscripts that haven't been debated
-    await autoDebateManuscripts().catch(e => console.warn("[DailyCycle] Auto-debate failed:", e.message));
-    // NEW: Auto-test forming hypotheses → evaluate & transition to "testing" (forming > 24h)
-    console.log("[Reasoning] Starting reasoning chain — autoTestHypotheses...");
-    await autoTestHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis testing failed:", e.message));
-    // NEW: Auto-debate hypotheses in "testing" state → The Forge → adversarial evaluation
-    console.log("[Reasoning] autoDebateHypotheses...");
-    await autoDebateHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis debate failed:", e.message));
-    // Auto-resolve: evaluate mature hypotheses with trust scores → confirm/reject
-    console.log("[Reasoning] autoResolveHypotheses...");
-    await autoResolveHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis resolution failed:", e.message));
-    // Contradiction detection: scan recent knowledge entries for conflicts
-    await autoDetectContradictions().catch(e => console.warn("[DailyCycle] Contradiction detection failed:", e.message));
-    // NEW: Red-flag check — cross-reference contradictions with active hypotheses
-    console.log("[Reasoning] autoRedFlagCheck...");
-    await autoRedFlagCheck().catch(e => console.warn("[DailyCycle] Red-flag check failed:", e.message));
-    // Auto-resolve minor contradictions older than 3 days
-    try { autoResolveOldContradictions(); } catch (e: any) { console.warn("[DailyCycle] Auto-resolve contradictions failed:", e.message); }
-    // Knowledge graph: cluster knowledge into themes and detect graph-level contradictions
-    await clusterKnowledge().catch(e => console.warn("[DailyCycle] Knowledge clustering failed:", e.message));
-    await detectGraphContradictions().catch(e => console.warn("[DailyCycle] Graph contradiction detection failed:", e.message));
-    // Metacognition: log cognitive state summary
+
+    // Tier 1: Independent tasks — no cross-dependencies, safe to parallelize
+    await Promise.allSettled([
+      runReflection().catch(e => console.warn("[DailyCycle] Reflection failed:", e.message)),
+      Promise.resolve(runConfidenceDecay()).catch(e => console.warn("[DailyCycle] Confidence decay failed:", e.message)),
+      runConnectionScan().catch(e => console.warn("[DailyCycle] Connection scan failed:", e.message)),
+      extractInsights().catch(e => console.warn("[DailyCycle] Insight extraction failed:", e.message)),
+      checkAndExtractSkills().catch(e => { console.warn("[DailyCycle] Skill extraction failed:", e.message); return []; })
+        .then(skills => { if (skills && skills.length > 0) console.log(`[DailyCycle] Extracted ${skills.length} new skill(s)`); }),
+    ]);
+
+    // Metacognition (read-only, log immediately)
     const meta = getMetacognitionState();
     console.log(`[DailyCycle] Cognitive state — KB: ${meta.knowledgeCoverage.totalActive} entries, Velocity: ${meta.learningVelocity.trend}, Connections: ${meta.synthesisStats.totalConnections}`);
-    // Skill extraction: check for recent successful outcomes and extract patterns
-    const skills = await checkAndExtractSkills().catch(e => { console.warn("[DailyCycle] Skill extraction failed:", e.message); return []; });
-    if (skills.length > 0) console.log(`[DailyCycle] Extracted ${skills.length} new skill(s)`);
 
-    // Dream engine: ensure dreams are seeded, then update against new knowledge
+    // Tier 2: Three concurrent chains that have internal sequential dependencies
+    // Chain A: hypothesis pipeline (test → debate → resolve — strict order)
+    // Chain B: contradiction pipeline (detect → red-flag → auto-resolve old)
+    // Chain C: manuscript debates + knowledge clustering (independent)
+    await Promise.allSettled([
+      // Chain A: Hypothesis reasoning chain (strict sequential)
+      (async () => {
+        console.log("[Reasoning] Starting reasoning chain — autoTestHypotheses...");
+        await autoTestHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis testing failed:", e.message));
+        console.log("[Reasoning] autoDebateHypotheses...");
+        await autoDebateHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis debate failed:", e.message));
+        console.log("[Reasoning] autoResolveHypotheses...");
+        await autoResolveHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis resolution failed:", e.message));
+      })(),
+      // Chain B: Contradiction pipeline (sequential within chain)
+      (async () => {
+        await autoDetectContradictions().catch(e => console.warn("[DailyCycle] Contradiction detection failed:", e.message));
+        console.log("[Reasoning] autoRedFlagCheck...");
+        await autoRedFlagCheck().catch(e => console.warn("[DailyCycle] Red-flag check failed:", e.message));
+        try { autoResolveOldContradictions(); } catch (e: any) { console.warn("[DailyCycle] Auto-resolve contradictions failed:", e.message); }
+        await detectGraphContradictions().catch(e => console.warn("[DailyCycle] Graph contradiction detection failed:", e.message));
+      })(),
+      // Chain C: Independent — manuscript debates + knowledge clustering
+      (async () => {
+        await autoDebateManuscripts().catch(e => console.warn("[DailyCycle] Auto-debate failed:", e.message));
+        await clusterKnowledge().catch(e => console.warn("[DailyCycle] Knowledge clustering failed:", e.message));
+      })(),
+    ]);
+
+    // Tier 3: Dreams, growth, and improvement (depend on KB/hypothesis updates above)
     seedDreams(); // no-op if already seeded
     await updateDreams().catch(e => console.warn("[DailyCycle] Dream update failed:", e.message));
-    // Growth snapshot: aggregate all metrics and generate self-assessment
     await takeGrowthSnapshot().catch(e => console.warn("[DailyCycle] Growth snapshot failed:", e.message));
-    // Weekly improvement plan: generate every Monday (day 1)
     if (new Date().getUTCDay() === 1) {
       await generateSelfImprovementPlan().catch(e => console.warn("[DailyCycle] Improvement plan failed:", e.message));
     }
-    // Execute pending improvement actions (runs daily to process any pending items)
     await executeImprovementActions().catch(e => console.warn("[DailyCycle] Improvement execution failed:", e.message));
   } catch (e: any) {
     console.warn("[DailyCycle] Self-improvement cycle error (non-fatal):", e.message);
   }
 
-  // 4c. Auto-podcast pipeline: generate episode from mature research threads (max 1/day)
-  try {
-    console.log("[DailyCycle] Checking podcast pipeline for ready threads...");
-    const autoEpisode = await runAutoPodcastPipeline().catch(e => {
-      console.warn("[DailyCycle] Podcast pipeline failed:", e.message);
-      return null;
-    });
-    if (autoEpisode) {
-      console.log(`[DailyCycle] Auto-generated podcast episode: "${autoEpisode.title}"`);
-    }
-  } catch (e: any) {
-    console.warn("[DailyCycle] Podcast pipeline error (non-fatal):", e.message);
-  }
+  console.log(`[DailyCycle] Phase D (self-improvement) completed in ${((Date.now() - phaseDStart) / 1000).toFixed(1)}s`);
 
-  // 4d. Auto-generate blog drafts from approved research (max 1/cycle)
-  try {
-    const agenda = getAgenda();
-    const matureThreads = agenda.threads.filter(t =>
-      t.status === "mature" && t.evidence.supporting.length >= 3,
-    );
+  // ── Phase E: Parallel content generation ───────────────────────────────────
+  const phaseEStart = Date.now();
 
-    const blogState = getBlogState();
-    const existingSourceIds = new Set(blogState.posts.map(p => p.sourceId));
-    const unbloggedThreads = matureThreads.filter(t => !existingSourceIds.has(t.id));
-
-    if (unbloggedThreads.length > 0) {
-      const thread = unbloggedThreads[0];
-      const sourceContent = thread.thesis + "\n\n" +
-        (thread.evidence.supporting.length > 0 ? `Supporting evidence: ${thread.evidence.supporting.join(", ")}` : "") +
-        (thread.actionableTips.length > 0 ? `\n\nTips: ${thread.actionableTips.join("; ")}` : "");
-      const post = await generateBlogPost({
-        topic: thread.title,
-        sourceContent,
-        source: "research",
-        sourceId: thread.id,
-        autoPublish: true, // Safety scanner will catch issues and downgrade to draft
-      }).catch(e => {
-        console.warn("[DailyCycle] Blog generation failed:", e.message);
-        return null;
-      });
-      if (post) {
-        console.log(`[DailyCycle] Auto-generated blog draft: "${post.title}"`);
+  const contentResults = await Promise.allSettled([
+    // Podcast pipeline
+    (async () => {
+      try {
+        console.log("[DailyCycle] Checking podcast pipeline for ready threads...");
+        const autoEpisode = await runAutoPodcastPipeline().catch(e => {
+          console.warn("[DailyCycle] Podcast pipeline failed:", e.message);
+          return null;
+        });
+        if (autoEpisode) {
+          console.log(`[DailyCycle] Auto-generated podcast episode: "${autoEpisode.title}"`);
+        }
+      } catch (e: any) {
+        console.warn("[DailyCycle] Podcast pipeline error (non-fatal):", e.message);
       }
-    }
-  } catch (e: any) {
-    console.warn("[DailyCycle] Blog generation step failed:", e.message);
-  }
+    })(),
+    // Blog generation
+    (async () => {
+      try {
+        const agenda = getAgenda();
+        const matureThreads = agenda.threads.filter(t =>
+          t.status === "mature" && t.evidence.supporting.length >= 3,
+        );
 
-  // 4e. Weekly knowledge consolidation (Sundays)
-  const today = new Date();
-  if (today.getDay() === 0) {
-    try {
-      const consolResult = await runKnowledgeConsolidation();
-      console.log(`[DailyCycle] KB consolidation: saved ${consolResult.savings} entries`);
-    } catch (e: any) {
-      console.warn("[DailyCycle] KB consolidation failed:", e.message);
-    }
-  }
+        const blogState = getBlogState();
+        const existingSourceIds = new Set(blogState.posts.map(p => p.sourceId));
+        const unbloggedThreads = matureThreads.filter(t => !existingSourceIds.has(t.id));
+
+        if (unbloggedThreads.length > 0) {
+          const thread = unbloggedThreads[0];
+          const sourceContent = thread.thesis + "\n\n" +
+            (thread.evidence.supporting.length > 0 ? `Supporting evidence: ${thread.evidence.supporting.join(", ")}` : "") +
+            (thread.actionableTips.length > 0 ? `\n\nTips: ${thread.actionableTips.join("; ")}` : "");
+          const post = await generateBlogPost({
+            topic: thread.title,
+            sourceContent,
+            source: "research",
+            sourceId: thread.id,
+            autoPublish: true,
+          }).catch(e => {
+            console.warn("[DailyCycle] Blog generation failed:", e.message);
+            return null;
+          });
+          if (post) {
+            console.log(`[DailyCycle] Auto-generated blog draft: "${post.title}"`);
+          }
+        }
+      } catch (e: any) {
+        console.warn("[DailyCycle] Blog generation step failed:", e.message);
+      }
+    })(),
+    // Weekly knowledge consolidation (Sundays)
+    (async () => {
+      const today = new Date();
+      if (today.getDay() === 0) {
+        try {
+          const consolResult = await runKnowledgeConsolidation();
+          console.log(`[DailyCycle] KB consolidation: saved ${consolResult.savings} entries`);
+        } catch (e: any) {
+          console.warn("[DailyCycle] KB consolidation failed:", e.message);
+        }
+      }
+    })(),
+  ]);
+
+  console.log(`[DailyCycle] Phase E (content generation) completed in ${((Date.now() - phaseEStart) / 1000).toFixed(1)}s`);
+
+  // ── Phase F: Sequential wrap-up ────────────────────────────────────────────
 
   // 5. Build briefing
   const briefing: DailyBriefing = {
@@ -1161,7 +1209,9 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
   state.nextRunAt = getNextRunTime().toISOString();
   saveState(state);
 
+  const totalTime = ((Date.now() - cycleStart) / 1000).toFixed(1);
   console.log(`[DailyCycle] Briefing complete — action: "${result.todaysAction.action}"`);
+  console.log(`[DailyCycle] Total cycle time: ${totalTime}s (parallelized phases B/D/E)`);
 
   // ASI-Evolve: analyze the daily cycle (non-blocking)
   analyzeDailyCycle(briefing).catch(e => console.warn("[DailyCycle] Analyzer failed:", e.message));
