@@ -18,6 +18,8 @@ import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { getMemoryState } from "./memoryEngine.js";
 import { getExplorationState } from "./explorationEngine.js";
+import { getBreakthroughCount } from "./breakthroughDetector.js";
+import { getAspirations } from "./researchEngine.js";
 
 const EVOLUTION_FILE = dataPath("evolution_history.json");
 
@@ -55,6 +57,14 @@ export interface DailySnapshot {
   growthVector:      string;   // "accelerating" | "steady" | "plateau" | "early"
   mood:              string;   // derived from recent performance
   milestone:         string | null;  // any notable milestone reached today
+
+  // Self-evolution metrics
+  aspirationProgress?: {
+    thirtyDay?:  { vision: string; progress: number };
+    sixtyDay?:   { vision: string; progress: number };
+    ninetyDay?:  { vision: string; progress: number };
+  };
+  breakthroughCount?: number;
 }
 
 interface EvolutionHistory {
@@ -204,6 +214,25 @@ export function takeSnapshot(additionalData?: {
     mood,
     milestone: detectMilestone({ date: today } as any, previous),
   };
+
+  // Self-evolution metrics (safe — these modules may not have data yet)
+  try {
+    snapshot.breakthroughCount = getBreakthroughCount();
+  } catch { snapshot.breakthroughCount = 0; }
+
+  try {
+    const aspStore = getAspirations();
+    const active = aspStore.aspirations.filter(a => a.status === "active");
+    const byHorizon: Record<string, { vision: string; progress: number }> = {};
+    for (const a of active) {
+      byHorizon[a.horizon] = { vision: a.vision, progress: a.progress };
+    }
+    snapshot.aspirationProgress = {
+      thirtyDay:  byHorizon["30d"],
+      sixtyDay:   byHorizon["60d"],
+      ninetyDay:  byHorizon["90d"],
+    };
+  } catch {}
 
   // Save
   // Don't duplicate same day

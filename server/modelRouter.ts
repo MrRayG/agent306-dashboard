@@ -96,6 +96,13 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "triad-fact-synthesis": "standard",       // Agent 3: package research → FactSheet
   "triad-reasoning": "premium",            // Agent 0: analyze evidence → LogicMap
   "triad-grounding-review": "premium",     // Agent 0: review Agent 6 output for grounding violations
+
+  // Self-evolution components
+  "topic-quality-evaluation": "standard",  // Auto-approval quality gate
+  "breakthrough-evaluation": "standard",   // Breakthrough detection scoring
+  "aspiration-generation": "premium",      // Forward-looking vision (Claude)
+  "aspiration-evaluation": "standard",     // Weekly progress check
+  "self-evolution-reflection": "premium",  // Daily self-reflection loop (Claude)
 };
 
 /**

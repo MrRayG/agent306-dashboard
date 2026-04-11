@@ -58,7 +58,7 @@ import { takeSnapshot, getEvolutionHistory, getLatestSnapshot, scheduleEvolution
 import { runResearchScan, getScannerState, scheduleResearchScan, scanGoalsForResearch } from "./researchScanner.js";
 import { generateArticleCard } from "./articleImageCard.js";
 import { runDailyCycle, getBriefingState, scheduleDailyCycle } from "./dailyCycleEngine.js";
-import { getPublicStatus, getPublicProgress, getPublicActivity, getPublicGoals, getPublicResearch, getPublicMetacognition } from "./publicApi.js";
+import { getPublicStatus, getPublicProgress, getPublicActivity, getPublicGoals, getPublicResearch, getPublicMetacognition, getPublicBreakthroughs, getPublicAspirations } from "./publicApi.js";
 import { getReflections, getStyleRules, deleteStyleRule, runReflection } from "./reflectionEngine.js";
 import {
   getPublishedPosts, getPostBySlug, getAllPosts,
@@ -3993,6 +3993,22 @@ needsHelp: true only when you genuinely need his direction or information`,
       res.set(publicCacheHeaders).json(getPublicMetacognition());
     } catch (e: any) {
       res.status(500).json({ error: "Failed to fetch metacognition" });
+    }
+  });
+
+  app.get("/api/public/breakthroughs", (_req, res) => {
+    try {
+      res.set(publicCacheHeaders).json(getPublicBreakthroughs());
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to fetch breakthroughs" });
+    }
+  });
+
+  app.get("/api/public/aspirations", (_req, res) => {
+    try {
+      res.set(publicCacheHeaders).json(getPublicAspirations());
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to fetch aspirations" });
     }
   });
 
