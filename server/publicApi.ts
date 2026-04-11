@@ -100,13 +100,15 @@ const PHASE_ORDER = [
 ];
 
 // ── Stale-label sanitizer ────────────────────────────────────
-// Strip any legacy Normies/Hive-era references from public-facing labels.
-const STALE_PATTERNS = /\bTHE HIVE\b|Normies|NormiesTV|gnormie|serc1n|dopemind/gi;
+// Replace legacy Normies/Hive-era references in public-facing labels.
+// "THE HIVE" → "THE SIGNAL" (in-place), other stale tokens stripped entirely.
+const STALE_HIVE = /\bTHE HIVE\b/gi;
+const STALE_OTHER = /\b(?:Normies|NormiesTV|gnormie|serc1n|dopemind)\b/gi;
 
 function sanitizeLabel(label: string): string {
-  return STALE_PATTERNS.test(label)
-    ? "Preparing podcast: THE SIGNAL"
-    : label;
+  let out = label.replace(STALE_HIVE, "THE SIGNAL");
+  out = out.replace(STALE_OTHER, "").replace(/\s{2,}/g, " ").trim();
+  return out;
 }
 
 // ── 1. Status ────────────────────────────────────────────────

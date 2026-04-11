@@ -580,8 +580,8 @@ All episodes are stored with the following metadata:
 
 | Field | Description |
 |---|---|
-| **Episode ID** | Sequential, per type: SIGNAL-001, HIVE-001, CONVERSATION-001 |
-| **Episode Type** | SIGNAL / HIVE / CONVERSATION |
+| **Episode ID** | Sequential, per type: SIGNAL-001, DISPATCH-001, CONVERSATION-001 |
+| **Episode Type** | SIGNAL / DISPATCH / CONVERSATION |
 | **Title** | Full title per naming convention |
 | **Publish Date** | YYYY-MM-DD |
 | **Driving Question** | The central question the episode answered |

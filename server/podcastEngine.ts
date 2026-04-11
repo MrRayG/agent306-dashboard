@@ -279,6 +279,24 @@ function saveState(s: PodcastState) {
 
 let state = loadState();
 
+// ── STARTUP MIGRATION: Replace stale "THE HIVE" branding with "THE SIGNAL" ───
+// Railway-persisted podcast_state.json may contain episodes titled with the old
+// Normies-era "THE HIVE" podcast name. Scrub them on load so the status bar and
+// all API responses show the correct "THE SIGNAL" branding.
+{
+  let migrated = 0;
+  for (const ep of state.episodes) {
+    if (/\bTHE HIVE\b/i.test(ep.title)) {
+      ep.title = ep.title.replace(/\bTHE HIVE\b/gi, "THE SIGNAL");
+      migrated++;
+    }
+  }
+  if (migrated > 0) {
+    saveState(state);
+    console.log(`[Podcast] MIGRATION: Replaced "THE HIVE" with "THE SIGNAL" in ${migrated} episode title(s)`);
+  }
+}
+
 export function getPodcastState() { return state; }
 
 // ── Episode Type Metadata ─────────────────────────────────────────────────────
