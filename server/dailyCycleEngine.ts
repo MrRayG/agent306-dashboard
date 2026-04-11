@@ -30,8 +30,9 @@ import { runReflection } from "./reflectionEngine.js";
 import {
   runConfidenceDecay, runDebate, checkContradictions, getDebates, autoResolveOldContradictions,
   evaluateHypothesis, calculateTrustScore, crossReferenceContradictionsWithHypotheses,
-  decomposeHypothesis,
+  decomposeHypothesis, triageHypothesisEvidence, trackRejectionVelocity, recordRejectionEvent,
 } from "./reasoningEngine.js";
+import { evidenceQueue, routeEvidenceSearch, processEvidenceQueue } from "./evidenceDispatcher.js";
 import { runConnectionScan } from "./synthesisEngine.js";
 import { extractInsights } from "./conversationLearningEngine.js";
 import { getMetacognitionState } from "./metacognitionEngine.js";
@@ -563,11 +564,23 @@ Based on ALL evidence (knowledge base + live search), what is your verdict? Reme
       const status = parsed.status as string;
       if (status === "confirmed" || status === "rejected" || status === "expired") {
         resolveHypothesis(hyp.id, status as "confirmed" | "rejected" | "expired", parsed.resolution ?? "Auto-resolved by daily cycle");
+        recordRejectionEvent(hyp.id, status === "rejected" ? "insufficient_evidence" : status, status === "confirmed");
         resolved++;
         console.log(`[DailyCycle] Hypothesis ${status}: "${hyp.claim.slice(0, 50)}" — evidence quality: ${parsed.evidence_quality ?? "unknown"}`);
       } else if (status === "insufficient_evidence") {
-        // Keep alive — log but don't resolve
+        // Keep alive — queue targeted search for next cycle
         console.log(`[DailyCycle] Hypothesis kept alive (insufficient evidence): "${hyp.claim.slice(0, 50)}" — ${(parsed.resolution ?? "").slice(0, 100)}`);
+        try {
+          evidenceQueue.add({
+            source: "hypothesis_resolve",
+            query: `Latest evidence for or against: ${hyp.claim}`,
+            targetId: hyp.id,
+            priority: 10,
+            searchRoute: routeEvidenceSearch(hyp.claim),
+          });
+        } catch (e: any) {
+          console.warn(`[DailyCycle] Failed to queue evidence for insufficient_evidence hypothesis:`, e.message);
+        }
       }
 
       // Rate limit: 5s between resolution calls
@@ -633,6 +646,40 @@ async function autoTestHypotheses(): Promise<number> {
 
   if (candidates.length === 0) return 0;
 
+  // ── Rejection velocity check — adjust behavior if intervention triggered ──
+  const rejectionMetrics = trackRejectionVelocity();
+  let maxLiveSearches = 5; // default: max 5 hypotheses get pre-evaluation search
+  if (rejectionMetrics.interventionTriggered) {
+    maxLiveSearches = 10; // double the evidence search budget
+    console.log(`[DailyCycle] Evidence intervention mode — doubling live search budget to ${maxLiveSearches}`);
+  }
+
+  // ── Evidence-first triage: classify each hypothesis before evaluation ──
+  let liveSearchesUsed = 0;
+  const triageResults: Map<string, Awaited<ReturnType<typeof triageHypothesisEvidence>>> = new Map();
+  for (const hyp of candidates) {
+    try {
+      const triage = await triageHypothesisEvidence({ id: hyp.id, claim: hyp.claim, prediction: hyp.prediction });
+      triageResults.set(hyp.id, triage);
+
+      // For evidence_sparse/absent: queue evidence searches (if within budget)
+      if (triage.bucket !== "evidence_rich" && liveSearchesUsed < maxLiveSearches) {
+        for (const query of triage.searchQueries) {
+          evidenceQueue.add({
+            source: "hypothesis_test",
+            query,
+            targetId: hyp.id,
+            priority: triage.bucket === "evidence_absent" ? 10 : 6,
+            searchRoute: routeEvidenceSearch(hyp.claim),
+          });
+        }
+        liveSearchesUsed++;
+      }
+    } catch (e: any) {
+      console.warn(`[DailyCycle] Evidence triage failed for "${hyp.claim.slice(0, 50)}":`, e.message);
+    }
+  }
+
   // Fallback knowledge context if semantic search fails
   const { knowledge: kb } = await import("./memoryEngine.js");
   const fallbackKbContext = kb.entries
@@ -644,6 +691,19 @@ async function autoTestHypotheses(): Promise<number> {
   let tested = 0;
   for (const hyp of candidates) {
     try {
+      // ── Evidence-absent hypotheses: skip evaluation this cycle, queue search ──
+      const triage = triageResults.get(hyp.id);
+      if (triage?.bucket === "evidence_absent") {
+        const freshLab = getResearchLab();
+        const freshHyp = freshLab.hypotheses.find(h => h.id === hyp.id);
+        if (freshHyp) {
+          (freshHyp as any).lastEvidenceSearch = Date.now();
+          (freshHyp as any).evidenceSearchCount = ((freshHyp as any).evidenceSearchCount ?? 0) + 1;
+        }
+        console.log(`[DailyCycle] Skipping evaluation for "${hyp.claim.slice(0, 50)}" — evidence_absent, search queued`);
+        continue;
+      }
+
       // ── Semantic KB context: per-hypothesis relevant entries ──
       let kbContext = fallbackKbContext;
       try {
@@ -704,10 +764,12 @@ async function autoTestHypotheses(): Promise<number> {
         if (rubricAvg < 4) {
           // Too weak — reject directly
           resolveHypothesis(hyp.id, "rejected", `Auto-rejected: rubric avg ${rubricAvg.toFixed(1)} < 4. ${assessment.reasoningChain.slice(0, 200)}`);
+          recordRejectionEvent(hyp.id, rubricAvg < 3 ? "low_rubric" : "weak_evidence", false);
           console.log(`[DailyCycle] Hypothesis auto-rejected (rubric avg ${rubricAvg.toFixed(1)}): "${hyp.claim.slice(0, 50)}"`);
         } else if (rubricAvg >= 8 && assessment.confidence >= 0.85) {
           // Exceptionally strong — fast-track confirm
           resolveHypothesis(hyp.id, "confirmed", `Fast-track confirmed: rubric avg ${rubricAvg.toFixed(1)}, confidence ${assessment.confidence.toFixed(2)}. ${assessment.reasoningChain.slice(0, 200)}`);
+          recordRejectionEvent(hyp.id, "confirmed", true);
           console.log(`[DailyCycle] Hypothesis fast-track confirmed (rubric avg ${rubricAvg.toFixed(1)}, confidence ${assessment.confidence.toFixed(2)}): "${hyp.claim.slice(0, 50)}"`);
         } else if (assessment.verdict === "testing" || rubricAvg >= 5) {
           // Transition to testing
@@ -728,7 +790,7 @@ async function autoTestHypotheses(): Promise<number> {
     }
   }
 
-  if (tested > 0) console.log(`[DailyCycle] Evaluated ${tested} forming hypotheses`);
+  if (tested > 0) console.log(`[DailyCycle] Evaluated ${tested} forming hypotheses (triaged: ${triageResults.size}, live searches: ${liveSearchesUsed})`);
   return tested;
 }
 
@@ -1085,12 +1147,21 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     // Chain B: contradiction pipeline (detect → red-flag → auto-resolve old)
     // Chain C: manuscript debates + knowledge clustering (independent)
     await Promise.allSettled([
-      // Chain A: Hypothesis reasoning chain (strict sequential)
+      // Chain A: Hypothesis reasoning chain with evidence queue rounds (strict sequential)
       (async () => {
+        // Round 1: Process evidence before testing (pre-evaluation enrichment)
+        console.log("[EvidenceDispatcher] Processing evidence queue — round 1 (pre-test)...");
+        await processEvidenceQueue().catch(e => console.warn("[DailyCycle] Evidence queue round 1 failed:", e.message));
+
         console.log("[Reasoning] Starting reasoning chain — autoTestHypotheses...");
         await autoTestHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis testing failed:", e.message));
         console.log("[Reasoning] autoDebateHypotheses...");
         await autoDebateHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis debate failed:", e.message));
+
+        // Round 2: Process evidence between debate and resolve (test/debate gap-filling)
+        console.log("[EvidenceDispatcher] Processing evidence queue — round 2 (post-debate)...");
+        await processEvidenceQueue().catch(e => console.warn("[DailyCycle] Evidence queue round 2 failed:", e.message));
+
         console.log("[Reasoning] autoResolveHypotheses...");
         await autoResolveHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis resolution failed:", e.message));
       })(),
@@ -1210,6 +1281,17 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     } catch (e: any) {
       console.warn("[DailyCycle] Triad cycle failed (non-fatal):", e.message);
     }
+  }
+
+  // ── Round 3: Final evidence fetch for remaining items (post-Triad) ──────
+  try {
+    console.log("[EvidenceDispatcher] Processing evidence queue — round 3 (final)...");
+    const round3Result = await processEvidenceQueue();
+    if (round3Result.processed > 0) {
+      console.log(`[DailyCycle] Evidence queue round 3: ${round3Result.succeeded} succeeded, ${round3Result.kbEntriesAdded} KB entries added`);
+    }
+  } catch (e: any) {
+    console.warn("[DailyCycle] Evidence queue round 3 failed (non-fatal):", e.message);
   }
 
   // ── Phase F: Sequential wrap-up ────────────────────────────────────────────

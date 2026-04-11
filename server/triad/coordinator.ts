@@ -31,6 +31,7 @@ import { getFullAgentContext } from "../memoryEngine.js";
 import { getAgenda, runResearchAgendaCycle } from "../research-agenda.js";
 import type { ResearchThread } from "../research-agenda.js";
 import { runResearchPipeline, getResearchLab, researchMultiSource } from "../researchEngine.js";
+import { evidenceQueue, routeEvidenceSearch } from "../evidenceDispatcher.js";
 import { runResearchAnalysisCycle } from "../researchAnalysisEngine.js";
 import { generateBlogPost } from "../blogEngine.js";
 import { runAutoPodcastPipeline } from "../podcastEngine.js";
@@ -474,7 +475,25 @@ Respond with JSON:
   ): Promise<Array<{ threadId: string; evidence: FactSheet["evidence"][0][] }>> {
     const results: Array<{ threadId: string; evidence: FactSheet["evidence"][0][] }> = [];
 
-    for (const req of requests.slice(0, 3)) {  // cap at 3 to limit API calls
+    // Add all requests to the evidence queue with priority 8 (Triad Reasoner).
+    // The dispatcher handles budget allocation and priority ordering.
+    for (const req of requests) {
+      try {
+        evidenceQueue.add({
+          source: "triad_reasoner",
+          query: req.query,
+          targetId: req.relatedThreadId || "",
+          priority: 8,
+          searchRoute: routeEvidenceSearch(req.query),
+        });
+      } catch (e: any) {
+        console.warn(`[Triad:Agent3] Failed to queue research request:`, e.message);
+      }
+    }
+
+    // Also run direct searches for immediate results in this cycle
+    // (evidence queue will be processed async in the daily cycle)
+    for (const req of requests.slice(0, 3)) {
       try {
         if (!PPLX_KEY) {
           console.warn("[Triad:Agent3] No Perplexity key — skipping research request");
