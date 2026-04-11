@@ -845,7 +845,7 @@ async function seedResearchThreadsIfEmpty(): Promise<number> {
   console.log("[DailyCycle] Cold start detected: 0 active research threads. Triggering generation...");
   try {
     const { generateResearchAgenda } = require("./research-agenda.js");
-    const newThreads = await generateResearchAgenda();
+    const newThreads = await generateResearchAgenda() ?? [];
     console.log(`[DailyCycle] Cold-start: generated ${newThreads.length} research threads`);
     return newThreads.length;
   } catch (e: any) {
@@ -891,7 +891,7 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
   try {
     console.log("[DailyCycle] Running research agenda cycle...");
     const agendaResult = await runResearchAgendaCycle();
-    console.log(`[DailyCycle] Research agenda: ${agendaResult.newThreads} new threads, ${agendaResult.advanced.length} advanced, ${agendaResult.pruned} pruned, ${agendaResult.podcastCandidates} podcast candidates`);
+    console.log(`[DailyCycle] Research agenda: ${agendaResult?.newThreads ?? 0} new threads, ${agendaResult?.advanced?.length ?? 0} advanced, ${agendaResult?.pruned ?? 0} pruned, ${agendaResult?.podcastCandidates ?? 0} podcast candidates`);
   } catch (e: any) {
     console.warn("[DailyCycle] Research agenda cycle failed (non-fatal):", e.message);
   }

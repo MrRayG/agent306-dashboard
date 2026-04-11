@@ -300,6 +300,9 @@ ${pipelineCtx}
 ${analysisCtx ? `LESSONS FROM PAST RESEARCH:\n${analysisCtx}\n` : ""}${liveAINews ? `LIVE AI NEWS (last 48 hours — from web search today):\n${liveAINews}\n\nIMPORTANT: Use these recent developments to inform your research agenda. Propose threads that investigate TODAY'S news, not old topics. Your audience wants to understand what's happening RIGHT NOW in AI.\n\n` : ""}Generate 3-5 new research threads and any updates to existing threads. Respond with JSON only.`;
 
   try {
+    const promptChars = systemPrompt.length + userPrompt.length;
+    console.log(`[ResearchAgenda] Sending to LLM: ${promptChars} chars (~${Math.round(promptChars / 4)} tokens)`);
+
     const res = await fetch(GROK_URL, {
       method: "POST",
       headers: getLLMHeaders(),
@@ -312,7 +315,7 @@ ${analysisCtx ? `LESSONS FROM PAST RESEARCH:\n${analysisCtx}\n` : ""}${liveAINew
         temperature: 0.7,
         max_tokens: 4000,
       }),
-      signal: AbortSignal.timeout(60000),
+      signal: AbortSignal.timeout(90000),
     });
 
     if (!res.ok) {
@@ -1255,50 +1258,63 @@ export async function runResearchAgendaCycle(): Promise<{
   pruned: number;
   podcastCandidates: number;
 }> {
-  console.log("[ResearchAgenda] Starting daily research agenda cycle...");
+  const safeDefault = { newThreads: 0, advanced: [] as string[], pruned: 0, podcastCandidates: 0 };
 
-  // 1. Generate new threads
-  let newThreads: ResearchThread[] = [];
   try {
-    newThreads = (await generateResearchAgenda()) ?? [];
-  } catch (e: any) {
-    console.warn("[ResearchAgenda] Thread generation failed (non-fatal):", e.message);
-  }
+    console.log("[ResearchAgenda] Starting daily research agenda cycle...");
 
-  // 2. Prioritize
-  const prioritized = prioritizeThreads() ?? [];
-
-  // 3. Advance top 3 threads
-  const advanced: string[] = [];
-  const toAdvance = prioritized.slice(0, 3);
-  for (const thread of toAdvance) {
+    // 1. Generate new threads
+    let newThreads: ResearchThread[] = [];
     try {
-      const result = await advanceThread(thread.id);
-      if (result) advanced.push(result.title);
-      // Rate limit: 5s between LLM calls
-      if (toAdvance.indexOf(thread) < toAdvance.length - 1) {
-        await new Promise(r => setTimeout(r, 5000));
-      }
+      newThreads = (await generateResearchAgenda()) ?? [];
     } catch (e: any) {
-      console.warn(`[ResearchAgenda] Failed to advance "${thread.title}":`, e.message);
+      console.warn("[ResearchAgenda] Thread generation failed (non-fatal):", e.message);
     }
+
+    // 2. Prioritize
+    const prioritized = prioritizeThreads() ?? [];
+
+    // 3. Advance top 3 threads
+    const advanced: string[] = [];
+    const toAdvance = prioritized.slice(0, 3);
+    for (const thread of toAdvance) {
+      try {
+        const result = await advanceThread(thread.id);
+        if (result) advanced.push(result.title);
+        // Rate limit: 5s between LLM calls
+        if (toAdvance.indexOf(thread) < toAdvance.length - 1) {
+          await new Promise(r => setTimeout(r, 5000));
+        }
+      } catch (e: any) {
+        console.warn(`[ResearchAgenda] Failed to advance "${thread.title}":`, e.message);
+      }
+    }
+
+    // 4. Prune stale threads
+    let prunedCount = 0;
+    try {
+      const pruneResult = pruneStaleThreads();
+      prunedCount = pruneResult?.count ?? 0;
+    } catch (e: any) {
+      console.warn("[ResearchAgenda] Prune failed (non-fatal):", e.message);
+    }
+
+    // 5. Count podcast candidates
+    const candidates = getPodcastCandidates() ?? [];
+    const agenda = loadAgenda();
+    agenda.stats.totalPodcastCandidates = candidates.length;
+    saveAgenda(agenda);
+
+    console.log(`[ResearchAgenda] Cycle complete — new: ${newThreads.length}, advanced: ${advanced.length}, pruned: ${prunedCount}, candidates: ${candidates.length}`);
+
+    return {
+      newThreads: newThreads.length,
+      advanced,
+      pruned: prunedCount,
+      podcastCandidates: candidates.length,
+    };
+  } catch (e: any) {
+    console.error("[ResearchAgenda] Cycle crashed unexpectedly:", e.message, e.stack);
+    return safeDefault;
   }
-
-  // 4. Prune stale threads
-  const { count: prunedCount } = pruneStaleThreads();
-
-  // 5. Count podcast candidates
-  const candidates = getPodcastCandidates() ?? [];
-  const agenda = loadAgenda();
-  agenda.stats.totalPodcastCandidates = candidates.length;
-  saveAgenda(agenda);
-
-  console.log(`[ResearchAgenda] Cycle complete — new: ${newThreads.length}, advanced: ${advanced.length}, pruned: ${prunedCount}, candidates: ${candidates.length}`);
-
-  return {
-    newThreads: newThreads.length,
-    advanced,
-    pruned: prunedCount,
-    podcastCandidates: candidates.length,
-  };
 }
