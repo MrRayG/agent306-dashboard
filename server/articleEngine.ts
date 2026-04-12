@@ -27,6 +27,7 @@ import { TwitterApi } from "twitter-api-v2";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { validateXPost, recordXPost } from "./xComplianceGuard.js";
+import { queueXPost } from "./xPostScheduler.js";
 
 const GROK_CHAT_API     = LLM_BASE_URL;
 const GROK_RESPONSE_API = LLM_RESPONSE_URL;
@@ -507,12 +508,19 @@ ${body}
         let replyTo = teaserPost.data.id;
 
         for (const chunk of chunks) {
+          const chunkCompliance = validateXPost(chunk);
+          if (!chunkCompliance.allowed) {
+            console.log(`[Article] Thread chunk skipped by compliance: ${chunkCompliance.reason}`);
+            continue;
+          }
+          const safeChunk = chunkCompliance.sanitizedContent ?? chunk;
           const reply = await xClient.v2.tweet({
-            text: chunk,
+            text: safeChunk,
             reply: { in_reply_to_tweet_id: replyTo },
           }).catch(() => null);
           if (reply?.data?.id) {
             replyTo = reply.data.id;
+            recordXPost(safeChunk);
           }
           // Brief pause between thread posts to avoid rate limits
           await new Promise(r => setTimeout(r, 1000));
@@ -610,6 +618,11 @@ export async function runWeeklyDeepRead(
     state.history.unshift(entry);
     if (state.history.length > 52) state.history = state.history.slice(0, 52); // keep 1 year
     saveState(state);
+
+    // Queue teaser for X post scheduler
+    if (teaser && teaser.length > 10) {
+      queueXPost(teaser.slice(0, 2500), "article");
+    }
 
     console.log(`[ArticleEngine] Deep Read posted: "${headline}" → ${tweetUrl ?? "no URL"}`);
     return { success: true, tweetUrl: tweetUrl ?? undefined, headline };

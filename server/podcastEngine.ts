@@ -34,6 +34,7 @@ import { getThreadById, type ResearchThread } from "./research-agenda.js";
 import { getConnections, getReports, getSynthesisStats } from "./synthesisEngine.js";
 import { getReflectionStats } from "./reflectionEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import { queuePodcastPromo, hasPostedEpisode } from "./xPostScheduler.js";
 
 const GROK_URL = LLM_BASE_URL;
 const PODCAST_FILE = dataPath("podcast_state.json");
@@ -692,6 +693,13 @@ export function publishEpisode(episodeId: string, publishedTo: string[]): boolea
   saveState(state);
 
   console.log(`[Podcast] Published: ${EPISODE_META[episode.type].label} #${episode.episodeNumber} — "${episode.title}"`);
+
+  // Queue podcast promo to X scheduler (immediate, event-driven)
+  if (!hasPostedEpisode(episodeId)) {
+    const promoText = episode.metadata?.socialPost
+      ?? `New episode: ${EPISODE_META[episode.type].label} #${episode.episodeNumber} — "${episode.title}"\n\nagent306.ai`;
+    queuePodcastPromo(promoText.slice(0, 2500), episodeId);
+  }
 
   // Auto-post to Farcaster if enabled and social post content exists (fire-and-forget)
   if (episode.metadata?.socialPost) {

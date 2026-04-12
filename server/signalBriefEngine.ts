@@ -31,6 +31,7 @@ import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
 import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import { queueXPost } from "./xPostScheduler.js";
 
 const GROK_URL          = LLM_BASE_URL;
 const GROK_SEARCH_URL   = LLM_RESPONSE_URL;
@@ -367,6 +368,11 @@ export async function postSignalBrief(xWrite: any, grokKey: string): Promise<str
   saveState(state);
 
   registerPost("signal_brief", tweetUrl, "signal_brief");
+  // Queue for X post scheduler (in addition to direct posting above)
+  if (generated.post.trim().length > 10) {
+    queueXPost(generated.post.trim(), "signal");
+  }
+
   console.log(`[SignalBrief] Complete — Brief #${state.totalBriefs}`);
   return tweetUrl;
 }
