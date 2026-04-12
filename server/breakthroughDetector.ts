@@ -358,7 +358,7 @@ export async function checkPredictions(): Promise<number> {
             model: "sonar",
             messages: [{
               role: "system",
-              content: "You verify predictions. Return ONLY valid JSON: {\"status\": \"verified_true\" | \"verified_false\" | \"inconclusive\", \"evidence\": \"brief explanation\"}"
+              content: "You verify predictions. You MUST respond with ONLY valid JSON. No markdown, no explanations, no text outside the JSON. Do not wrap in code fences.\n\nRequired JSON schema: {\"status\": \"verified_true\", \"evidence\": \"brief explanation\"}\n\nThe status field must be exactly one of: \"verified_true\", \"verified_false\", or \"inconclusive\"."
             }, {
               role: "user",
               content: `Prediction made on ${new Date(prediction.madeAt).toISOString().slice(0, 10)}: "${prediction.claim}"\n\nHas this prediction come true? Look for recent evidence.`
@@ -424,11 +424,13 @@ A finding is novel if it represents a NEW CONNECTION between ideas, not just a r
 
 Be rigorous. Most findings are NOT novel. That's okay.
 
-Return valid JSON only:
+You MUST respond with ONLY valid JSON. No markdown, no explanations, no text outside the JSON structure. Do not wrap in code fences.
+
+Required JSON schema:
 {
-  "noveltyScore": <number 0-100>,
-  "suggestedTitle": "<concise title for this finding>",
-  "reasoning": "<1-2 sentence explanation of your scoring>"
+  "noveltyScore": 50,
+  "suggestedTitle": "concise title for this finding",
+  "reasoning": "1-2 sentence explanation of your scoring"
 }`;
 
     const userPrompt = `The finding to evaluate:\n\n${finding}`;

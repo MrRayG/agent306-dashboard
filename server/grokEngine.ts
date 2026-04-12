@@ -79,6 +79,17 @@ function parseGrokSocialResponse(data: any): Array<{
   return posts.slice(0, 20);
 }
 
+// ── Sanitize x_search queries to avoid 400 errors ───────────────────────────
+// Truncate to safe length, strip control characters and problematic unicode
+export function sanitizeXSearchQuery(query: string): string {
+  return query
+    .replace(/[\x00-\x1F\x7F]/g, " ")     // strip control characters
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")  // strip zero-width chars
+    .replace(/\s+/g, " ")                    // collapse whitespace
+    .trim()
+    .slice(0, 2000);                         // Grok x_search has input limits
+}
+
 // ── Run a single Grok x_search with a specific query ─────────────────────────
 async function runGrokSearch(query: string): Promise<typeof communitySignalCache> {
   const nativeGrokKey = process.env.GROK_API_KEY ?? "";
@@ -86,29 +97,36 @@ async function runGrokSearch(query: string): Promise<typeof communitySignalCache
     console.warn("[306] GROK_API_KEY not set — skipping x_search");
     return [];
   }
+  const sanitizedQuery = sanitizeXSearchQuery(query);
   const grokResponsesUrl = process.env.GROK_RESPONSES_URL ?? "https://api.x.ai/v1/responses";
-  const res = await fetch(grokResponsesUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` },
-    body: JSON.stringify({
-      model: getModel("x_search"), // x_search quality is identical; grok-4-1-fast overkill for text retrieval
-      stream: false,
-      input: [{ role: "user", content: query }],
-      tools: [{ type: "x_search" }],
-    }),
-    signal: AbortSignal.timeout(45000),
-  });
+  try {
+    const res = await fetch(grokResponsesUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` },
+      body: JSON.stringify({
+        model: getModel("x_search"), // x_search quality is identical; grok-4-1-fast overkill for text retrieval
+        stream: false,
+        input: [{ role: "user", content: sanitizedQuery }],
+        tools: [{ type: "x_search" }],
+      }),
+      signal: AbortSignal.timeout(45000),
+    });
 
-  if (!res.ok) {
-    console.warn("[306] x_search failed:", res.status);
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => "");
+      console.warn(`[306] x_search failed: ${res.status} — query: "${sanitizedQuery.slice(0, 100)}..." — body: ${errorBody.slice(0, 200)}`);
+      return [];
+    }
+
+    const data = await res.json();
+    return parseGrokSocialResponse(data).map(p => ({
+      ...p,
+      capturedAt: new Date().toISOString(),
+    }));
+  } catch (e: any) {
+    console.warn(`[306] x_search error: ${e.message} — query: "${sanitizedQuery.slice(0, 100)}..."`);
     return [];
   }
-
-  const data = await res.json();
-  return parseGrokSocialResponse(data).map(p => ({
-    ...p,
-    capturedAt: new Date().toISOString(),
-  }));
 }
 
 // ── Main community signal collector — parallel targeted searches ──────────────

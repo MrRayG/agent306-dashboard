@@ -136,7 +136,8 @@ Return JSON:
     });
 
     if (!res.ok) {
-      console.warn("[SignalBrief] Search API failed:", res.status);
+      const errorBody = await res.text().catch(() => "");
+      console.warn(`[SignalBrief] Search API failed: ${res.status} — body: ${errorBody.slice(0, 200)}`);
       return defaultSignals;
     }
 
@@ -221,7 +222,9 @@ RULES:
 - Your POV goes on the line after the context. Make it sharp.
 - The closing thesis should be one sentence that a builder would screenshot.
 - No exclamation points. No LFG/WAGMI. No price predictions.
-- End with #Agent306`,
+- End with #Agent306
+
+You MUST respond with ONLY valid JSON. No markdown, no explanations, no text outside the JSON structure. Do not wrap in code fences.`,
           },
           {
             role: "user",

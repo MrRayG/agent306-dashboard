@@ -543,6 +543,8 @@ analyze patterns honestly (including contradictions), and interpret findings wit
 Research is not linear — if your analysis reveals gaps, loop back to earlier steps.
 Be honest about uncertainty. Admit what you don't know. Cite your sources.\n\n`;
 
+const JSON_SUFFIX = "\n\nIMPORTANT: You MUST respond with ONLY valid JSON. No markdown, no explanations, no prose, no text outside the JSON structure. Do not wrap in code fences.";
+
 async function callGrok(
   grokKey: string,
   systemPrompt: string,
@@ -551,13 +553,14 @@ async function callGrok(
 ): Promise<any | null> {
   let raw = "";
   try {
+    const fullSystem = (opts?.skipPreamble ? systemPrompt : METHODOLOGY_PREAMBLE + systemPrompt) + JSON_SUFFIX;
     const res = await fetch(GROK_CHAT_API, {
       method: "POST",
       headers: getLLMHeaders(),
       body: JSON.stringify({
         model: opts?.model ?? getModel("research_phase"),
         messages: [
-          { role: "system", content: opts?.skipPreamble ? systemPrompt : METHODOLOGY_PREAMBLE + systemPrompt },
+          { role: "system", content: fullSystem },
           { role: "user", content: userPrompt },
         ],
         max_tokens: opts?.maxTokens ?? 1500,
@@ -2159,14 +2162,16 @@ export async function autoApproveTopics(): Promise<TopicQualityEvaluation[]> {
 4. coherence: Is the analysis logically sound? (1 = contradictory/muddled, 10 = crystal clear reasoning)
 5. actionability: Can readers act on these findings? (1 = purely abstract, 10 = immediately actionable)
 
-Return valid JSON only:
+You MUST respond with ONLY valid JSON. No markdown, no explanations, no text outside the JSON structure. Do not wrap in code fences.
+
+Required JSON schema:
 {
-  "evidenceDepth": <1-10>,
-  "sourceQuality": <1-10>,
-  "insightNovelty": <1-10>,
-  "coherence": <1-10>,
-  "actionability": <1-10>,
-  "reasoning": "<1-2 sentence summary of your evaluation>"
+  "evidenceDepth": 5,
+  "sourceQuality": 5,
+  "insightNovelty": 5,
+  "coherence": 5,
+  "actionability": 5,
+  "reasoning": "1-2 sentence summary of your evaluation"
 }`;
 
         const res = await fetch(LLM_BASE_URL, {
@@ -2215,11 +2220,19 @@ Return valid JSON only:
         const avg = (scores.evidenceDepth + scores.sourceQuality + scores.insightNovelty + scores.coherence + scores.actionability) / 5;
         const averageScore = Math.round(avg * 10) / 10;
 
+        // Check how long the topic has been in pending_review
+        const reviewAge = topic.reviewRequestedAt
+          ? (Date.now() - new Date(topic.reviewRequestedAt).getTime()) / (24 * 60 * 60 * 1000)
+          : 0;
+
         let verdict: TopicQualityEvaluation["verdict"];
         if (averageScore >= 7.0 && autoApproved < MAX_AUTO_APPROVALS) {
           verdict = "auto_approve";
         } else if (averageScore < 5.0) {
           verdict = "decline";
+        } else if (reviewAge >= 3 && averageScore >= 5.0 && autoApproved < MAX_AUTO_APPROVALS) {
+          // Stale needs_attention: auto-approve after 3+ days in pending_review
+          verdict = "auto_approve";
         } else {
           verdict = "needs_attention";
         }
@@ -2235,18 +2248,19 @@ Return valid JSON only:
 
         // Apply verdict
         if (verdict === "auto_approve") {
+          const ageNote = reviewAge >= 3 ? ` (stale review — ${Math.round(reviewAge)}d in queue, lowered threshold)` : "";
           updateTopicStatus(topic.id, "approved", {
-            reviewNote: `[AutoApproval] Auto-approved with score ${averageScore}/10. Scores: evidence=${scores.evidenceDepth}, sources=${scores.sourceQuality}, novelty=${scores.insightNovelty}, coherence=${scores.coherence}, actionability=${scores.actionability}. ${parsed.reasoning}`,
+            reviewNote: `[AutoApproval] Auto-approved with score ${averageScore}/10${ageNote}. Scores: evidence=${scores.evidenceDepth}, sources=${scores.sourceQuality}, novelty=${scores.insightNovelty}, coherence=${scores.coherence}, actionability=${scores.actionability}. ${parsed.reasoning}`,
           });
           autoApproved++;
-          console.log(`[AutoApproval] AUTO-APPROVED "${topic.topic}" (avg: ${averageScore}) — ${parsed.reasoning}`);
+          console.log(`[AutoApproval] AUTO-APPROVED "${topic.topic}" (avg: ${averageScore}${ageNote}) — ${parsed.reasoning}`);
         } else if (verdict === "decline") {
           updateTopicStatus(topic.id, "declined", {
             reviewNote: `[AutoApproval] Declined with score ${averageScore}/10. ${parsed.reasoning}`,
           });
           console.log(`[AutoApproval] DECLINED "${topic.topic}" (avg: ${averageScore}) — ${parsed.reasoning}`);
         } else {
-          console.log(`[AutoApproval] NEEDS ATTENTION "${topic.topic}" (avg: ${averageScore}) — keeping in pending_review for human review`);
+          console.log(`[AutoApproval] NEEDS ATTENTION "${topic.topic}" (avg: ${averageScore}, ${Math.round(reviewAge)}d in queue) — keeping in pending_review for human review`);
         }
 
         console.log(`[AutoApproval] Scores for "${topic.topic}": evidence=${scores.evidenceDepth}, sources=${scores.sourceQuality}, novelty=${scores.insightNovelty}, coherence=${scores.coherence}, actionability=${scores.actionability}, avg=${averageScore}`);

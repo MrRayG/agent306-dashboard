@@ -70,6 +70,15 @@ export function safeParseLLMJson<T = any>(
     }
   }
 
+  // ── Step 6: Markdown prose recovery ─────────────────────────────────────
+  // If the LLM returned markdown prose with **Key:** patterns, try to
+  // extract structured data from it as a last resort.
+  const markdownRecovered = recoverFromMarkdown(raw.trim());
+  if (markdownRecovered) {
+    console.warn(`[JSONRepair] Recovered structured data from markdown prose for ${label}`);
+    return markdownRecovered as T;
+  }
+
   console.warn(`[JSONRepair] Could not parse JSON for ${label}: ${text.slice(0, 200)}`);
   return null;
 }
@@ -125,6 +134,73 @@ function repairTruncatedJson(text: string): string {
   repaired += "}".repeat(Math.max(0, openBraces - closeBraces));
 
   return repaired;
+}
+
+/**
+ * Attempt to recover structured data from markdown prose.
+ *
+ * Handles patterns like:
+ *   **Novelty Score: 68**\n**Suggested Title: ...**\n**Reasoning: ...**
+ *   **Consolidated Entry 1: ...**
+ *   **No strong, falsifiable hypotheses can be extracted.**
+ *
+ * Returns a plain object/array or null if unrecoverable.
+ */
+function recoverFromMarkdown(text: string): any | null {
+  // Pattern 1: "**No ... hypotheses ...**" → empty array (the LLM is saying "none")
+  if (/\*\*no\s+(strong|valid|falsifiable|testable)/i.test(text) &&
+      /hypothes[ei]s/i.test(text)) {
+    return [];
+  }
+
+  // Pattern 2: Key-value markdown like "**Novelty Score: 68**\n**Suggested Title: ...**"
+  const kvPairs: Record<string, any> = {};
+  const kvPattern = /\*\*([^:*]+?)(?:\s*:\s*|\*\*\s*:\s*)([^*]*?)(?:\*\*|$)/gm;
+  let match: RegExpExecArray | null;
+  let kvCount = 0;
+
+  while ((match = kvPattern.exec(text)) !== null) {
+    const key = match[1].trim()
+      .replace(/\s+/g, "_")
+      .replace(/[^a-zA-Z0-9_]/g, "")
+      .replace(/^_+|_+$/g, "");
+    let value: any = match[2].trim();
+
+    // Try to parse numeric values
+    if (/^\d+(\.\d+)?$/.test(value)) {
+      value = parseFloat(value);
+    }
+
+    // Normalize common key names to camelCase
+    const keyMap: Record<string, string> = {
+      "Novelty_Score": "noveltyScore",
+      "novelty_score": "noveltyScore",
+      "Suggested_Title": "suggestedTitle",
+      "suggested_title": "suggestedTitle",
+      "Reasoning": "reasoning",
+      "reasoning": "reasoning",
+      "Impact_Score": "impactScore",
+      "impact_score": "impactScore",
+      "Composite_Score": "compositeScore",
+      "composite_score": "compositeScore",
+    };
+
+    const normalizedKey = keyMap[key] ?? key.charAt(0).toLowerCase() + key.slice(1);
+    kvPairs[normalizedKey] = value;
+    kvCount++;
+  }
+
+  if (kvCount >= 2) return kvPairs;
+
+  // Pattern 3: Numbered entries like "**Consolidated Entry 1: ...**"
+  const entryPattern = /\*\*(?:Consolidated\s+)?Entry\s+\d+\s*:\s*([^*]+)\*\*/gi;
+  const entries: any[] = [];
+  while ((match = entryPattern.exec(text)) !== null) {
+    entries.push({ title: match[1].trim(), summary: match[1].trim() });
+  }
+  if (entries.length > 0) return { consolidated: entries };
+
+  return null;
 }
 
 /** Last resort: find the last complete object boundary and close the structure */
