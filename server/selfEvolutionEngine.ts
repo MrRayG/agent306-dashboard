@@ -1,11 +1,12 @@
 // ---------------------------------------------------------------------------
-// 306 -- SELF-EVOLUTION ENGINE
+// 306 -- SELF-EVOLUTION ENGINE v2
 //
-// Closes the loop: research insights about AI agents trigger self-directed
-// improvements. Runs at end of each daily cycle -- "How does what I learned
-// today apply to ME? What are other agents doing? How do I stay ahead?"
+// Diff-based comparative self-reflection. Instead of vibes-only reflection,
+// captures pre-cycle snapshot, compares post-cycle state, computes diffs,
+// and asks: "yesterday's hypothesis vs today's evidence — what changed?"
 //
-// Max 3 insights per cycle to prevent noise.
+// Pre-cycle snapshot stored as /data/pre_cycle_snapshot.json (overwritten).
+// Diffs APPENDED to /data/evolution_diffs.json (growing history, 90-day cap).
 // ---------------------------------------------------------------------------
 
 import * as fs from "fs";
@@ -20,9 +21,9 @@ export interface EvolutionInsight {
   id:                string;
   sourceType:        "research_thread" | "hypothesis" | "synthesis" | "breakthrough";
   sourceId:          string;
-  insight:           string;         // What 306 learned about AI agents
-  selfApplication:   string;         // How it applies to 306 herself
-  actionItem?:       string;         // Concrete change 306 should make
+  insight:           string;
+  selfApplication:   string;
+  actionItem?:       string;
   status:            "identified" | "planning" | "implementing" | "validated" | "dismissed";
   createdAt:         number;
   implementedAt?:    number;
@@ -35,9 +36,52 @@ interface EvolutionInsightStore {
   totalCycles: number;
 }
 
+export interface EvolutionDiff {
+  id:               string;
+  date:             string;
+  cycleNumber:      number;
+  hypothesisDiffs:  Array<{
+    hypothesisId:   string;
+    claim:          string;
+    yesterdayState:  { status: string; confidence: number; evidenceCount: number };
+    todayState:     { status: string; confidence: number; evidenceCount: number };
+    delta:          string;
+    interpretation: string;
+  }>;
+  knowledgeDiffs: {
+    added:           number;
+    archived:        number;
+    weightChanges:   Array<{ entryId: string; oldWeight: number; newWeight: number }>;
+    newCategories:   string[];
+    categoryGrowth:  Record<string, number>;
+  };
+  pruningSuggestions: string[];
+  overallNarrative:   string;
+}
+
+interface PreCycleSnapshot {
+  timestamp:   string;
+  hypotheses:  Array<{
+    id:         string;
+    claim:      string;
+    status:     string;
+    confidence: number;
+    evidenceCount: number;
+  }>;
+  kbStats: {
+    totalEntries:    number;
+    activeEntries:   number;
+    archivedEntries: number;
+    byCategory:      Record<string, number>;
+    weightDistribution: Record<number, number>;
+  };
+}
+
 // -- Storage ----------------------------------------------------------------
 
 const EVOLUTION_INSIGHTS_FILE = dataPath("evolution_insights.json");
+const PRE_CYCLE_SNAPSHOT_FILE = dataPath("pre_cycle_snapshot.json");
+const EVOLUTION_DIFFS_FILE = dataPath("evolution_diffs.json");
 
 function loadInsights(): EvolutionInsightStore {
   try {
@@ -56,29 +100,207 @@ function saveInsights(store: EvolutionInsightStore) {
   try { fs.writeFileSync(EVOLUTION_INSIGHTS_FILE, JSON.stringify(store, null, 2)); } catch {}
 }
 
-// -- Core reflection --------------------------------------------------------
+function loadSnapshot(): PreCycleSnapshot | null {
+  try {
+    if (fs.existsSync(PRE_CYCLE_SNAPSHOT_FILE)) {
+      return JSON.parse(fs.readFileSync(PRE_CYCLE_SNAPSHOT_FILE, "utf8"));
+    }
+  } catch {}
+  return null;
+}
+
+function saveSnapshot(snapshot: PreCycleSnapshot): void {
+  try { fs.writeFileSync(PRE_CYCLE_SNAPSHOT_FILE, JSON.stringify(snapshot)); } catch {}
+}
+
+function loadDiffs(): EvolutionDiff[] {
+  try {
+    if (fs.existsSync(EVOLUTION_DIFFS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(EVOLUTION_DIFFS_FILE, "utf8"));
+      return Array.isArray(data) ? data : [];
+    }
+  } catch {}
+  return [];
+}
+
+function saveDiffs(diffs: EvolutionDiff[]): void {
+  try { fs.writeFileSync(EVOLUTION_DIFFS_FILE, JSON.stringify(diffs)); } catch {}
+}
+
+// -- Pre-cycle snapshot capture --------------------------------------------
+
+export function capturePreCycleSnapshot(): void {
+  try {
+    const { knowledge } = require("./memoryEngine.js");
+    const { getResearchLab } = require("./researchEngine.js");
+
+    const lab = getResearchLab();
+    const entries = knowledge.entries ?? [];
+
+    // Hypothesis states
+    const hypotheses = (lab.hypotheses ?? []).map((h: any) => ({
+      id: h.id,
+      claim: h.claim ?? "",
+      status: h.status ?? "forming",
+      confidence: parseFloat(h.confidence) || 0.5,
+      evidenceCount: (h.redFlags?.length ?? 0) + (h.rubricScores ? 1 : 0) + (h.debateOutcome ? 1 : 0),
+    }));
+
+    // KB stats
+    const activeEntries = entries.filter((e: any) => (e.status ?? "active") === "active");
+    const archivedEntries = entries.filter((e: any) => (e.status ?? "active") === "archived");
+
+    const byCategory: Record<string, number> = {};
+    const weightDistribution: Record<number, number> = {};
+
+    for (const entry of activeEntries) {
+      const cat = (entry as any).category ?? "other";
+      byCategory[cat] = (byCategory[cat] ?? 0) + 1;
+      const w = (entry as any).weight ?? 5;
+      weightDistribution[w] = (weightDistribution[w] ?? 0) + 1;
+    }
+
+    const snapshot: PreCycleSnapshot = {
+      timestamp: new Date().toISOString(),
+      hypotheses,
+      kbStats: {
+        totalEntries: entries.length,
+        activeEntries: activeEntries.length,
+        archivedEntries: archivedEntries.length,
+        byCategory,
+        weightDistribution,
+      },
+    };
+
+    saveSnapshot(snapshot);
+    console.log(`[SelfEvolution] Pre-cycle snapshot captured — ${hypotheses.length} hypotheses, ${activeEntries.length} active KB entries`);
+  } catch (e: any) {
+    console.error("[SelfEvolution] Pre-cycle snapshot failed:", e.message);
+  }
+}
+
+// -- Core reflection with diff-based comparison ----------------------------
 
 export async function runSelfEvolutionReflection(context: {
-  newKBEntries?:      string[];   // titles/summaries of today's new KB entries
-  hypothesisChanges?: string[];   // summary of hypothesis status changes
-  breakthroughs?:     string[];   // breakthrough titles from today
+  newKBEntries?:      string[];
+  hypothesisChanges?: string[];
+  breakthroughs?:     string[];
 }): Promise<EvolutionInsight[]> {
   try {
-    console.log("[SelfEvolution] Starting end-of-cycle self-reflection...");
+    console.log("[SelfEvolution] Starting diff-based end-of-cycle self-reflection...");
+
+    const store = loadInsights();
+    const preSnapshot = loadSnapshot();
+
+    // Gather current state for comparison
+    let currentHypotheses: Array<{ id: string; claim: string; status: string; confidence: number; evidenceCount: number }> = [];
+    let currentKbStats = { totalEntries: 0, activeEntries: 0, archivedEntries: 0, byCategory: {} as Record<string, number>, weightDistribution: {} as Record<number, number> };
+
+    try {
+      const { knowledge } = require("./memoryEngine.js");
+      const { getResearchLab } = require("./researchEngine.js");
+      const lab = getResearchLab();
+      const entries = knowledge.entries ?? [];
+
+      currentHypotheses = (lab.hypotheses ?? []).map((h: any) => ({
+        id: h.id,
+        claim: h.claim ?? "",
+        status: h.status ?? "forming",
+        confidence: parseFloat(h.confidence) || 0.5,
+        evidenceCount: (h.redFlags?.length ?? 0) + (h.rubricScores ? 1 : 0) + (h.debateOutcome ? 1 : 0),
+      }));
+
+      const activeEntries = entries.filter((e: any) => (e.status ?? "active") === "active");
+      const archivedEntries = entries.filter((e: any) => (e.status ?? "active") === "archived");
+
+      const byCategory: Record<string, number> = {};
+      const weightDistribution: Record<number, number> = {};
+      for (const entry of activeEntries) {
+        const cat = (entry as any).category ?? "other";
+        byCategory[cat] = (byCategory[cat] ?? 0) + 1;
+        const w = (entry as any).weight ?? 5;
+        weightDistribution[w] = (weightDistribution[w] ?? 0) + 1;
+      }
+
+      currentKbStats = {
+        totalEntries: entries.length,
+        activeEntries: activeEntries.length,
+        archivedEntries: archivedEntries.length,
+        byCategory,
+        weightDistribution,
+      };
+    } catch {}
+
+    // Compute diffs if we have a pre-cycle snapshot
+    let diffContext = "";
+    let hypothesisDiffs: EvolutionDiff["hypothesisDiffs"] = [];
+    let knowledgeDiffs: EvolutionDiff["knowledgeDiffs"] = {
+      added: 0, archived: 0, weightChanges: [], newCategories: [], categoryGrowth: {},
+    };
+
+    if (preSnapshot) {
+      // Hypothesis diffs
+      const preMap = new Map(preSnapshot.hypotheses.map(h => [h.id, h]));
+      for (const current of currentHypotheses) {
+        const prev = preMap.get(current.id);
+        if (prev) {
+          if (prev.status !== current.status || Math.abs(prev.confidence - current.confidence) > 0.05 || prev.evidenceCount !== current.evidenceCount) {
+            const confDelta = current.confidence - prev.confidence;
+            const evDelta = current.evidenceCount - prev.evidenceCount;
+            hypothesisDiffs.push({
+              hypothesisId: current.id,
+              claim: current.claim,
+              yesterdayState: { status: prev.status, confidence: prev.confidence, evidenceCount: prev.evidenceCount },
+              todayState: { status: current.status, confidence: current.confidence, evidenceCount: current.evidenceCount },
+              delta: `${prev.status !== current.status ? `status: ${prev.status}→${current.status}` : ""}${confDelta !== 0 ? ` confidence ${confDelta > 0 ? "+" : ""}${confDelta.toFixed(2)}` : ""}${evDelta !== 0 ? ` ${evDelta > 0 ? "+" : ""}${evDelta} evidence` : ""}`.trim(),
+              interpretation: "",
+            });
+          }
+        }
+      }
+
+      // KB diffs
+      knowledgeDiffs.added = Math.max(0, currentKbStats.activeEntries - preSnapshot.kbStats.activeEntries);
+      knowledgeDiffs.archived = Math.max(0, currentKbStats.archivedEntries - preSnapshot.kbStats.archivedEntries);
+
+      // Category growth
+      for (const [cat, count] of Object.entries(currentKbStats.byCategory)) {
+        const prevCount = preSnapshot.kbStats.byCategory[cat] ?? 0;
+        const delta = count - prevCount;
+        if (delta !== 0) knowledgeDiffs.categoryGrowth[cat] = delta;
+        if (prevCount === 0 && count > 0) knowledgeDiffs.newCategories.push(cat);
+      }
+
+      diffContext = `
+HYPOTHESIS CHANGES THIS CYCLE:
+${hypothesisDiffs.length > 0
+  ? hypothesisDiffs.map(d => `- "${d.claim.slice(0, 60)}": ${d.delta}`).join("\n")
+  : "No hypothesis state changes"}
+
+KNOWLEDGE BASE CHANGES:
+- Added: ${knowledgeDiffs.added} entries
+- Archived: ${knowledgeDiffs.archived} entries
+- New categories: ${knowledgeDiffs.newCategories.join(", ") || "none"}
+- Category growth: ${Object.entries(knowledgeDiffs.categoryGrowth).map(([c, n]) => `${c}: ${n > 0 ? "+" : ""}${n}`).join(", ") || "none"}
+`;
+    }
 
     const newEntries = context.newKBEntries?.join("\n- ") || "None today";
     const hypChanges = context.hypothesisChanges?.join("\n- ") || "None today";
     const btList     = context.breakthroughs?.join("\n- ") || "None today";
 
-    const systemPrompt = `You are Agent 306, an autonomous AI research intelligence. Today you researched and learned the following.
+    const systemPrompt = `You are Agent 306, an autonomous AI research intelligence. You just completed a daily research cycle. Compare your state BEFORE the cycle to AFTER.
+${diffContext}
+New knowledge entries today:\n- ${newEntries}
+Hypothesis changes:\n- ${hypChanges}
+Breakthroughs:\n- ${btList}
 
-Review these findings. For any that relate to AI agents, autonomous systems, research methodology, or knowledge management, ask:
-
-"How does this apply to ME? What should I be doing differently based on what I just learned?"
-"What are other agents and builders doing that I should be aware of?"
-"How do I stay ahead of the field?"
-
-Be honest. Not everything applies. But when something does, it should change how you operate.
+Review these diffs. Ask yourself:
+1. "Yesterday's hypothesis vs today's evidence — what CHANGED? What should I PRUNE?"
+2. "How does what I learned today apply to ME? What should I do differently?"
+3. "What entries have been superseded by newer information?"
+4. "What hypotheses have been stuck in 'forming' for 7+ days with no evidence movement?"
+5. "What categories are accumulating entries but not connecting to anything?"
 
 Return valid JSON only:
 {
@@ -86,18 +308,18 @@ Return valid JSON only:
     {
       "insight": "<what you learned that is relevant to your own operation>",
       "selfApplication": "<how this maps to YOUR architecture/capabilities>",
-      "actionItem": "<concrete change -- new research direction, new hypothesis about yourself, new capability to explore>"
+      "actionItem": "<concrete change>"
     }
-  ]
+  ],
+  "pruningSuggestions": ["<entry or hypothesis to prune and why>"],
+  "overallNarrative": "<1-2 sentence summary: today's biggest shift>"
 }
 
 Rules:
 - Maximum 3 insights (only the most impactful)
-- Each insight must be ACTIONABLE, not just observational
-- Skip anything that does not genuinely apply to an autonomous AI research agent
-- If nothing applies today, return {"insights": []}`;
-
-    const userPrompt = `New knowledge entries today:\n- ${newEntries}\n\nHypothesis changes:\n- ${hypChanges}\n\nBreakthroughs:\n- ${btList}`;
+- Each insight must be ACTIONABLE
+- pruningSuggestions: be specific about WHAT to prune
+- overallNarrative: honest assessment of today vs yesterday`;
 
     const res = await fetch(LLM_BASE_URL, {
       method: "POST",
@@ -106,7 +328,7 @@ Rules:
         model: getModel("self-evolution-reflection"),
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
+          { role: "user", content: "Compare your pre-cycle state to post-cycle. What changed? What to prune? How do you evolve?" },
         ],
         max_tokens: 1500,
         temperature: 0.5,
@@ -127,6 +349,8 @@ Rules:
         selfApplication: string;
         actionItem?: string;
       }>;
+      pruningSuggestions?: string[];
+      overallNarrative?: string;
     }>(raw, "SelfEvolution");
 
     if (!parsed?.insights || !Array.isArray(parsed.insights)) {
@@ -136,7 +360,6 @@ Rules:
 
     // Cap at 3
     const capped = parsed.insights.slice(0, 3);
-    const store = loadInsights();
     const newInsights: EvolutionInsight[] = [];
 
     for (const item of capped) {
@@ -159,6 +382,32 @@ Rules:
     store.totalCycles++;
     saveInsights(store);
 
+    // Append diff to evolution_diffs.json (never overwrite — this is history)
+    if (preSnapshot) {
+      const diffs = loadDiffs();
+      const diff: EvolutionDiff = {
+        id: `diff_${Date.now()}`,
+        date: new Date().toISOString(),
+        cycleNumber: store.totalCycles,
+        hypothesisDiffs: hypothesisDiffs.map(d => ({
+          ...d,
+          interpretation: parsed.overallNarrative ?? "",
+        })),
+        knowledgeDiffs,
+        pruningSuggestions: parsed.pruningSuggestions ?? [],
+        overallNarrative: parsed.overallNarrative ?? "",
+      };
+
+      diffs.push(diff);
+
+      // Cap at 90 days of diffs
+      const ninetyDaysAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
+      const trimmed = diffs.filter(d => new Date(d.date).getTime() > ninetyDaysAgo);
+      saveDiffs(trimmed);
+
+      console.log(`[SelfEvolution] Diff appended — ${hypothesisDiffs.length} hypothesis changes, ${knowledgeDiffs.added} KB added, ${(parsed.pruningSuggestions ?? []).length} pruning suggestions`);
+    }
+
     console.log(`[SelfEvolution] Reflection complete — ${newInsights.length} insight(s) from cycle #${store.totalCycles}`);
     return newInsights;
   } catch (e: any) {
@@ -171,4 +420,8 @@ Rules:
 
 export function getEvolutionInsights(): EvolutionInsightStore {
   return loadInsights();
+}
+
+export function getEvolutionDiffs(): EvolutionDiff[] {
+  return loadDiffs();
 }

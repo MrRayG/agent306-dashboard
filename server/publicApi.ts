@@ -15,7 +15,8 @@ import { getAgentReachStatus } from "./agentReachEngine.js";
 import { getBriefingState } from "./dailyCycleEngine.js";
 import { getMetacognitionState } from "./metacognitionEngine.js";
 import { getLatestSnapshot, getEvolutionHistory } from "./evolutionTracker.js";
-import { getBreakthroughs } from "./breakthroughDetector.js";
+import { getBreakthroughs, getPredictions } from "./breakthroughDetector.js";
+import { getCorrections } from "./reasoningEngine.js";
 
 // ── In-memory cache (30-second TTL) ─────────────────────────
 
@@ -542,6 +543,53 @@ export function getPublicAspirations() {
     return {
       aspirations,
       total: aspirations.length,
+      generatedAt: new Date().toISOString(),
+    };
+  });
+}
+
+// -- 9. Predictions ---------------------------------------------------------
+
+export function getPublicPredictions() {
+  return cached("predictions", () => {
+    const store = getPredictions();
+    const predictions = store.predictions.map(p => ({
+      id:           p.id,
+      claim:        p.claim,
+      status:       p.status,
+      madeAt:       new Date(p.madeAt).toISOString(),
+      checkDate:    new Date(p.checkDate).toISOString(),
+      verifiedAt:   p.verifiedAt ? new Date(p.verifiedAt).toISOString() : null,
+    }));
+
+    return {
+      predictions,
+      total: predictions.length,
+      verified: predictions.filter(p => p.status === "verified_true").length,
+      falsified: predictions.filter(p => p.status === "verified_false").length,
+      pending: predictions.filter(p => p.status === "pending").length,
+      generatedAt: new Date().toISOString(),
+    };
+  });
+}
+
+// -- 10. Corrections --------------------------------------------------------
+
+export function getPublicCorrections() {
+  return cached("corrections", () => {
+    const store = getCorrections();
+    const corrections = store.corrections.map(c => ({
+      id:             c.id,
+      originalClaim:  c.originalClaim,
+      correctedClaim: c.correctedClaim,
+      whatChanged:    c.whatChanged,
+      lessonLearned:  c.lessonLearned,
+      correctionDate: new Date(c.correctionDate).toISOString(),
+    }));
+
+    return {
+      corrections,
+      total: corrections.length,
       generatedAt: new Date().toISOString(),
     };
   });

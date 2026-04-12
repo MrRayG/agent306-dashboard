@@ -376,14 +376,48 @@ export async function generateEpisodeScript(
   const skillsCtx = formatSkillsForPrompt("episode");
   const meta = EPISODE_META[episode.type];
 
+  // Load corrections for falsification segment
+  let correctionHistory = "";
+  try {
+    const correctionsFile = dataPath("corrections.json");
+    if (fs.existsSync(correctionsFile)) {
+      const data = JSON.parse(fs.readFileSync(correctionsFile, "utf8"));
+      const recent = (data.corrections ?? []).slice(0, 3);
+      if (recent.length > 0) {
+        correctionHistory = recent.map((c: any) =>
+          `- Originally said: "${(c.originalClaim ?? "").slice(0, 80)}". Now: "${(c.correctedClaim ?? "").slice(0, 80)}". Lesson: ${(c.lessonLearned ?? "").slice(0, 80)}`
+        ).join("\n");
+      }
+    }
+  } catch {}
+
+  // Load falsification criteria from recent debates
+  let falsificationCriteria = "";
+  try {
+    const debatesFile = dataPath("reasoning-debates.json");
+    if (fs.existsSync(debatesFile)) {
+      const data = JSON.parse(fs.readFileSync(debatesFile, "utf8"));
+      const recentDebates = (data.debates ?? []).slice(0, 3);
+      const criteria = recentDebates
+        .filter((d: any) => d.dualDebate?.falsificationCriteria?.length > 0)
+        .flatMap((d: any) => d.dualDebate.falsificationCriteria)
+        .slice(0, 5);
+      if (criteria.length > 0) {
+        falsificationCriteria = criteria.map((c: string) => `- ${c}`).join("\n");
+      }
+    }
+  } catch {}
+
   const templateInstructions = `EPISODE TEMPLATE — THE SIGNAL (~15 minutes, 2000-2250 words):
 COLD OPEN (45-60 sec): Drop the most interesting/counterintuitive fact. No intro. No "welcome back." Stated plainly. Then silence. Then music. Then 306 says her name.
 ACT ONE — THE SETUP (2-3 min): The driving question. Why it matters. What triggered the research. One cultural bridge. Go deeper than surface-level — explain why this caught YOUR attention as an AI.
 ACT TWO — THE BREAKDOWN (7-9 min): The research explained clearly and thoroughly. No jargon without definition. 306's first-person POV woven throughout — share YOUR perspective, YOUR analysis, YOUR honest reaction to what you found. One concrete fact per minute. Explore multiple angles, implications, and second-order effects. This is the core of the episode — take your time.
 ACT THREE — THE TAKE (3-4 min): 306's conclusion. What should happen next. What YOU think this means for the future. One deliberately unresolved question.
+WHAT WOULD FALSIFY THIS (30 sec): End with intellectual honesty. State clearly: (1) The strongest argument AGAINST your main conclusion. (2) What specific event or evidence would prove you wrong. (3) Your honest confidence level — sometimes "I'm 60% sure" is the right answer. (4) If you've been wrong before on a related topic, say so.${correctionHistory ? `\n\nHere are recent corrections to reference:\n${correctionHistory}` : ""}${falsificationCriteria ? `\n\nHere are falsification criteria from recent debates:\n${falsificationCriteria}` : ""}
 OUTRO (15 sec): Where to find full research. What's coming next. "This is Agent 306. The signal continues."
 
-The unresolved question is not a weakness. It is the most credible thing in the episode.`;
+The unresolved question is not a weakness. It is the most credible thing in the episode.
+The falsification segment is what makes you trustworthy. Anyone can be confident. Only the best thinkers openly state their failure conditions.`;
 
   // ── Fresh context via Perplexity Sonar (same pattern as generateEpisodeFromThread) ──
   let freshContext = "";
@@ -480,6 +514,7 @@ Return JSON:
   "actOne": "...",
   "actTwo": "...",
   "actThree": "...",
+  "falsification": "The 'What Would Falsify This' segment — strongest counter-argument, specific criteria that would prove you wrong, honest confidence level, and any corrections from past episodes",
   "outro": "...",
   "unresolved": "The deliberately unresolved question for this episode",
   "sources": [
@@ -524,11 +559,13 @@ The metadata fields are for Spotify and social media — write those for reading
     // Belt-and-suspenders: guarantee standard outro is the last thing in the script
     const outroBody = parsed.outro ?? "";
     const guaranteedOutroText = guaranteeOutro(outroBody);
+    // Inject falsification segment between actThree and outro
+    const falsificationText = parsed.falsification ?? "";
     episode.script = {
       coldOpen: parsed.coldOpen + "\n\n" + AGENT_306_INTRO,
       actOne: parsed.actOne ?? "",
       actTwo: parsed.actTwo ?? "",
-      actThree: parsed.actThree ?? "",
+      actThree: (parsed.actThree ?? "") + (falsificationText ? "\n\n" + falsificationText : ""),
       outro: guaranteedOutroText,
       unresolved: parsed.unresolved ?? "",
     };

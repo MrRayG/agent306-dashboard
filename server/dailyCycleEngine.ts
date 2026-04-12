@@ -21,6 +21,7 @@ import {
   archiveKnowledge,
   getArchiveStats,
   getActiveKnowledgeCount,
+  flushKnowledge,
 } from "./memoryEngine.js";
 import { getOptimizedContext } from "./contextWindow.js";
 import { semanticSearch } from "./embeddingEngine.js";
@@ -37,8 +38,8 @@ import { runConnectionScan } from "./synthesisEngine.js";
 import { extractInsights } from "./conversationLearningEngine.js";
 import { getMetacognitionState } from "./metacognitionEngine.js";
 import { getResearchLab, resolveHypothesis, addHypothesis, testHypothesis, runResearchPipeline, researchWithPerplexity, researchWithSemanticScholar, autoApproveTopics, generateAspirations, evaluateAspirations } from "./researchEngine.js";
-import { detectBreakthroughs } from "./breakthroughDetector.js";
-import { runSelfEvolutionReflection } from "./selfEvolutionEngine.js";
+import { detectBreakthroughs, checkPredictions, extractPrediction, storePrediction } from "./breakthroughDetector.js";
+import { runSelfEvolutionReflection, capturePreCycleSnapshot } from "./selfEvolutionEngine.js";
 import { clusterKnowledge, detectContradictions as detectGraphContradictions } from "./knowledge-graph.js";
 import { runResearchAgendaCycle } from "./research-agenda.js";
 import { runResearchAnalysisCycle } from "./researchAnalysisEngine.js";
@@ -989,6 +990,13 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     console.warn("[DailyCycle] Data intake failed (non-fatal):", e.message);
   }
 
+  // 0a. Capture pre-cycle snapshot for diff-based self-evolution
+  try {
+    capturePreCycleSnapshot();
+  } catch (e: any) {
+    console.warn("[DailyCycle] Pre-cycle snapshot failed (non-fatal):", e.message);
+  }
+
   // 0b. Cold-start checks: seed hypotheses and research threads if empty
   try {
     await generateSeedHypotheses();
@@ -1178,7 +1186,7 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
         console.log("[Reasoning] autoResolveHypotheses...");
         await autoResolveHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis resolution failed:", e.message));
 
-        // Breakthrough detection on confirmed hypotheses
+        // Breakthrough detection on confirmed hypotheses + prediction extraction
         try {
           const lab = getResearchLab();
           const confirmed = lab.hypotheses.filter(h =>
@@ -1192,8 +1200,42 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
               h.id,
             ).catch(e => console.warn("[DailyCycle] Breakthrough detection failed:", e.message));
           }
+
+          // Extract and store predictions from active hypotheses
+          const activeHyps = lab.hypotheses.filter(h => h.status === "forming" || h.status === "testing");
+          for (const h of activeHyps) {
+            const prediction = extractPrediction({ id: h.id, claim: h.claim, prediction: h.prediction, timeframe: h.timeframe });
+            if (prediction) storePrediction(prediction);
+          }
+
+          // Check past-due predictions
+          await checkPredictions().catch(e => console.warn("[DailyCycle] Prediction check failed:", e.message));
         } catch (e: any) {
           console.warn("[DailyCycle] Breakthrough detection failed (non-fatal):", e.message);
+        }
+
+        // Record corrections when hypotheses rejected after testing with confidence > 0.6
+        try {
+          const { recordCorrection } = await import("./reasoningEngine.js");
+          const lab = getResearchLab();
+          const recentlyRejected = lab.hypotheses.filter((h: any) =>
+            h.status === "rejected" && h.resolvedAt &&
+            (Date.now() - new Date(h.resolvedAt).getTime()) < 24 * 60 * 60 * 1000 &&
+            h.testingStartedAt && // was in testing
+            parseFloat(h.confidence) > 0.6
+          );
+          for (const h of recentlyRejected.slice(0, 3)) {
+            recordCorrection({
+              originalClaim: h.claim,
+              originalDate: new Date(h.formedAt).getTime(),
+              correctedClaim: h.resolution ?? `Rejected: ${h.claim}`,
+              sourceHypothesisId: h.id,
+              whatChanged: h.resolution ?? "Evidence contradicted the hypothesis",
+              lessonLearned: `Hypothesis "${h.claim.slice(0, 60)}" was rejected despite ${h.confidence} confidence. The evidence did not support the prediction.`,
+            });
+          }
+        } catch (e: any) {
+          console.warn("[DailyCycle] Correction recording failed (non-fatal):", e.message);
         }
       })(),
       // Chain B: Contradiction pipeline (sequential within chain)
@@ -1365,6 +1407,13 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     }
   } catch (e: any) {
     console.warn("[DailyCycle] Aspiration check failed (non-fatal):", e.message);
+  }
+
+  // ── Flush batched KB writes before wrap-up ──────────────────────────────────
+  try {
+    flushKnowledge();
+  } catch (e: any) {
+    console.warn("[DailyCycle] Knowledge flush failed (non-fatal):", e.message);
   }
 
   // ── Phase F: Sequential wrap-up ────────────────────────────────────────────

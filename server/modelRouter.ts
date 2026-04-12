@@ -103,6 +103,13 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "aspiration-generation": "premium",      // Forward-looking vision (Claude)
   "aspiration-evaluation": "standard",     // Weekly progress check
   "self-evolution-reflection": "premium",  // Daily self-reflection loop (Claude)
+
+  // Intelligence v2 — Dual-persona debate
+  "skeptic-debate": "standard",            // Skeptic pass — rigorous critic
+  "builder-debate": "standard",            // Builder pass — optimistic builder
+  "cross-score": "routine",               // Cross-scoring of both verdicts
+  "graph-analysis": "routine",            // Graph gap analysis for aspirations
+  "prediction-verification": "standard",   // Prediction check via Perplexity
 };
 
 /**

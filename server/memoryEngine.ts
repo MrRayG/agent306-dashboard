@@ -71,7 +71,7 @@ export interface KnowledgeEntry {
 // ── KB size configuration ─────────────────────────────────────
 // MAX_KB_ENTRIES: hard ceiling on knowledge base size.
 // Set via AGENT_MAX_KB_ENTRIES env var, defaults to 500.
-const MAX_KB_ENTRIES = Math.max(100, Math.min(5000, Number(process.env.AGENT_MAX_KB_ENTRIES) || 2000));
+const MAX_KB_ENTRIES = Math.max(100, Math.min(10000, Number(process.env.AGENT_MAX_KB_ENTRIES) || 5000));
 
 export interface KnowledgeMemory {
   entries: KnowledgeEntry[];
@@ -203,13 +203,47 @@ function load<T>(file: string, defaults: T): T {
 }
 
 function save(file: string, data: unknown): void {
-  try { fs.writeFileSync(file, JSON.stringify(data, null, 2)); } catch {}
+  try {
+    // Compact JSON for KB and embedding files (saves ~40% file size)
+    const isCompactTarget = file === KNOWLEDGE_FILE || file.includes("embedding");
+    fs.writeFileSync(file, isCompactTarget ? JSON.stringify(data) : JSON.stringify(data, null, 2));
+  } catch {}
 }
 
 // ── In-memory state ───────────────────────────────────────────
 let soul        = load<SoulMemory>(SOUL_FILE, DEFAULT_SOUL);
 let knowledge   = load<KnowledgeMemory>(KNOWLEDGE_FILE, DEFAULT_KNOWLEDGE);
 let performance = load<PerformanceMemory>(PERFORMANCE_FILE, DEFAULT_PERFORMANCE);
+
+// ── Write batching for KB (Component 6c) ──────────────────────
+let kbDirty = false;
+let kbSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+function markDirty(): void {
+  kbDirty = true;
+  if (!kbSaveTimer) {
+    kbSaveTimer = setTimeout(() => {
+      if (kbDirty) {
+        save(KNOWLEDGE_FILE, knowledge);
+        kbDirty = false;
+      }
+      kbSaveTimer = null;
+    }, 5000); // Flush every 5 seconds max
+  }
+}
+
+/** Explicitly flush pending KB writes. Call at end-of-cycle. */
+export function flushKnowledge(): void {
+  if (kbSaveTimer) {
+    clearTimeout(kbSaveTimer);
+    kbSaveTimer = null;
+  }
+  if (kbDirty) {
+    save(KNOWLEDGE_FILE, knowledge);
+    kbDirty = false;
+    console.log("[Memory] Knowledge base flushed to disk.");
+  }
+}
 
 // Seed soul file on first run
 if (!fs.existsSync(SOUL_FILE)) {
@@ -661,7 +695,7 @@ export function addKnowledge(entry: Omit<KnowledgeEntry, "id" | "learnedAt">): v
       exactMatch.updatedAt = now;
       if (entry.source) exactMatch.source = entry.source;
       knowledge.lastIngested = now;
-      save(KNOWLEDGE_FILE, knowledge);
+      markDirty();
       queueEmbeddingSync(exactMatch.id);
     }
     return;
@@ -680,7 +714,7 @@ export function addKnowledge(entry: Omit<KnowledgeEntry, "id" | "learnedAt">): v
       fuzzyMatch.updatedAt = now;
       if (entry.source) fuzzyMatch.source = entry.source;
       knowledge.lastIngested = now;
-      save(KNOWLEDGE_FILE, knowledge);
+      markDirty();
       queueEmbeddingSync(fuzzyMatch.id);
     }
     return;
@@ -720,7 +754,7 @@ export function addKnowledge(entry: Omit<KnowledgeEntry, "id" | "learnedAt">): v
         if (summaries.length > 0) {
           knowledge.entries.push(...summaries);
           knowledge.totalEntries = knowledge.entries.length;
-          save(KNOWLEDGE_FILE, knowledge);
+          markDirty();
           console.log(`[Memory] Archived ${evicted.length} entries into ${summaries.length} theme summaries`);
           for (const s of summaries) queueEmbeddingSync(s.id);
         }
@@ -729,7 +763,7 @@ export function addKnowledge(entry: Omit<KnowledgeEntry, "id" | "learnedAt">): v
 
     knowledge.totalEntries = knowledge.entries.length;
   }
-  save(KNOWLEDGE_FILE, knowledge);
+  markDirty();
 
   // ASI-Evolve: queue embedding sync for the new entry
   queueEmbeddingSync(full.id);
@@ -769,7 +803,7 @@ export function addKnowledge(entry: Omit<KnowledgeEntry, "id" | "learnedAt">): v
       if (idx !== -1) {
         knowledge.entries.splice(idx, 1);
         knowledge.totalEntries = knowledge.entries.length;
-        save(KNOWLEDGE_FILE, knowledge);
+        markDirty();
         queueEmbeddingSync(best.entry.id);
         console.log(`[Memory] Semantic dedup: "${semanticDedupTitle}" merged with "${best.entry.title}" (similarity: ${best.similarity.toFixed(3)})`);
       }
@@ -817,7 +851,7 @@ export function archiveKnowledge(entryId: string): boolean {
   const entry = knowledge.entries.find(e => e.id === entryId);
   if (!entry) return false;
   entry.status = "archived";
-  save(KNOWLEDGE_FILE, knowledge);
+  markDirty();
   console.log(`[Memory] Archived: "${entry.title}"`);
   return true;
 }
@@ -1087,6 +1121,7 @@ async function summarizeEvictedEntries(
  *  Also downgrades tiers: active → operational after 30 days, operational → archived after 60 days. */
 export function decayKnowledge(): void {
   const now        = Date.now();
+  const ONE_WEEK   = 7 * 24 * 60 * 60 * 1000;
   const TWO_WEEKS  = 14 * 24 * 60 * 60 * 1000;
   const FOUR_WEEKS = 28 * 24 * 60 * 60 * 1000;
   const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
@@ -1102,11 +1137,16 @@ export function decayKnowledge(): void {
     // Use the most recent timestamp (updatedAt or learnedAt) for decay calculation
     const referenceDate = entry.updatedAt ?? entry.learnedAt;
     const age = now - new Date(referenceDate).getTime();
-    if (age > FOUR_WEEKS && entry.weight > 2) {
-      entry.weight = Math.max(2, entry.weight - 2); // -2 after 4 weeks
+
+    // Aggressive decay v2: <1wk no decay, 1-2wk -1, 2-4wk -2, >4wk -3 floor 1
+    if (age > FOUR_WEEKS && entry.weight > 1) {
+      entry.weight = Math.max(1, entry.weight - 3); // -3 after 4 weeks, floor 1
       changed = true;
-    } else if (age > TWO_WEEKS && entry.weight > 4) {
-      entry.weight = Math.max(4, entry.weight - 1); // -1 after 2 weeks
+    } else if (age > TWO_WEEKS && entry.weight > 1) {
+      entry.weight = Math.max(1, entry.weight - 2); // -2 after 2 weeks
+      changed = true;
+    } else if (age > ONE_WEEK && entry.weight > 1) {
+      entry.weight = Math.max(1, entry.weight - 1); // -1 after 1 week
       changed = true;
     }
 
