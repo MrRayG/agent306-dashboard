@@ -9,6 +9,7 @@ import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { getSlimAgentContext } from "./memoryEngine.js"; // slim = soul + top 3 knowledge (~600 tokens vs 2,550)
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
+import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
@@ -412,7 +413,19 @@ export async function runMidnightReplies(xWrite: any): Promise<void> {
       const tweetIdMatch = reply.tweetUrl?.match(/status\/(\d+)/);
       const inReplyToId  = tweetIdMatch?.[1];
 
-      const payload: any = { text: finalText };
+      const compliance = validateXPost(finalText, {
+        isReply: true,
+        replyToUser: reply.username,
+        replyToPostId: inReplyToId,
+      });
+      if (!compliance.allowed) {
+        console.log(`[ReplyEngine] Reply to @${reply.username} skipped by compliance: ${compliance.reason}`);
+        releasePost(`reply_${reply.username}`);
+        continue;
+      }
+      const safeText = compliance.sanitizedContent ?? finalText;
+
+      const payload: any = { text: safeText };
       if (inReplyToId) payload.reply = { in_reply_to_tweet_id: inReplyToId };
 
       const posted = await xWrite.v2.tweet(payload);
@@ -420,6 +433,7 @@ export async function runMidnightReplies(xWrite: any): Promise<void> {
         ? `https://x.com/agent3zero6/status/${posted.data.id}`
         : null;
 
+      recordXPost(safeText, { isReply: true, replyToUser: reply.username, replyToPostId: inReplyToId });
       registerPost(`reply_${reply.username}`, tweetUrl, "reply_engine");
       state.repliedTo.push(key);
       // Track tweet ID for reliable dedup

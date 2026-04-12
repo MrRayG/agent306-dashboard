@@ -15,6 +15,7 @@ import { dataPath } from "./dataPaths.js";
 import { getMostActive, getStorySourceHolders } from "./holderCatalog.js";
 import { generateSpotlightCard } from "./imageCard.js";
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
+import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import fs from "fs";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
@@ -228,12 +229,19 @@ export async function postSpotlight(xWrite: any, grokKey: string): Promise<strin
 
     let tweetUrl: string | null = null;
     try {
-      const tweet = await xWrite.v2.tweet({
-        text: spotlight.tweet,
-        ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),
-      });
-      const tweetId = tweet.data?.id;
-      tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
+      const compliance = validateXPost(spotlight.tweet);
+      if (!compliance.allowed) {
+        console.log(`[Spotlight] Skipped by compliance: ${compliance.reason}`);
+      } else {
+        const safeText = compliance.sanitizedContent ?? spotlight.tweet;
+        const tweet = await xWrite.v2.tweet({
+          text: safeText,
+          ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),
+        });
+        const tweetId = tweet.data?.id;
+        tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
+        recordXPost(safeText);
+      }
     } catch (xErr: any) {
       console.error("[Spotlight] X post failed:", xErr.message);
     }

@@ -21,6 +21,7 @@ import {
   type KnowledgeEntry,
 } from "./memoryEngine.js";
 import { semanticSearch } from "./embeddingEngine.js";
+import { X_POSTING_RULES } from "./xComplianceGuard.js";
 import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 
@@ -270,6 +271,7 @@ export async function getOptimizedContextAsync(query: string, options?: Relevant
   return [
     getCoreIdentity(),
     getOperatorDirectives(),
+    X_POSTING_RULES,
     await getRelevantContextAsync(query, options),
     getSentimentArc(4),
     getPerformanceContext(5),
@@ -312,6 +314,7 @@ export function getOptimizedContext(query: string, options?: RelevantContextOpti
   return [
     getCoreIdentity(),
     getOperatorDirectives(),
+    X_POSTING_RULES,
     getRelevantContext(query, options),
     getSentimentArc(4),
     getPerformanceContext(5),

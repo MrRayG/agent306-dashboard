@@ -15,6 +15,7 @@ import { dataPath } from "./dataPaths.js";
 import { fetchLiveLeaderboard } from "./leaderboardEngine.js";
 import { generateRaceCard } from "./imageCard.js";
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
+import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import fs from "fs";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 
@@ -192,12 +193,19 @@ export async function postRace(xWrite: any, grokKey: string): Promise<string | n
 
     let tweetUrl: string | null = null;
     try {
-      const tweet = await xWrite.v2.tweet({
-        text: race.tweet,
-        ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),
-      });
-      const tweetId = tweet.data?.id;
-      tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
+      const compliance = validateXPost(race.tweet);
+      if (!compliance.allowed) {
+        console.log(`[Race] Skipped by compliance: ${compliance.reason}`);
+      } else {
+        const safeText = compliance.sanitizedContent ?? race.tweet;
+        const tweet = await xWrite.v2.tweet({
+          text: safeText,
+          ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),
+        });
+        const tweetId = tweet.data?.id;
+        tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
+        recordXPost(safeText);
+      }
     } catch (xErr: any) {
       console.error("[Race] X post failed:", xErr.message);
     }

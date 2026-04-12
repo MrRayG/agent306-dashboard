@@ -6,6 +6,7 @@
 
 import { createCanvas } from "canvas";
 import { requestPost, registerPost } from "./postCoordinator.js";
+import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import * as fs from "fs";
 import * as https from "https";
 import { getModel } from "./modelRouter.js";
@@ -471,16 +472,24 @@ Return JSON: {"t1": "...", "t2": "...", "t3": "..."}`;
       console.warn("[306:Leaderboard] Image upload failed:", imgErr.message);
     }
 
-    // Post as thread
+    // Post as thread — compliance check on the opener
+    const compliance = validateXPost(tweets.t1?.trim() ?? "");
+    if (!compliance.allowed) {
+      console.log(`[306:Leaderboard] Skipped by compliance: ${compliance.reason}`);
+      return;
+    }
+
     let lastTweetId: string | undefined;
     for (const [key, text] of [["t1", tweets.t1], ["t2", tweets.t2], ["t3", tweets.t3]] as [string,string][]) {
       if (!text?.trim()) continue;
       try {
-        const payload: any = { text: text.trim() };
+        const safeText = (key === "t1" && compliance.sanitizedContent) ? compliance.sanitizedContent : text.trim();
+        const payload: any = { text: safeText };
         if (lastTweetId) payload.reply = { in_reply_to_tweet_id: lastTweetId };
         if (key === "t1" && xMediaId) payload.media = { media_ids: [xMediaId] };
         const tw = await xWrite.v2.tweet(payload);
         lastTweetId = tw.data?.id;
+        if (key === "t1") recordXPost(safeText);
         if (key !== "t3") await new Promise(r => setTimeout(r, 2000));
       } catch (e: any) {
         console.warn(`[306:Leaderboard] ${key} failed:`, e.message);

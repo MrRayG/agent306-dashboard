@@ -26,6 +26,7 @@ import { getModel } from "./modelRouter.js";
 import { TwitterApi } from "twitter-api-v2";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 
 const GROK_CHAT_API     = LLM_BASE_URL;
 const GROK_RESPONSE_API = LLM_RESPONSE_URL;
@@ -474,21 +475,31 @@ ${body}
 
     if (articleRes?.data?.id) {
       // Post the teaser tweet that links to the article
-      const teaserPost = await xClient.v2.tweet(
-        `${teaser}\n\n[Read the full Deep Read ↓]`
-      ).catch(() => null);
-
-      if (teaserPost?.data?.id) {
-        articleUrl = `https://x.com/i/web/status/${teaserPost.data.id}`;
+      const teaserContent = `${teaser}\n\n[Read the full Deep Read ↓]`;
+      const compliance = validateXPost(teaserContent);
+      if (!compliance.allowed) {
+        console.log(`[Article] Teaser skipped by compliance: ${compliance.reason}`);
+      } else {
+        const safeTeaser = compliance.sanitizedContent ?? teaserContent;
+        const teaserPost = await xClient.v2.tweet(safeTeaser).catch(() => null);
+        if (teaserPost?.data?.id) {
+          articleUrl = `https://x.com/i/web/status/${teaserPost.data.id}`;
+          recordXPost(safeTeaser);
+        }
       }
     } else {
       // Fallback: post as a standard tweet with the article body as a thread
       // Split body into tweet-friendly chunks for a thread
-      const teaserPost = await xClient.v2.tweet(
-        teaser.slice(0, 280)
-      ).catch(() => null);
-
+      const fallbackTeaser = teaser.slice(0, 280);
+      const compliance = validateXPost(fallbackTeaser);
+      const teaserPost = compliance.allowed
+        ? await xClient.v2.tweet(compliance.sanitizedContent ?? fallbackTeaser).catch(() => null)
+        : null;
+      if (!compliance.allowed) {
+        console.log(`[Article] Teaser skipped by compliance: ${compliance.reason}`);
+      }
       if (teaserPost?.data?.id) {
+        recordXPost(compliance.sanitizedContent ?? fallbackTeaser);
         articleUrl = `https://x.com/i/web/status/${teaserPost.data.id}`;
 
         // Post the article body as replies (thread format)

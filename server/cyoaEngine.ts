@@ -21,6 +21,7 @@ import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./ll
 import { dataPath } from "./dataPaths.js";
 import { getModel } from "./modelRouter.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 const CYOA_STATE_FILE = dataPath("cyoa_state.json");
 
 export type CYOATrigger =
@@ -303,9 +304,15 @@ export async function postCYOAHook(
   const tweetText = buildHookTweet(episode, tokenId);
 
   try {
+    const compliance = validateXPost(tweetText);
+    if (!compliance.allowed) {
+      console.log(`[CYOA] Hook skipped by compliance: ${compliance.reason}`);
+      return null;
+    }
+    const safeText = compliance.sanitizedContent ?? tweetText;
     // Post the hook tweet
     // X API v2 polls require a separate endpoint — post text first then note poll
-    const tweet = await xWrite.v2.tweet({ text: tweetText });
+    const tweet = await xWrite.v2.tweet({ text: safeText });
     const tweetId = tweet.data?.id;
 
     if (tweetId) {
@@ -315,6 +322,7 @@ export async function postCYOAHook(
       episode.tweetIds.push(tweetId);
       cyoaState.activeEpisodeId = episodeId;
       saveState(cyoaState);
+      recordXPost(safeText);
       console.log(`[CYOA] Hook posted: ${tweetId}`);
     }
     return tweetId ?? null;
@@ -349,8 +357,15 @@ export async function resolveCYOA(
   const revealText = buildRevealTweet(episode);
   if (revealText) {
     try {
-      const tweet = await xWrite.v2.tweet({ text: revealText });
+      const compliance = validateXPost(revealText);
+      if (!compliance.allowed) {
+        console.log(`[CYOA] Reveal skipped by compliance: ${compliance.reason}`);
+        return;
+      }
+      const safeReveal = compliance.sanitizedContent ?? revealText;
+      const tweet = await xWrite.v2.tweet({ text: safeReveal });
       if (tweet.data?.id) episode.tweetIds.push(tweet.data.id);
+      recordXPost(safeReveal);
 
       // Wait a beat then post canon verdict
       await new Promise(r => setTimeout(r, 3000));
