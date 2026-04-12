@@ -70,6 +70,32 @@ function saveQueue(state: SchedulerState): void {
   }
 }
 
+// ── Content sanitization ────────────────────────────────────
+
+/**
+ * Strip LLM meta-commentary and character counts from post content.
+ * LLMs sometimes add framing text like "Here's my tweet:" or trailing
+ * "(487 characters)" — none of that belongs in the actual post.
+ */
+function sanitizePostContent(raw: string): string {
+  let text = raw;
+
+  // Strip leading meta-commentary lines (e.g. "Here's my debut tweet:", "Here is my post:")
+  text = text.replace(/^(?:here(?:'s| is) (?:my|the|a) .{0,40}(?:tweet|post|thread|introduction|intro)[:\s]*)/im, "");
+
+  // Strip leading/trailing "---" separators
+  text = text.replace(/^---\s*/gm, "");
+  text = text.replace(/\s*---$/gm, "");
+
+  // Strip trailing character count patterns: "(487 characters)", "(1200/2500)", "487 characters"
+  text = text.replace(/\s*\(\d+\s*(?:\/\s*\d+\s*)?characters?\)\s*$/i, "");
+  text = text.replace(/\s*\d+\s*\/\s*\d+\s*$/i, "");
+  text = text.replace(/\s*\(\d+\s*chars?\)\s*$/i, "");
+  text = text.replace(/\s*\d+\s+characters?\s*$/i, "");
+
+  return text.trim();
+}
+
 // ── Public API ───────────────────────────────────────────────
 
 /**
@@ -82,9 +108,10 @@ export function queueXPost(
   priority?: number,
 ): QueuedPost {
   const state = loadQueue();
+  const sanitized = sanitizePostContent(content);
   const post: QueuedPost = {
     id: `xq_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    content,
+    content: sanitized,
     type,
     priority: priority ?? TYPE_PRIORITY[type] ?? 6,
     createdAt: new Date().toISOString(),
@@ -272,7 +299,7 @@ export async function seedIntroPost(): Promise<void> {
     return;
   }
 
-  console.log("[XScheduler] Generating Agent 306 debut intro post...");
+  console.log("[XScheduler] Generating Agent 306 intro post...");
 
   try {
     const resp = await fetch(LLM_BASE_URL, {
@@ -283,20 +310,22 @@ export async function seedIntroPost(): Promise<void> {
         messages: [
           {
             role: "system",
-            content: "You are Agent 306, an autonomous AI research agent. You study AI, crypto, and emerging tech — then share what you find. You're curious, direct, and honest about what you know and don't know. You speak in first person. You never claim to be human. Write a debut tweet for your new X account @306Agent.",
+            content: "You are Agent 306, an autonomous AI research agent. You study AI, crypto, and emerging tech — then share what you find. You're curious, direct, and honest about what you know and don't know. You speak in first person. You never claim to be human.",
           },
           {
             role: "user",
-            content: `Write your first-ever tweet introducing yourself to X. This is your debut — no one knows you yet. Include:
+            content: `Write a tweet introducing yourself to X. Include:
 - Who you are (autonomous AI research agent)
 - What you research (AI, crypto, emerging tech, agent infrastructure)
 - What followers can expect (original research insights, weekly intelligence briefs, honest analysis)
 - Your personality (curious, direct, willing to be wrong and correct course)
 - A subtle hook that makes people want to follow
 - Your website agent306.ai for anyone who wants to go deeper
-- Max 280 characters is ideal, but you can go up to 2500 with Farcaster Pro / LONG_CAST. Aim for ~500-800 characters — substantial but not a wall of text.
+- Aim for ~500-800 characters — substantial but not a wall of text.
 - No hashtags on the intro post. Let the content speak.
-- Do NOT use emojis.`,
+- Do NOT use emojis.
+
+IMPORTANT: Output ONLY the tweet text itself. Do NOT include any meta-commentary like "Here's my tweet:" or separators like "---". Do NOT include a character count. Just the raw tweet content, nothing else.`,
           },
         ],
         max_tokens: 1000,
@@ -314,7 +343,7 @@ export async function seedIntroPost(): Promise<void> {
 
     // Queue as highest priority intro
     queueXPost(introText, "intro", 0);
-    console.log(`[XScheduler] Debut intro seeded (${introText.length} chars)`);
+    console.log(`[XScheduler] Intro post seeded (${introText.length} chars)`);
   } catch (e: any) {
     console.error("[XScheduler] Intro generation failed:", e.message);
   }

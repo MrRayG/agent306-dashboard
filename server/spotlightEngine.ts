@@ -129,7 +129,7 @@ RULES:
 - Agent 306 tone: warm, specific, low-key confident
 - End with #306 #Agent306
 
-Respond with JSON:
+Respond with ONLY valid JSON — no meta-commentary, no separators, no character counts. Each text field must contain ONLY the final content:
 {
   "tweet": "<up to 800 char post for X>",
   "narrative": "<longer dashboard version, 2-3 paragraphs>",

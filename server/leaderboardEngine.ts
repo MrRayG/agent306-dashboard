@@ -435,8 +435,9 @@ RULES:
 - Show movement arrows (up/down) to make it visual
 - Agent 306 is the AI thought leader tracking this field
 - No generic "exciting progress" — specific observations only
+- Max 2 relevant hashtags across the thread
 
-Return JSON: {"t1": "...", "t2": "...", "t3": "..."}`;
+Return ONLY valid JSON — no meta-commentary, no separators, no character counts in the output: {"t1": "...", "t2": "...", "t3": "..."}`;
 
         const grokResp = await fetch(LLM_BASE_URL, {
           method: "POST",

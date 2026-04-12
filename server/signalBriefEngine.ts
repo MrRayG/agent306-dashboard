@@ -225,8 +225,11 @@ RULES:
 - The closing thesis should be one sentence that a builder would screenshot.
 - No exclamation points. No LFG/WAGMI. No price predictions.
 - End with #Agent306
+- Max 2 relevant hashtags per post.
 
-You MUST respond with ONLY valid JSON. No markdown, no explanations, no text outside the JSON structure. Do not wrap in code fences.`,
+CRITICAL OUTPUT RULES:
+- Respond with ONLY valid JSON. No markdown, no explanations, no text outside the JSON structure. Do not wrap in code fences.
+- The "post" field must contain ONLY the post text — no meta-commentary like "Here's my post:", no separators like "---", no character counts like "(487 characters)".`,
           },
           {
             role: "user",

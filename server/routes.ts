@@ -922,7 +922,7 @@ setTimeout(() => {
 // Podcast promos fire immediately (event-driven)
 setTimeout(() => {
   startXPostScheduler(xWrite);
-  // Seed Agent 306's debut intro post (runs once, idempotent)
+  // Seed Agent 306's intro post (runs once, idempotent)
   seedIntroPost().catch(e => console.error("[XScheduler] Intro seed error:", e.message));
 }, 65_000);
 

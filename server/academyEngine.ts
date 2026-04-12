@@ -252,7 +252,7 @@ Write a post that:
 
 Also write a longer dashboard narrative (3-4 paragraphs, for the 306 dashboard — not posted publicly).
 
-Return JSON only:
+Return ONLY valid JSON — no meta-commentary, no separators, no character counts in the output. The "post" field must contain ONLY the post text itself:
 {
   "post": "<academy post, 800-2000 chars, starts with [306 ACADEMY]>",
   "dashboardNarrative": "<3-4 paragraph deeper version for the dashboard>",
