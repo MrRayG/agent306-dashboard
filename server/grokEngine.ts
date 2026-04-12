@@ -381,7 +381,8 @@ OPTIMIST RULE: Never amplify fear or FUD. Find the signal in noise. Earned optim
 ${agentMemoryCtx ? agentMemoryCtx + "\n" : ""}
 ${recentMemory.length > 0 ? `PREVIOUS EPISODES (your memory):\n${recentMemory.map(e => `EP${e.episodeId}: ${e.summary} [${e.sentiment}]`).join("\n")}` : "First episode — establish the world."}
 
-Respond with valid JSON:
+CRITICAL: Respond with valid JSON only. Every text field must contain ONLY the final content — no meta-commentary like "Here's my tweet:", no separators like "---", no character counts.
+
 {
   "tweet": "<max 240 chars, ONE idea, human voice, passes the human test>",
   "farcasterText": "<max 2500 chars, richer version for Farcaster — expand on the tweet with more context, detail, and voice. Include character traits, story depth, and community connections that don't fit in 240 chars. This goes to a crypto/NFT-native audience on Farcaster who appreciate depth. Farcaster Pro allows long-form casts, so use the space when the story warrants it.>",
