@@ -50,7 +50,7 @@ import { generateBlogPost, getBlogState, type BlogType } from "./blogEngine.js";
 import { getAgenda } from "./research-agenda.js";
 import { analyzeDailyCycle } from "./analyzerEngine.js";
 import { getExplorationState } from "./explorationEngine.js";
-import { queueXPost } from "./xPostScheduler.js";
+import { queueXPost, seedDailyContent } from "./xPostScheduler.js";
 import { runKnowledgeConsolidation } from "./knowledgeConsolidator.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { TriadCoordinator } from "./triad/coordinator.js";
@@ -1625,6 +1625,8 @@ export function scheduleDailyCycle(): void {
     console.log(`[DailyCycle] Next briefing in ${hours}h (6am ET / 10:00 UTC)`);
     setTimeout(async () => {
       await runDailyCycle().catch(e => console.error("[DailyCycle] Error:", e));
+      // Seed content after daily cycle to ensure queue has items for all 4 slots
+      await seedDailyContent().catch(e => console.error("[DailyCycle] Content seeding error:", e));
       scheduleNext();
     }, ms);
   }
