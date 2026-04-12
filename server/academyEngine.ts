@@ -26,9 +26,9 @@ import { getFullAgentContext } from "./memoryEngine.js";
 import { getOptimizedContext } from "./contextWindow.js";
 import { getModel } from "./modelRouter.js";
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
-import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import { queueXPost } from "./xPostScheduler.js";
 
 const GROK_URL = LLM_BASE_URL;
 const ACADEMY_STATE_FILE = dataPath("academy_state.json");
@@ -302,19 +302,14 @@ export async function postAcademyEpisode(xWrite: any): Promise<void> {
 
   let tweetUrl: string | null = null;
   try {
-    const compliance = validateXPost(generated.post.trim());
-    if (!compliance.allowed) {
-      console.log(`[Academy] Skipped by compliance: ${compliance.reason}`);
-    } else {
-      const safeText = compliance.sanitizedContent ?? generated.post.trim();
-      const tweet = await xWrite.v2.tweet({ text: safeText });
-      const tweetId = tweet.data?.id;
-      tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
-      recordXPost(safeText);
-      console.log(`[Academy] EP${state.totalEpisodes + 1} posted — ${tweetUrl}`);
+    const postText = generated.post.trim();
+    if (postText.length > 10) {
+      queueXPost(postText, "academy", 6);
+      console.log(`[Academy] EP${state.totalEpisodes + 1} queued for X posting`);
+      tweetUrl = "queued"; // placeholder — actual URL assigned when scheduler posts
     }
   } catch (e: any) {
-    console.error("[Academy] Post failed:", e.message);
+    console.error("[Academy] Queue failed:", e.message);
   }
 
   // Post to Farcaster

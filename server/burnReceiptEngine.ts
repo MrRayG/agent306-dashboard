@@ -21,7 +21,7 @@ import * as https from "https";
 import * as http from "http";
 import { generateBurnVideo } from "./videoEngine.js";
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
-import { validateXPost, recordXPost } from "./xComplianceGuard.js";
+import { queueXPost } from "./xPostScheduler.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 

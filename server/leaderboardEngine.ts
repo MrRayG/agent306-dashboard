@@ -7,7 +7,7 @@
 
 import { createCanvas } from "canvas";
 import { requestPost, registerPost } from "./postCoordinator.js";
-import { validateXPost, recordXPost } from "./xComplianceGuard.js";
+import { queueXPost } from "./xPostScheduler.js";
 import * as fs from "fs";
 import * as https from "https";
 import { getModel } from "./modelRouter.js";
