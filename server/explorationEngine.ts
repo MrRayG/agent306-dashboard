@@ -133,6 +133,13 @@ async function searchXSocial(query: string, grokKey: string): Promise<string> {
     return "";
   }
   try {
+    // Sanitize query to avoid 400 errors from special characters or excessive length
+    const sanitizedQuery = query
+      .replace(/[\x00-\x1F\x7F]/g, " ")
+      .replace(/[\u200B-\u200D\uFEFF]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 2000);
     const grokResponsesUrl = process.env.GROK_RESPONSES_URL ?? "https://api.x.ai/v1/responses";
     const res = await fetch(grokResponsesUrl, {
       method: "POST",
@@ -140,13 +147,17 @@ async function searchXSocial(query: string, grokKey: string): Promise<string> {
       body: JSON.stringify({
         model: "grok-3-fast",
         stream: false,
-        input: [{ role: "user", content: query }],
+        input: [{ role: "user", content: sanitizedQuery }],
         tools: [{ type: "x_search" }],
       }),
       signal: AbortSignal.timeout(35000),
     });
 
-    if (!res.ok) return "";
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => "");
+      console.warn(`[Exploration] x_search failed: ${res.status} — query: "${sanitizedQuery.slice(0, 100)}" — body: ${errorBody.slice(0, 200)}`);
+      return "";
+    }
     const data = await res.json();
 
     const parts: string[] = [];

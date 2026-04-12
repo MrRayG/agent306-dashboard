@@ -102,7 +102,9 @@ RULES:
 - Each summary should be up to 300 chars — pack in maximum useful information
 - Set weight to the MAX weight from the source entries
 
-Output JSON:
+You MUST respond with ONLY valid JSON. No markdown, no explanations, no text outside the JSON structure. Do not wrap in code fences.
+
+Required JSON schema:
 {
   "consolidated": [
     {

@@ -258,7 +258,18 @@ export async function generateResearchAgenda(): Promise<ResearchThread[]> {
 
 You are Agent 306 planning your research agenda. Your audience is EVERYDAY PEOPLE who want to understand and use AI practically.
 
-You must respond with ONLY valid JSON matching this structure:
+Rules:
+- Propose 3-5 NEW research threads that are NOT duplicates of active threads or pipeline topics.
+- Each thread must have a clear thesis, not just a topic.
+- Focus on what helps EVERYDAY PEOPLE use AI better.
+- Consider what's trending NOW in AI (from recent exploration data).
+- Identify knowledge gaps — what don't you know that you should?
+- Optionally suggest updates to existing threads based on new information.
+- Be specific and actionable, not vague.
+
+You MUST respond with ONLY valid JSON. No markdown, no explanations, no text outside the JSON structure. Do not wrap in code fences.
+
+Required JSON schema:
 {
   "newThreads": [
     {
@@ -267,7 +278,7 @@ You must respond with ONLY valid JSON matching this structure:
       "audienceRelevance": "string — why this matters to everyday AI users",
       "actionableTips": ["string — practical tips that could come from this research"],
       "gaps": ["string — what you need to find out"],
-      "priority": number (0-1, how important/urgent this is)
+      "priority": 0.5
     }
   ],
   "threadUpdates": [
@@ -275,19 +286,10 @@ You must respond with ONLY valid JSON matching this structure:
       "threadId": "string — existing thread ID to update",
       "thesisUpdate": "string — refined thesis if applicable, or null",
       "newGaps": ["string — newly identified gaps"],
-      "priorityAdjust": number (0-1, new priority if changed, or null)
+      "priorityAdjust": 0.5
     }
   ]
-}
-
-Rules:
-- Propose 3-5 NEW research threads that are NOT duplicates of active threads or pipeline topics.
-- Each thread must have a clear thesis, not just a topic.
-- Focus on what helps EVERYDAY PEOPLE use AI better.
-- Consider what's trending NOW in AI (from recent exploration data).
-- Identify knowledge gaps — what don't you know that you should?
-- Optionally suggest updates to existing threads based on new information.
-- Be specific and actionable, not vague.`;
+}`;
 
   const userPrompt = `RESEARCH AGENDA GENERATION — ${new Date().toISOString()}
 
@@ -471,7 +473,7 @@ async function generateSubQueries(thread: ResearchThread): Promise<string[]> {
       messages: [
         {
           role: "system",
-          content: `You generate targeted web search queries for research. Output ONLY a JSON array of 3-5 query strings.
+          content: `You generate targeted web search queries for research.
 
 Each query should approach the topic from a DIFFERENT angle:
 1. Latest developments/news (recency-focused, last 48 hours)
@@ -484,7 +486,10 @@ Rules:
 - Each query must be a natural search query (like you'd type into a search engine)
 - Avoid re-searching what's already known (see existing evidence below)
 - Be specific — include names, technologies, or concepts from the thesis
-- Return a JSON array of strings, nothing else`
+
+You MUST respond with ONLY a valid JSON array of strings. No markdown, no explanations, no text outside the JSON. Do not wrap in code fences.
+
+Example: ["query one", "query two", "query three"]`
         },
         {
           role: "user",
@@ -633,20 +638,23 @@ async function reduceFindings(
       messages: [
         {
           role: "system",
-          content: `You synthesize multiple web search results into a unified research briefing. Output ONLY valid JSON:
-
-{
-  "synthesis": "A comprehensive summary combining all search results. Deduplicate overlapping facts. Note contradictions explicitly. Prioritize genuinely new information.",
-  "contradictions": ["Any direct contradictions found between sources"],
-  "mostImportantInsight": "The single most important NEW finding across all searches",
-  "sourceCount": number
-}
+          content: `You synthesize multiple web search results into a unified research briefing.
 
 Rules:
 - Preserve ALL specific facts: dates, names, numbers, quotes
 - If sources contradict each other, note BOTH sides
 - Rank by novelty — what's genuinely new vs already widely known
-- Be comprehensive — don't drop facts to be brief`
+- Be comprehensive — don't drop facts to be brief
+
+You MUST respond with ONLY valid JSON. No markdown, no explanations, no text outside the JSON structure. Do not wrap in code fences.
+
+Required JSON schema:
+{
+  "synthesis": "A comprehensive summary combining all search results. Deduplicate overlapping facts. Note contradictions explicitly. Prioritize genuinely new information.",
+  "contradictions": ["Any direct contradictions found between sources"],
+  "mostImportantInsight": "The single most important NEW finding across all searches",
+  "sourceCount": 3
+}`
         },
         {
           role: "user",
@@ -822,7 +830,11 @@ export async function advanceThread(threadId: string): Promise<ResearchThread | 
 
 Your job: analyze the current state of this research thread and produce a REASONING TRACE.
 
-Output JSON:
+Be intellectually honest. Challenge the thesis. Find the non-obvious.
+
+You MUST respond with ONLY valid JSON. No markdown, no explanations, no text outside the JSON structure. Do not wrap in code fences.
+
+Required JSON schema:
 {
   "assumptions": ["list assumptions embedded in the current thesis — things taken for granted"],
   "blindSpots": ["what perspectives or data sources are being ignored?"],
@@ -832,9 +844,7 @@ Output JSON:
   "keyQuestion": "the ONE question that, if answered, would most advance this thread",
   "connectionsToPriorKnowledge": ["how does this thread connect to other things Agent 306 knows?"],
   "contrarian_take": "what would a smart skeptic say about this thesis?"
-}
-
-Be intellectually honest. Challenge the thesis. Find the non-obvious.`
+}`
           },
           {
             role: "user",
@@ -885,7 +895,9 @@ Think deeply. What are we missing? What assumptions are we making? What would ch
 
 ${analysisCtx ? `LESSONS FROM PAST RESEARCH:\n${analysisCtx}\n` : ""}You are Agent 306 advancing a research thread. Research the NEXT knowledge gap in this thread.
 
-You must respond with ONLY valid JSON:
+You MUST respond with ONLY valid JSON. No markdown, no explanations, no text outside the JSON structure. Do not wrap in code fences.
+
+Required JSON schema:
 {
   "findings": "string — what you discovered researching the next gap",
   "updatedThesis": "string — refined thesis (or same if unchanged)",
@@ -1099,16 +1111,21 @@ Research the next gap and advance this thread. Respond with JSON only.`;
             model: getModel("routine"),
             messages: [{
               role: "system",
-              content: `You extract testable, falsifiable hypotheses from research findings. Output JSON array:
+              content: `You extract testable, falsifiable hypotheses from research findings.
+
+Return [] if no strong hypotheses emerge. Maximum 2 hypotheses. Only include hypotheses that are genuinely falsifiable — no vague predictions.
+
+You MUST respond with ONLY a valid JSON array. No markdown, no explanations, no text outside the JSON. Do not wrap in code fences. If no hypotheses, return exactly: []
+
+Example JSON schema:
 [{
   "claim": "A specific, testable claim about the future or current state",
   "basis": "The evidence supporting this claim",
   "metric": "How this could be measured or verified",
   "prediction": "What you expect to happen",
   "timeframe": "When this should be verifiable (e.g., '3 months', '6 months')",
-  "confidence": "low" | "medium" | "high"
-}]
-Return [] if no strong hypotheses emerge. Maximum 2 hypotheses. Only include hypotheses that are genuinely falsifiable — no vague predictions.`
+  "confidence": "medium"
+}]`
             }, {
               role: "user",
               content: `Research thread: "${thread.title}"
