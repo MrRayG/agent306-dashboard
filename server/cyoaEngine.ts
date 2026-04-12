@@ -367,17 +367,31 @@ export async function resolveCYOA(
       if (tweet.data?.id) episode.tweetIds.push(tweet.data.id);
       recordXPost(safeReveal);
 
-      // Wait a beat then post canon verdict
+      // Wait a beat then post canon verdict (through compliance guard)
       await new Promise(r => setTimeout(r, 3000));
       const canonText = buildCanonTweet(episode);
-      const canonTweet = await xWrite.v2.tweet({ text: canonText });
-      if (canonTweet.data?.id) episode.tweetIds.push(canonTweet.data.id);
+      const canonCompliance = validateXPost(canonText);
+      if (!canonCompliance.allowed) {
+        console.log(`[CYOA] Canon tweet skipped by compliance: ${canonCompliance.reason}`);
+      } else {
+        const safeCanon = canonCompliance.sanitizedContent ?? canonText;
+        const canonTweet = await xWrite.v2.tweet({ text: safeCanon });
+        if (canonTweet.data?.id) episode.tweetIds.push(canonTweet.data.id);
+        recordXPost(safeCanon);
+      }
 
-      // CTA
+      // CTA (through compliance guard)
       await new Promise(r => setTimeout(r, 3000));
       const ctaText = buildCTATweet(episode, episode.tokenId);
-      const ctaTweet = await xWrite.v2.tweet({ text: ctaText });
-      if (ctaTweet.data?.id) episode.tweetIds.push(ctaTweet.data.id);
+      const ctaCompliance = validateXPost(ctaText);
+      if (!ctaCompliance.allowed) {
+        console.log(`[CYOA] CTA tweet skipped by compliance: ${ctaCompliance.reason}`);
+      } else {
+        const safeCta = ctaCompliance.sanitizedContent ?? ctaText;
+        const ctaTweet = await xWrite.v2.tweet({ text: safeCta });
+        if (ctaTweet.data?.id) episode.tweetIds.push(ctaTweet.data.id);
+        recordXPost(safeCta);
+      }
 
       episode.status = "resolved";
       episode.resolvedAt = new Date().toISOString();

@@ -483,13 +483,19 @@ Return JSON: {"t1": "...", "t2": "...", "t3": "..."}`;
     for (const [key, text] of [["t1", tweets.t1], ["t2", tweets.t2], ["t3", tweets.t3]] as [string,string][]) {
       if (!text?.trim()) continue;
       try {
-        const safeText = (key === "t1" && compliance.sanitizedContent) ? compliance.sanitizedContent : text.trim();
+        // Validate each tweet through compliance guard (t1 already validated above, but re-check is harmless)
+        const tweetCompliance = key === "t1" ? compliance : validateXPost(text.trim());
+        if (!tweetCompliance.allowed) {
+          console.log(`[306:Leaderboard] ${key} skipped by compliance: ${tweetCompliance.reason}`);
+          continue;
+        }
+        const safeText = tweetCompliance.sanitizedContent ?? text.trim();
         const payload: any = { text: safeText };
         if (lastTweetId) payload.reply = { in_reply_to_tweet_id: lastTweetId };
         if (key === "t1" && xMediaId) payload.media = { media_ids: [xMediaId] };
         const tw = await xWrite.v2.tweet(payload);
         lastTweetId = tw.data?.id;
-        if (key === "t1") recordXPost(safeText);
+        recordXPost(safeText);
         if (key !== "t3") await new Promise(r => setTimeout(r, 2000));
       } catch (e: any) {
         console.warn(`[306:Leaderboard] ${key} failed:`, e.message);

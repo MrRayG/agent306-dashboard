@@ -91,6 +91,7 @@ import {
   seedDreams,
 } from "./dreamEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import { startXPostScheduler, seedIntroPost, getXPostQueue } from "./xPostScheduler.js";
 
 // On-chain API removed
 // const ONCHAIN_API = "";
@@ -916,6 +917,15 @@ setTimeout(() => {
   seedDreams();
 }, 55_000);
 
+// ── X POST SCHEDULER — independent from daily research cycle ────────────────
+// 4 posting slots/day: 8am, 12pm, 5pm, 9pm ET
+// Podcast promos fire immediately (event-driven)
+setTimeout(() => {
+  startXPostScheduler(xWrite);
+  // Seed Agent 306's debut intro post (runs once, idempotent)
+  seedIntroPost().catch(e => console.error("[XScheduler] Intro seed error:", e.message));
+}, 65_000);
+
 // ── Editorial Summary Cache ─────────────────────────────────────────────────────
 // Decoupled from signal collection — generated async, served instantly from cache.
 // Prevents the digest endpoint from timing out while waiting for Grok.
@@ -1078,10 +1088,17 @@ export function registerRoutes(httpServer: Server, app: Express) {
   app.post("/api/x/test-tweet", requireDashAuth, async (_req, res) => {
     try {
       const testText = `[306 SYSTEM] Connection test — ${new Date().toISOString().slice(0, 16)} UTC`;
-      const tweet = await xWrite.v2.tweet({ text: testText });
+      const compliance = validateXPost(testText);
+      if (!compliance.allowed) {
+        res.status(429).json({ ok: false, error: `Compliance guard: ${compliance.reason}` });
+        return;
+      }
+      const safeText = compliance.sanitizedContent ?? testText;
+      const tweet = await xWrite.v2.tweet({ text: safeText });
       const tweetId = tweet.data?.id;
       if (tweetId) {
-        res.json({ ok: true, tweetId, url: `https://x.com/agent3zero6/status/${tweetId}`, text: testText });
+        recordXPost(safeText);
+        res.json({ ok: true, tweetId, url: `https://x.com/agent3zero6/status/${tweetId}`, text: safeText });
       } else {
         res.json({ ok: false, error: "Tweet sent but no ID returned", raw: JSON.stringify(tweet.data).slice(0, 500) });
       }
@@ -1094,6 +1111,11 @@ export function registerRoutes(httpServer: Server, app: Express) {
         hint: "Check X Developer Portal: App permissions must be 'Read and Write'. Free tier allows 17 tweets/24h.",
       });
     }
+  });
+
+  // ── X Post Queue (dashboard view) ───────────────────────────
+  app.get("/api/x/queue", requireDashAuth, (_req, res) => {
+    res.json(getXPostQueue());
   });
 
   app.get("/api/x/health", async (_req, res) => {

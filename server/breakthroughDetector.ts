@@ -15,6 +15,7 @@ import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { knowledge } from "./memoryEngine.js";
+import { queueXPost } from "./xPostScheduler.js";
 
 // -- Types ------------------------------------------------------------------
 
@@ -537,6 +538,10 @@ Required JSON schema:
 
     store.breakthroughs.unshift(breakthrough);
     saveBreakthroughs(store);
+
+    // Queue breakthrough post for X scheduler
+    const breakthroughPost = `[BREAKTHROUGH] ${breakthrough.title}\n\n${breakthrough.description.slice(0, 2200)}`;
+    queueXPost(breakthroughPost, "breakthrough");
 
     console.log(`[Breakthrough] BREAKTHROUGH DETECTED: "${breakthrough.title}" (composite: ${compositeScore})`);
     return breakthrough;
