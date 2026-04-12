@@ -37,8 +37,8 @@ import { evidenceQueue, routeEvidenceSearch, processEvidenceQueue } from "./evid
 import { runConnectionScan } from "./synthesisEngine.js";
 import { extractInsights } from "./conversationLearningEngine.js";
 import { getMetacognitionState } from "./metacognitionEngine.js";
-import { getResearchLab, resolveHypothesis, addHypothesis, testHypothesis, runResearchPipeline, researchWithPerplexity, researchWithSemanticScholar, autoApproveTopics, generateAspirations, evaluateAspirations } from "./researchEngine.js";
-import { detectBreakthroughs, checkPredictions, extractPrediction, storePrediction } from "./breakthroughDetector.js";
+import { getResearchLab, resolveHypothesis, addHypothesis, testHypothesis, runResearchPipeline, researchWithPerplexity, researchWithSemanticScholar, autoApproveTopics, generateAspirations, evaluateAspirations, getAspirations } from "./researchEngine.js";
+import { detectBreakthroughs, checkPredictions, extractPrediction, storePrediction, getBreakthroughs } from "./breakthroughDetector.js";
 import { runSelfEvolutionReflection, capturePreCycleSnapshot } from "./selfEvolutionEngine.js";
 import { clusterKnowledge, detectContradictions as detectGraphContradictions } from "./knowledge-graph.js";
 import { runResearchAgendaCycle } from "./research-agenda.js";
@@ -1383,10 +1383,17 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
       .map(h => `${h.claim} → ${h.status}`)
       .slice(0, 5);
 
+    // Pass actual breakthroughs detected this cycle (not empty array)
+    const todayStart = new Date(todayStr).getTime();
+    const todayBreakthroughs = getBreakthroughs().breakthroughs
+      .filter(b => b.detectedAt >= todayStart)
+      .map(b => b.title)
+      .slice(0, 5);
+
     await runSelfEvolutionReflection({
       newKBEntries,
       hypothesisChanges,
-      breakthroughs: [],
+      breakthroughs: todayBreakthroughs,
     });
   } catch (e: any) {
     console.warn("[DailyCycle] Self-evolution reflection failed (non-fatal):", e.message);
@@ -1395,14 +1402,22 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
   // ── Aspiration checks (weekly evaluation, monthly generation) ──────────────
   try {
     const today = new Date();
+    const aspirationStore = getAspirations();
+    const hasActiveAspirations = aspirationStore.aspirations.some(a => a.status === "active");
+
     // Weekly: evaluate aspirations (Sunday)
     if (today.getDay() === 0) {
       console.log("[DailyCycle] Running weekly aspiration evaluation...");
       await evaluateAspirations();
     }
-    // Monthly: generate new aspirations (day 1)
-    if (today.getDate() === 1) {
-      console.log("[DailyCycle] Running monthly aspiration generation...");
+
+    // Generate aspirations: monthly on day 1, OR on first run when none exist
+    if (today.getDate() === 1 || !hasActiveAspirations) {
+      if (!hasActiveAspirations) {
+        console.log("[DailyCycle] No active aspirations found — seeding initial aspirations...");
+      } else {
+        console.log("[DailyCycle] Running monthly aspiration generation...");
+      }
       await generateAspirations();
     }
   } catch (e: any) {
