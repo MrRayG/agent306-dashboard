@@ -300,6 +300,11 @@ Respond as JSON only: { "score": number, "reason": "brief", "rewrite": "improved
 
 // ── Main: run the hourly reply cycle ─────────────────────────────────────────
 export async function runMidnightReplies(xWrite: any): Promise<void> {
+  // DISABLED: X replies turned off to avoid spam risk
+  if (!process.env.X_REPLIES_ENABLED) {
+    console.log("[ReplyEngine] X replies disabled (X_REPLIES_ENABLED not set) — skipping reply cycle");
+    return;
+  }
   const state = loadState();
   console.log("[ReplyEngine] Midnight ET reply cycle starting...");
 
@@ -475,6 +480,11 @@ export async function runMidnightReplies(xWrite: any): Promise<void> {
 // Parallel to the X reply cycle. Fetches Farcaster mentions, generates replies
 // via the same Grok pipeline, posts via farcasterEngine.replyCast().
 export async function runFarcasterReplies(): Promise<void> {
+  // DISABLED: All auto-replies turned off to avoid spam risk
+  if (!process.env.X_REPLIES_ENABLED) {
+    console.log("[ReplyEngine:FC] Replies disabled (X_REPLIES_ENABLED not set) — skipping Farcaster reply cycle");
+    return;
+  }
   let fcEngine: typeof import("./farcasterEngine.js") | null = null;
   try {
     fcEngine = await import("./farcasterEngine.js");
@@ -559,6 +569,11 @@ export async function runFarcasterReplies(): Promise<void> {
 
 // ── Scheduler — fetch fresh mentions then reply, every hour ──────────────────
 export function scheduleMidnightReplies(xWrite: any): void {
+  // DISABLED: X replies turned off to avoid spam risk
+  if (!process.env.X_REPLIES_ENABLED) {
+    console.log("[ReplyEngine] X replies disabled (X_REPLIES_ENABLED not set) — not scheduling reply engine");
+    return;
+  }
   // Add ±15min jitter so X doesn't flag as automated bot (fixed intervals = spam signal)
   const BASE_INTERVAL_MS = 1 * 60 * 60 * 1000; // 1 hour base
   function nextInterval() {

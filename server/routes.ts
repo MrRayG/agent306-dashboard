@@ -872,8 +872,9 @@ for (const k of podcastKnowledge) addKnowledge(k);
 }
 
 // ── REPLY ENGINE — Hourly ────────────────────────────────────────
-// AUTO-REPLY DISABLED — X account under suspension appeal
-// Re-enable once X account is reinstated. Turn off before re-enabling.
+// AUTO-REPLY DISABLED — Agent 306 only posts original content, no replies.
+// All reply functions also check X_REPLIES_ENABLED env var as a safety net.
+// To re-enable: set X_REPLIES_ENABLED=true and uncomment the lines below.
 // initReplyWatcher(xClient);
 // setTimeout(() => {
 //   scheduleMidnightReplies(xWrite);
@@ -2160,13 +2161,23 @@ export function registerRoutes(httpServer: Server, app: Express) {
   });
 
   // POST /api/replies/run — manually trigger Agent 306 to reply to all queued mentions
+  // DISABLED: X replies turned off — Agent 306 only posts original content
   app.post("/api/replies/run", async (_req, res) => {
+    if (!process.env.X_REPLIES_ENABLED) {
+      res.json({ ok: false, message: "X replies are globally disabled (set X_REPLIES_ENABLED=true to re-enable)" });
+      return;
+    }
     res.json({ ok: true, message: "Reply cycle starting — Agent 306 is engaging now..." });
     runMidnightReplies(xWrite).catch(console.error);
   });
 
   // POST /api/replies/fetch-and-run — fetch fresh mentions then immediately reply
+  // DISABLED: X replies turned off — Agent 306 only posts original content
   app.post("/api/replies/fetch-and-run", async (_req, res) => {
+    if (!process.env.X_REPLIES_ENABLED) {
+      res.json({ ok: false, message: "X replies are globally disabled (set X_REPLIES_ENABLED=true to re-enable)" });
+      return;
+    }
     res.json({ ok: true, message: "Fetching fresh mentions then replying..." });
     fetchReplies()
       .then(() => new Promise(r => setTimeout(r, 5000))) // small gap after fetch
