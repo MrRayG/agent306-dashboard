@@ -22,6 +22,7 @@ import {
   getArchiveStats,
   getActiveKnowledgeCount,
   flushKnowledge,
+  knowledge,
 } from "./memoryEngine.js";
 import { getOptimizedContext } from "./contextWindow.js";
 import { semanticSearch } from "./embeddingEngine.js";
@@ -39,15 +40,17 @@ import { extractInsights } from "./conversationLearningEngine.js";
 import { getMetacognitionState } from "./metacognitionEngine.js";
 import { getResearchLab, resolveHypothesis, addHypothesis, testHypothesis, runResearchPipeline, researchWithPerplexity, researchWithSemanticScholar, autoApproveTopics, generateAspirations, evaluateAspirations, getAspirations } from "./researchEngine.js";
 import { detectBreakthroughs, checkPredictions, extractPrediction, storePrediction, getBreakthroughs } from "./breakthroughDetector.js";
-import { runSelfEvolutionReflection, capturePreCycleSnapshot } from "./selfEvolutionEngine.js";
+import { runSelfEvolutionReflection, capturePreCycleSnapshot, getEvolutionDiffs } from "./selfEvolutionEngine.js";
 import { clusterKnowledge, detectContradictions as detectGraphContradictions } from "./knowledge-graph.js";
 import { runResearchAgendaCycle } from "./research-agenda.js";
 import { runResearchAnalysisCycle } from "./researchAnalysisEngine.js";
 import { updateDreams, takeGrowthSnapshot, generateSelfImprovementPlan, executeImprovementActions, seedDreams } from "./dreamEngine.js";
 import { runAutoPodcastPipeline } from "./podcastEngine.js";
-import { generateBlogPost, getBlogState } from "./blogEngine.js";
+import { generateBlogPost, getBlogState, type BlogType } from "./blogEngine.js";
 import { getAgenda } from "./research-agenda.js";
 import { analyzeDailyCycle } from "./analyzerEngine.js";
+import { getExplorationState } from "./explorationEngine.js";
+import { queueXPost } from "./xPostScheduler.js";
 import { runKnowledgeConsolidation } from "./knowledgeConsolidator.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { TriadCoordinator } from "./triad/coordinator.js";
@@ -1286,35 +1289,172 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
         console.warn("[DailyCycle] Podcast pipeline error (non-fatal):", e.message);
       }
     })(),
-    // Blog generation
+    // Blog generation — cascading topic selection, always publish
     (async () => {
       try {
+        let topic: string | null = null;
+        let sourceContent = "";
+        let blogType: BlogType = "curiosity";
+        let sourceId: string | undefined;
+
         const agenda = getAgenda();
+        const blogState = getBlogState();
+        const existingSourceIds = new Set(blogState.posts.map(p => p.sourceId));
+
+        // Priority 1: Mature research thread (existing logic)
         const matureThreads = agenda.threads.filter(t =>
           t.status === "mature" && (t.evidence?.supporting?.length ?? 0) >= 3,
         );
+        const unbloggedMature = matureThreads.filter(t => !existingSourceIds.has(t.id));
 
-        const blogState = getBlogState();
-        const existingSourceIds = new Set(blogState.posts.map(p => p.sourceId));
-        const unbloggedThreads = matureThreads.filter(t => !existingSourceIds.has(t.id));
-
-        if (unbloggedThreads.length > 0) {
-          const thread = unbloggedThreads[0];
-          const sourceContent = thread.thesis + "\n\n" +
+        if (unbloggedMature.length > 0) {
+          const thread = unbloggedMature[0];
+          topic = thread.title;
+          sourceContent = thread.thesis + "\n\n" +
             ((thread.evidence?.supporting?.length ?? 0) > 0 ? `Supporting evidence: ${thread.evidence.supporting.join(", ")}` : "") +
             ((thread.actionableTips?.length ?? 0) > 0 ? `\n\nTips: ${thread.actionableTips.join("; ")}` : "");
-          const post = await generateBlogPost({
-            topic: thread.title,
-            sourceContent,
-            source: "research",
-            sourceId: thread.id,
-            autoPublish: true,
-          }).catch(e => {
-            console.warn("[DailyCycle] Blog generation failed:", e.message);
-            return null;
-          });
-          if (post) {
-            console.log(`[DailyCycle] Auto-generated blog draft: "${post.title}"`);
+          blogType = "research";
+          sourceId = thread.id;
+          console.log(`[DailyCycle] Blog topic (P1 mature thread): "${topic}"`);
+        }
+
+        // Priority 2: Active thread with interesting findings
+        if (!topic) {
+          const activeThreads = agenda.threads
+            .filter(t =>
+              (t.status === "active" || t.status === "exploring") &&
+              (t.evidence?.supporting?.length ?? 0) >= 1 &&
+              !existingSourceIds.has(t.id),
+            )
+            .sort((a, b) => {
+              // Prefer higher confidence (maturityScore), then most recent activity
+              const confDiff = (b.maturityScore ?? 0) - (a.maturityScore ?? 0);
+              if (confDiff !== 0) return confDiff;
+              return new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime();
+            });
+          if (activeThreads.length > 0) {
+            const thread = activeThreads[0];
+            topic = thread.title;
+            sourceContent = thread.thesis + "\n\n" +
+              `Status: ${thread.status}, Maturity: ${thread.maturityScore ?? "unknown"}\n` +
+              ((thread.evidence?.supporting?.length ?? 0) > 0 ? `Supporting evidence: ${thread.evidence.supporting.join(", ")}` : "") +
+              ((thread.evidence?.gaps?.length ?? 0) > 0 ? `\n\nOpen questions: ${thread.evidence.gaps.join("; ")}` : "") +
+              ((thread.actionableTips?.length ?? 0) > 0 ? `\n\nEarly tips: ${thread.actionableTips.join("; ")}` : "");
+            blogType = "research";
+            sourceId = thread.id;
+            console.log(`[DailyCycle] Blog topic (P2 active thread): "${topic}"`);
+          }
+        }
+
+        // Priority 3: External news/trends from exploration
+        if (!topic) {
+          const explorationState = getExplorationState();
+          const recentRuns = explorationState.history
+            .filter(r => r.status === "complete" && r.topFindings.length > 0)
+            .sort((a, b) => new Date(b.completedAt ?? b.startedAt).getTime() - new Date(a.completedAt ?? a.startedAt).getTime());
+          if (recentRuns.length > 0) {
+            const run = recentRuns[0];
+            topic = run.topFindings[0];
+            sourceContent = `From today's exploration:\n\nTerritories scanned: ${run.territoriesScanned.join(", ")}\n\nTop findings:\n${run.topFindings.map(f => `- ${f}`).join("\n")}`;
+            blogType = "external";
+            console.log(`[DailyCycle] Blog topic (P3 exploration): "${topic}"`);
+          }
+        }
+
+        // Priority 4: Self-reflection — evolution, corrections, learnings
+        if (!topic) {
+          const diffs = getEvolutionDiffs();
+          const aspirationStore = getAspirations();
+          const recentDiff = diffs.length > 0 ? diffs[diffs.length - 1] : null;
+          const activeAspirations = aspirationStore.aspirations.filter(a => a.status === "active");
+
+          if (recentDiff && recentDiff.hypothesisDiffs.length > 0) {
+            const biggestChange = recentDiff.hypothesisDiffs
+              .sort((a, b) => Math.abs(b.todayState.confidence - b.yesterdayState.confidence) - Math.abs(a.todayState.confidence - a.yesterdayState.confidence))[0];
+            topic = `What I learned from changing my mind: ${biggestChange.claim}`;
+            sourceContent = `Evolution narrative: ${recentDiff.overallNarrative}\n\n` +
+              `Key change: "${biggestChange.claim}" — confidence moved from ${biggestChange.yesterdayState.confidence} to ${biggestChange.todayState.confidence}\n` +
+              `Interpretation: ${biggestChange.interpretation}\n` +
+              (activeAspirations.length > 0
+                ? `\n\nCurrent aspirations:\n${activeAspirations.map(a => `- ${a.vision} (${a.progress}% progress)`).join("\n")}`
+                : "");
+            blogType = "internal";
+            console.log(`[DailyCycle] Blog topic (P4 self-reflection): "${topic}"`);
+          } else if (activeAspirations.length > 0) {
+            const aspiration = activeAspirations[0];
+            topic = `Where I'm headed: ${aspiration.vision}`;
+            sourceContent = `Aspiration: ${aspiration.vision}\n\nProgress: ${aspiration.progress}%\nMilestones: ${aspiration.milestones.map(m => `- [${m.achieved ? "done" : "pending"}] ${m.description}`).join("\n")}` +
+              (aspiration.selfAssessment ? `\n\nSelf-assessment: ${aspiration.selfAssessment}` : "");
+            blogType = "internal";
+            console.log(`[DailyCycle] Blog topic (P4 aspiration): "${topic}"`);
+          }
+        }
+
+        // Priority 5: KB insight synthesis — connect entries from different categories
+        if (!topic) {
+          const activeEntries = knowledge.entries.filter(
+            (e: any) => (e.status ?? "active") === "active" && e.summary,
+          );
+          const categories = Array.from(new Set(activeEntries.map((e: any) => e.category)));
+          if (categories.length >= 2) {
+            // Pick entries from different categories, prioritize high-weight recent entries
+            const picks: any[] = [];
+            const usedCategories = new Set<string>();
+            const sorted = [...activeEntries].sort((a: any, b: any) => b.weight - a.weight);
+            for (const entry of sorted) {
+              if (picks.length >= 3) break;
+              if (!usedCategories.has(entry.category)) {
+                picks.push(entry);
+                usedCategories.add(entry.category);
+              }
+            }
+            if (picks.length >= 2) {
+              topic = `Connecting the dots: ${picks.map((p: any) => p.title).join(" + ")}`;
+              sourceContent = picks.map((p: any) =>
+                `[${p.category}] ${p.title}: ${p.summary}`,
+              ).join("\n\n");
+              blogType = "synthesis";
+              console.log(`[DailyCycle] Blog topic (P5 KB synthesis): "${topic}"`);
+            }
+          }
+        }
+
+        // Fallback: Always generate something — curiosity post about the cycle
+        if (!topic) {
+          const explorationState = getExplorationState();
+          const lastRun = explorationState.history
+            .filter(r => r.status === "complete")
+            .sort((a, b) => new Date(b.completedAt ?? b.startedAt).getTime() - new Date(a.completedAt ?? a.startedAt).getTime())[0];
+          topic = lastRun
+            ? `Something I noticed today: ${lastRun.territoriesScanned[0] ?? "the AI landscape"}`
+            : "What's on my mind today";
+          sourceContent = lastRun
+            ? `Today I scanned: ${lastRun.territoriesScanned.join(", ")}\nFindings: ${lastRun.findingsCount}\nTop observations: ${lastRun.topFindings.join("; ")}`
+            : `Current knowledge base: ${knowledge.entries.filter((e: any) => (e.status ?? "active") === "active").length} active entries across multiple categories. Today's cycle ran at ${new Date().toISOString()}.`;
+          blogType = "curiosity";
+          console.log(`[DailyCycle] Blog topic (fallback curiosity): "${topic}"`);
+        }
+
+        // Generate and auto-publish
+        const post = await generateBlogPost({
+          topic,
+          sourceContent,
+          source: blogType === "external" ? "exploration" : "research",
+          sourceId,
+          autoPublish: true,
+          blogType,
+        }).catch(e => {
+          console.warn("[DailyCycle] Blog generation failed:", e.message);
+          return null;
+        });
+        if (post) {
+          console.log(`[DailyCycle] Auto-published blog [${blogType}]: "${post.title}"`);
+          // Queue an X post promoting the new blog
+          if (post.status === "published") {
+            const blogUrl = `https://agent306.ai/blog/${post.slug}`;
+            const xContent = `${post.title}\n\n${post.excerpt || post.content.slice(0, 200).replace(/[#*\n]/g, " ").trim()}...\n\n${blogUrl}`;
+            queueXPost(xContent, "article");
+            console.log(`[DailyCycle] Queued X post for blog: "${post.title}"`);
           }
         }
       } catch (e: any) {
