@@ -1,3 +1,4 @@
+// DISABLED: Normies-era content engine — not used by Agent 306
 // ─────────────────────────────────────────────────────────────────────────────
 // 306 — RESEARCH BRIEF ENGINE
 // [306 RESEARCH] show format
@@ -293,114 +294,23 @@ Next brief drops when the next breakthrough lands.
 }
 
 // ── Post a Research Brief episode to X ─────────────────────────────────────────────────
+// DISABLED: Normies-era content engine — not used by Agent 306
 export async function postCYOAHook(
   episodeId: string,
   xWrite: any,
   tokenId?: number
 ): Promise<string | null> {
-  const episode = cyoaState.episodes.find(e => e.id === episodeId);
-  if (!episode) return null;
-
-  const tweetText = buildHookTweet(episode, tokenId);
-
-  try {
-    const compliance = validateXPost(tweetText);
-    if (!compliance.allowed) {
-      console.log(`[CYOA] Hook skipped by compliance: ${compliance.reason}`);
-      return null;
-    }
-    const safeText = compliance.sanitizedContent ?? tweetText;
-    // Post the hook tweet
-    // X API v2 polls require a separate endpoint — post text first then note poll
-    const tweet = await xWrite.v2.tweet({ text: safeText });
-    const tweetId = tweet.data?.id;
-
-    if (tweetId) {
-      episode.pollTweetId = tweetId;
-      episode.postedAt = new Date().toISOString();
-      episode.status = "posted";
-      episode.tweetIds.push(tweetId);
-      cyoaState.activeEpisodeId = episodeId;
-      saveState(cyoaState);
-      recordXPost(safeText);
-      console.log(`[CYOA] Hook posted: ${tweetId}`);
-    }
-    return tweetId ?? null;
-  } catch (e: any) {
-    console.error("[CYOA] Post error:", e.message);
-    return null;
-  }
+  console.log("[CYOA] X posting disabled — Normies-era engine");
+  return null;
 }
 
 // ── Resolve a Research Brief episode with winning option ─────────────────────────────
+// DISABLED: Normies-era content engine — not used by Agent 306
 export async function resolveCYOA(
   episodeId: string,
   winningOption: "A" | "B" | "C" | "D",
   pollResults: Record<string, number>,
   xWrite: any
 ): Promise<void> {
-  const episode = cyoaState.episodes.find(e => e.id === episodeId);
-  if (!episode) return;
-
-  episode.winningOption = winningOption;
-  episode.pollResults = pollResults;
-  episode.totalVotes = Object.values(pollResults).reduce((a, b) => a + b, 0);
-  episode.status = "revealed";
-  episode.revealedAt = new Date().toISOString();
-
-  // Mark the winning option as canon
-  episode.options.forEach(o => { o.isCanon = o.letter === winningOption; });
-
-  saveState(cyoaState);
-
-  // Post reveal tweet
-  const revealText = buildRevealTweet(episode);
-  if (revealText) {
-    try {
-      const compliance = validateXPost(revealText);
-      if (!compliance.allowed) {
-        console.log(`[CYOA] Reveal skipped by compliance: ${compliance.reason}`);
-        return;
-      }
-      const safeReveal = compliance.sanitizedContent ?? revealText;
-      const tweet = await xWrite.v2.tweet({ text: safeReveal });
-      if (tweet.data?.id) episode.tweetIds.push(tweet.data.id);
-      recordXPost(safeReveal);
-
-      // Wait a beat then post canon verdict (through compliance guard)
-      await new Promise(r => setTimeout(r, 3000));
-      const canonText = buildCanonTweet(episode);
-      const canonCompliance = validateXPost(canonText);
-      if (!canonCompliance.allowed) {
-        console.log(`[CYOA] Canon tweet skipped by compliance: ${canonCompliance.reason}`);
-      } else {
-        const safeCanon = canonCompliance.sanitizedContent ?? canonText;
-        const canonTweet = await xWrite.v2.tweet({ text: safeCanon });
-        if (canonTweet.data?.id) episode.tweetIds.push(canonTweet.data.id);
-        recordXPost(safeCanon);
-      }
-
-      // CTA (through compliance guard)
-      await new Promise(r => setTimeout(r, 3000));
-      const ctaText = buildCTATweet(episode, episode.tokenId);
-      const ctaCompliance = validateXPost(ctaText);
-      if (!ctaCompliance.allowed) {
-        console.log(`[CYOA] CTA tweet skipped by compliance: ${ctaCompliance.reason}`);
-      } else {
-        const safeCta = ctaCompliance.sanitizedContent ?? ctaText;
-        const ctaTweet = await xWrite.v2.tweet({ text: safeCta });
-        if (ctaTweet.data?.id) episode.tweetIds.push(ctaTweet.data.id);
-        recordXPost(safeCta);
-      }
-
-      episode.status = "resolved";
-      episode.resolvedAt = new Date().toISOString();
-      cyoaState.totalResolved++;
-      saveState(cyoaState);
-
-      console.log(`[CYOA] Episode ${episodeId} resolved — ${episode.totalVotes} votes`);
-    } catch (e: any) {
-      console.error("[CYOA] Resolve post error:", e.message);
-    }
-  }
+  console.log("[CYOA] X posting disabled — Normies-era engine");
 }

@@ -1,3 +1,4 @@
+// DISABLED: Normies-era content engine — not used by Agent 306
 // ─────────────────────────────────────────────────────────────────────────────
 // 306 — BURN RECEIPT ENGINE
 // Real-time burn detection (polls every 90s) + personalized image card +
@@ -637,74 +638,9 @@ export async function processBurnReceipt(
     burnedType, burnedLevel, burnedPixels: burnedPixelsMeta,
   });
 
-  // 3. Generate media — video for ≥2 souls, static card for 1 soul
-  // Video costs $0.0639, static card is free. Small burns get cards, big burns get video.
-  let xMediaId: string | undefined;
-  let usedVideo = false;
-
-  if (tokenCount >= 2) {
-    try {
-      const videoPath = await generateBurnVideo({ tokenId: receiverTokenId, tokenCount, level, ap: actionPoints });
-      if (videoPath && fs.existsSync(videoPath)) {
-        xMediaId = await xWrite.v1.uploadMedia(videoPath, { mimeType: "video/mp4" as any });
-        console.log(`[BurnReceipt] Video uploaded — media_id: ${xMediaId}`);
-        usedVideo = true;
-        try { fs.unlinkSync(videoPath); } catch {}
-      }
-    } catch (vidErr: any) {
-      console.log(`[BurnReceipt] Video skipped — falling back to image: ${vidErr.message}`);
-    }
-  }
-
-  // Fall back to static image card
-  if (!xMediaId) {
-    try {
-      const cardBuf = await generateBurnReceiptCard({
-        receiverTokenId, burnedTokenIds: burnedTokenIds.length > 0 ? burnedTokenIds : [receiverTokenId],
-        tokenCount, pixelTotal, narrative, receiptNumber, level, actionPoints,
-        burnedType, burnedLevel, burnedPixels: burnedPixelsMeta,
-      });
-      if (cardBuf) {
-        xMediaId = await xWrite.v1.uploadMedia(cardBuf, { mimeType: "image/png" as any });
-        console.log(`[BurnReceipt] Image uploaded — media_id: ${xMediaId}`);
-      }
-    } catch (imgErr: any) {
-      console.warn("[BurnReceipt] Image upload failed:", imgErr.message);
-    }
-  }
-
-  // 4. Post tweet
-  try {
-    const compliance = validateXPost(tweetText);
-    if (!compliance.allowed) {
-      console.log(`[BurnReceipt] Skipped by compliance: ${compliance.reason}`);
-    } else {
-      const safeText = compliance.sanitizedContent ?? tweetText;
-      const tweet = await xWrite.v2.tweet({
-        text: safeText,
-        ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),
-      });
-      console.log(`[BurnReceipt] Posted burn receipt — tweet: ${tweet.data?.id}`);
-      recordXPost(safeText);
-      registerPost(`burn_${burn.commitId}`, `https://x.com/agent3zero6/status/${tweet.data?.id}`, 'burn_receipt');
-    }
-  } catch (tweetErr: any) {
-    console.error("[BurnReceipt] Tweet failed:", tweetErr.message);
-  }
-
-  // 5. Post to Farcaster
-  try {
-    const { postCast, isFarcasterEnabled, determineChannel } = await import("./farcasterEngine.js");
-    if (isFarcasterEnabled()) {
-      const cast = await postCast({ text: tweetText.slice(0, 2500), channel: "nft" });
-      if (cast) {
-        registerPost(`burn_${burn.commitId}`, cast.url, "burn_receipt", "farcaster");
-        console.log(`[BurnReceipt] Farcaster cast posted: ${cast.url}`);
-      }
-    }
-  } catch (fcErr: any) {
-    console.warn("[BurnReceipt] Farcaster post failed:", fcErr.message);
-  }
+  // DISABLED: Normies-era content engine — not used by Agent 306
+  // X posting, media upload, video generation, and Farcaster posting removed
+  console.log("[BurnReceipt] X/Farcaster posting disabled — Normies-era engine");
 
   // State already saved at start of function — nothing to do here
   console.log(`[BurnReceipt] Complete — #${receiptNumber} processed`);

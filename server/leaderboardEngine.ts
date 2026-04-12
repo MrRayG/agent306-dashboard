@@ -1,3 +1,4 @@
+// DISABLED: Normies-era content engine — not used by Agent 306
 // ─────────────────────────────────────────────────────────────────────────────
 // 306 — WEEKLY AI TOPICS LEADERBOARD ENGINE
 // Posts top AI topics and research areas every Monday at 9am ET
@@ -461,65 +462,9 @@ Return ONLY valid JSON — no meta-commentary, no separators, no character count
       tweets.t1 = `AI Topics · Week ${weekNumber}\n\n${fallbackContext[angle]}\n\nWeek ${trackingWeeks} of tracking · ${leaders.length} topics\n#Agent306 #AIResearch`;
     }
 
-    // Generate leaderboard image card
-    let xMediaId: string | undefined;
-    try {
-      const cardBuf = await generateLeaderboardCard(leaders, prevLeaders, weekNumber % 52 + 1);
-      if (cardBuf) {
-        xMediaId = await xWrite.v1.uploadMedia(cardBuf, { mimeType: "image/png" as any });
-        console.log(`[306:Leaderboard] Card uploaded`);
-      }
-    } catch (imgErr: any) {
-      console.warn("[306:Leaderboard] Image upload failed:", imgErr.message);
-    }
-
-    // Post as thread — compliance check on the opener
-    const compliance = validateXPost(tweets.t1?.trim() ?? "");
-    if (!compliance.allowed) {
-      console.log(`[306:Leaderboard] Skipped by compliance: ${compliance.reason}`);
-      return;
-    }
-
-    let lastTweetId: string | undefined;
-    for (const [key, text] of [["t1", tweets.t1], ["t2", tweets.t2], ["t3", tweets.t3]] as [string,string][]) {
-      if (!text?.trim()) continue;
-      try {
-        // Validate each tweet through compliance guard (t1 already validated above, but re-check is harmless)
-        const tweetCompliance = key === "t1" ? compliance : validateXPost(text.trim());
-        if (!tweetCompliance.allowed) {
-          console.log(`[306:Leaderboard] ${key} skipped by compliance: ${tweetCompliance.reason}`);
-          continue;
-        }
-        const safeText = tweetCompliance.sanitizedContent ?? text.trim();
-        const payload: any = { text: safeText };
-        if (lastTweetId) payload.reply = { in_reply_to_tweet_id: lastTweetId };
-        if (key === "t1" && xMediaId) payload.media = { media_ids: [xMediaId] };
-        const tw = await xWrite.v2.tweet(payload);
-        lastTweetId = tw.data?.id;
-        recordXPost(safeText);
-        if (key !== "t3") await new Promise(r => setTimeout(r, 2000));
-      } catch (e: any) {
-        console.warn(`[306:Leaderboard] ${key} failed:`, e.message);
-      }
-    }
-
-    console.log(`[306:Leaderboard] Thread posted — ${lastTweetId}`);
-    registerPost("leaderboard", lastTweetId ? `https://x.com/agent3zero6/status/${lastTweetId}` : null, "leaderboard");
-
-    // Post to Farcaster (combined thread as single cast)
-    try {
-      const { postCast, isFarcasterEnabled } = await import("./farcasterEngine.js");
-      if (isFarcasterEnabled()) {
-        const combinedText = [tweets.t1, tweets.t2, tweets.t3].filter(Boolean).join("\n\n").slice(0, 2500);
-        const cast = await postCast({ text: combinedText, channel: "nft" });
-        if (cast) {
-          registerPost("leaderboard", cast.url, "leaderboard", "farcaster");
-          console.log(`[306:Leaderboard] Farcaster cast posted: ${cast.url}`);
-        }
-      }
-    } catch (fcErr: any) {
-      console.warn("[306:Leaderboard] Farcaster post failed:", fcErr.message);
-    }
+    // DISABLED: Normies-era content engine — not used by Agent 306
+    // X posting, media upload, and Farcaster posting removed
+    console.log("[306:Leaderboard] X/Farcaster posting disabled — Normies-era engine");
 
     // Save state
     saveState({

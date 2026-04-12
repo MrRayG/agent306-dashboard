@@ -1,3 +1,4 @@
+// DISABLED: Normies-era content engine — not used by Agent 306
 /**
  * ─────────────────────────────────────────────────────────────
  *  THE SPOTLIGHT — Weekly Holder Feature
@@ -192,87 +193,10 @@ export async function generateSpotlight(grokKey: string): Promise<{
 }
 
 /** Post the spotlight to X with image card */
+// DISABLED: Normies-era content engine — not used by Agent 306
 export async function postSpotlight(xWrite: any, grokKey: string): Promise<string | null> {
-  if (!requestPost("spotlight")) return null;
-  const spotlight = await generateSpotlight(grokKey);
-  if (!spotlight) return null;
-
-  try {
-    // Generate image card
-    let xMediaId: string | undefined;
-    try {
-      // Try to extract a token ID from the spotlight content or holder data
-      // Fallback: use Agent 306 (token 306) as the featured token on the card
-      let spotlightTokenId: number | undefined = undefined;
-      const tokenMatch = spotlight.narrative?.match(/#(\d{1,5})/) ||
-                         spotlight.tweet?.match(/#(\d{1,5})/);
-      if (tokenMatch) {
-        const id = Number(tokenMatch[1]);
-        if (id > 0 && id <= 9999) spotlightTokenId = id;
-      }
-      // If no holder token found, use Agent 306 as the visual anchor
-      if (!spotlightTokenId) spotlightTokenId = 306;
-
-      const cardBuf = await generateSpotlightCard({
-        holderUsername: spotlight.holderUsername,
-        headline: spotlight.headline,
-        weekLabel: spotlight.weekLabel,
-        featuredTokenId: spotlightTokenId,
-      });
-      if (cardBuf) {
-        xMediaId = await xWrite.v1.uploadMedia(cardBuf, { mimeType: "image/png" as any });
-        console.log(`[Spotlight] Image uploaded — media_id: ${xMediaId}`);
-      }
-    } catch (imgErr: any) {
-      console.log(`[Spotlight] Image generation skipped: ${imgErr.message}`);
-    }
-
-    let tweetUrl: string | null = null;
-    try {
-      const compliance = validateXPost(spotlight.tweet);
-      if (!compliance.allowed) {
-        console.log(`[Spotlight] Skipped by compliance: ${compliance.reason}`);
-      } else {
-        const safeText = compliance.sanitizedContent ?? spotlight.tweet;
-        const tweet = await xWrite.v2.tweet({
-          text: safeText,
-          ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),
-        });
-        const tweetId = tweet.data?.id;
-        tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
-        recordXPost(safeText);
-      }
-    } catch (xErr: any) {
-      console.error("[Spotlight] X post failed:", xErr.message);
-    }
-
-    // Post to Farcaster
-    let castUrl: string | null = null;
-    try {
-      const { postCast, isFarcasterEnabled } = await import("./farcasterEngine.js");
-      if (isFarcasterEnabled()) {
-        const cast = await postCast({ text: spotlight.tweet.slice(0, 2500), channel: "nft" });
-        if (cast) {
-          castUrl = cast.url;
-          registerPost("spotlight", cast.url, "spotlight", "farcaster");
-          console.log(`[Spotlight] Farcaster cast posted: ${cast.url}`);
-        }
-      }
-    } catch (fcErr: any) {
-      console.warn("[Spotlight] Farcaster post failed:", fcErr.message);
-    }
-
-    state.lastPostedAt = new Date().toISOString();
-    state.lastHolderUsername = spotlight.holderUsername;
-    saveState(state);
-
-    registerPost('spotlight', tweetUrl, 'spotlight');
-    console.log(`[Spotlight] Posted — ${tweetUrl}`);
-    return tweetUrl;
-  } catch (e: any) {
-    console.error("[Spotlight] Post error:", e.message);
-    return null;
-  }
+  console.log("[Spotlight] X/Farcaster posting disabled — Normies-era engine");
+  return null;
 }
 
 /** Schedule spotlight — every Sunday 11am ET (15:00 UTC) */

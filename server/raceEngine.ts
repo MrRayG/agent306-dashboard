@@ -1,3 +1,4 @@
+// DISABLED: Normies-era content engine — not used by Agent 306
 /**
  * ─────────────────────────────────────────────────────────────
  *  THE RACE — Weekly AI Roundup
@@ -164,92 +165,10 @@ export async function generateRace(grokKey: string): Promise<{
 }
 
 /** Post the WEEKLY AI ROUNDUP to X with image card */
+// DISABLED: Normies-era content engine — not used by Agent 306
 export async function postRace(xWrite: any, grokKey: string): Promise<string | null> {
-  if (!requestPost("race")) return null;
-  const race = await generateRace(grokKey);
-  if (!race) return null;
-
-  try {
-    // Generate race image card
-    let xMediaId: string | undefined;
-    try {
-      const cardBuf = await generateRaceCard({
-        weekNumber: race.context.weekNumber,
-        weekLabel: race.weekLabel,
-        daysToArena: 0, // field tracking metric
-        headline: race.headline,
-        top5: race.context.top10.slice(0, 5).map((e: any) => ({
-          rank: e.rank, tokenId: e.tokenId ?? 0, level: e.level ?? 0, ap: e.ap ?? e.actionPoints ?? 0,
-        })),
-        totalBurnsThisWeek: race.context.totalDevelopmentsThisWeek,
-      });
-      if (cardBuf) {
-        xMediaId = await xWrite.v1.uploadMedia(cardBuf, { mimeType: "image/png" as any });
-        console.log(`[Race] Image uploaded — media_id: ${xMediaId}`);
-      }
-    } catch (imgErr: any) {
-      console.log(`[Race] Image generation skipped: ${imgErr.message}`);
-    }
-
-    let tweetUrl: string | null = null;
-    try {
-      const compliance = validateXPost(race.tweet);
-      if (!compliance.allowed) {
-        console.log(`[Race] Skipped by compliance: ${compliance.reason}`);
-      } else {
-        const safeText = compliance.sanitizedContent ?? race.tweet;
-        const tweet = await xWrite.v2.tweet({
-          text: safeText,
-          ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),
-        });
-        const tweetId = tweet.data?.id;
-        tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
-        recordXPost(safeText);
-      }
-    } catch (xErr: any) {
-      console.error("[Race] X post failed:", xErr.message);
-    }
-
-    // Post to Farcaster
-    try {
-      const { postCast, isFarcasterEnabled } = await import("./farcasterEngine.js");
-      if (isFarcasterEnabled()) {
-        const cast = await postCast({ text: race.tweet.slice(0, 2500), channel: "nft" });
-        if (cast) {
-          registerPost("race", cast.url, "race", "farcaster");
-          console.log(`[Race] Farcaster cast posted: ${cast.url}`);
-        }
-      }
-    } catch (fcErr: any) {
-      console.warn("[Race] Farcaster post failed:", fcErr.message);
-    }
-
-    // Save this week's record
-    const week: RaceWeek = {
-      weekNumber: race.context.weekNumber,
-      weekLabel: race.weekLabel,
-      postedAt: new Date().toISOString(),
-      tweetUrl,
-      top5: race.context.top10.slice(0, 5).map((e: any) => ({
-        rank: e.rank, topic: e.topic ?? "", momentum: e.momentum ?? 0, mentions: e.mentions ?? e.actionPoints ?? 0,
-      })),
-      totalDevelopments: race.context.totalDevelopmentsThisWeek,
-      weeksTracked: race.context.weeksTracked,
-      headline: race.headline,
-    };
-
-    state.weeks.push(week);
-    state.totalWeeks++;
-    state.lastPostedAt = new Date().toISOString();
-    saveState(state);
-
-    registerPost('race', tweetUrl, `race_week_${week.weekNumber}`);
-    console.log(`[Race] Week ${week.weekNumber} posted — "${race.headline}" — ${tweetUrl}`);
-    return tweetUrl;
-  } catch (e: any) {
-    console.error("[Race] Post error:", e.message);
-    return null;
-  }
+  console.log("[Race] X/Farcaster posting disabled — Normies-era engine");
+  return null;
 }
 
 /** Schedule the WEEKLY AI ROUNDUP — every Sunday 12pm ET (16:00 UTC) — 1h after Spotlight */
