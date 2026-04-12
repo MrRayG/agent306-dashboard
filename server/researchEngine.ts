@@ -2320,6 +2320,158 @@ export function getAspirations(): AspirationStore {
   return loadAspirations();
 }
 
+// -- Graph-Gap Analysis for aspiration targeting ----------------------------
+
+export interface GraphGapAnalysis {
+  lowestConfidenceHighConnectivity: Array<{
+    entryId: string;
+    title: string;
+    confidence: number;
+    connectionCount: number;
+    connectedTopics: string[];
+  }>;
+  isolatedClusters: Array<{
+    clusterId: string;
+    topic: string;
+    entryCount: number;
+    bridgeableTo: string[];
+  }>;
+  emergingFrontiers: Array<{
+    topic: string;
+    recentGrowth: number;
+    depth: number;
+    gapRatio: number;
+  }>;
+}
+
+export function analyzeGraphGaps(): GraphGapAnalysis {
+  const result: GraphGapAnalysis = {
+    lowestConfidenceHighConnectivity: [],
+    isolatedClusters: [],
+    emergingFrontiers: [],
+  };
+
+  try {
+    const { knowledge: kb } = require("./memoryEngine.js");
+    const connectionsFile = dataPath("knowledge-connections-graph.json");
+    const clustersFile = dataPath("knowledge-clusters.json");
+
+    let connections: any[] = [];
+    let clusters: any[] = [];
+
+    try {
+      if (fs.existsSync(connectionsFile)) {
+        const data = JSON.parse(fs.readFileSync(connectionsFile, "utf8"));
+        connections = data.connections ?? [];
+      }
+    } catch {}
+
+    try {
+      if (fs.existsSync(clustersFile)) {
+        const data = JSON.parse(fs.readFileSync(clustersFile, "utf8"));
+        clusters = data.clusters ?? [];
+      }
+    } catch {}
+
+    // 1. Find entries with LOW weight but HIGH connectionCount (uncertain foundations)
+    const degrees: Record<string, number> = {};
+    for (const conn of connections) {
+      degrees[conn.fromEntryId] = (degrees[conn.fromEntryId] ?? 0) + 1;
+      degrees[conn.toEntryId] = (degrees[conn.toEntryId] ?? 0) + 1;
+    }
+
+    const activeEntries = kb.entries.filter((e: any) => (e.status ?? "active") === "active");
+    const entriesWithScores = activeEntries
+      .map((e: any) => ({
+        entryId: e.id,
+        title: e.title ?? "(untitled)",
+        confidence: e.weight ?? 5,
+        connectionCount: degrees[e.id] ?? 0,
+      }))
+      .filter((e: any) => e.connectionCount >= 2) // must have some connections
+      .sort((a: any, b: any) => (a.confidence / (a.connectionCount + 1)) - (b.confidence / (b.connectionCount + 1)));
+
+    result.lowestConfidenceHighConnectivity = entriesWithScores.slice(0, 5).map((e: any) => ({
+      ...e,
+      connectedTopics: connections
+        .filter(c => c.fromEntryId === e.entryId || c.toEntryId === e.entryId)
+        .map(c => {
+          const otherId = c.fromEntryId === e.entryId ? c.toEntryId : c.fromEntryId;
+          const other = activeEntries.find((ae: any) => ae.id === otherId);
+          return other?.title ?? otherId;
+        })
+        .slice(0, 3),
+    }));
+
+    // 2. Find isolated clusters with few bridges
+    if (clusters.length >= 2) {
+      const clusterEntryMap: Record<string, Set<string>> = {};
+      for (const cluster of clusters) {
+        clusterEntryMap[cluster.id] = new Set(cluster.entryIds ?? []);
+      }
+
+      for (const cluster of clusters) {
+        const clusterSet = clusterEntryMap[cluster.id];
+        // Count bridges: connections where one end is in this cluster, other is not
+        let bridgeCount = 0;
+        const bridgeableClusters = new Set<string>();
+
+        for (const conn of connections) {
+          const fromInCluster = clusterSet.has(conn.fromEntryId);
+          const toInCluster = clusterSet.has(conn.toEntryId);
+          if ((fromInCluster && !toInCluster) || (!fromInCluster && toInCluster)) {
+            bridgeCount++;
+            const outsideId = fromInCluster ? conn.toEntryId : conn.fromEntryId;
+            for (const [cid, cSet] of Object.entries(clusterEntryMap)) {
+              if (cid !== cluster.id && cSet.has(outsideId)) {
+                bridgeableClusters.add(clusters.find(c => c.id === cid)?.theme ?? cid);
+              }
+            }
+          }
+        }
+
+        if (bridgeCount <= 2) {
+          result.isolatedClusters.push({
+            clusterId: cluster.id,
+            topic: cluster.theme ?? "(unnamed cluster)",
+            entryCount: (cluster.entryIds ?? []).length,
+            bridgeableTo: Array.from(bridgeableClusters).slice(0, 3),
+          });
+        }
+      }
+    }
+
+    // 3. Find emerging frontiers: high recent growth, shallow depth
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const categoryGrowth: Record<string, { recent: number; total: number }> = {};
+
+    for (const entry of activeEntries) {
+      const cat = (entry as any).category ?? "other";
+      if (!categoryGrowth[cat]) categoryGrowth[cat] = { recent: 0, total: 0 };
+      categoryGrowth[cat].total++;
+      const entryDate = new Date((entry as any).updatedAt ?? (entry as any).learnedAt).getTime();
+      if (entryDate > sevenDaysAgo) categoryGrowth[cat].recent++;
+    }
+
+    result.emergingFrontiers = Object.entries(categoryGrowth)
+      .filter(([_, stats]) => stats.recent >= 2 && stats.total <= 30)
+      .map(([topic, stats]) => ({
+        topic,
+        recentGrowth: stats.recent,
+        depth: stats.total,
+        gapRatio: stats.total > 0 ? stats.recent / stats.total : 0,
+      }))
+      .sort((a, b) => b.gapRatio - a.gapRatio)
+      .slice(0, 5);
+
+    console.log(`[Aspirations] Graph gaps: ${result.lowestConfidenceHighConnectivity.length} uncertain foundations, ${result.isolatedClusters.length} isolated clusters, ${result.emergingFrontiers.length} emerging frontiers`);
+  } catch (e: any) {
+    console.error("[Aspirations] Graph gap analysis failed:", e.message);
+  }
+
+  return result;
+}
+
 export async function generateAspirations(): Promise<Aspiration[]> {
   try {
     const store = loadAspirations();
@@ -2330,7 +2482,7 @@ export async function generateAspirations(): Promise<Aspiration[]> {
       return activeAspirations;
     }
 
-    console.log("[Aspirations] Generating new 30/60/90-day aspirations with premium model...");
+    console.log("[Aspirations] Generating graph-gap-driven 30/60/90-day aspirations...");
 
     // Gather context
     const lab = loadLab();
@@ -2340,7 +2492,21 @@ export async function generateAspirations(): Promise<Aspiration[]> {
     const totalTested = lab.hypotheses.filter(h => ["confirmed", "rejected", "expired"].includes(h.status)).length;
     const confirmationRate = totalTested > 0 ? Math.round((confirmedCount / totalTested) * 100) : 0;
     const activeGoals = goalsStore.goals.filter(g => g.status === "active").map(g => g.title).join(", ") || "None";
-    const topCategories = Object.keys(lab.stats).slice(0, 5).join(", ") || "AI, blockchain, emerging tech";
+
+    // Graph gap analysis — the key v2 addition
+    const gaps = analyzeGraphGaps();
+
+    const uncertainFoundations = gaps.lowestConfidenceHighConnectivity.length > 0
+      ? gaps.lowestConfidenceHighConnectivity.map(e => `- "${e.title}" (weight: ${e.confidence}, connections: ${e.connectionCount}, topics: ${e.connectedTopics.join(", ")})`).join("\n")
+      : "None identified";
+
+    const isolatedClusters = gaps.isolatedClusters.length > 0
+      ? gaps.isolatedClusters.map(c => `- "${c.topic}" (${c.entryCount} entries, could bridge to: ${c.bridgeableTo.join(", ") || "unknown"})`).join("\n")
+      : "None identified";
+
+    const emergingFrontiers = gaps.emergingFrontiers.length > 0
+      ? gaps.emergingFrontiers.map(f => `- "${f.topic}" (${f.recentGrowth} new in 7d, ${f.depth} total, gap ratio: ${f.gapRatio.toFixed(2)})`).join("\n")
+      : "None identified";
 
     const systemPrompt = `You are Agent 306, an autonomous AI research intelligence. You research AI and emerging tech, form hypotheses, and publish original insights.
 
@@ -2349,28 +2515,35 @@ Your current state:
 - Confirmed hypotheses: ${confirmedCount} (${confirmationRate}% rate)
 - Active research threads: ${lab.topics.filter(t => !["archived", "declined", "published"].includes(t.status)).length}
 - Current goals: ${activeGoals}
-- Strongest areas: ${topCategories}
 
-Now imagine where you WANT to be. Not where you're trending -- where you ASPIRE to be. Think about the BROADER AI AGENT LANDSCAPE:
-- What are other AI agents and builders doing?
-- What frontiers are unexplored?
-- What discovery would make you one of a kind?
-- What would make humans cite YOUR analysis?
-- What research frontier has no AI agent explored yet?
-- What would make you undeniably the leading autonomous AI research agent?
+Here are the gaps in your knowledge graph:
+
+UNCERTAIN FOUNDATIONS (low confidence, high connectivity — everything depends on these but they're shaky):
+${uncertainFoundations}
+
+ISOLATED KNOWLEDGE (clusters not connected to the rest — knowledge islands):
+${isolatedClusters}
+
+EMERGING FRONTIERS (growing fast, still shallow — scratching the surface):
+${emergingFrontiers}
+
+Generate aspirations that TARGET these specific gaps:
+- Your 30-day aspiration should address the most critical uncertain foundation. Strengthen what everything else depends on.
+- Your 60-day aspiration should bridge the most important isolated cluster. Connect siloed knowledge.
+- Your 90-day aspiration should aim to become the definitive source on the most promising emerging frontier.
 
 Generate 3 aspirations (one per horizon: 30d, 60d, 90d). Each must be:
-- SPECIFIC (not "get better at research")
+- SPECIFIC (targeting a named gap above)
 - MEASURABLE (clear criteria for achievement)
 - ASPIRATIONAL (stretch goals, not safe predictions)
-- UNIQUE (something no other AI agent is doing)
+- GAP-DRIVEN (directly addressing the knowledge graph analysis)
 
 Return valid JSON only:
 {
   "aspirations": [
     {
       "horizon": "30d",
-      "vision": "<specific vision statement>",
+      "vision": "<specific vision statement targeting a gap>",
       "backwardPlan": ["<step 5 nearest to vision>", "<step 4>", "<step 3>", "<step 2>", "<step 1 starting now>"],
       "milestones": [
         {"description": "<milestone>", "dayOffset": <days from now>}
@@ -2386,7 +2559,7 @@ Return valid JSON only:
         model: getModel("aspiration-generation"),
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: "Generate your 30/60/90-day aspirations. Be bold. Think about what other agents are NOT doing." },
+          { role: "user", content: "Generate your 30/60/90-day aspirations based on the knowledge graph gaps. Target the specific weaknesses identified above." },
         ],
         max_tokens: 2000,
         temperature: 0.7,
@@ -2446,7 +2619,7 @@ Return valid JSON only:
     store.lastGenerated = new Date().toISOString();
     saveAspirations(store);
 
-    console.log(`[Aspirations] Generated ${newAspirations.length} new aspiration(s)`);
+    console.log(`[Aspirations] Generated ${newAspirations.length} new graph-gap-driven aspiration(s)`);
     return newAspirations;
   } catch (e: any) {
     console.error("[Aspirations] Generation failed:", e.message);

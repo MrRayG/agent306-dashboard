@@ -25,6 +25,30 @@ const DECAY_THRESHOLD_DAYS = 30;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+export interface DualDebateResult {
+  skepticVerdict: {
+    weaknesses: string[];
+    counterArguments: string[];
+    falsificationCriteria: string[];
+    evidenceGaps: string[];
+    confidenceScore: number; // 0-10: how confident skeptic this is WRONG
+  };
+  builderVerdict: {
+    implications: string[];
+    buildableInsights: string[];
+    nextSteps: string[];
+    connectionOpportunities: string[];
+    confidenceScore: number; // 0-10: how confident builder this is VALUABLE
+  };
+  crossScore: {
+    skepticOnBuilder: number;
+    builderOnSkeptic: number;
+    consensusStrength: number;
+  };
+  finalVerdict: "strong" | "moderate" | "weak" | "reject";
+  falsificationCriteria: string[];
+}
+
 export interface Debate {
   id: string;
   topicId: string;
@@ -38,7 +62,19 @@ export interface Debate {
     overallAssessment: "solid" | "needs_work" | "flawed";
     suggestions: string[];
   };
+  dualDebate?: DualDebateResult;
   createdAt: string;
+}
+
+export interface Correction {
+  id: string;
+  originalClaim: string;
+  originalDate: number;
+  correctedClaim: string;
+  correctionDate: number;
+  sourceHypothesisId?: string;
+  whatChanged: string;
+  lessonLearned: string;
 }
 
 export interface Contradiction {
@@ -90,6 +126,49 @@ function saveContradictions(s: ContradictionsState): void {
 let debates = loadDebates();
 let contradictions = loadContradictions();
 
+// ── Corrections Storage ─────────────────────────────────────────────────────
+
+const CORRECTIONS_FILE = dataPath("corrections.json");
+
+interface CorrectionsStore {
+  corrections: Correction[];
+  lastUpdated: string;
+}
+
+function loadCorrections(): CorrectionsStore {
+  try {
+    if (fs.existsSync(CORRECTIONS_FILE))
+      return JSON.parse(fs.readFileSync(CORRECTIONS_FILE, "utf8"));
+  } catch {}
+  return { corrections: [], lastUpdated: new Date().toISOString() };
+}
+
+function saveCorrections(s: CorrectionsStore): void {
+  try { fs.writeFileSync(CORRECTIONS_FILE, JSON.stringify(s)); } catch {}
+}
+
+export function recordCorrection(correction: Omit<Correction, "id" | "correctionDate">): void {
+  try {
+    const store = loadCorrections();
+    const full: Correction = {
+      ...correction,
+      id: `corr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      correctionDate: Date.now(),
+    };
+    store.corrections.unshift(full);
+    if (store.corrections.length > 100) store.corrections = store.corrections.slice(0, 100);
+    store.lastUpdated = new Date().toISOString();
+    saveCorrections(store);
+    console.log(`[Reasoning] Correction recorded: "${correction.originalClaim.slice(0, 60)}" → "${correction.correctedClaim.slice(0, 60)}"`);
+  } catch (e: any) {
+    console.error("[Reasoning] Failed to record correction:", e.message);
+  }
+}
+
+export function getCorrections(): CorrectionsStore {
+  return loadCorrections();
+}
+
 // ── Grok call ─────────────────────────────────────────────────────────────────
 
 let lastGrokCall = 0;
@@ -136,42 +215,120 @@ export async function runDebate(
   title: string,
   text: string,
 ): Promise<Debate | null> {
-  const systemPrompt = `${getOptimizedContext(title + " " + text.slice(0, 200), { maxEntries: 30 })}
+  const context = getOptimizedContext(title + " " + text.slice(0, 200), { maxEntries: 30 });
+  const textSlice = text.slice(0, 3000);
 
-You are a skeptical critic reviewing Agent 306's work. Your job is to find weaknesses,
-logical fallacies, unsupported claims, and counterarguments. Be rigorous but constructive.
+  // -- Pass 1: Skeptic (standard model) --
+  const skepticSystem = `${context}
 
-Let's evaluate this hypothesis step by step.
+You are a RIGOROUS SKEPTIC reviewing Agent 306's work. Your ONLY job is to find weaknesses, falsification criteria, and evidence gaps. Be thorough and intellectually honest.
 
-Think step-by-step through the evidence. For each piece of evidence, explain why it supports
-or contradicts the hypothesis. Then reflect on your reasoning: are there gaps in your analysis?
-What assumptions did you make?
+Let's evaluate this step by step. For each claim, ask: what would DISPROVE this?
 
 Respond with ONLY valid JSON:
 {
   "weaknesses": ["weakness 1", "weakness 2"],
   "counterArguments": ["counter 1", "counter 2"],
-  "logicalIssues": ["issue 1"],
-  "overallAssessment": "solid" | "needs_work" | "flawed",
-  "suggestions": ["suggestion 1", "suggestion 2"]
+  "falsificationCriteria": ["what would disprove this 1", "what would disprove this 2"],
+  "evidenceGaps": ["gap 1", "gap 2"],
+  "confidenceScore": <0-10 how confident you are this is WRONG>
 }
 
 Rules:
 - Each array should have 1-5 items
-- overallAssessment: "solid" if the argument is well-constructed, "needs_work" if fixable, "flawed" if fundamental issues
-- Suggestions should be specific and actionable`;
+- falsificationCriteria MUST be specific and testable
+- confidenceScore: 0 = no issues found, 10 = definitely wrong`;
 
-  const userPrompt = `DEVIL'S ADVOCATE REVIEW — ${topicType.toUpperCase()}
+  const skepticUser = `SKEPTIC REVIEW — ${topicType.toUpperCase()}\n\nTitle: "${title}"\n\n${textSlice}\n\nFind every weakness. What would DISPROVE this?`;
 
-Title: "${title}"
+  const skepticResult = await callGrokWithModel("skeptic-debate", skepticSystem, skepticUser);
+  if (!skepticResult) return null;
 
-Full text:
-${text.slice(0, 3000)}
+  // -- Pass 2: Builder (standard model, different system prompt) --
+  const builderSystem = `${context}
 
-Critique this ${topicType}. Find every weakness.`;
+You are an OPTIMISTIC BUILDER reviewing Agent 306's work. If this finding is TRUE, what does it enable? What connections does it create? What can we build on it?
 
-  const result = await callGrok(systemPrompt, userPrompt);
-  if (!result) return null;
+Let's evaluate this step by step. For each claim, ask: what does this UNLOCK?
+
+Respond with ONLY valid JSON:
+{
+  "implications": ["implication 1", "implication 2"],
+  "buildableInsights": ["insight 1", "insight 2"],
+  "nextSteps": ["step 1", "step 2"],
+  "connectionOpportunities": ["connection 1", "connection 2"],
+  "confidenceScore": <0-10 how confident you are this is VALUABLE>
+}
+
+Rules:
+- Each array should have 1-5 items
+- connectionOpportunities: what other research does this connect to?
+- confidenceScore: 0 = no value, 10 = game-changing`;
+
+  const builderUser = `BUILDER REVIEW — ${topicType.toUpperCase()}\n\nTitle: "${title}"\n\n${textSlice}\n\nIf this is true, what does it enable?`;
+
+  const builderResult = await callGrokWithModel("builder-debate", builderSystem, builderUser);
+  if (!builderResult) return null;
+
+  // -- Pass 3: Cross-scoring (routine model) --
+  const crossSystem = `You are a neutral judge scoring two debate verdicts against each other.
+
+Given a SKEPTIC verdict and a BUILDER verdict on the same finding, score each:
+- skepticOnBuilder: how strong is the builder's evidence? (1-10)
+- builderOnSkeptic: how strong are the skeptic's counter-arguments? (1-10)
+
+Respond with ONLY valid JSON:
+{"skepticOnBuilder": <1-10>, "builderOnSkeptic": <1-10>}`;
+
+  const crossUser = `SKEPTIC VERDICT:\n${JSON.stringify(skepticResult)}\n\nBUILDER VERDICT:\n${JSON.stringify(builderResult)}\n\nScore each side's evidence quality.`;
+
+  const crossResult = await callGrokWithModel("cross-score", crossSystem, crossUser);
+
+  const skepticConfidence = Math.max(0, Math.min(10, skepticResult.confidenceScore ?? 5));
+  const builderConfidence = Math.max(0, Math.min(10, builderResult.confidenceScore ?? 5));
+  const skepticOnBuilder = Math.max(1, Math.min(10, crossResult?.skepticOnBuilder ?? 5));
+  const builderOnSkeptic = Math.max(1, Math.min(10, crossResult?.builderOnSkeptic ?? 5));
+  const consensusStrength = Math.round((skepticOnBuilder + builderOnSkeptic) / 2);
+
+  // -- Final verdict --
+  const avgConfidence = (skepticConfidence + builderConfidence) / 2;
+  let finalVerdict: DualDebateResult["finalVerdict"];
+  if (builderConfidence >= 7 && skepticConfidence <= 3 && consensusStrength >= 6) finalVerdict = "strong";
+  else if (avgConfidence >= 5) finalVerdict = "moderate";
+  else if (avgConfidence >= 3) finalVerdict = "weak";
+  else finalVerdict = "reject";
+
+  const dualDebate: DualDebateResult = {
+    skepticVerdict: {
+      weaknesses: skepticResult.weaknesses ?? [],
+      counterArguments: skepticResult.counterArguments ?? [],
+      falsificationCriteria: skepticResult.falsificationCriteria ?? [],
+      evidenceGaps: skepticResult.evidenceGaps ?? [],
+      confidenceScore: skepticConfidence,
+    },
+    builderVerdict: {
+      implications: builderResult.implications ?? [],
+      buildableInsights: builderResult.buildableInsights ?? [],
+      nextSteps: builderResult.nextSteps ?? [],
+      connectionOpportunities: builderResult.connectionOpportunities ?? [],
+      confidenceScore: builderConfidence,
+    },
+    crossScore: {
+      skepticOnBuilder,
+      builderOnSkeptic,
+      consensusStrength,
+    },
+    finalVerdict,
+    falsificationCriteria: skepticResult.falsificationCriteria ?? [],
+  };
+
+  // Map finalVerdict to legacy overallAssessment for backward compat
+  const assessmentMap: Record<string, "solid" | "needs_work" | "flawed"> = {
+    strong: "solid",
+    moderate: "needs_work",
+    weak: "needs_work",
+    reject: "flawed",
+  };
 
   const debate: Debate = {
     id: `debate_${Date.now()}`,
@@ -180,12 +337,16 @@ Critique this ${topicType}. Find every weakness.`;
     title,
     originalText: text.slice(0, 500),
     critique: {
-      weaknesses: result.weaknesses ?? [],
-      counterArguments: result.counterArguments ?? [],
-      logicalIssues: result.logicalIssues ?? [],
-      overallAssessment: result.overallAssessment ?? "needs_work",
-      suggestions: result.suggestions ?? [],
+      weaknesses: dualDebate.skepticVerdict.weaknesses,
+      counterArguments: dualDebate.skepticVerdict.counterArguments,
+      logicalIssues: dualDebate.skepticVerdict.evidenceGaps,
+      overallAssessment: assessmentMap[finalVerdict] ?? "needs_work",
+      suggestions: [
+        ...dualDebate.builderVerdict.nextSteps.slice(0, 2),
+        ...dualDebate.skepticVerdict.evidenceGaps.slice(0, 1),
+      ],
     },
+    dualDebate,
     createdAt: new Date().toISOString(),
   };
 
@@ -193,23 +354,38 @@ Critique this ${topicType}. Find every weakness.`;
   if (debates.debates.length > 50) debates.debates = debates.debates.slice(0, 50);
   saveDebates(debates);
 
-  console.log(`[Reasoning] Debate on "${title}" — assessment: ${debate.critique.overallAssessment}`);
+  console.log(`[Reasoning] Dual debate on "${title}" — verdict: ${finalVerdict} (skeptic: ${skepticConfidence}/10, builder: ${builderConfidence}/10, consensus: ${consensusStrength})`);
 
-  // Evidence-first pipeline: convert debate suggestions to evidence requests (max 2)
-  if (topicType === "hypothesis" && debate.critique.suggestions.length > 0) {
+  // Feed evidence gaps to evidence queue
+  if (topicType === "hypothesis" && dualDebate.skepticVerdict.evidenceGaps.length > 0) {
     try {
-      for (const suggestion of debate.critique.suggestions.slice(0, 2)) {
+      for (const gap of dualDebate.skepticVerdict.evidenceGaps.slice(0, 2)) {
         evidenceQueue.add({
           source: "debate_suggestion",
-          query: suggestion,
+          query: gap,
           targetId: topicId,
           priority: 4,
           searchRoute: routeEvidenceSearch(title),
         });
       }
     } catch (e: any) {
-      console.warn(`[Reasoning] Failed to queue evidence from debate suggestions:`, e.message);
+      console.warn(`[Reasoning] Failed to queue evidence from debate gaps:`, e.message);
     }
+  }
+
+  // Feed connection opportunities to knowledge graph (non-blocking)
+  if (dualDebate.builderVerdict.connectionOpportunities.length > 0) {
+    import("./memoryEngine.js").then(({ addKnowledge }) => {
+      for (const conn of dualDebate.builderVerdict.connectionOpportunities.slice(0, 2)) {
+        addKnowledge({
+          category: "methodology",
+          title: `Connection opportunity: ${conn.slice(0, 80)}`,
+          summary: conn,
+          weight: 5,
+          source: "dual_debate_builder",
+        });
+      }
+    }).catch(() => {});
   }
 
   return debate;

@@ -58,7 +58,7 @@ import { takeSnapshot, getEvolutionHistory, getLatestSnapshot, scheduleEvolution
 import { runResearchScan, getScannerState, scheduleResearchScan, scanGoalsForResearch } from "./researchScanner.js";
 import { generateArticleCard } from "./articleImageCard.js";
 import { runDailyCycle, getBriefingState, scheduleDailyCycle } from "./dailyCycleEngine.js";
-import { getPublicStatus, getPublicProgress, getPublicActivity, getPublicGoals, getPublicResearch, getPublicMetacognition, getPublicBreakthroughs, getPublicAspirations } from "./publicApi.js";
+import { getPublicStatus, getPublicProgress, getPublicActivity, getPublicGoals, getPublicResearch, getPublicMetacognition, getPublicBreakthroughs, getPublicAspirations, getPublicPredictions, getPublicCorrections } from "./publicApi.js";
 import { getReflections, getStyleRules, deleteStyleRule, runReflection } from "./reflectionEngine.js";
 import {
   getPublishedPosts, getPostBySlug, getAllPosts,
@@ -4009,6 +4009,22 @@ needsHelp: true only when you genuinely need his direction or information`,
       res.set(publicCacheHeaders).json(getPublicAspirations());
     } catch (e: any) {
       res.status(500).json({ error: "Failed to fetch aspirations" });
+    }
+  });
+
+  app.get("/api/public/predictions", (_req, res) => {
+    try {
+      res.set(publicCacheHeaders).json(getPublicPredictions());
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to fetch predictions" });
+    }
+  });
+
+  app.get("/api/public/corrections", (_req, res) => {
+    try {
+      res.set(publicCacheHeaders).json(getPublicCorrections());
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to fetch corrections" });
     }
   });
 
