@@ -20,6 +20,7 @@ import * as https from "https";
 import * as http from "http";
 import { generateBurnVideo } from "./videoEngine.js";
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
+import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 
@@ -674,12 +675,19 @@ export async function processBurnReceipt(
 
   // 4. Post tweet
   try {
-    const tweet = await xWrite.v2.tweet({
-      text: tweetText,
-      ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),
-    });
-    console.log(`[BurnReceipt] Posted burn receipt — tweet: ${tweet.data?.id}`);
-    registerPost(`burn_${burn.commitId}`, `https://x.com/agent3zero6/status/${tweet.data?.id}`, 'burn_receipt');
+    const compliance = validateXPost(tweetText);
+    if (!compliance.allowed) {
+      console.log(`[BurnReceipt] Skipped by compliance: ${compliance.reason}`);
+    } else {
+      const safeText = compliance.sanitizedContent ?? tweetText;
+      const tweet = await xWrite.v2.tweet({
+        text: safeText,
+        ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),
+      });
+      console.log(`[BurnReceipt] Posted burn receipt — tweet: ${tweet.data?.id}`);
+      recordXPost(safeText);
+      registerPost(`burn_${burn.commitId}`, `https://x.com/agent3zero6/status/${tweet.data?.id}`, 'burn_receipt');
+    }
   } catch (tweetErr: any) {
     console.error("[BurnReceipt] Tweet failed:", tweetErr.message);
   }

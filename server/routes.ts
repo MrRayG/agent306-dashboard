@@ -33,6 +33,7 @@ import { generateAudio, getAudioFilePath, getAudioAssets, saveAudioAsset, getAud
 import multer from "multer";
 import { getVideoStats } from "./videoEngine.js";
 import { requestPost, registerPost, releasePost, getCoordinatorState, resetCooldown } from "./postCoordinator.js";
+import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import { runWeeklyDeepRead, previewDeepRead, getArticleState, scheduleWeeklyArticle } from "./articleEngine.js";
 import { runExploration, getExplorationState, scheduleExploration } from "./explorationEngine.js";
 import { getAgentReachStatus } from "./agentReachEngine.js";
@@ -510,25 +511,32 @@ Respond as JSON only: { "score": number, "reason": "brief reason", "rewrite": "i
     let openerTweetId: string | undefined;
 
     try {
-      const openerTweet = await xWrite.v2.tweet({
-        text: finalTweetText,
-        ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),
-      });
-      openerTweetId = openerTweet.data?.id;
-      tweetUrl = openerTweetId ? `https://x.com/agent3zero6/status/${openerTweetId}` : `https://x.com/agent3zero6`;
-      storage.updateEpisodeStatus(episode.id, "posted", tweetUrl);
-      pollerStatus.lastTweetUrl = tweetUrl;
-      console.log(`[Agent306] EP${epNum} opener posted${xMediaId ? " with image" : ""}: ${tweetUrl}`);
-      // Record in memory + queue engagement check
-      recordPost({
-        episodeId: epNum,
-        tweetUrl,
-        tweetText: finalTweetText,
-        qualityScore: episode.qualityScore ?? 7,
-        sentiment: grokResult.sentiment,
-        signals: sources,
-      });
-      queueEngagementCheck(tweetUrl);
+      const compliance = validateXPost(finalTweetText);
+      if (!compliance.allowed) {
+        console.log(`[Agent306] EP${epNum} opener skipped by compliance: ${compliance.reason}`);
+      } else {
+        const postText = compliance.sanitizedContent ?? finalTweetText;
+        const openerTweet = await xWrite.v2.tweet({
+          text: postText,
+          ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),
+        });
+        openerTweetId = openerTweet.data?.id;
+        tweetUrl = openerTweetId ? `https://x.com/agent3zero6/status/${openerTweetId}` : `https://x.com/agent3zero6`;
+        storage.updateEpisodeStatus(episode.id, "posted", tweetUrl);
+        pollerStatus.lastTweetUrl = tweetUrl;
+        console.log(`[Agent306] EP${epNum} opener posted${xMediaId ? " with image" : ""}: ${tweetUrl}`);
+        recordXPost(postText);
+        // Record in memory + queue engagement check
+        recordPost({
+          episodeId: epNum,
+          tweetUrl,
+          tweetText: postText,
+          qualityScore: episode.qualityScore ?? 7,
+          sentiment: grokResult.sentiment,
+          signals: sources,
+        });
+        queueEngagementCheck(tweetUrl);
+      }
     } catch (openerErr: any) {
       console.error("[Agent306] Opener tweet failed:", openerErr.message);
     }
@@ -717,10 +725,16 @@ Return JSON: {"post": "..."}`
     // ── 3. Post single dispatch ──────────────────────────────────────
     let lastTweetId: string | undefined;
     try {
-      const payload: any = { text: postText.trim() };
-      const result = await xWrite.v2.tweet(payload);
-      lastTweetId = result.data?.id;
-      console.log(`[Agent306:News] Dispatch posted — ${lastTweetId} (${postText.length} chars)`);
+      const compliance = validateXPost(postText.trim());
+      if (!compliance.allowed) {
+        console.log(`[Agent306:News] Dispatch skipped by compliance: ${compliance.reason}`);
+      } else {
+        const safeText = compliance.sanitizedContent ?? postText.trim();
+        const result = await xWrite.v2.tweet({ text: safeText });
+        lastTweetId = result.data?.id;
+        recordXPost(safeText);
+        console.log(`[Agent306:News] Dispatch posted — ${lastTweetId} (${safeText.length} chars)`);
+      }
     } catch (e: any) {
       console.error(`[Agent306:News] Post failed:`, e.message);
     }
@@ -1037,10 +1051,16 @@ export function registerRoutes(httpServer: Server, app: Express) {
     if (!text) return res.status(400).json({ error: "text is required" });
 
     try {
+      const compliance = validateXPost(text);
+      if (!compliance.allowed) {
+        return res.status(429).json({ error: `Compliance guard: ${compliance.reason}` });
+      }
+      const safeText = compliance.sanitizedContent ?? text;
       // Single auth: OAuth 1.0a only — no OAuth 2.0 complexity
       let tweetId: string | undefined;
-      const tweet = await xWrite.v2.tweet(text);
+      const tweet = await xWrite.v2.tweet(safeText);
       tweetId = tweet.data?.id;
+      recordXPost(safeText);
 
       const tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : undefined;
       if (episodeId) storage.updateEpisodeStatus(Number(episodeId), "posted", tweetUrl);
@@ -1212,6 +1232,11 @@ export function registerRoutes(httpServer: Server, app: Express) {
     const { text, imageUrl } = req.body;
     if (!text) return res.status(400).json({ error: "text required" });
     try {
+      const compliance = validateXPost(text);
+      if (!compliance.allowed) {
+        return res.status(429).json({ error: `Compliance guard: ${compliance.reason}` });
+      }
+      const safeText = compliance.sanitizedContent ?? text;
       let mediaId: string | undefined;
       if (imageUrl) {
         const imgRes = await fetch(imageUrl);
@@ -1221,10 +1246,11 @@ export function registerRoutes(httpServer: Server, app: Express) {
         }
       }
       const tweet = await xWrite.v2.tweet({
-        text,
+        text: safeText,
         ...(mediaId ? { media: { media_ids: [mediaId] } } : {}),
       });
       const tweetId = tweet.data?.id;
+      recordXPost(safeText);
       const tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : undefined;
       res.json({ ok: true, tweetId, tweetUrl, mediaId });
     } catch (e: any) {
@@ -1599,11 +1625,18 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
         // Post to X
         try {
-          const tweet = await xWrite.v2.tweet({ text: postText.trim() });
-          const tweetId = tweet.data?.id;
-          const tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
-          registerPost("race", tweetUrl, "ai_roundup");
-          console.log("[AIRoundup] Posted to X:", tweetUrl);
+          const compliance = validateXPost(postText.trim());
+          if (!compliance.allowed) {
+            console.log(`[AIRoundup] Skipped by compliance: ${compliance.reason}`);
+          } else {
+            const safeText = compliance.sanitizedContent ?? postText.trim();
+            const tweet = await xWrite.v2.tweet({ text: safeText });
+            const tweetId = tweet.data?.id;
+            const tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
+            recordXPost(safeText);
+            registerPost("race", tweetUrl, "ai_roundup");
+            console.log("[AIRoundup] Posted to X:", tweetUrl);
+          }
         } catch (e: any) { console.error("[AIRoundup] X post failed:", e.message); }
 
         // Post to Farcaster
@@ -2196,9 +2229,16 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
       // Post to X
       try {
-        const result = await xWrite.v2.tweet({ text: tweet.trim() });
-        const tweetId = result.data?.id;
-        tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
+        const compliance = validateXPost(tweet.trim());
+        if (!compliance.allowed) {
+          console.log(`[CommunityBoost] Skipped by compliance: ${compliance.reason}`);
+        } else {
+          const safeText = compliance.sanitizedContent ?? tweet.trim();
+          const result = await xWrite.v2.tweet({ text: safeText });
+          const tweetId = result.data?.id;
+          tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
+          recordXPost(safeText);
+        }
       } catch (xErr: any) {
         console.error("[CommunityBoost] X post failed:", xErr.message);
       }
@@ -2305,11 +2345,18 @@ export function registerRoutes(httpServer: Server, app: Express) {
         // Post to X
         let tweetUrl = null;
         try {
-          const tweet = await xWrite.v2.tweet({ text: postText.trim() });
-          const tweetId = tweet.data?.id;
-          tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
-          registerPost("cyoa", tweetUrl, "research_brief");
-          console.log("[ResearchBrief] Posted to X:", tweetUrl);
+          const compliance = validateXPost(postText.trim());
+          if (!compliance.allowed) {
+            console.log(`[ResearchBrief] Skipped by compliance: ${compliance.reason}`);
+          } else {
+            const safeText = compliance.sanitizedContent ?? postText.trim();
+            const tweet = await xWrite.v2.tweet({ text: safeText });
+            const tweetId = tweet.data?.id;
+            tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
+            recordXPost(safeText);
+            registerPost("cyoa", tweetUrl, "research_brief");
+            console.log("[ResearchBrief] Posted to X:", tweetUrl);
+          }
         } catch (e: any) { console.error("[ResearchBrief] X post failed:", e.message); }
 
         // Post to Farcaster
@@ -2357,12 +2404,18 @@ export function registerRoutes(httpServer: Server, app: Express) {
     let xMediaId: string | undefined;
 
     try {
+      const compliance = validateXPost(tweetText);
+      if (!compliance.allowed) {
+        return res.status(429).json({ error: `Compliance guard: ${compliance.reason}` });
+      }
+      const safeText = compliance.sanitizedContent ?? tweetText;
       const tweet = await xWrite.v2.tweet({
-        text: tweetText,
+        text: safeText,
         ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),
       });
       const tweetId = tweet.data?.id;
       if (!tweetId) return res.status(500).json({ error: "Tweet failed" });
+      recordXPost(safeText);
 
       // Update episode state
       episode.pollTweetId = tweetId;

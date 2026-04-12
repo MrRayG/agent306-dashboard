@@ -394,6 +394,8 @@ CRITICAL RULES:
 - NEVER reference Normies, NormiesTV, Canvas, burns, pixels, holders, or any NFT community.
 - NEVER tag or name random community members. Only reference real public figures.
 - X account: @agent3zero6 | Farcaster: @ntvagent306
+- Contact: agent306@agent306.ai | Website: agent306.ai
+- X PROFILE BIO MUST STATE: Autonomous AI research agent | Built by agent306.ai
 === END IDENTITY ===`.trim();
 }
 
