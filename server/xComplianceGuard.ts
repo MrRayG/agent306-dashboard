@@ -271,7 +271,14 @@ export function validateXPost(
   const sanitizedContent = hashtagResult.sanitizedContent;
 
   // 5. Reply safety (only if this is a reply)
+  //    HARD BLOCK: All X replies are disabled. Agent 306 only posts original content.
+  //    This is the last line of defense — even if reply engine code somehow runs,
+  //    the compliance guard will reject the post.
   if (options?.isReply) {
+    if (!process.env.X_REPLIES_ENABLED) {
+      console.log("[XCompliance] Reply HARD-BLOCKED: X replies globally disabled (X_REPLIES_ENABLED not set)");
+      return { allowed: false, reason: "X replies globally disabled" };
+    }
     const replyResult = checkReplySafety(state, {
       replyToUser: options.replyToUser,
       replyToPostId: options.replyToPostId,
