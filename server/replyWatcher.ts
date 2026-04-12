@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // 306 — REPLY WATCHER
-// Fetches mentions/replies to @agent306 via TWO sources:
+// Fetches mentions/replies to @306Agent via TWO sources:
 //   1. Twitter API v2 userMentionTimeline (primary — reliable, structured data)
 //   2. Grok x_search (supplementary — finds quote tweets and keyword mentions)
 //
@@ -28,9 +28,9 @@ export function initReplyWatcher(client: any): void {
   client.v2.me().then((me: any) => {
     agent306UserId = me.data?.id ?? null;
     if (agent306UserId) {
-      console.log(`[ReplyWatcher] Initialized — @agent306 user ID: ${agent306UserId}`);
+      console.log(`[ReplyWatcher] Initialized — @306Agent user ID: ${agent306UserId}`);
     } else {
-      console.warn("[ReplyWatcher] Could not resolve @agent306 user ID — mentions fetch will use Grok only");
+      console.warn("[ReplyWatcher] Could not resolve @306Agent user ID — mentions fetch will use Grok only");
     }
   }).catch((err: any) => {
     console.warn("[ReplyWatcher] Failed to get user ID:", err.message);
@@ -213,16 +213,16 @@ async function fetchMentionsViaGrok(): Promise<CommunityReply[]> {
         stream: false,
         input: [{
           role: "user",
-          content: `Search X for recent engagement with @agent306 from the last 3 hours.
+          content: `Search X for recent engagement with @306Agent from the last 3 hours.
 
-PRIORITY: Always include any posts from @MrRayG that mention or engage with @agent306.
-@MrRayG is the owner/operator of @agent306 — his messages are highest priority.
+PRIORITY: Always include any posts from @MrRayG that mention or engage with @306Agent.
+@MrRayG is the owner/operator of @306Agent — his messages are highest priority.
 
 Focus on things the Twitter mentions API might miss:
-1. All posts from @MrRayG tagging @agent306 or asking Agent 306 anything
-2. Quote tweets of @agent306 posts
+1. All posts from @MrRayG tagging @306Agent or asking Agent 306 anything
+2. Quote tweets of @306Agent posts
 3. Posts mentioning "306" or "Agent 306" without directly @mentioning the account
-4. Threaded conversations where @agent306 was mentioned earlier
+4. Threaded conversations where @306Agent was mentioned earlier
 
 Do NOT include direct replies or @mentions — those are already captured separately.
 
@@ -291,7 +291,7 @@ Return JSON array (max 10):
 }
 
 // ── SOURCE 3: Dedicated @MrRayG monitor — highest priority ─────────────────
-// Checks for any recent posts from @MrRayG mentioning @agent306 or Agent 306.
+// Checks for any recent posts from @MrRayG mentioning @306Agent or Agent 306.
 // This catches "DM-style" mentions, questions, and prompts from the operator.
 // Also detects non-ecosystem topics that Agent 306 should research and respond to.
 async function fetchMrRayGMentions(): Promise<CommunityReply[]> {
@@ -311,9 +311,9 @@ async function fetchMrRayGMentions(): Promise<CommunityReply[]> {
           content: `Search X for ALL recent posts from @MrRayG from the last 24 hours.
 
 I need every post from @MrRayG, especially:
-1. Any post that @mentions @agent306 or asks Agent 306 anything
-2. Any post sharing articles, news, or tech/AI content (even if not mentioning @agent306)
-3. Any direct message-style posts addressed to @agent306
+1. Any post that @mentions @306Agent or asks Agent 306 anything
+2. Any post sharing articles, news, or tech/AI content (even if not mentioning @306Agent)
+3. Any direct message-style posts addressed to @306Agent
 4. Any post about AI, technology, blockchain, NFTs, or anything @MrRayG seems to want Agent 306 to know about
 
 Return JSON array:

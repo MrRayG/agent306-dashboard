@@ -488,7 +488,7 @@ Return JSON: {"t1": "...", "t2": "...", "t3": "..."}`;
     }
 
     console.log(`[306:Leaderboard] Thread posted — ${lastTweetId}`);
-    registerPost("leaderboard", lastTweetId ? `https://x.com/agent3zero6/status/${lastTweetId}` : null, "leaderboard");
+    registerPost("leaderboard", lastTweetId ? `https://x.com/306Agent/status/${lastTweetId}` : null, "leaderboard");
 
     // Post to Farcaster (combined thread as single cast)
     try {

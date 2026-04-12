@@ -137,7 +137,7 @@ export default function CommunityBoost() {
           COMMUNITY BOOST
         </h1>
         <p style={{ ...mono, fontSize: "0.88rem", color: "rgba(227,229,228,0.45)", margin: 0, lineHeight: 1.6 }}>
-          Drop a link to anything a co-creator built. Agent 306 reads it, drafts a shoutout, you approve and post from @agent3zero6.
+          Drop a link to anything a co-creator built. Agent 306 reads it, drafts a shoutout, you approve and post from @306Agent.
         </p>
       </div>
 
@@ -323,7 +323,7 @@ export default function CommunityBoost() {
               {draft.showTag}
             </span>
             <span style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.40)" }}>
-              posting as @agent3zero6
+              posting as @306Agent
             </span>
           </div>
 

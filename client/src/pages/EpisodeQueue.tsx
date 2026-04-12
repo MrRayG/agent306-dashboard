@@ -259,7 +259,7 @@ function PendingCard({ ep, onMarkPosted, isPosting }: {
               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                 <Twitter style={{ width: 11, height: 11, color: "rgba(227,229,228,0.60)" }} />
                 <span style={{ ...mono, fontSize: "0.73rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "rgba(227,229,228,0.48)" }}>
-                  tweet · @agent3zero6
+                  tweet · @306Agent
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

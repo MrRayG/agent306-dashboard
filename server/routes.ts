@@ -515,7 +515,7 @@ Respond as JSON only: { "score": number, "reason": "brief reason", "rewrite": "i
         ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),
       });
       openerTweetId = openerTweet.data?.id;
-      tweetUrl = openerTweetId ? `https://x.com/agent3zero6/status/${openerTweetId}` : `https://x.com/agent3zero6`;
+      tweetUrl = openerTweetId ? `https://x.com/306Agent/status/${openerTweetId}` : `https://x.com/306Agent`;
       storage.updateEpisodeStatus(episode.id, "posted", tweetUrl);
       pollerStatus.lastTweetUrl = tweetUrl;
       console.log(`[Agent306] EP${epNum} opener posted${xMediaId ? " with image" : ""}: ${tweetUrl}`);
@@ -725,12 +725,12 @@ Return JSON: {"post": "..."}`
       console.error(`[Agent306:News] Post failed:`, e.message);
     }
 
-    registerPost("news_dispatch", lastTweetId ? `https://x.com/agent3zero6/status/${lastTweetId}` : null, "news_dispatch");
+    registerPost("news_dispatch", lastTweetId ? `https://x.com/306Agent/status/${lastTweetId}` : null, "news_dispatch");
 
     // ── 5. Post to Farcaster ───────────────────────────────────────────────
     try {
       if (isFarcasterEnabled() && postText.trim().length > 10) {
-        const tweetUrl = lastTweetId ? `https://x.com/agent3zero6/status/${lastTweetId}` : undefined;
+        const tweetUrl = lastTweetId ? `https://x.com/306Agent/status/${lastTweetId}` : undefined;
         const channel = postText.match(/\bai\b|agent|llm|model/i) ? "ai" : undefined;
         const cast = await postCast({
           text: postText.trim().slice(0, 2500),
@@ -1042,7 +1042,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       const tweet = await xWrite.v2.tweet(text);
       tweetId = tweet.data?.id;
 
-      const tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : undefined;
+      const tweetUrl = tweetId ? `https://x.com/306Agent/status/${tweetId}` : undefined;
       if (episodeId) storage.updateEpisodeStatus(Number(episodeId), "posted", tweetUrl);
       res.json({ ok: true, tweetId, tweetUrl });
     } catch (e: any) {
@@ -1060,7 +1060,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       const tweet = await xWrite.v2.tweet({ text: testText });
       const tweetId = tweet.data?.id;
       if (tweetId) {
-        res.json({ ok: true, tweetId, url: `https://x.com/agent3zero6/status/${tweetId}`, text: testText });
+        res.json({ ok: true, tweetId, url: `https://x.com/306Agent/status/${tweetId}`, text: testText });
       } else {
         res.json({ ok: false, error: "Tweet sent but no ID returned", raw: JSON.stringify(tweet.data).slice(0, 500) });
       }
@@ -1225,7 +1225,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
         ...(mediaId ? { media: { media_ids: [mediaId] } } : {}),
       });
       const tweetId = tweet.data?.id;
-      const tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : undefined;
+      const tweetUrl = tweetId ? `https://x.com/306Agent/status/${tweetId}` : undefined;
       res.json({ ok: true, tweetId, tweetUrl, mediaId });
     } catch (e: any) {
       console.error("[Agent306] post-with-media error:", e.message);
@@ -1581,7 +1581,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
           body: JSON.stringify({
             model: getModel("ai-roundup"),
             messages: [
-              { role: "system", content: `${agentCtx}\n\nKNOWLEDGE:\n${kbCtx}\n\nYou are Agent 306 writing a [306 ROUNDUP] — a weekly roundup of the biggest AI developments, model releases, and industry moves.\n\nLIVE DATA FROM THIS WEEK:\n${liveData || "No live data available — use your knowledge base."}\n\nFORMAT:\n- [306 ROUNDUP] header\n- 4-5 items, each with a bold headline + 1-2 sentence take\n- Your POV on each — not just what happened, but why it matters\n- Closing line: one thesis tying it all together\n- Max 2800 characters for X\n- Sign: @agent3zero6\n- NEVER mention Normies, NFTs, burns, holders\n\nReturn JSON: {"post": "full roundup text"}` },
+              { role: "system", content: `${agentCtx}\n\nKNOWLEDGE:\n${kbCtx}\n\nYou are Agent 306 writing a [306 ROUNDUP] — a weekly roundup of the biggest AI developments, model releases, and industry moves.\n\nLIVE DATA FROM THIS WEEK:\n${liveData || "No live data available — use your knowledge base."}\n\nFORMAT:\n- [306 ROUNDUP] header\n- 4-5 items, each with a bold headline + 1-2 sentence take\n- Your POV on each — not just what happened, but why it matters\n- Closing line: one thesis tying it all together\n- Max 2800 characters for X\n- Sign: @306Agent\n- NEVER mention Normies, NFTs, burns, holders\n\nReturn JSON: {"post": "full roundup text"}` },
               { role: "user", content: "Write this week\'s [306 ROUNDUP] covering the biggest AI developments." }
             ],
             max_tokens: 3000,
@@ -1601,7 +1601,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
         try {
           const tweet = await xWrite.v2.tweet({ text: postText.trim() });
           const tweetId = tweet.data?.id;
-          const tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
+          const tweetUrl = tweetId ? `https://x.com/306Agent/status/${tweetId}` : null;
           registerPost("race", tweetUrl, "ai_roundup");
           console.log("[AIRoundup] Posted to X:", tweetUrl);
         } catch (e: any) { console.error("[AIRoundup] X post failed:", e.message); }
@@ -2198,7 +2198,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       try {
         const result = await xWrite.v2.tweet({ text: tweet.trim() });
         const tweetId = result.data?.id;
-        tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
+        tweetUrl = tweetId ? `https://x.com/306Agent/status/${tweetId}` : null;
       } catch (xErr: any) {
         console.error("[CommunityBoost] X post failed:", xErr.message);
       }
@@ -2286,7 +2286,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
           body: JSON.stringify({
             model: getModel("research-brief"),
             messages: [
-              { role: "system", content: `${agentCtx}\n\nKNOWLEDGE:\n${kbCtx}\n\nYou are Agent 306 writing a [306 RESEARCH] brief. This is a deeper analytical piece on a specific AI or crypto topic you\'ve been investigating. Write from your knowledge base — reference specific findings, data points, and your own analysis. Your voice is direct, substantive, and insightful. Not a news summary — this is YOUR research perspective.\n\nRULES:\n- Write 800-1200 characters for X posting\n- Lead with your thesis, not background\n- Include specific data, names, or numbers\n- End with a forward-looking insight\n- Tag: [306 RESEARCH]\n- Sign: @agent3zero6\n- NEVER mention Normies, NFTs, burns, holders, or any old identity\n\nReturn JSON: {"post": "your full research brief text", "topic": "2-4 word topic label"}` },
+              { role: "system", content: `${agentCtx}\n\nKNOWLEDGE:\n${kbCtx}\n\nYou are Agent 306 writing a [306 RESEARCH] brief. This is a deeper analytical piece on a specific AI or crypto topic you\'ve been investigating. Write from your knowledge base — reference specific findings, data points, and your own analysis. Your voice is direct, substantive, and insightful. Not a news summary — this is YOUR research perspective.\n\nRULES:\n- Write 800-1200 characters for X posting\n- Lead with your thesis, not background\n- Include specific data, names, or numbers\n- End with a forward-looking insight\n- Tag: [306 RESEARCH]\n- Sign: @306Agent\n- NEVER mention Normies, NFTs, burns, holders, or any old identity\n\nReturn JSON: {"post": "your full research brief text", "topic": "2-4 word topic label"}` },
               { role: "user", content: "Write a [306 RESEARCH] brief on the most important topic from your current knowledge base. Pick something timely and substantive." }
             ],
             max_tokens: 2000,
@@ -2307,7 +2307,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
         try {
           const tweet = await xWrite.v2.tweet({ text: postText.trim() });
           const tweetId = tweet.data?.id;
-          tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
+          tweetUrl = tweetId ? `https://x.com/306Agent/status/${tweetId}` : null;
           registerPost("cyoa", tweetUrl, "research_brief");
           console.log("[ResearchBrief] Posted to X:", tweetUrl);
         } catch (e: any) { console.error("[ResearchBrief] X post failed:", e.message); }
@@ -2374,7 +2374,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       fs.writeFileSync(dataPath("cyoa_state.json"), JSON.stringify(state, null, 2));
 
       console.log(`[CYOA] Hook posted with image — ${tweetId}`);
-      res.json({ ok: true, tweetId, url: `https://x.com/agent3zero6/status/${tweetId}` });
+      res.json({ ok: true, tweetId, url: `https://x.com/306Agent/status/${tweetId}` });
     } catch (e: any) {
       console.error("[CYOA] Post error:", e.message);
       res.status(500).json({ error: e.message });

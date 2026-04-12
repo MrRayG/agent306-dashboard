@@ -55,7 +55,7 @@ const CONTENT_TYPES = [
   },
 ] as const;
 
-const X_ACCOUNT = "@agent3zero6";
+const X_ACCOUNT = "@306Agent";
 const FC_ACCOUNT = "@ntvagent306";
 
 export default function CommandCenter() {

@@ -316,7 +316,7 @@ export async function postSignalBrief(xWrite: any, grokKey: string): Promise<str
   try {
     const tweet = await xWrite.v2.tweet({ text: generated.post.trim() });
     const tweetId = tweet.data?.id;
-    tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
+    tweetUrl = tweetId ? `https://x.com/306Agent/status/${tweetId}` : null;
     console.log(`[SignalBrief] Brief #${state.totalBriefs + 1} posted — ${tweetUrl}`);
   } catch (e: any) {
     console.error("[SignalBrief] Post failed:", e.message);

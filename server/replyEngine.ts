@@ -257,7 +257,7 @@ async function qualityGateReply(reply: string): Promise<{ pass: boolean; rewrite
         model: getModel("reply_generation"),
         messages: [{
           role: "system",
-          content: "You are a quality editor for @agent306 — Agent 306's X account. Score replies ruthlessly whether they are about 306, AI, technology, or any other topic.",
+          content: "You are a quality editor for @306Agent — Agent 306's X account. Score replies ruthlessly whether they are about 306, AI, technology, or any other topic.",
         }, {
           role: "user",
           content: `Score this reply 1-10: is it sharp, genuine, and worth posting?
@@ -417,7 +417,7 @@ export async function runMidnightReplies(xWrite: any): Promise<void> {
 
       const posted = await xWrite.v2.tweet(payload);
       const tweetUrl = posted.data?.id
-        ? `https://x.com/agent3zero6/status/${posted.data.id}`
+        ? `https://x.com/306Agent/status/${posted.data.id}`
         : null;
 
       registerPost(`reply_${reply.username}`, tweetUrl, "reply_engine");

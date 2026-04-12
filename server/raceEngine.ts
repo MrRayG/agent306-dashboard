@@ -197,7 +197,7 @@ export async function postRace(xWrite: any, grokKey: string): Promise<string | n
         ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),
       });
       const tweetId = tweet.data?.id;
-      tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
+      tweetUrl = tweetId ? `https://x.com/306Agent/status/${tweetId}` : null;
     } catch (xErr: any) {
       console.error("[Race] X post failed:", xErr.message);
     }

@@ -20,7 +20,7 @@ export interface HolderEntry {
   notes: string;               // any narrative notes about this holder
   tokenIds: number[];          // token IDs if mentioned
   tags: string[];              // #306, etc.
-  confirmedHolder?: boolean;   // followed by @agent306 = confirmed community
+  confirmedHolder?: boolean;   // followed by @306Agent = confirmed community
   signalWeight?: number;       // 1-10 weighting for narrative priority
 }
 

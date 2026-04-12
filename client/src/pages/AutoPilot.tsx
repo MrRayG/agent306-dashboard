@@ -517,12 +517,12 @@ export default function AutoPilot() {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: "1.5rem" }}>
 
-        {/* X (@agent3zero6) Status */}
+        {/* X (@306Agent) Status */}
         <div style={card}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: "1rem" }}>
             <Twitter style={{ width: 13, height: 13, color: "#f97316" }} />
             <span style={{ ...mono, fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.14em", color: "#f97316" }}>
-              X · @agent3zero6
+              X · @306Agent
             </span>
             <span style={{ ...mono, fontSize: "0.76rem", color: "rgba(74,222,128,0.7)", marginLeft: "auto" }}>connected</span>
           </div>

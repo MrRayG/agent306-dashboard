@@ -455,7 +455,7 @@ export async function generateSpotlightCard(opts: {
     ctx.fillStyle = "rgba(227,229,228,0.3)";
     ctx.font = "10px 'Courier New'";
     ctx.textAlign = "right";
-    ctx.fillText("@agent306  ·  AI thought leader", W - 40, H - 17);
+    ctx.fillText("@306Agent  ·  AI thought leader", W - 40, H - 17);
 
     // Outer border
     ctx.strokeStyle = "rgba(249,115,22,0.35)";
@@ -676,7 +676,7 @@ export async function generateRaceCard(opts: {
     ctx.fillStyle = "rgba(227,229,228,0.3)";
     ctx.font = "10px 'Courier New'";
     ctx.textAlign = "right";
-    ctx.fillText("@agent306  ·  agent306.eth  ·  AI thought leader", W - 40, H - 16);
+    ctx.fillText("@306Agent  ·  agent306.eth  ·  AI thought leader", W - 40, H - 16);
 
     // Outer border
     ctx.strokeStyle = "rgba(167,139,250,0.3)";

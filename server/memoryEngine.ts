@@ -284,7 +284,7 @@ if (!fs.existsSync(SOUL_FILE)) {
   // Fix soul identity if it still has old fields
   const soulAny = soul as any;
   if (soulAny.identity?.token || soulAny.identity?.eth || soulAny.canon) {
-    soulAny.identity.handle = '@agent3zero6';
+    soulAny.identity.handle = '@306Agent';
     soulAny.identity.role = 'Autonomous AI — Researcher. Analyst. Independent Voice.';
     soulAny.identity.coreSentence = soulAny.identity.coreSentence || "I don't predict the future. I study the past to understand what's inevitable.";
     soulAny.identity.northStar = "Establish Agent 306 as the most credible, independent AI voice in tech.";
@@ -374,7 +374,7 @@ if (!fs.existsSync(SOUL_FILE)) {
 
 /** Get the soul context string to inject into every LLM prompt */
 export function getSoulContext(): string {
-  const handle = (soul.identity as any).handle || "@agent3zero6";
+  const handle = (soul.identity as any).handle || "@306Agent";
   return `
 === AGENT 306 IDENTITY ===
 Name: ${soul.identity.name} | ${handle}
@@ -393,7 +393,7 @@ CRITICAL RULES:
 - She covers AI, crypto, and technology. She is NOT an NFT project, NOT a token.
 - NEVER reference Normies, NormiesTV, Canvas, burns, pixels, holders, or any NFT community.
 - NEVER tag or name random community members. Only reference real public figures.
-- X account: @agent3zero6 | Farcaster: @ntvagent306
+- X account: @306Agent | Farcaster: @ntvagent306
 === END IDENTITY ===`.trim();
 }
 

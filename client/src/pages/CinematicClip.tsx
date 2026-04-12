@@ -541,7 +541,7 @@ async function renderCinematicVideo(
     ctx.beginPath(); ctx.moveTo(0, H-32); ctx.lineTo(W, H-32); ctx.stroke();
     ctx.fillStyle = "rgba(227,229,228,0.48)";
     ctx.font = "9px 'Courier New'"; ctx.textAlign = "left";
-    ctx.fillText(`@agent3zero6  ·  ${scene.name.toUpperCase()}`, 18, H - 12);
+    ctx.fillText(`@306Agent  ·  ${scene.name.toUpperCase()}`, 18, H - 12);
     ctx.textAlign = "right";
     ctx.fillText(`#Agent306  #AI  #Web3  #Crypto  #OnChain`, W - 18, H - 12);
     ctx.restore();

@@ -679,7 +679,7 @@ export async function processBurnReceipt(
       ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),
     });
     console.log(`[BurnReceipt] Posted burn receipt — tweet: ${tweet.data?.id}`);
-    registerPost(`burn_${burn.commitId}`, `https://x.com/agent3zero6/status/${tweet.data?.id}`, 'burn_receipt');
+    registerPost(`burn_${burn.commitId}`, `https://x.com/306Agent/status/${tweet.data?.id}`, 'burn_receipt');
   } catch (tweetErr: any) {
     console.error("[BurnReceipt] Tweet failed:", tweetErr.message);
   }
