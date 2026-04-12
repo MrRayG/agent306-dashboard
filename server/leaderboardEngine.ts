@@ -1,3 +1,4 @@
+// DISABLED: Normies-era content engine — not used by Agent 306
 // ─────────────────────────────────────────────────────────────────────────────
 // 306 — WEEKLY AI TOPICS LEADERBOARD ENGINE
 // Posts top AI topics and research areas every Monday at 9am ET
@@ -461,43 +462,9 @@ Return ONLY valid JSON — no meta-commentary, no separators, no character count
       tweets.t1 = `AI Topics · Week ${weekNumber}\n\n${fallbackContext[angle]}\n\nWeek ${trackingWeeks} of tracking · ${leaders.length} topics\n#Agent306 #AIResearch`;
     }
 
-    // Generate leaderboard image card
-    let xMediaId: string | undefined;
-    try {
-      const cardBuf = await generateLeaderboardCard(leaders, prevLeaders, weekNumber % 52 + 1);
-      if (cardBuf) {
-        xMediaId = await xWrite.v1.uploadMedia(cardBuf, { mimeType: "image/png" as any });
-        console.log(`[306:Leaderboard] Card uploaded`);
-      }
-    } catch (imgErr: any) {
-      console.warn("[306:Leaderboard] Image upload failed:", imgErr.message);
-    }
-
-    // Queue the main leaderboard post (t1) with optional image
-    // Thread replies (t2, t3) are combined into the main post for queue simplicity
-    const combinedText = [tweets.t1, tweets.t2, tweets.t3].filter(Boolean).join("\n\n").trim();
-    if (combinedText.length > 10) {
-      // Queue just the main post text (t1) — it has the image and the hook
-      queueXPost(tweets.t1?.trim() ?? combinedText.slice(0, 2500), "leaderboard", 7, xMediaId);
-      console.log(`[306:Leaderboard] Queued for X posting${xMediaId ? " (with image)" : ""}`);
-    }
-
-    registerPost("leaderboard", "queued", "leaderboard");
-
-    // Post to Farcaster (combined thread as single cast)
-    try {
-      const { postCast, isFarcasterEnabled } = await import("./farcasterEngine.js");
-      if (isFarcasterEnabled()) {
-        const combinedText = [tweets.t1, tweets.t2, tweets.t3].filter(Boolean).join("\n\n").slice(0, 2500);
-        const cast = await postCast({ text: combinedText, channel: "nft" });
-        if (cast) {
-          registerPost("leaderboard", cast.url, "leaderboard", "farcaster");
-          console.log(`[306:Leaderboard] Farcaster cast posted: ${cast.url}`);
-        }
-      }
-    } catch (fcErr: any) {
-      console.warn("[306:Leaderboard] Farcaster post failed:", fcErr.message);
-    }
+    // DISABLED: Normies-era content engine — not used by Agent 306
+    // X posting, media upload, and Farcaster posting removed
+    console.log("[306:Leaderboard] X/Farcaster posting disabled — Normies-era engine");
 
     // Save state
     saveState({

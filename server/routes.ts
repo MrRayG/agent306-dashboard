@@ -820,15 +820,8 @@ setTimeout(() => {
   startEngagementTracker(xClient);
 }, 15_000);
 
-// ── THE SPOTLIGHT — Weekly holder feature, Sunday 11am ET ─────────────────
-setTimeout(() => {
-  scheduleSpotlight(xWrite, LLM_API_KEY);
-}, 20_000);
-
-// ── WEEKLY AI ROUNDUP — Sunday 12pm ET ─────────────────
-setTimeout(() => {
-  scheduleRace(xWrite, LLM_API_KEY);
-}, 25_000);
+// DISABLED: Normies-era content engines — not used by Agent 306
+// scheduleSpotlight and scheduleRace removed
 
 // ── PODCAST KNOWLEDGE v2 — Seed on boot ──────────────────────────────
 // Two episode types: THE SIGNAL, THE CONVERSATION

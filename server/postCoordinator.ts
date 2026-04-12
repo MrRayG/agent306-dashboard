@@ -20,10 +20,7 @@ const STATE_FILE = dataPath("post_coordinator.json");
 const COOLDOWNS: Record<string, number> = {
   episode:       11 * 60 * 60 * 1000,  // 11h  — fires every 12h, 1h buffer
   news_dispatch: 23 * 60 * 60 * 1000,  // 23h  — daily, never twice same day
-  leaderboard:    6 * 24 * 60 * 60 * 1000, // 6d — weekly
-  spotlight:      6 * 24 * 60 * 60 * 1000, // 6d — weekly
-  race:           6 * 24 * 60 * 60 * 1000, // 6d — weekly
-  cyoa:           6 * 24 * 60 * 60 * 1000, // 6d — weekly
+  // DISABLED: Normies-era engines removed — leaderboard, spotlight, race, cyoa
   academy:       47 * 60 * 60 * 1000,  // 47h  — Tue/Thu/Sat, 48h buffer
   signal_brief:  47 * 60 * 60 * 1000,  // 47h  — Mon/Wed/Fri, 48h buffer
 };
