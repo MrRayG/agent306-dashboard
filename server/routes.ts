@@ -91,7 +91,7 @@ import {
   seedDreams,
 } from "./dreamEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
-import { startXPostScheduler, seedIntroPost, getXPostQueue } from "./xPostScheduler.js";
+import { startXPostScheduler, seedIntroPost, getXPostQueue, queueXPost, seedDailyContent } from "./xPostScheduler.js";
 
 // On-chain API removed
 // const ONCHAIN_API = "";
@@ -723,34 +723,25 @@ Return JSON: {"post": "..."}`
       postText = `[NEWS DISPATCH] ${dayLabel}\n\nETH ${ethPrice} (${ethChange}) · BTC ${btcPrice} (${btcChange}). AI and Web3 continue to converge.`;
     }
 
-    // ── 3. Post single dispatch ──────────────────────────────────────
-    let lastTweetId: string | undefined;
+    // ── 3. Queue dispatch via X post scheduler ──────────────────────────
     try {
-      const compliance = validateXPost(postText.trim());
-      if (!compliance.allowed) {
-        console.log(`[Agent306:News] Dispatch skipped by compliance: ${compliance.reason}`);
-      } else {
-        const safeText = compliance.sanitizedContent ?? postText.trim();
-        const result = await xWrite.v2.tweet({ text: safeText });
-        lastTweetId = result.data?.id;
-        recordXPost(safeText);
-        console.log(`[Agent306:News] Dispatch posted — ${lastTweetId} (${safeText.length} chars)`);
+      if (postText.trim().length > 10) {
+        queueXPost(postText.trim(), "dispatch", 4);
+        console.log(`[Agent306:News] Dispatch queued for X posting (${postText.trim().length} chars)`);
       }
     } catch (e: any) {
-      console.error(`[Agent306:News] Post failed:`, e.message);
+      console.error(`[Agent306:News] Queue failed:`, e.message);
     }
 
-    registerPost("news_dispatch", lastTweetId ? `https://x.com/agent3zero6/status/${lastTweetId}` : null, "news_dispatch");
+    registerPost("news_dispatch", "queued", "news_dispatch");
 
     // ── 5. Post to Farcaster ───────────────────────────────────────────────
     try {
       if (isFarcasterEnabled() && postText.trim().length > 10) {
-        const tweetUrl = lastTweetId ? `https://x.com/agent3zero6/status/${lastTweetId}` : undefined;
         const channel = postText.match(/\bai\b|agent|llm|model/i) ? "ai" : undefined;
         const cast = await postCast({
           text: postText.trim().slice(0, 2500),
           channel,
-          embeds: tweetUrl ? [{ url: tweetUrl }] : undefined,
         });
         if (cast) {
           registerPost("news_dispatch", cast.url, "news_dispatch", "farcaster");

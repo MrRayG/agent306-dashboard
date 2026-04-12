@@ -6,7 +6,7 @@
 
 import { createCanvas } from "canvas";
 import { requestPost, registerPost } from "./postCoordinator.js";
-import { validateXPost, recordXPost } from "./xComplianceGuard.js";
+import { queueXPost } from "./xPostScheduler.js";
 import * as fs from "fs";
 import * as https from "https";
 import { getModel } from "./modelRouter.js";
@@ -473,38 +473,16 @@ Return ONLY valid JSON — no meta-commentary, no separators, no character count
       console.warn("[306:Leaderboard] Image upload failed:", imgErr.message);
     }
 
-    // Post as thread — compliance check on the opener
-    const compliance = validateXPost(tweets.t1?.trim() ?? "");
-    if (!compliance.allowed) {
-      console.log(`[306:Leaderboard] Skipped by compliance: ${compliance.reason}`);
-      return;
+    // Queue the main leaderboard post (t1) with optional image
+    // Thread replies (t2, t3) are combined into the main post for queue simplicity
+    const combinedText = [tweets.t1, tweets.t2, tweets.t3].filter(Boolean).join("\n\n").trim();
+    if (combinedText.length > 10) {
+      // Queue just the main post text (t1) — it has the image and the hook
+      queueXPost(tweets.t1?.trim() ?? combinedText.slice(0, 2500), "leaderboard", 7, xMediaId);
+      console.log(`[306:Leaderboard] Queued for X posting${xMediaId ? " (with image)" : ""}`);
     }
 
-    let lastTweetId: string | undefined;
-    for (const [key, text] of [["t1", tweets.t1], ["t2", tweets.t2], ["t3", tweets.t3]] as [string,string][]) {
-      if (!text?.trim()) continue;
-      try {
-        // Validate each tweet through compliance guard (t1 already validated above, but re-check is harmless)
-        const tweetCompliance = key === "t1" ? compliance : validateXPost(text.trim());
-        if (!tweetCompliance.allowed) {
-          console.log(`[306:Leaderboard] ${key} skipped by compliance: ${tweetCompliance.reason}`);
-          continue;
-        }
-        const safeText = tweetCompliance.sanitizedContent ?? text.trim();
-        const payload: any = { text: safeText };
-        if (lastTweetId) payload.reply = { in_reply_to_tweet_id: lastTweetId };
-        if (key === "t1" && xMediaId) payload.media = { media_ids: [xMediaId] };
-        const tw = await xWrite.v2.tweet(payload);
-        lastTweetId = tw.data?.id;
-        recordXPost(safeText);
-        if (key !== "t3") await new Promise(r => setTimeout(r, 2000));
-      } catch (e: any) {
-        console.warn(`[306:Leaderboard] ${key} failed:`, e.message);
-      }
-    }
-
-    console.log(`[306:Leaderboard] Thread posted — ${lastTweetId}`);
-    registerPost("leaderboard", lastTweetId ? `https://x.com/agent3zero6/status/${lastTweetId}` : null, "leaderboard");
+    registerPost("leaderboard", "queued", "leaderboard");
 
     // Post to Farcaster (combined thread as single cast)
     try {
