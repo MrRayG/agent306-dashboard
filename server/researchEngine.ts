@@ -230,6 +230,7 @@ function saveLab(lab: ResearchLab) {
 }
 
 export function getResearchLab(): ResearchLab { return loadLab(); }
+export function saveResearchLab(lab: ResearchLab): void { saveLab(lab); }
 
 export function resetResearchLab(): { cleared: { topics: number; hypotheses: number } } {
   const lab = loadLab();
@@ -331,10 +332,58 @@ export function getTopicById(id: string): ResearchTopic | undefined {
   return loadLab().topics.find(t => t.id === id);
 }
 
+// ── Hypothesis similarity helpers ────────────────────────────────────────────
+
+const STOP_WORDS = new Set(['the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might',
+  'shall', 'can', 'that', 'this', 'these', 'those', 'it', 'its', 'of', 'in', 'to', 'for', 'with',
+  'on', 'at', 'by', 'from', 'as', 'into', 'through', 'during', 'before', 'after', 'and', 'but',
+  'or', 'not', 'no', 'nor', 'so', 'yet', 'both', 'each', 'more', 'most', 'other', 'some', 'such',
+  'than', 'too', 'very', 'just', 'about', 'above', 'also', 'between', 'under', 'again', 'further',
+  'then', 'once', 'here', 'there', 'when', 'where', 'why', 'how', 'all', 'any', 'few', 'own']);
+
+export function extractKeyTokens(text: string): Set<string> {
+  return new Set(
+    text.toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, ' ')
+      .split(/\s+/)
+      .filter(t => t.length > 2 && !STOP_WORDS.has(t))
+  );
+}
+
+export function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
+  const intersection = new Set(Array.from(a).filter(x => b.has(x)));
+  const union = new Set(Array.from(a).concat(Array.from(b)));
+  return union.size === 0 ? 0 : intersection.size / union.size;
+}
+
+export function findSimilarHypothesis(claim: string, hypotheses: Hypothesis[]): Hypothesis | null {
+  const claimTokens = extractKeyTokens(claim);
+  for (const h of hypotheses) {
+    const hTokens = extractKeyTokens(h.claim);
+    const overlap = jaccardSimilarity(claimTokens, hTokens);
+    if (overlap >= 0.55) return h;
+  }
+  return null;
+}
+
 // ── Hypothesis management ─────────────────────────────────────────────────────
 
 export function addHypothesis(input: Omit<Hypothesis, "id" | "formedAt" | "status">): Hypothesis {
   const lab = loadLab();
+
+  // Similarity gate: skip if a similar active hypothesis already exists
+  try {
+    const active = lab.hypotheses.filter(h => h.status === 'forming' || h.status === 'testing');
+    const duplicate = findSimilarHypothesis(input.claim, active);
+    if (duplicate) {
+      console.log(`[ResearchLab] Skipped duplicate hypothesis — similar to "${duplicate.claim.slice(0, 60)}..." (${duplicate.id})`);
+      return duplicate;
+    }
+  } catch (e: any) {
+    console.warn("[ResearchLab] Similarity check failed (non-fatal):", e.message);
+  }
+
   const hyp: Hypothesis = {
     ...input,
     id:       `hyp_${Date.now()}`,
