@@ -87,6 +87,7 @@ function checkSimilarity(
 // ── Rate limiting ────────────────────────────────────────────
 const MAX_POSTS_PER_24H = 6;
 const MIN_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours
+const GRACE_WINDOW_MS = 60 * 1000; // 60s grace to avoid fence-post rejections at exact boundary
 
 function checkRateLimit(state: ComplianceState): { pass: boolean; reason?: string } {
   const now = Date.now();
@@ -105,7 +106,7 @@ function checkRateLimit(state: ComplianceState): { pass: boolean; reason?: strin
   if (recentTimestamps.length > 0) {
     const lastPost = Math.max(...recentTimestamps);
     const elapsed = now - lastPost;
-    if (elapsed < MIN_INTERVAL_MS) {
+    if (elapsed < (MIN_INTERVAL_MS - GRACE_WINDOW_MS)) {
       const hoursElapsed = (elapsed / (60 * 60 * 1000)).toFixed(1);
       const minHours = (MIN_INTERVAL_MS / (60 * 60 * 1000)).toFixed(0);
       return {
