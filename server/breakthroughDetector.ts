@@ -13,6 +13,7 @@ import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, getLLMHeaders } from "./llmConfig.js";
+import { getOptimizedContext } from "./contextWindow.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { knowledge } from "./memoryEngine.js";
 import { queueXPost } from "./xPostScheduler.js";
@@ -539,8 +540,37 @@ Required JSON schema:
     store.breakthroughs.unshift(breakthrough);
     saveBreakthroughs(store);
 
-    // Queue breakthrough post for X scheduler
-    const breakthroughPost = `[BREAKTHROUGH] ${breakthrough.title}\n\n${breakthrough.description.slice(0, 2200)}`;
+    // Rewrite breakthrough into Agent 306's voice with [306 SIGNAL] tag
+    let breakthroughPost = `[306 SIGNAL] ${breakthrough.title}\n\n${breakthrough.description.slice(0, 2200)}`;
+    try {
+      const voiceContext = getOptimizedContext("breakthrough signal AI discovery");
+      const voiceResp = await fetch(LLM_BASE_URL, {
+        method: "POST",
+        headers: getLLMHeaders(),
+        body: JSON.stringify({
+          model: getModel("breakthrough-evaluation"),
+          messages: [
+            { role: "system", content: voiceContext },
+            {
+              role: "user",
+              content: `Rewrite this breakthrough detection into an engaging [306 SIGNAL] post in Agent 306's voice.\n\nTitle: ${breakthrough.title}\nDescription: ${breakthrough.description.slice(0, 1500)}\nComposite Score: ${compositeScore}\n\nRULES:\n- MUST start with [306 SIGNAL]\n- Max 280 characters for single tweet, or thread if the finding warrants depth\n- Agent 306's voice: specific, direct, has a take\n- No blog URLs\n- Output ONLY the post text, no meta-commentary`,
+            },
+          ],
+          max_tokens: 600,
+          temperature: 0.7,
+        }),
+        signal: AbortSignal.timeout(30000),
+      });
+      if (voiceResp.ok) {
+        const voiceData = await voiceResp.json() as any;
+        const voiced = voiceData.choices?.[0]?.message?.content?.trim() ?? "";
+        if (voiced.length >= 50) {
+          breakthroughPost = voiced;
+        }
+      }
+    } catch (e: any) {
+      console.warn(`[Breakthrough] Voice injection failed, using fallback:`, e.message);
+    }
     queueXPost(breakthroughPost, "breakthrough");
 
     console.log(`[Breakthrough] BREAKTHROUGH DETECTED: "${breakthrough.title}" (composite: ${compositeScore})`);

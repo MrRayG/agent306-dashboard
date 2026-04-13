@@ -7,9 +7,9 @@
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import { getShowTagDescriptions } from "./contentTypes.js";
 
 const GROK_API_KEY = LLM_API_KEY;
-const GROK_MODEL   = "grok-4-1-fast-non-reasoning";
 const GROK_URL     = LLM_BASE_URL;
 // on-chain API removed
 
@@ -362,17 +362,10 @@ WRITING RULES (non-negotiable):
 THE CULTURAL BRIDGE RULE (use at least 2x/week — drives highest RT):
 Connect to something bigger: art history, sports, tech inflection points.
 
-SHOW TAGS (first line of every post, ALL CAPS brackets):
-[306 STORIES] — narrative episodes, character arcs
-[306 NEWS] — Web3/market/project updates
-[306 FIELD REPORT] — real-time on-chain moves
-[306 COMMUNITY] — holder spotlight, builders, creators
-[306 SIGNAL] — important updates (override everything)
-[306 RESEARCH] — research briefs, community vote narratives
-[306 ACADEMY] — education episodes
-[306 SIGNAL BRIEF] — 3 signals + Agent 306's POV
+SHOW TAGS (first line of every post, ALL CAPS brackets — choose the most fitting):
+${getShowTagDescriptions()}
 
-SHOW SELECTION: AI development → FIELD REPORT | important update → SIGNAL | community building → COMMUNITY | story arc → STORIES | news → NEWS
+SHOW SELECTION: trend/breakthrough → SIGNAL | weekly recap → ROUNDUP | breaking news → NEWS | deep analysis → RESEARCH | education → ACADEMY | tool review → TOOLBOX | dataset highlight → DATASET | controversy → DEBATE | prompt craft → PROMPT | historical → ARCHIVE
 
 POST STRUCTURE: 1) Set the scene (one sentence, specific) 2) The beat (what happened) 3) What it means (your take) 4) Leave a thread (open question)
 
@@ -615,7 +608,7 @@ Remember: respond only with the JSON format specified.`;
     method: "POST",
     headers: getLLMHeaders(),
     body: JSON.stringify({
-      model: GROK_MODEL,
+      model: getModel("episode-generation"),
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user",   content: userPrompt },

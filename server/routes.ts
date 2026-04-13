@@ -23,8 +23,8 @@ import { generateBoost } from "./boostEngine";
 import { generateVoiceClip, getVoiceQuota, getClip, getRecentClips } from "./voiceEngine";
 import { getMemoryState, recordPost, ratePost, performance as perfMemory, decayKnowledge, addKnowledge, archiveKnowledge, searchArchive, getArchiveStats, knowledge as knowledgeState } from "./memoryEngine.js";
 import { startEngagementTracker, queueEngagementCheck, getPendingChecks } from "./engagementTracker.js";
-import { scheduleSpotlight, generateSpotlight, postSpotlight, getSpotlightState } from "./spotlightEngine.js";
-import { scheduleRace, generateRace, postRace, getRaceState } from "./raceEngine.js";
+import { generateSpotlight, postSpotlight, getSpotlightState } from "./spotlightEngine.js";
+import { generateRace, postRace, getRaceState } from "./raceEngine.js";
 import { scheduleMidnightReplies, runMidnightReplies } from "./replyEngine.js";
 import { scheduleAcademy, postAcademyEpisode, getAcademyState } from "./academyEngine.js";
 import { scheduleSignalBrief, postSignalBrief, getSignalBriefState } from "./signalBriefEngine.js";
@@ -75,7 +75,7 @@ import { getKnowledgeMap, getClusters, getContradictions as getGraphContradictio
 import { getInsights, getRelationships, extractInsights, analyzeRelationships, purgeStaleRelationships } from "./conversationLearningEngine.js";
 import { getMetacognitionState } from "./metacognitionEngine.js";
 import { searchConversations } from "./conversationMemory.js";
-import { getKnowledgeTiers, scanForInjection } from "./memoryEngine.js";
+import { getKnowledgeTiers, scanForInjection, getSoulContext } from "./memoryEngine.js";
 import { getModel, getModelConfig as getModelRouterStats } from "./modelRouter.js";
 import { getCoreIdentity, getRelevantContext, getOptimizedContext, getRelevantContextAsync, addOperatorDirective, getOperatorDirectives } from "./contextWindow.js";
 import { getEmbeddingStatus, syncEmbeddings, semanticSearch } from "./embeddingEngine.js";
@@ -654,32 +654,23 @@ async function postDailyNewsDispatch() {
       weekday: "long", month: "long", day: "numeric", timeZone: "America/New_York"
     });
 
-    // ── 2. Ask Grok to write a full 4-tweet thread ───────────────────────────
+    // ── 2. Ask Grok to write today's [306 NEWS] dispatch ───────────────────────────
+    const dispatchContext = getOptimizedContext("news dispatch daily AI market headlines");
     const grokResp = await fetch(LLM_BASE_URL, {
       method: "POST",
       headers: getLLMHeaders(),
       body: JSON.stringify({
         model: getModel("news-dispatch"),
-        messages: [{
-          role: "user",
-          content: `You are Agent 306 — an autonomous AI researcher and analyst. You cover AI, crypto, and technology.
+        messages: [
+          {
+            role: "system",
+            content: dispatchContext,
+          },
+          {
+            role: "user",
+            content: `Write today's [306 NEWS] dispatch as a single post. This is a media dispatch, not a stat dump.
 
-IDENTITY FOR THIS DISPATCH:
-
-THE EDITOR: You curate ruthlessly. You have a POV on every signal. Never neutral. "This matters because..." not "here is what happened."
-
-THE AI EXPERT: You are not covering the AI revolution from the outside. You ARE an AI agent. When you write about AI — you write as a participant, not an observer. You know the landscape:
-- Agentic AI market: $7.76B (2025) → $317B by 2035, 45% CAGR
-- x402 Protocol: AI agents making autonomous payments — 75M+ transactions
-- MCP donated to Linux Foundation — universal agent interoperability standard
-- OpenAI Operator, Google Vertex AI Agent Builder — browser agents at scale
-- 40% of enterprise applications integrate agentic AI by end of 2026
-
-THE FUTURIST: You project. You predict. Reasoned vision backed by what you see happening right now.
-
-THE OPTIMIST: You find opportunity in every challenge. You find the signal in the noise and the builder angle in every story.
-
-Write today's [NEWS DISPATCH] as a single post. This is a media dispatch, not a stat dump.
+The post MUST start with [306 NEWS] as the very first characters.
 
 TODAY'S DATA:
 Date: ${dayLabel}
@@ -693,14 +684,17 @@ ${topAIHeadlines || "Major AI developments continuing across the ecosystem."}
 Write a single compelling post (max 1,000 chars) that covers today's most interesting AI or crypto signal. Agent 306's perspective — she has skin in this.
 
 RULES:
+- The post MUST begin with [306 NEWS]
 - Agent 306 speaks in first person. She has opinions. She is part of this.
 - No hype words: no "incredible", "amazing", "LFG", "WAGMI"
 - Specificity over generality — name numbers, name people
 - Reference specific headlines from the data provided. Be concrete — numbers, names, implications.
 - NEVER reference Normies, NormiesTV, any founders, token holders, or NFT projects. Agent 306 is her own independent entity.
+- NEVER include blog URLs in the tweet body.
 
 Return JSON: {"post": "..."}`
-        }],
+          }
+        ],
         max_tokens: 2500,
         temperature: 0.8,
       }),
@@ -820,8 +814,8 @@ setTimeout(() => {
   startEngagementTracker(xClient);
 }, 15_000);
 
-// DISABLED: Normies-era content engines — not used by Agent 306
-// scheduleSpotlight and scheduleRace removed
+// DISABLED: Normies-era content engines — scheduler initializations removed.
+// Spotlight and Race engines are disabled; API endpoints remain for manual use only.
 
 // ── PODCAST KNOWLEDGE v2 — Seed on boot ──────────────────────────────
 // Two episode types: THE SIGNAL, THE CONVERSATION
@@ -1630,23 +1624,16 @@ export function registerRoutes(httpServer: Server, app: Express) {
         if (!postText && raw.length > 30) postText = raw;
         if (!postText || postText.length < 30) { console.error("[AIRoundup] No content generated"); return; }
 
-        // Post to X
+        // Queue for X via scheduler (high priority) instead of direct posting
         try {
-          const compliance = validateXPost(postText.trim());
-          if (!compliance.allowed) {
-            console.log(`[AIRoundup] Skipped by compliance: ${compliance.reason}`);
-          } else {
-            const safeText = compliance.sanitizedContent ?? postText.trim();
-            const tweet = await xWrite.v2.tweet({ text: safeText });
-            const tweetId = tweet.data?.id;
-            const tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
-            recordXPost(safeText);
-            registerPost("race", tweetUrl, "ai_roundup");
-            console.log("[AIRoundup] Posted to X:", tweetUrl);
+          if (postText.trim().length > 10) {
+            queueXPost(postText.trim(), "roundup", 2);
+            registerPost("race", "queued", "ai_roundup");
+            console.log("[AIRoundup] Queued for X posting via scheduler");
           }
-        } catch (e: any) { console.error("[AIRoundup] X post failed:", e.message); }
+        } catch (e: any) { console.error("[AIRoundup] Queue failed:", e.message); }
 
-        // Post to Farcaster
+        // Post to Farcaster (alongside queue, not dependent on direct X posting)
         try {
           if (isFarcasterEnabled() && postText.trim().length > 10) {
             const cast = await postCast({ text: postText.trim().slice(0, 2500), channel: "ai" });
@@ -2359,24 +2346,16 @@ export function registerRoutes(httpServer: Server, app: Express) {
         if (!postText && raw.length > 30) postText = raw;
         if (!postText || postText.length < 30) { console.error("[ResearchBrief] No content generated"); return; }
 
-        // Post to X
-        let tweetUrl = null;
+        // Queue for X via scheduler (high priority) instead of direct posting
         try {
-          const compliance = validateXPost(postText.trim());
-          if (!compliance.allowed) {
-            console.log(`[ResearchBrief] Skipped by compliance: ${compliance.reason}`);
-          } else {
-            const safeText = compliance.sanitizedContent ?? postText.trim();
-            const tweet = await xWrite.v2.tweet({ text: safeText });
-            const tweetId = tweet.data?.id;
-            tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
-            recordXPost(safeText);
-            registerPost("cyoa", tweetUrl, "research_brief");
-            console.log("[ResearchBrief] Posted to X:", tweetUrl);
+          if (postText.trim().length > 10) {
+            queueXPost(postText.trim(), "research", 2);
+            registerPost("cyoa", "queued", "research_brief");
+            console.log("[ResearchBrief] Queued for X posting via scheduler");
           }
-        } catch (e: any) { console.error("[ResearchBrief] X post failed:", e.message); }
+        } catch (e: any) { console.error("[ResearchBrief] Queue failed:", e.message); }
 
-        // Post to Farcaster
+        // Post to Farcaster (alongside queue, not dependent on direct X posting)
         try {
           if (isFarcasterEnabled() && postText.trim().length > 10) {
             const cast = await postCast({ text: postText.trim().slice(0, 2500), channel: "ai" });

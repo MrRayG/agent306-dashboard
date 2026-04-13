@@ -371,10 +371,8 @@ export async function postSignalBrief(xWrite: any, grokKey: string): Promise<str
   saveState(state);
 
   registerPost("signal_brief", tweetUrl, "signal_brief");
-  // Queue for X post scheduler (in addition to direct posting above)
-  if (generated.post.trim().length > 10) {
-    queueXPost(generated.post.trim(), "signal");
-  }
+  // Double-posting removed: direct post above is the sole posting method.
+  // Previously also called queueXPost() which caused the same content to post twice.
 
   console.log(`[SignalBrief] Complete — Brief #${state.totalBriefs}`);
   return tweetUrl;
