@@ -15,6 +15,7 @@
 import { LLM_BASE_URL, getLLMHeaders } from "../llmConfig.js";
 import { getModel } from "../modelRouter.js";
 import { safeParseLLMJson } from "../safeParseLLMJson.js";
+import { getSoulContext } from "../memoryEngine.js";
 import type { ContentBrief, ContentReview } from "./schemas.js";
 
 /**
@@ -42,10 +43,14 @@ export async function enforceGrounding(
     ? brief.mustNotInclude.map(c => `- ${c}`).join("\n")
     : "(none)";
 
+  // Add soul context for voice consistency checking
+  let soulContext = "";
+  try { soulContext = getSoulContext(); } catch {}
+
   const systemPrompt = `You are Agent 0 (Reasoner) performing a grounding review of Agent 6 (Writer) output.
 
-Your job: ensure EVERY factual claim in the content is supported by the evidence chain below.
-
+Your job: ensure EVERY factual claim in the content is supported by the evidence chain below. Also verify the content sounds like Agent 306's authentic voice.
+${soulContext ? `\n## Agent 306's Identity & Voice\n${soulContext}\n` : ""}
 ## Evidence Chain (from Agent 3's research)
 ${evidenceSummary}
 

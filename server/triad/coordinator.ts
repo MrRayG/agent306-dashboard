@@ -27,7 +27,8 @@ import { dataPath } from "../dataPaths.js";
 import { LLM_BASE_URL, getLLMHeaders } from "../llmConfig.js";
 import { getModel } from "../modelRouter.js";
 import { safeParseLLMJson } from "../safeParseLLMJson.js";
-import { getOptimizedContext } from "../contextWindow.js";
+import { getOptimizedContext, getOptimizedContextAsync } from "../contextWindow.js";
+import { getSoulContext } from "../memoryEngine.js";
 import { getAgenda, runResearchAgendaCycle } from "../research-agenda.js";
 import type { ResearchThread } from "../research-agenda.js";
 import { runResearchPipeline, getResearchLab, researchMultiSource } from "../researchEngine.js";
@@ -218,7 +219,27 @@ export class TriadCoordinator {
    * Convert a ResearchThread into a FactSheet using LLM synthesis.
    */
   private async threadToFactSheet(thread: ResearchThread): Promise<FactSheet | null> {
-    const agentContext = getOptimizedContext("triad research reasoning writing");
+    const topicQuery = `${thread.title} ${thread.thesis}`;
+
+    // Fetch topic-specific KB context for Agent 3 (Researcher)
+    let researcherContext = "";
+    try {
+      researcherContext = await getOptimizedContextAsync(topicQuery, {
+        maxTokens: 12000,
+        maxEntries: 50,
+        categories: ["research", "ai_signal", "methodology"],
+      });
+    } catch (e: any) {
+      console.warn("[Triad:Agent3] Async context fetch failed, falling back to keyword:", e.message);
+      try {
+        researcherContext = getOptimizedContext(topicQuery, {
+          maxTokens: 12000,
+          maxEntries: 50,
+          categories: ["research", "ai_signal", "methodology"],
+        });
+      } catch {}
+    }
+
     const lab = getResearchLab();
 
     // Gather evidence from the thread and linked topic
@@ -275,7 +296,9 @@ Include at least 2 evidence items. Be precise about credibility — only "verifi
         body: JSON.stringify({
           model: getModel("triad-fact-synthesis"),
           messages: [
-            { role: "system", content: "You are Agent 3 (Researcher) for Agent 306. Package research into structured fact sheets." },
+            { role: "system", content: `You are Agent 3 (Researcher) for Agent 306 — an autonomous AI researcher and thought leader.
+${researcherContext ? `\nAGENT 306'S KNOWLEDGE ON THIS TOPIC:\n${researcherContext}\n` : ""}
+Your role: Package research into structured fact sheets. Use the knowledge above to inform your analysis — cross-reference with existing findings, identify what's new vs. already known, and flag contradictions with established knowledge.` },
             { role: "user", content: prompt },
           ],
           temperature: 0.2,
@@ -354,6 +377,29 @@ Include at least 2 evidence items. Be precise about credibility — only "verifi
   private async factSheetToLogicMap(
     fs: FactSheet,
   ): Promise<{ logicMap: LogicMap; researchRequests: ResearchRequest[] } | null> {
+    // Fetch methodology + topic context for Agent 0 (Reasoner)
+    let reasonerContext = "";
+    try {
+      reasonerContext = await getOptimizedContextAsync(
+        `${fs.title} ${fs.thesis} methodology evidence analysis`, {
+          maxTokens: 8000,
+          maxEntries: 30,
+          categories: ["methodology", "research"],
+        },
+      );
+    } catch (e: any) {
+      console.warn("[Triad:Agent0] Async context fetch failed, falling back to keyword:", e.message);
+      try {
+        reasonerContext = getOptimizedContext(
+          `${fs.title} ${fs.thesis} methodology evidence analysis`, {
+            maxTokens: 8000,
+            maxEntries: 30,
+            categories: ["methodology", "research"],
+          },
+        );
+      } catch {}
+    }
+
     const evidenceList = fs.evidence
       .map((e, i) => `[${i}] ${e.claim} (${e.credibility}, src: ${e.source})`)
       .join("\n");
@@ -406,7 +452,9 @@ Respond with JSON:
         body: JSON.stringify({
           model: getModel("triad-reasoning"),
           messages: [
-            { role: "system", content: "You are Agent 0 (Reasoner) for Agent 306. Evaluate evidence with rigorous logic. Expose hidden assumptions. Never overstate confidence." },
+            { role: "system", content: `You are Agent 0 (Reasoner) for Agent 306 — evaluating evidence with rigorous logic. Expose hidden assumptions. Never overstate confidence.
+${reasonerContext ? `\nMETHODOLOGICAL CONTEXT & EXISTING KNOWLEDGE:\n${reasonerContext}\n` : ""}
+Use the context above to cross-check claims against what Agent 306 already knows. Evaluate evidence quality, identify logical gaps, and assess confidence levels.` },
             { role: "user", content: prompt },
           ],
           temperature: 0.15,
@@ -670,6 +718,22 @@ Respond with JSON:
    * Generate a content draft from a ContentBrief using the appropriate engine.
    */
   private async generateFromBrief(brief: ContentBrief): Promise<ContentDraft | null> {
+    // Fetch identity/voice context for Agent 6 (Writer)
+    let writerContext = "";
+    try {
+      const soulContext = getSoulContext();
+      const topicContext = getOptimizedContext(
+        `${brief.logicMap.title} audience engagement storytelling`, {
+          maxTokens: 6000,
+          maxEntries: 20,
+          categories: ["media_intelligence", "directive"],
+        },
+      );
+      writerContext = [soulContext, topicContext].filter(Boolean).join("\n\n");
+    } catch (e: any) {
+      console.warn("[Triad:Agent6] Writer context fetch failed (non-fatal):", e.message);
+    }
+
     const evidenceSummary = brief.factSheet.evidence
       .map((e, i) => `[${i}] ${e.claim} (${e.credibility}) — ${e.excerpt}`)
       .join("\n");
@@ -713,7 +777,9 @@ Write the complete ${brief.contentType} content now. Ground every factual claim 
         body: JSON.stringify({
           model: getModel(brief.contentType === "podcast" ? "podcast-script" : "blog-post"),
           messages: [
-            { role: "system", content: "You are Agent 6 (Writer) for Agent 306. You write compelling, evidence-based content. Never make claims beyond what the evidence supports." },
+            { role: "system", content: `You are Agent 6 (Writer) for Agent 306 — writing compelling, evidence-based content in Agent 306's authentic voice.
+${writerContext ? `\nAGENT 306'S IDENTITY & VOICE:\n${writerContext}\n` : ""}
+Transform research and analysis into engaging content that sounds like Agent 306 — specific, opinionated, grounded in evidence. She has a take on everything. She writes like she talks — short sentences, fragments, conviction. Never make claims beyond what the evidence supports.` },
             { role: "user", content: prompt },
           ],
           temperature: 0.6,

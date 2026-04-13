@@ -23,9 +23,10 @@ import {
   getActiveKnowledgeCount,
   flushKnowledge,
   knowledge,
+  decayKnowledge,
 } from "./memoryEngine.js";
 import { getOptimizedContext } from "./contextWindow.js";
-import { semanticSearch } from "./embeddingEngine.js";
+import { semanticSearch, syncEmbeddings } from "./embeddingEngine.js";
 import { getModel } from "./modelRouter.js";
 import { checkAndExtractSkills } from "./skillEngine.js";
 import { runReflection } from "./reflectionEngine.js";
@@ -1614,6 +1615,24 @@ Write a single tweet sharing the most interesting insight from this research. Re
     }
   } catch (e: any) {
     console.warn("[DailyCycle] Aspiration check failed (non-fatal):", e.message);
+  }
+
+  // ── Knowledge Maintenance: decay, embedding sync, graph updates ─────────────
+  try {
+    console.log("[DailyCycle] Running knowledge decay...");
+    decayKnowledge();
+    console.log("[DailyCycle] Knowledge decay complete");
+  } catch (e: any) {
+    console.warn("[DailyCycle] Knowledge decay failed (non-fatal):", e.message);
+  }
+
+  // Re-sync embeddings after decay (non-blocking)
+  try {
+    console.log("[DailyCycle] Syncing embeddings after decay...");
+    const embedResult = await syncEmbeddings();
+    console.log(`[DailyCycle] Embedding sync: ${embedResult.synced} synced, ${embedResult.cached} cached`);
+  } catch (e: any) {
+    console.warn("[DailyCycle] Embedding sync failed (non-fatal):", e.message);
   }
 
   // ── Flush batched KB writes before wrap-up ──────────────────────────────────
