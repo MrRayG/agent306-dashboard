@@ -326,7 +326,7 @@ export async function postSignalBrief(xWrite: any, grokKey: string): Promise<str
       const safeText = compliance.sanitizedContent ?? generated.post.trim();
       const tweet = await xWrite.v2.tweet({ text: safeText });
       const tweetId = tweet.data?.id;
-      tweetUrl = tweetId ? `https://x.com/agent3zero6/status/${tweetId}` : null;
+      tweetUrl = tweetId ? `https://x.com/306Agent/status/${tweetId}` : null;
       recordXPost(safeText);
       console.log(`[SignalBrief] Brief #${state.totalBriefs + 1} posted — ${tweetUrl}`);
     }

@@ -51,7 +51,7 @@ And I will always leave you with one question I cannot answer yet. Because hones
 
 This is Agent 306. Welcome to THE SIGNAL.`;
 
-const AGENT_306_OUTRO = `You can find the full research and links to the Galaxy report on my channels at @agent3zero6 on X and @ntvagent306 on Farcaster. Next week on THE SIGNAL—whatever the biggest story is. That is how this works. This is Agent 306. The signal continues.`;
+const AGENT_306_OUTRO = `You can find the full research and links to the Galaxy report on my channels at @306Agent on X and @ntvagent306 on Farcaster. Next week on THE SIGNAL—whatever the biggest story is. That is how this works. This is Agent 306. The signal continues.`;
 
 /**
  * Check whether an outro section already contains a similar sign-off from the LLM.
@@ -63,7 +63,7 @@ function outroAlreadyPresent(text: string): boolean {
   const lower = text.toLowerCase();
   return (
     lower.includes("the signal continues") ||
-    lower.includes("agent3zero6") ||
+    lower.includes("306Agent") ||
     lower.includes("ntvagent306")
   );
 }

@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { CONTENT_TYPE_LIST, ACTIVE_ENGINES, SCHEDULER_SLOTS } from "@/data/contentTypes";
+import AutoPilot from "./AutoPilot";
 
 function timeAgo(iso: string | null): string {
   if (!iso) return "never";
@@ -13,27 +14,115 @@ function timeAgo(iso: string | null): string {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
+function formatCooldown(ms: number): string {
+  if (ms <= 0) return "Ready";
+  const m = Math.ceil(ms / 60000);
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m`;
+}
+
 const mono = { fontFamily: "'Courier New', monospace" } as const;
 const pixel = { fontFamily: "'Courier New', monospace", textTransform: "uppercase" as const, letterSpacing: "0.15em" } as const;
 
-// Triggerable content types (engines with API endpoints)
+// Triggerable content types — removed disabled CYOA and Race engines
 const TRIGGERABLE = [
   { id: "signal_brief", label: "SIGNAL Brief", tag: "[306 SIGNAL]", color: "#fbbf24", endpoint: "/api/signal-brief/post", schedule: "Mon/Wed/Fri 12pm ET" },
-  { id: "cyoa", label: "Research Brief", tag: "[306 RESEARCH]", color: "#2dd4bf", endpoint: "/api/cyoa/post", schedule: "Manual trigger" },
-  { id: "race", label: "AI Roundup", tag: "[306 ROUNDUP]", color: "#a78bfa", endpoint: "/api/race/post", schedule: "Manual trigger" },
   { id: "news_dispatch", label: "News Dispatch", tag: "[306 NEWS]", color: "#4ade80", endpoint: "/api/news/dispatch", schedule: "Daily 8am ET" },
   { id: "academy", label: "Academy", tag: "[306 ACADEMY]", color: "#60a5fa", endpoint: "/api/academy/post", schedule: "Tue/Thu/Sat 10am ET" },
 ] as const;
 
-const X_ACCOUNT = "@agent3zero6";
+const X_ACCOUNT = "@306Agent";
 const FC_ACCOUNT = "@ntvagent306";
 
-export default function CommandCenter() {
+type CmdTab = "operations" | "pipeline";
+
+function ComplianceCard() {
+  const { data: compliance, isLoading } = useQuery<any>({
+    queryKey: ["/api/compliance/status"],
+    refetchInterval: 60_000,
+  });
+
+  if (isLoading || !compliance) {
+    return (
+      <div style={{ background: "#141516", border: "1px solid rgba(227,229,228,0.10)", padding: "16px 20px", marginBottom: "20px" }}>
+        <div style={{ ...pixel, fontSize: "0.68rem", color: "rgba(227,229,228,0.60)", marginBottom: "8px" }}>X COMPLIANCE</div>
+        <div style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.48)" }}>Loading...</div>
+      </div>
+    );
+  }
+
+  const pct = compliance.maxPosts24h > 0 ? (compliance.postsLast24h / compliance.maxPosts24h) * 100 : 0;
+  const isOnCooldown = compliance.cooldownRemainingMs > 0;
+  const isAtLimit = compliance.remainingPosts <= 0;
+
+  let statusText: string;
+  let statusColor: string;
+  if (isAtLimit) {
+    statusText = "Daily limit reached";
+    statusColor = "#ef4444";
+  } else if (isOnCooldown) {
+    statusText = "Cooldown active";
+    statusColor = "#eab308";
+  } else {
+    statusText = "Clear to post";
+    statusColor = "#4ade80";
+  }
+
+  return (
+    <div style={{ background: "#141516", border: `1px solid ${statusColor}25`, padding: "16px 20px", marginBottom: "20px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+        <div style={{ ...pixel, fontSize: "0.68rem", color: "rgba(227,229,228,0.60)" }}>X COMPLIANCE</div>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: statusColor }} />
+          <span style={{ ...mono, fontSize: "0.78rem", color: statusColor }}>{statusText}</span>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px", marginBottom: "12px" }}>
+        <div>
+          <div style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.50)", marginBottom: "4px" }}>POSTS TODAY</div>
+          <div style={{ ...mono, fontSize: "1.1rem", color: "#efefef", fontWeight: 700 }}>
+            {compliance.postsLast24h} <span style={{ fontSize: "0.78rem", color: "rgba(227,229,228,0.50)", fontWeight: 400 }}>/ {compliance.maxPosts24h}</span>
+          </div>
+        </div>
+        <div>
+          <div style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.50)", marginBottom: "4px" }}>NEXT SLOT</div>
+          <div style={{ ...mono, fontSize: "1.1rem", color: isOnCooldown ? "#eab308" : "#4ade80", fontWeight: 700 }}>
+            {isOnCooldown ? formatCooldown(compliance.cooldownRemainingMs) : "Now"}
+          </div>
+        </div>
+        <div>
+          <div style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.50)", marginBottom: "4px" }}>MIN INTERVAL</div>
+          <div style={{ ...mono, fontSize: "1.1rem", color: "#efefef", fontWeight: 700 }}>
+            {compliance.minIntervalHours}h
+          </div>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div style={{ background: "rgba(227,229,228,0.08)", height: "6px", borderRadius: "3px", overflow: "hidden" }}>
+        <div style={{
+          width: `${Math.min(pct, 100)}%`,
+          height: "100%",
+          background: isAtLimit ? "#ef4444" : isOnCooldown ? "#eab308" : "#4ade80",
+          transition: "width 0.3s",
+        }} />
+      </div>
+    </div>
+  );
+}
+
+function OperationsTab() {
   const { toast } = useToast();
   const [triggering, setTriggering] = useState<string | null>(null);
 
   const { data: house, refetch } = useQuery<any>({
     queryKey: ["/api/house"],
+  });
+
+  const { data: articleState } = useQuery<any>({
+    queryKey: ["/api/article/state"],
   });
 
   const coord = house?.coordinator;
@@ -55,19 +144,9 @@ export default function CommandCenter() {
   }
 
   return (
-    <div style={{ padding: "24px", maxWidth: "960px", margin: "0 auto" }}>
-      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
-
-      {/* Header */}
-      <div style={{ marginBottom: "28px" }}>
-        <div style={{ ...pixel, fontSize: "0.68rem", color: "rgba(227,229,228,0.60)", marginBottom: "4px" }}>AGENT 306</div>
-        <h1 style={{ fontSize: "26px", fontWeight: 800, color: "#efefef", margin: "0 0 6px", letterSpacing: "-0.02em" }}>
-          Command <span style={{ color: "#f97316" }}>Center</span>
-        </h1>
-        <p style={{ ...mono, fontSize: "0.88rem", color: "rgba(227,229,228,0.68)", margin: 0 }}>
-          Content engines for X ({X_ACCOUNT}) and Farcaster ({FC_ACCOUNT}). 10 content types, 4 daily posting slots.
-        </p>
-      </div>
+    <>
+      {/* Compliance guard */}
+      <ComplianceCard />
 
       {/* Active engine indicator */}
       {coord?.activeEngine && (
@@ -87,7 +166,23 @@ export default function CommandCenter() {
         </div>
       )}
 
-      {/* ── Content Type Registry ── */}
+      {/* Article Engine status card */}
+      {articleState && (
+        <div style={{ background: "#141516", border: "1px solid rgba(45,212,191,0.15)", padding: "12px 16px", marginBottom: "20px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ ...mono, fontSize: "0.70rem", color: "#2dd4bf", background: "rgba(45,212,191,0.12)", padding: "2px 8px" }}>[306 ARTICLE]</span>
+              <span style={{ ...mono, fontSize: "0.83rem", color: "#efefef", fontWeight: 600 }}>The Deep Read</span>
+            </div>
+            <div style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.50)" }}>
+              {articleState.lastRun ? `Last: ${timeAgo(articleState.lastRun)}` : "No articles yet"}
+              {articleState.totalArticles != null && ` · ${articleState.totalArticles} total`}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Content Type Registry */}
       <div style={{ marginBottom: "28px" }}>
         <div style={{ ...pixel, fontSize: "0.68rem", color: "rgba(227,229,228,0.60)", marginBottom: "12px" }}>
           CONTENT TYPE REGISTRY — 10 SHOW TAGS
@@ -117,7 +212,7 @@ export default function CommandCenter() {
         </div>
       </div>
 
-      {/* ── Active Engines ── */}
+      {/* Active Engines */}
       <div style={{ marginBottom: "28px" }}>
         <div style={{ ...pixel, fontSize: "0.68rem", color: "rgba(227,229,228,0.60)", marginBottom: "12px" }}>
           ACTIVE ENGINES
@@ -134,7 +229,7 @@ export default function CommandCenter() {
         </div>
       </div>
 
-      {/* ── Post Scheduler Slots ── */}
+      {/* Post Scheduler Slots */}
       <div style={{ marginBottom: "28px" }}>
         <div style={{ ...pixel, fontSize: "0.68rem", color: "rgba(227,229,228,0.60)", marginBottom: "12px" }}>
           POST SCHEDULER — 4 DAILY SLOTS
@@ -152,7 +247,7 @@ export default function CommandCenter() {
         </div>
       </div>
 
-      {/* ── Triggerable Engines ── */}
+      {/* Triggerable Engines */}
       <div style={{ marginBottom: "28px" }}>
         <div style={{ ...pixel, fontSize: "0.68rem", color: "rgba(227,229,228,0.60)", marginBottom: "12px" }}>
           GENERATE & POST
@@ -284,6 +379,45 @@ export default function CommandCenter() {
       <div style={{ marginTop: "12px", ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.35)", textAlign: "center" as const }}>
         All engines share the same disk-based coordinator — no duplicates across Railway restarts
       </div>
+    </>
+  );
+}
+
+export default function CommandCenter() {
+  const [tab, setTab] = useState<CmdTab>("operations");
+
+  return (
+    <div style={{ padding: "24px", maxWidth: "960px", margin: "0 auto" }}>
+      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
+
+      {/* Header */}
+      <div style={{ marginBottom: "20px" }}>
+        <div style={{ ...pixel, fontSize: "0.68rem", color: "rgba(227,229,228,0.60)", marginBottom: "4px" }}>AGENT 306</div>
+        <h1 style={{ fontSize: "26px", fontWeight: 800, color: "#efefef", margin: "0 0 6px", letterSpacing: "-0.02em" }}>
+          Command <span style={{ color: "#f97316" }}>Center</span>
+        </h1>
+        <p style={{ ...mono, fontSize: "0.88rem", color: "rgba(227,229,228,0.68)", margin: 0 }}>
+          Content engines for X ({X_ACCOUNT}) and Farcaster ({FC_ACCOUNT}). 10 content types, 4 daily posting slots.
+        </p>
+      </div>
+
+      {/* Sub-tabs */}
+      <div style={{ display: "flex", borderBottom: "1px solid rgba(227,229,228,0.15)", marginBottom: "1.5rem" }}>
+        {([
+          { key: "operations" as CmdTab, label: "Operations" },
+          { key: "pipeline" as CmdTab, label: "Pipeline & Farcaster" },
+        ]).map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)} style={{
+            ...mono, fontSize: "0.80rem", textTransform: "uppercase", letterSpacing: "0.12em",
+            background: "transparent", border: "none",
+            borderBottom: tab === t.key ? "2px solid #f97316" : "2px solid transparent",
+            color: tab === t.key ? "#f97316" : "rgba(227,229,228,0.55)",
+            padding: "0.6rem 1.25rem", cursor: "pointer", marginBottom: -1,
+          }}>{t.label}</button>
+        ))}
+      </div>
+
+      {tab === "operations" ? <OperationsTab /> : <AutoPilot />}
     </div>
   );
 }

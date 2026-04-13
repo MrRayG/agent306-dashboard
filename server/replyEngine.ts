@@ -435,7 +435,7 @@ export async function runMidnightReplies(xWrite: any): Promise<void> {
 
       const posted = await xWrite.v2.tweet(payload);
       const tweetUrl = posted.data?.id
-        ? `https://x.com/agent3zero6/status/${posted.data.id}`
+        ? `https://x.com/306Agent/status/${posted.data.id}`
         : null;
 
       recordXPost(safeText, { isReply: true, replyToUser: reply.username, replyToPostId: inReplyToId });
