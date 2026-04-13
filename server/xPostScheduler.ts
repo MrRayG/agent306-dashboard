@@ -4,13 +4,15 @@
  *
  *  Independent posting scheduler -- decoupled from the 3am
  *  daily research cycle. Content engines queue posts here;
- *  the scheduler picks them up at 4 named daily time slots.
+ *  the scheduler picks them up at 6 named daily time slots.
  *
- *  Named slots (ET):
- *    Morning  (8am)  -- SIGNAL Brief / News Dispatch
- *    Midday   (12pm) -- Research, Blog, Academy
- *    Afternoon(5pm)  -- Breakthrough, Spotlight, Synthesis
- *    Evening  (9pm)  -- Reflection, Curiosity, Article
+ *  Named slots (ET) — 6 slots, 2h+ apart, fills daily 6-post limit:
+ *    Early Morning (8am)  -- News Dispatch / Signal
+ *    Late Morning  (10am) -- Academy / Toolbox / Dataset
+ *    Midday        (12pm) -- Research / Blog / Prompt
+ *    Afternoon     (5pm)  -- Debate / Breakthrough / Signal
+ *    Early Evening  (7pm) -- Archive / Toolbox / Dataset
+ *    Late Evening   (9pm) -- Prompt / Debate / Reflection
  *
  *  Each slot PREFERS its assigned content type but falls back
  *  to whatever is queued (priority order) if preferred unavailable.
@@ -112,10 +114,12 @@ interface ContentSlot {
 }
 
 const CONTENT_SLOTS: ContentSlot[] = [
-  { name: "Morning",   hourUTC: 12, preferredTypes: ["signal", "dispatch", "roundup", "archive"] },
-  { name: "Midday",    hourUTC: 16, preferredTypes: ["research", "academy", "prompt", "toolbox", "blog"] },
-  { name: "Afternoon", hourUTC: 21, preferredTypes: ["debate", "dataset", "toolbox", "breakthrough"] },
-  { name: "Evening",   hourUTC: 1,  preferredTypes: ["archive", "debate", "prompt", "reflection"] },
+  { name: "Early Morning", hourUTC: 12, preferredTypes: ["dispatch", "signal", "roundup", "news"] },
+  { name: "Late Morning",  hourUTC: 14, preferredTypes: ["academy", "toolbox", "dataset", "archive"] },
+  { name: "Midday",        hourUTC: 16, preferredTypes: ["research", "blog", "prompt", "signal"] },
+  { name: "Afternoon",     hourUTC: 21, preferredTypes: ["debate", "breakthrough", "signal", "toolbox"] },
+  { name: "Early Evening", hourUTC: 23, preferredTypes: ["archive", "dataset", "toolbox", "prompt"] },
+  { name: "Late Evening",  hourUTC: 1,  preferredTypes: ["prompt", "debate", "reflection", "archive"] },
 ];
 
 // -- State persistence --------------------------------------------
@@ -326,8 +330,8 @@ export function queuePodcastPromo(content: string, episodeId: string): QueuedPos
 }
 
 // -- Scheduler slots (ET -> UTC) ----------------------------------
-// 8am ET = 12:00 UTC, 12pm ET = 16:00 UTC,
-// 5pm ET = 21:00 UTC, 9pm ET = 01:00 UTC (next day)
+// 8am ET = 12:00 UTC, 10am ET = 14:00 UTC, 12pm ET = 16:00 UTC,
+// 5pm ET = 21:00 UTC, 7pm ET = 23:00 UTC, 9pm ET = 01:00 UTC (next day)
 const SLOT_HOURS_UTC = CONTENT_SLOTS.map(s => s.hourUTC);
 
 function getNextSlotMs(): { ms: number; slot: ContentSlot } {
