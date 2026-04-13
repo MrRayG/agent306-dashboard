@@ -397,7 +397,7 @@ export default function CommandCenter() {
           Command <span style={{ color: "#f97316" }}>Center</span>
         </h1>
         <p style={{ ...mono, fontSize: "0.88rem", color: "rgba(227,229,228,0.68)", margin: 0 }}>
-          Content engines for X ({X_ACCOUNT}) and Farcaster ({FC_ACCOUNT}). 10 content types, 4 daily posting slots.
+          Content engines for X ({X_ACCOUNT}) and Farcaster ({FC_ACCOUNT}). 10 content types, 6 daily posting slots (8am/10am/12pm/5pm/7pm/9pm ET).
         </p>
       </div>
 
