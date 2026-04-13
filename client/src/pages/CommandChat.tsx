@@ -232,7 +232,7 @@ export default function CommandChat() {
                 animation: "chat-pulse 2s infinite" }} />
               <span style={{ ...mono, fontSize: "0.73rem", color: "rgba(74,222,128,0.7)",
                 textTransform: "uppercase" as const, letterSpacing: "0.1em" }}>
-                Online · @agent3zero6
+                Online · @306Agent
               </span>
             </div>
           </div>

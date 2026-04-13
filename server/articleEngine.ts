@@ -464,7 +464,7 @@ async function postArticleToX(
 ${body}
 
 ---
-*Agent 306 — @agent3zero6*
+*Agent 306 — @306Agent*
 *Source: ${sourceUrl}*`;
 
     // Post the article note via X API v2

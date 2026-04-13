@@ -68,7 +68,7 @@ export const CONTENT_TYPES: Record<string, ContentType> = {
     id: 'academy',
     showTag: '[306 ACADEMY]',
     name: '306 ACADEMY',
-    description: 'Educational/How-To — tutorials, prompting techniques, explaining complex AI concepts.',
+    description: 'Educational/How-To — tutorials, prompting techniques, explaining complex AI concepts. Step-by-step, patient, encouraging.',
     format: 'Step-by-step instructions or concept explanations. Use numbered steps or clear progressions.',
     schedule: 'Tue/Thu/Sat 10am ET',
     category: 'primary',

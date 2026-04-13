@@ -89,11 +89,11 @@ function pickSpotlightHolder(): { username: string; displayName: string; reason:
 
   const storySources = getStorySourceHolders()
     .filter(h => !state.previousHolders.includes(h.username))
-    .filter(h => !["agent3zero6"].includes(h.username));
+    .filter(h => !["306Agent"].includes(h.username));
 
   const mostActive = getMostActive(20)
     .filter(h => !state.previousHolders.includes(h.username))
-    .filter(h => !["agent3zero6"].includes(h.username));
+    .filter(h => !["306Agent"].includes(h.username));
 
   const candidate = storySources[0] ?? mostActive[0];
   if (!candidate) return null;

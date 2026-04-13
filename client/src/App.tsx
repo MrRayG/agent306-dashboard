@@ -3,48 +3,30 @@ import { useHashLocation } from "wouter/use-hash-location";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
-import StoryEngine from "@/pages/StoryEngine";
-import EpisodeQueue from "@/pages/EpisodeQueue";
-import VideoStudio from "@/pages/VideoStudio";
-import AutoPilot from "@/pages/AutoPilot";
-import NewsEngine from "@/pages/NewsEngine";
-import PodcastStudio from "@/pages/PodcastStudio";
-import ArticleStudio from "@/pages/ArticleStudio";
-import BlogStudio from "@/pages/BlogStudio";
-import CommandChat from "@/pages/CommandChat";
-import AgentStatus from "@/pages/AgentStatus";
-import VoiceStudio from "@/pages/VoiceStudio";
-import AgentHQ from "@/pages/AgentHQ";
-import WeeklyEngines from "@/pages/WeeklyEngines";
 import CommandCenter from "@/pages/CommandCenter";
-import MorningBriefing from "@/pages/MorningBriefing";
-import DataIntake from "@/pages/DataIntake";
-import KnowledgeGraph from "@/pages/KnowledgeGraph";
+import EpisodeQueue from "@/pages/EpisodeQueue";
+import WritingStudio from "@/pages/WritingStudio";
+import PodcastStudio from "@/pages/PodcastStudio";
+import CommandChat from "@/pages/CommandChat";
+import Intelligence from "@/pages/Intelligence";
 import ResearchAgenda from "@/pages/ResearchAgenda";
+import AgentHQ from "@/pages/AgentHQ";
+import StatusHub from "@/pages/StatusHub";
 import DreamsGrowth from "@/pages/DreamsGrowth";
 import NotFound from "@/pages/not-found";
 import PerplexityAttribution from "@/components/PerplexityAttribution";
 
 const nav = [
-  { href: "/briefing", label: "Morning Brief", desc: "Daily intelligence"  },
-  { href: "/",        label: "Story Engine",  desc: "Narrative AI"       },
-  { href: "/episodes",label: "Episodes",      desc: "Queue & post"       },
-  { href: "/video",   label: "Video Studio",  desc: "Generate clips"     },
-  { href: "/autopilot", label: "Autopilot",     desc: "Auto-post engine"   },
-  { href: "/news",     label: "News Engine",   desc: "What's hot"         },
-  { href: "/podcast",   label: "Podcast Studio",   desc: "Guest queue + interviews" },
-  { href: "/article",   label: "Article Studio",   desc: "The Deep Read · weekly AI" },
-  { href: "/blog",      label: "Blog Studio",      desc: "306's daily log" },
-  { href: "/command",   label: "Command Center",    desc: "All engines · Status" },
-  { href: "/status",    label: "Agent Status",      desc: "Evolution · Exploration" },
-  { href: "/chat",      label: "Talk to 306",       desc: "Direct line"            },
-  { href: "/weekly",    label: "Weekly Engines",    desc: "Spotlight · Race" },
-  { href: "/house",     label: "Agent HQ",          desc: "Research · Lab · Status" },
-  { href: "/voice",     label: "Voice Studio",      desc: "Agent 306 speaks" },
-  { href: "/intake",    label: "Data Intake",       desc: "AI source feeds" },
-  { href: "/knowledge", label: "Knowledge Graph",   desc: "Connected intelligence" },
-  { href: "/agenda",    label: "Research Agenda",   desc: "Active investigations" },
-  { href: "/dreams",    label: "Dreams & Growth",   desc: "Aspirations \u00B7 Self-improvement" },
+  { href: "/",         label: "Command Center", desc: "All engines · Status" },
+  { href: "/episodes", label: "Episodes",       desc: "Queue & post"        },
+  { href: "/writing",  label: "Writing Studio", desc: "Articles · Blog"     },
+  { href: "/podcast",  label: "Podcast Studio", desc: "Guest queue + interviews" },
+  { href: "/chat",     label: "Talk to 306",    desc: "Direct line"         },
+  { href: "/intel",    label: "Intelligence",   desc: "Sources · Knowledge" },
+  { href: "/agenda",   label: "Research",       desc: "Active investigations" },
+  { href: "/hq",       label: "Agent HQ",       desc: "Research · Lab · Status" },
+  { href: "/status",   label: "Status",         desc: "Briefing · Vitals"   },
+  { href: "/dreams",   label: "Dreams & Growth", desc: "Aspirations \u00B7 Self-improvement" },
 ];
 
 function Sidebar() {
@@ -155,25 +137,16 @@ function App() {
       <Router hook={useHashLocation}>
         <Layout>
           <Switch>
-            <Route path="/briefing" component={MorningBriefing} />
-            <Route path="/"         component={StoryEngine}  />
-            <Route path="/episodes" component={EpisodeQueue} />
-            <Route path="/video"    component={VideoStudio}  />
-            <Route path="/autopilot" component={AutoPilot} />
-            <Route path="/news"      component={NewsEngine}    />
-            <Route path="/podcast"  component={PodcastStudio}   />
-            <Route path="/article"  component={ArticleStudio}   />
-            <Route path="/blog"     component={BlogStudio}      />
-            <Route path="/command"   component={CommandCenter}     />
-            <Route path="/status"    component={AgentStatus}       />
-            <Route path="/chat"      component={CommandChat}       />
-            <Route path="/weekly"    component={WeeklyEngines}    />
-            <Route path="/house"     component={AgentHQ}          />
-            <Route path="/voice"     component={VoiceStudio}     />
-            <Route path="/intake"    component={DataIntake}      />
-            <Route path="/knowledge" component={KnowledgeGraph}  />
-            <Route path="/agenda"    component={ResearchAgenda}  />
-            <Route path="/dreams"    component={DreamsGrowth}   />
+            <Route path="/"         component={CommandCenter} />
+            <Route path="/episodes" component={EpisodeQueue}  />
+            <Route path="/writing"  component={WritingStudio} />
+            <Route path="/podcast"  component={PodcastStudio} />
+            <Route path="/chat"     component={CommandChat}   />
+            <Route path="/intel"    component={Intelligence}  />
+            <Route path="/agenda"   component={ResearchAgenda} />
+            <Route path="/hq"       component={AgentHQ}       />
+            <Route path="/status"   component={StatusHub}     />
+            <Route path="/dreams"   component={DreamsGrowth}  />
             <Route component={NotFound} />
           </Switch>
         </Layout>

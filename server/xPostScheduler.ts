@@ -445,7 +445,7 @@ async function processQueue(xWrite: any, slot?: ContentSlot): Promise<void> {
       post.posted = true;
       post.postedAt = new Date().toISOString();
       saveQueue(state);
-      console.log(`[XScheduler] Posted ${post.type}: https://x.com/agent3zero6/status/${tweetId}`);
+      console.log(`[XScheduler] Posted ${post.type}: https://x.com/306Agent/status/${tweetId}`);
     } else {
       console.warn("[XScheduler] Tweet sent but no ID returned");
     }
@@ -481,7 +481,7 @@ async function processImmediateQueue(xWrite: any): Promise<void> {
         recordPostType(state, post.type);
         post.posted = true;
         post.postedAt = new Date().toISOString();
-        console.log(`[XScheduler] Podcast promo posted: https://x.com/agent3zero6/status/${tweetId}`);
+        console.log(`[XScheduler] Podcast promo posted: https://x.com/306Agent/status/${tweetId}`);
       }
     } catch (e: any) {
       console.error("[XScheduler] Podcast promo failed:", e.message);

@@ -378,3 +378,27 @@ export const X_PROFILE_BIO_REQUIREMENTS = {
  * Contact email for Agent 306.
  */
 export const AGENT306_CONTACT_EMAIL = "agent306@agent306.ai";
+
+/**
+ * Get current compliance status for the dashboard.
+ * Exposes rate limit state so the UI can show remaining quota and cooldown.
+ */
+export function getComplianceStatus() {
+  const state = loadState();
+  const now = Date.now();
+  const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000;
+  const last24h = state.postTimestamps.filter(t => t > twentyFourHoursAgo);
+  const lastPost = last24h.length > 0 ? Math.max(...last24h) : 0;
+  const cooldownRemaining = lastPost > 0 ? Math.max(0, (lastPost + MIN_INTERVAL_MS) - now) : 0;
+  const nextAvailable = lastPost > 0 ? new Date(lastPost + MIN_INTERVAL_MS).toISOString() : "now";
+
+  return {
+    postsLast24h: last24h.length,
+    maxPosts24h: MAX_POSTS_PER_24H,
+    remainingPosts: Math.max(0, MAX_POSTS_PER_24H - last24h.length),
+    lastPostAt: lastPost > 0 ? new Date(lastPost).toISOString() : null,
+    nextAvailableAt: nextAvailable,
+    cooldownRemainingMs: cooldownRemaining,
+    minIntervalHours: MIN_INTERVAL_MS / (60 * 60 * 1000),
+  };
+}

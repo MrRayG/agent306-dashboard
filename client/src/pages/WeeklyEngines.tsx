@@ -53,7 +53,7 @@ export default function WeeklyEngines() {
   const { toast } = useToast();
 
   // Article / Deep Read state
-  const { data: articleStatus } = useQuery({ queryKey: ["/api/article/status"] });
+  const { data: articleStatus } = useQuery({ queryKey: ["/api/article/state"] });
 
   // Roundup state (manual trigger, not auto-scheduled)
   const { data: roundupStatus } = useQuery({ queryKey: ["/api/race/status"] });

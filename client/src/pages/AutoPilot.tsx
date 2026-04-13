@@ -351,10 +351,6 @@ export default function AutoPilot() {
     queryKey: ["/api/episodes"],
   });
 
-  const { data: burns = [] } = useQuery<any[]>({
-    queryKey: ["/api/burns/feed"],
-  });
-
   const { data: signals = [] } = useQuery<any[]>({
     queryKey: ["/api/signals"],
   });
@@ -371,7 +367,6 @@ export default function AutoPilot() {
 
   const recentEpisodes = episodes.slice(0, 5);
   const postedEpisodes = episodes.filter((e: any) => e.status === "posted");
-  const recentBurns = Array.isArray(burns) ? burns.slice(0, 8) : [];
   const recentSignals = Array.isArray(signals) ? signals.slice(0, 10) : [];
 
   const mono: React.CSSProperties = { fontFamily: "'Courier New', monospace" };
@@ -517,12 +512,12 @@ export default function AutoPilot() {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: "1.5rem" }}>
 
-        {/* X (@agent3zero6) Status */}
+        {/* X (@306Agent) Status */}
         <div style={card}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: "1rem" }}>
             <Twitter style={{ width: 13, height: 13, color: "#f97316" }} />
             <span style={{ ...mono, fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.14em", color: "#f97316" }}>
-              X · @agent3zero6
+              X · @306Agent
             </span>
             <span style={{ ...mono, fontSize: "0.76rem", color: "rgba(74,222,128,0.7)", marginLeft: "auto" }}>connected</span>
           </div>
