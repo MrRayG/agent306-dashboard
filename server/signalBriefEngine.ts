@@ -32,6 +32,7 @@ import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { queueXPost } from "./xPostScheduler.js";
+import { enforceShowTag } from "./contentTypes.js";
 
 const GROK_URL          = LLM_BASE_URL;
 const GROK_SEARCH_URL   = LLM_RESPONSE_URL;
@@ -297,7 +298,9 @@ Return JSON:
       { number: 3, track: "Wild Card",      headline: parsed.signal3Headline ?? "Wild Card", content: wildcardSignal },
     ];
 
-    return { post: parsed.post, signals, weekLabel };
+    // Enforce [306 SIGNAL] show tag
+    const post = enforceShowTag(parsed.post, "signal");
+    return { post, signals, weekLabel };
   } catch (e: any) {
     console.error("[SignalBrief] Generation error:", e.message);
     return null;

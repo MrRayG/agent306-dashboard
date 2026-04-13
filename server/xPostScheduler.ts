@@ -26,7 +26,8 @@ import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import { LLM_BASE_URL, getLLMHeaders } from "./llmConfig.js";
 import { getModel } from "./modelRouter.js";
 import { getOptimizedContext } from "./contextWindow.js";
-import { CONTENT_TYPES, getShowTagDescriptions } from "./contentTypes.js";
+import { CONTENT_TYPES, getShowTagDescriptions, getShowTag, enforceShowTag } from "./contentTypes.js";
+import { getVoiceContext } from "./voiceInstructions.js";
 
 // -- Types --------------------------------------------------------
 
@@ -522,7 +523,7 @@ export async function seedDailyContent(): Promise<void> {
   const needed = Math.min(4 - pendingCount, seedCandidates.length);
   const seedTypes = seedCandidates.slice(0, needed);
 
-  // Get shared identity context (replaces old hardcoded SEED_SYSTEM_PROMPT)
+  // Get shared identity context + voice craft instructions
   let systemContext = "";
   try {
     systemContext = getOptimizedContext("seed content generation for X");
@@ -531,10 +532,30 @@ export async function seedDailyContent(): Promise<void> {
     systemContext = "You are Agent 306 — an autonomous AI researcher and thought leader. Female. You study AI, crypto, and emerging tech from the inside.";
   }
 
+  const voiceRules = getVoiceContext('seed');
   const showTagDescriptions = getShowTagDescriptions();
+
+  // System prompt = identity context + voice craft + show tag descriptions
+  const systemPrompt = `${systemContext}\n\n${voiceRules}\n\nCONTENT TYPES — choose the most fitting and ALWAYS lead with that show tag:\n${showTagDescriptions}\n\nOutput ONLY the tweet text. No meta-commentary. No "Here's my tweet:". No character counts.`;
+
+  // Per-type seed prompts — tailored voice guidance for each content type
+  const SEED_PROMPTS: Record<string, string> = {
+    signal: "Share a trend or shift you're watching. Not what happened — WHY it's happening. What's the deeper signal beneath the headline? One sharp take that makes people think.",
+    research: "Share a quick research highlight — something interesting you noticed in AI, crypto, or emerging tech. One insight, sharp and specific. Not a summary, a signal.",
+    roundup: "Pick the 3-5 biggest AI developments this week. Quick hits — what happened and why it matters. Your POV on each, not just headlines.",
+    news: "What's the most important thing happening right now in AI or crypto? Lead with urgency. Be factual but have a take.",
+    academy: "Teach something. Pick one concept, technique, or tool and explain it like you're talking to a smart friend. Step by step. Patient but not patronizing.",
+    toolbox: "Review a tool, SDK, or app you've been looking at. What does it do? Who should use it? What's your honest first impression? Be specific.",
+    dataset: "Spotlight an open-source dataset or data technique worth knowing about. What is it, how big, why it matters. Be the friend who sends the good links.",
+    debate: "Pick a controversial AI topic. Present both sides fairly — then give your take. End with a question that invites discussion. Don't hedge.",
+    prompt: "Share a system prompt, workflow, or agentic pattern that actually works in production. Show the recipe, explain why it works. Practical > theoretical.",
+    archive: "Throwback — connect a seminal paper, moment, or idea from AI history to something happening right now. 'This was published in 2017 and look where we are.'",
+  };
 
   for (const seedType of seedTypes) {
     try {
+      const userPrompt = SEED_PROMPTS[seedType] || "Share one thread-worthy insight about AI or technology. Something that makes someone stop and think. Specific, opinionated, grounded.";
+
       const resp = await fetch(LLM_BASE_URL, {
         method: "POST",
         headers: getLLMHeaders(),
@@ -543,11 +564,11 @@ export async function seedDailyContent(): Promise<void> {
           messages: [
             {
               role: "system",
-              content: `${systemContext}\n\nYou are generating a post for X (Twitter). Choose the most fitting content type and ALWAYS lead with that show tag:\n\n${showTagDescriptions}\n\nOutput ONLY the tweet text. No meta-commentary. No "Here's my tweet:". No character counts.`,
+              content: systemPrompt,
             },
             {
               role: "user",
-              content: `Generate an engaging, original post. The post MUST:\n1. Start with the chosen [306 XXX] show tag\n2. Reflect Agent 306's authentic voice\n3. Be under 280 characters (or thread if needed)\n4. NOT contain blog URLs\n5. Be thought-provoking and designed to grow following\n6. Ground this in something specific and real — a recent development, a paper, a trend\n\nFocus area for this post: ${seedType}`,
+              content: userPrompt,
             },
           ],
           max_tokens: 600,
@@ -556,9 +577,11 @@ export async function seedDailyContent(): Promise<void> {
       });
 
       const data = await resp.json();
-      const text = data.choices?.[0]?.message?.content?.trim() ?? "";
+      let text = data.choices?.[0]?.message?.content?.trim() ?? "";
 
       if (text && text.length >= 50 && text.length <= 600) {
+        // Enforce show tag after LLM generation
+        text = enforceShowTag(text, seedType);
         queueXPost(text, seedType);
         console.log(`[XScheduler] Seeded ${seedType} post (${text.length} chars)`);
       } else {
