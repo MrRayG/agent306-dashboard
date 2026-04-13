@@ -399,7 +399,7 @@ ${replyContext}`
         sentiment: grokResult.sentiment,
         keyEvents: grokResult.keyEvents,
         featuredTokens: grokResult.featuredTokens,
-        grokModel: "grok-4-1-fast",
+        grokModel: "grok-4-1-fast-non-reasoning",
       }),
       status: "ready",
     });
@@ -1594,7 +1594,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
               method: "POST",
               headers: { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` },
               body: JSON.stringify({
-                model: "grok-3-fast", stream: false,
+                model: "grok-4-1-fast-non-reasoning", stream: false,
                 input: [{ role: "user", content: "What are the 5 biggest AI developments, model releases, and industry moves from the past 7 days? Be specific with names, numbers, dates." }],
                 tools: [{ type: "x_search" }],
               }),
@@ -2577,7 +2577,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
               ? { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` }
               : getLLMHeaders(),
             body: JSON.stringify({
-              model: nativeGrokKey ? "grok-3-fast" : getModel("x_search"),
+              model: nativeGrokKey ? "grok-4-1-fast-non-reasoning" : getModel("x_search"),
               tools: [{ type: "x_search" }],
               messages: [{
                 role: "user",

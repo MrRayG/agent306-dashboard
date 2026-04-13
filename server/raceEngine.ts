@@ -147,7 +147,7 @@ export async function generateRace(grokKey: string): Promise<{
       method: "POST",
       headers: getLLMHeaders(),
       body: JSON.stringify({
-        model: "grok-4-1-fast",
+        model: "grok-4-1-fast-non-reasoning",
         messages: [{ role: "user", content: buildRacePrompt(ctx) }],
         temperature: 0.85,
       }),
