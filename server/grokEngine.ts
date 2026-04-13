@@ -7,7 +7,7 @@
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
-import { getShowTagDescriptions } from "./contentTypes.js";
+import { getShowTagDescriptions, enforceShowTag } from "./contentTypes.js";
 
 const GROK_API_KEY = LLM_API_KEY;
 const GROK_URL     = LLM_BASE_URL;
@@ -633,6 +633,15 @@ Remember: respond only with the JSON format specified.`;
     if (parsed.spotlightToken === undefined) parsed.spotlightToken = null;
     if (!parsed.farcasterText) {
       parsed.farcasterText = (parsed.narrative ?? parsed.tweet ?? "").slice(0, 2500);
+    }
+    // Enforce show tag on tweet — the system prompt asks the LLM to pick
+    // the most fitting tag, so we detect which one it chose and enforce it
+    if (parsed.tweet) {
+      const tagMatch = parsed.tweet.match(/^\[306\s+(\w+)\]/i);
+      if (tagMatch) {
+        const detectedType = tagMatch[1].toLowerCase();
+        parsed.tweet = enforceShowTag(parsed.tweet, detectedType);
+      }
     }
     return parsed;
   } else {

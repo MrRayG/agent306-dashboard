@@ -156,5 +156,19 @@ export function getContentTypeByQueue(queueType: string): ContentType | undefine
   return Object.values(CONTENT_TYPES).find(t => t.queueType === queueType);
 }
 
+/**
+ * Post-processing show tag enforcement.
+ * Ensures post starts with the correct [306 XXX] tag.
+ * Strips any malformed tag attempts before prepending the correct one.
+ */
+export function enforceShowTag(postText: string, queueType: string): string {
+  const expectedTag = getShowTag(queueType);
+  if (!expectedTag) return postText;
+  if (postText.startsWith(expectedTag)) return postText;
+  // Strip any existing malformed show tag
+  const cleaned = postText.replace(/^\[306\s+\w+\]\s*/i, '');
+  return `${expectedTag} ${cleaned}`;
+}
+
 /** All valid show tags */
 export const ALL_SHOW_TAGS = Object.values(CONTENT_TYPES).map(t => t.showTag);

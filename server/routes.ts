@@ -92,6 +92,8 @@ import {
 } from "./dreamEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { startXPostScheduler, seedIntroPost, getXPostQueue, queueXPost, seedDailyContent } from "./xPostScheduler.js";
+import { getVoiceContext } from "./voiceInstructions.js";
+import { enforceShowTag } from "./contentTypes.js";
 
 // On-chain API removed
 // const ONCHAIN_API = "";
@@ -656,6 +658,8 @@ async function postDailyNewsDispatch() {
 
     // ── 2. Ask Grok to write today's [306 NEWS] dispatch ───────────────────────────
     const dispatchContext = getOptimizedContext("news dispatch daily AI market headlines");
+    const newsVoice = getVoiceContext('news');
+    const dispatchSystemPrompt = `${dispatchContext}\n\n${newsVoice}`;
     const grokResp = await fetch(LLM_BASE_URL, {
       method: "POST",
       headers: getLLMHeaders(),
@@ -664,7 +668,7 @@ async function postDailyNewsDispatch() {
         messages: [
           {
             role: "system",
-            content: dispatchContext,
+            content: dispatchSystemPrompt,
           },
           {
             role: "user",
@@ -716,6 +720,9 @@ Return JSON: {"post": "..."}`
     if (!postText) {
       postText = `[NEWS DISPATCH] ${dayLabel}\n\nETH ${ethPrice} (${ethChange}) · BTC ${btcPrice} (${btcChange}). AI and Web3 continue to converge.`;
     }
+
+    // Enforce [306 NEWS] show tag
+    postText = enforceShowTag(postText, "dispatch");
 
     // ── 3. Queue dispatch via X post scheduler ──────────────────────────
     try {
@@ -1651,6 +1658,9 @@ export function registerRoutes(httpServer: Server, app: Express) {
         if (!postText && raw.length > 30) postText = raw;
         if (!postText || postText.length < 30) { console.error("[AIRoundup] No content generated"); return; }
 
+        // Enforce [306 ROUNDUP] show tag
+        postText = enforceShowTag(postText, "roundup");
+
         // Queue for X via scheduler (high priority) instead of direct posting
         try {
           if (postText.trim().length > 10) {
@@ -2372,6 +2382,9 @@ export function registerRoutes(httpServer: Server, app: Express) {
         postText = safeParseLLMJson(raw, "Routes.researchBrief")?.post ?? "";
         if (!postText && raw.length > 30) postText = raw;
         if (!postText || postText.length < 30) { console.error("[ResearchBrief] No content generated"); return; }
+
+        // Enforce [306 RESEARCH] show tag
+        postText = enforceShowTag(postText, "research");
 
         // Queue for X via scheduler (high priority) instead of direct posting
         try {
