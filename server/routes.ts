@@ -3610,6 +3610,37 @@ needsHelp: true only when you genuinely need his direction or information`,
     }
   });
 
+  // GET /api/hypotheses/clusters — preview similar hypothesis clusters without merging
+  app.get("/api/hypotheses/clusters", async (_req, res) => {
+    try {
+      const { findHypothesisClusters } = await import("./hypothesisConsolidator.js");
+      const clusters = findHypothesisClusters(3);
+      res.json({
+        totalClusters: clusters.length,
+        totalHypotheses: clusters.reduce((s, c) => s + c.members.length, 0),
+        clusters: clusters.map(c => ({
+          representative: c.representative.claim.slice(0, 100),
+          memberCount: c.members.length,
+          members: c.members.map(m => ({ id: m.id, claim: m.claim.slice(0, 100), status: m.status })),
+        })),
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/hypotheses/consolidate — run hypothesis consolidation
+  app.post("/api/hypotheses/consolidate", async (req, res) => {
+    try {
+      const { consolidateHypotheses } = await import("./hypothesisConsolidator.js");
+      const dryRun = req.query.dryRun === "true";
+      const result = await consolidateHypotheses({ dryRun });
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // GET /api/reasoning/trust-scores — view all hypothesis trust scores
   app.get("/api/reasoning/trust-scores", async (_req, res) => {
     try {

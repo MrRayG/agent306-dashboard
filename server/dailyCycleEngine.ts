@@ -53,6 +53,7 @@ import { analyzeDailyCycle } from "./analyzerEngine.js";
 import { getExplorationState } from "./explorationEngine.js";
 import { queueXPost, seedDailyContent } from "./xPostScheduler.js";
 import { runKnowledgeConsolidation } from "./knowledgeConsolidator.js";
+import { consolidateHypotheses } from "./hypothesisConsolidator.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { TriadCoordinator } from "./triad/coordinator.js";
 
@@ -1523,6 +1524,19 @@ Write a single tweet sharing the most interesting insight from this research. Re
           console.log(`[DailyCycle] KB consolidation: saved ${consolResult.savings} entries`);
         } catch (e: any) {
           console.warn("[DailyCycle] KB consolidation failed:", e.message);
+        }
+      }
+    })(),
+    // Weekly hypothesis consolidation (Sundays)
+    (async () => {
+      const today = new Date();
+      if (today.getDay() === 0) {
+        try {
+          console.log("[DailyCycle] Running weekly hypothesis consolidation...");
+          const result = await consolidateHypotheses({ minClusterSize: 3 });
+          console.log(`[DailyCycle] Hypothesis consolidation: ${result.clustersFound} clusters, ${result.merged} merged, ${result.removed} removed`);
+        } catch (e: any) {
+          console.warn("[DailyCycle] Hypothesis consolidation failed (non-fatal):", e.message);
         }
       }
     })(),
