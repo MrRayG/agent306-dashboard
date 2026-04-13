@@ -576,7 +576,7 @@ async function parallelPerplexitySearch(
             max_tokens: 800,
             temperature: 0.1,
           }),
-          signal: AbortSignal.timeout(25000),
+          signal: AbortSignal.timeout(35000),
         });
 
         if (!pplxRes.ok) {
@@ -669,7 +669,7 @@ ${combinedResults}`
       temperature: 0.2,
       max_tokens: 2000,
     }),
-    signal: AbortSignal.timeout(40000),
+    signal: AbortSignal.timeout(60000),
   });
 
   if (!res.ok) {
@@ -866,9 +866,9 @@ Think deeply. What are we missing? What assumptions are we making? What would ch
           }
         ],
         temperature: 0.3,
-        max_tokens: 1200,
+        max_tokens: 2000,
       }),
-      signal: AbortSignal.timeout(40000),
+      signal: AbortSignal.timeout(60000),
     });
 
     if (reasoningRes.ok) {

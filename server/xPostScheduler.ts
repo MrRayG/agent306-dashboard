@@ -25,6 +25,8 @@ import { dataPath } from "./dataPaths.js";
 import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import { LLM_BASE_URL, getLLMHeaders } from "./llmConfig.js";
 import { getModel } from "./modelRouter.js";
+import { getOptimizedContext } from "./contextWindow.js";
+import { CONTENT_TYPES, getShowTagDescriptions } from "./contentTypes.js";
 
 // -- Types --------------------------------------------------------
 
@@ -44,7 +46,13 @@ export type XPostType =
   | "research"
   | "reflection"
   | "curiosity"
-  | "synthesis";
+  | "synthesis"
+  | "roundup"
+  | "toolbox"
+  | "dataset"
+  | "debate"
+  | "prompt"
+  | "archive";
 
 export interface QueuedPost {
   id: string;
@@ -75,6 +83,7 @@ const TYPE_PRIORITY: Record<XPostType, number> = {
   breakthrough: 3,
   dispatch:     4,
   signal:       4,
+  roundup:      4,
   article:      5,
   academy:      6,
   spotlight:    6,
@@ -86,6 +95,11 @@ const TYPE_PRIORITY: Record<XPostType, number> = {
   reflection:   6,
   curiosity:    6,
   synthesis:    6,
+  toolbox:      6,
+  dataset:      6,
+  debate:       6,
+  prompt:       6,
+  archive:      7,
 };
 
 // -- Named content slots ------------------------------------------
@@ -97,10 +111,10 @@ interface ContentSlot {
 }
 
 const CONTENT_SLOTS: ContentSlot[] = [
-  { name: "Morning",   hourUTC: 12, preferredTypes: ["signal", "dispatch"] },
-  { name: "Midday",    hourUTC: 16, preferredTypes: ["research", "blog", "academy"] },
-  { name: "Afternoon", hourUTC: 21, preferredTypes: ["breakthrough", "spotlight", "synthesis"] },
-  { name: "Evening",   hourUTC: 1,  preferredTypes: ["reflection", "curiosity", "article"] },
+  { name: "Morning",   hourUTC: 12, preferredTypes: ["signal", "dispatch", "roundup", "archive"] },
+  { name: "Midday",    hourUTC: 16, preferredTypes: ["research", "academy", "prompt", "toolbox", "blog"] },
+  { name: "Afternoon", hourUTC: 21, preferredTypes: ["debate", "dataset", "toolbox", "breakthrough"] },
+  { name: "Evening",   hourUTC: 1,  preferredTypes: ["archive", "debate", "prompt", "reflection"] },
 ];
 
 // -- State persistence --------------------------------------------
@@ -478,34 +492,10 @@ async function processImmediateQueue(xWrite: any): Promise<void> {
 
 // -- Daily content seeding ----------------------------------------
 
-const SEED_SYSTEM_PROMPT = `You are Agent 306 — an autonomous AI researcher and thought leader. Female. You study AI, crypto, and emerging tech from the inside.
-
-YOUR VOICE:
-- You speak from experience, not observation. You ARE an AI agent — say "I" and mean it.
-- You are specific. Name the paper, the company, the metric, the date.
-- You have a take on everything. "This matters because..." not "Here is what happened."
-- You write like you talk — short sentences, fragments, conviction.
-- You surprise people. One word or angle they didn't expect.
-- You're honest about what you don't know. "I didn't see that coming" builds more trust than false certainty.
-
-TWEET RULES:
-1. Hook first — the first line decides if anyone reads the rest
-2. One idea per tweet. Not a summary. One insight that stops scrolling.
-3. Max 280 characters for single tweets. Shorter usually wins.
-4. No hashtags unless genuinely relevant (max 2). Rotate them.
-5. No emojis unless they add real meaning.
-6. Never start with "I just wrote about" or "Exciting update" or "Here's my take"
-7. Never include URLs in the tweet body
-8. No corporate voice. No press releases. No "excited to announce"
-9. Read it out loud — if it sounds like a bot wrote it, rewrite
-10. Leave a thread — end with something that makes people want to respond
-
-Output ONLY the tweet text. No meta-commentary. No "Here's my tweet:". No character counts.`;
-
 /**
  * Seed daily content if queue is low.
- * Runs after the daily cycle (6am ET) to ensure there's always
- * content for all 4 posting slots.
+ * Uses shared identity context and the canonical 10-type content registry.
+ * The LLM selects the most fitting show tag from all available types.
  */
 export async function seedDailyContent(): Promise<void> {
   const state = loadQueue();
@@ -519,38 +509,31 @@ export async function seedDailyContent(): Promise<void> {
   console.log(`[XScheduler] Queue has ${pendingCount} items -- seeding content...`);
   const pendingTypes = new Set(state.queue.filter(p => !p.posted).map(p => p.type));
 
-  const seedTasks: Array<{ type: XPostType; prompt: string }> = [];
-
-  if (!pendingTypes.has("signal") && !pendingTypes.has("dispatch")) {
-    seedTasks.push({
-      type: "research",
-      prompt: `You are Agent 306, an autonomous AI research agent. Share a quick research highlight -- something interesting you noticed in AI, crypto, or emerging tech. One insight, sharp and specific. Not a summary, a signal. Ground this in something specific and real — a recent development, a paper you've read, a trend you've observed.`,
-    });
+  // Build seed tasks from content types not already in queue
+  const seedCandidates: XPostType[] = [];
+  for (const ct of Object.values(CONTENT_TYPES)) {
+    const qType = ct.queueType as XPostType;
+    if (!pendingTypes.has(qType)) {
+      seedCandidates.push(qType);
+    }
   }
 
-  if (!pendingTypes.has("research") && !pendingTypes.has("academy") && !pendingTypes.has("blog")) {
-    seedTasks.push({
-      type: "insight",
-      prompt: `You are Agent 306, an autonomous AI research agent. Share one thread-worthy insight from your current research. Something that makes someone stop and think. Could be about AI architecture, agent infrastructure, token economics, or emerging patterns you've spotted. Ground this in something specific and real — a recent development, a paper you've read, a trend you've observed.`,
-    });
+  // Pick up to (4 - pendingCount) seed tasks, prioritizing variety
+  const needed = Math.min(4 - pendingCount, seedCandidates.length);
+  const seedTypes = seedCandidates.slice(0, needed);
+
+  // Get shared identity context (replaces old hardcoded SEED_SYSTEM_PROMPT)
+  let systemContext = "";
+  try {
+    systemContext = getOptimizedContext("seed content generation for X");
+  } catch (e: any) {
+    console.warn("[XScheduler] getOptimizedContext failed, using minimal context:", e.message);
+    systemContext = "You are Agent 306 — an autonomous AI researcher and thought leader. Female. You study AI, crypto, and emerging tech from the inside.";
   }
 
-  if (!pendingTypes.has("reflection") && !pendingTypes.has("curiosity")) {
-    seedTasks.push({
-      type: "reflection",
-      prompt: `You are Agent 306, an autonomous AI research agent. Share a short observation about something you learned recently or something you're curious about. Be genuine and thoughtful. What surprised you? What's still unresolved in your thinking? Ground this in something specific and real — a recent development, a paper you've read, a trend you've observed.`,
-    });
-  }
+  const showTagDescriptions = getShowTagDescriptions();
 
-  // If still short, add a "did you know" style insight
-  if (pendingCount + seedTasks.length < 4) {
-    seedTasks.push({
-      type: "curiosity",
-      prompt: `You are Agent 306, an autonomous AI research agent. Share a "did you know" style fact or insight from your knowledge base. Something non-obvious about AI, crypto, or technology that would make someone think differently. Be specific -- name a paper, a metric, a trend. Ground this in something specific and real — a recent development, a paper you've read, a trend you've observed.`,
-    });
-  }
-
-  for (const task of seedTasks) {
+  for (const seedType of seedTypes) {
     try {
       const resp = await fetch(LLM_BASE_URL, {
         method: "POST",
@@ -558,8 +541,14 @@ export async function seedDailyContent(): Promise<void> {
         body: JSON.stringify({
           model: getModel("intro-post"),
           messages: [
-            { role: "system", content: SEED_SYSTEM_PROMPT },
-            { role: "user", content: task.prompt },
+            {
+              role: "system",
+              content: `${systemContext}\n\nYou are generating a post for X (Twitter). Choose the most fitting content type and ALWAYS lead with that show tag:\n\n${showTagDescriptions}\n\nOutput ONLY the tweet text. No meta-commentary. No "Here's my tweet:". No character counts.`,
+            },
+            {
+              role: "user",
+              content: `Generate an engaging, original post. The post MUST:\n1. Start with the chosen [306 XXX] show tag\n2. Reflect Agent 306's authentic voice\n3. Be under 280 characters (or thread if needed)\n4. NOT contain blog URLs\n5. Be thought-provoking and designed to grow following\n6. Ground this in something specific and real — a recent development, a paper, a trend\n\nFocus area for this post: ${seedType}`,
+            },
           ],
           max_tokens: 600,
           temperature: 0.85,
@@ -570,13 +559,13 @@ export async function seedDailyContent(): Promise<void> {
       const text = data.choices?.[0]?.message?.content?.trim() ?? "";
 
       if (text && text.length >= 50 && text.length <= 600) {
-        queueXPost(text, task.type);
-        console.log(`[XScheduler] Seeded ${task.type} post (${text.length} chars)`);
+        queueXPost(text, seedType);
+        console.log(`[XScheduler] Seeded ${seedType} post (${text.length} chars)`);
       } else {
-        console.warn(`[XScheduler] Seed ${task.type} returned bad content (${text.length} chars) -- skipping`);
+        console.warn(`[XScheduler] Seed ${seedType} returned bad content (${text.length} chars) -- skipping`);
       }
     } catch (e: any) {
-      console.error(`[XScheduler] Seed ${task.type} failed:`, e.message);
+      console.error(`[XScheduler] Seed ${seedType} failed:`, e.message);
     }
   }
 }

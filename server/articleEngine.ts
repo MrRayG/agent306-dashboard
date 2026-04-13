@@ -619,10 +619,8 @@ export async function runWeeklyDeepRead(
     if (state.history.length > 52) state.history = state.history.slice(0, 52); // keep 1 year
     saveState(state);
 
-    // Queue teaser for X post scheduler
-    if (teaser && teaser.length > 10) {
-      queueXPost(teaser.slice(0, 2500), "article");
-    }
+    // Double-posting removed: direct post above is the sole posting method.
+    // Previously also called queueXPost() which caused the teaser to post twice.
 
     console.log(`[ArticleEngine] Deep Read posted: "${headline}" → ${tweetUrl ?? "no URL"}`);
     return { success: true, tweetUrl: tweetUrl ?? undefined, headline };

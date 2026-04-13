@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { CONTENT_TYPE_LIST, ACTIVE_ENGINES, SCHEDULER_SLOTS } from "@/data/contentTypes";
 
 function timeAgo(iso: string | null): string {
   if (!iso) return "never";
@@ -15,44 +16,13 @@ function timeAgo(iso: string | null): string {
 const mono = { fontFamily: "'Courier New', monospace" } as const;
 const pixel = { fontFamily: "'Courier New', monospace", textTransform: "uppercase" as const, letterSpacing: "0.15em" } as const;
 
-// ── Content type definitions ────────────────────────────────────────────────
-const CONTENT_TYPES = [
-  {
-    id: "signal_brief",
-    label: "SIGNAL Brief",
-    color: "#fbbf24",
-    tag: "[306 SIGNAL]",
-    description: "A concise daily intelligence brief summarizing the most important AI/crypto signals and news.",
-    schedule: "Mon / Wed / Fri at 12pm ET",
-    endpoint: "/api/signal-brief/post",
-  },
-  {
-    id: "cyoa",
-    label: "Research Brief",
-    color: "#2dd4bf",
-    tag: "[306 RESEARCH]",
-    description: "A deeper analytical piece on a specific AI or crypto research topic Agent 306 has been investigating.",
-    schedule: "Sunday at 10am ET",
-    endpoint: "/api/cyoa/post",
-  },
-  {
-    id: "race",
-    label: "AI Roundup",
-    color: "#a78bfa",
-    tag: "[306 ROUNDUP]",
-    description: "A weekly roundup of the biggest AI developments, model releases, and industry moves.",
-    schedule: "Sunday at 12pm ET",
-    endpoint: "/api/race/post",
-  },
-  {
-    id: "news_dispatch",
-    label: "News Dispatch",
-    color: "#4ade80",
-    tag: "[306 NEWS]",
-    description: "Breaking or timely news coverage on a specific AI/crypto event or announcement.",
-    schedule: "Daily at 8am ET",
-    endpoint: "/api/news/dispatch",
-  },
+// Triggerable content types (engines with API endpoints)
+const TRIGGERABLE = [
+  { id: "signal_brief", label: "SIGNAL Brief", tag: "[306 SIGNAL]", color: "#fbbf24", endpoint: "/api/signal-brief/post", schedule: "Mon/Wed/Fri 12pm ET" },
+  { id: "cyoa", label: "Research Brief", tag: "[306 RESEARCH]", color: "#2dd4bf", endpoint: "/api/cyoa/post", schedule: "Manual trigger" },
+  { id: "race", label: "AI Roundup", tag: "[306 ROUNDUP]", color: "#a78bfa", endpoint: "/api/race/post", schedule: "Manual trigger" },
+  { id: "news_dispatch", label: "News Dispatch", tag: "[306 NEWS]", color: "#4ade80", endpoint: "/api/news/dispatch", schedule: "Daily 8am ET" },
+  { id: "academy", label: "Academy", tag: "[306 ACADEMY]", color: "#60a5fa", endpoint: "/api/academy/post", schedule: "Tue/Thu/Sat 10am ET" },
 ] as const;
 
 const X_ACCOUNT = "@agent3zero6";
@@ -80,13 +50,12 @@ export default function CommandCenter() {
     setTriggering(null);
   }
 
-  // Find engine state from coordinator
   function getEngineState(engineId: string) {
     return coord?.engines?.find((e: any) => e.engine === engineId);
   }
 
   return (
-    <div style={{ padding: "24px", maxWidth: "900px", margin: "0 auto" }}>
+    <div style={{ padding: "24px", maxWidth: "960px", margin: "0 auto" }}>
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
 
       {/* Header */}
@@ -96,7 +65,7 @@ export default function CommandCenter() {
           Command <span style={{ color: "#f97316" }}>Center</span>
         </h1>
         <p style={{ ...mono, fontSize: "0.88rem", color: "rgba(227,229,228,0.68)", margin: 0 }}>
-          Content engines for X ({X_ACCOUNT}) and Farcaster ({FC_ACCOUNT}). Generate, preview, and post.
+          Content engines for X ({X_ACCOUNT}) and Farcaster ({FC_ACCOUNT}). 10 content types, 4 daily posting slots.
         </p>
       </div>
 
@@ -118,97 +87,146 @@ export default function CommandCenter() {
         </div>
       )}
 
-      {/* Content type cards */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "28px" }}>
-        {CONTENT_TYPES.map(ct => {
-          const engineState = getEngineState(ct.id);
-          const isReady = engineState?.isReady ?? true;
-          const lastPosted = engineState?.lastPostedAt ?? null;
-          const lastTweetUrl = engineState?.lastTweetUrl ?? null;
-          const lastCastUrl = engineState?.lastCastUrl ?? null;
-          const isTriggering = triggering === ct.label;
-
-          return (
+      {/* ── Content Type Registry ── */}
+      <div style={{ marginBottom: "28px" }}>
+        <div style={{ ...pixel, fontSize: "0.68rem", color: "rgba(227,229,228,0.60)", marginBottom: "12px" }}>
+          CONTENT TYPE REGISTRY — 10 SHOW TAGS
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "8px" }}>
+          {CONTENT_TYPE_LIST.map(ct => (
             <div key={ct.id} style={{
-              border: `1px solid ${ct.color}25`,
               background: "#141516",
-              padding: "0",
-              overflow: "hidden",
+              border: "1px solid rgba(227,229,228,0.10)",
+              padding: "12px 16px",
             }}>
-              {/* Top accent bar */}
-              <div style={{ height: 3, background: ct.color }} />
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                <span style={{ ...mono, fontSize: "0.70rem", color: ct.category === 'primary' ? "#fbbf24" : "#a78bfa", background: ct.category === 'primary' ? "rgba(251,191,36,0.12)" : "rgba(167,139,250,0.12)", padding: "2px 6px" }}>
+                  {ct.showTag}
+                </span>
+                <span style={{ ...mono, fontSize: "0.60rem", color: ct.category === 'primary' ? "#4ade80" : "rgba(227,229,228,0.40)" }}>
+                  {ct.category === 'primary' ? 'ACTIVE' : 'SEED'}
+                </span>
+              </div>
+              <div style={{ ...mono, fontSize: "0.78rem", color: "#efefef", fontWeight: 600, marginBottom: "2px" }}>{ct.name}</div>
+              <div style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.50)", lineHeight: 1.5 }}>
+                {ct.description.slice(0, 80)}{ct.description.length > 80 ? '...' : ''}
+              </div>
+              <div style={{ ...mono, fontSize: "0.63rem", color: "rgba(227,229,228,0.35)", marginTop: "4px" }}>{ct.schedule}</div>
+            </div>
+          ))}
+        </div>
+      </div>
 
-              <div style={{ padding: "20px 24px" }}>
-                {/* Header row */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
-                      <span style={{ ...mono, fontSize: "0.70rem", color: ct.color, background: `${ct.color}15`, padding: "2px 8px" }}>{ct.tag}</span>
-                      {isReady && <span style={{ ...mono, fontSize: "0.63rem", color: "#4ade80" }}>READY</span>}
-                    </div>
-                    <h2 style={{ ...mono, fontSize: "1.10rem", fontWeight: 700, color: ct.color, margin: "0 0 4px" }}>{ct.label}</h2>
-                    <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", margin: 0, lineHeight: 1.6, maxWidth: 550 }}>
-                      {ct.description}
-                    </p>
-                  </div>
+      {/* ── Active Engines ── */}
+      <div style={{ marginBottom: "28px" }}>
+        <div style={{ ...pixel, fontSize: "0.68rem", color: "rgba(227,229,228,0.60)", marginBottom: "12px" }}>
+          ACTIVE ENGINES
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "rgba(227,229,228,0.08)" }}>
+          {ACTIVE_ENGINES.map(eng => (
+            <div key={eng.id} style={{ background: "#141516", padding: "10px 20px", display: "flex", alignItems: "center", gap: "16px" }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: eng.color, flexShrink: 0 }} />
+              <div style={{ ...mono, fontSize: "0.83rem", color: eng.color, fontWeight: 600, minWidth: "160px" }}>{eng.label}</div>
+              <div style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.50)", flex: 1 }}>{eng.schedule}</div>
+              <span style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.40)", background: "rgba(227,229,228,0.06)", padding: "2px 8px" }}>{eng.tag}</span>
+            </div>
+          ))}
+        </div>
+      </div>
 
-                  {/* Status dot */}
-                  <div style={{ textAlign: "right", flexShrink: 0 }}>
-                    <div style={{
-                      width: 10, height: 10, borderRadius: "50%",
-                      background: isReady ? "#4ade80" : "rgba(227,229,228,0.35)",
-                      marginLeft: "auto", marginBottom: 6,
-                    }} />
-                    <div style={{ ...mono, fontSize: "0.63rem", color: "rgba(227,229,228,0.45)" }}>
-                      {lastPosted ? `Last: ${timeAgo(lastPosted)}` : "No posts yet"}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Platforms + Schedule */}
-                <div style={{ display: "flex", gap: "16px", alignItems: "center", marginBottom: "16px", flexWrap: "wrap" }}>
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <span style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.40)" }}>Posts to:</span>
-                    <span style={{ ...mono, fontSize: "0.68rem", color: "#efefef", background: "rgba(227,229,228,0.08)", padding: "2px 8px" }}>X {X_ACCOUNT}</span>
-                    <span style={{ ...mono, fontSize: "0.68rem", color: "#8a63d2", background: "rgba(138,99,210,0.08)", padding: "2px 8px" }}>Farcaster {FC_ACCOUNT}</span>
-                  </div>
-                  <span style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.35)" }}>{ct.schedule}</span>
-                </div>
-
-                {/* Actions row */}
-                <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-                  <button
-                    onClick={() => trigger(ct.endpoint, ct.label)}
-                    disabled={isTriggering}
-                    style={{
-                      background: isTriggering ? `${ct.color}25` : ct.color,
-                      color: isTriggering ? `${ct.color}80` : "#1a1b1c",
-                      border: "none", ...mono, fontSize: "0.83rem", fontWeight: 700,
-                      padding: "8px 20px", cursor: isTriggering ? "not-allowed" : "pointer",
-                      textTransform: "uppercase" as const, letterSpacing: "0.06em",
-                    }}
-                  >
-                    {isTriggering ? "Generating..." : "Generate & Post"}
-                  </button>
-
-                  {/* Recent post links */}
-                  {lastTweetUrl && (
-                    <a href={lastTweetUrl} target="_blank" rel="noopener noreferrer"
-                      style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.55)", textDecoration: "none", border: "1px solid rgba(227,229,228,0.18)", padding: "6px 12px" }}>
-                      View on X
-                    </a>
-                  )}
-                  {lastCastUrl && (
-                    <a href={lastCastUrl} target="_blank" rel="noopener noreferrer"
-                      style={{ ...mono, fontSize: "0.73rem", color: "#8a63d2", textDecoration: "none", border: "1px solid rgba(138,99,210,0.18)", padding: "6px 12px" }}>
-                      View on Farcaster
-                    </a>
-                  )}
-                </div>
+      {/* ── Post Scheduler Slots ── */}
+      <div style={{ marginBottom: "28px" }}>
+        <div style={{ ...pixel, fontSize: "0.68rem", color: "rgba(227,229,228,0.60)", marginBottom: "12px" }}>
+          POST SCHEDULER — 4 DAILY SLOTS
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
+          {SCHEDULER_SLOTS.map(slot => (
+            <div key={slot.name} style={{ background: "#141516", border: "1px solid rgba(227,229,228,0.10)", padding: "12px 16px" }}>
+              <div style={{ ...mono, fontSize: "0.83rem", color: "#f97316", fontWeight: 700, marginBottom: "4px" }}>{slot.name}</div>
+              <div style={{ ...mono, fontSize: "0.73rem", color: "#efefef", marginBottom: "6px" }}>{slot.time}</div>
+              <div style={{ ...mono, fontSize: "0.63rem", color: "rgba(227,229,228,0.45)", lineHeight: 1.5 }}>
+                {slot.preferred.join(', ')}
               </div>
             </div>
-          );
-        })}
+          ))}
+        </div>
+      </div>
+
+      {/* ── Triggerable Engines ── */}
+      <div style={{ marginBottom: "28px" }}>
+        <div style={{ ...pixel, fontSize: "0.68rem", color: "rgba(227,229,228,0.60)", marginBottom: "12px" }}>
+          GENERATE & POST
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          {TRIGGERABLE.map(ct => {
+            const engineState = getEngineState(ct.id);
+            const isReady = engineState?.isReady ?? true;
+            const lastPosted = engineState?.lastPostedAt ?? null;
+            const lastTweetUrl = engineState?.lastTweetUrl ?? null;
+            const lastCastUrl = engineState?.lastCastUrl ?? null;
+            const isTriggering = triggering === ct.label;
+
+            return (
+              <div key={ct.id} style={{
+                border: `1px solid ${ct.color}25`,
+                background: "#141516",
+                overflow: "hidden",
+              }}>
+                <div style={{ height: 3, background: ct.color }} />
+                <div style={{ padding: "16px 20px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
+                        <span style={{ ...mono, fontSize: "0.70rem", color: ct.color, background: `${ct.color}15`, padding: "2px 8px" }}>{ct.tag}</span>
+                        {isReady && <span style={{ ...mono, fontSize: "0.63rem", color: "#4ade80" }}>READY</span>}
+                      </div>
+                      <h2 style={{ ...mono, fontSize: "1.05rem", fontWeight: 700, color: ct.color, margin: "0 0 2px" }}>{ct.label}</h2>
+                      <span style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.35)" }}>{ct.schedule}</span>
+                    </div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <div style={{
+                        width: 10, height: 10, borderRadius: "50%",
+                        background: isReady ? "#4ade80" : "rgba(227,229,228,0.35)",
+                        marginLeft: "auto", marginBottom: 6,
+                      }} />
+                      <div style={{ ...mono, fontSize: "0.63rem", color: "rgba(227,229,228,0.45)" }}>
+                        {lastPosted ? `Last: ${timeAgo(lastPosted)}` : "No posts yet"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+                    <button
+                      onClick={() => trigger(ct.endpoint, ct.label)}
+                      disabled={isTriggering}
+                      style={{
+                        background: isTriggering ? `${ct.color}25` : ct.color,
+                        color: isTriggering ? `${ct.color}80` : "#1a1b1c",
+                        border: "none", ...mono, fontSize: "0.83rem", fontWeight: 700,
+                        padding: "8px 20px", cursor: isTriggering ? "not-allowed" : "pointer",
+                        textTransform: "uppercase" as const, letterSpacing: "0.06em",
+                      }}
+                    >
+                      {isTriggering ? "Generating..." : "Generate & Post"}
+                    </button>
+                    {lastTweetUrl && (
+                      <a href={lastTweetUrl} target="_blank" rel="noopener noreferrer"
+                        style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.55)", textDecoration: "none", border: "1px solid rgba(227,229,228,0.18)", padding: "6px 12px" }}>
+                        View on X
+                      </a>
+                    )}
+                    {lastCastUrl && (
+                      <a href={lastCastUrl} target="_blank" rel="noopener noreferrer"
+                        style={{ ...mono, fontSize: "0.73rem", color: "#8a63d2", textDecoration: "none", border: "1px solid rgba(138,99,210,0.18)", padding: "6px 12px" }}>
+                        View on Farcaster
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Recent posts feed */}
@@ -218,14 +236,14 @@ export default function CommandCenter() {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "rgba(227,229,228,0.12)" }}>
           {coord?.recentPosts?.length > 0 ? coord.recentPosts
-            .filter((p: any) => ["signal_brief", "cyoa", "race", "news_dispatch"].includes(p.key || p.engine))
+            .slice(0, 10)
             .map((p: any, i: number) => (
             <div key={i} style={{ background: "#141516", padding: "10px 20px", display: "flex", alignItems: "center", gap: "16px" }}>
               <div style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", minWidth: "80px" }}>
                 {timeAgo(p.postedAt)}
               </div>
               <div style={{ ...mono, fontSize: "0.83rem", color: "#efefef", flex: 1 }}>
-                {p.engine.toUpperCase()}
+                {p.engine?.toUpperCase() ?? p.key?.toUpperCase() ?? "—"}
               </div>
               {p.platform && (
                 <span style={{ ...mono, fontSize: "0.73rem", color: p.platform === "farcaster" ? "#8a63d2" : "rgba(227,229,228,0.48)", textTransform: "uppercase" as const }}>
@@ -234,7 +252,7 @@ export default function CommandCenter() {
               )}
               {(p.tweetUrl || p.postUrl) && (
                 <a href={p.postUrl || p.tweetUrl} target="_blank" rel="noopener noreferrer"
-                  style={{ ...mono, fontSize: "0.78rem", color: p.platform === "farcaster" ? "#8a63d2" : "#a78bfa", textDecoration: "none" }}>
+                  style={{ ...mono, fontSize: "0.78rem", color: "#a78bfa", textDecoration: "none" }}>
                   view
                 </a>
               )}

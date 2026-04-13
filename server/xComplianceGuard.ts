@@ -85,8 +85,8 @@ function checkSimilarity(
 }
 
 // ── Rate limiting ────────────────────────────────────────────
-const MAX_POSTS_PER_24H = 4;
-const MIN_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 hours
+const MAX_POSTS_PER_24H = 6;
+const MIN_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 function checkRateLimit(state: ComplianceState): { pass: boolean; reason?: string } {
   const now = Date.now();

@@ -27,7 +27,7 @@ import { dataPath } from "../dataPaths.js";
 import { LLM_BASE_URL, getLLMHeaders } from "../llmConfig.js";
 import { getModel } from "../modelRouter.js";
 import { safeParseLLMJson } from "../safeParseLLMJson.js";
-import { getFullAgentContext } from "../memoryEngine.js";
+import { getOptimizedContext } from "../contextWindow.js";
 import { getAgenda, runResearchAgendaCycle } from "../research-agenda.js";
 import type { ResearchThread } from "../research-agenda.js";
 import { runResearchPipeline, getResearchLab, researchMultiSource } from "../researchEngine.js";
@@ -218,7 +218,7 @@ export class TriadCoordinator {
    * Convert a ResearchThread into a FactSheet using LLM synthesis.
    */
   private async threadToFactSheet(thread: ResearchThread): Promise<FactSheet | null> {
-    const agentContext = getFullAgentContext();
+    const agentContext = getOptimizedContext("triad research reasoning writing");
     const lab = getResearchLab();
 
     // Gather evidence from the thread and linked topic

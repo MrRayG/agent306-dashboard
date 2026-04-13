@@ -1,16 +1,7 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-
-function timeUntil(iso: string | null): string {
-  if (!iso) return "—";
-  const diff = Math.floor((new Date(iso).getTime() - Date.now()) / 1000);
-  if (diff <= 0) return "overdue";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m`;
-  return `${Math.floor(diff / 86400)}d ${Math.floor((diff % 86400) / 3600)}h`;
-}
 
 function timeAgo(iso: string | null): string {
   if (!iso) return "never";
@@ -52,7 +43,7 @@ function PreviewBox({ content, onPost, posting }: { content: string; onPost: () 
           letterSpacing: "0.1em", cursor: posting ? "not-allowed" : "pointer",
         }}
       >
-        {posting ? "POSTING..." : "→ POST TO X"}
+        {posting ? "POSTING..." : "POST TO X"}
       </button>
     </div>
   );
@@ -60,45 +51,16 @@ function PreviewBox({ content, onPost, posting }: { content: string; onPost: () 
 
 export default function WeeklyEngines() {
   const { toast } = useToast();
-  // Spotlight state
-  const { data: spotlightStatus } = useQuery({ queryKey: ["/api/spotlight/status"] });
-  const [spotlightPreview, setSpotlightPreview] = useState<any>(null);
-  const [spotlightLoading, setSpotlightLoading] = useState(false);
-  const [spotlightPosting, setSpotlightPosting] = useState(false);
-  const [spotlightResult, setSpotlightResult] = useState<string | null>(null);
 
-  // Roundup state
+  // Article / Deep Read state
+  const { data: articleStatus } = useQuery({ queryKey: ["/api/article/status"] });
+
+  // Roundup state (manual trigger, not auto-scheduled)
   const { data: roundupStatus } = useQuery({ queryKey: ["/api/race/status"] });
   const [roundupPreview, setRoundupPreview] = useState<any>(null);
   const [roundupLoading, setRoundupLoading] = useState(false);
   const [roundupPosting, setRoundupPosting] = useState(false);
   const [roundupResult, setRoundupResult] = useState<string | null>(null);
-
-  async function previewSpotlight() {
-    setSpotlightLoading(true);
-    setSpotlightPreview(null);
-    try {
-      const res = await apiRequest("POST", "/api/spotlight/preview");
-      const data = await res.json();
-      if (data.spotlight) setSpotlightPreview(data.spotlight);
-      else toast({ title: data.error ?? "Failed to generate", variant: "destructive" });
-    } catch { toast({ title: "Server error", variant: "destructive" }); }
-    setSpotlightLoading(false);
-  }
-
-  async function postSpotlight() {
-    if (!spotlightPreview) return;
-    setSpotlightPosting(true);
-    try {
-      const res = await apiRequest("POST", "/api/spotlight/post");
-      const data = await res.json();
-      if (data.tweetUrl) {
-        setSpotlightResult(data.tweetUrl);
-        setSpotlightPreview(null);
-      } else toast({ title: data.error ?? "Failed to post", variant: "destructive" });
-    } catch { toast({ title: "Server error", variant: "destructive" }); }
-    setSpotlightPosting(false);
-  }
 
   async function previewRoundup() {
     setRoundupLoading(true);
@@ -118,15 +80,16 @@ export default function WeeklyEngines() {
     try {
       const res = await apiRequest("POST", "/api/race/post");
       const data = await res.json();
-      if (data.tweetUrl) {
-        setRoundupResult(data.tweetUrl);
+      if (data.ok) {
+        setRoundupResult("queued");
         setRoundupPreview(null);
+        toast({ title: "AI Roundup queued for posting" });
       } else toast({ title: data.error ?? "Failed to post", variant: "destructive" });
     } catch { toast({ title: "Server error", variant: "destructive" }); }
     setRoundupPosting(false);
   }
 
-  const ss = spotlightStatus as any;
+  const as = articleStatus as any;
   const rus = roundupStatus as any;
 
   return (
@@ -136,87 +99,72 @@ export default function WeeklyEngines() {
       <div style={{ marginBottom: "32px" }}>
         <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.2em", marginBottom: "4px" }}>WEEKLY ENGINES</div>
         <h1 style={{ fontSize: "26px", fontWeight: 800, color: "#efefef", margin: "0 0 8px", letterSpacing: "-0.02em" }}>
-          The <span style={{ color: "#f97316" }}>Spotlight</span> + <span style={{ color: "#60a5fa" }}>Weekly AI Roundup</span>
+          The <span style={{ color: "#2dd4bf" }}>Deep Read</span> + <span style={{ color: "#60a5fa" }}>AI Roundup</span>
         </h1>
         <p style={{ fontSize: "15px", color: "rgba(227,229,228,0.68)", margin: 0, lineHeight: 1.6 }}>
-          Two weekly posts that drive growth. Spotlight highlights breakthrough research. The Weekly Roundup tracks the AI landscape.
-          Both auto-post on Sundays — or preview and post manually here.
+          Two weekly features. The Deep Read is an auto-generated long-form X Article published every Monday.
+          The AI Roundup captures the week's biggest AI developments — manually triggered.
         </p>
       </div>
 
-      {/* ── THE SPOTLIGHT ── */}
-      <Section title="🔦 THE SPOTLIGHT — AI RESEARCH HIGHLIGHT" accent="#f97316">
+      {/* ── THE DEEP READ (Article Engine) ── */}
+      <Section title="[306 RESEARCH] THE DEEP READ — WEEKLY X ARTICLE" accent="#2dd4bf">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "16px", marginBottom: "20px" }}>
           <div>
             <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>AUTO-POSTS</div>
-            <div style={{ fontSize: "17px", fontWeight: 700, color: "#efefef" }}>Sundays · 11am ET</div>
+            <div style={{ fontSize: "17px", fontWeight: 700, color: "#efefef" }}>Mondays 5pm ET</div>
           </div>
           <div>
-            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>TOTAL SPOTLIGHTS</div>
-            <div style={{ fontSize: "17px", fontWeight: 700, color: "#efefef" }}>{ss?.totalSpotlights ?? 0}</div>
+            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>TOTAL ARTICLES</div>
+            <div style={{ fontSize: "17px", fontWeight: 700, color: "#efefef" }}>{as?.totalArticles ?? as?.history?.length ?? 0}</div>
           </div>
           <div>
-            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>LAST HOLDER</div>
-            <div style={{ fontSize: "17px", fontWeight: 700, color: "#f97316" }}>
-              {ss?.lastHolderUsername ? `@${ss.lastHolderUsername}` : "—"}
+            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>LAST POSTED</div>
+            <div style={{ fontSize: "17px", fontWeight: 700, color: "#2dd4bf" }}>
+              {as?.lastPostedAt ? timeAgo(as.lastPostedAt) : "—"}
             </div>
           </div>
         </div>
 
-        <div style={{ fontSize: "14px", color: "rgba(227,229,228,0.68)", lineHeight: 1.6, marginBottom: "16px", borderLeft: "2px solid #f97316", paddingLeft: "12px" }}>
-          Agent 306 picks one AI research highlight each week and writes the story behind it — not a summary, a deep analysis.
-          What it means. Why it matters. The insight others miss.
+        <div style={{ fontSize: "14px", color: "rgba(227,229,228,0.68)", lineHeight: 1.6, marginBottom: "16px", borderLeft: "2px solid #2dd4bf", paddingLeft: "12px" }}>
+          Agent 306 discovers the week's most important AI story, writes a deep analysis using X Notes,
+          and posts a teaser tweet. Uses premium models for quality.
         </div>
 
-        {spotlightResult ? (
-          <div style={{ padding: "12px", background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.3)" }}>
-            <div style={{ fontSize: "13px", color: "#4ade80", fontFamily: "monospace", marginBottom: "4px" }}>● POSTED</div>
-            <a href={spotlightResult} target="_blank" rel="noopener noreferrer"
-              style={{ fontSize: "15px", color: "#4ade80", fontFamily: "monospace" }}>{spotlightResult}</a>
-          </div>
-        ) : spotlightPreview ? (
+        {as?.history?.length > 0 && (
           <div>
-            <div style={{ fontSize: "13px", color: "#f97316", fontFamily: "monospace", marginBottom: "4px" }}>
-              SPOTLIGHT: @{spotlightPreview.holderUsername} · "{spotlightPreview.headline}"
-            </div>
-            <PreviewBox content={spotlightPreview.tweet} onPost={postSpotlight} posting={spotlightPosting} />
-            <button onClick={() => setSpotlightPreview(null)}
-              style={{ marginTop: "8px", background: "transparent", border: "1px solid rgba(227,229,228,0.35)", color: "rgba(227,229,228,0.68)", padding: "6px 14px", fontFamily: "monospace", fontSize: "13px", cursor: "pointer" }}>
-              REGENERATE
-            </button>
+            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em", marginBottom: "8px" }}>RECENT ARTICLES</div>
+            {(as.history as any[]).slice(0, 3).map((a: any, i: number) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid rgba(227,229,228,0.12)", fontSize: "14px" }}>
+                <span style={{ color: "#2dd4bf", fontFamily: "monospace" }}>{a.headline?.slice(0, 50) ?? "Deep Read"}</span>
+                <span style={{ color: "rgba(227,229,228,0.50)", fontFamily: "monospace", fontSize: "13px" }}>{timeAgo(a.postedAt)}</span>
+                {a.tweetUrl && <a href={a.tweetUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#2dd4bf", fontSize: "13px", fontFamily: "monospace" }}>view</a>}
+              </div>
+            ))}
           </div>
-        ) : (
-          <button onClick={previewSpotlight} disabled={spotlightLoading}
-            style={{
-              background: "transparent", border: "1px solid #f97316", color: "#f97316",
-              padding: "10px 20px", fontFamily: "monospace", fontSize: "14px", fontWeight: 700,
-              letterSpacing: "0.1em", cursor: spotlightLoading ? "not-allowed" : "pointer",
-            }}>
-            {spotlightLoading ? "GENERATING..." : "→ GENERATE SPOTLIGHT PREVIEW"}
-          </button>
         )}
       </Section>
 
-      {/* ── WEEKLY AI ROUNDUP ── */}
-      <Section title="🌐 WEEKLY AI ROUNDUP — STATE OF THE FIELD" accent="#60a5fa">
+      {/* ── AI ROUNDUP (manual trigger) ── */}
+      <Section title="[306 ROUNDUP] AI ROUNDUP — STATE OF THE FIELD" accent="#60a5fa">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "16px", marginBottom: "20px" }}>
           <div>
-            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>AUTO-POSTS</div>
-            <div style={{ fontSize: "17px", fontWeight: 700, color: "#efefef" }}>Sundays · 12pm ET</div>
+            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>TRIGGER</div>
+            <div style={{ fontSize: "17px", fontWeight: 700, color: "#efefef" }}>Manual</div>
           </div>
           <div>
-            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>TOPICS TRACKED</div>
-            <div style={{ fontSize: "17px", fontWeight: 700, color: "#60a5fa" }}>{rus?.daysToArena ?? "—"}</div>
+            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>DELIVERY</div>
+            <div style={{ fontSize: "17px", fontWeight: 700, color: "#60a5fa" }}>Queued via scheduler</div>
           </div>
           <div>
-            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>EDITIONS PUBLISHED</div>
+            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>EDITIONS</div>
             <div style={{ fontSize: "17px", fontWeight: 700, color: "#efefef" }}>{rus?.totalWeeks ?? 0}</div>
           </div>
         </div>
 
         <div style={{ fontSize: "14px", color: "rgba(227,229,228,0.68)", lineHeight: 1.6, marginBottom: "16px", borderLeft: "2px solid #60a5fa", paddingLeft: "12px" }}>
-          Every Sunday is a new edition. Key developments. Model releases. Research breakthroughs.
-          306 is the only place with the complete AI field record.
+          Key AI developments, model releases, and research breakthroughs from the past week.
+          Uses Grok x_search for live data. Posts are queued through the scheduler for optimal timing.
         </div>
 
         {rus?.weeks?.length > 0 && (
@@ -226,7 +174,7 @@ export default function WeeklyEngines() {
               <div key={w.weekNumber} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid rgba(227,229,228,0.12)", fontSize: "14px" }}>
                 <span style={{ color: "#60a5fa", fontFamily: "monospace" }}>Edition {w.weekNumber}</span>
                 <span style={{ color: "#efefef" }}>"{w.headline}"</span>
-                {w.tweetUrl && <a href={w.tweetUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#60a5fa", fontSize: "13px", fontFamily: "monospace" }}>↗</a>}
+                {w.tweetUrl && <a href={w.tweetUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#60a5fa", fontSize: "13px", fontFamily: "monospace" }}>view</a>}
               </div>
             ))}
           </div>
@@ -234,14 +182,12 @@ export default function WeeklyEngines() {
 
         {roundupResult ? (
           <div style={{ padding: "12px", background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.3)" }}>
-            <div style={{ fontSize: "13px", color: "#4ade80", fontFamily: "monospace", marginBottom: "4px" }}>● POSTED</div>
-            <a href={roundupResult} target="_blank" rel="noopener noreferrer"
-              style={{ fontSize: "15px", color: "#4ade80", fontFamily: "monospace" }}>{roundupResult}</a>
+            <div style={{ fontSize: "13px", color: "#4ade80", fontFamily: "monospace" }}>QUEUED FOR POSTING</div>
           </div>
         ) : roundupPreview ? (
           <div>
             <div style={{ fontSize: "13px", color: "#60a5fa", fontFamily: "monospace", marginBottom: "4px" }}>
-              "{roundupPreview.headline}" · {roundupPreview.weekLabel}
+              "{roundupPreview.headline}" {roundupPreview.weekLabel ? `(${roundupPreview.weekLabel})` : ""}
             </div>
             <PreviewBox content={roundupPreview.tweet} onPost={postRoundup} posting={roundupPosting} />
             <button onClick={() => setRoundupPreview(null)}
@@ -256,13 +202,13 @@ export default function WeeklyEngines() {
               padding: "10px 20px", fontFamily: "monospace", fontSize: "14px", fontWeight: 700,
               letterSpacing: "0.1em", cursor: roundupLoading ? "not-allowed" : "pointer",
             }}>
-            {roundupLoading ? "GENERATING..." : "→ GENERATE ROUNDUP PREVIEW"}
+            {roundupLoading ? "GENERATING..." : "GENERATE ROUNDUP PREVIEW"}
           </button>
         )}
       </Section>
 
       <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.35)", fontFamily: "monospace", textAlign: "center", marginTop: "16px" }}>
-        Both engines auto-post every Sunday. Use this page to preview, edit intent, or post manually at any time.
+        The Deep Read auto-posts every Monday. Use the Roundup section to preview and queue manually at any time.
       </div>
     </div>
   );
