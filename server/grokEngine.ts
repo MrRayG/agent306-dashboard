@@ -9,7 +9,7 @@ import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./ll
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 const GROK_API_KEY = LLM_API_KEY;
-const GROK_MODEL   = "grok-4-1-fast";
+const GROK_MODEL   = "grok-4-1-fast-non-reasoning";
 const GROK_URL     = LLM_BASE_URL;
 // on-chain API removed
 
@@ -104,7 +104,7 @@ async function runGrokSearch(query: string): Promise<typeof communitySignalCache
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` },
       body: JSON.stringify({
-        model: getModel("x_search"), // x_search quality is identical; grok-4-1-fast overkill for text retrieval
+        model: "grok-4-1-fast-non-reasoning", // native Grok Responses API requires grok-4 family for x_search
         stream: false,
         input: [{ role: "user", content: sanitizedQuery }],
         tools: [{ type: "x_search" }],

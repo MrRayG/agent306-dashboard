@@ -100,7 +100,7 @@ async function fetchFreshSignals(grokKey: string): Promise<{
       : getLLMHeaders();
     const searchBody = useNativeGrok
       ? {
-          model: "grok-3-fast",
+          model: "grok-4-1-fast-non-reasoning",
           stream: false,
           input: [{
             role: "user",

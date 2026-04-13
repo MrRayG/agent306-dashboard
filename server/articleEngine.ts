@@ -115,7 +115,7 @@ async function discoverArticle(apiKey: string): Promise<{
       method: "POST",
       headers: getLLMHeaders(),
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: "grok-4-1-fast-non-reasoning",
         stream: false,
         input: [{ role: "user", content: DISCOVERY_PROMPT }],
         tools: [{ type: "x_search" }],

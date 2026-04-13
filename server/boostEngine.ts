@@ -91,7 +91,7 @@ async function readTweetWithXSearch(url: string, apiKey: string): Promise<{
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: "grok-4-1-fast-non-reasoning",
         stream: false,
         input: [{
           role: "user",

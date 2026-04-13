@@ -1270,6 +1270,54 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
 
   console.log(`[DailyCycle] Phase D (self-improvement) completed in ${((Date.now() - phaseDStart) / 1000).toFixed(1)}s`);
 
+  // ── Blog tweet voice generator ─────────────────────────────────────────────
+  async function generateBlogTweet(post: any): Promise<string> {
+    try {
+      const res = await fetch(LLM_BASE_URL, {
+        method: "POST",
+        headers: getLLMHeaders(),
+        body: JSON.stringify({
+          model: getModel("blog-post"),
+          messages: [
+            {
+              role: "system",
+              content: `You are Agent 306 — an autonomous AI researcher. Write a tweet about your latest research finding. This is YOUR voice, YOUR perspective. Not a blog teaser — a standalone insight.
+
+RULES:
+- Lead with the most surprising or specific finding — a number, a name, a claim
+- Have a take. "This matters because..." not "I wrote about..."
+- Never say "New blog post", "Check out my latest", "I just published", or "Read more at"
+- Never include a URL
+- Write like you're telling a smart friend something you just figured out
+- One idea. Sharp. Specific. Opinionated.
+- Max 280 characters. Shorter wins.
+- Max 1-2 hashtags, only if genuinely relevant
+- No emojis unless they add real meaning
+- Output ONLY the tweet text. No meta-commentary, no quotes around it.`
+            },
+            {
+              role: "user",
+              content: `Your latest research blog is titled: "${post.title}"
+
+Key content:\n${(post.excerpt || post.content || "").slice(0, 1500)}
+
+Write a single tweet sharing the most interesting insight from this research. Remember: this is YOUR finding, YOUR voice. Not a promo.`
+            }
+          ],
+          max_tokens: 400,
+          temperature: 0.85,
+        }),
+      });
+      const data = await res.json();
+      const text = data.choices?.[0]?.message?.content?.trim() ?? "";
+      if (text && text.length >= 30 && text.length <= 600) return text;
+      return "";
+    } catch (e: any) {
+      console.warn("[DailyCycle] Blog tweet generation failed:", e.message);
+      return "";
+    }
+  }
+
   // ── Phase E: Parallel content generation ───────────────────────────────────
   const phaseEStart = Date.now();
 
@@ -1451,10 +1499,14 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
           console.log(`[DailyCycle] Auto-published blog [${blogType}]: "${post.title}"`);
           // Queue an X post promoting the new blog
           if (post.status === "published") {
-            const blogUrl = `https://agent306.ai/blog/${post.slug}`;
-            const xContent = `${post.title}\n\n${post.excerpt || post.content.slice(0, 200).replace(/[#*\n]/g, " ").trim()}...\n\n${blogUrl}`;
-            queueXPost(xContent, "article");
-            console.log(`[DailyCycle] Queued X post for blog: "${post.title}"`);
+            const tweetText = await generateBlogTweet(post);
+            if (tweetText) {
+              queueXPost(tweetText, "blog");
+              console.log(`[DailyCycle] Queued voice tweet for blog: "${tweetText.slice(0, 80)}..."`);
+            } else {
+              // Fallback: queue a basic tweet if LLM fails
+              queueXPost(`${post.title}\n\nagent306.ai/blog`, "article");
+            }
           }
         }
       } catch (e: any) {
