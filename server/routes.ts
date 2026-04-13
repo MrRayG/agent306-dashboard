@@ -890,6 +890,23 @@ setTimeout(() => {
   }
 }, 60_000);
 
+// ── EMBEDDING SYNC — sync KB embeddings on boot (background, non-fatal) ─────
+setTimeout(async () => {
+  try {
+    const status = getEmbeddingStatus();
+    console.log(`[Embeddings] Boot sync: ${status.embeddedEntries}/${status.totalEntries} entries have embeddings`);
+    if (status.embeddedEntries < status.totalEntries * 0.8) {
+      console.log("[Embeddings] Starting full embedding sync...");
+      const result = await syncEmbeddings();
+      console.log(`[Embeddings] Sync complete: ${result.synced} synced, ${result.cached} cached`);
+    } else {
+      console.log("[Embeddings] Coverage sufficient — skipping full sync");
+    }
+  } catch (e: any) {
+    console.warn("[Embeddings] Boot sync failed (non-fatal):", e.message);
+  }
+}, 30_000);
+
 // ── DREAM ENGINE — seed initial dreams on startup ────────────────────────────
 setTimeout(() => {
   seedDreams();
