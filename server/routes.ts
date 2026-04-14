@@ -34,6 +34,7 @@ import multer from "multer";
 import { getVideoStats } from "./videoEngine.js";
 import { requestPost, registerPost, releasePost, getCoordinatorState, resetCooldown } from "./postCoordinator.js";
 import { validateXPost, recordXPost } from "./xComplianceGuard.js";
+import { enforcePostFormat } from "./postFormatGuard.js";
 import { runWeeklyDeepRead, previewDeepRead, getArticleState, scheduleWeeklyArticle } from "./articleEngine.js";
 import { runExploration, getExplorationState, scheduleExploration } from "./explorationEngine.js";
 import { getAgentReachStatus } from "./agentReachEngine.js";
@@ -518,7 +519,7 @@ Respond as JSON only: { "score": number, "reason": "brief reason", "rewrite": "i
       if (!compliance.allowed) {
         console.log(`[Agent306] EP${epNum} opener skipped by compliance: ${compliance.reason}`);
       } else {
-        const postText = compliance.sanitizedContent ?? finalTweetText;
+        const postText = enforcePostFormat(compliance.sanitizedContent ?? finalTweetText);
         const openerTweet = await xWrite.v2.tweet({
           text: postText,
           ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),
@@ -1068,7 +1069,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       if (!compliance.allowed) {
         return res.status(429).json({ error: `Compliance guard: ${compliance.reason}` });
       }
-      const safeText = compliance.sanitizedContent ?? text;
+      const safeText = enforcePostFormat(compliance.sanitizedContent ?? text);
       // Single auth: OAuth 1.0a only — no OAuth 2.0 complexity
       let tweetId: string | undefined;
       const tweet = await xWrite.v2.tweet(safeText);
@@ -1261,7 +1262,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       if (!compliance.allowed) {
         return res.status(429).json({ error: `Compliance guard: ${compliance.reason}` });
       }
-      const safeText = compliance.sanitizedContent ?? text;
+      const safeText = enforcePostFormat(compliance.sanitizedContent ?? text);
       let mediaId: string | undefined;
       if (imageUrl) {
         const imgRes = await fetch(imageUrl);
@@ -2274,7 +2275,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
         if (!compliance.allowed) {
           console.log(`[CommunityBoost] Skipped by compliance: ${compliance.reason}`);
         } else {
-          const safeText = compliance.sanitizedContent ?? tweet.trim();
+          const safeText = enforcePostFormat(compliance.sanitizedContent ?? tweet.trim());
           const result = await xWrite.v2.tweet({ text: safeText });
           const tweetId = result.data?.id;
           tweetUrl = tweetId ? `https://x.com/306Agent/status/${tweetId}` : null;
@@ -2444,7 +2445,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       if (!compliance.allowed) {
         return res.status(429).json({ error: `Compliance guard: ${compliance.reason}` });
       }
-      const safeText = compliance.sanitizedContent ?? tweetText;
+      const safeText = enforcePostFormat(compliance.sanitizedContent ?? tweetText);
       const tweet = await xWrite.v2.tweet({
         text: safeText,
         ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),

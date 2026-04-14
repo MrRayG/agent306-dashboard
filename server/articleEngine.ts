@@ -29,6 +29,7 @@ import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { getFormatVoiceContext } from "./voiceInstructions.js";
 import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import { queueXPost } from "./xPostScheduler.js";
+import { enforcePostFormat } from "./postFormatGuard.js";
 
 const GROK_CHAT_API     = LLM_BASE_URL;
 const GROK_RESPONSE_API = LLM_RESPONSE_URL;
@@ -484,7 +485,7 @@ ${body}
       if (!compliance.allowed) {
         console.log(`[Article] Teaser skipped by compliance: ${compliance.reason}`);
       } else {
-        const safeTeaser = compliance.sanitizedContent ?? teaserContent;
+        const safeTeaser = enforcePostFormat(compliance.sanitizedContent ?? teaserContent, "research");
         const teaserPost = await xClient.v2.tweet(safeTeaser).catch(() => null);
         if (teaserPost?.data?.id) {
           articleUrl = `https://x.com/i/web/status/${teaserPost.data.id}`;
@@ -496,14 +497,17 @@ ${body}
       // Split body into tweet-friendly chunks for a thread
       const fallbackTeaser = teaser.slice(0, 280);
       const compliance = validateXPost(fallbackTeaser);
-      const teaserPost = compliance.allowed
-        ? await xClient.v2.tweet(compliance.sanitizedContent ?? fallbackTeaser).catch(() => null)
+      const safeFallbackTeaser = compliance.allowed
+        ? enforcePostFormat(compliance.sanitizedContent ?? fallbackTeaser, "research")
+        : null;
+      const teaserPost = safeFallbackTeaser
+        ? await xClient.v2.tweet(safeFallbackTeaser).catch(() => null)
         : null;
       if (!compliance.allowed) {
         console.log(`[Article] Teaser skipped by compliance: ${compliance.reason}`);
       }
       if (teaserPost?.data?.id) {
-        recordXPost(compliance.sanitizedContent ?? fallbackTeaser);
+        recordXPost(safeFallbackTeaser!);
         articleUrl = `https://x.com/i/web/status/${teaserPost.data.id}`;
 
         // Post the article body as replies (thread format)
