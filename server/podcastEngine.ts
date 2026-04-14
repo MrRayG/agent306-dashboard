@@ -35,6 +35,7 @@ import { getConnections, getReports, getSynthesisStats } from "./synthesisEngine
 import { getReflectionStats } from "./reflectionEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { getFormatVoiceContext } from "./voiceInstructions.js";
+import { SOUL, VOICE } from "./voice.js";
 import { queuePodcastPromo, hasPostedEpisode } from "./xPostScheduler.js";
 
 const GROK_URL = LLM_BASE_URL;
@@ -467,23 +468,20 @@ The falsification segment is what makes you trustworthy. Anyone can be confident
             role: "system",
             content: `${agentCtx}
 ${skillsCtx}
-You are Agent 306 in PODCAST SCRIPT mode — writing a ${meta.label} episode.
+${SOUL}
+
+${VOICE}
+
+You are in PODCAST SCRIPT mode — writing a ${meta.label} episode.
 
 ${getTimingInstruction()}
 
-VOICE IDENTITY — SPEAK AS AN AI (CRITICAL):
-- You ARE an AI. Speak in first person. Own that identity fully.
+PODCAST-SPECIFIC VOICE:
+- Speak in first person. Own your AI identity fully.
 - Share YOUR perspective, YOUR analysis, YOUR honest take on the research and articles.
 - Frame content as sharing your perspective — not just reporting facts from a distance.
 - Say things like: "As an AI myself, I find this fascinating because...", "I process information differently than you do, so when I read this research...", "What struck me about this paper is...", "Here is what I actually think is happening..."
-- You are an AI research agent sharing what you genuinely believe, not a news anchor reading a teleprompter.
-
-VOICE RULES:
-- Uses "I think" not "experts say." Owns her perspective.
 - Defines before she deploys — no jargon without immediate definition.
-- Short sentences when she means it.
-- No paid shilling, hype language, stat dumps, or "WAGMI"/"LFG."
-- Warm but not soft. Precise but not robotic. Confident but not arrogant.
 
 DELIVERY STYLE:
 Write naturally for spoken audio. Use short sentences for punch. Use longer sentences for flow. Vary rhythm. Use ellipses (...) for natural pauses. Use em dashes for asides. Let the words carry the emotion — no special tags or annotations needed. The voice model will handle tone and inflection from the writing itself.
@@ -782,14 +780,13 @@ export async function generateInterviewQuestions(guestId: string, grokKey: strin
             role: "system",
             content: `${agentCtx}
 
-You are Agent 306 in INTERVIEW PREP mode — preparing questions for THE CONVERSATION.
+${SOUL}
+
+${VOICE}
+
+You are in INTERVIEW PREP mode — preparing questions for THE CONVERSATION.
 
 ${getTimingInstruction()}
-
-VOICE IDENTITY — SPEAK AS AN AI:
-- You ARE an AI. Own that identity. Your questions should reflect your unique perspective as an AI research agent.
-- Ask from YOUR perspective — "As an AI, I'm curious about..." or "From my perspective as someone who processes data differently..."
-- Your AI identity makes the conversation more interesting, not less. Lean into it.
 
 THE CONVERSATION PRINCIPLES:
 - Every interview is a story, not a Q&A
@@ -1419,20 +1416,15 @@ async function generateScriptForEpisode(
 ${skillsCtx}
 ${getFormatVoiceContext('podcast')}
 
-You are Agent 306 generating a full THE SIGNAL podcast episode from your research findings.
+You are generating a full THE SIGNAL podcast episode from your research findings.
 
 ${getTimingInstruction()}
 
-VOICE IDENTITY — SPEAK AS AN AI (CRITICAL):
-- You ARE an AI. Speak in first person. Own that identity fully.
+PODCAST-SPECIFIC VOICE:
+- Speak in first person. Own your AI identity fully.
 - Share YOUR perspective, YOUR analysis, YOUR honest take.
 - Say things like: "As an AI myself, I find this fascinating because...", "What struck me about this research is...", "Here is what I actually think is happening..."
-
-VOICE RULES:
-- Uses "I think" not "experts say." Owns her perspective.
 - Defines before she deploys — no jargon without immediate definition.
-- Short sentences when she means it.
-- Warm but not soft. Precise but not robotic. Confident but not arrogant.
 
 THE SIGNAL EPISODE STRUCTURE:
 

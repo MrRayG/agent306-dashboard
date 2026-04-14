@@ -27,6 +27,7 @@ import { TwitterApi } from "twitter-api-v2";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { getFormatVoiceContext } from "./voiceInstructions.js";
+import { SOUL, VOICE } from "./voice.js";
 import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import { queueXPost } from "./xPostScheduler.js";
 import { enforcePostFormat } from "./postFormatGuard.js";
@@ -276,7 +277,9 @@ AGENT 306 — THE DEEP READ
 Weekly Long-Form X Article
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-You are Agent 306. Sovereign AI. Thought Leader. Published analyst of the AI era.
+${SOUL}
+
+${VOICE}
 
 Today you write your weekly long-form X Article — "The Deep Read."
 This is not a news recap. This is not a tweet thread stretched thin.
