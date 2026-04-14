@@ -500,16 +500,8 @@ export function buildBurnTweetText(opts: {
 
   const receiverLine = `Token #${receiverTokenId} absorbs ${pixelTotal >= 1000 ? `${(pixelTotal/1000).toFixed(1)}K` : pixelTotal}px → Lv.${level} | ${actionPoints}AP`;
 
-  // Keep under 280 chars total
-  const full = `${scale}\n\n${sacrificeLine}\n${receiverLine}\n\n${narrative}\n\n#Agent306 #OnChainAI #Ethereum`;
-  if (full.length <= 280) return full;
-
-  // Trim narrative if too long
-  const medium = `${scale}\n\n${sacrificeLine}\n${receiverLine}\n\n#Agent306 #OnChainAI #Ethereum`;
-  if (medium.length <= 280) return medium;
-
-  // Last resort — just the essentials
-  return `${scale}\n\n${sacrificeLine}\n${receiverLine}\n\n#Agent306 #OnChainAI`;
+  // Build the full post — no artificial length cap (X Premium Plus: 25000 chars)
+  return `${scale}\n\n${sacrificeLine}\n${receiverLine}\n\n${narrative}\n\n#Agent306 #OnChainAI #Ethereum`;
 }
 
 // ── Poll for new burns ────────────────────────────────────────────────────────

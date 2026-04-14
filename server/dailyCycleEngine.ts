@@ -1292,7 +1292,7 @@ RULES:
 - Never include a URL
 - Write like you're telling a smart friend something you just figured out
 - One idea. Sharp. Specific. Opinionated.
-- Max 280 characters. Shorter wins.
+- Let the content dictate the length. Say what needs to be said, then stop.
 - Max 1-2 hashtags, only if genuinely relevant
 - No emojis unless they add real meaning
 - Output ONLY the tweet text. No meta-commentary, no quotes around it.`

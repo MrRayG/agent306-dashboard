@@ -471,7 +471,7 @@ export function qualityCheck(tweet: string, contentType: string): { pass: boolea
   }
 
   // 4. Total length check (before opinion check — gibberish shouldn't claim "no take")
-  if (tweet.length > 280) {
+  if (tweet.length > 25000) {
     return { pass: false, reason: `Over character limit (${tweet.length} chars)` };
   }
 
@@ -506,20 +506,20 @@ export function qualityCheck(tweet: string, contentType: string): { pass: boolea
 // Token limits by content type — richer types get more room,
 // the format guard handles final shaping.
 const TOKEN_LIMITS: Record<string, number> = {
-  dispatch:   200,  // news can be punchy or detailed
-  signal:     200,  // analysis needs room for the "why"
-  research:   300,  // deep dives need space
-  roundup:    400,  // 3-5 stories need the most room
-  reflection: 150,  // evening thoughts stay tight
-  debate:     250,  // both sides + take
-  prompt:     150,  // questions are short
-  archive:    200,  // historical context
-  progress:   200,  // updates on what she's building
-  academy:    300,  // teaching needs detail
-  toolbox:    250,  // tool reviews need specifics
-  dataset:    250,  // dataset spotlights
+  dispatch:   600,   // news — concise but complete
+  signal:     800,   // analysis needs room for the "why"
+  research:   1000,  // deep dives need space
+  roundup:    1200,  // 3-5 stories need the most room
+  reflection: 600,   // evening thoughts — not artificially short
+  debate:     800,   // both sides + take
+  prompt:     500,   // techniques — practical detail
+  archive:    600,   // historical context + connection
+  progress:   600,   // updates
+  academy:    1000,  // teaching needs detail
+  toolbox:    800,   // tool reviews need specifics
+  dataset:    800,   // dataset spotlights
 };
-const DEFAULT_TOKEN_LIMIT = 200;
+const DEFAULT_TOKEN_LIMIT = 600;
 
 async function generateOnDemandPost(type: XPostType, state: SchedulerState): Promise<QueuedPost | null> {
   const systemPrompt = buildTweetSystemPrompt(type);

@@ -61,7 +61,7 @@ export const KNOWN_HANDLES: Record<string, string> = {
  * - Case-insensitive matching
  * - Only injects on FIRST occurrence of each entity
  * - Skips if handle already present in tweet
- * - Respects 280 char limit
+ * - Respects 25000 char limit (X Premium Plus)
  */
 export function injectMentions(tweet: string): string {
   let result = tweet;
@@ -92,8 +92,8 @@ export function injectMentions(tweet: string): string {
     const insertion = ` (${handle})`;
     const candidate = result.slice(0, match.index + match[0].length) + insertion + result.slice(match.index + match[0].length);
 
-    // Only add if we stay under 280 chars
-    if (candidate.length <= 280) {
+    // Only add if we stay under 25000 chars (X Premium Plus)
+    if (candidate.length <= 25000) {
       result = candidate;
       addedHandles.add(handle.toLowerCase());
     }

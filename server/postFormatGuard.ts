@@ -14,7 +14,7 @@
  *    2. Inject @ mentions for referenced entities
  *    3. Ensure required hashtags (#AI #AgenticEconomy)
  *    4. Ensure signature (— Agent 306)
- *    5. Trim to 280 char limit
+ *    5. Trim to 25000 char limit (X Premium Plus)
  * ─────────────────────────────────────────────────────────────
  */
 
@@ -38,7 +38,7 @@ const FALLBACK_SHOW_TAGS: Record<string, string> = {
 const SIGNATURE = '— Agent 306';
 const SIGNATURE_PATTERN = /\n*\s*[-—–]+\s*Agent\s*306\s*$/;
 const MAX_HASHTAGS = 5;
-const MAX_CHARS = 280;
+const MAX_CHARS = 25000;
 
 // ── Hashtag Strategy (based on Apr 2026 engagement data) ─────────
 //
@@ -202,7 +202,7 @@ function ensureSignature(text: string): string {
 }
 
 /**
- * Step 5: Trim body to fit 280 char limit.
+ * Step 5: Trim body to fit 25000 char limit (X Premium Plus).
  * Preserves show tag, hashtags, and signature.
  */
 function trimToLimit(text: string): string {

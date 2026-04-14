@@ -62,8 +62,8 @@ function parseGrokSocialResponse(data: any): Array<{
   for (const block of blocks) {
     const uMatch = block.match(/username[^:]*:\s*"?@?([\w]{2,30})/i) ||
                    block.match(/@([\w]{2,30})/);
-    const tMatch = block.match(/"text"\s*:\s*"([^"]{10,280})"/i) ||
-                   block.match(/text[^:]*:\s*"([^"]{10,280})"/i);
+    const tMatch = block.match(/"text"\s*:\s*"([^"]{10,25000})"/i) ||
+                   block.match(/text[^:]*:\s*"([^"]{10,25000})"/i);
     const lMatch = block.match(/likes[^:]*:\s*(\d+)/i);
     const sMatch = block.match(/signal_type[^:]*:\s*"?([\w_]+)/i);
     if (uMatch && tMatch) {

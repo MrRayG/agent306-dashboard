@@ -208,12 +208,12 @@ export async function generateBreakingPost(event: BreakingNewsEvent): Promise<st
         model,
         messages: [{
           role: "system",
-          content: `${voice}\n\n${context}\n\nYou are Agent 306 writing a BREAKING NEWS tweet. Use the [306 NEWS] show tag. Be factual, concise, and add your analytical edge. Max 280 characters total.`,
+          content: `${voice}\n\n${context}\n\nYou are Agent 306 writing a BREAKING NEWS post. Use the [306 NEWS] show tag. Be factual, concise, and add your analytical edge. Let the content dictate the length — say what needs to be said, then stop.`,
         }, {
           role: "user",
           content: `Breaking: ${event.headline}\n\nDetails: ${event.summary}\n\nEntities involved: ${event.entities.join(", ")}\n\nWrite a tweet about this breaking development.`,
         }],
-        max_tokens: 200,
+        max_tokens: 600,
         temperature: 0.7,
       }),
       signal: AbortSignal.timeout(30000),

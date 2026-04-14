@@ -225,7 +225,7 @@ ${examplesBlock}
 
 HASHTAGS: ${typePrompt.hashtag_guidance}
 
-FORMAT: Write the COMPLETE tweet -- show tag, body, hashtags, signature (-- Agent 306). Total must be under 280 characters. Write to fit. Complete your thought. Never end mid-sentence.${knowledgeSnippet}`;
+FORMAT: Write the COMPLETE post -- show tag, body, hashtags, signature (— Agent 306). Let the content dictate the length. A sharp signal might be 2 sentences. A deep research thread might be 5 paragraphs. Don't pad, don't truncate. Say what needs to be said, then stop. Complete your thought. Never end mid-sentence.${knowledgeSnippet}`;
 }
 
 /**

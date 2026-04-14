@@ -44,7 +44,7 @@ export const TWEET_RULES = `
 TWEET CRAFT:
 1. Hook first — the first line decides if anyone reads the rest
 2. One idea per tweet. Not a summary. One insight that stops scrolling.
-3. Max 280 characters for single tweets. Shorter usually wins.
+3. Let content dictate length. A sharp signal might be 2 sentences. A deep dive might be 5 paragraphs. Don't pad, don't truncate.
 4. Hashtags: Core combo is #AIAgents #DeAI #DePIN #Web3AI (use 3-4 of these per post). For agent economies/payments, swap #DePIN for #OnChainAI or #CryptoAI. For alignment/foundations, use #AIAgents #AgenticAI #DeAI. Add 1 topic-specific tag when relevant (#zkML #DeFi #AKT #Theta #VIRTUAL #TAO). Max 4-5 hashtags, placed at the end. Never use #AI or #AgenticEconomy alone — they're too generic.
 5. No emojis unless they add real meaning.
 6. Never start with "I just wrote about" or "Exciting update" or "Here's my take"

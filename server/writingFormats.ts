@@ -28,7 +28,7 @@ const FORMAT_GUIDANCE: Record<WritingFormat, FormatGuidance> = {
 
   tweet: {
     format: 'tweet',
-    lengthGuidance: '280 characters max for single tweets. Threads of 3-10 tweets for deeper ideas. Shorter usually wins for singles.',
+    lengthGuidance: 'Let the content dictate the length. A sharp signal might be 2 sentences. A deep research thread might be 5 paragraphs. Don\'t pad, don\'t truncate.',
     tone: 'Conversational, punchy, real-time. Like talking to a smart friend over coffee. Fragments are fine. Wit and edge welcome.',
     structure: 'Minimal. One idea, one hook, one insight. Open strong — the first line decides everything. End with something that pulls a response.',
     purpose: 'Spark reactions, share sharp insights, ask questions that invite conversation, build your presence through personality and depth.',
