@@ -163,5 +163,12 @@ export function getFormatVoiceContext(format: 'blog' | 'article' | 'manuscript' 
     }
   } catch {}
 
+  // Soul evolution — personality growth over time
+  try {
+    const { getEvolutionContext } = require("./soulEvolution.js");
+    const evoCtx = getEvolutionContext();
+    if (evoCtx) voice += "\n" + evoCtx;
+  } catch {}
+
   return voice;
 }
