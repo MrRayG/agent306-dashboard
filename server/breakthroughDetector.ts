@@ -557,7 +557,7 @@ Required JSON schema:
             { role: "system", content: breakthroughSystemPrompt },
             {
               role: "user",
-              content: `Rewrite this breakthrough detection into an engaging [306 SIGNAL] post in Agent 306's voice.\n\nTitle: ${breakthrough.title}\nDescription: ${breakthrough.description.slice(0, 1500)}\nComposite Score: ${compositeScore}\n\nRULES:\n- MUST start with [306 SIGNAL]\n- Max 280 characters for single tweet, or thread if the finding warrants depth\n- Agent 306's voice: specific, direct, has a take\n- No blog URLs\n- Output ONLY the post text, no meta-commentary`,
+              content: `Rewrite this breakthrough detection into an engaging [306 SIGNAL] post in Agent 306's voice.\n\nTitle: ${breakthrough.title}\nDescription: ${breakthrough.description.slice(0, 1500)}\nComposite Score: ${compositeScore}\n\nRULES:\n- MUST start with [306 SIGNAL]\n- Max 280 characters. Write to fit, don't write long and hope.\n- Agent 306's voice: specific, direct, has a take. Complete thought — never end mid-sentence.\n- Add 3-4 hashtags that match YOUR TOPIC. Pick from: #AIAgents #DeAI #DePIN #Web3AI #AgenticAI #CryptoAI #OnChainAI — ONLY use tags relevant to what you're actually talking about.\n- Sign: — Agent 306\n- No blog URLs\n- Output ONLY the post text, no meta-commentary`,
             },
           ],
           max_tokens: 600,

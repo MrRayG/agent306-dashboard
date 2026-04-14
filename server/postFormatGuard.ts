@@ -2,17 +2,14 @@
  * ─────────────────────────────────────────────────────────────
  *  POST FORMAT GUARD
  *
- *  Last-mile safety net that auto-fixes every tweet before it
- *  hits the X API. Generation SHOULD include these elements,
- *  but this guard catches failures.
- *
- *  Every tweet must have:
- *    [SHOW TAG] + body + hashtags + signature
+ *  Lightweight safety net — NOT the primary shaping tool.
+ *  Agent 306 writes the COMPLETE tweet (tag, body, hashtags,
+ *  signature). This guard only catches genuine misses.
  *
  *  Steps:
  *    1. Ensure show tag is present (bracket format)
  *    2. Inject @ mentions for referenced entities
- *    3. Ensure required hashtags (#AI #AgenticEconomy)
+ *    3. If < 2 hashtags, add defaults (if 2+, trust her choice)
  *    4. Ensure signature (— Agent 306)
  *    5. Trim to 280 char limit
  * ─────────────────────────────────────────────────────────────
@@ -148,9 +145,9 @@ function ensureShowTag(text: string, contentType?: string): string {
 }
 
 /**
- * Step 3: Ensure context-aware hashtags are present.
- * Uses content-type combos (3-5 hashtags, placed at end).
- * Generation may also add topic-specific tags (#DePIN, #zkML, etc.)
+ * Step 3: Ensure hashtags are present — SAFETY NET only.
+ * If the LLM already picked 2+ hashtags, trust her choice.
+ * Only inject defaults if she missed them entirely (0-1 hashtags).
  */
 function ensureHashtags(text: string, contentType?: string): string {
   // Temporarily remove signature if present
@@ -160,47 +157,28 @@ function ensureHashtags(text: string, contentType?: string): string {
 
   // Count existing hashtags
   const existingHashtags = body.match(/#\w+/g) || [];
-  const existingSet = new Set(existingHashtags.map(h => h.toLowerCase()));
 
-  // Get the right combo for this content type
-  const requiredTags = getHashtagsForType(contentType);
-
-  const hashtagsToAdd: string[] = [];
-  for (const tag of requiredTags) {
-    if (!existingSet.has(tag.toLowerCase())) {
-      hashtagsToAdd.push(tag);
-    }
-  }
-
-  if (hashtagsToAdd.length === 0) {
-    // All required hashtags present — check total count
+  // If she already picked 2+ hashtags, trust her choice
+  if (existingHashtags.length >= 2) {
+    // Only enforce max count
     if (existingHashtags.length > MAX_HASHTAGS) {
       body = stripExcessHashtags(body, MAX_HASHTAGS);
     }
     return body + sig;
   }
 
-  // If adding would exceed max, keep existing topic-specific ones and required ones
-  const totalAfterAdd = existingHashtags.length + hashtagsToAdd.length;
-  if (totalAfterAdd > MAX_HASHTAGS) {
-    // Strip any hashtags not in the required combo to make room
-    const requiredLower = new Set(requiredTags.map(h => h.toLowerCase()));
-    body = body.replace(/#\w+/g, (match) => {
-      if (requiredLower.has(match.toLowerCase())) return match;
-      return '';
-    }).replace(/\s{2,}/g, ' ').trim();
-    // Recalculate what's still needed
-    const remaining = body.match(/#\w+/g) || [];
-    const remainingSet = new Set(remaining.map(h => h.toLowerCase()));
-    hashtagsToAdd.length = 0;
-    for (const tag of requiredTags) {
-      if (!remainingSet.has(tag.toLowerCase())) {
-        hashtagsToAdd.push(tag);
-      }
+  // No or only 1 hashtag — she missed them, add defaults for the content type
+  const requiredTags = getHashtagsForType(contentType);
+  const existingSet = new Set(existingHashtags.map(h => h.toLowerCase()));
+
+  const hashtagsToAdd: string[] = [];
+  for (const tag of requiredTags) {
+    if (!existingSet.has(tag.toLowerCase())) {
+      hashtagsToAdd.push(tag);
     }
+    if (existingHashtags.length + hashtagsToAdd.length >= 4) break;
   }
 
-  // Add missing hashtags on a line before signature
   if (hashtagsToAdd.length > 0) {
     body = body.trimEnd() + '\n' + hashtagsToAdd.join(' ');
   }

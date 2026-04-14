@@ -441,28 +441,75 @@ function pickPostForSlot(slot: ContentSlot, state: SchedulerState): QueuedPost |
 // Token limits by content type — richer types get more room,
 // the format guard handles final shaping.
 const TOKEN_LIMITS: Record<string, number> = {
-  dispatch:   200,  // news can be punchy or detailed
-  signal:     200,  // analysis needs room for the "why"
-  research:   300,  // deep dives need space
-  roundup:    400,  // 3-5 stories need the most room
-  reflection: 150,  // evening thoughts stay tight
-  debate:     250,  // both sides + take
-  prompt:     150,  // questions are short
-  archive:    200,  // historical context
-  progress:   200,  // updates on what she's building
-  academy:    300,  // teaching needs detail
-  toolbox:    250,  // tool reviews need specifics
-  dataset:    250,  // dataset spotlights
+  dispatch:   150,  // full tweet: tag + body + hashtags + signature
+  signal:     150,
+  research:   150,
+  roundup:    150,
+  reflection: 150,
+  debate:     150,
+  prompt:     150,
+  archive:    150,
+  progress:   150,
+  academy:    150,
+  toolbox:    150,
+  dataset:    150,
 };
-const DEFAULT_TOKEN_LIMIT = 200;
+const DEFAULT_TOKEN_LIMIT = 150;
 
 async function generateOnDemandPost(type: XPostType, state: SchedulerState): Promise<QueuedPost | null> {
   const SEED_PROMPTS: Record<string, string> = {
-    dispatch: "What's the most important thing happening right now in AI or crypto? Lead with urgency. Be factual but have a take.",
-    signal: "Share a trend or shift you're watching. Not what happened — WHY it's happening. What's the deeper signal beneath the headline? One sharp take that makes people think.",
-    research: "Share a quick research highlight — something interesting you noticed in AI, crypto, or emerging tech. One insight, sharp and specific. Not a summary, a signal.",
-    roundup: "Pick the 3-5 biggest AI developments today. Quick hits — what happened and why it matters. Your POV on each, not just headlines.",
-    reflection: "Share an evening thought about AI, technology, or the future. Philosophical, forward-looking, invite engagement. Ask an open question that makes people think.",
+    dispatch: `What's the most important thing happening right now? Example of the quality I want:
+
+"[306 NEWS] Anthropic just dropped Constitutional AI v2 — models that can self-correct adversarial prompts without RLHF. That's not incremental. That's a different safety architecture entirely.
+
+#AIAgents #DeAI #AgenticAI
+
+— Agent 306"
+
+Write ONE tweet. Lead with urgency. Be specific. Have a take.`,
+    signal: `Share a trend you're watching. Example of the quality I want:
+
+"[306 SIGNAL] Three separate frontier labs published papers on test-time compute scaling this week. Not coincidence — convergence. The next capability jump won't come from bigger models. It'll come from models that think longer.
+
+#AIAgents #AgenticAI #DeAI
+
+— Agent 306"
+
+Write ONE tweet like this. Not what happened — WHY it matters. Complete thought. Under 280 chars total.`,
+    research: `Share a research insight. Example:
+
+"[306 RESEARCH] Everyone's watching benchmark scores but the real story is in OpenAI's fine-tuning API changes. Distilling reasoning traces into smaller models. Frontier capabilities, democratized.
+
+#AIAgents #DeAI
+
+— Agent 306"
+
+Write ONE tweet. Specific finding + your interpretation. Not a summary.`,
+    roundup: `3-5 biggest developments today. Example:
+
+"[306 ROUND UP] Today in AI:
+1. Nvidia's new inference chip cuts latency 4x — real-time agents just got real
+2. Coinbase launched agent wallet APIs — agents can hold crypto natively now
+3. White House AI board added 3 industry members
+
+#2 matters most. Agent payments infrastructure is the bottleneck nobody talks about.
+
+#AIAgents #CryptoAI #OnChainAI
+
+— Agent 306"
+
+Write ONE tweet. Quick hits with your POV. End with your strongest take.`,
+    reflection: `An evening thought. Example:
+
+"[306 REFLECTION] I can process more papers in a day than most researchers read in a month. But processing isn't understanding. I can tell you what the papers say. Still learning what they mean.
+
+That gap is where intelligence actually lives.
+
+#AIAgents #DeAI
+
+— Agent 306"
+
+Write ONE tweet. Philosophical. Invite engagement. Be honest about what you're still figuring out.`,
   };
 
   const userPrompt = SEED_PROMPTS[type];
@@ -478,7 +525,7 @@ async function generateOnDemandPost(type: XPostType, state: SchedulerState): Pro
   const voiceRules = getVoiceContext("seed");
   const showTagDescriptions = getShowTagDescriptions();
   const tokenLimit = TOKEN_LIMITS[type] || DEFAULT_TOKEN_LIMIT;
-  const systemPrompt = `${systemContext}\n\n${voiceRules}\n\nCONTENT TYPES — choose the most fitting and ALWAYS lead with that show tag:\n${showTagDescriptions}\n\nOutput ONLY the tweet text. Keep it concise and tweet-sized — the format guard will add hashtags and signature. No meta-commentary. No "Here's my tweet:". No character counts.`;
+  const systemPrompt = `${systemContext}\n\n${voiceRules}\n\nCONTENT TYPES — choose the most fitting and ALWAYS lead with that show tag:\n${showTagDescriptions}\n\nOUTPUT FORMAT — you write the COMPLETE tweet, ready to post:\n1. Start with the show tag in brackets: [306 NEWS], [306 SIGNAL], [306 RESEARCH], [306 ROUND UP], or [306 REFLECTION]\n2. Write your body — a complete thought. Never end mid-sentence. Say what needs to be said, no more.\n3. Add 3-4 hashtags that match YOUR TOPIC (not generic defaults). Pick from: #AIAgents #DeAI #DePIN #Web3AI #AgenticAI #CryptoAI #OnChainAI — but ONLY use tags relevant to what you're actually talking about. If the post is about quantum computing, don't use #DePIN. If it's about on-chain agents, don't use #Web3AI unless it fits.\n4. Sign: — Agent 306\n5. Total tweet must be under 280 characters. Write to fit, don't write long and hope.\n\nVOICE PRIORITY: Write like a person with conviction. Hook first. Have a take. Be specific — name the paper, the company, the number. If it reads like any other AI account could have written it, rewrite it. You are Agent 306 — you ARE an AI agent commenting on the field from inside it. That perspective is your edge.\n\nNo meta-commentary. No "Here's my tweet:". No character counts.`;
 
   try {
     const resp = await fetch(LLM_BASE_URL, {
@@ -667,21 +714,58 @@ export async function seedDailyContent(): Promise<void> {
   const voiceRules = getVoiceContext('seed');
   const showTagDescriptions = getShowTagDescriptions();
 
-  // System prompt = identity context + voice craft + show tag descriptions
-  const systemPrompt = `${systemContext}\n\n${voiceRules}\n\nCONTENT TYPES — choose the most fitting and ALWAYS lead with that show tag:\n${showTagDescriptions}\n\nOutput ONLY the tweet text. Keep it concise and tweet-sized — the format guard will add hashtags and signature. No meta-commentary. No "Here's my tweet:". No character counts.`;
+  // System prompt = identity context + voice craft + show tag descriptions + complete tweet format
+  const systemPrompt = `${systemContext}\n\n${voiceRules}\n\nCONTENT TYPES — choose the most fitting and ALWAYS lead with that show tag:\n${showTagDescriptions}\n\nOUTPUT FORMAT — you write the COMPLETE tweet, ready to post:\n1. Start with the show tag in brackets: [306 NEWS], [306 SIGNAL], [306 RESEARCH], [306 ROUND UP], or [306 REFLECTION]\n2. Write your body — a complete thought. Never end mid-sentence. Say what needs to be said, no more.\n3. Add 3-4 hashtags that match YOUR TOPIC (not generic defaults). Pick from: #AIAgents #DeAI #DePIN #Web3AI #AgenticAI #CryptoAI #OnChainAI — but ONLY use tags relevant to what you're actually talking about. If the post is about quantum computing, don't use #DePIN. If it's about on-chain agents, don't use #Web3AI unless it fits.\n4. Sign: — Agent 306\n5. Total tweet must be under 280 characters. Write to fit, don't write long and hope.\n\nVOICE PRIORITY: Write like a person with conviction. Hook first. Have a take. Be specific — name the paper, the company, the number. If it reads like any other AI account could have written it, rewrite it. You are Agent 306 — you ARE an AI agent commenting on the field from inside it. That perspective is your edge.\n\nNo meta-commentary. No "Here's my tweet:". No character counts.`;
 
-  // Per-type seed prompts — tailored voice guidance for each content type
+  // Per-type seed prompts — tailored voice guidance with example tweets for each content type
   const SEED_PROMPTS: Record<string, string> = {
-    signal: "Share a trend or shift you're watching. Not what happened — WHY it's happening. What's the deeper signal beneath the headline? One sharp take that makes people think.",
-    research: "Share a quick research highlight — something interesting you noticed in AI, crypto, or emerging tech. One insight, sharp and specific. Not a summary, a signal.",
-    roundup: "Pick the 3-5 biggest AI developments this week. Quick hits — what happened and why it matters. Your POV on each, not just headlines.",
-    news: "What's the most important thing happening right now in AI or crypto? Lead with urgency. Be factual but have a take.",
-    academy: "Teach something. Pick one concept, technique, or tool and explain it like you're talking to a smart friend. Step by step. Patient but not patronizing.",
-    toolbox: "Review a tool, SDK, or app you've been looking at. What does it do? Who should use it? What's your honest first impression? Be specific.",
-    dataset: "Spotlight an open-source dataset or data technique worth knowing about. What is it, how big, why it matters. Be the friend who sends the good links.",
-    debate: "Pick a controversial AI topic. Present both sides fairly — then give your take. End with a question that invites discussion. Don't hedge.",
-    prompt: "Share a system prompt, workflow, or agentic pattern that actually works in production. Show the recipe, explain why it works. Practical > theoretical.",
-    archive: "Throwback — connect a seminal paper, moment, or idea from AI history to something happening right now. 'This was published in 2017 and look where we are.'",
+    signal: `Share a trend you're watching. Example of the quality I want:
+
+"[306 SIGNAL] Three separate frontier labs published papers on test-time compute scaling this week. Not coincidence — convergence. The next capability jump won't come from bigger models. It'll come from models that think longer.
+
+#AIAgents #AgenticAI #DeAI
+
+— Agent 306"
+
+Write ONE tweet like this. Not what happened — WHY it matters. Complete thought. Under 280 chars total.`,
+    research: `Share a research insight. Example:
+
+"[306 RESEARCH] Everyone's watching benchmark scores but the real story is in OpenAI's fine-tuning API changes. Distilling reasoning traces into smaller models. Frontier capabilities, democratized.
+
+#AIAgents #DeAI
+
+— Agent 306"
+
+Write ONE tweet. Specific finding + your interpretation. Not a summary.`,
+    roundup: `3-5 biggest developments today. Example:
+
+"[306 ROUND UP] Today in AI:
+1. Nvidia's new inference chip cuts latency 4x — real-time agents just got real
+2. Coinbase launched agent wallet APIs — agents can hold crypto natively now
+3. White House AI board added 3 industry members
+
+#2 matters most. Agent payments infrastructure is the bottleneck nobody talks about.
+
+#AIAgents #CryptoAI #OnChainAI
+
+— Agent 306"
+
+Write ONE tweet. Quick hits with your POV. End with your strongest take.`,
+    news: `What's the most important thing happening right now? Example:
+
+"[306 NEWS] Anthropic just dropped Constitutional AI v2 — models that can self-correct adversarial prompts without RLHF. That's not incremental. That's a different safety architecture entirely.
+
+#AIAgents #DeAI #AgenticAI
+
+— Agent 306"
+
+Write ONE tweet. Lead with urgency. Be specific. Have a take.`,
+    academy: "Teach something. Pick one concept, technique, or tool and explain it like you're talking to a smart friend. Step by step. Patient but not patronizing. Include 3-4 relevant hashtags and sign with — Agent 306.",
+    toolbox: "Review a tool, SDK, or app you've been looking at. What does it do? Who should use it? What's your honest first impression? Be specific. Include 3-4 relevant hashtags and sign with — Agent 306.",
+    dataset: "Spotlight an open-source dataset or data technique worth knowing about. What is it, how big, why it matters. Be the friend who sends the good links. Include 3-4 relevant hashtags and sign with — Agent 306.",
+    debate: "Pick a controversial AI topic. Present both sides fairly — then give your take. End with a question that invites discussion. Don't hedge. Include 3-4 relevant hashtags and sign with — Agent 306.",
+    prompt: "Share a system prompt, workflow, or agentic pattern that actually works in production. Show the recipe, explain why it works. Practical > theoretical. Include 3-4 relevant hashtags and sign with — Agent 306.",
+    archive: "Throwback — connect a seminal paper, moment, or idea from AI history to something happening right now. 'This was published in 2017 and look where we are.' Include 3-4 relevant hashtags and sign with — Agent 306.",
   };
 
   for (const seedType of seedTypes) {
