@@ -31,6 +31,7 @@ import { getOptimizedContext } from "./contextWindow.js";
 import { CONTENT_TYPES, getShowTagDescriptions, getShowTag, enforceShowTag } from "./contentTypes.js";
 import { getVoiceContext } from "./voiceInstructions.js";
 import { enforcePostFormat } from "./postFormatGuard.js";
+import { startBreakingNewsLoop } from "./breakingNewsDetector.js";
 
 // -- Types --------------------------------------------------------
 
@@ -126,10 +127,8 @@ const CONTENT_SLOTS: ContentSlot[] = [
   { name: "Late Evening",  hourUTC: 1,  preferredTypes: ["reflection", "debate", "prompt"],  requiredContentType: "reflection" }, // 9pm ET — 306 REFLECTION
 ];
 
-// TODO: Breaking news detection — when a story involves tier-1 entities
-// (major AI company announcements, policy changes, frontier model drops),
-// flag as breaking and optionally bump the posting schedule.
-// For now, the 8am NEWS slot handles this. Future: real-time detection.
+// Breaking news detection is now handled by breakingNewsDetector.ts
+// Tier-1 events post immediately; tier-2/3 are queued via queueXPost().
 
 // -- State persistence --------------------------------------------
 const QUEUE_FILE = dataPath("x_post_queue.json");
@@ -793,6 +792,9 @@ IMPORTANT: Output ONLY the tweet text itself. Do NOT include any meta-commentary
 
 export function startXPostScheduler(xWrite: any): void {
   console.log("[XScheduler] Starting X post scheduler (6 locked slots/day: 8am NEWS, 10am SIGNAL, 12pm RESEARCH, 5pm ROUND UP, 7pm AGENT'S CHOICE, 9pm REFLECTION)");
+
+  // Start breaking news detection loop (checks every 30 min during posting hours)
+  startBreakingNewsLoop(xWrite);
 
   // Process immediate items (podcast promos) every 5 minutes
   setInterval(() => {
