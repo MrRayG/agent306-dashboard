@@ -33,6 +33,7 @@ import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./ll
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { queueXPost } from "./xPostScheduler.js";
 import { enforceShowTag } from "./contentTypes.js";
+import { enforcePostFormat } from "./postFormatGuard.js";
 
 const GROK_URL          = LLM_BASE_URL;
 const GROK_SEARCH_URL   = LLM_RESPONSE_URL;
@@ -326,7 +327,8 @@ export async function postSignalBrief(xWrite: any, grokKey: string): Promise<str
     if (!compliance.allowed) {
       console.log(`[SignalBrief] Skipped by compliance: ${compliance.reason}`);
     } else {
-      const safeText = compliance.sanitizedContent ?? generated.post.trim();
+      let safeText = compliance.sanitizedContent ?? generated.post.trim();
+      safeText = enforcePostFormat(safeText, "signal");
       const tweet = await xWrite.v2.tweet({ text: safeText });
       const tweetId = tweet.data?.id;
       tweetUrl = tweetId ? `https://x.com/306Agent/status/${tweetId}` : null;
