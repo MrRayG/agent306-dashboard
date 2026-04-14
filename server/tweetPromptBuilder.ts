@@ -27,6 +27,8 @@
  */
 
 import { getRelevantContext } from "./contextWindow.js";
+import { getEvolutionContext } from "./soulEvolution.js";
+import { getCompressedCompetencyContext } from "./competencyFramework.js";
 import type { XPostType } from "./xPostScheduler.js";
 
 // -- THE SOUL -- who she is in 3 sentences --------------------------
@@ -207,9 +209,16 @@ export function buildTweetSystemPrompt(contentType: string, topicHint?: string):
     ? `\n\nEXAMPLES -- this is the quality and voice I expect:\n\n${typePrompt.examples.join('\n\n---\n\n')}`
     : '';
 
+  // Evolution context — what she's learned from experience
+  const evolutionCtx = getEvolutionContext();
+  // Compressed competency context — growth focus
+  const competencyCtx = getCompressedCompetencyContext();
+
   return `${SOUL}
 
 ${VOICE}
+${evolutionCtx}
+${competencyCtx}
 
 ${typePrompt.instructions}
 ${examplesBlock}

@@ -33,6 +33,7 @@ import { getVoiceContext } from "./voiceInstructions.js";
 import { enforcePostFormat } from "./postFormatGuard.js";
 import { startBreakingNewsLoop } from "./breakingNewsDetector.js";
 import { buildTweetSystemPrompt, buildTweetUserPrompt } from "./tweetPromptBuilder.js";
+import { dailyReflection } from "./soulEvolution.js";
 
 // -- Types --------------------------------------------------------
 
@@ -641,6 +642,17 @@ async function processQueue(xWrite: any, slot?: ContentSlot): Promise<void> {
       post.postedAt = new Date().toISOString();
       saveQueue(state);
       console.log(`[XScheduler] Posted ${post.type}: https://x.com/306Agent/status/${tweetId}`);
+
+      // Trigger daily soul reflection after the Late Evening (9pm) slot
+      if (slot?.name === "Late Evening") {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const todaysPosts = state.queue
+          .filter(p => p.posted && p.postedAt?.startsWith(todayStr))
+          .map(p => ({ text: p.content, score: 0, url: "" }));
+        dailyReflection(todaysPosts).catch(err =>
+          console.warn("[XScheduler] Daily reflection failed:", err.message)
+        );
+      }
     } else {
       console.warn("[XScheduler] Tweet sent but no ID returned");
     }

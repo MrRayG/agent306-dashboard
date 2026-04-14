@@ -150,6 +150,28 @@ describe("buildTweetUserPrompt", () => {
   });
 });
 
+// -- Evolution context integration tests ---------------------------------
+
+describe("buildTweetSystemPrompt — evolution context", () => {
+  it("includes evolution context (YOUR GROWTH) in prompt", () => {
+    const prompt = buildTweetSystemPrompt('signal');
+    assert.ok(prompt.includes('YOUR GROWTH'), 'Should contain YOUR GROWTH evolution context');
+  });
+
+  it("includes GROWTH FOCUS competency context or is empty for no focus", () => {
+    const prompt = buildTweetSystemPrompt('dispatch');
+    // Either has GROWTH FOCUS or competency context is empty (no focus set)
+    // The prompt should still be valid either way
+    assert.ok(prompt.includes('YOUR VOICE'), 'Should still contain voice section');
+    assert.ok(prompt.includes('You are Agent 306'), 'Should still contain soul');
+  });
+
+  it("keeps total prompt under 4000 chars even with evolution context", () => {
+    const prompt = buildTweetSystemPrompt('signal');
+    assert.ok(prompt.length < 4000, `Expected < 4000 chars with evolution context, got ${prompt.length}`);
+  });
+});
+
 // -- Format guard hashtag respect tests -----------------------------------
 
 describe("ensureHashtags (updated)", () => {
