@@ -11,7 +11,7 @@ _All files that consume tokens at runtime_
 | replyEngine.ts | 345 | ~3,708 | ~850 | Every reply send |
 | academyEngine.ts | 374 | ~4,750 | ~600 | Tue/Thu/Sat 10am |
 | signalBriefEngine.ts | 334 | ~3,241 | ~600 | Mon/Wed/Fri 12pm |
-| burnReceiptEngine.ts | 687 | ~7,300 | ~900 | Every burn event |
+| ~~burnReceiptEngine.ts~~ | — | — | — | removed |
 | boostEngine.ts | 279 | ~2,764 | ~400 | On-demand |
 | cyoaEngine.ts | 390 | ~4,027 | ~500 | Sunday 10am |
 | raceEngine.ts | 276 | ~2,412 | ~400 | Sunday 12pm |
@@ -63,7 +63,7 @@ TOTAL PER CALL          → ~2,550 tokens
 |---|---|---|
 | Mission statement repeated | grokEngine (x3), memoryEngine, academyEngine | ~800 tokens/call |
 | Voice rules repeated | grokEngine + replyEngine | ~400 tokens/call |
-| Framing repeated | grokEngine + burnReceiptEngine + cyoaEngine | ~300 tokens/call |
+| Framing repeated | grokEngine + cyoaEngine | ~300 tokens/call |
 | following.json loads full profiles | Only usernames/isPfpHolder needed | ~1,200 tokens saved |
 | Knowledge summaries avg 396 chars | Should be ≤150 chars | ~500 tokens/call |
 
