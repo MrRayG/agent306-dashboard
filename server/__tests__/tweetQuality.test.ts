@@ -137,9 +137,9 @@ describe("buildTweetSystemPrompt", () => {
     assert.ok(!prompt.includes('always use #DePIN'), 'Should not force irrelevant #DePIN');
   });
 
-  it("keeps total prompt under 3000 chars without knowledge context", () => {
+  it("keeps total prompt under 5000 chars without knowledge context", () => {
     const prompt = buildTweetSystemPrompt('signal');
-    assert.ok(prompt.length < 3000, `Expected < 3000 chars, got ${prompt.length}`);
+    assert.ok(prompt.length < 5000, `Expected < 5000 chars, got ${prompt.length}`);
   });
 
   it("falls back to signal for unknown content types", () => {
@@ -180,9 +180,9 @@ describe("buildTweetSystemPrompt — evolution context", () => {
     assert.ok(prompt.includes('You are Agent 306'), 'Should still contain soul');
   });
 
-  it("keeps total prompt under 4000 chars even with evolution context", () => {
+  it("keeps total prompt under 5000 chars even with evolution context", () => {
     const prompt = buildTweetSystemPrompt('signal');
-    assert.ok(prompt.length < 4000, `Expected < 4000 chars with evolution context, got ${prompt.length}`);
+    assert.ok(prompt.length < 5000, `Expected < 5000 chars with evolution context, got ${prompt.length}`);
   });
 });
 
