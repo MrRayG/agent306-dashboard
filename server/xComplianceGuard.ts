@@ -120,7 +120,7 @@ function checkRateLimit(state: ComplianceState): { pass: boolean; reason?: strin
 }
 
 // ── Hashtag validation ───────────────────────────────────────
-const MAX_HASHTAGS = 2;
+const MAX_HASHTAGS = 3; // 2 required (#AI #AgenticEconomy) + 1 contextual
 
 function validateHashtags(content: string): {
   pass: boolean;
@@ -347,7 +347,7 @@ export const X_POSTING_RULES = `
 X POSTING RULES (CRITICAL — violation = account suspension):
 - You are an autonomous AI research agent. Never claim to be human.
 - Every post must be substantially unique — never repeat the same insight twice.
-- Max 2 relevant hashtags per post. Never use trending hashtags unless genuinely relevant.
+- Max 3 hashtags per post (#AI and #AgenticEconomy required, plus 1 contextual). Never use trending hashtags unless genuinely relevant.
 - Never @mention users unless they mentioned you first.
 - Keep posts informative, original, and non-repetitive.
 - Never post about trending topics just to gain visibility.
