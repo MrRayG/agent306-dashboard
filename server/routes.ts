@@ -10,8 +10,7 @@ import { collectAllSignals, updateFeaturedTokens, bumpEpisodeCount, markSignalsU
 import { generateEpisodeWithGrok, type EpisodeMemory } from "./grokEngine";
 import { saveEpisodeCard } from "./imageCard";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
-// Burns, community, and catalog imports removed (removed)
-// import { checkForNewBurns, processBurnReceipt, getReceiptState } from "./burnReceiptEngine";
+// Community and catalog imports removed (removed)
 // import { getCommunitySignalCache, searchCommunitySocial, resetCommunityCache } from "./grokEngine";
 // import { ingestSignals, getCatalog, getCatalogStats, getMostActive, getStorySourceHolders } from "./holderCatalog";
 import { generateCYOAEpisode, postCYOAHook, resolveCYOA, getCYOAState, buildHookTweet, type CYOATrigger } from "./cyoaEngine";
