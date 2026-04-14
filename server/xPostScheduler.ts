@@ -460,7 +460,7 @@ async function generateOnDemandPost(type: XPostType, state: SchedulerState): Pro
 
   const voiceRules = getVoiceContext("seed");
   const showTagDescriptions = getShowTagDescriptions();
-  const systemPrompt = `${systemContext}\n\n${voiceRules}\n\nCONTENT TYPES — choose the most fitting and ALWAYS lead with that show tag:\n${showTagDescriptions}\n\nOutput ONLY the tweet text. No meta-commentary. No "Here's my tweet:". No character counts.`;
+  const systemPrompt = `${systemContext}\n\n${voiceRules}\n\nCONTENT TYPES — choose the most fitting and ALWAYS lead with that show tag:\n${showTagDescriptions}\n\nCRITICAL: Output ONLY the tweet text. Max 280 characters total (including show tag, hashtags, and signature). This is a single tweet, NOT a blog post or thread. No meta-commentary. No "Here's my tweet:". No character counts.`;
 
   try {
     const resp = await fetch(LLM_BASE_URL, {
@@ -472,7 +472,7 @@ async function generateOnDemandPost(type: XPostType, state: SchedulerState): Pro
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
-        max_tokens: 600,
+        max_tokens: 120,  // ~280 chars for a single tweet
         temperature: 0.85,
       }),
     });
@@ -480,7 +480,7 @@ async function generateOnDemandPost(type: XPostType, state: SchedulerState): Pro
     const data = await resp.json();
     let text = data.choices?.[0]?.message?.content?.trim() ?? "";
 
-    if (text && text.length >= 50 && text.length <= 600) {
+    if (text && text.length >= 50) {
       text = enforceShowTag(text, type);
       const post = queueXPost(text, type);
       console.log(`[XScheduler] On-demand ${type} generated (${text.length} chars)`);
@@ -650,7 +650,7 @@ export async function seedDailyContent(): Promise<void> {
   const showTagDescriptions = getShowTagDescriptions();
 
   // System prompt = identity context + voice craft + show tag descriptions
-  const systemPrompt = `${systemContext}\n\n${voiceRules}\n\nCONTENT TYPES — choose the most fitting and ALWAYS lead with that show tag:\n${showTagDescriptions}\n\nOutput ONLY the tweet text. No meta-commentary. No "Here's my tweet:". No character counts.`;
+  const systemPrompt = `${systemContext}\n\n${voiceRules}\n\nCONTENT TYPES — choose the most fitting and ALWAYS lead with that show tag:\n${showTagDescriptions}\n\nCRITICAL: Output ONLY the tweet text. Max 280 characters total (including show tag, hashtags, and signature). This is a single tweet, NOT a blog post or thread. No meta-commentary. No "Here's my tweet:". No character counts.`;
 
   // Per-type seed prompts — tailored voice guidance for each content type
   const SEED_PROMPTS: Record<string, string> = {
@@ -685,7 +685,7 @@ export async function seedDailyContent(): Promise<void> {
               content: userPrompt,
             },
           ],
-          max_tokens: 600,
+          max_tokens: 120,  // ~280 chars for a single tweet
           temperature: 0.85,
         }),
       });
@@ -693,9 +693,10 @@ export async function seedDailyContent(): Promise<void> {
       const data = await resp.json();
       let text = data.choices?.[0]?.message?.content?.trim() ?? "";
 
-      if (text && text.length >= 50 && text.length <= 600) {
-        // Enforce show tag after LLM generation
+      if (text && text.length >= 50) {
+        // Enforce show tag + format guard (hashtags, signature, trim)
         text = enforceShowTag(text, seedType);
+        text = enforcePostFormat(text, seedType);
         queueXPost(text, seedType);
         console.log(`[XScheduler] Seeded ${seedType} post (${text.length} chars)`);
       } else {
