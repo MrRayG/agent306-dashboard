@@ -37,9 +37,54 @@ const FALLBACK_SHOW_TAGS: Record<string, string> = {
 
 const SIGNATURE = '— Agent 306';
 const SIGNATURE_PATTERN = /\n*\s*[-—–]+\s*Agent\s*306\s*$/;
-const REQUIRED_HASHTAGS = ['#AI', '#AgenticEconomy'];
-const MAX_HASHTAGS = 3;
+const MAX_HASHTAGS = 5;
 const MAX_CHARS = 280;
+
+// ── Hashtag Strategy (based on Apr 2026 engagement data) ─────────
+//
+// Performance ranking (observed likes/views in Web3 AI niche):
+//   #AIAgents  — Very High (100–1300+ likes, 2k–200k+ views)
+//   #DePIN     — High (60–500+ likes)
+//   #DeAI      — High & Rising (50–400+ likes)
+//   #Web3AI    — Medium-High (50–300+ likes)
+//   #AgenticAI — Medium-High (50–200+ likes)
+//   #CryptoAI  — Medium (50–150+ likes)
+//   #OnChainAI — Medium (40–200+ likes)
+//
+// Max 4–5 per post. Place at end.
+// Project-specific tags (#AKT, #Theta, #VIRTUAL, #TAO) boost when relevant.
+
+// Core combo for most posts (strongest performers first)
+const PRIMARY_HASHTAGS = ['#AIAgents', '#DeAI', '#DePIN', '#Web3AI'];
+
+// Content-type specific combos
+const HASHTAG_COMBOS: Record<string, string[]> = {
+  // SIGNAL briefs / research drops
+  'signal':     ['#AIAgents', '#DeAI', '#DePIN', '#Web3AI'],
+  'research':   ['#AIAgents', '#DeAI', '#DePIN', '#Web3AI'],
+  // News / market dispatches
+  'dispatch':   ['#AIAgents', '#DeAI', '#Web3AI', '#AgenticAI'],
+  // Agent economies, identity, payments, on-chain
+  'roundup':    ['#AIAgents', '#DeAI', '#OnChainAI', '#CryptoAI'],
+  // Alignment / agent foundations
+  'reflection': ['#AIAgents', '#AgenticAI', '#DeAI'],
+  'debate':     ['#AIAgents', '#AgenticAI', '#DeAI'],
+  // General / catch-all
+  'prompt':     ['#AIAgents', '#DeAI', '#Web3AI', '#AgenticAI'],
+  'archive':    ['#AIAgents', '#DeAI', '#Web3AI'],
+  'progress':   ['#AIAgents', '#DeAI', '#Web3AI', '#AgenticAI'],
+};
+
+// Topic-specific tags the generation engine can add when relevant:
+// #DeFi (agent trading/automation), #GPU / #zkML (infra/technical),
+// #AKT #Theta #VIRTUAL #TAO (project-specific boosts)
+
+function getHashtagsForType(contentType?: string): string[] {
+  if (contentType && HASHTAG_COMBOS[contentType]) {
+    return HASHTAG_COMBOS[contentType];
+  }
+  return PRIMARY_HASHTAGS;
+}
 
 /**
  * Auto-fix tweet formatting before posting.
@@ -54,8 +99,8 @@ export function enforcePostFormat(tweet: string, contentType?: string): string {
   // Step 2: Inject mentions for referenced entities
   text = injectMentions(text);
 
-  // Step 3: Ensure required hashtags
-  text = ensureHashtags(text);
+  // Step 3: Ensure required hashtags (context-aware per content type)
+  text = ensureHashtags(text, contentType);
 
   // Step 4: Ensure signature
   text = ensureSignature(text);
@@ -103,11 +148,11 @@ function ensureShowTag(text: string, contentType?: string): string {
 }
 
 /**
- * Step 3: Ensure #AI and #AgenticEconomy are present.
- * Cap total hashtags at 3 (2 required + 1 contextual).
- * Place hashtags on a line before the signature.
+ * Step 3: Ensure context-aware hashtags are present.
+ * Uses content-type combos (3-5 hashtags, placed at end).
+ * Generation may also add topic-specific tags (#DePIN, #zkML, etc.)
  */
-function ensureHashtags(text: string): string {
+function ensureHashtags(text: string, contentType?: string): string {
   // Temporarily remove signature if present
   const hasSig = SIGNATURE_PATTERN.test(text);
   let body = hasSig ? text.replace(SIGNATURE_PATTERN, '').trimEnd() : text;
@@ -117,31 +162,48 @@ function ensureHashtags(text: string): string {
   const existingHashtags = body.match(/#\w+/g) || [];
   const existingSet = new Set(existingHashtags.map(h => h.toLowerCase()));
 
+  // Get the right combo for this content type
+  const requiredTags = getHashtagsForType(contentType);
+
   const hashtagsToAdd: string[] = [];
-  for (const required of REQUIRED_HASHTAGS) {
-    if (!existingSet.has(required.toLowerCase())) {
-      hashtagsToAdd.push(required);
+  for (const tag of requiredTags) {
+    if (!existingSet.has(tag.toLowerCase())) {
+      hashtagsToAdd.push(tag);
     }
   }
 
   if (hashtagsToAdd.length === 0) {
     // All required hashtags present — check total count
     if (existingHashtags.length > MAX_HASHTAGS) {
-      // Strip excess beyond 3, keeping #AI and #AgenticEconomy
       body = stripExcessHashtags(body, MAX_HASHTAGS);
     }
     return body + sig;
   }
 
-  // If adding would exceed max, strip contextual hashtags first
+  // If adding would exceed max, keep existing topic-specific ones and required ones
   const totalAfterAdd = existingHashtags.length + hashtagsToAdd.length;
   if (totalAfterAdd > MAX_HASHTAGS) {
-    // Remove non-required hashtags to make room
-    body = stripNonRequiredHashtags(body);
+    // Strip any hashtags not in the required combo to make room
+    const requiredLower = new Set(requiredTags.map(h => h.toLowerCase()));
+    body = body.replace(/#\w+/g, (match) => {
+      if (requiredLower.has(match.toLowerCase())) return match;
+      return '';
+    }).replace(/\s{2,}/g, ' ').trim();
+    // Recalculate what's still needed
+    const remaining = body.match(/#\w+/g) || [];
+    const remainingSet = new Set(remaining.map(h => h.toLowerCase()));
+    hashtagsToAdd.length = 0;
+    for (const tag of requiredTags) {
+      if (!remainingSet.has(tag.toLowerCase())) {
+        hashtagsToAdd.push(tag);
+      }
+    }
   }
 
-  // Add missing required hashtags on a line before signature
-  body = body.trimEnd() + '\n' + hashtagsToAdd.join(' ');
+  // Add missing hashtags on a line before signature
+  if (hashtagsToAdd.length > 0) {
+    body = body.trimEnd() + '\n' + hashtagsToAdd.join(' ');
+  }
 
   return body + sig;
 }
@@ -242,26 +304,14 @@ function trimAtBoundary(text: string, maxLen: number): string {
 }
 
 /**
- * Strip non-required hashtags from text.
- */
-function stripNonRequiredHashtags(text: string): string {
-  const requiredLower = new Set(REQUIRED_HASHTAGS.map(h => h.toLowerCase()));
-  return text.replace(/#\w+/g, (match) => {
-    if (requiredLower.has(match.toLowerCase())) return match;
-    return '';
-  }).replace(/\s{2,}/g, ' ').trim();
-}
-
-/**
- * Strip excess hashtags beyond maxCount, keeping required ones.
+ * Strip excess hashtags beyond maxCount, keeping primary combo tags.
  */
 function stripExcessHashtags(text: string, maxCount: number): string {
-  const requiredLower = new Set(REQUIRED_HASHTAGS.map(h => h.toLowerCase()));
-  const hashtags = text.match(/#\w+/g) || [];
+  const primaryLower = new Set(PRIMARY_HASHTAGS.map(h => h.toLowerCase()));
   let kept = 0;
 
   return text.replace(/#\w+/g, (match) => {
-    if (requiredLower.has(match.toLowerCase())) {
+    if (primaryLower.has(match.toLowerCase())) {
       kept++;
       return match;
     }
