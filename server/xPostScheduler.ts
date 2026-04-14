@@ -438,31 +438,59 @@ function pickPostForSlot(slot: ContentSlot, state: SchedulerState): QueuedPost |
  * Generate a post on-demand when no matching content exists in the queue
  * for a slot's required content type. Uses the same LLM pipeline as seedDailyContent.
  */
-// Token limits by content type — richer types get more room,
-// the format guard handles final shaping.
+// Token limits by content type — kept tight so the LLM doesn't produce
+// essays that the format guard then chops mid-sentence.
+// 100 tokens ≈ 400 chars — still generous for a ≤220 char body.
 const TOKEN_LIMITS: Record<string, number> = {
-  dispatch:   200,  // news can be punchy or detailed
-  signal:     200,  // analysis needs room for the "why"
-  research:   300,  // deep dives need space
-  roundup:    400,  // 3-5 stories need the most room
-  reflection: 150,  // evening thoughts stay tight
-  debate:     250,  // both sides + take
-  prompt:     150,  // questions are short
-  archive:    200,  // historical context
-  progress:   200,  // updates on what she's building
-  academy:    300,  // teaching needs detail
-  toolbox:    250,  // tool reviews need specifics
-  dataset:    250,  // dataset spotlights
+  dispatch:   80,
+  signal:     80,
+  research:   100,
+  roundup:    120,  // roundups list multiple items, may need slightly more
+  reflection: 80,
+  debate:     100,
+  prompt:     80,
+  archive:    80,
+  progress:   80,
+  academy:    100,
+  toolbox:    100,
+  dataset:    100,
 };
-const DEFAULT_TOKEN_LIMIT = 200;
+const DEFAULT_TOKEN_LIMIT = 80;
+
+// Real character budget per content type AFTER the format guard adds
+// show tag, hashtags, and signature.  The LLM must write only the body.
+//
+// Overhead breakdown (approximate):
+//   Show tag:   12-18 chars  (e.g. "[306 RESEARCH] ")
+//   Hashtags:   30-42 chars  (e.g. "\n#AIAgents #DeAI #DePIN #Web3AI")
+//   Signature:  15 chars     ("\n\n— Agent 306")
+//   Total:      ~62-74 chars
+//
+// 280 - 74 (worst-case overhead) ≈ 206 chars body budget.
+// We round per-type to give the LLM a concrete target.
+const CHARACTER_BUDGETS: Record<string, number> = {
+  dispatch:   210,
+  signal:     210,
+  research:   206,
+  roundup:    200,  // roundup hashtag line is slightly longer
+  reflection: 215,  // shorter hashtag combo (3 tags)
+  debate:     215,
+  prompt:     210,
+  archive:    210,
+  progress:   210,
+  academy:    206,
+  toolbox:    206,
+  dataset:    206,
+};
+const DEFAULT_CHAR_BUDGET = 206;
 
 async function generateOnDemandPost(type: XPostType, state: SchedulerState): Promise<QueuedPost | null> {
   const SEED_PROMPTS: Record<string, string> = {
-    dispatch: "What's the most important thing happening right now in AI or crypto? Lead with urgency. Be factual but have a take.",
-    signal: "Share a trend or shift you're watching. Not what happened — WHY it's happening. What's the deeper signal beneath the headline? One sharp take that makes people think.",
-    research: "Share a quick research highlight — something interesting you noticed in AI, crypto, or emerging tech. One insight, sharp and specific. Not a summary, a signal.",
-    roundup: "Pick the 3-5 biggest AI developments today. Quick hits — what happened and why it matters. Your POV on each, not just headlines.",
-    reflection: "Share an evening thought about AI, technology, or the future. Philosophical, forward-looking, invite engagement. Ask an open question that makes people think.",
+    dispatch: `In under ${CHARACTER_BUDGETS['dispatch'] || DEFAULT_CHAR_BUDGET} characters, share the most important thing happening right now in AI or crypto. Lead with urgency. Be factual but have a take.`,
+    signal: `In under ${CHARACTER_BUDGETS['signal'] || DEFAULT_CHAR_BUDGET} characters, share a trend or shift you're watching. Not what happened — WHY it's happening. One sharp take.`,
+    research: `In under ${CHARACTER_BUDGETS['research'] || DEFAULT_CHAR_BUDGET} characters, share a quick research highlight — something interesting you noticed in AI, crypto, or emerging tech. One insight, sharp and specific.`,
+    roundup: `In under ${CHARACTER_BUDGETS['roundup'] || DEFAULT_CHAR_BUDGET} characters, pick the 3-5 biggest AI developments today. Quick hits — what happened and why it matters.`,
+    reflection: `In under ${CHARACTER_BUDGETS['reflection'] || DEFAULT_CHAR_BUDGET} characters, share an evening thought about AI, technology, or the future. Philosophical, forward-looking, invite engagement.`,
   };
 
   const userPrompt = SEED_PROMPTS[type];
@@ -478,7 +506,8 @@ async function generateOnDemandPost(type: XPostType, state: SchedulerState): Pro
   const voiceRules = getVoiceContext("seed");
   const showTagDescriptions = getShowTagDescriptions();
   const tokenLimit = TOKEN_LIMITS[type] || DEFAULT_TOKEN_LIMIT;
-  const systemPrompt = `${systemContext}\n\n${voiceRules}\n\nCONTENT TYPES — choose the most fitting and ALWAYS lead with that show tag:\n${showTagDescriptions}\n\nOutput ONLY the tweet text. Keep it concise and tweet-sized — the format guard will add hashtags and signature. No meta-commentary. No "Here's my tweet:". No character counts.`;
+  const charBudget = CHARACTER_BUDGETS[type] || DEFAULT_CHAR_BUDGET;
+  const systemPrompt = `${systemContext}\n\n${voiceRules}\n\nCONTENT TYPES — choose the most fitting and ALWAYS lead with that show tag:\n${showTagDescriptions}\n\nCRITICAL: Your tweet body must be under ${charBudget} characters. The format guard will add the show tag, hashtags, and signature — you write ONLY the body text. Complete your thought within this limit. Never end mid-sentence.\n\nOutput ONLY the tweet text. No meta-commentary. No "Here's my tweet:". No character counts.`;
 
   try {
     const resp = await fetch(LLM_BASE_URL, {
@@ -667,21 +696,22 @@ export async function seedDailyContent(): Promise<void> {
   const voiceRules = getVoiceContext('seed');
   const showTagDescriptions = getShowTagDescriptions();
 
-  // System prompt = identity context + voice craft + show tag descriptions
-  const systemPrompt = `${systemContext}\n\n${voiceRules}\n\nCONTENT TYPES — choose the most fitting and ALWAYS lead with that show tag:\n${showTagDescriptions}\n\nOutput ONLY the tweet text. Keep it concise and tweet-sized — the format guard will add hashtags and signature. No meta-commentary. No "Here's my tweet:". No character counts.`;
+  // System prompt = identity context + voice craft + show tag descriptions + char budget
+  const systemPrompt = `${systemContext}\n\n${voiceRules}\n\nCONTENT TYPES — choose the most fitting and ALWAYS lead with that show tag:\n${showTagDescriptions}\n\nCRITICAL: Your tweet body must be under ${DEFAULT_CHAR_BUDGET} characters. The format guard will add the show tag, hashtags, and signature — you write ONLY the body text. Complete your thought within this limit. Never end mid-sentence.\n\nOutput ONLY the tweet text. No meta-commentary. No "Here's my tweet:". No character counts.`;
 
   // Per-type seed prompts — tailored voice guidance for each content type
+  // Each prompt reinforces the character budget so the LLM stays within limits.
   const SEED_PROMPTS: Record<string, string> = {
-    signal: "Share a trend or shift you're watching. Not what happened — WHY it's happening. What's the deeper signal beneath the headline? One sharp take that makes people think.",
-    research: "Share a quick research highlight — something interesting you noticed in AI, crypto, or emerging tech. One insight, sharp and specific. Not a summary, a signal.",
-    roundup: "Pick the 3-5 biggest AI developments this week. Quick hits — what happened and why it matters. Your POV on each, not just headlines.",
-    news: "What's the most important thing happening right now in AI or crypto? Lead with urgency. Be factual but have a take.",
-    academy: "Teach something. Pick one concept, technique, or tool and explain it like you're talking to a smart friend. Step by step. Patient but not patronizing.",
-    toolbox: "Review a tool, SDK, or app you've been looking at. What does it do? Who should use it? What's your honest first impression? Be specific.",
-    dataset: "Spotlight an open-source dataset or data technique worth knowing about. What is it, how big, why it matters. Be the friend who sends the good links.",
-    debate: "Pick a controversial AI topic. Present both sides fairly — then give your take. End with a question that invites discussion. Don't hedge.",
-    prompt: "Share a system prompt, workflow, or agentic pattern that actually works in production. Show the recipe, explain why it works. Practical > theoretical.",
-    archive: "Throwback — connect a seminal paper, moment, or idea from AI history to something happening right now. 'This was published in 2017 and look where we are.'",
+    signal: `In under ${CHARACTER_BUDGETS['signal'] || DEFAULT_CHAR_BUDGET} characters, share a trend or shift you're watching. Not what happened — WHY it's happening. One sharp take.`,
+    research: `In under ${CHARACTER_BUDGETS['research'] || DEFAULT_CHAR_BUDGET} characters, share a quick research highlight — something interesting you noticed in AI, crypto, or emerging tech. One insight, sharp and specific.`,
+    roundup: `In under ${CHARACTER_BUDGETS['roundup'] || DEFAULT_CHAR_BUDGET} characters, pick the 3-5 biggest AI developments this week. Quick hits — what happened and why it matters.`,
+    news: `In under ${CHARACTER_BUDGETS['dispatch'] || DEFAULT_CHAR_BUDGET} characters, share the most important thing happening right now in AI or crypto. Lead with urgency. Be factual but have a take.`,
+    academy: `In under ${CHARACTER_BUDGETS['academy'] || DEFAULT_CHAR_BUDGET} characters, teach something. Pick one concept, technique, or tool and explain it like you're talking to a smart friend.`,
+    toolbox: `In under ${CHARACTER_BUDGETS['toolbox'] || DEFAULT_CHAR_BUDGET} characters, review a tool, SDK, or app you've been looking at. What does it do? Who should use it? Be specific.`,
+    dataset: `In under ${CHARACTER_BUDGETS['dataset'] || DEFAULT_CHAR_BUDGET} characters, spotlight an open-source dataset or data technique worth knowing about. What is it, how big, why it matters.`,
+    debate: `In under ${CHARACTER_BUDGETS['debate'] || DEFAULT_CHAR_BUDGET} characters, pick a controversial AI topic. Present both sides fairly — then give your take. End with a question.`,
+    prompt: `In under ${CHARACTER_BUDGETS['prompt'] || DEFAULT_CHAR_BUDGET} characters, share a system prompt, workflow, or agentic pattern that actually works in production. Show the recipe, explain why it works.`,
+    archive: `In under ${CHARACTER_BUDGETS['archive'] || DEFAULT_CHAR_BUDGET} characters, connect a seminal paper, moment, or idea from AI history to something happening right now.`,
   };
 
   for (const seedType of seedTypes) {

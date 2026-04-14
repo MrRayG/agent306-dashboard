@@ -557,10 +557,10 @@ Required JSON schema:
             { role: "system", content: breakthroughSystemPrompt },
             {
               role: "user",
-              content: `Rewrite this breakthrough detection into an engaging [306 SIGNAL] post in Agent 306's voice.\n\nTitle: ${breakthrough.title}\nDescription: ${breakthrough.description.slice(0, 1500)}\nComposite Score: ${compositeScore}\n\nRULES:\n- MUST start with [306 SIGNAL]\n- Max 280 characters for single tweet, or thread if the finding warrants depth\n- Agent 306's voice: specific, direct, has a take\n- No blog URLs\n- Output ONLY the post text, no meta-commentary`,
+              content: `Rewrite this breakthrough detection into an engaging [306 SIGNAL] post in Agent 306's voice.\n\nTitle: ${breakthrough.title}\nDescription: ${breakthrough.description.slice(0, 1500)}\nComposite Score: ${compositeScore}\n\nRULES:\n- MUST start with [306 SIGNAL]\n- Your tweet body must be under 210 characters. The format guard adds the show tag, hashtags, and signature — you write ONLY the body. Complete your thought within this limit. Never end mid-sentence.\n- Agent 306's voice: specific, direct, has a take\n- No blog URLs\n- Output ONLY the post text, no meta-commentary`,
             },
           ],
-          max_tokens: 600,
+          max_tokens: 100,
           temperature: 0.7,
         }),
         signal: AbortSignal.timeout(30000),

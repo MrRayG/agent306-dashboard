@@ -272,14 +272,16 @@ function trimToLimit(text: string): string {
 
 /**
  * Trim text to maxLen, preferring sentence boundaries.
+ * Priority: sentence end > em dash / semicolon > comma > word boundary.
  */
 function trimAtBoundary(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
 
   const truncated = text.slice(0, maxLen);
 
-  // Try to find a sentence boundary (. ! ?) within last 40 chars
-  const searchWindow = truncated.slice(-40);
+  // Try to find a sentence boundary (. ! ?) within last 80 chars
+  const windowSize = Math.min(80, truncated.length);
+  const searchWindow = truncated.slice(-windowSize);
   const sentenceEnd = Math.max(
     searchWindow.lastIndexOf('. '),
     searchWindow.lastIndexOf('! '),
@@ -290,11 +292,35 @@ function trimAtBoundary(text: string, maxLen: number): string {
   );
 
   if (sentenceEnd > 0) {
-    const cutPoint = truncated.length - 40 + sentenceEnd + 1; // +1 to include the punctuation
+    const cutPoint = truncated.length - windowSize + sentenceEnd + 1; // +1 to include the punctuation
     return truncated.slice(0, cutPoint).trimEnd();
   }
 
-  // No sentence boundary — cut at last space
+  // Try em dashes and semicolons as clause-level cut points
+  const dashEnd = Math.max(
+    searchWindow.lastIndexOf('— '),
+    searchWindow.lastIndexOf('; '),
+    searchWindow.lastIndexOf('—\n'),
+  );
+
+  if (dashEnd > 0) {
+    const cutPoint = truncated.length - windowSize + dashEnd;
+    return truncated.slice(0, cutPoint).trimEnd();
+  }
+
+  // Try comma + space as a clause boundary (last 60 chars)
+  const commaWindow = truncated.slice(-60);
+  const commaEnd = commaWindow.lastIndexOf(', ');
+  if (commaEnd > 0) {
+    const cutPoint = truncated.length - 60 + commaEnd;
+    // Only use comma cut if it preserves at least half the text
+    if (cutPoint > maxLen * 0.5) {
+      return truncated.slice(0, cutPoint).trimEnd();
+    }
+  }
+
+  // Last resort: cut at last space, but try to find the PREVIOUS complete
+  // sentence rather than leaving an incomplete thought with "..."
   const lastSpace = truncated.lastIndexOf(' ');
   if (lastSpace > maxLen * 0.5) {
     return truncated.slice(0, lastSpace).trimEnd() + '...';
