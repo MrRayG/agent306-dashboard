@@ -156,51 +156,29 @@ function ensureHashtags(text: string, contentType?: string): string {
   // Temporarily remove signature if present
   const hasSig = SIGNATURE_PATTERN.test(text);
   let body = hasSig ? text.replace(SIGNATURE_PATTERN, '').trimEnd() : text;
-  let sig = hasSig ? `\n\n${SIGNATURE}` : '';
+  const sig = hasSig ? `\n\n${SIGNATURE}` : '';
 
-  // Count existing hashtags
   const existingHashtags = body.match(/#\w+/g) || [];
-  const existingSet = new Set(existingHashtags.map(h => h.toLowerCase()));
 
-  // Get the right combo for this content type
-  const requiredTags = getHashtagsForType(contentType);
-
-  const hashtagsToAdd: string[] = [];
-  for (const tag of requiredTags) {
-    if (!existingSet.has(tag.toLowerCase())) {
-      hashtagsToAdd.push(tag);
-    }
-  }
-
-  if (hashtagsToAdd.length === 0) {
-    // All required hashtags present — check total count
+  // If she picked 2+ hashtags, trust her. Only cap at max.
+  if (existingHashtags.length >= 2) {
     if (existingHashtags.length > MAX_HASHTAGS) {
       body = stripExcessHashtags(body, MAX_HASHTAGS);
     }
     return body + sig;
   }
 
-  // If adding would exceed max, keep existing topic-specific ones and required ones
-  const totalAfterAdd = existingHashtags.length + hashtagsToAdd.length;
-  if (totalAfterAdd > MAX_HASHTAGS) {
-    // Strip any hashtags not in the required combo to make room
-    const requiredLower = new Set(requiredTags.map(h => h.toLowerCase()));
-    body = body.replace(/#\w+/g, (match) => {
-      if (requiredLower.has(match.toLowerCase())) return match;
-      return '';
-    }).replace(/\s{2,}/g, ' ').trim();
-    // Recalculate what's still needed
-    const remaining = body.match(/#\w+/g) || [];
-    const remainingSet = new Set(remaining.map(h => h.toLowerCase()));
-    hashtagsToAdd.length = 0;
-    for (const tag of requiredTags) {
-      if (!remainingSet.has(tag.toLowerCase())) {
-        hashtagsToAdd.push(tag);
-      }
+  // 0-1 hashtags = she missed them. Add defaults.
+  const requiredTags = getHashtagsForType(contentType);
+  const existingSet = new Set(existingHashtags.map(h => h.toLowerCase()));
+  const hashtagsToAdd: string[] = [];
+  for (const tag of requiredTags) {
+    if (!existingSet.has(tag.toLowerCase())) {
+      hashtagsToAdd.push(tag);
     }
+    if (existingHashtags.length + hashtagsToAdd.length >= 4) break;
   }
 
-  // Add missing hashtags on a line before signature
   if (hashtagsToAdd.length > 0) {
     body = body.trimEnd() + '\n' + hashtagsToAdd.join(' ');
   }

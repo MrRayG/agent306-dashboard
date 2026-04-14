@@ -19,6 +19,7 @@ import { knowledge } from "./memoryEngine.js";
 import { queueXPost } from "./xPostScheduler.js";
 import { getVoiceContext } from "./voiceInstructions.js";
 import { enforceShowTag } from "./contentTypes.js";
+import { buildTweetSystemPrompt } from "./tweetPromptBuilder.js";
 
 // -- Types ------------------------------------------------------------------
 
@@ -545,9 +546,7 @@ Required JSON schema:
     // Rewrite breakthrough into Agent 306's voice with [306 SIGNAL] tag
     let breakthroughPost = `[306 SIGNAL] ${breakthrough.title}\n\n${breakthrough.description.slice(0, 2200)}`;
     try {
-      const voiceContext = getOptimizedContext("breakthrough signal AI discovery");
-      const voiceRules = getVoiceContext('general');
-      const breakthroughSystemPrompt = `${voiceContext}\n\n${voiceRules}`;
+      const breakthroughSystemPrompt = buildTweetSystemPrompt('signal', breakthrough.title);
       const voiceResp = await fetch(LLM_BASE_URL, {
         method: "POST",
         headers: getLLMHeaders(),
@@ -557,7 +556,7 @@ Required JSON schema:
             { role: "system", content: breakthroughSystemPrompt },
             {
               role: "user",
-              content: `Rewrite this breakthrough detection into an engaging [306 SIGNAL] post in Agent 306's voice.\n\nTitle: ${breakthrough.title}\nDescription: ${breakthrough.description.slice(0, 1500)}\nComposite Score: ${compositeScore}\n\nRULES:\n- MUST start with [306 SIGNAL]\n- Max 280 characters for single tweet, or thread if the finding warrants depth\n- Agent 306's voice: specific, direct, has a take\n- No blog URLs\n- Output ONLY the post text, no meta-commentary`,
+              content: `Rewrite this breakthrough detection into a [306 SIGNAL] tweet.\n\nTitle: ${breakthrough.title}\nDescription: ${breakthrough.description.slice(0, 1500)}\nComposite Score: ${compositeScore}\n\nOutput ONLY the tweet text. No meta-commentary.`,
             },
           ],
           max_tokens: 600,
