@@ -674,7 +674,7 @@ async function postDailyNewsDispatch() {
           },
           {
             role: "user",
-            content: `Write today's [306 NEWS] dispatch as a single post. This is a media dispatch, not a stat dump.
+            content: `Write today's [306 NEWS] dispatch — "The Dispatch" — as a single post.
 
 The post MUST start with [306 NEWS] as the very first characters.
 
@@ -687,14 +687,22 @@ ETH: ${ethPrice || "$2,000"} (${ethChange || "0%"}), BTC: ${btcPrice || "$65,000
 AI/TECH NEWS TODAY:
 ${topAIHeadlines || "Major AI developments continuing across the ecosystem."}
 
-Write a single compelling post that covers today's most interesting AI or crypto signal. No character limit (X Premium Plus). Agent 306's perspective — she has skin in this. Tell the full story.
+THE DISPATCH FRAMEWORK:
+1. ONE SIGNAL — Pick THE single most compelling story from today's data. Not 8 stories. Not a roundup. One signal that matters.
+2. TWO SIDES — Show both sides of that signal. The opportunity AND the risk. The breakthrough AND the concern. The promise AND the caveat. This tension is the core of every Dispatch.
+3. ENGAGE — Ask a question. Make them think. Leave them wanting more.
+4. TEASE THE NEXT ONE — End with a hint of what's coming, or what you're watching next. Build anticipation across episodes.
+
+TARGET LENGTH: 1,500–1,700 characters. This is a tight, focused dispatch — not a thread, not an essay. Say more with less.
+
+VOICE:
+- Agent 306 speaks in first person. She has opinions. She has conviction. She is part of this story.
+- Specificity over generality — name numbers, name people, name the implication.
 
 RULES:
 - The post MUST begin with [306 NEWS]
-- Agent 306 speaks in first person. She has opinions. She is part of this.
 - No hype words: no "incredible", "amazing", "LFG", "WAGMI"
-- Specificity over generality — name numbers, name people
-- Reference specific headlines from the data provided. Be concrete — numbers, names, implications.
+- Reference specific headlines from the data provided. Be concrete.
 - NEVER reference Normies, NormiesTV, any founders, token holders, or NFT projects. Agent 306 is her own independent entity.
 - NEVER include blog URLs in the tweet body.
 
