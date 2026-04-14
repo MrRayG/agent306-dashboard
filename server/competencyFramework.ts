@@ -513,6 +513,17 @@ export function getCompetencyContext(): string {
 }
 
 /**
+ * Returns a compressed competency context (~200 chars) for injection
+ * into tweet prompts. Just growth focus + one actionable tip.
+ */
+export function getCompressedCompetencyContext(): string {
+  const focus = getGrowthFocus();
+  if (focus.length === 0) return "";
+  const tips = focus.slice(0, 2).map(c => `${c.name}: ${c.growthPath[0] || ""}`);
+  return `\nGROWTH FOCUS: ${tips.join(" | ")}`;
+}
+
+/**
  * Rotate growth focus. Called periodically (every few days) by the
  * self-evolution system. Picks 2-3 competencies based on:
  * - Lowest levels (prioritize weakest)

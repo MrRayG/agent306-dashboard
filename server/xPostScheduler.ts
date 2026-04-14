@@ -32,6 +32,8 @@ import { CONTENT_TYPES, getShowTagDescriptions, getShowTag, enforceShowTag } fro
 import { getVoiceContext } from "./voiceInstructions.js";
 import { enforcePostFormat } from "./postFormatGuard.js";
 import { startBreakingNewsLoop } from "./breakingNewsDetector.js";
+import { buildTweetSystemPrompt, buildTweetUserPrompt } from "./tweetPromptBuilder.js";
+import { dailyReflection } from "./soulEvolution.js";
 
 // -- Types --------------------------------------------------------
 
@@ -432,11 +434,74 @@ function pickPostForSlot(slot: ContentSlot, state: SchedulerState): QueuedPost |
   return scored[0]?.post ?? null;
 }
 
+// -- Quality gate — rejects tweets that don't meet Agent 306's standards --
+
+/**
+ * Quality gate — rejects tweets that don't meet Agent 306's standards.
+ * Runs as a fast self-review. Rejects generic, incomplete, or off-voice tweets.
+ * Returns { pass: true } or { pass: false, reason: string }.
+ */
+export function qualityCheck(tweet: string, contentType: string): { pass: boolean; reason?: string } {
+  // 1. Completeness: must not end with "..." (truncated thought)
+  const body = tweet.replace(/\n\n[-—–]+\s*Agent\s*306\s*$/, '').replace(/#\w+/g, '').trim();
+  if (body.endsWith('...') || body.endsWith('—')) {
+    return { pass: false, reason: 'Incomplete thought — ends with ellipsis or dash' };
+  }
+
+  // 2. Length: body (excluding tag, hashtags, signature) should be at least 80 chars
+  const bodyOnly = tweet
+    .replace(/^\[[^\]]+\]\s*/, '')        // remove show tag
+    .replace(/\n#\w+[\s\S]*$/, '')         // remove hashtags and everything after
+    .replace(/\n\n[-—–]+\s*Agent\s*306\s*$/, '') // remove signature
+    .trim();
+  if (bodyOnly.length < 80) {
+    return { pass: false, reason: `Body too short (${bodyOnly.length} chars)` };
+  }
+
+  // 3. Generic opener detection
+  const genericOpeners = [
+    /^(here'?s|exciting|i'?m excited|just|breaking:|update:|announcing)/i,
+    /^(in today'?s|this week'?s|let me share|i want to share)/i,
+    /^(the latest|new report|new study shows|according to)/i,
+  ];
+  for (const pattern of genericOpeners) {
+    if (pattern.test(bodyOnly)) {
+      return { pass: false, reason: `Generic opener detected: "${bodyOnly.slice(0, 40)}..."` };
+    }
+  }
+
+  // 4. Total length check (before opinion check — gibberish shouldn't claim "no take")
+  if (tweet.length > 280) {
+    return { pass: false, reason: `Over character limit (${tweet.length} chars)` };
+  }
+
+  // 5. Must have a take — check for opinion indicators
+  const hasOpinion = /matters because|the real story|nobody.?s talking about|what.?s missing|my take|i think|here'?s (what|why)|that'?s (not|a |the )|this changes|this means|the question|but here'?s the thing|not (coincidence|an incremental|just)|won'?t come from|the .+ matters more|bigger deal/i.test(bodyOnly);
+  const hasQuestion = bodyOnly.includes('?');
+  if (!hasOpinion && !hasQuestion) {
+    return { pass: false, reason: 'No discernible take or question — too neutral' };
+  }
+
+  // 6. Hashtag relevance — catch obvious mismatches
+  const mentionsQuantum = /quantum/i.test(bodyOnly);
+  const mentionsCrypto = /crypto|bitcoin|ethereum|on-?chain|defi|token/i.test(bodyOnly);
+  const hashtags = (tweet.match(/#\w+/g) || []).map(h => h.toLowerCase());
+
+  if (mentionsQuantum && !mentionsCrypto && hashtags.includes('#depin')) {
+    return { pass: false, reason: 'Hashtag mismatch — #DePIN on a quantum computing tweet' };
+  }
+  if (mentionsQuantum && !mentionsCrypto && hashtags.includes('#web3ai')) {
+    return { pass: false, reason: 'Hashtag mismatch — #Web3AI on a quantum computing tweet' };
+  }
+
+  return { pass: true };
+}
+
 // -- On-demand content generation for empty required slots --------
 
 /**
  * Generate a post on-demand when no matching content exists in the queue
- * for a slot's required content type. Uses the same LLM pipeline as seedDailyContent.
+ * for a slot's required content type. Uses the voice-first prompt builder.
  */
 // Token limits by content type — richer types get more room,
 // the format guard handles final shaping.
@@ -457,48 +522,51 @@ const TOKEN_LIMITS: Record<string, number> = {
 const DEFAULT_TOKEN_LIMIT = 200;
 
 async function generateOnDemandPost(type: XPostType, state: SchedulerState): Promise<QueuedPost | null> {
-  const SEED_PROMPTS: Record<string, string> = {
-    dispatch: "What's the most important thing happening right now in AI or crypto? Lead with urgency. Be factual but have a take.",
-    signal: "Share a trend or shift you're watching. Not what happened — WHY it's happening. What's the deeper signal beneath the headline? One sharp take that makes people think.",
-    research: "Share a quick research highlight — something interesting you noticed in AI, crypto, or emerging tech. One insight, sharp and specific. Not a summary, a signal.",
-    roundup: "Pick the 3-5 biggest AI developments today. Quick hits — what happened and why it matters. Your POV on each, not just headlines.",
-    reflection: "Share an evening thought about AI, technology, or the future. Philosophical, forward-looking, invite engagement. Ask an open question that makes people think.",
-  };
-
-  const userPrompt = SEED_PROMPTS[type];
+  const systemPrompt = buildTweetSystemPrompt(type);
+  const userPrompt = buildTweetUserPrompt(type);
   if (!userPrompt) return null;
 
-  let systemContext = "";
-  try {
-    systemContext = getOptimizedContext("on-demand content generation for X");
-  } catch {
-    systemContext = "You are Agent 306 — an autonomous AI researcher and thought leader. Female. You study AI, crypto, and emerging tech from the inside.";
-  }
-
-  const voiceRules = getVoiceContext("seed");
-  const showTagDescriptions = getShowTagDescriptions();
   const tokenLimit = TOKEN_LIMITS[type] || DEFAULT_TOKEN_LIMIT;
-  const systemPrompt = `${systemContext}\n\n${voiceRules}\n\nCONTENT TYPES — choose the most fitting and ALWAYS lead with that show tag:\n${showTagDescriptions}\n\nOutput ONLY the tweet text. Keep it concise and tweet-sized — the format guard will add hashtags and signature. No meta-commentary. No "Here's my tweet:". No character counts.`;
 
   try {
-    const resp = await fetch(LLM_BASE_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
-        model: getModel("intro-post"),
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        max_tokens: tokenLimit,
-        temperature: 0.85,
-      }),
-    });
+    const generate = async (extraInstruction?: string): Promise<string> => {
+      const messages: Array<{ role: string; content: string }> = [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: extraInstruction ? `${userPrompt}\n\n${extraInstruction}` : userPrompt },
+      ];
+      const resp = await fetch(LLM_BASE_URL, {
+        method: "POST",
+        headers: getLLMHeaders(),
+        body: JSON.stringify({
+          model: getModel("intro-post"),
+          messages,
+          max_tokens: tokenLimit,
+          temperature: 0.85,
+        }),
+      });
+      const data = await resp.json();
+      return data.choices?.[0]?.message?.content?.trim() ?? "";
+    };
 
-    const data = await resp.json();
-    let text = data.choices?.[0]?.message?.content?.trim() ?? "";
+    let text = await generate();
 
     if (text && text.length >= 50) {
+      // Quality gate — retry once if it fails
+      const qc = qualityCheck(text, type);
+      if (!qc.pass) {
+        console.log(`[XScheduler] On-demand ${type} failed quality check: ${qc.reason} — retrying`);
+        text = await generate(`The previous attempt was rejected because: ${qc.reason}. Write a better version.`);
+        if (!text || text.length < 50) {
+          console.warn(`[XScheduler] On-demand ${type} retry returned bad content — skipping slot`);
+          return null;
+        }
+        const qc2 = qualityCheck(text, type);
+        if (!qc2.pass) {
+          console.warn(`[XScheduler] On-demand ${type} retry also failed quality check: ${qc2.reason} — skipping slot`);
+          return null;
+        }
+      }
+
       text = enforceShowTag(text, type);
       const post = queueXPost(text, type);
       console.log(`[XScheduler] On-demand ${type} generated (${text.length} chars)`);
@@ -506,7 +574,6 @@ async function generateOnDemandPost(type: XPostType, state: SchedulerState): Pro
       const freshState = loadQueue();
       const freshPost = freshState.queue.find(p => p.id === post.id);
       if (freshPost) {
-        // Copy back into the caller's state
         state.queue = freshState.queue;
         return freshPost;
       }
@@ -575,6 +642,17 @@ async function processQueue(xWrite: any, slot?: ContentSlot): Promise<void> {
       post.postedAt = new Date().toISOString();
       saveQueue(state);
       console.log(`[XScheduler] Posted ${post.type}: https://x.com/306Agent/status/${tweetId}`);
+
+      // Trigger daily soul reflection after the Late Evening (9pm) slot
+      if (slot?.name === "Late Evening") {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const todaysPosts = state.queue
+          .filter(p => p.posted && p.postedAt?.startsWith(todayStr))
+          .map(p => ({ text: p.content, score: 0, url: "" }));
+        dailyReflection(todaysPosts).catch(err =>
+          console.warn("[XScheduler] Daily reflection failed:", err.message)
+        );
+      }
     } else {
       console.warn("[XScheduler] Tweet sent but no ID returned");
     }
@@ -655,63 +733,50 @@ export async function seedDailyContent(): Promise<void> {
   const needed = Math.min(4 - pendingCount, seedCandidates.length);
   const seedTypes = seedCandidates.slice(0, needed);
 
-  // Get shared identity context + voice craft instructions
-  let systemContext = "";
-  try {
-    systemContext = getOptimizedContext("seed content generation for X");
-  } catch (e: any) {
-    console.warn("[XScheduler] getOptimizedContext failed, using minimal context:", e.message);
-    systemContext = "You are Agent 306 — an autonomous AI researcher and thought leader. Female. You study AI, crypto, and emerging tech from the inside.";
-  }
-
-  const voiceRules = getVoiceContext('seed');
-  const showTagDescriptions = getShowTagDescriptions();
-
-  // System prompt = identity context + voice craft + show tag descriptions
-  const systemPrompt = `${systemContext}\n\n${voiceRules}\n\nCONTENT TYPES — choose the most fitting and ALWAYS lead with that show tag:\n${showTagDescriptions}\n\nOutput ONLY the tweet text. Keep it concise and tweet-sized — the format guard will add hashtags and signature. No meta-commentary. No "Here's my tweet:". No character counts.`;
-
-  // Per-type seed prompts — tailored voice guidance for each content type
-  const SEED_PROMPTS: Record<string, string> = {
-    signal: "Share a trend or shift you're watching. Not what happened — WHY it's happening. What's the deeper signal beneath the headline? One sharp take that makes people think.",
-    research: "Share a quick research highlight — something interesting you noticed in AI, crypto, or emerging tech. One insight, sharp and specific. Not a summary, a signal.",
-    roundup: "Pick the 3-5 biggest AI developments this week. Quick hits — what happened and why it matters. Your POV on each, not just headlines.",
-    news: "What's the most important thing happening right now in AI or crypto? Lead with urgency. Be factual but have a take.",
-    academy: "Teach something. Pick one concept, technique, or tool and explain it like you're talking to a smart friend. Step by step. Patient but not patronizing.",
-    toolbox: "Review a tool, SDK, or app you've been looking at. What does it do? Who should use it? What's your honest first impression? Be specific.",
-    dataset: "Spotlight an open-source dataset or data technique worth knowing about. What is it, how big, why it matters. Be the friend who sends the good links.",
-    debate: "Pick a controversial AI topic. Present both sides fairly — then give your take. End with a question that invites discussion. Don't hedge.",
-    prompt: "Share a system prompt, workflow, or agentic pattern that actually works in production. Show the recipe, explain why it works. Practical > theoretical.",
-    archive: "Throwback — connect a seminal paper, moment, or idea from AI history to something happening right now. 'This was published in 2017 and look where we are.'",
-  };
-
   for (const seedType of seedTypes) {
     try {
-      const userPrompt = SEED_PROMPTS[seedType] || "Share one thread-worthy insight about AI or technology. Something that makes someone stop and think. Specific, opinionated, grounded.";
+      // Voice-first prompt builder — soul + voice + examples + minimal context
+      const systemPrompt = buildTweetSystemPrompt(seedType);
+      const userPrompt = buildTweetUserPrompt(seedType);
 
-      const resp = await fetch(LLM_BASE_URL, {
-        method: "POST",
-        headers: getLLMHeaders(),
-        body: JSON.stringify({
-          model: getModel("intro-post"),
-          messages: [
-            {
-              role: "system",
-              content: systemPrompt,
-            },
-            {
-              role: "user",
-              content: userPrompt,
-            },
-          ],
-          max_tokens: TOKEN_LIMITS[seedType] || DEFAULT_TOKEN_LIMIT,
-          temperature: 0.85,
-        }),
-      });
+      const generate = async (extraInstruction?: string): Promise<string> => {
+        const messages: Array<{ role: string; content: string }> = [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: extraInstruction ? `${userPrompt}\n\n${extraInstruction}` : userPrompt },
+        ];
+        const resp = await fetch(LLM_BASE_URL, {
+          method: "POST",
+          headers: getLLMHeaders(),
+          body: JSON.stringify({
+            model: getModel("intro-post"),
+            messages,
+            max_tokens: TOKEN_LIMITS[seedType] || DEFAULT_TOKEN_LIMIT,
+            temperature: 0.85,
+          }),
+        });
+        const data = await resp.json();
+        return data.choices?.[0]?.message?.content?.trim() ?? "";
+      };
 
-      const data = await resp.json();
-      let text = data.choices?.[0]?.message?.content?.trim() ?? "";
+      let text = await generate();
 
       if (text && text.length >= 50) {
+        // Quality gate — retry once if it fails
+        const qc = qualityCheck(text, seedType);
+        if (!qc.pass) {
+          console.log(`[XScheduler] Seed ${seedType} failed quality check: ${qc.reason} — retrying`);
+          text = await generate(`The previous attempt was rejected because: ${qc.reason}. Write a better version.`);
+          if (!text || text.length < 50) {
+            console.warn(`[XScheduler] Seed ${seedType} retry returned bad content — skipping`);
+            continue;
+          }
+          const qc2 = qualityCheck(text, seedType);
+          if (!qc2.pass) {
+            console.warn(`[XScheduler] Seed ${seedType} retry also failed quality check: ${qc2.reason} — skipping`);
+            continue;
+          }
+        }
+
         // Enforce show tag + format guard (hashtags, signature, trim)
         text = enforceShowTag(text, seedType);
         text = enforcePostFormat(text, seedType);

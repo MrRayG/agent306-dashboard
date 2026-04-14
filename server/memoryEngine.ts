@@ -20,6 +20,7 @@ import { queueEmbeddingSync, semanticSearch } from "./embeddingEngine.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import { reflectOnPost } from "./soulEvolution.js";
 
 // ── File paths (all on Railway /data volume) ──────────────────
 const SOUL_FILE        = dataPath("memory_soul.json");
@@ -533,6 +534,13 @@ export function updateEngagement(tweetUrl: string, engagement: PerformanceLesson
   analyzePatterns();
   save(PERFORMANCE_FILE, performance);
   console.log(`[Memory] EP${lesson.episodeId} engagement updated — score: ${lesson.score}/10`);
+
+  // Soul evolution reflection for notable posts (fire-and-forget)
+  if (lesson.score >= 7 || lesson.score <= 3) {
+    reflectOnPost(lesson.tweetText, lesson.tweetUrl, lesson.score).catch(err =>
+      console.warn("[Memory] Soul reflection failed:", err.message)
+    );
+  }
 }
 
 /** MrRayG rates a post manually from the dashboard */
@@ -547,6 +555,13 @@ export function ratePost(tweetUrl: string, rating: number): void {
     lesson.lessons.push("MrRayG rated this low — avoid this approach");
   }
   save(PERFORMANCE_FILE, performance);
+
+  // Soul evolution reflection on manual rating (fire-and-forget)
+  if (lesson.manualRating >= 4 || lesson.manualRating <= 2) {
+    reflectOnPost(lesson.tweetText, lesson.tweetUrl, lesson.score, lesson.manualRating).catch(err =>
+      console.warn("[Memory] Soul reflection on manual rating failed:", err.message)
+    );
+  }
 }
 
 /**
