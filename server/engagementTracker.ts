@@ -7,6 +7,7 @@
  */
 
 import { updateEngagement, performance } from "./memoryEngine.js";
+import { evaluatePostCompetencies, updateCompetencyLevel } from "./competencyFramework.js";
 
 const CHECK_DELAY_MS = 60 * 60 * 1000; // 1 hour after posting
 const CHECK_INTERVAL = 5 * 60 * 1000;  // Check every 5 min for pending posts
@@ -46,14 +47,39 @@ export async function runPendingChecks(xRead: any): Promise<void> {
 
       if (tweet?.data?.public_metrics) {
         const m = tweet.data.public_metrics;
-        await updateEngagement(check.tweetUrl, {
+        const engagement = {
           likes: m.like_count ?? 0,
           replies: m.reply_count ?? 0,
           retweets: m.retweet_count ?? 0,
           bookmarks: m.bookmark_count ?? 0,
           impressions: m.impression_count ?? 0,
-        });
+        };
+        await updateEngagement(check.tweetUrl, engagement);
         console.log(`[Tracker] EP checked — ${m.like_count} likes, ${m.reply_count} replies`);
+
+        // Correlate engagement with competencies exercised in this post
+        try {
+          const lesson = performance.lessons.find(l => l.tweetUrl === check.tweetUrl);
+          if (lesson) {
+            const evals = evaluatePostCompetencies({
+              text: lesson.tweetText,
+              engagement,
+              score: lesson.score,
+            });
+            for (const ev of evals) {
+              const delta = ev.signal === "positive" ? 0.1 : ev.signal === "negative" ? -0.1 : 0;
+              if (delta !== 0) {
+                updateCompetencyLevel(ev.competencyId, delta, `[engagement] ${ev.reason}`);
+              }
+            }
+            if (evals.length > 0) {
+              console.log(`[Tracker] Competency eval — ${evals.filter(e => e.signal === "positive").length} positive, ${evals.filter(e => e.signal === "negative").length} negative signals`);
+            }
+          }
+        } catch (e: any) {
+          // Non-fatal: competency eval failure shouldn't block engagement tracking
+          console.warn(`[Tracker] Competency evaluation failed (non-fatal): ${e.message}`);
+        }
       }
 
       // Remove from pending

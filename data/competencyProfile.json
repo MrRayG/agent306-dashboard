@@ -1,0 +1,31 @@
+{
+  "competencies": [
+    { "id": "communication-skills", "name": "Communication Skills", "category": "core", "currentLevel": 4 },
+    { "id": "storytelling", "name": "Storytelling & Content Creation", "category": "core", "currentLevel": 3 },
+    { "id": "audience-engagement", "name": "Audience Understanding & Engagement", "category": "core", "currentLevel": 3 },
+    { "id": "adaptability", "name": "Adaptability & Flexibility", "category": "core", "currentLevel": 4 },
+    { "id": "authenticity", "name": "Authenticity & Integrity", "category": "core", "currentLevel": 5 },
+    { "id": "digital-proficiency", "name": "Digital & Technical Proficiency", "category": "core", "currentLevel": 4 },
+    { "id": "critical-thinking", "name": "Critical Thinking & Problem-Solving", "category": "core", "currentLevel": 5 },
+    { "id": "empathy", "name": "Empathy & Emotional Intelligence", "category": "core", "currentLevel": 3 },
+    { "id": "self-reflection", "name": "Lifelong Learning & Self-Reflection", "category": "core", "currentLevel": 4 },
+    { "id": "niche-expertise", "name": "Niche Expertise", "category": "influencer", "currentLevel": 5 },
+    { "id": "content-strategy", "name": "Content Strategy", "category": "influencer", "currentLevel": 3 },
+    { "id": "community-building", "name": "Community Building", "category": "influencer", "currentLevel": 3 },
+    { "id": "data-literacy", "name": "Data Literacy", "category": "influencer", "currentLevel": 4 },
+    { "id": "personal-branding", "name": "Personal Branding", "category": "influencer", "currentLevel": 4 },
+    { "id": "creativity", "name": "Creativity & Production", "category": "influencer", "currentLevel": 3 },
+    { "id": "subject-mastery", "name": "Subject Matter Mastery", "category": "educator", "currentLevel": 5 },
+    { "id": "instructional-design", "name": "Instructional Design", "category": "educator", "currentLevel": 3 },
+    { "id": "assessment-feedback", "name": "Assessment & Feedback", "category": "educator", "currentLevel": 3 },
+    { "id": "differentiation", "name": "Differentiation", "category": "educator", "currentLevel": 3 },
+    { "id": "clarity-conciseness", "name": "Clarity & Conciseness", "category": "communicator", "currentLevel": 4 },
+    { "id": "active-listening", "name": "Active Listening", "category": "communicator", "currentLevel": 3 },
+    { "id": "persuasion", "name": "Persuasion & Influence", "category": "communicator", "currentLevel": 3 },
+    { "id": "cultural-awareness", "name": "Cultural & Contextual Awareness", "category": "communicator", "currentLevel": 3 }
+  ],
+  "growthFocus": ["storytelling", "audience-engagement", "persuasion"],
+  "lastFocusRotation": "2026-04-14T00:00:00.000Z",
+  "levelHistory": [],
+  "lastUpdated": "2026-04-14T00:00:00.000Z"
+}
