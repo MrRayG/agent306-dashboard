@@ -11,7 +11,7 @@ _Last updated: 2026-03-24 | Auto-updated by audit cron 2x/week_
 | replyWatcher (x_search) | ~800 | ~600 | ~1,400 | 24 | **33,600** ← #1 cost |
 | replyEngine (per reply) | ~3,400 | ~100 | ~3,500 | 5 avg | **17,500** |
 | newsDispatch | ~12,241 | ~800 | ~13,041 | 1 | **13,041** |
-| burnReceiptEngine | ~3,450 | ~300 | ~3,750 | 3 avg | **11,250** |
+| ~~burnReceiptEngine~~ | — | — | — | — | **removed** |
 | academyEngine | ~3,150 | ~400 | ~3,550 | 0.43 | **1,526** |
 | signalBriefEngine | ~3,150 | ~400 | ~3,550 | 0.43 | **1,526** |
 | Other (boost, race, etc.) | ~2,500 | ~300 | ~2,800 | 0.5 | **1,400** |

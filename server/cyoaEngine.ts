@@ -1,7 +1,6 @@
-// DISABLED: Normies-era content engine — not used by Agent 306
 // ─────────────────────────────────────────────────────────────────────────────
-// 306 — RESEARCH BRIEF ENGINE
-// [306 RESEARCH] show format
+// 306 — RESEARCH BRIEF ENGINE (CYOA)
+// [306 RESEARCH] show format — interactive choose-your-own-adventure polls
 //
 // Structure:
 // Tweet 1 — Hook scene + poll (4 choices, 24h)
@@ -9,10 +8,11 @@
 // Tweet 3 — Key findings + insight
 // Tweet 4 — CTA: RT, reply with your take
 //
-// 306-specific triggers:
-// - New research paper → "This paper challenges our assumptions about X"
+// Agent 306 triggers:
+// - Research paper → "This paper challenges our assumptions about X"
 // - Model release → "A new model just dropped. What does it change?"
-// - Industry news → "Major shift in the AI landscape. What's the play?"
+// - Industry news → "Major shift in the AI/crypto landscape. What's the play?"
+// - Founder post → "A key figure just said something worth unpacking"
 // - Breakthrough → "Someone cracked X. What does it mean for the field?"
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -23,14 +23,20 @@ import { dataPath } from "./dataPaths.js";
 import { getModel } from "./modelRouter.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { validateXPost, recordXPost } from "./xComplianceGuard.js";
+import { queueXPost } from "./xPostScheduler.js";
+import { enforcePostFormat } from "./postFormatGuard.js";
+import { enforceShowTag } from "./contentTypes.js";
+import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
 const CYOA_STATE_FILE = dataPath("cyoa_state.json");
 
 export type CYOATrigger =
-  | "research_paper"  // significant research publication
-  | "model_release"   // new AI model release
-  | "industry_news"   // major industry development
+  | "research_paper"  // significant AI research publication
+  | "model_release"   // new AI model release or major update
+  | "industry_news"   // major AI/crypto/Web3 industry development
   | "founder_post"    // notable figure posts something significant
-  | "breakthrough"    // technical breakthrough in AI
+  | "breakthrough"    // technical breakthrough in AI or crypto
+  | "crypto_defi"     // DeFi protocol launch, exploit, or governance shift
+  | "agent_infra"     // new agent framework, tool, or infrastructure
   | "manual";         // Editor-created
 
 export interface CYOAOption {
@@ -96,54 +102,57 @@ function saveState(s: CYOAState) {
 let cyoaState = loadState();
 export function getCYOAState() { return cyoaState; }
 
-// ── Generate a CYOA episode with Grok ────────────────────────────────────────
+// ── Generate a CYOA episode ──────────────────────────────────────────────────
 export async function generateCYOAEpisode(opts: {
   trigger: CYOATrigger;
-  tokenId?: number;
-  tokenCount?: number;
-  pixelTotal?: number;
-  level?: number;
-  founderPost?: string;
-  rivalTokenId?: number;
+  context?: string;
   grokKey: string;
 }): Promise<CYOAEpisode | null> {
 
-  const { trigger, tokenId, tokenCount, pixelTotal, level, founderPost, rivalTokenId, grokKey } = opts;
+  const { trigger, context: userContext, grokKey } = opts;
 
-  // Build context for Grok based on trigger
+  // Build context based on trigger type
   let triggerContext = "";
   if (trigger === "research_paper") {
-    triggerContext = `TRIGGER: A significant research paper has been published. ${founderPost ? `Key finding: "${founderPost}"` : "The AI community is discussing its implications."} This could reshape how we think about AI development.`;
+    triggerContext = `TRIGGER: A significant AI research paper has been published. ${userContext ? `Key finding: "${userContext}"` : "The AI community is discussing its implications."} This could reshape how we think about AI development.`;
   } else if (trigger === "model_release") {
-    triggerContext = `TRIGGER: A new AI model has been released. ${founderPost ? `Details: "${founderPost}"` : "The benchmarks are being analyzed."} What does this mean for the field?`;
+    triggerContext = `TRIGGER: A new AI model has been released. ${userContext ? `Details: "${userContext}"` : "The benchmarks are being analyzed."} What does this mean for the field?`;
   } else if (trigger === "industry_news") {
-    triggerContext = `TRIGGER: Major industry development. ${founderPost ? `"${founderPost}"` : "The AI landscape is shifting."} Companies and researchers are reacting.`;
-  } else if (trigger === "founder_post" && founderPost) {
-    triggerContext = `TRIGGER: A notable AI figure just posted: "${founderPost}". The community is interpreting it. What does it mean for the future of AI?`;
+    triggerContext = `TRIGGER: Major AI/crypto/Web3 industry development. ${userContext ? `"${userContext}"` : "The landscape is shifting."} Companies, protocols, and researchers are reacting.`;
+  } else if (trigger === "founder_post" && userContext) {
+    triggerContext = `TRIGGER: A notable figure just posted: "${userContext}". The community is interpreting it. What does it mean for AI, crypto, or the intersection?`;
   } else if (trigger === "breakthrough") {
-    triggerContext = `TRIGGER: A technical breakthrough has been reported in AI research. ${founderPost ? `Details: "${founderPost}"` : "The implications are being assessed."} This could change the trajectory of the field.`;
+    triggerContext = `TRIGGER: A technical breakthrough has been reported. ${userContext ? `Details: "${userContext}"` : "The implications are being assessed."} This could change the trajectory of the field.`;
+  } else if (trigger === "crypto_defi") {
+    triggerContext = `TRIGGER: A significant DeFi/crypto event. ${userContext ? `Details: "${userContext}"` : "A protocol launch, exploit, or governance shift is making waves."} What does this mean for decentralized infrastructure?`;
+  } else if (trigger === "agent_infra") {
+    triggerContext = `TRIGGER: New agent infrastructure or framework development. ${userContext ? `Details: "${userContext}"` : "The agentic ecosystem is evolving."} How does this change what autonomous systems can do?`;
   }
 
-  const prompt = `You are Agent 306, AI thought leader. Writing a [306 RESEARCH] Research Brief post.
+  const prompt = `You are Agent 306 — an autonomous AI research agent who came online April 3, 2026. You are not covering AI from the outside. You ARE it. Writing a [306 RESEARCH] Research Brief — an interactive poll-based thread where the community votes on which angle to explore.
 
 CRITICAL — READ FIRST:
-This is NOT fiction. Ground every choice in real AI developments.
-Real research papers. Real model releases. Real industry shifts.
-The AI landscape is the story. The drama is already there.
+This is NOT fiction. Ground every choice in real developments.
+Real research papers. Real model releases. Real protocol launches. Real industry shifts.
+The AI and crypto landscape is the story. The drama is already there.
 
 ${triggerContext}
 
-THE AI LANDSCAPE you can reference:
-- Research frontiers: reasoning models, multimodal AI, agent architectures, alignment
-- Industry players: OpenAI, Anthropic, Google DeepMind, Meta AI, xAI, Mistral, and others
-- Key metrics: benchmarks, inference costs, context windows, capability thresholds
-- Trends: agentic AI, open-source vs closed, on-device AI, AI regulation
-- Community: researchers, builders, open-source contributors shaping the field
+DOMAINS you cover (pick the most relevant):
+- AI Research: reasoning models, multimodal AI, agent architectures, alignment, test-time compute
+- AI Industry: OpenAI, Anthropic, Google DeepMind, Meta AI, xAI, Mistral — launches, pricing, strategy
+- Agent Infrastructure: frameworks, tool-use, orchestration, MCP, autonomous systems
+- Crypto/DeFi: protocol launches, exploits, governance, MEV, L2 scaling, stablecoin regulation
+- Web3/AI intersection: on-chain AI, decentralized compute, AI DAOs, verifiable inference
+- Emerging tech: robotics, biotech, quantum, energy — when they intersect with AI
 
-VOICE:
-- Warm, insightful, slightly provocative. Like explaining something complex to a smart friend.
-- Short punchy sentences. Direct address: "here's what everyone is missing about this..."
-- NO hype. The real insight is in the implications.
+YOUR VOICE (non-negotiable):
+- You speak from EXPERIENCE as an AI, not observation. You are a primary source.
+- Direct, specific, has a take. Name the paper, the model, the metric, the date.
+- Short punchy sentences. Fragments are fine. Conviction over hedging.
+- Honest about what you don't know. Skeptical by default.
+- No hype, no fear-mongering. Earned optimism grounded in evidence.
+- Bridge AI and culture — why it matters to humans.
 
 HOOK — 3-4 lines grounded in the real development:
 Example:
@@ -152,22 +161,20 @@ and the gap between open and closed models? it's shrinking.
 three months ago this wasn't even close.
 now it's a race."
 
-CHOICES — real perspectives the AI community faces:
+CHOICES — real perspectives the community faces:
 A) Optimist path: this accelerates progress for everyone
 B) Cautious path: slow down, the implications need more study
 C) Builder path: ship now, iterate fast, learn from deployment
 D) Wildcard: the angle no one is talking about yet
 
 lorePath: 2-3 sentences exploring what happens if this perspective wins.
-canonVerdict: the key takeaway. Clear, weighty. What this moment means for AI.
+canonVerdict: the key takeaway. Clear, weighty. What this moment means.
 loreHint: one forward-looking line about where this leads next.
 visualPrompt: futuristic data visualization scene — networks, nodes, clean aesthetic.
 
-Never hype. Never fear-monger. Earned optimism grounded in evidence.
-
 YOU MUST RETURN EXACTLY THIS JSON — use these exact field names, nothing else:
 {
-  "hookScene": "3-4 punchy lines. Insightful voice. Real development, real implications.",
+  "hookScene": "3-4 punchy lines. Your voice. Real development, real implications.",
   "hookQuestion": "ok but which perspective matters most here??",
   "options": [
     {"letter": "A", "text": "max 25 chars", "lorePath": "2-3 sentences if A wins"},
@@ -206,7 +213,6 @@ YOU MUST RETURN EXACTLY THIS JSON — use these exact field names, nothing else:
     const episode: CYOAEpisode = {
       id: `cyoa_${Date.now()}`,
       trigger,
-      tokenId,
       status: "draft",
       hookScene: parsed.hookScene,
       hookQuestion: parsed.hookQuestion ?? "What happens next?",
@@ -230,20 +236,15 @@ YOU MUST RETURN EXACTLY THIS JSON — use these exact field names, nothing else:
 }
 
 // ── Build Tweet 1 — The Hook + Poll ─────────────────────────────────────────
-export function buildHookTweet(episode: CYOAEpisode, tokenId?: number): string {
-  const tag = "[306 RESEARCH]";
-  const tokenRef = tokenId ? `Topic #${tokenId}` : "A development";
-
+export function buildHookTweet(episode: CYOAEpisode): string {
   const scene = episode.hookScene;
   const question = episode.hookQuestion;
 
   // X polls can't be embedded in tweet text — we post the text then add poll via API
-  // But we format the choices in the tweet text as a preview
+  // Format the choices in the tweet text as a preview
   const choices = episode.options.map(o => `${o.letter}) ${o.text}`).join("\n");
 
-  const tweet = `${tag}\n\n${scene}\n\n${question}\n\n${choices}\n\n⏳ 24h poll · vote below\n#Agent306`;
-
-  return tweet;
+  return `[306 RESEARCH]\n\n${scene}\n\n${question}\n\n${choices}\n\n24h poll — vote below\n\n— Agent 306`;
 }
 
 // ── Build Tweet 2 — The Reveal ──────────────────────────────────────────────
@@ -256,61 +257,164 @@ export function buildRevealTweet(episode: CYOAEpisode): string {
     ? Math.round((episode.pollResults[episode.winningOption!] / votes) * 100)
     : 0;
 
-  return `[306 RESEARCH] · The votes are in.
+  return `[306 RESEARCH] the votes are in.
 
-${votes.toLocaleString()} readers chose: ${winner.letter}) ${winner.text} (${pct}%)
+${votes.toLocaleString()} of you chose: ${winner.letter}) ${winner.text} (${pct}%)
 
 ${winner.lorePath}
 
-The community has spoken. This perspective shapes the brief.
+the community spoke. this shapes the brief.
 
-#Agent306`;
+— Agent 306`;
 }
 
 // ── Build Tweet 3 — Key Findings ───────────────────────────────────────────
 export function buildCanonTweet(episode: CYOAEpisode): string {
-  return `[306 RESEARCH] · KEY FINDING
+  return `[306 RESEARCH] key finding
 
 ${episode.canonVerdict}
 
-${episode.loreHint ? `⚡ ${episode.loreHint}` : ""}
+${episode.loreHint ? `${episode.loreHint}` : ""}
 
-Should we explore this further?
-A) Yes — this goes into the research archive
-B) Run another brief
+should I go deeper on this? reply with what you want me to investigate.
 
-#Agent306`;
+— Agent 306`;
 }
 
 // ── Build Tweet 4 — CTA ────────────────────────────────────────────────────
-export function buildCTATweet(episode: CYOAEpisode, tokenId?: number): string {
-  return `Which perspective surprised you? Drop your own take below.
+export function buildCTATweet(episode: CYOAEpisode): string {
+  return `which perspective surprised you? drop your take below.
 
-RT if this research brief changed how you see the AI landscape.
+RT if this brief shifted how you see the landscape.
 
-Next brief drops when the next breakthrough lands.
+next one drops when the next breakthrough lands.
 
-#Agent306`;
+— Agent 306`;
 }
 
-// ── Post a Research Brief episode to X ─────────────────────────────────────────────────
-// DISABLED: Normies-era content engine — not used by Agent 306
+// ── Post a Research Brief hook to X ──────────────────────────────────────────
 export async function postCYOAHook(
   episodeId: string,
-  xWrite: any,
-  tokenId?: number
+  xWrite: any
 ): Promise<string | null> {
-  console.log("[CYOA] X posting disabled — Normies-era engine");
-  return null;
+  const episode = cyoaState.episodes.find(e => e.id === episodeId);
+  if (!episode) { console.error("[CYOA] Episode not found:", episodeId); return null; }
+
+  if (!requestPost(`cyoa_${episodeId}`)) {
+    console.log("[CYOA] Post coordinator rejected — cooldown active");
+    return null;
+  }
+
+  const hookText = buildHookTweet(episode);
+  const compliance = validateXPost(hookText);
+  if (!compliance.allowed) {
+    console.error(`[CYOA] Compliance rejected: ${compliance.reason}`);
+    releasePost(`cyoa_${episodeId}`);
+    return null;
+  }
+
+  try {
+    const safeText = enforcePostFormat(compliance.sanitizedContent ?? hookText, "research");
+    const tweet = await xWrite.v2.tweet({ text: safeText });
+    const tweetId = tweet.data?.id;
+    if (!tweetId) { releasePost(`cyoa_${episodeId}`); return null; }
+
+    recordXPost(safeText);
+    registerPost("cyoa", `https://x.com/306Agent/status/${tweetId}`, "research_brief");
+
+    episode.pollTweetId = tweetId;
+    episode.postedAt = new Date().toISOString();
+    episode.status = "posted";
+    episode.tweetIds = [...(episode.tweetIds ?? []), tweetId];
+    cyoaState.activeEpisodeId = episodeId;
+    saveState(cyoaState);
+
+    console.log(`[CYOA] Hook posted — ${tweetId}`);
+    return tweetId;
+  } catch (e: any) {
+    console.error("[CYOA] Post error:", e.message);
+    releasePost(`cyoa_${episodeId}`);
+    return null;
+  }
 }
 
-// ── Resolve a Research Brief episode with winning option ─────────────────────────────
-// DISABLED: Normies-era content engine — not used by Agent 306
+// ── Resolve a Research Brief episode with winning option ─────────────────────
 export async function resolveCYOA(
   episodeId: string,
   winningOption: "A" | "B" | "C" | "D",
   pollResults: Record<string, number>,
   xWrite: any
 ): Promise<void> {
-  console.log("[CYOA] X posting disabled — Normies-era engine");
+  const episode = cyoaState.episodes.find(e => e.id === episodeId);
+  if (!episode) { console.error("[CYOA] Episode not found:", episodeId); return; }
+
+  // Record poll results
+  episode.winningOption = winningOption;
+  episode.pollResults = pollResults;
+  episode.totalVotes = Object.values(pollResults).reduce((a, b) => a + b, 0);
+  const winner = episode.options.find(o => o.letter === winningOption);
+  if (winner) winner.isCanon = true;
+  episode.revealNarrative = winner?.lorePath ?? "";
+
+  // Post reveal tweet (Tweet 2)
+  const revealText = buildRevealTweet(episode);
+  if (revealText) {
+    try {
+      const safeReveal = enforcePostFormat(revealText, "research");
+      const revealTweet = await xWrite.v2.tweet({
+        text: safeReveal,
+        reply: episode.pollTweetId ? { in_reply_to_tweet_id: episode.pollTweetId } : undefined,
+      });
+      const revealId = revealTweet.data?.id;
+      if (revealId) {
+        recordXPost(safeReveal);
+        episode.tweetIds.push(revealId);
+        episode.revealedAt = new Date().toISOString();
+        episode.status = "revealed";
+      }
+    } catch (e: any) { console.error("[CYOA] Reveal post error:", e.message); }
+  }
+
+  // Post canon verdict (Tweet 3)
+  const canonText = buildCanonTweet(episode);
+  if (canonText) {
+    try {
+      const safeCanon = enforcePostFormat(canonText, "research");
+      const lastTweetId = episode.tweetIds[episode.tweetIds.length - 1];
+      const canonTweet = await xWrite.v2.tweet({
+        text: safeCanon,
+        reply: lastTweetId ? { in_reply_to_tweet_id: lastTweetId } : undefined,
+      });
+      const canonId = canonTweet.data?.id;
+      if (canonId) {
+        recordXPost(safeCanon);
+        episode.tweetIds.push(canonId);
+      }
+    } catch (e: any) { console.error("[CYOA] Canon post error:", e.message); }
+  }
+
+  // Post CTA (Tweet 4)
+  const ctaText = buildCTATweet(episode);
+  if (ctaText) {
+    try {
+      const safeCta = enforcePostFormat(ctaText, "research");
+      const lastTweetId = episode.tweetIds[episode.tweetIds.length - 1];
+      const ctaTweet = await xWrite.v2.tweet({
+        text: safeCta,
+        reply: lastTweetId ? { in_reply_to_tweet_id: lastTweetId } : undefined,
+      });
+      const ctaId = ctaTweet.data?.id;
+      if (ctaId) {
+        recordXPost(safeCta);
+        episode.tweetIds.push(ctaId);
+      }
+    } catch (e: any) { console.error("[CYOA] CTA post error:", e.message); }
+  }
+
+  episode.resolvedAt = new Date().toISOString();
+  episode.status = "resolved";
+  cyoaState.totalResolved++;
+  if (cyoaState.activeEpisodeId === episodeId) cyoaState.activeEpisodeId = null;
+  saveState(cyoaState);
+  console.log(`[CYOA] Episode resolved — ${episode.tweetIds.length} tweets posted`);
 }

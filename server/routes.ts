@@ -10,11 +10,10 @@ import { collectAllSignals, updateFeaturedTokens, bumpEpisodeCount, markSignalsU
 import { generateEpisodeWithGrok, type EpisodeMemory } from "./grokEngine";
 import { saveEpisodeCard } from "./imageCard";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
-// Burns, community, and catalog imports removed (removed)
-// import { checkForNewBurns, processBurnReceipt, getReceiptState } from "./burnReceiptEngine";
+// Community and catalog imports removed (removed)
 // import { getCommunitySignalCache, searchCommunitySocial, resetCommunityCache } from "./grokEngine";
 // import { ingestSignals, getCatalog, getCatalogStats, getMostActive, getStorySourceHolders } from "./holderCatalog";
-import { generateCYOAEpisode, postCYOAHook, resolveCYOA, getCYOAState, buildHookTweet, type CYOATrigger } from "./cyoaEngine";
+import { generateCYOAEpisode, postCYOAHook, resolveCYOA, getCYOAState, buildHookTweet, type CYOATrigger } from "./cyoaEngine.js";
 import { fetchReplies, getReplyState, formatRepliesForContext, getTopReplies, initReplyWatcher } from "./replyWatcher";
 import { getConversationMemoryState } from "./conversationMemory.js";
 import { scheduleWeeklyLeaderboard, postWeeklyLeaderboard, fetchLiveLeaderboard } from "./leaderboardEngine";
@@ -2456,17 +2455,13 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
   // Generate a new CYOA episode
   app.post("/api/cyoa/generate", async (req, res) => {
-    const { trigger, tokenId, tokenCount, pixelTotal, level, rivalTokenId } = req.body;
+    const { trigger, context } = req.body;
     const grokKey = LLM_API_KEY;
-    if (!grokKey) return res.status(500).json({ error: "No Grok key" });
+    if (!grokKey) return res.status(500).json({ error: "No LLM key" });
 
     const episode = await generateCYOAEpisode({
-      trigger: (trigger ?? "pre_arena") as CYOATrigger,
-      tokenId: tokenId ? Number(tokenId) : undefined,
-      tokenCount: tokenCount ? Number(tokenCount) : undefined,
-      pixelTotal: pixelTotal ? Number(pixelTotal) : undefined,
-      level: level ? Number(level) : undefined,
-      rivalTokenId: rivalTokenId ? Number(rivalTokenId) : undefined,
+      trigger: (trigger ?? "industry_news") as CYOATrigger,
+      context: context ?? undefined,
       grokKey,
     });
 
@@ -2477,40 +2472,9 @@ export function registerRoutes(httpServer: Server, app: Express) {
   // Post the hook tweet for a CYOA episode
   app.post("/api/cyoa/post/:id", async (req, res) => {
     const { id } = req.params;
-    const state = getCYOAState();
-    const episode = state.episodes.find((e: any) => e.id === id);
-    if (!episode) return res.status(404).json({ error: "Episode not found" });
-
-    const featuredTokenId = episode.tokenId ?? 306;
-    const tweetText = buildHookTweet(episode, featuredTokenId);
-
-    // Image upload removed (on-chain API disabled)
-    let xMediaId: string | undefined;
-
     try {
-      const compliance = validateXPost(tweetText);
-      if (!compliance.allowed) {
-        return res.status(429).json({ error: `Compliance guard: ${compliance.reason}` });
-      }
-      const safeText = enforcePostFormat(compliance.sanitizedContent ?? tweetText);
-      const tweet = await xWrite.v2.tweet({
-        text: safeText,
-        ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),
-      });
-      const tweetId = tweet.data?.id;
-      if (!tweetId) return res.status(500).json({ error: "Tweet failed" });
-      recordXPost(safeText);
-
-      // Update episode state
-      episode.pollTweetId = tweetId;
-      episode.postedAt = new Date().toISOString();
-      episode.status = "posted";
-      episode.tweetIds = [...(episode.tweetIds ?? []), tweetId];
-      state.activeEpisodeId = id;
-      const fs = await import("fs");
-      fs.writeFileSync(dataPath("cyoa_state.json"), JSON.stringify(state, null, 2));
-
-      console.log(`[CYOA] Hook posted with image — ${tweetId}`);
+      const tweetId = await postCYOAHook(id, xWrite);
+      if (!tweetId) return res.status(500).json({ error: "Post failed — check logs" });
       res.json({ ok: true, tweetId, url: `https://x.com/306Agent/status/${tweetId}` });
     } catch (e: any) {
       console.error("[CYOA] Post error:", e.message);
