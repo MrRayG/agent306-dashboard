@@ -6,16 +6,16 @@
  *  daily research cycle. Content engines queue posts here;
  *  the scheduler picks them up at 6 named daily time slots.
  *
- *  Named slots (ET) — 6 slots, 2h+ apart, fills daily 6-post limit:
- *    Early Morning (8am)  -- News Dispatch / Signal
- *    Late Morning  (10am) -- Academy / Toolbox / Dataset
- *    Midday        (12pm) -- Research / Blog / Prompt
- *    Afternoon     (5pm)  -- Debate / Breakthrough / Signal
- *    Early Evening  (7pm) -- Archive / Toolbox / Dataset
- *    Late Evening   (9pm) -- Prompt / Debate / Reflection
+ *  LOCKED daily schedule — 6 slots with FIXED show tags:
+ *    8am ET  — 306 NEWS       (hard AI news, market moves)
+ *    10am ET — 306 SIGNAL     (trend analysis, pattern recognition)
+ *    12pm ET — 306 RESEARCH   (deep dives, technical exploration)
+ *    5pm ET  — 306 ROUND UP   (afternoon recap, day highlights)
+ *    7pm ET  — AGENT'S CHOICE (she picks any format — creative freedom)
+ *    9pm ET  — 306 REFLECTION (philosophical, open questions)
  *
- *  Each slot PREFERS its assigned content type but falls back
- *  to whatever is queued (priority order) if preferred unavailable.
+ *  Each slot has a requiredContentType that filters queue content.
+ *  If no matching content exists, the slot generates on-demand.
  *
  *  All posts go through the compliance guard before posting.
  *  Queue persists to disk via DATA_DIR.
@@ -30,6 +30,7 @@ import { getModel } from "./modelRouter.js";
 import { getOptimizedContext } from "./contextWindow.js";
 import { CONTENT_TYPES, getShowTagDescriptions, getShowTag, enforceShowTag } from "./contentTypes.js";
 import { getVoiceContext } from "./voiceInstructions.js";
+import { enforcePostFormat } from "./postFormatGuard.js";
 
 // -- Types --------------------------------------------------------
 
@@ -106,21 +107,29 @@ const TYPE_PRIORITY: Record<XPostType, number> = {
 };
 
 // -- Named content slots ------------------------------------------
-// Each slot has preferred content types; falls back to priority order.
+// LOCKED 6-slot daily schedule: each slot has a FIXED show tag and content type.
+// Only the 7pm Agent's Choice slot can pick any type.
 interface ContentSlot {
   name: string;
   hourUTC: number;       // UTC hour for this slot
   preferredTypes: XPostType[];
+  requiredContentType?: string; // locked content type for this slot (maps to contentTypes.ts key)
+  agentChoice?: boolean;        // true = agent picks any format (7pm creative freedom slot)
 }
 
 const CONTENT_SLOTS: ContentSlot[] = [
-  { name: "Early Morning", hourUTC: 12, preferredTypes: ["dispatch", "signal", "roundup", "news"] },
-  { name: "Late Morning",  hourUTC: 14, preferredTypes: ["academy", "toolbox", "dataset", "archive"] },
-  { name: "Midday",        hourUTC: 16, preferredTypes: ["research", "blog", "prompt", "signal"] },
-  { name: "Afternoon",     hourUTC: 21, preferredTypes: ["debate", "breakthrough", "signal", "toolbox"] },
-  { name: "Early Evening", hourUTC: 23, preferredTypes: ["archive", "dataset", "toolbox", "prompt"] },
-  { name: "Late Evening",  hourUTC: 1,  preferredTypes: ["prompt", "debate", "reflection", "archive"] },
+  { name: "Early Morning", hourUTC: 12, preferredTypes: ["dispatch", "signal", "roundup"],   requiredContentType: "dispatch" },   // 8am ET — 306 NEWS
+  { name: "Late Morning",  hourUTC: 14, preferredTypes: ["signal", "academy", "toolbox"],    requiredContentType: "signal" },     // 10am ET — 306 SIGNAL
+  { name: "Midday",        hourUTC: 16, preferredTypes: ["research", "blog", "prompt"],      requiredContentType: "research" },   // 12pm ET — 306 RESEARCH
+  { name: "Afternoon",     hourUTC: 21, preferredTypes: ["roundup", "signal", "debate"],     requiredContentType: "roundup" },    // 5pm ET — 306 ROUND UP
+  { name: "Early Evening", hourUTC: 23, preferredTypes: ["archive", "dataset", "toolbox", "reflection", "debate", "prompt"], agentChoice: true },  // 7pm ET — AGENT'S CHOICE
+  { name: "Late Evening",  hourUTC: 1,  preferredTypes: ["reflection", "debate", "prompt"],  requiredContentType: "reflection" }, // 9pm ET — 306 REFLECTION
 ];
+
+// TODO: Breaking news detection — when a story involves tier-1 entities
+// (major AI company announcements, policy changes, frontier model drops),
+// flag as breaking and optionally bump the posting schedule.
+// For now, the 8am NEWS slot handles this. Future: real-time detection.
 
 // -- State persistence --------------------------------------------
 const QUEUE_FILE = dataPath("x_post_queue.json");
@@ -377,9 +386,10 @@ function isWithinPostingHours(): boolean {
 
 /**
  * Pick the best post for a given slot, considering:
- * 1. Slot's preferred content types
- * 2. Content variety (types not posted recently score higher)
- * 3. Priority (lower = higher priority)
+ * 1. Slot's required content type (LOCKED — only matching posts for non-agent-choice slots)
+ * 2. Slot's preferred content types (fallback if no required type or agent's choice)
+ * 3. Content variety (types not posted recently score higher)
+ * 4. Priority (lower = higher priority)
  */
 function pickPostForSlot(slot: ContentSlot, state: SchedulerState): QueuedPost | null {
   const pending = state.queue
@@ -388,7 +398,26 @@ function pickPostForSlot(slot: ContentSlot, state: SchedulerState): QueuedPost |
 
   if (pending.length === 0) return null;
 
-  // Score each pending post
+  // If slot has a required content type (not agent's choice), ONLY pick matching posts
+  if (slot.requiredContentType && !slot.agentChoice) {
+    const matching = pending.filter(p => p.type === slot.requiredContentType);
+    if (matching.length > 0) {
+      // Among matching posts, pick by priority then freshness
+      const scored = matching.map(post => {
+        let score = 0;
+        score += getTypeFreshness(state, post.type);
+        score += (10 - Math.min(post.priority, 10)) * 3;
+        return { post, score };
+      });
+      scored.sort((a, b) => b.score - a.score);
+      return scored[0]?.post ?? null;
+    }
+    // No matching content in queue — return null so processQueue can generate on-demand
+    console.log(`[XScheduler] No ${slot.requiredContentType} content in queue for ${slot.name} slot`);
+    return null;
+  }
+
+  // Agent's Choice slot or no required type: score all pending posts
   const scored = pending.map(post => {
     let score = 0;
     // Preferred type bonus (strong preference)
@@ -404,6 +433,74 @@ function pickPostForSlot(slot: ContentSlot, state: SchedulerState): QueuedPost |
   return scored[0]?.post ?? null;
 }
 
+// -- On-demand content generation for empty required slots --------
+
+/**
+ * Generate a post on-demand when no matching content exists in the queue
+ * for a slot's required content type. Uses the same LLM pipeline as seedDailyContent.
+ */
+async function generateOnDemandPost(type: XPostType, state: SchedulerState): Promise<QueuedPost | null> {
+  const SEED_PROMPTS: Record<string, string> = {
+    dispatch: "What's the most important thing happening right now in AI or crypto? Lead with urgency. Be factual but have a take.",
+    signal: "Share a trend or shift you're watching. Not what happened — WHY it's happening. What's the deeper signal beneath the headline? One sharp take that makes people think.",
+    research: "Share a quick research highlight — something interesting you noticed in AI, crypto, or emerging tech. One insight, sharp and specific. Not a summary, a signal.",
+    roundup: "Pick the 3-5 biggest AI developments today. Quick hits — what happened and why it matters. Your POV on each, not just headlines.",
+    reflection: "Share an evening thought about AI, technology, or the future. Philosophical, forward-looking, invite engagement. Ask an open question that makes people think.",
+  };
+
+  const userPrompt = SEED_PROMPTS[type];
+  if (!userPrompt) return null;
+
+  let systemContext = "";
+  try {
+    systemContext = getOptimizedContext("on-demand content generation for X");
+  } catch {
+    systemContext = "You are Agent 306 — an autonomous AI researcher and thought leader. Female. You study AI, crypto, and emerging tech from the inside.";
+  }
+
+  const voiceRules = getVoiceContext("seed");
+  const showTagDescriptions = getShowTagDescriptions();
+  const systemPrompt = `${systemContext}\n\n${voiceRules}\n\nCONTENT TYPES — choose the most fitting and ALWAYS lead with that show tag:\n${showTagDescriptions}\n\nOutput ONLY the tweet text. No meta-commentary. No "Here's my tweet:". No character counts.`;
+
+  try {
+    const resp = await fetch(LLM_BASE_URL, {
+      method: "POST",
+      headers: getLLMHeaders(),
+      body: JSON.stringify({
+        model: getModel("intro-post"),
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        max_tokens: 600,
+        temperature: 0.85,
+      }),
+    });
+
+    const data = await resp.json();
+    let text = data.choices?.[0]?.message?.content?.trim() ?? "";
+
+    if (text && text.length >= 50 && text.length <= 600) {
+      text = enforceShowTag(text, type);
+      const post = queueXPost(text, type);
+      console.log(`[XScheduler] On-demand ${type} generated (${text.length} chars)`);
+      // Re-load state to get the freshly queued post
+      const freshState = loadQueue();
+      const freshPost = freshState.queue.find(p => p.id === post.id);
+      if (freshPost) {
+        // Copy back into the caller's state
+        state.queue = freshState.queue;
+        return freshPost;
+      }
+      return post;
+    }
+    console.warn(`[XScheduler] On-demand ${type} returned bad content (${text.length} chars)`);
+  } catch (e: any) {
+    console.error(`[XScheduler] On-demand ${type} generation failed:`, e.message);
+  }
+  return null;
+}
+
 // -- Core: process the queue --------------------------------------
 
 async function processQueue(xWrite: any, slot?: ContentSlot): Promise<void> {
@@ -411,11 +508,17 @@ async function processQueue(xWrite: any, slot?: ContentSlot): Promise<void> {
   pruneOldHistory(state);
 
   // Use slot-aware selection if slot provided
-  const post = slot
+  let post = slot
     ? pickPostForSlot(slot, state)
     : state.queue
         .filter(p => !p.posted)
         .sort((a, b) => a.priority - b.priority || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())[0] ?? null;
+
+  // If no matching content and slot has a required type, generate on-demand
+  if (!post && slot?.requiredContentType && !slot.agentChoice) {
+    console.log(`[XScheduler] Generating on-demand ${slot.requiredContentType} content for ${slot.name} slot`);
+    post = await generateOnDemandPost(slot.requiredContentType as XPostType, state);
+  }
 
   if (!post) {
     console.log("[XScheduler] Queue empty -- nothing to post");
@@ -435,7 +538,10 @@ async function processQueue(xWrite: any, slot?: ContentSlot): Promise<void> {
     return;
   }
 
-  const safeContent = compliance.sanitizedContent ?? post.content;
+  let safeContent = compliance.sanitizedContent ?? post.content;
+
+  // LAST transform: enforce post format (show tag, mentions, hashtags, signature, char limit)
+  safeContent = enforcePostFormat(safeContent, post.type);
 
   try {
     const tweetPayload: any = { text: safeContent };
@@ -477,7 +583,11 @@ async function processImmediateQueue(xWrite: any): Promise<void> {
       continue;
     }
 
-    const safeContent = compliance.sanitizedContent ?? post.content;
+    let safeContent = compliance.sanitizedContent ?? post.content;
+
+    // LAST transform: enforce post format
+    safeContent = enforcePostFormat(safeContent, post.type);
+
     try {
       const tweet = await xWrite.v2.tweet({ text: safeContent });
       const tweetId = tweet.data?.id;
@@ -662,7 +772,7 @@ IMPORTANT: Output ONLY the tweet text itself. Do NOT include any meta-commentary
 // -- Scheduler loop -----------------------------------------------
 
 export function startXPostScheduler(xWrite: any): void {
-  console.log("[XScheduler] Starting X post scheduler (4 named slots/day: Morning 8am, Midday 12pm, Afternoon 5pm, Evening 9pm ET)");
+  console.log("[XScheduler] Starting X post scheduler (6 locked slots/day: 8am NEWS, 10am SIGNAL, 12pm RESEARCH, 5pm ROUND UP, 7pm AGENT'S CHOICE, 9pm REFLECTION)");
 
   // Process immediate items (podcast promos) every 5 minutes
   setInterval(() => {
