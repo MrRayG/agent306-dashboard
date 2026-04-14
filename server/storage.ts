@@ -8,6 +8,7 @@ export interface IStorage {
   getEpisode(id: number): Episode | undefined;
   createEpisode(ep: InsertEpisode): Episode;
   updateEpisodeStatus(id: number, status: string, videoUrl?: string): Episode | undefined;
+  deleteEpisode(id: number): boolean;
 
   // Render Jobs
   getRenderJobs(): RenderJob[];
@@ -35,6 +36,10 @@ export class DatabaseStorage implements IStorage {
     if (videoUrl) update.videoUrl = videoUrl;
     if (status === "posted") update.postedAt = new Date().toISOString();
     return db.update(episodes).set(update).where(eq(episodes.id, id)).returning().get();
+  }
+  deleteEpisode(id: number): boolean {
+    const result = db.delete(episodes).where(eq(episodes.id, id)).returning().get();
+    return !!result;
   }
 
   getRenderJobs(): RenderJob[] {
