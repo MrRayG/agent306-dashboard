@@ -476,7 +476,7 @@ Scoring criteria:
 
 BANNED phrases that auto-score 4 or below: "Sacrifices compound", "Canvas pixels burn brighter", "etched in eternity", "Burns fuel the fire", "etch dominance", "etch power forever", "Arena whispers", "power compounds", "pixels multiply"
 
-If score is below 7, provide a rewrite (max 240 chars) that earns a 8+.
+If score is below 7, provide a rewrite that earns a 8+.
 
 Respond as JSON only: { "score": number, "reason": "brief reason", "rewrite": "improved version or null if score >= 7" }`,
             }],
@@ -687,7 +687,7 @@ ETH: ${ethPrice || "$2,000"} (${ethChange || "0%"}), BTC: ${btcPrice || "$65,000
 AI/TECH NEWS TODAY:
 ${topAIHeadlines || "Major AI developments continuing across the ecosystem."}
 
-Write a single compelling post (max 1,000 chars) that covers today's most interesting AI or crypto signal. Agent 306's perspective — she has skin in this.
+Write a single compelling post that covers today's most interesting AI or crypto signal. No character limit (X Premium Plus). Agent 306's perspective — she has skin in this. Tell the full story.
 
 RULES:
 - The post MUST begin with [306 NEWS]

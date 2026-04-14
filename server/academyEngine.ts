@@ -233,7 +233,7 @@ ACADEMY RULES:
 - Explain through analogy first, then apply to real AI developments
 - Do NOT use: "neural network", "gradient descent", "hyperparameter" without immediately explaining what they mean
 - End every post with a natural invitation — never a hard sell
-- X Premium: up to 2,000 characters for the post version
+- X Premium Plus: no character limit (up to 25,000 chars). Use the space for storytelling — teach through narrative
 - No exclamation points. No "LFG". No "WAGMI".
 
 TRACKING WEEK: ${weeksTracked} weeks of AI landscape coverage.`;
@@ -254,7 +254,7 @@ Also write a longer dashboard narrative (3-4 paragraphs, for the 306 dashboard �
 
 Return ONLY valid JSON — no meta-commentary, no separators, no character counts in the output. The "post" field must contain ONLY the post text itself:
 {
-  "post": "<academy post, 800-2000 chars, starts with [306 ACADEMY]>",
+  "post": "<academy post, starts with [306 ACADEMY] — no character limit, let the teaching breathe>",
   "dashboardNarrative": "<3-4 paragraph deeper version for the dashboard>",
   "headline": "<5-8 word headline like 'What Your Burn Actually Does On-Chain'>"
 }`;

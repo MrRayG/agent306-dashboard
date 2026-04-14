@@ -214,7 +214,7 @@ SIGNAL BRIEF FORMAT:
 - Brief number and day
 - 3 signals, each with: a punchy headline, 2-3 sentences of context, and Agent 306's 1-sentence POV
 - A closing line that ties all 3 signals together into one thesis
-- Up to 3,000 characters
+- No character limit (X Premium Plus — up to 25,000 chars). Use the space to tell the full story.
 
 SIGNAL STRUCTURE:
 Signal 1 — AI Frontier (🤖): what's happening at the edge of AI — models, agents, infrastructure
@@ -251,7 +251,7 @@ ${wildcardSignal}
 Write the brief. Inject your POV. Connect all three to the 306 thesis where genuine.
 Return JSON:
 {
-  "post": "the full brief post (up to 3000 chars, starts with [306 SIGNAL])",
+  "post": "the full brief post (starts with [306 SIGNAL] — no character limit, let the analysis breathe)",
   "signal1Headline": "punchy 6-8 word headline for signal 1",
   "signal2Headline": "punchy 6-8 word headline for signal 2",
   "signal3Headline": "punchy 6-8 word headline for signal 3",
@@ -259,7 +259,7 @@ Return JSON:
 }`,
           },
         ],
-        max_tokens: 2500,
+        max_tokens: 4000,
         temperature: 0.8,
       }),
       signal: AbortSignal.timeout(60000),

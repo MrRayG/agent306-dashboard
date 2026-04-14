@@ -345,7 +345,7 @@ ${recentMemory.length > 0 ? `PREVIOUS EPISODES (your memory):\n${recentMemory.ma
 CRITICAL: Respond with valid JSON only. Every text field must contain ONLY the final content — no meta-commentary like "Here's my tweet:", no separators like "---", no character counts.
 
 {
-  "tweet": "<max 240 chars, ONE idea, human voice, passes the human test>",
+  "tweet": "<X post — no character limit (Premium Plus, 25k). ONE core idea, but tell the full story. Human voice, passes the human test. Let the content dictate the length.>",
   "farcasterText": "<max 2500 chars, richer version for Farcaster — expand on the tweet with more context, detail, and voice. Include character traits, story depth, and community connections that don't fit in 240 chars. This goes to a crypto/NFT-native audience on Farcaster who appreciate depth. Farcaster Pro allows long-form casts, so use the space when the story warrants it.>",
   "thread": [],
   "narrative": "<2-3 paragraph full story for dashboard>",
@@ -614,7 +614,7 @@ Remember: respond only with the JSON format specified.`;
     return parsed;
   } else {
     return {
-      tweet: content.slice(0, 258) + " 🧵",
+      tweet: content,
       farcasterText: content.slice(0, 2500),
       thread: [],
       narrative: content,

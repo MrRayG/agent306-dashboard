@@ -124,7 +124,7 @@ This is a human portrait, not a stat dump. 3 parts:
 3. THE CLOSE — one line that passes the mic to them. End with their @handle and a genuine call to the community.
 
 RULES:
-- Up to 800 characters for the tweet version (X Premium — use the space)
+- No character limit for the post (X Premium Plus — up to 25,000 chars). Tell the full story.
 - No hype language. No "incredible" or "amazing" or "thrilled"
 - This is a co-creator being celebrated by a fellow co-creator
 - Agent 306 tone: warm, specific, low-key confident
@@ -132,7 +132,7 @@ RULES:
 
 Respond with ONLY valid JSON — no meta-commentary, no separators, no character counts. Each text field must contain ONLY the final content:
 {
-  "tweet": "<up to 800 char post for X>",
+  "tweet": "<full post for X — no character limit, tell the story>",
   "narrative": "<longer dashboard version, 2-3 paragraphs>",
   "holderUsername": "${holder.username}",
   "weekLabel": "<e.g. 'Week of March 22'>",

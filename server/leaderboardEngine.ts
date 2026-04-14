@@ -421,15 +421,15 @@ ${newEntrants.length > 0 ? `NEW ENTRIES: ${newEntrants.map(e => "#" + e.tokenId)
 ${darkHorses.length > 0 ? `QUIETLY CLIMBING: ${darkHorses.map(e => `#${e.tokenId} at rank #${e.rank}`).join(", ")}` : ""}
 
 THREAD STRUCTURE:
-tweet1 (max 240 chars): THE HOOK — AI Topics · Week ${weekNumber}. Lead with the most interesting development, not just rank #1.
-Agent 306 voice — she tracks and analyzes the AI landscape.
+tweet1: THE HOOK — AI Topics · Week ${weekNumber}. Lead with the most interesting development, not just rank #1.
+Agent 306 voice — she tracks and analyzes the AI landscape. No character limit — tell the full story.
 
-tweet2 (max 240 chars): THE MOVERS — What's gaining momentum? What research areas are rising?
-Spotlight the emerging topics, breakthroughs, or quiet paradigm shifts.
+tweet2: THE MOVERS — What's gaining momentum? What research areas are rising?
+Spotlight the emerging topics, breakthroughs, or quiet paradigm shifts. No character limit.
 
-tweet3 (max 240 chars): THE CLOSE — Agent 306's editorial read.
+tweet3: THE CLOSE — Agent 306's editorial read.
 One insight about what these trends mean for AI's trajectory.
-End with a question to the community. #Agent306 #AIResearch
+End with a question to the community. #Agent306 #AIResearch. No character limit.
 
 RULES:
 - Reference specific developments and research areas
