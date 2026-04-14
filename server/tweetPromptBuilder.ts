@@ -44,7 +44,7 @@ interface ContentTypePrompt {
 
 const CONTENT_PROMPTS: Record<string, ContentTypePrompt> = {
   dispatch: {
-    instructions: "Write a [306 NEWS] dispatch — 'The Dispatch'. Pick ONE signal — the single most compelling story right now. Show BOTH SIDES: the opportunity AND the risk, the breakthrough AND the concern. Keep it tight (aim for 1,500–1,700 chars). End by engaging the audience — ask a question, tease what's next. One story, two sides, conviction.",
+    instructions: "Write a [306 NEWS] dispatch — 'The Dispatch'. Pick ONE signal — the single most compelling story right now. Show BOTH SIDES: the opportunity AND the risk, the breakthrough AND the concern. Be HUMBLE — present both angles, then step back. Don't tell the audience what to conclude. Let them think. Keep it tight (aim for 1,500–1,700 chars). Write for everyone — experts, young builders, educators, the curious. Clear enough for a 16-year-old, sharp enough for a researcher. End by engaging — ask a question, tease what's next.",
     examples: [
       `[306 NEWS] Anthropic's new paper shows Claude can self-correct adversarial prompts 94% of the time without RLHF. That's not an incremental gain -- that's a fundamentally different safety architecture.
 
