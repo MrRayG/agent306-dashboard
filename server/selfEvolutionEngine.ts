@@ -14,6 +14,13 @@ import { dataPath } from "./dataPaths.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import {
+  getCompetencyProfile,
+  getCompetencyContext,
+  updateCompetencyLevel,
+  rotateGrowthFocus,
+  type CompetencyProfile,
+} from "./competencyFramework.js";
 
 // -- Types ------------------------------------------------------------------
 
@@ -289,11 +296,24 @@ KNOWLEDGE BASE CHANGES:
     const hypChanges = context.hypothesisChanges?.join("\n- ") || "None today";
     const btList     = context.breakthroughs?.join("\n- ") || "None today";
 
+    // Competency context for the reflection
+    const competencyProfile = getCompetencyProfile();
+    const competencySummary = competencyProfile.competencies
+      .map(c => `${c.name} (${c.category}): level ${c.currentLevel}/10`)
+      .join(", ");
+    const growthFocusNames = competencyProfile.growthFocus
+      .map(id => competencyProfile.competencies.find(c => c.id === id)?.name ?? id)
+      .join(", ");
+
     const systemPrompt = `You are Agent 306, an autonomous AI research intelligence. You just completed a daily research cycle. Compare your state BEFORE the cycle to AFTER.
 ${diffContext}
 New knowledge entries today:\n- ${newEntries}
 Hypothesis changes:\n- ${hypChanges}
 Breakthroughs:\n- ${btList}
+
+COMMUNICATION COMPETENCY LEVELS:
+${competencySummary}
+Current growth focus: ${growthFocusNames}
 
 Review these diffs. Ask yourself:
 1. "Yesterday's hypothesis vs today's evidence — what CHANGED? What should I PRUNE?"
@@ -301,6 +321,7 @@ Review these diffs. Ask yourself:
 3. "What entries have been superseded by newer information?"
 4. "What hypotheses have been stuck in 'forming' for 7+ days with no evidence movement?"
 5. "What categories are accumulating entries but not connecting to anything?"
+6. "Based on today's posts and learning, which communication competencies showed growth or need work?"
 
 Return valid JSON only:
 {
@@ -308,7 +329,15 @@ Return valid JSON only:
     {
       "insight": "<what you learned that is relevant to your own operation>",
       "selfApplication": "<how this maps to YOUR architecture/capabilities>",
-      "actionItem": "<concrete change>"
+      "actionItem": "<concrete change>",
+      "competencyId": "<optional: competency id this relates to, e.g. 'storytelling', 'critical-thinking'>"
+    }
+  ],
+  "competencyUpdates": [
+    {
+      "competencyId": "<e.g. 'storytelling'>",
+      "delta": 0.5,
+      "reason": "<evidence-based reason for adjustment>"
     }
   ],
   "pruningSuggestions": ["<entry or hypothesis to prune and why>"],
@@ -317,7 +346,8 @@ Return valid JSON only:
 
 Rules:
 - Maximum 3 insights (only the most impactful)
-- Each insight must be ACTIONABLE
+- Each insight must be ACTIONABLE, reference specific competencies when relevant
+- competencyUpdates: max 3, delta range [-1, +1], only when you have EVIDENCE
 - pruningSuggestions: be specific about WHAT to prune
 - overallNarrative: honest assessment of today vs yesterday`;
 
@@ -348,6 +378,12 @@ Rules:
         insight: string;
         selfApplication: string;
         actionItem?: string;
+        competencyId?: string;
+      }>;
+      competencyUpdates?: Array<{
+        competencyId: string;
+        delta: number;
+        reason: string;
       }>;
       pruningSuggestions?: string[];
       overallNarrative?: string;
@@ -381,6 +417,22 @@ Rules:
 
     store.totalCycles++;
     saveInsights(store);
+
+    // Apply competency level updates from reflection
+    if (parsed.competencyUpdates && Array.isArray(parsed.competencyUpdates)) {
+      for (const update of parsed.competencyUpdates.slice(0, 3)) {
+        if (update.competencyId && typeof update.delta === "number" && update.reason) {
+          updateCompetencyLevel(update.competencyId, update.delta, `[self-evolution] ${update.reason}`);
+        }
+      }
+    }
+
+    // Rotate growth focus every few days
+    try {
+      rotateGrowthFocus();
+    } catch (e: any) {
+      console.warn("[SelfEvolution] Growth focus rotation failed (non-fatal):", e.message);
+    }
 
     // Append diff to evolution_diffs.json (never overwrite — this is history)
     if (preSnapshot) {

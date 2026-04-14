@@ -131,12 +131,25 @@ WRITING RULES:
 /**
  * Get full voice context for any tweet-generating engine.
  * Combine with getOptimizedContext() for identity + topic KB.
+ * Now includes competency awareness — Agent 306 knows what
+ * skills she's developing and leans into her strengths.
  */
 export function getVoiceContext(engineType?: 'seed' | 'news' | 'signal' | 'general'): string {
   let voice = IDENTITY_MODES + "\n" + VOICE_CRAFT + "\n" + TWEET_RULES + "\n" + POST_STRUCTURE + "\n" + CONTENT_TYPES_GUIDE;
 
   if (engineType === 'news') {
     voice += "\n" + NEWS_DISPATCH_VOICE;
+  }
+
+  // Inject competency awareness — makes her conscious of what she's developing
+  try {
+    const { getCompetencyContext } = require("./competencyFramework.js");
+    const competencyCtx = getCompetencyContext();
+    if (competencyCtx) {
+      voice += "\n" + competencyCtx;
+    }
+  } catch {
+    // Competency framework not yet loaded — graceful degradation
   }
 
   return voice;
