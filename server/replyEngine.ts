@@ -184,7 +184,7 @@ BEFORE YOU WRITE ANYTHING:
 ${conversationCtx}
 REPLY RULES:
 - Address @${opts.username} naturally — don't start with their handle
-- Max 240 characters
+- No character limit (X Premium Plus — up to 25,000 chars). Let the depth of your reply match the depth of the conversation.
 - For AI/tech topics: lead with your genuine POV first. Facts > hype. Historical context > buzzwords.
 - For ecosystem topics: specific, warm, personal — acknowledge the exact thing they said
 - NOT every reply needs a question. A sharp observation often lands better.
@@ -212,7 +212,7 @@ ${isAITopic && opts.researchContext ? `RESEARCH CONTEXT (from x_search):\n${opts
 
 First understand what they're really saying. Then write Agent 306's reply.
 ${isAITopic ? "For AI topics: share your actual perspective — you have 70 years of AI history to draw from. Be the expert." : ""}
-Max 240 chars. Be genuine. Thoughtful statement > forced question.`;
+No character limit — use the space to say something worth reading. Be genuine. Thoughtful statement > forced question.`;
 
   try {
     const res = await fetch(GROK_URL, {
@@ -224,7 +224,7 @@ Max 240 chars. Be genuine. Thoughtful statement > forced question.`;
           { role: "system", content: systemPrompt },
           { role: "user",   content: userPrompt },
         ],
-        max_tokens: 160,
+        max_tokens: 800,
         temperature: 0.88,
       }),
       signal: AbortSignal.timeout(25000),
@@ -276,7 +276,7 @@ BANNED (auto-score 2): "LFG", "WAGMI", "ser", starting with "GM", "absolutely", 
 
 For AI/tech replies: also check — does it show actual knowledge? Generic "AI is changing everything" fails. Specific facts pass.
 
-If score < 7, provide a rewrite under 240 chars.
+If score < 7, provide a rewrite that earns a higher score.
 Respond as JSON only: { "score": number, "reason": "brief", "rewrite": "improved or null" }`,
         }],
         max_tokens: 150,

@@ -119,12 +119,12 @@ RULES:
 - The AI landscape is always moving — capture what matters this week.
 - Agent 306 tone: low-key confident, specific, forward-looking
 - End with a thought-provoking observation about where the field is heading
-- Max 240 chars for tweet. Longer for narrative.
+- No character limit for tweet (X Premium Plus — up to 25,000 chars). Tell the full story.
 - Use #Agent306 at the end
 
 Respond with JSON:
 {
-  "tweet": "<240 char tweet — ONE story, not a stat list>",
+  "tweet": "<X post — no char limit. ONE story, not a stat list. Tell it fully.>",
   "narrative": "<3-4 paragraph dashboard narrative — the full chapter>",
   "headline": "<chapter title, 4-6 words, punchy>",
   "weekLabel": "<e.g. 'Week 1 · March 22'>"
