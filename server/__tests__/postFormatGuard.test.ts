@@ -6,7 +6,7 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { enforcePostFormat } from "../postFormatGuard.js";
+import { enforcePostFormat, stripMarkdown } from "../postFormatGuard.js";
 
 describe("enforcePostFormat", () => {
   // ── Signature ─────────────────────────────────────────────────────────────
@@ -137,5 +137,48 @@ describe("enforcePostFormat", () => {
     const result = enforcePostFormat("[306 SIGNAL]", "signal");
     assert.ok(result.includes("[306 SIGNAL]"), "Should keep the tag");
     assert.ok(result.includes("— Agent 306"), "Should add signature");
+  });
+});
+
+describe("stripMarkdown", () => {
+  it("removes **bold** formatting", () => {
+    assert.equal(stripMarkdown("This is **bold** text"), "This is bold text");
+  });
+
+  it("removes *italic* formatting", () => {
+    assert.equal(stripMarkdown("This is *italic* text"), "This is italic text");
+  });
+
+  it("converts [text](url) links to plain text", () => {
+    assert.equal(
+      stripMarkdown("Check [Agent 306](https://agent306.ai) for details"),
+      "Check Agent 306 for details",
+    );
+  });
+
+  it("removes ## headers", () => {
+    assert.equal(stripMarkdown("## Breaking News\nSomething happened"), "Breaking News\nSomething happened");
+    assert.equal(stripMarkdown("### Sub Header"), "Sub Header");
+  });
+
+  it("leaves clean text unchanged", () => {
+    const clean = "This is plain text with no markdown at all.";
+    assert.equal(stripMarkdown(clean), clean);
+  });
+
+  it("removes `inline code` backticks", () => {
+    assert.equal(stripMarkdown("Use `fetch()` to call the API"), "Use fetch() to call the API");
+  });
+
+  it("removes ~~strikethrough~~ formatting", () => {
+    assert.equal(stripMarkdown("This is ~~wrong~~ correct"), "This is wrong correct");
+  });
+
+  it("removes __underscore bold__ formatting", () => {
+    assert.equal(stripMarkdown("This is __bold__ text"), "This is bold text");
+  });
+
+  it("removes _underscore italic_ formatting", () => {
+    assert.equal(stripMarkdown("This is _italic_ text"), "This is italic text");
   });
 });
