@@ -95,6 +95,8 @@ import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { startXPostScheduler, seedIntroPost, getXPostQueue, queueXPost, seedDailyContent } from "./xPostScheduler.js";
 import { getVoiceContext } from "./voiceInstructions.js";
 import { enforceShowTag } from "./contentTypes.js";
+import { getCompetencyProfile } from "./competencyFramework.js";
+import { getRecentEvents } from "./breakingNewsDetector.js";
 
 // On-chain API removed
 // const ONCHAIN_API = "";
@@ -4769,6 +4771,26 @@ needsHelp: true only when you genuinely need his direction or information`,
   app.post("/api/blog/purge-conversational", requireDashAuth, (_req, res) => {
     const result = purgeConversationalPosts();
     res.json(result);
+  });
+
+  // ── Competency Dashboard ────────────────────────────────────────────────
+  app.get("/api/competency", (_req, res) => {
+    try {
+      const profile = getCompetencyProfile();
+      res.json(profile);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── Breaking News ──────────────────────────────────────────────────────
+  app.get("/api/breaking-news", (_req, res) => {
+    try {
+      const events = getRecentEvents(48);
+      res.json({ events, count: events.length });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   app.post("/api/seed", (_req, res) => {

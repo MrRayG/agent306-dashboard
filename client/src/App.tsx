@@ -13,6 +13,7 @@ import ResearchAgenda from "@/pages/ResearchAgenda";
 import AgentHQ from "@/pages/AgentHQ";
 import StatusHub from "@/pages/StatusHub";
 import DreamsGrowth from "@/pages/DreamsGrowth";
+import CompetencyDashboard from "@/pages/CompetencyDashboard";
 import NotFound from "@/pages/not-found";
 import PerplexityAttribution from "@/components/PerplexityAttribution";
 
@@ -26,7 +27,8 @@ const nav = [
   { href: "/agenda",   label: "Research",       desc: "Active investigations" },
   { href: "/hq",       label: "Agent HQ",       desc: "Research · Lab · Status" },
   { href: "/status",   label: "Status",         desc: "Briefing · Vitals"   },
-  { href: "/dreams",   label: "Dreams & Growth", desc: "Aspirations \u00B7 Self-improvement" },
+  { href: "/dreams",      label: "Dreams & Growth", desc: "Aspirations \u00B7 Self-improvement" },
+  { href: "/competency", label: "Competencies",    desc: "Skills \u00B7 Radar chart"       },
 ];
 
 function Sidebar() {
@@ -146,7 +148,8 @@ function App() {
             <Route path="/agenda"   component={ResearchAgenda} />
             <Route path="/hq"       component={AgentHQ}       />
             <Route path="/status"   component={StatusHub}     />
-            <Route path="/dreams"   component={DreamsGrowth}  />
+            <Route path="/dreams"      component={DreamsGrowth}        />
+            <Route path="/competency" component={CompetencyDashboard} />
             <Route component={NotFound} />
           </Switch>
         </Layout>
