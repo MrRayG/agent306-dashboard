@@ -300,6 +300,19 @@ let state = loadState();
   }
 }
 
+// ── STARTUP CLEANUP: Auto-purge Normies-era stale episodes ──────────────────
+{
+  const beforeCount = state.episodes.length;
+  state.episodes = state.episodes.filter(ep => {
+    const text = (ep.narrative || '') + (ep.title || '');
+    return !text.includes('@NORMIES_TV') && !text.includes('@normiesART') && !text.includes('NORMIES');
+  });
+  if (state.episodes.length < beforeCount) {
+    console.log(`[Podcast] Auto-purged ${beforeCount - state.episodes.length} Normies-era episodes`);
+    saveState(state);
+  }
+}
+
 export function getPodcastState() { return state; }
 
 // ── Episode Type Metadata ─────────────────────────────────────────────────────

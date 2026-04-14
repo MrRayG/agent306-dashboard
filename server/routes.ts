@@ -2525,6 +2525,12 @@ export function registerRoutes(httpServer: Server, app: Express) {
     res.json(updated);
   });
 
+  app.delete("/api/episodes/:id", (req, res) => {
+    const ok = storage.deleteEpisode(Number(req.params.id));
+    if (!ok) return res.status(404).json({ error: "Episode not found" });
+    res.json({ ok: true });
+  });
+
   // ── Render Jobs ───────────────────────────────────────────────────
   app.get("/api/renders", (_req, res) => {
     res.json(storage.getRenderJobs());

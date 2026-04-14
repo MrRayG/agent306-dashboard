@@ -61,10 +61,12 @@ function AnimatedStat({ value, label, color, icon }: { value: number; label: str
 }
 
 // ── Pending card — full visual treatment ─────────────────────────────
-function PendingCard({ ep, onMarkPosted, isPosting }: {
+function PendingCard({ ep, onMarkPosted, onDismiss, isPosting, isDismissing }: {
   ep: Episode;
   onMarkPosted: (ep: Episode) => void;
+  onDismiss: (ep: Episode) => void;
   isPosting: boolean;
+  isDismissing: boolean;
 }) {
   const [tweet, setTweet] = useState(() => buildTweet(ep));
   const [editing, setEditing] = useState(false);
@@ -236,6 +238,26 @@ function PendingCard({ ep, onMarkPosted, isPosting }: {
                 : <><CheckCircle2 style={{ width: 11, height: 11 }} /> Mark Posted</>
               }
             </button>
+
+            {/* Dismiss */}
+            <button
+              onClick={() => onDismiss(ep)}
+              disabled={isDismissing}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "0.7rem 0.9rem",
+                background: "rgba(239,68,68,0.08)",
+                border: "1px solid rgba(239,68,68,0.3)",
+                color: "#ef4444",
+                cursor: isDismissing ? "not-allowed" : "pointer",
+                ...mono, fontSize: "0.80rem", letterSpacing: "0.08em",
+              }}
+            >
+              {isDismissing
+                ? <><Loader2 style={{ width: 11, height: 11 }} className="animate-spin" /> Removing...</>
+                : <>✕ Dismiss</>
+              }
+            </button>
           </div>
 
           <p style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.35)", marginTop: 7 }}>
@@ -318,6 +340,7 @@ function EmptyState({ onGenerate, isPending }: { onGenerate: () => void; isPendi
 export default function EpisodeQueue() {
   const { toast } = useToast();
   const [postingId, setPostingId] = useState<number | null>(null);
+  const [dismissingId, setDismissingId] = useState<number | null>(null);
 
   const { data: episodes = [], isLoading, refetch } = useQuery<Episode[]>({
     queryKey: ["/api/episodes"],
@@ -336,6 +359,19 @@ export default function EpisodeQueue() {
       setTimeout(() => queryClient.invalidateQueries({ queryKey: ["/api/episodes"] }), 16_000);
     },
   });
+
+  const handleDismiss = async (ep: Episode) => {
+    setDismissingId(ep.id);
+    try {
+      await apiRequest("DELETE", `/api/episodes/${ep.id}`);
+      toast({ title: "Episode dismissed" });
+      queryClient.invalidateQueries({ queryKey: ["/api/episodes"] });
+    } catch (e: any) {
+      toast({ title: "Failed to delete", description: e.message, variant: "destructive" });
+    } finally {
+      setDismissingId(null);
+    }
+  };
 
   const handleMarkPosted = (ep: Episode) => {
     setPostingId(ep.id);
@@ -426,7 +462,7 @@ export default function EpisodeQueue() {
           <EmptyState onGenerate={() => pollerMutation.mutate()} isPending={pollerMutation.isPending} />
         ) : (
           pending.map(ep => (
-            <PendingCard key={ep.id} ep={ep} onMarkPosted={handleMarkPosted} isPosting={postingId === ep.id} />
+            <PendingCard key={ep.id} ep={ep} onMarkPosted={handleMarkPosted} onDismiss={handleDismiss} isPosting={postingId === ep.id} isDismissing={dismissingId === ep.id} />
           ))
         )}
       </div>
