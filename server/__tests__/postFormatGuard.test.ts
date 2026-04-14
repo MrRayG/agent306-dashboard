@@ -95,25 +95,26 @@ describe("enforcePostFormat", () => {
     assert.ok(result.startsWith("[306 SIGNAL]"), "Should keep show tag");
     assert.ok(result.includes("#AIAgents"), "Should keep hashtags");
     assert.ok(result.endsWith("— Agent 306"), "Should keep signature");
-    assert.ok(result.length <= 280, `Should be within char limit, got ${result.length}`);
+    assert.ok(result.length <= 25000, `Should be within char limit, got ${result.length}`);
   });
 
   // ── Character limit ───────────────────────────────────────────────────────
 
-  it("trims posts over 280 chars", () => {
+  it("does not trim posts under 25000 chars", () => {
     const longBody = "This is a very long signal about AI developments in the market. ".repeat(8);
     const input = `[306 SIGNAL] ${longBody}`;
     const result = enforcePostFormat(input, "signal");
-    assert.ok(result.length <= 280, `Expected <= 280 chars, got ${result.length}`);
+    assert.ok(result.length <= 25000, `Expected <= 25000 chars, got ${result.length}`);
+    assert.ok(result.includes(longBody.trim()), "Should preserve full body content");
   });
 
-  it("preserves signature and tag when trimming", () => {
+  it("preserves signature and tag on longer posts", () => {
     const longBody = "This is a very important AI signal. ".repeat(15);
     const input = `[306 SIGNAL] ${longBody}`;
     const result = enforcePostFormat(input, "signal");
-    assert.ok(result.length <= 280, `Expected <= 280 chars, got ${result.length}`);
-    assert.ok(result.startsWith("[306 SIGNAL]"), "Should preserve show tag after trim");
-    assert.ok(result.endsWith("— Agent 306"), "Should preserve signature after trim");
+    assert.ok(result.length <= 25000, `Expected <= 25000 chars, got ${result.length}`);
+    assert.ok(result.startsWith("[306 SIGNAL]"), "Should preserve show tag");
+    assert.ok(result.endsWith("— Agent 306"), "Should preserve signature");
   });
 
   // ── No content type ───────────────────────────────────────────────────────

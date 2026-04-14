@@ -243,7 +243,7 @@ export function buildHookTweet(episode: CYOAEpisode, tokenId?: number): string {
 
   const tweet = `${tag}\n\n${scene}\n\n${question}\n\n${choices}\n\n⏳ 24h poll · vote below\n#Agent306`;
 
-  return tweet.length <= 280 ? tweet : `${tag}\n\n${scene}\n\n${question}\n\n${choices}\n#Agent306`;
+  return tweet;
 }
 
 // ── Build Tweet 2 — The Reveal ──────────────────────────────────────────────

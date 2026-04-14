@@ -252,7 +252,7 @@ async function generateDeepReadArticle(
   apiKey: string
 ): Promise<{
   headline:    string;
-  teaser:      string;  // the X post teaser (280 chars max)
+  teaser:      string;  // the X post teaser
   body:        string;  // the full article content (long-form, no limit)
 }> {
   console.log("[ArticleEngine] Generating Deep Read article...");
@@ -495,7 +495,7 @@ ${body}
     } else {
       // Fallback: post as a standard tweet with the article body as a thread
       // Split body into tweet-friendly chunks for a thread
-      const fallbackTeaser = teaser.slice(0, 280);
+      const fallbackTeaser = teaser.slice(0, 25000);
       const compliance = validateXPost(fallbackTeaser);
       const safeFallbackTeaser = compliance.allowed
         ? enforcePostFormat(compliance.sanitizedContent ?? fallbackTeaser, "research")

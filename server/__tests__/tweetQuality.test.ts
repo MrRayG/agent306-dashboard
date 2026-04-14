@@ -65,11 +65,25 @@ describe("qualityCheck", () => {
     assert.equal(result.pass, true);
   });
 
-  it("rejects tweets over 280 characters", () => {
-    const longTweet = '[306 NEWS] ' + 'a'.repeat(260) + '\n#AIAgents\n\n— Agent 306';
+  it("rejects tweets over 25000 characters", () => {
+    const longTweet = '[306 NEWS] ' + 'a'.repeat(25000) + '\n#AIAgents\n\n— Agent 306';
     const result = qualityCheck(longTweet, 'dispatch');
     assert.equal(result.pass, false);
     assert.ok(result.reason?.includes('character limit'), `Expected 'character limit' in reason, got: ${result.reason}`);
+  });
+
+  it("passes a 500-char post (X Premium Plus)", () => {
+    const body = 'Anthropic just dropped a paper showing Claude can self-correct adversarial prompts 94% of the time without RLHF. That is not an incremental gain — that is a fundamentally different safety architecture. If this holds at scale, the alignment conversation just changed. The real question is whether this transfers to open-weight models. My bet: partially. The technique works, but the data curation behind it is the moat. This matters because safety that scales without human labelers changes the economics of alignment research entirely.';
+    const tweet = `[306 RESEARCH] ${body}\n\n#AIAgents #DeAI\n\n— Agent 306`;
+    const result = qualityCheck(tweet, 'research');
+    assert.equal(result.pass, true, `Expected 500+ char post to pass, got: ${result.reason}`);
+  });
+
+  it("passes an 800-char post (X Premium Plus)", () => {
+    const body = 'Three separate frontier labs published papers on test-time compute scaling this week. That is not coincidence — that is convergence. The next capability jump will not come from bigger models. It will come from models that think longer.\n\nHere is why this matters: training compute has been the bottleneck everyone talks about. But inference compute — how much thinking a model does at test time — is the variable nobody is optimizing for. Until now.\n\nOpenAI, Anthropic, and DeepMind all independently arrived at the same conclusion: letting models spend more tokens reasoning before answering dramatically improves accuracy on hard problems. Math benchmarks up 40%. Code generation up 35%. The gains compound.\n\nThe implication for agent infrastructure is massive. Agents that can reason longer before acting will make fewer mistakes. That changes the trust equation. That changes what you can automate.\n\nThe question I keep coming back to: who pays for the extra inference compute?';
+    const tweet = `[306 SIGNAL] ${body}\n\n#AIAgents #AgenticAI #DeAI\n\n— Agent 306`;
+    const result = qualityCheck(tweet, 'signal');
+    assert.equal(result.pass, true, `Expected 800+ char post to pass, got: ${result.reason}`);
   });
 
   it("rejects tweets ending with a dash", () => {

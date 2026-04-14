@@ -686,7 +686,7 @@ Use the context above to cross-check claims against what Agent 306 already knows
       case "academy":
         return "Educational and encouraging. Break complex concepts into digestible steps. Use analogies from familiar domains. End with actionable takeaways.";
       case "social":
-        return "Punchy, quotable, thought-provoking. Lead with the strongest insight. Under 280 chars for main claim.";
+        return "Punchy, quotable, thought-provoking. Lead with the strongest insight. Let the content dictate the length.";
     }
   }
 
