@@ -34,6 +34,7 @@ import { getThreadById, type ResearchThread } from "./research-agenda.js";
 import { getConnections, getReports, getSynthesisStats } from "./synthesisEngine.js";
 import { getReflectionStats } from "./reflectionEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import { getFormatVoiceContext } from "./voiceInstructions.js";
 import { queuePodcastPromo, hasPostedEpisode } from "./xPostScheduler.js";
 
 const GROK_URL = LLM_BASE_URL;
@@ -1416,6 +1417,8 @@ async function generateScriptForEpisode(
           role: "system",
           content: `${agentCtx}
 ${skillsCtx}
+${getFormatVoiceContext('podcast')}
+
 You are Agent 306 generating a full THE SIGNAL podcast episode from your research findings.
 
 ${getTimingInstruction()}

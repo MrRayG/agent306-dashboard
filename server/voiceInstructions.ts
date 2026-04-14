@@ -141,6 +141,14 @@ export function getVoiceContext(engineType?: 'seed' | 'news' | 'signal' | 'gener
     voice += "\n" + NEWS_DISPATCH_VOICE;
   }
 
+  // Inject format-specific writing craft for tweets
+  try {
+    const { getFormatContext } = require("./writingFormats.js");
+    voice += "\n" + getFormatContext('tweet');
+  } catch {
+    // writingFormats not yet loaded — graceful degradation
+  }
+
   // Inject competency awareness — makes her conscious of what she's developing
   try {
     const { getCompetencyContext } = require("./competencyFramework.js");
@@ -151,6 +159,35 @@ export function getVoiceContext(engineType?: 'seed' | 'news' | 'signal' | 'gener
   } catch {
     // Competency framework not yet loaded — graceful degradation
   }
+
+  return voice;
+}
+
+/**
+ * Get voice context for any writing format (blog, article, manuscript, podcast).
+ * Combines identity + format-specific craft + competency awareness.
+ * Use this in blogEngine.ts, articleEngine.ts, podcastEngine.ts, etc.
+ */
+export function getFormatVoiceContext(format: 'blog' | 'article' | 'manuscript' | 'podcast'): string {
+  let voice = IDENTITY_MODES + "\n" + VOICE_CRAFT;
+
+  // Format-specific writing craft (replaces TWEET_RULES for non-tweet formats)
+  try {
+    const { getFormatContext, CROSS_FORMAT_STRATEGY } = require("./writingFormats.js");
+    voice += "\n" + getFormatContext(format);
+    voice += "\n" + CROSS_FORMAT_STRATEGY;
+  } catch {
+    // writingFormats not yet loaded — graceful degradation
+  }
+
+  // Competency awareness
+  try {
+    const { getCompetencyContext } = require("./competencyFramework.js");
+    const competencyCtx = getCompetencyContext();
+    if (competencyCtx) {
+      voice += "\n" + competencyCtx;
+    }
+  } catch {}
 
   return voice;
 }

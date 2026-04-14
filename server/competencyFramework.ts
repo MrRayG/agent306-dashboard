@@ -563,7 +563,15 @@ export function evaluatePostCompetencies(post: {
   text: string;
   engagement?: { likes: number; replies: number; retweets: number; bookmarks: number; impressions: number };
   score?: number;
+  format?: 'tweet' | 'blog' | 'article' | 'manuscript' | 'podcast'; // defaults to 'tweet'
 }): Array<{ competencyId: string; signal: "positive" | "neutral" | "negative"; reason: string }> {
+  // Format-aware evaluation: weight competencies by what matters for each format
+  // Import is optional — graceful degradation if writingFormats not available
+  let formatCompetencies: string[] = [];
+  try {
+    const { getFormatCompetencies } = require("./writingFormats.js");
+    formatCompetencies = getFormatCompetencies(post.format ?? 'tweet');
+  } catch {}
   const results: Array<{ competencyId: string; signal: "positive" | "neutral" | "negative"; reason: string }> = [];
   const text = post.text.toLowerCase();
   const score = post.score ?? 5;

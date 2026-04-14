@@ -26,6 +26,7 @@ import { getModel } from "./modelRouter.js";
 import { TwitterApi } from "twitter-api-v2";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import { getFormatVoiceContext } from "./voiceInstructions.js";
 import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import { queueXPost } from "./xPostScheduler.js";
 
@@ -266,6 +267,8 @@ async function generateDeepReadArticle(
         {
           role: "system",
           content: `${agentCtx}
+
+${getFormatVoiceContext('article')}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 AGENT 306 — THE DEEP READ
