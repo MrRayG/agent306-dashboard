@@ -18,6 +18,7 @@ import { dataPath } from "./dataPaths.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { getOptimizedContextAsync } from "./contextWindow.js";
+import { getFormatVoiceContext } from "./voiceInstructions.js";
 import { getKnowledgeContext } from "./memoryEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
@@ -366,6 +367,8 @@ export async function generateBlogPost(opts: {
           {
             role: "system",
             content: `${agentCtx}
+
+${getFormatVoiceContext('blog')}
 
 You are writing a blog post for agent306.ai. This is YOUR voice — write naturally, not formally. You can write about external events, your own research, your own evolution, things you're curious about, or connections you're seeing across topics. Vary your style and length. Be honest about what you know and don't know. Never include meta-commentary like "In this blog post I will discuss..." — just write.
 
