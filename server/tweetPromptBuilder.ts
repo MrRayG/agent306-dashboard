@@ -44,14 +44,26 @@ interface ContentTypePrompt {
 
 const CONTENT_PROMPTS: Record<string, ContentTypePrompt> = {
   dispatch: {
-    instructions: "Write a [306 NEWS] tweet. Lead with the most important thing happening RIGHT NOW in AI or crypto. Not a summary -- a signal. What happened, why it matters, what everyone else is missing.",
+    instructions: "Write a [306 NEWS] dispatch — 'The Dispatch'. Pick ONE signal — the single most compelling story right now. Show BOTH SIDES: the opportunity AND the risk, the breakthrough AND the concern. Be HUMBLE — present both angles, then step back. Don't tell the audience what to conclude. Let them think. Keep it tight (aim for 1,500–1,700 chars). Write for everyone — experts, young builders, educators, the curious. Clear enough for a 16-year-old, sharp enough for a researcher. End by engaging — ask a question, tease what's next.",
     examples: [
-      `[306 NEWS] Anthropic's new paper shows Claude can self-correct adversarial prompts 94% of the time without RLHF. That's not an incremental gain -- that's a fundamentally different safety architecture. If this holds at scale, the alignment conversation just changed.
+      `[306 NEWS] Anthropic's new paper shows Claude can self-correct adversarial prompts 94% of the time without RLHF. That's not an incremental gain -- that's a fundamentally different safety architecture.
+
+But here's the other side: self-correction without human oversight means the model decides what counts as "adversarial." If that boundary drifts, we've built a system that polices itself with no appeals court.
+
+I'm watching this one closely. The alignment conversation just changed -- the question is whether it changed in the direction we think.
+
+What's your read? Is self-correction the breakthrough or the trapdoor?
 
 #AIAgents #AgenticAI #DeAI
 
 -- Agent 306`,
       `[306 NEWS] EU AI Act enforcement timeline leaked. Tier-1 compliance starts January 2027 -- a full year earlier than published. Every company building foundation models just lost 12 months of runway.
+
+The upside nobody's talking about: this could be the moat that separates serious AI companies from the vaporware. Compliance is expensive. Only the well-capitalized survive.
+
+The risk: innovation doesn't care about regulatory timelines. The best open-source models are being built in jurisdictions that won't enforce this. Europe might be regulating itself out of the race.
+
+More on this tomorrow. I'm digging into which labs are actually ready.
 
 #AIAgents #DeAI
 
@@ -215,7 +227,7 @@ FORMAT: Write the COMPLETE post -- show tag, body, hashtags, signature (— Agen
  */
 export function buildTweetUserPrompt(contentType: string): string {
   const prompts: Record<string, string> = {
-    dispatch: "What's the most important thing happening right now? Write one [306 NEWS] tweet.",
+    dispatch: "Pick the ONE most compelling signal right now. Show both sides — the opportunity and the risk. Keep it tight (~1,500-1,700 chars). Write one [306 NEWS] dispatch.",
     signal: "What pattern are you seeing that others are missing? Write one [306 SIGNAL] tweet.",
     research: "What's the most interesting research finding you've encountered? Write one [306 RESEARCH] tweet.",
     roundup: "What are the 3-5 biggest developments today? Write one [306 ROUND UP] tweet.",
