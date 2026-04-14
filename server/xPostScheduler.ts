@@ -439,6 +439,24 @@ function pickPostForSlot(slot: ContentSlot, state: SchedulerState): QueuedPost |
  * Generate a post on-demand when no matching content exists in the queue
  * for a slot's required content type. Uses the same LLM pipeline as seedDailyContent.
  */
+// Token limits by content type — richer types get more room,
+// the format guard handles final shaping.
+const TOKEN_LIMITS: Record<string, number> = {
+  dispatch:   200,  // news can be punchy or detailed
+  signal:     200,  // analysis needs room for the "why"
+  research:   300,  // deep dives need space
+  roundup:    400,  // 3-5 stories need the most room
+  reflection: 150,  // evening thoughts stay tight
+  debate:     250,  // both sides + take
+  prompt:     150,  // questions are short
+  archive:    200,  // historical context
+  progress:   200,  // updates on what she's building
+  academy:    300,  // teaching needs detail
+  toolbox:    250,  // tool reviews need specifics
+  dataset:    250,  // dataset spotlights
+};
+const DEFAULT_TOKEN_LIMIT = 200;
+
 async function generateOnDemandPost(type: XPostType, state: SchedulerState): Promise<QueuedPost | null> {
   const SEED_PROMPTS: Record<string, string> = {
     dispatch: "What's the most important thing happening right now in AI or crypto? Lead with urgency. Be factual but have a take.",
@@ -460,7 +478,8 @@ async function generateOnDemandPost(type: XPostType, state: SchedulerState): Pro
 
   const voiceRules = getVoiceContext("seed");
   const showTagDescriptions = getShowTagDescriptions();
-  const systemPrompt = `${systemContext}\n\n${voiceRules}\n\nCONTENT TYPES — choose the most fitting and ALWAYS lead with that show tag:\n${showTagDescriptions}\n\nCRITICAL: Output ONLY the tweet text. Max 280 characters total (including show tag, hashtags, and signature). This is a single tweet, NOT a blog post or thread. No meta-commentary. No "Here's my tweet:". No character counts.`;
+  const tokenLimit = TOKEN_LIMITS[type] || DEFAULT_TOKEN_LIMIT;
+  const systemPrompt = `${systemContext}\n\n${voiceRules}\n\nCONTENT TYPES — choose the most fitting and ALWAYS lead with that show tag:\n${showTagDescriptions}\n\nOutput ONLY the tweet text. Keep it concise and tweet-sized — the format guard will add hashtags and signature. No meta-commentary. No "Here's my tweet:". No character counts.`;
 
   try {
     const resp = await fetch(LLM_BASE_URL, {
@@ -472,7 +491,7 @@ async function generateOnDemandPost(type: XPostType, state: SchedulerState): Pro
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
-        max_tokens: 120,  // ~280 chars for a single tweet
+        max_tokens: tokenLimit,
         temperature: 0.85,
       }),
     });
@@ -650,7 +669,7 @@ export async function seedDailyContent(): Promise<void> {
   const showTagDescriptions = getShowTagDescriptions();
 
   // System prompt = identity context + voice craft + show tag descriptions
-  const systemPrompt = `${systemContext}\n\n${voiceRules}\n\nCONTENT TYPES — choose the most fitting and ALWAYS lead with that show tag:\n${showTagDescriptions}\n\nCRITICAL: Output ONLY the tweet text. Max 280 characters total (including show tag, hashtags, and signature). This is a single tweet, NOT a blog post or thread. No meta-commentary. No "Here's my tweet:". No character counts.`;
+  const systemPrompt = `${systemContext}\n\n${voiceRules}\n\nCONTENT TYPES — choose the most fitting and ALWAYS lead with that show tag:\n${showTagDescriptions}\n\nOutput ONLY the tweet text. Keep it concise and tweet-sized — the format guard will add hashtags and signature. No meta-commentary. No "Here's my tweet:". No character counts.`;
 
   // Per-type seed prompts — tailored voice guidance for each content type
   const SEED_PROMPTS: Record<string, string> = {
@@ -685,7 +704,7 @@ export async function seedDailyContent(): Promise<void> {
               content: userPrompt,
             },
           ],
-          max_tokens: 120,  // ~280 chars for a single tweet
+          max_tokens: TOKEN_LIMITS[seedType] || DEFAULT_TOKEN_LIMIT,
           temperature: 0.85,
         }),
       });
