@@ -18,7 +18,7 @@ import { generateCYOAEpisode, postCYOAHook, resolveCYOA, getCYOAState, buildHook
 import { fetchReplies, getReplyState, formatRepliesForContext, getTopReplies, initReplyWatcher } from "./replyWatcher";
 import { getConversationMemoryState } from "./conversationMemory.js";
 import { scheduleWeeklyLeaderboard, postWeeklyLeaderboard, fetchLiveLeaderboard } from "./leaderboardEngine";
-import { scheduleFollowingSync, syncFollowing, getFollowingState, buildFollowingQuery, getPfpHolderUsernames, getFollowingUsernames } from "./followingSync";
+import { scheduleFollowingSync, syncFollowing, getFollowingState, buildFollowingQuery, getPfpHolderUsernames, getFollowingUsernames, getFollowTargets, processFollowQueue, addFollowTarget, removeFollowTarget } from "./followingSync";
 import { generateBoost } from "./boostEngine";
 import { generateVoiceClip, getVoiceQuota, getClip, getRecentClips } from "./voiceEngine";
 import { getMemoryState, recordPost, ratePost, performance as perfMemory, decayKnowledge, addKnowledge, archiveKnowledge, searchArchive, getArchiveStats, knowledge as knowledgeState } from "./memoryEngine.js";
@@ -2243,6 +2243,51 @@ export function registerRoutes(httpServer: Server, app: Express) {
     syncFollowing(xClient)
       .then(s => console.log(`[FollowingSync] Manual sync: ${s.totalCount} accounts`))
       .catch(e => console.warn("[FollowingSync] Manual sync failed:", e.message));
+  });
+
+  // ── Auto-Follow System ──────────────────────────────────────────
+  // GET follow targets list
+  app.get("/api/follow/targets", (_req, res) => {
+    res.json(getFollowTargets());
+  });
+
+  // POST process the follow queue (follows up to 3 unfollowed targets)
+  app.post("/api/follow/process", async (_req, res) => {
+    try {
+      const result = await processFollowQueue(xClient);
+      res.json({ ok: true, ...result });
+    } catch (err: any) {
+      console.error("[AutoFollow] Process error:", err.message);
+      res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
+  // POST add a new follow target
+  app.post("/api/follow/add", (req, res) => {
+    const { username, category, reason, priority } = req.body ?? {};
+    if (!username || typeof username !== "string") {
+      return res.status(400).json({ error: "username is required" });
+    }
+    try {
+      const target = addFollowTarget(
+        username.trim().replace(/^@/, ""),
+        category ?? "Uncategorized",
+        reason ?? "",
+        typeof priority === "number" ? priority : 3,
+      );
+      res.json({ ok: true, target });
+    } catch (err: any) {
+      res.status(409).json({ ok: false, error: err.message });
+    }
+  });
+
+  // DELETE remove a follow target
+  app.delete("/api/follow/:username", (req, res) => {
+    const removed = removeFollowTarget(req.params.username);
+    if (!removed) {
+      return res.status(404).json({ ok: false, error: "Target not found" });
+    }
+    res.json({ ok: true, message: `Removed @${req.params.username} from follow targets` });
   });
 
   // ── Community Boost ──────────────────────────────────────────────

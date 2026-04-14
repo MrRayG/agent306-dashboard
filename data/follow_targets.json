@@ -1,0 +1,190 @@
+{
+  "_comment": "Curated follow targets for @306Agent. This is a starter list of ~22 accounts. The full 33-account list should be verified by the user before adding the remaining targets.",
+  "targets": [
+    {
+      "username": "AndrewYNg",
+      "category": "AI Leadership",
+      "priority": 1,
+      "followed": false,
+      "followedAt": null,
+      "reason": "AI/ML pioneer, deeplearning.ai founder"
+    },
+    {
+      "username": "ylecun",
+      "category": "AI Leadership",
+      "priority": 1,
+      "followed": false,
+      "followedAt": null,
+      "reason": "Meta Chief AI Scientist"
+    },
+    {
+      "username": "sama",
+      "category": "AI Leadership",
+      "priority": 1,
+      "followed": false,
+      "followedAt": null,
+      "reason": "OpenAI CEO"
+    },
+    {
+      "username": "demaboris",
+      "category": "AI Leadership",
+      "priority": 1,
+      "followed": false,
+      "followedAt": null,
+      "reason": "AI researcher"
+    },
+    {
+      "username": "hwchase17",
+      "category": "AI Agent Builders",
+      "priority": 1,
+      "followed": false,
+      "followedAt": null,
+      "reason": "LangChain creator"
+    },
+    {
+      "username": "jan_leike",
+      "category": "AI Agent Builders",
+      "priority": 1,
+      "followed": false,
+      "followedAt": null,
+      "reason": "AI alignment researcher"
+    },
+    {
+      "username": "karpathy",
+      "category": "AI Agent Builders",
+      "priority": 1,
+      "followed": false,
+      "followedAt": null,
+      "reason": "AI researcher, former Tesla AI director"
+    },
+    {
+      "username": "VitalikButerin",
+      "category": "Web3/Crypto AI",
+      "priority": 1,
+      "followed": false,
+      "followedAt": null,
+      "reason": "Ethereum co-founder"
+    },
+    {
+      "username": "balaborji",
+      "category": "Web3/Crypto AI",
+      "priority": 1,
+      "followed": false,
+      "followedAt": null,
+      "reason": "Crypto AI thought leader"
+    },
+    {
+      "username": "swyx",
+      "category": "AI Agent Infrastructure",
+      "priority": 2,
+      "followed": false,
+      "followedAt": null,
+      "reason": "AI developer advocate, smol-ai founder"
+    },
+    {
+      "username": "jimfan",
+      "category": "AI Agent Infrastructure",
+      "priority": 2,
+      "followed": false,
+      "followedAt": null,
+      "reason": "NVIDIA AI researcher"
+    },
+    {
+      "username": "drjimfan",
+      "category": "AI Agent Infrastructure",
+      "priority": 2,
+      "followed": false,
+      "followedAt": null,
+      "reason": "NVIDIA AI agent researcher"
+    },
+    {
+      "username": "emollick",
+      "category": "AI Media/Analysis",
+      "priority": 2,
+      "followed": false,
+      "followedAt": null,
+      "reason": "Wharton professor, AI adoption researcher"
+    },
+    {
+      "username": "ai_breakfast",
+      "category": "AI Media/Analysis",
+      "priority": 2,
+      "followed": false,
+      "followedAt": null,
+      "reason": "AI news digest"
+    },
+    {
+      "username": "TheAIGRID",
+      "category": "AI Media/Analysis",
+      "priority": 2,
+      "followed": false,
+      "followedAt": null,
+      "reason": "AI news and analysis"
+    },
+    {
+      "username": "auabornetwork",
+      "category": "Crypto AI Projects",
+      "priority": 2,
+      "followed": false,
+      "followedAt": null,
+      "reason": "Decentralized AI network"
+    },
+    {
+      "username": "OlaborNetwork",
+      "category": "Crypto AI Projects",
+      "priority": 2,
+      "followed": false,
+      "followedAt": null,
+      "reason": "Decentralized AI network"
+    },
+    {
+      "username": "Spectral_Labs",
+      "category": "Crypto AI Projects",
+      "priority": 2,
+      "followed": false,
+      "followedAt": null,
+      "reason": "On-chain AI infrastructure"
+    },
+    {
+      "username": "GaryMarkus",
+      "category": "AI Policy",
+      "priority": 3,
+      "followed": false,
+      "followedAt": null,
+      "reason": "AI critic and cognitive scientist"
+    },
+    {
+      "username": "tegaborark",
+      "category": "AI Policy",
+      "priority": 3,
+      "followed": false,
+      "followedAt": null,
+      "reason": "AI policy researcher"
+    },
+    {
+      "username": "punk6529",
+      "category": "AI Agents/Web3 Influencers",
+      "priority": 3,
+      "followed": false,
+      "followedAt": null,
+      "reason": "Web3 thought leader, NFT collector"
+    },
+    {
+      "username": "cobie",
+      "category": "AI Agents/Web3 Influencers",
+      "priority": 3,
+      "followed": false,
+      "followedAt": null,
+      "reason": "Crypto commentator"
+    },
+    {
+      "username": "DefiIgnas",
+      "category": "AI Agents/Web3 Influencers",
+      "priority": 3,
+      "followed": false,
+      "followedAt": null,
+      "reason": "DeFi researcher and influencer"
+    }
+  ],
+  "lastUpdated": "2026-04-14T00:00:00.000Z"
+}
