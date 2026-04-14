@@ -87,6 +87,22 @@ function getHashtagsForType(contentType?: string): string[] {
 }
 
 /**
+ * Strip markdown formatting that X renders as raw characters.
+ * Converts **bold**, *italic*, [links](url), ## headers, `code`, ~~strike~~ to plain text.
+ */
+export function stripMarkdown(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/__(.+?)__/g, '$1')
+    .replace(/_(.+?)_/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/~~(.+?)~~/g, '$1');
+}
+
+/**
  * Auto-fix tweet formatting before posting.
  * This is a SAFETY NET — generation should still include these elements.
  */
@@ -105,7 +121,10 @@ export function enforcePostFormat(tweet: string, contentType?: string): string {
   // Step 4: Ensure signature
   text = ensureSignature(text);
 
-  // Step 5: Trim to character limit
+  // Step 5: Strip markdown (X renders it as raw characters)
+  text = stripMarkdown(text);
+
+  // Step 6: Trim to character limit
   text = trimToLimit(text);
 
   return text;
