@@ -39,6 +39,7 @@ import { runExploration, getExplorationState, scheduleExploration } from "./expl
 import { getAgentReachStatus } from "./agentReachEngine.js";
 import { get306EvalResults, get306EvalHistory } from "./evalEngine.js";
 import { getCycleContext, isCycleActive } from "./cycleContext.js";
+import { getNoveltyGateLog } from "./noveltyGate.js";
 import { getAllSessions, getActiveSessionCount, closeExpiredSessions } from "./sessionMemory.js";
 import { postCast, isFarcasterEnabled, getFarcasterState, setFarcasterEnabled, createSigner, getSignerStatus, fetchMentions, determineChannel, getStoredSignerUuid, storeSignerUuid } from "./farcasterEngine.js";
 import {
@@ -4914,5 +4915,15 @@ needsHelp: true only when you genuinely need his direction or information`,
     demoEpisodes.forEach(e => storage.createEpisode(e as any));
 
     res.json({ ok: true, signalsCreated: demoSignals.length, episodesCreated: demoEpisodes.length });
+  });
+
+  // ── Novelty Gate ────────────────────────────────────────────────
+  app.get("/api/novelty-gate", (_req, res) => {
+    try {
+      const log = getNoveltyGateLog(50);
+      res.json({ checks: log, total: log.length });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 }
