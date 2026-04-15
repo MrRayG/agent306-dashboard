@@ -1682,12 +1682,24 @@ Write a single tweet sharing the most interesting insight from this research. Re
   }
 
   // ── 306Eval Benchmark (read-only, non-blocking) ──────────────────────────
+  let evalResult: ReturnType<typeof run306Eval> | null = null;
   try {
     console.log("[DailyCycle] Running 306Eval benchmark...");
-    const evalResult = run306Eval();
+    evalResult = run306Eval();
     console.log(`[DailyCycle] 306Eval: ${evalResult.composite}/100 (weakest: ${evalResult.weakestDimension})`);
   } catch (e: any) {
     console.warn("[DailyCycle] 306Eval failed (non-fatal):", e.message);
+  }
+
+  // ── Wisdom Engine — pull historical sources based on 306Eval calibration ──
+  if (evalResult) {
+    try {
+      const { pullWisdom } = await import("./wisdomEngine.js");
+      const wisdomResult = await pullWisdom(evalResult);
+      console.log(`[DailyCycle] Wisdom Engine: ingested ${wisdomResult.entriesIngested} entries for ${wisdomResult.triggeredBy}`);
+    } catch (err: any) {
+      console.warn("[DailyCycle] Wisdom Engine failed (non-fatal):", err.message);
+    }
   }
 
   // ── End cycle context accumulator (before wrap-up) ──────────────────────
