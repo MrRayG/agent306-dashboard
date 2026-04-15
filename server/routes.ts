@@ -40,6 +40,7 @@ import { getAgentReachStatus } from "./agentReachEngine.js";
 import { get306EvalResults, get306EvalHistory } from "./evalEngine.js";
 import { getCycleContext, isCycleActive } from "./cycleContext.js";
 import { getNoveltyGateLog } from "./noveltyGate.js";
+import { getWisdomPullHistory, getWisdomApiUsage, getActiveWisdomCount } from "./wisdomEngine.js";
 import { getAllSessions, getActiveSessionCount, closeExpiredSessions } from "./sessionMemory.js";
 import { postCast, isFarcasterEnabled, getFarcasterState, setFarcasterEnabled, createSigner, getSignerStatus, fetchMentions, determineChannel, getStoredSignerUuid, storeSignerUuid } from "./farcasterEngine.js";
 import {
@@ -4922,6 +4923,18 @@ needsHelp: true only when you genuinely need his direction or information`,
     try {
       const log = getNoveltyGateLog(50);
       res.json({ checks: log, total: log.length });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── Wisdom Engine ───────────────────────────────────────────────
+  app.get("/api/wisdom", (_req, res) => {
+    try {
+      const history = getWisdomPullHistory().slice(0, 10);
+      const usage = getWisdomApiUsage();
+      const activeCount = getActiveWisdomCount();
+      res.json({ recentPulls: history, wisdomEntryCount: activeCount, apiUsage: usage });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
