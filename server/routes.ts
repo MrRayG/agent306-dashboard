@@ -91,10 +91,12 @@ import {
   seedDreams,
 } from "./dreamEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
-import { startXPostScheduler, seedIntroPost, getXPostQueue, queueXPost, seedDailyContent } from "./xPostScheduler.js";
+import { startXPostScheduler, seedIntroPost, getXPostQueue, queueXPost, seedDailyContent, getTodaysPostsSummary } from "./xPostScheduler.js";
 import { getVoiceContext } from "./voiceInstructions.js";
 import { enforceShowTag } from "./contentTypes.js";
 import { getCompetencyProfile } from "./competencyFramework.js";
+import { buildVoiceBlock } from "./voice.js";
+import { getEvolutionContext } from "./soulEvolution.js";
 import { getRecentEvents } from "./breakingNewsDetector.js";
 
 // On-chain API removed
@@ -660,8 +662,8 @@ async function postDailyNewsDispatch() {
 
     // ── 2. Ask Grok to write today's [306 NEWS] dispatch ───────────────────────────
     const dispatchContext = getOptimizedContext("news dispatch daily AI market headlines");
-    const newsVoice = getVoiceContext('news');
-    const dispatchSystemPrompt = `${dispatchContext}\n\n${newsVoice}`;
+    const todaysSummary = getTodaysPostsSummary();
+    const dispatchSystemPrompt = `${dispatchContext}\n\n${buildVoiceBlock()}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
     const grokResp = await fetch(LLM_BASE_URL, {
       method: "POST",
       headers: getLLMHeaders(),

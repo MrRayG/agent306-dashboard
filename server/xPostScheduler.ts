@@ -223,6 +223,37 @@ function getTypeFreshness(state: SchedulerState, type: XPostType): number {
   return Math.min(100, hoursSinceLast);
 }
 
+/**
+ * Get a compact summary of what was posted today for cross-engine awareness.
+ * Engines inject this into prompts so the LLM knows what topics were already
+ * covered and avoids repeating them.
+ */
+export function getTodaysPostsSummary(): string {
+  const state = loadQueue();
+  const today = new Date().toISOString().slice(0, 10);
+  const todayPosts = state.queue.filter(
+    p => p.posted && p.postedAt && p.postedAt.startsWith(today),
+  );
+
+  if (todayPosts.length === 0) return "";
+
+  const lines = todayPosts.map(p => {
+    const time = p.postedAt
+      ? new Date(p.postedAt).toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+          timeZone: "America/New_York",
+        })
+      : "unknown time";
+    // Extract first ~80 chars of content as topic hint
+    const topic = p.content.replace(/^\[.*?\]\s*/, "").slice(0, 80).trim();
+    return `- [${p.type.toUpperCase()}] "${topic}..." (${time} ET)`;
+  });
+
+  return `ALREADY POSTED TODAY:\n${lines.join("\n")}\n\nDo NOT repeat topics already covered today. You may reference them naturally if relevant.`;
+}
+
 // -- Public API ---------------------------------------------------
 
 /**

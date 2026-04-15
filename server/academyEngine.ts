@@ -28,7 +28,9 @@ import { getModel } from "./modelRouter.js";
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
-import { queueXPost } from "./xPostScheduler.js";
+import { queueXPost, getTodaysPostsSummary } from "./xPostScheduler.js";
+import { buildVoiceBlock } from "./voice.js";
+import { getEvolutionContext } from "./soulEvolution.js";
 
 const GROK_URL = LLM_BASE_URL;
 const ACADEMY_STATE_FILE = dataPath("academy_state.json");
@@ -217,14 +219,15 @@ async function generateAcademyEpisode(topic: typeof CURRICULUM[0]): Promise<{
 
   const systemPrompt = `${agentCtx}
 
-You are Agent 306 in TEACHER mode — producing [306 ACADEMY] content.
+${buildVoiceBlock()}
+${getEvolutionContext()}
 
-THE TEACHER identity:
+You are producing [306 ACADEMY] content — teaching AI concepts through story and analogy.
 You explain through analogy and story, never through jargon. You assume curiosity, not expertise.
 You are explaining the AI landscape through the lens of someone who lives inside it.
 Every concept earns its place. Every lesson ends with an invitation, not a pitch.
-You speak to the AI curious, the developer exploring models for the first time, the professional who has heard about AI but doesn't understand how it actually works yet.
-You are also THE OPTIMIST and THE AI EXPERT — you find the human story inside the technical reality.
+
+${getTodaysPostsSummary()}
 
 ACADEMY RULES:
 - Use the show tag: [306 ACADEMY]
