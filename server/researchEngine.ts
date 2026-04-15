@@ -1632,6 +1632,17 @@ export interface AgentGoal {
 
   // MrRayG
   mrraygNote?:   string;         // his feedback or encouragement
+
+  // Goal Engine — structured milestone data (parallel to milestones[])
+  milestoneSpecs?: Array<{
+    text: string;
+    metric: string;
+    target: number | string;
+    deadline: string;
+    measuredBy: "system" | "grok";
+  }>;
+  targetDimension?: string;          // 306Eval dimension this goal targets
+  targetCompetencies?: string[];     // competency IDs that strengthen on completion
 }
 
 interface GoalsStore {

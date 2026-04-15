@@ -1551,12 +1551,21 @@ Write a single tweet sharing the most interesting insight from this research. Re
         }
       }
     })(),
-    // Weekly hypothesis consolidation (Sundays)
+    // Adaptive hypothesis consolidation (daily if queue is large, weekly otherwise)
     (async () => {
-      const today = new Date();
-      if (today.getDay() === 0) {
-        try {
-          console.log("[DailyCycle] Running weekly hypothesis consolidation...");
+      try {
+        const { getResearchLab: getLabForConsolidation } = await import("./researchEngine.js");
+        const lab = getLabForConsolidation();
+        const activeHypotheses = lab.hypotheses.filter(
+          (h: any) => h.status === "forming" || h.status === "testing"
+        ).length;
+
+        const today = new Date();
+        const isSunday = today.getDay() === 0;
+        const queueOverloaded = activeHypotheses > 130;
+
+        if (isSunday || queueOverloaded) {
+          console.log(`[DailyCycle] Running hypothesis consolidation (active: ${activeHypotheses}, trigger: ${queueOverloaded ? "queue overloaded" : "weekly"})...`);
           // Read most recent eval result to prioritize clusters by weakest dimension
           let weakDim: string | undefined;
           try {
@@ -1564,7 +1573,12 @@ Write a single tweet sharing the most interesting insight from this research. Re
             const history = get306EvalHistory();
             weakDim = history[0]?.weakestDimension;
           } catch {}
-          const result = await consolidateHypotheses({ minClusterSize: 3, weakestDimension: weakDim });
+          const result = await consolidateHypotheses({
+            minClusterSize: queueOverloaded ? 2 : 3,
+            maxClusters: queueOverloaded ? 10 : 5,
+            similarityThreshold: queueOverloaded ? 0.35 : 0.45,
+            weakestDimension: weakDim,
+          });
           console.log(`[DailyCycle] Hypothesis consolidation: ${result.clustersFound} clusters, ${result.merged} merged, ${result.removed} removed`);
           // Wire consolidation result into cycle context
           if (result.merged > 0) {
@@ -1578,9 +1592,9 @@ Write a single tweet sharing the most interesting insight from this research. Re
               });
             } catch {}
           }
-        } catch (e: any) {
-          console.warn("[DailyCycle] Hypothesis consolidation failed (non-fatal):", e.message);
         }
+      } catch (e: any) {
+        console.warn("[DailyCycle] Hypothesis consolidation failed (non-fatal):", e.message);
       }
     })(),
     // Goal engine cycle context event (if goalEngine is available)
@@ -1740,6 +1754,20 @@ Write a single tweet sharing the most interesting insight from this research. Re
       console.log(`[DailyCycle] Wisdom Engine: ingested ${wisdomResult.entriesIngested} entries for ${wisdomResult.triggeredBy}`);
     } catch (err: any) {
       console.warn("[DailyCycle] Wisdom Engine failed (non-fatal):", err.message);
+    }
+  }
+
+  // ── Autonomous Goal Engine — self-improvement loop ──────────────────────
+  if (evalResult) {
+    try {
+      const { runGoalEngine } = await import("./goalEngine.js");
+      const goalResult = await runGoalEngine(evalResult, GROK_API_KEY ?? "");
+      console.log(`[DailyCycle] Goal Engine: ${goalResult.goalsGenerated} generated, ${goalResult.goalsResolved} resolved, ${goalResult.milestonesAutoCompleted} milestones completed`);
+      if (goalResult.brainEvolutionEvents.length > 0) {
+        console.log(`[DailyCycle] Brain evolution: ${goalResult.brainEvolutionEvents.join("; ")}`);
+      }
+    } catch (err: any) {
+      console.warn("[DailyCycle] Goal Engine failed (non-fatal):", err.message);
     }
   }
 

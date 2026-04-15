@@ -4939,4 +4939,16 @@ needsHelp: true only when you genuinely need his direction or information`,
       res.status(500).json({ error: e.message });
     }
   });
+
+  // ── Goal Engine ─────────────────────────────────────────────────
+  app.get("/api/goal-engine", async (_req, res) => {
+    try {
+      const { getGoalEngineHistory, buildGoalContext } = await import("./goalEngine.js");
+      const history = getGoalEngineHistory();
+      const context = await buildGoalContext();
+      res.json({ history: history.runs.slice(0, 10), currentContext: context });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
 }
