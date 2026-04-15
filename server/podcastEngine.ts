@@ -557,7 +557,7 @@ The metadata fields are for Spotify and social media — write those for reading
         max_tokens: 10000,
         temperature: 0.78,
       }),
-      signal: AbortSignal.timeout(90000),
+      signal: AbortSignal.timeout(180000),
     });
 
     if (!res.ok) return false;
@@ -1529,7 +1529,7 @@ The close segment MUST end with EXACTLY this sign-off (verbatim):
       max_tokens: 10000,
       temperature: 0.78,
     }),
-    signal: AbortSignal.timeout(120000),
+    signal: AbortSignal.timeout(180000),
   });
 
   if (!res.ok) {
