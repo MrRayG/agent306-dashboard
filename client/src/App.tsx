@@ -14,11 +14,13 @@ import AgentHQ from "@/pages/AgentHQ";
 import StatusHub from "@/pages/StatusHub";
 import DreamsGrowth from "@/pages/DreamsGrowth";
 import CompetencyDashboard from "@/pages/CompetencyDashboard";
+import EvalDashboard from "@/pages/EvalDashboard";
 import NotFound from "@/pages/not-found";
 import PerplexityAttribution from "@/components/PerplexityAttribution";
 
 const nav = [
   { href: "/",         label: "Command Center", desc: "All engines · Status" },
+  { href: "/eval",     label: "306Eval",        desc: "Benchmark · Growth"  },
   { href: "/episodes", label: "Episodes",       desc: "Queue & post"        },
   { href: "/writing",  label: "Writing Studio", desc: "Articles · Blog"     },
   { href: "/podcast",  label: "Podcast Studio", desc: "Guest queue + interviews" },
@@ -140,6 +142,7 @@ function App() {
         <Layout>
           <Switch>
             <Route path="/"         component={CommandCenter} />
+            <Route path="/eval"     component={EvalDashboard} />
             <Route path="/episodes" component={EpisodeQueue}  />
             <Route path="/writing"  component={WritingStudio} />
             <Route path="/podcast"  component={PodcastStudio} />
