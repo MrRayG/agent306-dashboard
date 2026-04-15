@@ -1702,6 +1702,20 @@ Write a single tweet sharing the most interesting insight from this research. Re
     }
   }
 
+  // ── Autonomous Goal Engine — self-improvement loop ──────────────────────
+  if (evalResult) {
+    try {
+      const { runGoalEngine } = await import("./goalEngine.js");
+      const goalResult = await runGoalEngine(evalResult, GROK_API_KEY ?? "");
+      console.log(`[DailyCycle] Goal Engine: ${goalResult.goalsGenerated} generated, ${goalResult.goalsResolved} resolved, ${goalResult.milestonesAutoCompleted} milestones completed`);
+      if (goalResult.brainEvolutionEvents.length > 0) {
+        console.log(`[DailyCycle] Brain evolution: ${goalResult.brainEvolutionEvents.join("; ")}`);
+      }
+    } catch (err: any) {
+      console.warn("[DailyCycle] Goal Engine failed (non-fatal):", err.message);
+    }
+  }
+
   // ── End cycle context accumulator (before wrap-up) ──────────────────────
   let cycleSummary: ReturnType<typeof endCycleContext> | null = null;
   try { cycleSummary = endCycleContext(); } catch (e: any) { console.warn("[DailyCycle] Cycle context end failed (non-fatal):", e.message); }
