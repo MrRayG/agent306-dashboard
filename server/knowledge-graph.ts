@@ -650,3 +650,44 @@ export function getClusters(): KnowledgeCluster[] {
 export function getContradictions(): KnowledgeConnection[] {
   return graphState.connections.filter(c => c.relationshipType === "contradicts");
 }
+
+// ── Connection Reinforcement ─────────────────────────────────────────────────
+
+/** Reinforce connections based on content performance or decay stale ones */
+export function reinforceConnections(entryIds: string[], direction: "strengthen" | "decay"): void {
+  const targetSet = new Set(entryIds);
+  let modified = 0;
+
+  for (const conn of graphState.connections) {
+    if (targetSet.has(conn.fromEntryId) || targetSet.has(conn.toEntryId)) {
+      if (direction === "strengthen") {
+        conn.confidence = Math.min(1.0, conn.confidence + 0.05);
+      } else {
+        conn.confidence = Math.max(0, conn.confidence - 0.1);
+      }
+      modified++;
+    }
+  }
+
+  // Prune dead connections
+  const before = graphState.connections.length;
+  graphState.connections = graphState.connections.filter(c => c.confidence > 0.15);
+  const pruned = before - graphState.connections.length;
+
+  if (modified > 0 || pruned > 0) {
+    saveConnections(graphState);
+    console.log(`[KnowledgeGraph] Reinforced ${modified} connections (${direction}), pruned ${pruned}`);
+  }
+}
+
+/** Daily maintenance — decay connections to archived/low-weight entries */
+export function runConnectionMaintenance(): void {
+  const archivedIds = new Set(
+    knowledge.entries
+      .filter(e => (e.status ?? "active") === "archived" || e.weight < 3)
+      .map(e => e.id)
+  );
+
+  if (archivedIds.size === 0) return;
+  reinforceConnections(Array.from(archivedIds), "decay");
+}

@@ -20,6 +20,7 @@ import {
   knowledge,
   type KnowledgeEntry,
 } from "./memoryEngine.js";
+import type { KnowledgeConnection } from "./knowledge-graph.js";
 import { semanticSearch } from "./embeddingEngine.js";
 import { X_POSTING_RULES } from "./xComplianceGuard.js";
 import * as fs from "fs";
@@ -316,6 +317,159 @@ export function getOptimizedContext(query: string, options?: RelevantContextOpti
     getOperatorDirectives(),
     X_POSTING_RULES,
     getRelevantContext(query, options),
+    getSentimentArc(4),
+    getPerformanceContext(5),
+    styleRules,
+  ].filter(Boolean).join("\n\n");
+}
+
+// ── Graph-Aware Context — multi-hop retrieval via knowledge graph ──────────
+
+/** Track which entries were selected for context (for provenance) */
+let _lastContextEntryIds: string[] = [];
+
+/** Returns the entry IDs from the most recent getGraphAwareContext call */
+export function getLastContextEntryIds(): string[] {
+  return [..._lastContextEntryIds];
+}
+
+/**
+ * Graph-aware context retrieval. Extends keyword scoring with graph traversal:
+ *   hop-0: keyword-scored entries (reserves 30% char budget for graph entries)
+ *   hop-1: entries connected to hop-0 via knowledge graph (top 5, min confidence 0.5)
+ *   hop-2: entries connected to hop-1 (top 3, min confidence 0.7, optional)
+ */
+export function getGraphAwareContext(
+  query: string,
+  options?: RelevantContextOptions & { maxHops?: number },
+): string {
+  const queryTokens = tokenize(query);
+  if (queryTokens.length === 0) return getRelevantContext(query, options);
+
+  const scored = knowledge.entries
+    .map(entry => ({ entry, score: scoreEntry(entry, queryTokens, options ?? {}) }))
+    .filter(s => s.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  const maxEntries = options?.maxEntries ?? 20;
+  const maxChars = options?.maxTokens ?? 4000;
+  const maxHops = options?.maxHops ?? 1;
+
+  // Select hop-0 entries (reserve 30% budget for graph entries)
+  const hop0: KnowledgeEntry[] = [];
+  let totalChars = 0;
+  for (const { entry } of scored) {
+    const line = `[${entry.category.toUpperCase()}] ${entry.title}: ${entry.summary}\n`;
+    if (totalChars + line.length > maxChars * 0.7) break;
+    if (hop0.length >= maxEntries) break;
+    hop0.push(entry);
+    totalChars += line.length;
+  }
+
+  if (hop0.length === 0) {
+    _lastContextEntryIds = [];
+    return getRelevantContext(query, options);
+  }
+
+  // Graph traversal — sync, reads from in-memory graphState
+  let allConnections: KnowledgeConnection[] = [];
+  try {
+    const { getGraphConnections } = require("./knowledge-graph.js");
+    allConnections = getGraphConnections();
+  } catch {}
+
+  const hop0Ids = new Set(hop0.map(e => e.id));
+
+  // Hop 1: entries connected to hop-0
+  const hop1Entries: Array<{ entry: KnowledgeEntry; connection: KnowledgeConnection }> = [];
+  for (const conn of allConnections) {
+    if (conn.confidence < 0.5) continue;
+    const connectedId = hop0Ids.has(conn.fromEntryId) ? conn.toEntryId :
+                        hop0Ids.has(conn.toEntryId) ? conn.fromEntryId : null;
+    if (!connectedId || hop0Ids.has(connectedId)) continue;
+
+    const entry = knowledge.entries.find(e => e.id === connectedId && (e.status ?? "active") === "active");
+    if (entry) hop1Entries.push({ entry, connection: conn });
+  }
+
+  // Sort hop-1 by connection confidence, take top 5
+  hop1Entries.sort((a, b) => b.connection.confidence - a.connection.confidence);
+  const selectedHop1 = hop1Entries.slice(0, 5);
+
+  // Hop 2 (optional): entries connected to hop-1 entries
+  const hop1Ids = new Set(selectedHop1.map(h => h.entry.id));
+  const hop2Entries: Array<{ entry: KnowledgeEntry; connection: KnowledgeConnection }> = [];
+  if (maxHops >= 2) {
+    for (const conn of allConnections) {
+      if (conn.confidence < 0.7) continue;
+      const connectedId = hop1Ids.has(conn.fromEntryId) ? conn.toEntryId :
+                          hop1Ids.has(conn.toEntryId) ? conn.fromEntryId : null;
+      if (!connectedId || hop0Ids.has(connectedId) || hop1Ids.has(connectedId)) continue;
+
+      const entry = knowledge.entries.find(e => e.id === connectedId && (e.status ?? "active") === "active");
+      if (entry) hop2Entries.push({ entry, connection: conn });
+    }
+    hop2Entries.sort((a, b) => b.connection.confidence - a.connection.confidence);
+  }
+  const selectedHop2 = hop2Entries.slice(0, 3);
+
+  // Track provenance
+  _lastContextEntryIds = [
+    ...hop0.map(e => e.id),
+    ...selectedHop1.map(h => h.entry.id),
+    ...selectedHop2.map(h => h.entry.id),
+  ];
+
+  // Build enriched context string
+  let ctx = `\n=== RELEVANT KNOWLEDGE (${hop0.length} entries matched) ===\n`;
+  for (const e of hop0) {
+    ctx += `[${e.category.toUpperCase()}] ${e.title}: ${e.summary}\n`;
+  }
+
+  if (selectedHop1.length > 0) {
+    ctx += `\n=== CONNECTED KNOWLEDGE (graph, 1 hop) ===\n`;
+    for (const { entry, connection } of selectedHop1) {
+      ctx += `[${entry.category.toUpperCase()}] ${entry.title}: ${entry.summary} (${connection.relationshipType}: ${connection.reasoning})\n`;
+    }
+  }
+
+  if (selectedHop2.length > 0) {
+    ctx += `\n=== EXTENDED CONNECTIONS (graph, 2 hops) ===\n`;
+    for (const { entry, connection } of selectedHop2) {
+      ctx += `[${entry.category.toUpperCase()}] ${entry.title}: ${entry.summary} (${connection.relationshipType})\n`;
+    }
+  }
+
+  ctx += "=== END KNOWLEDGE ===\n";
+  return ctx;
+}
+
+/**
+ * Optimized context with graph awareness — drop-in replacement for getOptimizedContext.
+ * Same structure as getOptimizedContext but uses getGraphAwareContext.
+ */
+export function getOptimizedContextWithGraph(query: string, options?: RelevantContextOptions): string {
+  let styleRules = "";
+  try {
+    const fs = require("fs");
+    const { dataPath } = require("./dataPaths.js");
+    const rulesFile = dataPath("style-rules.json");
+    if (fs.existsSync(rulesFile)) {
+      const data = JSON.parse(fs.readFileSync(rulesFile, "utf8"));
+      const rules = (data.rules ?? [])
+        .filter((r: any) => r.confidence === "high" || r.hitCount >= 2)
+        .slice(0, 10)
+        .map((r: any) => `- ${r.rule}`)
+        .join("\n");
+      if (rules) styleRules = `\nACTIVE STYLE RULES (learned from post performance):\n${rules}`;
+    }
+  } catch {}
+
+  return [
+    getCoreIdentity(),
+    getOperatorDirectives(),
+    X_POSTING_RULES,
+    getGraphAwareContext(query, options),
     getSentimentArc(4),
     getPerformanceContext(5),
     styleRules,

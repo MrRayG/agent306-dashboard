@@ -26,7 +26,7 @@
  * -----------------------------------------------------------------
  */
 
-import { getRelevantContext } from "./contextWindow.js";
+import { getGraphAwareContext } from "./contextWindow.js";
 import { getEvolutionContext } from "./soulEvolution.js";
 import { getCompressedCompetencyContext } from "./competencyFramework.js";
 import { buildVoiceBlock } from "./voice.js";
@@ -175,7 +175,7 @@ export function buildTweetSystemPrompt(contentType: string, topicHint?: string):
   let knowledgeSnippet = '';
   if (topicHint) {
     try {
-      const ctx = getRelevantContext(topicHint, { maxEntries: 5, maxTokens: 1000 });
+      const ctx = getGraphAwareContext(topicHint, { maxEntries: 5, maxTokens: 1000 });
       if (ctx && ctx.length > 50) {
         knowledgeSnippet = `\n\nRECENT KNOWLEDGE (use if relevant, ignore if not):\n${ctx}`;
       }
