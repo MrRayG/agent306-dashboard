@@ -1554,8 +1554,8 @@ Write a single tweet sharing the most interesting insight from this research. Re
     // Adaptive hypothesis consolidation (daily if queue is large, weekly otherwise)
     (async () => {
       try {
-        const { getResearchLab } = await import("./researchEngine.js");
-        const lab = getResearchLab();
+        const { getResearchLab: getLabForConsolidation } = await import("./researchEngine.js");
+        const lab = getLabForConsolidation();
         const activeHypotheses = lab.hypotheses.filter(
           (h: any) => h.status === "forming" || h.status === "testing"
         ).length;
