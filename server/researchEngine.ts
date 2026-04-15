@@ -357,6 +357,27 @@ export function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
   return union.size === 0 ? 0 : intersection.size / union.size;
 }
 
+// Regex-based entity extraction for hypothesis dedup (lightweight, no LLM)
+const ENTITY_PATTERN = /\b([A-Z][a-zA-Z0-9]*(?:[-\s][A-Z0-9][a-zA-Z0-9]*)*)\b/g;
+const ENTITY_SKIP = new Set([
+  "I", "A", "The", "This", "That", "It", "My", "We", "He", "She", "They",
+  "But", "And", "Or", "So", "If", "No", "Yes", "Not", "What", "How", "Why",
+  "When", "Where", "Who", "Which", "Just", "Also",
+]);
+
+export function extractEntitiesFromClaim(text: string): string[] {
+  const entities = new Set<string>();
+  const pattern = new RegExp(ENTITY_PATTERN.source, "g");
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text)) !== null) {
+    const candidate = match[1].trim();
+    if (candidate.length < 2) continue;
+    if (ENTITY_SKIP.has(candidate)) continue;
+    entities.add(candidate);
+  }
+  return Array.from(entities);
+}
+
 export function findSimilarHypothesis(claim: string, hypotheses: Hypothesis[]): Hypothesis | null {
   const claimTokens = extractKeyTokens(claim);
   for (const h of hypotheses) {
@@ -382,6 +403,41 @@ export function addHypothesis(input: Omit<Hypothesis, "id" | "formedAt" | "statu
     }
   } catch (e: any) {
     console.warn("[ResearchLab] Similarity check failed (non-fatal):", e.message);
+  }
+
+  // Entity-level dedup: check if core entities already appear in active hypotheses
+  try {
+    const newEntities = extractEntitiesFromClaim(input.claim);
+
+    if (newEntities.length > 0) {
+      const active = lab.hypotheses.filter(h => h.status === "forming" || h.status === "testing");
+      const newNames = new Set(newEntities.map(e => e.toLowerCase()));
+
+      for (const existing of active) {
+        const existingEntities = extractEntitiesFromClaim(existing.claim);
+        if (existingEntities.length === 0) continue;
+
+        const existingNames = new Set(existingEntities.map(e => e.toLowerCase()));
+        const overlap = [...newNames].filter(n => existingNames.has(n)).length;
+        const overlapRatio = overlap / Math.min(newNames.size, existingNames.size);
+
+        if (overlapRatio > 0.6) {
+          const keywordSim = jaccardSimilarity(
+            extractKeyTokens(input.claim),
+            extractKeyTokens(existing.claim),
+          );
+          if (keywordSim > 0.3) {
+            console.log(`[ResearchLab] Entity dedup: "${input.claim.slice(0, 60)}" overlaps with "${existing.claim.slice(0, 60)}" (entities: ${overlap}/${Math.min(newNames.size, existingNames.size)}, keywords: ${keywordSim.toFixed(2)})`);
+            existing.trustScore = Math.min(100, (existing.trustScore ?? 5) + 0.5);
+            saveLab(lab);
+            return existing;
+          }
+        }
+      }
+    }
+  } catch (e: any) {
+    // Non-fatal: if entity extraction fails, fall through to normal creation
+    console.warn("[ResearchLab] Entity dedup check failed (non-fatal):", e.message);
   }
 
   const hyp: Hypothesis = {
