@@ -4392,6 +4392,32 @@ needsHelp: true only when you genuinely need his direction or information`,
     catch (e: any) { res.status(500).json({ error: "Failed to fetch contradictions" }); }
   });
 
+  // ── Entity Graph — entity extraction index ──────────────────────────────
+
+  app.get("/api/graph/entities", (_req, res) => {
+    try {
+      const { getEntityIndex } = require("./entityExtractor.js");
+      const index = getEntityIndex();
+      res.json(index);
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to fetch entity index: " + e.message });
+    }
+  });
+
+  app.get("/api/graph/entity/:name", (req, res) => {
+    try {
+      const { findEntriesByEntity } = require("./entityExtractor.js");
+      const name = decodeURIComponent(req.params.name);
+      if (!name || name.length < 2) {
+        return res.status(400).json({ error: "Entity name required (min 2 chars)" });
+      }
+      const entries = findEntriesByEntity(name);
+      res.json({ entity: name, entries, count: entries.length });
+    } catch (e: any) {
+      res.status(500).json({ error: "Entity lookup failed: " + e.message });
+    }
+  });
+
   app.post("/api/knowledge/cluster", requireDashAuth, async (_req, res) => {
     try {
       const clusters = await clusterKnowledge();

@@ -797,6 +797,14 @@ export function addKnowledge(entry: Omit<KnowledgeEntry, "id" | "learnedAt">): v
     console.warn("[Memory] Knowledge graph connection discovery failed:", e.message)
   );
 
+  // Entity extraction (fire-and-forget, non-fatal)
+  try {
+    import("./entityExtractor.js").then(({ extractEntities }) =>
+      extractEntities({ id: full.id, title: full.title, summary: full.summary, weight: full.weight })
+        .catch(e => console.warn("[Memory] Entity extraction failed:", e.message))
+    );
+  } catch {}
+
   // Cross-category semantic dedup: merge if a high-similarity entry exists (non-blocking)
   semanticSearch(semanticDedupQuery, { maxResults: 3, minSimilarity: 0.85 })
     .then(results => {

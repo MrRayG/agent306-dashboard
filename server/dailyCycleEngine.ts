@@ -1252,10 +1252,16 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
         try { autoResolveOldContradictions(); } catch (e: any) { console.warn("[DailyCycle] Auto-resolve contradictions failed:", e.message); }
         await detectGraphContradictions().catch(e => console.warn("[DailyCycle] Graph contradiction detection failed:", e.message));
       })(),
-      // Chain C: Independent — manuscript debates + knowledge clustering
+      // Chain C: Independent — manuscript debates + knowledge clustering + connection maintenance
       (async () => {
         await autoDebateManuscripts().catch(e => console.warn("[DailyCycle] Auto-debate failed:", e.message));
         await clusterKnowledge().catch(e => console.warn("[DailyCycle] Knowledge clustering failed:", e.message));
+        try {
+          const { runConnectionMaintenance } = await import("./knowledge-graph.js");
+          runConnectionMaintenance();
+        } catch (e: any) {
+          console.warn("[DailyCycle] Connection maintenance failed (non-fatal):", e.message);
+        }
       })(),
     ]);
 
