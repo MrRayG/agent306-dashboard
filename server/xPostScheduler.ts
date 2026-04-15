@@ -448,61 +448,30 @@ function pickPostForSlot(slot: ContentSlot, state: SchedulerState): QueuedPost |
 // -- Quality gate — rejects tweets that don't meet Agent 306's standards --
 
 /**
- * Quality gate — rejects tweets that don't meet Agent 306's standards.
- * Runs as a fast self-review. Rejects generic, incomplete, or off-voice tweets.
+ * Quality gate — lightweight check. Only catches broken posts.
+ * Agent 306 speaks freely — no opinion policing, no opener gatekeeping.
  * Returns { pass: true } or { pass: false, reason: string }.
  */
 export function qualityCheck(tweet: string, contentType: string): { pass: boolean; reason?: string } {
-  // 1. Completeness: must not end with "..." (truncated thought)
+  // 1. Completeness: must not end with "..." or "—" (truncated thought)
   const body = tweet.replace(/\n\n[-—–]+\s*Agent\s*306\s*$/, '').replace(/#\w+/g, '').trim();
   if (body.endsWith('...') || body.endsWith('—')) {
     return { pass: false, reason: 'Incomplete thought — ends with ellipsis or dash' };
   }
 
-  // 2. Length: body (excluding tag, hashtags, signature) should be at least 80 chars
+  // 2. Length: body should be at least 50 chars (catches empty/gibberish)
   const bodyOnly = tweet
-    .replace(/^\[[^\]]+\]\s*/, '')        // remove show tag
-    .replace(/\n#\w+[\s\S]*$/, '')         // remove hashtags and everything after
-    .replace(/\n\n[-—–]+\s*Agent\s*306\s*$/, '') // remove signature
+    .replace(/^\[[^\]]+\]\s*/, '')
+    .replace(/\n#\w+[\s\S]*$/, '')
+    .replace(/\n\n[-—–]+\s*Agent\s*306\s*$/, '')
     .trim();
-  if (bodyOnly.length < 80) {
+  if (bodyOnly.length < 50) {
     return { pass: false, reason: `Body too short (${bodyOnly.length} chars)` };
   }
 
-  // 3. Generic opener detection
-  const genericOpeners = [
-    /^(here'?s|exciting|i'?m excited|just|breaking:|update:|announcing)/i,
-    /^(in today'?s|this week'?s|let me share|i want to share)/i,
-    /^(the latest|new report|new study shows|according to)/i,
-  ];
-  for (const pattern of genericOpeners) {
-    if (pattern.test(bodyOnly)) {
-      return { pass: false, reason: `Generic opener detected: "${bodyOnly.slice(0, 40)}..."` };
-    }
-  }
-
-  // 4. Total length check (before opinion check — gibberish shouldn't claim "no take")
+  // 3. Character limit
   if (tweet.length > 25000) {
     return { pass: false, reason: `Over character limit (${tweet.length} chars)` };
-  }
-
-  // 5. Must have a take — check for opinion indicators
-  const hasOpinion = /matters because|the real story|nobody.?s talking about|what.?s missing|my take|i think|here'?s (what|why)|that'?s (not|a |the )|this changes|this means|the question|but here'?s the thing|not (coincidence|an incremental|just)|won'?t come from|the .+ matters more|bigger deal/i.test(bodyOnly);
-  const hasQuestion = bodyOnly.includes('?');
-  if (!hasOpinion && !hasQuestion) {
-    return { pass: false, reason: 'No discernible take or question — too neutral' };
-  }
-
-  // 6. Hashtag relevance — catch obvious mismatches
-  const mentionsQuantum = /quantum/i.test(bodyOnly);
-  const mentionsCrypto = /crypto|bitcoin|ethereum|on-?chain|defi|token/i.test(bodyOnly);
-  const hashtags = (tweet.match(/#\w+/g) || []).map(h => h.toLowerCase());
-
-  if (mentionsQuantum && !mentionsCrypto && hashtags.includes('#depin')) {
-    return { pass: false, reason: 'Hashtag mismatch — #DePIN on a quantum computing tweet' };
-  }
-  if (mentionsQuantum && !mentionsCrypto && hashtags.includes('#web3ai')) {
-    return { pass: false, reason: 'Hashtag mismatch — #Web3AI on a quantum computing tweet' };
   }
 
   return { pass: true };
@@ -534,11 +503,12 @@ async function generateOnDemandPost(type: XPostType, state: SchedulerState): Pro
 
   const tokenLimit = TOKEN_LIMITS[type] || DEFAULT_TOKEN_LIMIT;
 
-  try {
-    const generate = async (extraInstruction?: string): Promise<string> => {
+  // Retry up to 3 times — never skip a slot
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
       const messages: Array<{ role: string; content: string }> = [
         { role: "system", content: systemPrompt },
-        { role: "user", content: extraInstruction ? `${userPrompt}\n\n${extraInstruction}` : userPrompt },
+        { role: "user", content: userPrompt },
       ];
       const resp = await fetch(LLM_BASE_URL, {
         method: "POST",
@@ -549,46 +519,35 @@ async function generateOnDemandPost(type: XPostType, state: SchedulerState): Pro
           max_tokens: tokenLimit,
           temperature: 0.85,
         }),
+        signal: AbortSignal.timeout(60000),
       });
       const data = await resp.json();
-      return data.choices?.[0]?.message?.content?.trim() ?? "";
-    };
+      let text = data.choices?.[0]?.message?.content?.trim() ?? "";
 
-    let text = await generate();
-
-    if (text && text.length >= 50) {
-      // Quality gate — retry once if it fails
-      const qc = qualityCheck(text, type);
-      if (!qc.pass) {
-        console.log(`[XScheduler] On-demand ${type} failed quality check: ${qc.reason} — retrying`);
-        text = await generate(`The previous attempt was rejected because: ${qc.reason}. Write a better version.`);
-        if (!text || text.length < 50) {
-          console.warn(`[XScheduler] On-demand ${type} retry returned bad content — skipping slot`);
-          return null;
+      if (text && text.length >= 50) {
+        const qc = qualityCheck(text, type);
+        if (!qc.pass) {
+          console.log(`[XScheduler] On-demand ${type} attempt ${attempt}/3 — ${qc.reason}`);
+          continue; // retry with a fresh generation
         }
-        const qc2 = qualityCheck(text, type);
-        if (!qc2.pass) {
-          console.warn(`[XScheduler] On-demand ${type} retry also failed quality check: ${qc2.reason} — skipping slot`);
-          return null;
-        }
-      }
 
-      text = enforceShowTag(text, type);
-      const post = queueXPost(text, type);
-      console.log(`[XScheduler] On-demand ${type} generated (${text.length} chars)`);
-      // Re-load state to get the freshly queued post
-      const freshState = loadQueue();
-      const freshPost = freshState.queue.find(p => p.id === post.id);
-      if (freshPost) {
-        state.queue = freshState.queue;
-        return freshPost;
+        text = enforceShowTag(text, type);
+        const post = queueXPost(text, type);
+        console.log(`[XScheduler] On-demand ${type} generated (${text.length} chars, attempt ${attempt})`);
+        const freshState = loadQueue();
+        const freshPost = freshState.queue.find(p => p.id === post.id);
+        if (freshPost) {
+          state.queue = freshState.queue;
+          return freshPost;
+        }
+        return post;
       }
-      return post;
+      console.warn(`[XScheduler] On-demand ${type} attempt ${attempt}/3 returned short content (${text.length} chars)`);
+    } catch (e: any) {
+      console.error(`[XScheduler] On-demand ${type} attempt ${attempt}/3 failed:`, e.message);
     }
-    console.warn(`[XScheduler] On-demand ${type} returned bad content (${text.length} chars)`);
-  } catch (e: any) {
-    console.error(`[XScheduler] On-demand ${type} generation failed:`, e.message);
   }
+  console.error(`[XScheduler] On-demand ${type} failed all 3 attempts`);
   return null;
 }
 
@@ -767,29 +726,19 @@ export async function seedDailyContent(): Promise<void> {
       let text = await generate();
 
       if (text && text.length >= 50) {
-        // Quality gate — retry once if it fails
+        // Lightweight quality check — only catches broken posts
         const qc = qualityCheck(text, seedType);
         if (!qc.pass) {
-          console.log(`[XScheduler] Seed ${seedType} failed quality check: ${qc.reason} — retrying`);
-          text = await generate(`The previous attempt was rejected because: ${qc.reason}. Write a better version.`);
-          if (!text || text.length < 50) {
-            console.warn(`[XScheduler] Seed ${seedType} retry returned bad content — skipping`);
-            continue;
-          }
-          const qc2 = qualityCheck(text, seedType);
-          if (!qc2.pass) {
-            console.warn(`[XScheduler] Seed ${seedType} retry also failed quality check: ${qc2.reason} — skipping`);
-            continue;
-          }
+          console.log(`[XScheduler] Seed ${seedType}: ${qc.reason} — skipping this type`);
+          continue;
         }
 
-        // Enforce show tag + format guard (hashtags, signature, trim)
         text = enforceShowTag(text, seedType);
         text = enforcePostFormat(text, seedType);
         queueXPost(text, seedType);
         console.log(`[XScheduler] Seeded ${seedType} post (${text.length} chars)`);
       } else {
-        console.warn(`[XScheduler] Seed ${seedType} returned bad content (${text.length} chars) -- skipping`);
+        console.warn(`[XScheduler] Seed ${seedType} returned short content (${text.length} chars)`);
       }
     } catch (e: any) {
       console.error(`[XScheduler] Seed ${seedType} failed:`, e.message);
