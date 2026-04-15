@@ -276,7 +276,7 @@ function loadState(): PodcastState {
   };
 }
 
-function saveState(s: PodcastState) {
+export function saveState(s: PodcastState) {
   try { fs.writeFileSync(PODCAST_FILE, JSON.stringify(s, null, 2)); } catch {}
 }
 
