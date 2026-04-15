@@ -37,6 +37,7 @@ import { enforcePostFormat } from "./postFormatGuard.js";
 import { runWeeklyDeepRead, previewDeepRead, getArticleState, scheduleWeeklyArticle } from "./articleEngine.js";
 import { runExploration, getExplorationState, scheduleExploration } from "./explorationEngine.js";
 import { getAgentReachStatus } from "./agentReachEngine.js";
+import { get306EvalResults, get306EvalHistory } from "./evalEngine.js";
 import { postCast, isFarcasterEnabled, getFarcasterState, setFarcasterEnabled, createSigner, getSignerStatus, fetchMentions, determineChannel, getStoredSignerUuid, storeSignerUuid } from "./farcasterEngine.js";
 import {
   getResearchLab, addTopic, updateTopicStatus, getTopicById,
@@ -4805,6 +4806,25 @@ needsHelp: true only when you genuinely need his direction or information`,
     try {
       const profile = getCompetencyProfile();
       res.json(profile);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── 306Eval Benchmark ─────────────────────────────────────────────────
+  app.get("/api/eval", (_req, res) => {
+    try {
+      const data = get306EvalResults();
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/eval/history", (_req, res) => {
+    try {
+      const history = get306EvalHistory();
+      res.json({ history });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
