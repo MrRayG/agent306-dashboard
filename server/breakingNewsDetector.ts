@@ -23,6 +23,7 @@ import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import { shouldFrameAsBreaking } from "./noveltyGate.js";
 
 export interface BreakingNewsEvent {
   id: string;
@@ -242,7 +243,7 @@ function isWithinPostingHours(): boolean {
   return utcHour >= 12 || utcHour < 2;
 }
 
-function markEventPosted(eventId: string): void {
+export function markEventPosted(eventId: string): void {
   const store = loadEvents();
   const event = store.events.find(e => e.id === eventId);
   if (event) {
@@ -263,6 +264,31 @@ export function startBreakingNewsLoop(xWrite: any): void {
 
     const event = await checkBreakingNews();
     if (!event) return;
+
+    // Novelty gate — check KB before allowing [306 NEWS] framing
+    try {
+      const noveltyResult = await shouldFrameAsBreaking(event);
+      if (!noveltyResult.allowed) {
+        console.log(`[BreakingNews] Novelty gate blocked: ${noveltyResult.reason}`);
+        if (noveltyResult.reframedType === "analysis" || noveltyResult.reframedType === "update") {
+          const post = await generateBreakingPost(event);
+          if (post) {
+            const reframed = post.replace(/\[306 NEWS\]/i,
+              noveltyResult.reframedType === "update" ? "[306 SIGNAL]" : "[306 RESEARCH]");
+            queueXPost(reframed, noveltyResult.reframedType === "update" ? "signal" : "research", 5);
+            markEventPosted(event.id);
+            console.log(`[BreakingNews] Reframed as ${noveltyResult.reframedType}: "${event.headline.slice(0, 60)}"`);
+          }
+          return;
+        }
+        // "skip" recommendation — mark as posted to avoid re-detection
+        markEventPosted(event.id);
+        return;
+      }
+    } catch (err) {
+      // Non-fatal: if novelty gate fails, allow original flow to proceed
+      console.warn("[BreakingNews] Novelty gate check failed, allowing through:", err);
+    }
 
     if (shouldPostImmediately(event)) {
       // Tier 1: Generate and post immediately
