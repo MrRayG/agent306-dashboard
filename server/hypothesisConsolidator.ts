@@ -135,14 +135,18 @@ Respond with JSON:
  */
 export async function consolidateHypotheses(options?: {
   minClusterSize?: number;
+  maxClusters?: number;
+  similarityThreshold?: number;
   dryRun?: boolean;
 }): Promise<{ clustersFound: number; merged: number; removed: number }> {
   const minSize = options?.minClusterSize ?? 3;
+  const maxClusters = options?.maxClusters ?? 5;
+  const simThreshold = options?.similarityThreshold ?? 0.45;
   const dryRun = options?.dryRun ?? false;
 
-  console.log(`[HypothesisConsolidator] Starting consolidation (minClusterSize=${minSize}, dryRun=${dryRun})...`);
+  console.log(`[HypothesisConsolidator] Starting consolidation (minClusterSize=${minSize}, maxClusters=${maxClusters}, similarityThreshold=${simThreshold}, dryRun=${dryRun})...`);
 
-  const clusters = findHypothesisClusters(minSize);
+  const clusters = findHypothesisClusters(minSize, simThreshold);
   console.log(`[HypothesisConsolidator] Found ${clusters.length} clusters with ${clusters.reduce((s, c) => s + c.members.length, 0)} total hypotheses`);
 
   if (clusters.length === 0) {
@@ -152,8 +156,8 @@ export async function consolidateHypotheses(options?: {
   let merged = 0;
   let removed = 0;
 
-  // Process up to 5 clusters per run (budget-conscious, matching KB consolidator)
-  const clustersToProcess = clusters.slice(0, 5);
+  // Process up to maxClusters per run (budget-conscious, matching KB consolidator)
+  const clustersToProcess = clusters.slice(0, maxClusters);
 
   for (const cluster of clustersToProcess) {
     console.log(`[HypothesisConsolidator] Merging cluster: "${cluster.representative.claim.slice(0, 60)}..." (${cluster.members.length} variants)`);

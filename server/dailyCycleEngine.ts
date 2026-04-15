@@ -1551,17 +1551,30 @@ Write a single tweet sharing the most interesting insight from this research. Re
         }
       }
     })(),
-    // Weekly hypothesis consolidation (Sundays)
+    // Adaptive hypothesis consolidation (daily if queue is large, weekly otherwise)
     (async () => {
-      const today = new Date();
-      if (today.getDay() === 0) {
-        try {
-          console.log("[DailyCycle] Running weekly hypothesis consolidation...");
-          const result = await consolidateHypotheses({ minClusterSize: 3 });
+      try {
+        const { getResearchLab } = await import("./researchEngine.js");
+        const lab = getResearchLab();
+        const activeHypotheses = lab.hypotheses.filter(
+          (h: any) => h.status === "forming" || h.status === "testing"
+        ).length;
+
+        const today = new Date();
+        const isSunday = today.getDay() === 0;
+        const queueOverloaded = activeHypotheses > 130;
+
+        if (isSunday || queueOverloaded) {
+          console.log(`[DailyCycle] Running hypothesis consolidation (active: ${activeHypotheses}, trigger: ${queueOverloaded ? "queue overloaded" : "weekly"})...`);
+          const result = await consolidateHypotheses({
+            minClusterSize: queueOverloaded ? 2 : 3,
+            maxClusters: queueOverloaded ? 10 : 5,
+            similarityThreshold: queueOverloaded ? 0.35 : 0.45,
+          });
           console.log(`[DailyCycle] Hypothesis consolidation: ${result.clustersFound} clusters, ${result.merged} merged, ${result.removed} removed`);
-        } catch (e: any) {
-          console.warn("[DailyCycle] Hypothesis consolidation failed (non-fatal):", e.message);
         }
+      } catch (e: any) {
+        console.warn("[DailyCycle] Hypothesis consolidation failed (non-fatal):", e.message);
       }
     })(),
   ]);
