@@ -228,7 +228,7 @@ export async function generateBreakingPost(event: BreakingNewsEvent): Promise<st
     const text = data.choices?.[0]?.message?.content ?? "";
     if (!text || text.length < 20) return null;
 
-    return enforcePostFormat(text, "dispatch");
+    return enforcePostFormat(text, "news");
   } catch (e: any) {
     console.error("[BreakingNews] Post generation failed:", e.message);
     return null;
@@ -268,23 +268,23 @@ export function startBreakingNewsLoop(xWrite: any): void {
       // Tier 1: Generate and post immediately
       const post = await generateBreakingPost(event);
       if (post) {
-        const validation = validateXPost(post, "dispatch");
+        const validation = validateXPost(post, "news");
         if (validation.allowed) {
           try {
             await xWrite.v2.tweet({ text: post });
-            recordXPost(post, "dispatch");
+            recordXPost(post, "news");
             markEventPosted(event.id);
             console.log(`[BreakingNews] TIER-1 posted immediately: "${post.slice(0, 60)}"`);
           } catch (e: any) {
             console.error("[BreakingNews] Tweet failed:", e.message);
             // Fall back to high-priority queue
-            queueXPost(post, "dispatch", 0);
+            queueXPost(post, "news", 0);
             markEventPosted(event.id);
           }
         } else {
           console.log(`[BreakingNews] Compliance blocked: ${validation.reason}`);
           // Queue for next available slot
-          queueXPost(post, "dispatch", 1);
+          queueXPost(post, "news", 1);
           markEventPosted(event.id);
         }
       }
@@ -292,7 +292,7 @@ export function startBreakingNewsLoop(xWrite: any): void {
       // Tier 2: Queue as high-priority
       const post = await generateBreakingPost(event);
       if (post) {
-        queueXPost(post, "dispatch", 1);
+        queueXPost(post, "news", 1);
         markEventPosted(event.id);
         console.log(`[BreakingNews] Tier-2 queued high-priority: "${event.headline.slice(0, 60)}"`);
       }
@@ -300,7 +300,7 @@ export function startBreakingNewsLoop(xWrite: any): void {
       // Tier 3: Queue as normal
       const post = await generateBreakingPost(event);
       if (post) {
-        queueXPost(post, "dispatch", 5);
+        queueXPost(post, "news", 5);
         markEventPosted(event.id);
         console.log(`[BreakingNews] Tier-3 queued normal: "${event.headline.slice(0, 60)}"`);
       }

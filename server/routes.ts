@@ -734,12 +734,12 @@ Return JSON: {"post": "..."}`
     }
 
     // Enforce [306 NEWS] show tag
-    postText = enforceShowTag(postText, "dispatch");
+    postText = enforceShowTag(postText, "news");
 
     // ── 3. Queue dispatch via X post scheduler ──────────────────────────
     try {
       if (postText.trim().length > 10) {
-        queueXPost(postText.trim(), "dispatch", 4);
+        queueXPost(postText.trim(), "news", 4);
         console.log(`[Agent306:News] Dispatch queued for X posting (${postText.trim().length} chars)`);
       }
     } catch (e: any) {

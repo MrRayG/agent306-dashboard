@@ -7,12 +7,12 @@
  *  the scheduler picks them up at 6 named daily time slots.
  *
  *  LOCKED daily schedule — 6 slots with FIXED show tags:
- *    8am ET  — 306 NEWS       (hard AI news, market moves)
- *    10am ET — 306 SIGNAL     (trend analysis, pattern recognition)
- *    12pm ET — 306 RESEARCH   (deep dives, technical exploration)
- *    5pm ET  — 306 ROUND UP   (afternoon recap, day highlights)
- *    7pm ET  — AGENT'S CHOICE (she picks any format — creative freedom)
- *    9pm ET  — 306 REFLECTION (philosophical, open questions)
+ *    8am ET  — [306 NEWS]       (hard AI news, market moves)
+ *    10am ET — [306 SIGNAL]     (trend analysis, pattern recognition)
+ *    12pm ET — [306 RESEARCH]   (deep dives, technical exploration)
+ *    5pm ET  — [306 ROUND UP]   (afternoon recap, day highlights)
+ *    7pm ET  — [THE DISPATCH]   (flagship evening dispatch — one signal, two sides)
+ *    9pm ET  — [306 REFLECTION] (philosophical, open questions)
  *
  *  Each slot has a requiredContentType that filters queue content.
  *  If no matching content exists, the slot generates on-demand.
@@ -41,25 +41,15 @@ export type XPostType =
   | "intro"
   | "signal"
   | "article"
-  | "insight"
   | "podcast"
   | "breakthrough"
   | "dispatch"
+  | "news"
   | "academy"
-  | "spotlight"
-  | "leaderboard"
-  | "burn"
   | "blog"
   | "research"
   | "reflection"
-  | "curiosity"
-  | "synthesis"
-  | "roundup"
-  | "toolbox"
-  | "dataset"
-  | "debate"
-  | "prompt"
-  | "archive";
+  | "roundup";
 
 export interface QueuedPost {
   id: string;
@@ -89,24 +79,14 @@ const TYPE_PRIORITY: Record<XPostType, number> = {
   intro:        2,
   breakthrough: 3,
   dispatch:     4,
+  news:         4,
   signal:       4,
   roundup:      4,
   article:      5,
-  academy:      6,
-  spotlight:    6,
-  insight:      6,
-  leaderboard:  7,
-  burn:         8,
   blog:         5,
   research:     5,
+  academy:      6,
   reflection:   6,
-  curiosity:    6,
-  synthesis:    6,
-  toolbox:      6,
-  dataset:      6,
-  debate:       6,
-  prompt:       6,
-  archive:      7,
 };
 
 // -- Named content slots ------------------------------------------
@@ -121,12 +101,12 @@ interface ContentSlot {
 }
 
 const CONTENT_SLOTS: ContentSlot[] = [
-  { name: "Early Morning", hourUTC: 12, preferredTypes: ["dispatch", "signal", "roundup"],   requiredContentType: "dispatch" },   // 8am ET — 306 NEWS
-  { name: "Late Morning",  hourUTC: 14, preferredTypes: ["signal", "academy", "toolbox"],    requiredContentType: "signal" },     // 10am ET — 306 SIGNAL
-  { name: "Midday",        hourUTC: 16, preferredTypes: ["research", "blog", "prompt"],      requiredContentType: "research" },   // 12pm ET — 306 RESEARCH
-  { name: "Afternoon",     hourUTC: 21, preferredTypes: ["roundup", "signal", "debate"],     requiredContentType: "roundup" },    // 5pm ET — 306 ROUND UP
-  { name: "Early Evening", hourUTC: 23, preferredTypes: ["archive", "dataset", "toolbox", "reflection", "debate", "prompt"], agentChoice: true },  // 7pm ET — AGENT'S CHOICE
-  { name: "Late Evening",  hourUTC: 1,  preferredTypes: ["reflection", "debate", "prompt"],  requiredContentType: "reflection" }, // 9pm ET — 306 REFLECTION
+  { name: "Early Morning", hourUTC: 12, preferredTypes: ["news", "signal", "roundup"],       requiredContentType: "news" },       // 8am ET — [306 NEWS]
+  { name: "Late Morning",  hourUTC: 14, preferredTypes: ["signal", "academy"],               requiredContentType: "signal" },     // 10am ET — [306 SIGNAL]
+  { name: "Midday",        hourUTC: 16, preferredTypes: ["research", "blog"],                requiredContentType: "research" },   // 12pm ET — [306 RESEARCH]
+  { name: "Afternoon",     hourUTC: 21, preferredTypes: ["roundup", "signal"],               requiredContentType: "roundup" },    // 5pm ET — [306 ROUND UP]
+  { name: "Early Evening", hourUTC: 23, preferredTypes: ["dispatch"],                        requiredContentType: "dispatch" },   // 7pm ET — [THE DISPATCH]
+  { name: "Late Evening",  hourUTC: 1,  preferredTypes: ["reflection"],                      requiredContentType: "reflection" }, // 9pm ET — [306 REFLECTION]
 ];
 
 // Breaking news detection is now handled by breakingNewsDetector.ts
@@ -506,18 +486,13 @@ export function qualityCheck(tweet: string, contentType: string): { pass: boolea
 // Token limits by content type — richer types get more room,
 // the format guard handles final shaping.
 const TOKEN_LIMITS: Record<string, number> = {
-  dispatch:   600,   // news — concise but complete
+  news:       600,   // morning news — concise but complete
+  dispatch:   800,   // flagship evening dispatch — one signal, two sides (~1,500-1,700 chars)
   signal:     800,   // analysis needs room for the "why"
   research:   1000,  // deep dives need space
   roundup:    1200,  // 3-5 stories need the most room
   reflection: 600,   // evening thoughts — not artificially short
-  debate:     800,   // both sides + take
-  prompt:     500,   // techniques — practical detail
-  archive:    600,   // historical context + connection
-  progress:   600,   // updates
   academy:    1000,  // teaching needs detail
-  toolbox:    800,   // tool reviews need specifics
-  dataset:    800,   // dataset spotlights
 };
 const DEFAULT_TOKEN_LIMIT = 600;
 
@@ -856,7 +831,7 @@ IMPORTANT: Output ONLY the tweet text itself. Do NOT include any meta-commentary
 // -- Scheduler loop -----------------------------------------------
 
 export function startXPostScheduler(xWrite: any): void {
-  console.log("[XScheduler] Starting X post scheduler (6 locked slots/day: 8am NEWS, 10am SIGNAL, 12pm RESEARCH, 5pm ROUND UP, 7pm AGENT'S CHOICE, 9pm REFLECTION)");
+  console.log("[XScheduler] Starting X post scheduler (6 locked slots/day: 8am NEWS, 10am SIGNAL, 12pm RESEARCH, 5pm ROUND UP, 7pm THE DISPATCH, 9pm REFLECTION)");
 
   // Start breaking news detection loop (checks every 30 min during posting hours)
   startBreakingNewsLoop(xWrite);
