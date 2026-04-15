@@ -60,7 +60,7 @@ import { takeSnapshot, getEvolutionHistory, getLatestSnapshot, scheduleEvolution
 import { runResearchScan, getScannerState, scheduleResearchScan, scanGoalsForResearch } from "./researchScanner.js";
 import { generateArticleCard } from "./articleImageCard.js";
 import { runDailyCycle, getBriefingState, scheduleDailyCycle } from "./dailyCycleEngine.js";
-import { getPublicStatus, getPublicProgress, getPublicActivity, getPublicGoals, getPublicResearch, getPublicMetacognition, getPublicBreakthroughs, getPublicAspirations, getPublicPredictions, getPublicCorrections } from "./publicApi.js";
+import { getPublicStatus, getPublicProgress, getPublicActivity, getPublicGoals, getPublicResearch, getPublicMetacognition, getPublicBreakthroughs, getPublicAspirations, getPublicPredictions, getPublicCorrections, getPublicEval } from "./publicApi.js";
 import { getReflections, getStyleRules, deleteStyleRule, runReflection } from "./reflectionEngine.js";
 import {
   getPublishedPosts, getPostBySlug, getAllPosts,
@@ -4176,6 +4176,14 @@ needsHelp: true only when you genuinely need his direction or information`,
       res.set(publicCacheHeaders).json(getPublicCorrections());
     } catch (e: any) {
       res.status(500).json({ error: "Failed to fetch corrections" });
+    }
+  });
+
+  app.get("/api/public/eval", (_req, res) => {
+    try {
+      res.set(publicCacheHeaders).json(getPublicEval());
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to fetch eval" });
     }
   });
 
