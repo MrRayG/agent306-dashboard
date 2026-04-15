@@ -498,8 +498,19 @@ const DEFAULT_TOKEN_LIMIT = 600;
 
 async function generateOnDemandPost(type: XPostType, state: SchedulerState): Promise<QueuedPost | null> {
   const systemPrompt = buildTweetSystemPrompt(type);
-  const userPrompt = buildTweetUserPrompt(type);
-  if (!userPrompt) return null;
+  const basePrompt = buildTweetUserPrompt(type);
+  if (!basePrompt) return null;
+
+  // Inject today's posts so she doesn't repeat topics
+  const todaysSummary = getTodaysPostsSummary();
+  const todaysPending = state.queue
+    .filter(p => !p.posted && p.content)
+    .map(p => p.content.slice(0, 100))
+    .join(" | ");
+  const dedupContext = todaysSummary || todaysPending
+    ? `\n\nALREADY POSTED/QUEUED TODAY (DO NOT repeat these topics or entities):\n${todaysSummary}${todaysPending ? `\nQueued: ${todaysPending}` : ''}`
+    : '';
+  const userPrompt = basePrompt + dedupContext;
 
   const tokenLimit = TOKEN_LIMITS[type] || DEFAULT_TOKEN_LIMIT;
 
@@ -698,16 +709,22 @@ export async function seedDailyContent(): Promise<void> {
   const needed = Math.min(4 - pendingCount, seedCandidates.length);
   const seedTypes = seedCandidates.slice(0, needed);
 
+  // Collect today's posts for dedup across all seed generations
+  const todaysSummary = getTodaysPostsSummary();
+
   for (const seedType of seedTypes) {
     try {
-      // Voice-first prompt builder — soul + voice + examples + minimal context
       const systemPrompt = buildTweetSystemPrompt(seedType);
-      const userPrompt = buildTweetUserPrompt(seedType);
+      const baseUserPrompt = buildTweetUserPrompt(seedType);
+      const dedupNote = todaysSummary
+        ? `\n\nALREADY POSTED TODAY (pick a DIFFERENT topic):\n${todaysSummary}`
+        : '';
+      const userPrompt = baseUserPrompt + dedupNote;
 
-      const generate = async (extraInstruction?: string): Promise<string> => {
+      const generate = async (): Promise<string> => {
         const messages: Array<{ role: string; content: string }> = [
           { role: "system", content: systemPrompt },
-          { role: "user", content: extraInstruction ? `${userPrompt}\n\n${extraInstruction}` : userPrompt },
+          { role: "user", content: userPrompt },
         ];
         const resp = await fetch(LLM_BASE_URL, {
           method: "POST",
