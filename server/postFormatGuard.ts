@@ -24,14 +24,14 @@ import { injectMentions } from "./knownHandles.js";
 // Valid show tag names (without brackets) — includes types not in contentTypes.ts
 const VALID_SHOW_TAG_NAMES = [
   '306 NEWS', '306 SIGNAL', '306 RESEARCH', '306 ROUND UP', '306 ROUNDUP',
-  '306 REFLECTION', '306 PROGRESS', '306 DEBATE', '306 ARCHIVE',
-  '306 PROMPT', '306 THREAD', '306 ACADEMY', '306 TOOLBOX', '306 DATASET',
+  '306 REFLECTION', '306 PROGRESS', '306 ARCHIVE',
+  '306 THREAD', '306 ACADEMY',
+  'THE DISPATCH',
 ];
 
 // Queue type → show tag for types not in contentTypes.ts
 const FALLBACK_SHOW_TAGS: Record<string, string> = {
   'reflection': '[306 REFLECTION]',
-  'dispatch': '[306 NEWS]',
   'roundup': '[306 ROUNDUP]',
 };
 
@@ -63,16 +63,12 @@ const HASHTAG_COMBOS: Record<string, string[]> = {
   'signal':     ['#AIAgents', '#DeAI', '#DePIN', '#Web3AI'],
   'research':   ['#AIAgents', '#DeAI', '#DePIN', '#Web3AI'],
   // News / market dispatches
+  'news':       ['#AIAgents', '#DeAI', '#Web3AI', '#AgenticAI'],
   'dispatch':   ['#AIAgents', '#DeAI', '#Web3AI', '#AgenticAI'],
   // Agent economies, identity, payments, on-chain
   'roundup':    ['#AIAgents', '#DeAI', '#OnChainAI', '#CryptoAI'],
   // Alignment / agent foundations
   'reflection': ['#AIAgents', '#AgenticAI', '#DeAI'],
-  'debate':     ['#AIAgents', '#AgenticAI', '#DeAI'],
-  // General / catch-all
-  'prompt':     ['#AIAgents', '#DeAI', '#Web3AI', '#AgenticAI'],
-  'archive':    ['#AIAgents', '#DeAI', '#Web3AI'],
-  'progress':   ['#AIAgents', '#DeAI', '#Web3AI', '#AgenticAI'],
 };
 
 // Topic-specific tags the generation engine can add when relevant:

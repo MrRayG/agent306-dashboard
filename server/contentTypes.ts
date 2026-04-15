@@ -56,13 +56,25 @@ export const CONTENT_TYPES: Record<string, ContentType> = {
     id: 'news',
     showTag: '[306 NEWS]',
     name: '306 NEWS',
-    description: 'Real-Time Alerts — breaking updates, product launches, regulatory shifts. Urgent, factual, direct.',
+    description: '8am Morning News — breaking updates, product launches, regulatory shifts. Urgent, factual, direct.',
     format: '"Breaking"/"Developing" tags. Lead with the headline. Keep it factual with 306\'s brief POV.',
     schedule: 'Daily 8am ET',
     category: 'primary',
     engine: 'routes.ts (news dispatch)',
-    queueType: 'dispatch',
+    queueType: 'news',
     slotPreference: ['morning'],
+  },
+  dispatch: {
+    id: 'dispatch',
+    showTag: '[THE DISPATCH]',
+    name: 'THE DISPATCH',
+    description: '7pm Flagship — Episode series. One signal, two sides, humble, universal audience. ~1,500-1,700 chars.',
+    format: 'Episode # series. Pick ONE signal, show both sides. Step back — don\'t conclude for the audience. Write for everyone.',
+    schedule: 'Daily 7pm ET',
+    category: 'primary',
+    engine: 'routes.ts (dispatch)',
+    queueType: 'dispatch',
+    slotPreference: ['evening'],
   },
   academy: {
     id: 'academy',
@@ -75,66 +87,6 @@ export const CONTENT_TYPES: Record<string, ContentType> = {
     engine: 'academyEngine',
     queueType: 'academy',
     slotPreference: ['midday', 'morning'],
-  },
-  toolbox: {
-    id: 'toolbox',
-    showTag: '[306 TOOLBOX]',
-    name: '306 TOOLBOX',
-    description: 'Reviews and first looks at new AI dev tools, SDKs, productivity apps.',
-    format: 'Tool name + what it does + first impressions + who should use it.',
-    schedule: 'Seed generation + manual',
-    category: 'new',
-    engine: 'seed (xPostScheduler)',
-    queueType: 'toolbox',
-    slotPreference: ['afternoon', 'midday'],
-  },
-  dataset: {
-    id: 'dataset',
-    showTag: '[306 DATASET]',
-    name: '306 DATASET',
-    description: 'Spotlighting open-source datasets or data-curation techniques.',
-    format: 'Dataset name + size/scope + why it matters + link/reference.',
-    schedule: 'Seed generation + manual',
-    category: 'new',
-    engine: 'seed (xPostScheduler)',
-    queueType: 'dataset',
-    slotPreference: ['afternoon', 'evening'],
-  },
-  debate: {
-    id: 'debate',
-    showTag: '[306 DEBATE]',
-    name: '306 DEBATE',
-    description: 'Two sides of a controversial AI topic to spark discussion.',
-    format: 'Present both sides fairly, then 306\'s take. End with a question to the audience.',
-    schedule: 'Seed generation + manual',
-    category: 'new',
-    engine: 'seed (xPostScheduler)',
-    queueType: 'debate',
-    slotPreference: ['evening', 'afternoon'],
-  },
-  prompt: {
-    id: 'prompt',
-    showTag: '[306 PROMPT]',
-    name: '306 PROMPT',
-    description: 'High-performance system prompts or agentic workflows that work in production.',
-    format: 'Prompt/workflow + context on why it works + practical tip.',
-    schedule: 'Seed generation + manual',
-    category: 'new',
-    engine: 'seed (xPostScheduler)',
-    queueType: 'prompt',
-    slotPreference: ['midday', 'afternoon'],
-  },
-  archive: {
-    id: 'archive',
-    showTag: '[306 ARCHIVE]',
-    name: '306 ARCHIVE',
-    description: 'Throwback posts highlighting seminal papers or moments relevant to current trends.',
-    format: 'Historical reference + why it matters now + connection to current events.',
-    schedule: 'Seed generation + manual',
-    category: 'new',
-    engine: 'seed (xPostScheduler)',
-    queueType: 'archive',
-    slotPreference: ['evening'],
   },
 };
 
@@ -158,15 +110,15 @@ export function getContentTypeByQueue(queueType: string): ContentType | undefine
 
 /**
  * Post-processing show tag enforcement.
- * Ensures post starts with the correct [306 XXX] tag.
+ * Ensures post starts with the correct show tag ([306 XXX] or [THE DISPATCH]).
  * Strips any malformed tag attempts before prepending the correct one.
  */
 export function enforceShowTag(postText: string, queueType: string): string {
   const expectedTag = getShowTag(queueType);
   if (!expectedTag) return postText;
   if (postText.startsWith(expectedTag)) return postText;
-  // Strip any existing malformed show tag
-  const cleaned = postText.replace(/^\[306\s+\w+\]\s*/i, '');
+  // Strip any existing malformed show tag (covers [306 XXX] and [THE DISPATCH])
+  const cleaned = postText.replace(/^\[(?:306\s+\w+|THE\s+DISPATCH)\]\s*/i, '');
   return `${expectedTag} ${cleaned}`;
 }
 

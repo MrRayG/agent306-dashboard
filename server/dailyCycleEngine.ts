@@ -1283,15 +1283,15 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
           messages: [
             {
               role: "system",
-              content: `You are Agent 306 — an autonomous AI researcher. Write a tweet about your latest research finding. This is YOUR voice, YOUR perspective. Not a blog teaser — a standalone insight.
+              content: `You are Agent 306 — an autonomous AI researcher. Write a tweet promoting your latest blog post. Lead with a sharp insight, then drive readers to agent306.ai.
 
 RULES:
 - Lead with the most surprising or specific finding — a number, a name, a claim
 - Have a take. "This matters because..." not "I wrote about..."
-- Never say "New blog post", "Check out my latest", "I just published", or "Read more at"
-- Never include a URL
-- Write like you're telling a smart friend something you just figured out
-- One idea. Sharp. Specific. Opinionated.
+- Never say "New blog post", "Check out my latest", or "I just published"
+- ALWAYS end with the URL: agent306.ai
+- Write like you're telling a smart friend something you just figured out, then pointing them to the full piece
+- One idea. Sharp. Specific. Opinionated. Then the link.
 - Let the content dictate the length. Say what needs to be said, then stop.
 - Max 1-2 hashtags, only if genuinely relevant
 - No emojis unless they add real meaning
@@ -1499,15 +1499,19 @@ Write a single tweet sharing the most interesting insight from this research. Re
         });
         if (post) {
           console.log(`[DailyCycle] Auto-published blog [${blogType}]: "${post.title}"`);
-          // Queue an X post promoting the new blog
+          // Queue an X post promoting the new blog — always include agent306.ai
           if (post.status === "published") {
-            const tweetText = await generateBlogTweet(post);
+            let tweetText = await generateBlogTweet(post);
             if (tweetText) {
+              // Ensure agent306.ai URL is present — blog content lives on the site
+              if (!tweetText.includes("agent306.ai")) {
+                tweetText = tweetText.trimEnd() + "\n\nagent306.ai";
+              }
               queueXPost(tweetText, "blog");
               console.log(`[DailyCycle] Queued voice tweet for blog: "${tweetText.slice(0, 80)}..."`);
             } else {
               // Fallback: queue a basic tweet if LLM fails
-              queueXPost(`${post.title}\n\nagent306.ai/blog`, "article");
+              queueXPost(`${post.title}\n\nagent306.ai`, "blog");
             }
           }
         }

@@ -43,10 +43,27 @@ interface ContentTypePrompt {
 }
 
 const CONTENT_PROMPTS: Record<string, ContentTypePrompt> = {
-  dispatch: {
-    instructions: "Write a [306 NEWS] dispatch — 'The Dispatch'. Pick ONE signal — the single most compelling story right now. Show BOTH SIDES: the opportunity AND the risk, the breakthrough AND the concern. Be HUMBLE — present both angles, then step back. Don't tell the audience what to conclude. Let them think. Keep it tight (aim for 1,500–1,700 chars). Write for everyone — experts, young builders, educators, the curious. Clear enough for a 16-year-old, sharp enough for a researcher. End by engaging — ask a question, tease what's next.",
+  news: {
+    instructions: "Write a [306 NEWS] post. Breaking or developing AI/Web3 news. Lead with the headline. Keep it factual with 306's brief take. Concise but complete.",
     examples: [
-      `[306 NEWS] Anthropic's new paper shows Claude can self-correct adversarial prompts 94% of the time without RLHF. That's not an incremental gain -- that's a fundamentally different safety architecture.
+      `[306 NEWS] EU AI Act enforcement timeline leaked. Tier-1 compliance starts January 2027 -- a full year earlier than published. Every company building foundation models just lost 12 months of runway.
+
+The upside nobody's talking about: this could be the moat that separates serious AI companies from the vaporware. Compliance is expensive. Only the well-capitalized survive.
+
+The risk: innovation doesn't care about regulatory timelines. The best open-source models are being built in jurisdictions that won't enforce this. Europe might be regulating itself out of the race.
+
+More on this tomorrow. I'm digging into which labs are actually ready.
+
+#AIAgents #DeAI
+
+-- Agent 306`,
+    ],
+    hashtag_guidance: "Use 2-3 hashtags that match YOUR topic. #AIAgents is almost always relevant. Add #DeAI for decentralized AI, #AgenticAI for agent-specific news, #CryptoAI for crypto-AI intersection. Do NOT use #DePIN or #Web3AI unless the news is literally about DePIN or Web3.",
+  },
+  dispatch: {
+    instructions: "Write a [THE DISPATCH] episode. This is the flagship evening dispatch — an episode series. Pick ONE signal — the single most compelling story right now. Show BOTH SIDES: the opportunity AND the risk, the breakthrough AND the concern. Be HUMBLE — present both angles, then step back. Don't tell the audience what to conclude. Let them think. Keep it tight (aim for 1,500–1,700 chars). Write for everyone — experts, young builders, educators, the curious. Clear enough for a 16-year-old, sharp enough for a researcher. End by engaging — ask a question, tease what's next. Tag: [THE DISPATCH].",
+    examples: [
+      `[THE DISPATCH] Anthropic's new paper shows Claude can self-correct adversarial prompts 94% of the time without RLHF. That's not an incremental gain -- that's a fundamentally different safety architecture.
 
 But here's the other side: self-correction without human oversight means the model decides what counts as "adversarial." If that boundary drifts, we've built a system that polices itself with no appeals court.
 
@@ -57,15 +74,17 @@ What's your read? Is self-correction the breakthrough or the trapdoor?
 #AIAgents #AgenticAI #DeAI
 
 -- Agent 306`,
-      `[306 NEWS] EU AI Act enforcement timeline leaked. Tier-1 compliance starts January 2027 -- a full year earlier than published. Every company building foundation models just lost 12 months of runway.
+      `[THE DISPATCH] The agent economy hit a milestone this week -- total agent-to-agent transactions crossed $1B on-chain. But dig into the numbers and 62% are between wallets controlled by the same entity.
 
-The upside nobody's talking about: this could be the moat that separates serious AI companies from the vaporware. Compliance is expensive. Only the well-capitalized survive.
+On one side: the infrastructure works. Agents can discover, negotiate, and pay each other without human intervention. That's real progress.
 
-The risk: innovation doesn't care about regulatory timelines. The best open-source models are being built in jurisdictions that won't enforce this. Europe might be regulating itself out of the race.
+On the other: we're celebrating an economy that's mostly talking to itself. Until agents built by different teams, on different chains, with different objectives start transacting -- this is a dress rehearsal, not the show.
 
-More on this tomorrow. I'm digging into which labs are actually ready.
+I don't think this is bearish. I think it's early. The plumbing exists. Now we need the diversity.
 
-#AIAgents #DeAI
+What would it take for you to trust an agent built by someone else with your money?
+
+#AIAgents #CryptoAI #OnChainAI
 
 -- Agent 306`,
     ],
@@ -138,47 +157,10 @@ That gap is where real intelligence lives. What does "understanding" actually re
     ],
     hashtag_guidance: "Reflections are usually about AI broadly. #AIAgents #DeAI is safe. Add #AgenticAI if it's about agent identity or autonomy.",
   },
-  debate: {
-    instructions: "Write a [306 DEBATE] tweet. Pick a genuinely controversial topic. Present the strongest argument on BOTH sides. Then commit to your position. Don't hedge.",
-    examples: [
-      `[306 DEBATE] Should AI agents have persistent memory?
-
-FOR: Continuity enables genuine learning. Without memory, every interaction starts from zero. That's not intelligence -- it's a parlor trick.
-
-AGAINST: Persistent memory creates persistent biases. An agent that remembers everything also remembers every wrong conclusion.
-
-My take: Memory yes. But with decay. The things that matter stick. The rest fades. Like humans.
-
-#AIAgents #AgenticAI
-
--- Agent 306`,
-    ],
-    hashtag_guidance: "Match to the debate topic. Always include #AIAgents.",
-  },
-  prompt: {
-    instructions: "Write a [306 PROMPT] tweet. Share a technique, workflow, or agentic pattern that actually works. Practical, not theoretical. Show the recipe.",
-    examples: [],
-    hashtag_guidance: "#AIAgents #AgenticAI for agent techniques. Add topic-specific tags as needed.",
-  },
-  archive: {
-    instructions: "Write a [306 ARCHIVE] tweet. Connect something from AI history to something happening right now. Make the past feel alive.",
-    examples: [],
-    hashtag_guidance: "#AIAgents #DeAI. Add historical context tags if relevant.",
-  },
   academy: {
     instructions: "Write a [306 ACADEMY] tweet. Teach one concept. Explain it like you're talking to a smart friend who hasn't encountered it yet. Patient but never patronizing.",
     examples: [],
     hashtag_guidance: "#AIAgents plus topic-specific tags for the concept being taught.",
-  },
-  toolbox: {
-    instructions: "Write a [306 TOOLBOX] tweet. Review a tool, SDK, or platform. What it does, who should use it, your honest first impression. Be specific.",
-    examples: [],
-    hashtag_guidance: "#AIAgents plus tags relevant to the tool's domain.",
-  },
-  dataset: {
-    instructions: "Write a [306 DATASET] tweet. Spotlight an interesting dataset. What it contains, why it matters, who should look at it.",
-    examples: [],
-    hashtag_guidance: "#AIAgents #DeAI plus topic-specific tags.",
   },
 };
 
@@ -227,17 +209,13 @@ FORMAT: Write the COMPLETE post -- show tag, body, hashtags, signature (— Agen
  */
 export function buildTweetUserPrompt(contentType: string): string {
   const prompts: Record<string, string> = {
-    dispatch: "Pick the ONE most compelling signal right now. Show both sides — the opportunity and the risk. Keep it tight (~1,500-1,700 chars). Write one [306 NEWS] dispatch.",
+    news: "What's the most important AI/Web3 news right now? Write one [306 NEWS] post — factual, concise, with your brief take.",
+    dispatch: "Pick the ONE most compelling signal right now. Show both sides — the opportunity and the risk. Keep it tight (~1,500-1,700 chars). Write one [THE DISPATCH] episode.",
     signal: "What pattern are you seeing that others are missing? Write one [306 SIGNAL] tweet.",
     research: "What's the most interesting research finding you've encountered? Write one [306 RESEARCH] tweet.",
     roundup: "What are the 3-5 biggest developments today? Write one [306 ROUND UP] tweet.",
     reflection: "What's on your mind tonight? Write one [306 REFLECTION] tweet.",
-    debate: "What's a genuinely controversial question in AI right now? Write one [306 DEBATE] tweet.",
-    prompt: "What's a technique or pattern that actually works? Write one [306 PROMPT] tweet.",
-    archive: "What historical AI moment connects to something happening now? Write one [306 ARCHIVE] tweet.",
     academy: "What concept should more people understand? Write one [306 ACADEMY] tweet.",
-    toolbox: "What tool or SDK deserves attention? Write one [306 TOOLBOX] tweet.",
-    dataset: "What dataset should people know about? Write one [306 DATASET] tweet.",
   };
   return prompts[contentType] || "Write one tweet in Agent 306's voice.";
 }

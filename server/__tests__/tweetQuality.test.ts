@@ -123,10 +123,11 @@ describe("buildTweetSystemPrompt", () => {
   });
 
   it("includes examples for major content types", () => {
-    for (const type of ['dispatch', 'signal', 'research', 'roundup', 'reflection']) {
+    for (const type of ['dispatch', 'news', 'signal', 'research', 'roundup', 'reflection']) {
       const prompt = buildTweetSystemPrompt(type);
       assert.ok(prompt.includes('EXAMPLES'), `${type} should include EXAMPLES`);
-      assert.ok(prompt.includes('[306'), `${type} should include show tag in examples`);
+      // dispatch uses [THE DISPATCH], others use [306 ...]
+      assert.ok(prompt.includes('[THE DISPATCH]') || prompt.includes('[306'), `${type} should include show tag in examples`);
       assert.ok(prompt.includes('Agent 306'), `${type} should include signature in examples`);
     }
   });
@@ -150,11 +151,12 @@ describe("buildTweetSystemPrompt", () => {
 
 describe("buildTweetUserPrompt", () => {
   it("returns specific prompts for each content type", () => {
-    const types = ['dispatch', 'signal', 'research', 'roundup', 'reflection', 'debate', 'prompt', 'archive', 'academy', 'toolbox', 'dataset'];
+    const types = ['dispatch', 'news', 'signal', 'research', 'roundup', 'reflection', 'academy'];
     for (const type of types) {
       const prompt = buildTweetUserPrompt(type);
       assert.ok(prompt.length > 20, `${type} should have a user prompt, got: "${prompt}"`);
-      assert.ok(prompt.includes('[306'), `${type} prompt should reference the show tag`);
+      // dispatch uses [THE DISPATCH], others use [306 ...]
+      assert.ok(prompt.includes('[THE DISPATCH]') || prompt.includes('[306'), `${type} prompt should reference the show tag`);
     }
   });
 

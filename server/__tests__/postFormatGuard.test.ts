@@ -43,6 +43,12 @@ describe("enforcePostFormat", () => {
   it("adds missing show tag for dispatch content type", () => {
     const input = "Market update: major shift in AI infrastructure.";
     const result = enforcePostFormat(input, "dispatch");
+    assert.ok(result.startsWith("[THE DISPATCH]"), `Expected [THE DISPATCH] tag, got: "${result.slice(0, 30)}"`);
+  });
+
+  it("adds missing show tag for news content type", () => {
+    const input = "Breaking: AI regulatory shift announced today.";
+    const result = enforcePostFormat(input, "news");
     assert.ok(result.startsWith("[306 NEWS]"), `Expected [306 NEWS] tag, got: "${result.slice(0, 30)}"`);
   });
 
