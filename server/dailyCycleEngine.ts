@@ -1557,11 +1557,52 @@ Write a single tweet sharing the most interesting insight from this research. Re
       if (today.getDay() === 0) {
         try {
           console.log("[DailyCycle] Running weekly hypothesis consolidation...");
-          const result = await consolidateHypotheses({ minClusterSize: 3 });
+          // Read most recent eval result to prioritize clusters by weakest dimension
+          let weakDim: string | undefined;
+          try {
+            const { get306EvalHistory } = await import("./evalEngine.js");
+            const history = get306EvalHistory();
+            weakDim = history[0]?.weakestDimension;
+          } catch {}
+          const result = await consolidateHypotheses({ minClusterSize: 3, weakestDimension: weakDim });
           console.log(`[DailyCycle] Hypothesis consolidation: ${result.clustersFound} clusters, ${result.merged} merged, ${result.removed} removed`);
+          // Wire consolidation result into cycle context
+          if (result.merged > 0) {
+            try {
+              recordCycleEvent({
+                phase: "content",
+                type: "hypothesis_consolidated",
+                summary: `Hypothesis consolidation: ${result.clustersFound} clusters found, ${result.merged} merged, ${result.removed} redundant removed. Active queue reduced.`,
+                entityMentions: [],
+                relatedEntryIds: [],
+              });
+            } catch {}
+          }
         } catch (e: any) {
           console.warn("[DailyCycle] Hypothesis consolidation failed (non-fatal):", e.message);
         }
+      }
+    })(),
+    // Goal engine cycle context event (if goalEngine is available)
+    (async () => {
+      try {
+        const goalEngine = await import("./goalEngine.js");
+        if (typeof goalEngine.runGoalEngine === "function") {
+          const goalResult = await goalEngine.runGoalEngine();
+          if (goalResult && (goalResult.goalsGenerated > 0 || goalResult.milestonesAutoCompleted > 0)) {
+            try {
+              recordCycleEvent({
+                phase: "debate",
+                type: "goal_engine_update",
+                summary: `Goal Engine: ${goalResult.goalsGenerated ?? 0} goals generated, ${goalResult.goalsResolved ?? 0} resolved, ${goalResult.milestonesAutoCompleted ?? 0} milestones auto-completed.`,
+                entityMentions: [],
+                relatedEntryIds: [],
+              });
+            } catch {}
+          }
+        }
+      } catch {
+        // goalEngine not available yet — non-fatal
       }
     })(),
   ]);

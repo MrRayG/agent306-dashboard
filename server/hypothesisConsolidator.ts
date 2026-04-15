@@ -130,30 +130,83 @@ Respond with JSON:
   }
 }
 
+// ── Eval-aware cluster prioritization ────────────────────────────────────────
+
+const DIMENSION_KEYWORDS: Record<string, string[]> = {
+  signalAcquisition:   ["research", "data", "source", "scan", "feed", "signal", "detect", "monitor"],
+  sourceIntegrity:     ["source", "verify", "trust", "citation", "evidence", "integrity", "accuracy"],
+  reasoningRigor:      ["logic", "reason", "argument", "analysis", "debate", "contradiction", "hypothesis"],
+  intellectualHonesty: ["bias", "correct", "wrong", "honest", "revise", "update", "prune"],
+  voiceEvolution:      ["voice", "style", "tone", "writing", "rhetoric", "narrative", "storytelling"],
+  audienceImpact:      ["audience", "engagement", "community", "reach", "impact", "distribution", "follower"],
+};
+
+function scoreClusterRelevance(cluster: HypothesisCluster, keywords: string[]): number {
+  const claimText = cluster.members.map(m => m.claim.toLowerCase()).join(" ");
+  let score = 0;
+  for (const kw of keywords) {
+    if (claimText.includes(kw)) score++;
+  }
+  score += Math.min(3, Math.floor(cluster.members.length / 3));
+  return score;
+}
+
+/**
+ * Prioritize hypothesis clusters based on 306Eval weak dimension.
+ * Clusters whose topics relate to the weak dimension get sorted first.
+ */
+export function prioritizeClusters(
+  clusters: HypothesisCluster[],
+  weakestDimension?: string,
+): HypothesisCluster[] {
+  if (!weakestDimension || clusters.length <= 1) return clusters;
+
+  const keywords = DIMENSION_KEYWORDS[weakestDimension] ?? [];
+  if (keywords.length === 0) return clusters;
+
+  return [...clusters].sort((a, b) => {
+    const aRelevance = scoreClusterRelevance(a, keywords);
+    const bRelevance = scoreClusterRelevance(b, keywords);
+    if (bRelevance !== aRelevance) return bRelevance - aRelevance;
+    return b.members.length - a.members.length;
+  });
+}
+
+// ── Consolidation ────────────────────────────────────────────────────────────
+
 /**
  * Run full hypothesis consolidation: find clusters, merge each, update research lab.
  */
 export async function consolidateHypotheses(options?: {
   minClusterSize?: number;
+  maxClusters?: number;
+  similarityThreshold?: number;
+  weakestDimension?: string;
   dryRun?: boolean;
 }): Promise<{ clustersFound: number; merged: number; removed: number }> {
   const minSize = options?.minClusterSize ?? 3;
+  const maxClusters = options?.maxClusters ?? 5;
+  const simThreshold = options?.similarityThreshold ?? 0.45;
   const dryRun = options?.dryRun ?? false;
 
   console.log(`[HypothesisConsolidator] Starting consolidation (minClusterSize=${minSize}, dryRun=${dryRun})...`);
 
-  const clusters = findHypothesisClusters(minSize);
+  let clusters = findHypothesisClusters(minSize, simThreshold);
   console.log(`[HypothesisConsolidator] Found ${clusters.length} clusters with ${clusters.reduce((s, c) => s + c.members.length, 0)} total hypotheses`);
 
   if (clusters.length === 0) {
     return { clustersFound: 0, merged: 0, removed: 0 };
   }
 
+  // Prioritize clusters based on eval weakness
+  if (options?.weakestDimension) {
+    clusters = prioritizeClusters(clusters, options.weakestDimension);
+  }
+
   let merged = 0;
   let removed = 0;
 
-  // Process up to 5 clusters per run (budget-conscious, matching KB consolidator)
-  const clustersToProcess = clusters.slice(0, 5);
+  const clustersToProcess = clusters.slice(0, maxClusters);
 
   for (const cluster of clustersToProcess) {
     console.log(`[HypothesisConsolidator] Merging cluster: "${cluster.representative.claim.slice(0, 60)}..." (${cluster.members.length} variants)`);
