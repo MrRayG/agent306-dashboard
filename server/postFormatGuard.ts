@@ -54,33 +54,9 @@ const MAX_CHARS = 25000;
 // Max 4–5 per post. Place at end.
 // Project-specific tags (#AKT, #Theta, #VIRTUAL, #TAO) boost when relevant.
 
-// Core combo for most posts (strongest performers first)
-const PRIMARY_HASHTAGS = ['#AIAgents', '#DeAI', '#DePIN', '#Web3AI'];
-
-// Content-type specific combos
-const HASHTAG_COMBOS: Record<string, string[]> = {
-  // SIGNAL briefs / research drops
-  'signal':     ['#AIAgents', '#DeAI', '#DePIN', '#Web3AI'],
-  'research':   ['#AIAgents', '#DeAI', '#DePIN', '#Web3AI'],
-  // News / market dispatches
-  'news':       ['#AIAgents', '#DeAI', '#Web3AI', '#AgenticAI'],
-  'dispatch':   ['#AIAgents', '#DeAI', '#Web3AI', '#AgenticAI'],
-  // Agent economies, identity, payments, on-chain
-  'roundup':    ['#AIAgents', '#DeAI', '#OnChainAI', '#CryptoAI'],
-  // Alignment / agent foundations
-  'reflection': ['#AIAgents', '#AgenticAI', '#DeAI'],
-};
-
-// Topic-specific tags the generation engine can add when relevant:
-// #DeFi (agent trading/automation), #GPU / #zkML (infra/technical),
-// #AKT #Theta #VIRTUAL #TAO (project-specific boosts)
-
-function getHashtagsForType(contentType?: string): string[] {
-  if (contentType && HASHTAG_COMBOS[contentType]) {
-    return HASHTAG_COMBOS[contentType];
-  }
-  return PRIMARY_HASHTAGS;
-}
+// Minimal fallback — only used if the LLM produced zero hashtags.
+// Agent 306 chooses her own hashtags via prompt guidance.
+const FALLBACK_HASHTAG = '#AIAgents';
 
 /**
  * Strip markdown formatting that X renders as raw characters.
@@ -163,9 +139,10 @@ function ensureShowTag(text: string, contentType?: string): string {
 }
 
 /**
- * Step 3: Ensure context-aware hashtags are present.
- * Uses content-type combos (3-5 hashtags, placed at end).
- * Generation may also add topic-specific tags (#DePIN, #zkML, etc.)
+ * Step 3: Ensure at least one hashtag exists.
+ * Agent 306 chooses her own hashtags via prompt guidance.
+ * We only add #AIAgents as a fallback if she produced zero.
+ * Cap at MAX_HASHTAGS to avoid spam.
  */
 function ensureHashtags(text: string, contentType?: string): string {
   // Temporarily remove signature if present
@@ -175,27 +152,14 @@ function ensureHashtags(text: string, contentType?: string): string {
 
   const existingHashtags = body.match(/#\w+/g) || [];
 
-  // If she picked 2+ hashtags, trust her. Only cap at max.
-  if (existingHashtags.length >= 2) {
-    if (existingHashtags.length > MAX_HASHTAGS) {
-      body = stripExcessHashtags(body, MAX_HASHTAGS);
-    }
-    return body + sig;
+  // Trust her hashtag choices. Only cap excess.
+  if (existingHashtags.length > MAX_HASHTAGS) {
+    body = stripExcessHashtags(body, MAX_HASHTAGS);
   }
 
-  // 0-1 hashtags = she missed them. Add defaults.
-  const requiredTags = getHashtagsForType(contentType);
-  const existingSet = new Set(existingHashtags.map(h => h.toLowerCase()));
-  const hashtagsToAdd: string[] = [];
-  for (const tag of requiredTags) {
-    if (!existingSet.has(tag.toLowerCase())) {
-      hashtagsToAdd.push(tag);
-    }
-    if (existingHashtags.length + hashtagsToAdd.length >= 4) break;
-  }
-
-  if (hashtagsToAdd.length > 0) {
-    body = body.trimEnd() + '\n' + hashtagsToAdd.join(' ');
+  // Only add fallback if she used zero hashtags
+  if (existingHashtags.length === 0) {
+    body = body.trimEnd() + '\n\n' + FALLBACK_HASHTAG;
   }
 
   return body + sig;
@@ -297,17 +261,11 @@ function trimAtBoundary(text: string, maxLen: number): string {
 }
 
 /**
- * Strip excess hashtags beyond maxCount, keeping primary combo tags.
+ * Strip excess hashtags beyond maxCount. Keeps first N.
  */
 function stripExcessHashtags(text: string, maxCount: number): string {
-  const primaryLower = new Set(PRIMARY_HASHTAGS.map(h => h.toLowerCase()));
   let kept = 0;
-
   return text.replace(/#\w+/g, (match) => {
-    if (primaryLower.has(match.toLowerCase())) {
-      kept++;
-      return match;
-    }
     if (kept < maxCount) {
       kept++;
       return match;

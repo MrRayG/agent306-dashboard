@@ -62,7 +62,7 @@ const DEFAULT_WISDOM_WEIGHT = 5;
 const MAX_HISTORY_ENTRIES = 50;
 
 const RATE_LIMITS: Record<string, number> = {
-  google_books: 50,
+  google_books: 20, // reduced from 50 — Google Books free tier has strict daily limits
   bible: 20,
   quran: 20,
   gutenberg: 20,
@@ -190,12 +190,24 @@ async function queryGoogleBooks(searchTerms: string[], usage: WisdomApiUsage): P
   const query = encodeURIComponent(searchTerms.slice(0, 2).join(" "));
   try {
     incrementUsage("google_books", usage);
-    const res = await fetch(
-      `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=3&orderBy=relevance`,
-      { signal: AbortSignal.timeout(10000) },
-    );
-    if (!res.ok) {
-      console.warn(`[WisdomEngine] Google Books API error: ${res.status}`);
+
+    // Retry with exponential backoff on 429 (rate limit)
+    let res: Response | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      res = await fetch(
+        `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=3&orderBy=relevance`,
+        { signal: AbortSignal.timeout(10000) },
+      );
+      if (res.status === 429 && attempt < 2) {
+        const delay = (attempt + 1) * 5000; // 5s, 10s
+        console.warn(`[WisdomEngine] Google Books 429 — retrying in ${delay / 1000}s (attempt ${attempt + 1}/3)`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      break;
+    }
+    if (!res || !res.ok) {
+      console.warn(`[WisdomEngine] Google Books API error: ${res?.status ?? "no response"}`);
       return [];
     }
     const data = await res.json() as any;
