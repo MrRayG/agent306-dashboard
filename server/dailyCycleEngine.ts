@@ -56,6 +56,7 @@ import { runKnowledgeConsolidation } from "./knowledgeConsolidator.js";
 import { consolidateHypotheses } from "./hypothesisConsolidator.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { TriadCoordinator } from "./triad/coordinator.js";
+import { run306Eval } from "./evalEngine.js";
 
 const GROK_URL     = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
@@ -1658,6 +1659,15 @@ Write a single tweet sharing the most interesting insight from this research. Re
     flushKnowledge();
   } catch (e: any) {
     console.warn("[DailyCycle] Knowledge flush failed (non-fatal):", e.message);
+  }
+
+  // ── 306Eval Benchmark (read-only, non-blocking) ──────────────────────────
+  try {
+    console.log("[DailyCycle] Running 306Eval benchmark...");
+    const evalResult = run306Eval();
+    console.log(`[DailyCycle] 306Eval: ${evalResult.composite}/100 (weakest: ${evalResult.weakestDimension})`);
+  } catch (e: any) {
+    console.warn("[DailyCycle] 306Eval failed (non-fatal):", e.message);
   }
 
   // ── Phase F: Sequential wrap-up ────────────────────────────────────────────
