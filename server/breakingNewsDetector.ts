@@ -4,10 +4,14 @@
  *
  *  Checks for major AI/crypto developments every 30 minutes during
  *  posting hours using the Perplexity sonar API. When a tier-1 event
- *  is detected, generates a [306 NEWS] post and posts immediately.
+ *  is detected, generates a [306 NEWS] post and queues it at highest
+ *  priority. During protected slot windows (e.g. THE DISPATCH at 7pm),
+ *  even tier-1 news is queued rather than posted immediately to avoid
+ *  stealing another show's time slot.
  *
  *  Tier system:
- *    Tier 1 — Major announcements from key entities → immediate post
+ *    Tier 1 — Major announcements from key entities → high-priority queue
+ *             (immediate post only during the 8am NEWS slot window)
  *    Tier 2 — Notable developments → high-priority queue
  *    Tier 3 — Interesting but not urgent → normal queue
  * -----------------------------------------------------------------
@@ -19,7 +23,8 @@ import { queueXPost } from "./xPostScheduler.js";
 import { getVoiceContext } from "./voiceInstructions.js";
 import { getOptimizedContext } from "./contextWindow.js";
 import { enforcePostFormat } from "./postFormatGuard.js";
-import { validateXPost, recordXPost } from "./xComplianceGuard.js";
+// validateXPost and recordXPost no longer needed — breaking news now queues
+// through xPostScheduler which handles compliance and recording.
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
@@ -291,28 +296,15 @@ export function startBreakingNewsLoop(xWrite: any): void {
     }
 
     if (shouldPostImmediately(event)) {
-      // Tier 1: Generate and post immediately
+      // Tier 1: Queue at highest priority — the slot scheduler will post
+      // it at the next NEWS slot. We no longer bypass the slot system
+      // because immediate posting can collide with protected slots
+      // (e.g. THE DISPATCH at 7pm, ROUNDUP at 5pm).
       const post = await generateBreakingPost(event);
       if (post) {
-        const validation = validateXPost(post, "news");
-        if (validation.allowed) {
-          try {
-            await xWrite.v2.tweet({ text: post });
-            recordXPost(post, "news");
-            markEventPosted(event.id);
-            console.log(`[BreakingNews] TIER-1 posted immediately: "${post.slice(0, 60)}"`);
-          } catch (e: any) {
-            console.error("[BreakingNews] Tweet failed:", e.message);
-            // Fall back to high-priority queue
-            queueXPost(post, "news", 0);
-            markEventPosted(event.id);
-          }
-        } else {
-          console.log(`[BreakingNews] Compliance blocked: ${validation.reason}`);
-          // Queue for next available slot
-          queueXPost(post, "news", 1);
-          markEventPosted(event.id);
-        }
+        queueXPost(post, "news", 0); // priority 0 = highest
+        markEventPosted(event.id);
+        console.log(`[BreakingNews] TIER-1 queued highest-priority: "${post.slice(0, 60)}"`);
       }
     } else if (event.tier === 2) {
       // Tier 2: Queue as high-priority
