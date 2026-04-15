@@ -38,6 +38,8 @@ import { runWeeklyDeepRead, previewDeepRead, getArticleState, scheduleWeeklyArti
 import { runExploration, getExplorationState, scheduleExploration } from "./explorationEngine.js";
 import { getAgentReachStatus } from "./agentReachEngine.js";
 import { get306EvalResults, get306EvalHistory } from "./evalEngine.js";
+import { getCycleContext, isCycleActive } from "./cycleContext.js";
+import { getAllSessions, getActiveSessionCount, closeExpiredSessions } from "./sessionMemory.js";
 import { postCast, isFarcasterEnabled, getFarcasterState, setFarcasterEnabled, createSigner, getSignerStatus, fetchMentions, determineChannel, getStoredSignerUuid, storeSignerUuid } from "./farcasterEngine.js";
 import {
   getResearchLab, addTopic, updateTopicStatus, getTopicById,
@@ -4869,6 +4871,26 @@ needsHelp: true only when you genuinely need his direction or information`,
     try {
       const events = getRecentEvents(48);
       res.json({ events, count: events.length });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── Cycle Context & Session Memory ─────────────────────────────────────
+  app.get("/api/cycle/context", (_req, res) => {
+    try {
+      const context = getCycleContext();
+      res.json({ active: isCycleActive(), context });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/sessions", (_req, res) => {
+    try {
+      const sessions = getAllSessions();
+      const expired = closeExpiredSessions();
+      res.json({ activeSessions: getActiveSessionCount(), expiredClosed: expired, sessions });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }

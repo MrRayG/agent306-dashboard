@@ -57,6 +57,7 @@ import { consolidateHypotheses } from "./hypothesisConsolidator.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { TriadCoordinator } from "./triad/coordinator.js";
 import { run306Eval } from "./evalEngine.js";
+import { startCycle as startCycleContext, recordEvent as recordCycleEvent, endCycle as endCycleContext } from "./cycleContext.js";
 
 const GROK_URL     = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
@@ -984,6 +985,9 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
   const cycleStart = Date.now();
   console.log("[DailyCycle] Starting daily intelligence cycle...");
 
+  // Initialize cycle context accumulator (non-fatal)
+  try { startCycleContext(); } catch (e: any) { console.warn("[DailyCycle] Cycle context start failed (non-fatal):", e.message); }
+
   // ── Phase A: Sequential prerequisites (intake + seeding + gather) ──────────
   const phaseAStart = Date.now();
 
@@ -992,6 +996,7 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     console.log("[DailyCycle] Running data intake...");
     const intakeItems = await runFullIntake();
     console.log(`[DailyCycle] Data intake complete — ${intakeItems.length} new items ingested`);
+    try { recordCycleEvent({ phase: "intake", type: "kb_added", summary: `Ingested ${intakeItems.length} new items`, entityMentions: [], relatedEntryIds: [] }); } catch {}
   } catch (e: any) {
     console.warn("[DailyCycle] Data intake failed (non-fatal):", e.message);
   }
@@ -1021,6 +1026,8 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
 
   // 2. Auto-resolve expired hypotheses
   const resolvedNames = autoResolveExpired(expiredHypotheses);
+
+  try { recordCycleEvent({ phase: "intake", type: "kb_added", summary: `Gathered ${activeHypotheses.length} active hypotheses, ${kbActive} KB entries, resolved ${resolvedNames.length} expired`, entityMentions: [], relatedEntryIds: [] }); } catch {}
 
   console.log(`[DailyCycle] Phase A (prerequisites) completed in ${((Date.now() - phaseAStart) / 1000).toFixed(1)}s`);
 
@@ -1082,6 +1089,7 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     researchAnalysis(),
   ]);
 
+  try { recordCycleEvent({ phase: "research", type: "kb_added", summary: "Phase B research & analysis completed", entityMentions: [], relatedEntryIds: [] }); } catch {}
   console.log(`[DailyCycle] Phase B (research & analysis) completed in ${((Date.now() - phaseBStart) / 1000).toFixed(1)}s`);
 
   // ── Phase B+: Auto-approve pending_review topics ───────────────────────────
@@ -1148,6 +1156,7 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     console.warn("[DailyCycle] Hypothesis creation from briefing failed:", e.message);
   }
 
+  try { recordCycleEvent({ phase: "research", type: "kb_added", summary: `Briefing generated — action: "${result.todaysAction.action}"`, entityMentions: [], relatedEntryIds: [] }); } catch {}
   console.log(`[DailyCycle] Phase C (briefing) completed in ${((Date.now() - phaseCStart) / 1000).toFixed(1)}s`);
 
   // ── Phase D: Parallel self-improvement (tiered for dependency safety) ──────
@@ -1182,8 +1191,10 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
 
         console.log("[Reasoning] Starting reasoning chain — autoTestHypotheses...");
         await autoTestHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis testing failed:", e.message));
+        try { recordCycleEvent({ phase: "hypothesis", type: "hypothesis_tested", summary: "Hypothesis testing phase completed", entityMentions: [], relatedEntryIds: [] }); } catch {}
         console.log("[Reasoning] autoDebateHypotheses...");
         await autoDebateHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis debate failed:", e.message));
+        try { recordCycleEvent({ phase: "hypothesis", type: "debate_result", summary: "Hypothesis debate phase completed", entityMentions: [], relatedEntryIds: [] }); } catch {}
 
         // Round 2: Process evidence between debate and resolve (test/debate gap-filling)
         console.log("[EvidenceDispatcher] Processing evidence queue — round 2 (post-debate)...");
@@ -1247,6 +1258,7 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
       // Chain B: Contradiction pipeline (sequential within chain)
       (async () => {
         await autoDetectContradictions().catch(e => console.warn("[DailyCycle] Contradiction detection failed:", e.message));
+        try { recordCycleEvent({ phase: "hypothesis", type: "contradiction_found", summary: "Contradiction detection completed", entityMentions: [], relatedEntryIds: [] }); } catch {}
         console.log("[Reasoning] autoRedFlagCheck...");
         await autoRedFlagCheck().catch(e => console.warn("[DailyCycle] Red-flag check failed:", e.message));
         try { autoResolveOldContradictions(); } catch (e: any) { console.warn("[DailyCycle] Auto-resolve contradictions failed:", e.message); }
@@ -1277,6 +1289,7 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     console.warn("[DailyCycle] Self-improvement cycle error (non-fatal):", e.message);
   }
 
+  try { recordCycleEvent({ phase: "debate", type: "debate_result", summary: "Phase D self-improvement completed", entityMentions: [], relatedEntryIds: [] }); } catch {}
   console.log(`[DailyCycle] Phase D (self-improvement) completed in ${((Date.now() - phaseDStart) / 1000).toFixed(1)}s`);
 
   // ── Blog tweet voice generator ─────────────────────────────────────────────
@@ -1553,6 +1566,7 @@ Write a single tweet sharing the most interesting insight from this research. Re
     })(),
   ]);
 
+  try { recordCycleEvent({ phase: "content", type: "post_generated", summary: "Phase E content generation completed", entityMentions: [], relatedEntryIds: [] }); } catch {}
   console.log(`[DailyCycle] Phase E (content generation) completed in ${((Date.now() - phaseEStart) / 1000).toFixed(1)}s`);
 
   // ── Phase E+: Agentic Triad (opt-in via TRIAD_ENABLED=true) ───────────────
@@ -1675,6 +1689,10 @@ Write a single tweet sharing the most interesting insight from this research. Re
   } catch (e: any) {
     console.warn("[DailyCycle] 306Eval failed (non-fatal):", e.message);
   }
+
+  // ── End cycle context accumulator (before wrap-up) ──────────────────────
+  let cycleSummary: ReturnType<typeof endCycleContext> | null = null;
+  try { cycleSummary = endCycleContext(); } catch (e: any) { console.warn("[DailyCycle] Cycle context end failed (non-fatal):", e.message); }
 
   // ── Phase F: Sequential wrap-up ────────────────────────────────────────────
 
