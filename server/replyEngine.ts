@@ -157,6 +157,18 @@ async function generateReply(opts: {
     }
   } catch {} // conversationMemory may not exist yet on first deploy
 
+  // Enhance with session memory — within-conversation coherence (additive, non-fatal)
+  let sessionCtx = "";
+  let resolvedText = opts.text;
+  try {
+    const { getOrCreateSession, getSessionContext, resolveReferences } = await import("./sessionMemory.js");
+    const session = getOrCreateSession(opts.username);
+    if (session.turns.length > 0) {
+      sessionCtx = getSessionContext(opts.username);
+      resolvedText = resolveReferences(opts.text, session);
+    }
+  } catch {} // sessionMemory may not exist yet
+
   // Detect if this is an ecosystem topic (tech/AI/general)
   const isEcosystemTopic = /306|agent.?306|web3|onchain|on.chain/i.test(opts.text);
   const isAITopic = /ai|gpt|llm|model|agent|openai|claude|gemini|grok|nvidia|jensen|robot|autonomous|inference|token.*cost|machine.*learn/i.test(opts.text);
@@ -181,7 +193,7 @@ BEFORE YOU WRITE ANYTHING:
 2. If it's an AI/tech topic — what do YOU actually think about it? You have deep knowledge of AI history and development. Use it.
 3. If you don't know enough about the specific topic to reply well, acknowledge what you do know and ask a genuine question.
 4. Match their energy and tone.
-${conversationCtx}
+${conversationCtx}${sessionCtx}
 REPLY RULES:
 - Address @${opts.username} naturally — don't start with their handle
 - No character limit (X Premium Plus — up to 25,000 chars). Let the depth of your reply match the depth of the conversation.
@@ -201,7 +213,7 @@ CULTURAL BRIDGE (use ONLY if it genuinely fits — skip it for most tech/AI topi
 ${tokenNote}`;
 
   const userPrompt = `Reply to @${opts.username} who said:
-"${opts.text}"
+"${resolvedText}"
 
 Reply type: ${opts.replyType}
 ${opts.tokenMentioned ? `Token mentioned: #${opts.tokenMentioned}` : ""}
@@ -366,6 +378,13 @@ export async function runMidnightReplies(xWrite: any): Promise<void> {
         recordIncoming(reply.username, reply.text, reply.tweetUrl);
       } catch {}
 
+      // Record incoming in session memory (non-fatal)
+      try {
+        const { getOrCreateSession, addTurn } = await import("./sessionMemory.js");
+        getOrCreateSession(reply.username);
+        addTurn(reply.username, { direction: "them", text: reply.text, kbEntryIds: [], timestamp: Date.now() });
+      } catch {}
+
       // Research the topic if: (a) flagged as needsResearch, (b) from @MrRayG, or (c) AI/tech topic
       let researchContext = "";
       const isNonEcosystem = !/306|agent.?306/i.test(reply.text);
@@ -450,6 +469,12 @@ export async function runMidnightReplies(xWrite: any): Promise<void> {
       try {
         const { recordOutgoing } = await import("./conversationMemory.js");
         recordOutgoing(reply.username, finalText, tweetUrl ?? undefined);
+      } catch {}
+
+      // Record outgoing in session memory (non-fatal)
+      try {
+        const { addTurn } = await import("./sessionMemory.js");
+        addTurn(reply.username, { direction: "us", text: finalText, kbEntryIds: [], timestamp: Date.now() });
       } catch {}
 
       console.log(`[ReplyEngine] Replied to @${reply.username}: "${finalText.slice(0, 60)}..." → ${tweetUrl}`);
