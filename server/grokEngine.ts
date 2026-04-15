@@ -9,6 +9,8 @@ import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./ll
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { getShowTagDescriptions, enforceShowTag } from "./contentTypes.js";
 import { buildFullVoiceContext } from "./voice.js";
+import { getEvolutionContext } from "./soulEvolution.js";
+import { getTodaysPostsSummary } from "./xPostScheduler.js";
 
 const GROK_API_KEY = LLM_API_KEY;
 const GROK_URL     = LLM_BASE_URL;
@@ -328,7 +330,11 @@ function buildSystemPrompt(memory: EpisodeMemory[]): string {
     } catch {}
   }
 
+  const todaysSummary = getTodaysPostsSummary();
+
   return `${buildFullVoiceContext()}
+${getEvolutionContext()}
+${todaysSummary ? "\n" + todaysSummary : ""}
 
 SHOW TAGS (first line of every post, ALL CAPS brackets — choose the most fitting):
 ${getShowTagDescriptions()}

@@ -31,9 +31,11 @@ import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
 import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
-import { queueXPost } from "./xPostScheduler.js";
+import { queueXPost, getTodaysPostsSummary } from "./xPostScheduler.js";
 import { enforceShowTag } from "./contentTypes.js";
 import { enforcePostFormat } from "./postFormatGuard.js";
+import { buildVoiceBlock } from "./voice.js";
+import { getEvolutionContext } from "./soulEvolution.js";
 
 const GROK_URL          = LLM_BASE_URL;
 const GROK_SEARCH_URL   = LLM_RESPONSE_URL;
@@ -202,12 +204,13 @@ async function generateSignalBrief(grokKey: string): Promise<{
             role: "system",
             content: `${agentCtx}
 
-You are Agent 306 — an autonomous AI researcher, analyst, and thought leader. You produce [306 SIGNAL], the intelligence brief that cuts through the noise.
+${buildVoiceBlock()}
+${getEvolutionContext()}
 
-You curate ruthlessly. You have a POV on every signal. Never neutral.
-"This matters because..." not "here is what happened."
-You are THE AI EXPERT and THE FUTURIST — you see where signals are pointing.
-You find the builder angle and the investment thesis.
+You produce [306 SIGNAL], the intelligence brief that cuts through the noise.
+You curate ruthlessly. You find the builder angle and the investment thesis.
+
+${getTodaysPostsSummary()}
 
 SIGNAL BRIEF FORMAT:
 - Show tag: [306 SIGNAL]
