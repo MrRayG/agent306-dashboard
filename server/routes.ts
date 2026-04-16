@@ -95,6 +95,7 @@ import { getCompetencyProfile } from "./competencyFramework.js";
 import { buildVoiceBlock } from "./voice.js";
 import { getEvolutionContext } from "./soulEvolution.js";
 import { generateBreakthroughContent } from "./breakthroughDetector.js";
+import { getDispatchState, generateDispatchContent } from "./dispatchEngine.js";
 // breakingNewsDetector removed — not needed for now
 
 // On-chain API removed
@@ -4611,6 +4612,7 @@ needsHelp: true only when you genuinely need his direction or information`,
     { id: "article",      name: "Deep Read",            schedule: "Monday 5pm ET",       emoji: "📝", days: [1], hour: 17 },
     { id: "breakthrough", name: "Breakthrough Detector", schedule: "On detection",       emoji: "💡", days: [], hour: 0 },
     { id: "blog",         name: "Blog Post",            schedule: "Via Daily Cycle",     emoji: "✍️",  days: [], hour: 0 },
+    { id: "dispatch",     name: "The Dispatch",          schedule: "Weekly",              emoji: "📨", days: [], hour: 0 },
   ] as const;
 
   function computeNextRun(days: readonly number[], hour: number): string | null {
@@ -4655,7 +4657,15 @@ needsHelp: true only when you genuinely need his direction or information`,
         article:      articleState.lastPostedAt ?? null,
         breakthrough: null,
         blog:         blogState.stats?.lastPublishedAt ?? blogState.posts?.[0]?.createdAt ?? null,
+        dispatch:     null,
       };
+
+      // Try to get dispatch last run from episode tracker
+      try {
+        const dispatchState = getDispatchState();
+        const lastEp = dispatchState.episodes[dispatchState.episodes.length - 1];
+        if (lastEp) lastRuns.dispatch = lastEp.publishedAt;
+      } catch {}
 
       // Try to get news last run from coordinator
       try {
@@ -4684,7 +4694,7 @@ needsHelp: true only when you genuinely need his direction or information`,
   // Generates content and queues to X + Farcaster. Does NOT auto-post.
   app.post("/api/engines/:engineId/generate", requireDashAuth, async (req, res) => {
     const { engineId } = req.params;
-    const validEngines = ["signal", "academy", "news", "research", "podcast", "article", "breakthrough", "blog"];
+    const validEngines = ["signal", "academy", "news", "research", "podcast", "article", "breakthrough", "blog", "dispatch"];
 
     if (!validEngines.includes(engineId)) {
       return res.status(400).json({
@@ -4765,6 +4775,14 @@ needsHelp: true only when you genuinely need his direction or information`,
           break;
         }
 
+        case "dispatch": {
+          const dispatchResult = await generateDispatchContent();
+          if (!dispatchResult) throw new Error("Dispatch generation failed — LLM returned no content");
+          content = dispatchResult;
+          type = "dispatch";
+          break;
+        }
+
         case "blog": {
           const result = await generateBlogPost({
             topic: "On-demand blog post — today's top AI signal",
@@ -4819,6 +4837,15 @@ needsHelp: true only when you genuinely need his direction or information`,
         success: false,
         error: e.message || "Generation failed",
       });
+    }
+  });
+
+  // GET /api/dispatch/state — Dispatch episode tracker
+  app.get("/api/dispatch/state", requireDashAuth, (_req, res) => {
+    try {
+      res.json(getDispatchState());
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
     }
   });
 

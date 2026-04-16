@@ -1,9 +1,21 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { useState, useEffect } from "react";
+import { queryClient } from "@/lib/queryClient";
+import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { CONTENT_TYPE_LIST, ACTIVE_ENGINES } from "@/data/contentTypes";
 import AutoPilot from "./AutoPilot";
+import {
+  Loader2,
+  Play,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
+
+// ── Helpers ─────────────────────────────────────────────────────────────
 
 function timeAgo(iso: string | null): string {
   if (!iso) return "never";
@@ -12,6 +24,17 @@ function timeAgo(iso: string | null): string {
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function relativeTime(iso: string | null): string {
+  if (!iso) return "—";
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms < 0) return "overdue";
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  if (h > 24) return `${Math.floor(h / 24)}d ${h % 24}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
 }
 
 function formatCooldown(ms: number): string {
@@ -24,18 +47,42 @@ function formatCooldown(ms: number): string {
 
 const mono = { fontFamily: "'Courier New', monospace" } as const;
 const pixel = { fontFamily: "'Courier New', monospace", textTransform: "uppercase" as const, letterSpacing: "0.15em" } as const;
+const label: React.CSSProperties = {
+  ...mono,
+  fontSize: "0.76rem",
+  textTransform: "uppercase",
+  letterSpacing: "0.18em",
+  color: "rgba(227,229,228,0.55)",
+  marginBottom: "0.35rem",
+};
+const card: React.CSSProperties = {
+  background: "rgba(227,229,228,0.06)",
+  border: "1px solid rgba(227,229,228,0.10)",
+  padding: "1.25rem",
+};
 
-// Triggerable content types — only engines with manual trigger endpoints
-const TRIGGERABLE = [
-  { id: "news_dispatch", label: "News Dispatch", tag: "[306 NEWS]", color: "#4ade80", endpoint: "/api/news/dispatch", schedule: "Daily 8am ET" },
-  { id: "signal_brief", label: "SIGNAL Brief", tag: "[306 SIGNAL]", color: "#fbbf24", endpoint: "/api/signal-brief/post", schedule: "Mon/Wed/Fri 12pm ET" },
-  { id: "academy", label: "Academy", tag: "[306 ACADEMY]", color: "#60a5fa", endpoint: "/api/academy/post", schedule: "Tue/Thu/Sat 10am ET" },
-] as const;
+// ── Type Labels ─────────────────────────────────────────────────────────
 
-const X_ACCOUNT = "@306Agent";
-const FC_ACCOUNT = "@ntvagent306";
+const TYPE_LABELS: Record<string, { tag: string; color: string; bg: string }> = {
+  signal:       { tag: "306 SIGNAL",    color: "#f97316", bg: "rgba(249,115,22,0.12)" },
+  news:         { tag: "306 NEWS",      color: "#4ade80", bg: "rgba(74,222,128,0.12)" },
+  dispatch:     { tag: "THE DISPATCH",  color: "#a78bfa", bg: "rgba(167,139,250,0.12)" },
+  academy:      { tag: "306 ACADEMY",   color: "#2dd4bf", bg: "rgba(45,212,191,0.12)" },
+  podcast:      { tag: "PODCAST",       color: "#f97316", bg: "rgba(249,115,22,0.12)" },
+  research:     { tag: "306 RESEARCH",  color: "#a78bfa", bg: "rgba(167,139,250,0.12)" },
+  breakthrough: { tag: "BREAKTHROUGH",  color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
+  blog:         { tag: "BLOG",          color: "#38bdf8", bg: "rgba(56,189,248,0.12)" },
+  article:      { tag: "ARTICLE",       color: "#38bdf8", bg: "rgba(56,189,248,0.12)" },
+  reflection:   { tag: "REFLECTION",    color: "#a78bfa", bg: "rgba(167,139,250,0.12)" },
+  roundup:      { tag: "306 ROUNDUP",   color: "#f97316", bg: "rgba(249,115,22,0.12)" },
+  agent_voice:  { tag: "306 UNPLUGGED", color: "#eab308", bg: "rgba(234,179,8,0.12)" },
+};
 
-type CmdTab = "operations" | "pipeline";
+function getTypeLabel(type: string) {
+  return TYPE_LABELS[type] ?? { tag: type.toUpperCase(), color: "#efefef", bg: "rgba(227,229,228,0.12)" };
+}
+
+// ── Compliance Card ─────────────────────────────────────────────────────
 
 function ComplianceCard() {
   const { data: compliance, isLoading } = useQuery<any>({
@@ -100,7 +147,6 @@ function ComplianceCard() {
         </div>
       </div>
 
-      {/* Progress bar */}
       <div style={{ background: "rgba(227,229,228,0.08)", height: "6px", borderRadius: "3px", overflow: "hidden" }}>
         <div style={{
           width: `${Math.min(pct, 100)}%`,
@@ -113,11 +159,577 @@ function ComplianceCard() {
   );
 }
 
+// ── Engine Cards (Generate Now) ─────────────────────────────────────────
+
+interface EngineInfo {
+  id: string;
+  name: string;
+  emoji: string;
+  schedule: string;
+  nextRun: string | null;
+  lastRun: string | null;
+  enabled: boolean;
+}
+
+function EngineCards() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [generating, setGenerating] = useState<string | null>(null);
+  const [lastResult, setLastResult] = useState<Record<string, { success: boolean; content?: string; error?: string }>>({});
+
+  const { data: engineData, isLoading } = useQuery<{ engines: EngineInfo[] }>({
+    queryKey: ["/api/engines/status"],
+    refetchInterval: 30_000,
+  });
+
+  const { data: dispatchState } = useQuery<{ currentEpisode: number; episodes: any[] }>({
+    queryKey: ["/api/dispatch/state"],
+    refetchInterval: 60_000,
+  });
+
+  async function handleGenerate(engineId: string, engineName: string) {
+    setGenerating(engineId);
+    setLastResult(prev => ({ ...prev, [engineId]: undefined as any }));
+
+    try {
+      const res = await apiRequest("POST", `/api/engines/${engineId}/generate`, {});
+      const data = await res.json();
+
+      if (data.success) {
+        setLastResult(prev => ({ ...prev, [engineId]: { success: true, content: data.content } }));
+        toast({
+          title: `${engineName} generated`,
+          description: `Queued to ${data.queuedTo.join(" + ")} (${data.contentLength} chars)`,
+        });
+        qc.invalidateQueries({ queryKey: ["/api/posting/overview"] });
+        qc.invalidateQueries({ queryKey: ["/api/engines/status"] });
+        qc.invalidateQueries({ queryKey: ["/api/dispatch/state"] });
+      } else {
+        setLastResult(prev => ({ ...prev, [engineId]: { success: false, error: data.error } }));
+        toast({ title: "Generation failed", description: data.error, variant: "destructive" });
+      }
+    } catch (e: any) {
+      setLastResult(prev => ({ ...prev, [engineId]: { success: false, error: e.message } }));
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+    setGenerating(null);
+  }
+
+  const engines = engineData?.engines ?? [];
+
+  const colorMap: Record<string, string> = {
+    signal: "#fbbf24",
+    academy: "#60a5fa",
+    news: "#4ade80",
+    research: "#818cf8",
+    podcast: "#f97316",
+    article: "#2dd4bf",
+    breakthrough: "#ef4444",
+    blog: "#a78bfa",
+    dispatch: "#a78bfa",
+  };
+
+  if (isLoading) {
+    return (
+      <div style={{ padding: "20px" }}>
+        <div style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.48)" }}>Loading engines...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      {engines.map(eng => {
+        const color = colorMap[eng.id] ?? "#efefef";
+        const isGenerating = generating === eng.id;
+        const result = lastResult[eng.id];
+        const canGenerate = ["signal", "academy", "news", "research", "podcast", "article", "breakthrough", "blog", "dispatch"].includes(eng.id);
+        const isDispatch = eng.id === "dispatch";
+        const episodeCount = dispatchState?.currentEpisode ?? 0;
+
+        return (
+          <div key={eng.id} style={{
+            background: "#141516",
+            border: `1px solid ${color}20`,
+            overflow: "hidden",
+          }}>
+            <div style={{ height: 3, background: color }} />
+            <div style={{ padding: "14px 18px" }}>
+              {/* Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                    <span style={{ fontSize: "1rem" }}>{eng.emoji}</span>
+                    <span style={{ ...mono, fontSize: "0.95rem", fontWeight: 700, color }}>{eng.name}</span>
+                    {isDispatch && episodeCount > 0 && (
+                      <span style={{
+                        ...mono, fontSize: "0.63rem", color: "#a78bfa",
+                        background: "rgba(167,139,250,0.15)", padding: "2px 8px",
+                      }}>
+                        EP {episodeCount}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ ...mono, fontSize: "0.70rem", color: "rgba(227,229,228,0.45)", marginBottom: "2px" }}>
+                    {eng.schedule}
+                  </div>
+                  <div style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.35)" }}>
+                    {eng.nextRun
+                      ? <>Next: <span style={{ color: "rgba(227,229,228,0.60)" }}>{relativeTime(eng.nextRun)}</span></>
+                      : "On demand"
+                    }
+                    {eng.lastRun && (
+                      <> &middot; Last: {timeAgo(eng.lastRun)}</>
+                    )}
+                  </div>
+                </div>
+                <div style={{ flexShrink: 0 }}>
+                  {canGenerate && (
+                    <button
+                      onClick={() => handleGenerate(eng.id, eng.name)}
+                      disabled={isGenerating || generating !== null}
+                      style={{
+                        background: isGenerating ? `${color}20` : color,
+                        color: isGenerating ? color : "#1a1b1c",
+                        border: "none",
+                        padding: "6px 14px",
+                        fontFamily: "'Courier New', monospace",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.08em",
+                        cursor: isGenerating || generating !== null ? "not-allowed" : "pointer",
+                        opacity: generating !== null && !isGenerating ? 0.4 : 1,
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      {isGenerating ? "Generating..." : "Generate Now"}
+                    </button>
+                  )}
+                  {!canGenerate && (
+                    <span style={{ ...mono, fontSize: "0.63rem", color: "rgba(227,229,228,0.30)", padding: "6px 0" }}>
+                      Not available
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Loading indicator */}
+              {isGenerating && (
+                <div style={{
+                  marginTop: "10px",
+                  padding: "8px 12px",
+                  background: `${color}08`,
+                  border: `1px solid ${color}15`,
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <div style={{
+                      width: 8, height: 8, borderRadius: "50%",
+                      background: color,
+                      animation: "pulse 1s infinite",
+                    }} />
+                    <span style={{ ...mono, fontSize: "0.73rem", color }}>
+                      Generating content... (this may take 15-30s)
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Result feedback */}
+              {result && !isGenerating && (
+                <div style={{
+                  marginTop: "10px",
+                  padding: "8px 12px",
+                  background: result.success ? "rgba(74,222,128,0.06)" : "rgba(239,68,68,0.06)",
+                  border: `1px solid ${result.success ? "rgba(74,222,128,0.15)" : "rgba(239,68,68,0.15)"}`,
+                }}>
+                  {result.success ? (
+                    <>
+                      <div style={{ ...mono, fontSize: "0.70rem", color: "#4ade80", marginBottom: "4px" }}>
+                        Content generated and queued!
+                      </div>
+                      {result.content && (
+                        <div style={{
+                          ...mono, fontSize: "0.70rem", color: "rgba(227,229,228,0.55)",
+                          lineHeight: 1.5, maxHeight: "80px", overflow: "hidden",
+                          whiteSpace: "pre-wrap",
+                        }}>
+                          {result.content.slice(0, 200)}{result.content.length > 200 ? "..." : ""}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div style={{ ...mono, fontSize: "0.70rem", color: "#ef4444" }}>
+                      Failed: {result.error}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Expandable Content ──────────────────────────────────────────────────
+
+function ExpandableContent({ content, maxChars = 150 }: { content: string; maxChars?: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const needsExpand = content.length > maxChars;
+
+  return (
+    <div>
+      <p style={{
+        ...mono,
+        fontSize: "0.80rem",
+        color: "rgba(227,229,228,0.65)",
+        lineHeight: 1.5,
+        margin: 0,
+        whiteSpace: "pre-wrap",
+        ...(needsExpand && !expanded ? {
+          overflow: "hidden",
+          display: "-webkit-box",
+          WebkitLineClamp: 3,
+          WebkitBoxOrient: "vertical" as const,
+        } : {}),
+      }}>
+        {expanded ? content : (needsExpand ? content.slice(0, maxChars) + "..." : content)}
+      </p>
+      {needsExpand && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          style={{
+            ...mono,
+            fontSize: "0.68rem",
+            color: "#f97316",
+            background: "none",
+            border: "none",
+            padding: "4px 0 0",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+          }}
+        >
+          {expanded ? (
+            <><ChevronUp style={{ width: 12, height: 12 }} /> Show less</>
+          ) : (
+            <><ChevronDown style={{ width: 12, height: 12 }} /> Show more</>
+          )}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Expandable Recent Post ──────────────────────────────────────────────
+
+function ExpandableRecentPost({ content, maxChars = 120 }: { content: string; maxChars?: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const needsExpand = content.length > maxChars;
+
+  if (!needsExpand) {
+    return (
+      <p style={{
+        ...mono,
+        fontSize: "0.76rem",
+        color: "rgba(227,229,228,0.55)",
+        lineHeight: 1.4,
+        margin: 0,
+        flex: 1,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+      }}>
+        {content}
+      </p>
+    );
+  }
+
+  return (
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <p style={{
+        ...mono,
+        fontSize: "0.76rem",
+        color: "rgba(227,229,228,0.55)",
+        lineHeight: 1.4,
+        margin: 0,
+        ...(expanded ? { whiteSpace: "pre-wrap" as const } : {
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap" as const,
+        }),
+      }}>
+        {expanded ? content : content.slice(0, maxChars)}
+      </p>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        style={{
+          ...mono,
+          fontSize: "0.63rem",
+          color: "#f97316",
+          background: "none",
+          border: "none",
+          padding: "2px 0 0",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          gap: "3px",
+        }}
+      >
+        {expanded ? (
+          <><ChevronUp style={{ width: 10, height: 10 }} /> Less</>
+        ) : (
+          <><ChevronDown style={{ width: 10, height: 10 }} /> More</>
+        )}
+      </button>
+    </div>
+  );
+}
+
+// ── Platform Card ───────────────────────────────────────────────────────
+
+interface QueueItem {
+  id: string;
+  content: string;
+  type: string;
+  priority: number;
+  createdAt: string;
+  channel?: string;
+}
+
+interface RecentPost {
+  id: string;
+  content: string;
+  type: string;
+  postedAt: string;
+  platform: string;
+  castUrl?: string;
+}
+
+interface PlatformData {
+  autoPost: boolean;
+  configured?: boolean;
+  queue: QueueItem[];
+  recentPosts: RecentPost[];
+  postedTodayCount: number;
+  queueDepth: number;
+}
+
+function PlatformCard({
+  platform,
+  data,
+  accentColor,
+  accentBg,
+  accentBorder,
+  icon,
+  onToggle,
+  onPostNow,
+  postingId,
+}: {
+  platform: string;
+  data: PlatformData;
+  accentColor: string;
+  accentBg: string;
+  accentBorder: string;
+  icon: React.ReactNode;
+  onToggle: () => void;
+  onPostNow: (postId: string) => void;
+  postingId: string | null;
+}) {
+  const toggleBg = data.autoPost ? "rgba(74,222,128,0.15)" : "rgba(227,229,228,0.10)";
+  const toggleBorder = data.autoPost ? "rgba(74,222,128,0.4)" : "rgba(227,229,228,0.25)";
+  const toggleColor = data.autoPost ? "#4ade80" : "rgba(227,229,228,0.55)";
+  const toggleText = data.autoPost ? "AUTO ON" : "AUTO OFF";
+
+  return (
+    <div style={{ ...card, background: accentBg, borderColor: accentBorder }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {icon}
+          <span style={{ ...mono, fontSize: "0.90rem", textTransform: "uppercase", letterSpacing: "0.14em", color: accentColor }}>
+            {platform}
+          </span>
+        </div>
+        <button
+          onClick={onToggle}
+          style={{
+            ...mono,
+            fontSize: "0.73rem",
+            textTransform: "uppercase",
+            letterSpacing: "0.12em",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "4px 12px",
+            background: toggleBg,
+            border: `1px solid ${toggleBorder}`,
+            color: toggleColor,
+            cursor: "pointer",
+          }}
+        >
+          <span style={{
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            background: data.autoPost ? "#4ade80" : "rgba(227,229,228,0.35)",
+            display: "inline-block",
+          }} />
+          {toggleText}
+        </button>
+      </div>
+
+      {/* Stats bar */}
+      <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
+        <div>
+          <p style={label}>Queued</p>
+          <p style={{ ...mono, fontSize: "1.1rem", color: "#efefef" }}>{data.queueDepth}</p>
+        </div>
+        <div>
+          <p style={label}>Today</p>
+          <p style={{ ...mono, fontSize: "1.1rem", color: "#efefef" }}>{data.postedTodayCount}</p>
+        </div>
+      </div>
+
+      {/* Queued Content */}
+      <div style={{ marginBottom: 16 }}>
+        <p style={{ ...label, marginBottom: 10 }}>
+          Queued Content {data.queue.length > 0 ? `(${data.queue.length} pending)` : ""}
+        </p>
+        {data.queue.length === 0 ? (
+          <p style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.40)", lineHeight: 1.6 }}>
+            No content queued — engines will add posts on their schedules
+          </p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {data.queue.map((item) => {
+              const tl = getTypeLabel(item.type);
+              const isPosting = postingId === item.id;
+              return (
+                <div
+                  key={item.id}
+                  style={{
+                    background: "rgba(227,229,228,0.04)",
+                    border: "1px solid rgba(227,229,228,0.08)",
+                    padding: "10px 12px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{
+                        ...mono,
+                        fontSize: "0.68rem",
+                        padding: "1px 6px",
+                        background: tl.bg,
+                        color: tl.color,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.08em",
+                      }}>
+                        {tl.tag}
+                      </span>
+                      <span style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.45)" }}>
+                        {timeAgo(item.createdAt)}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => onPostNow(item.id)}
+                      disabled={isPosting}
+                      style={{
+                        ...mono,
+                        fontSize: "0.68rem",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.1em",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        padding: "3px 10px",
+                        background: "rgba(249,115,22,0.12)",
+                        border: "1px solid rgba(249,115,22,0.35)",
+                        color: "#f97316",
+                        cursor: isPosting ? "not-allowed" : "pointer",
+                        opacity: isPosting ? 0.6 : 1,
+                      }}
+                    >
+                      {isPosting ? (
+                        <><Loader2 style={{ width: 10, height: 10 }} className="animate-spin" /> Posting...</>
+                      ) : (
+                        <><Play style={{ width: 10, height: 10 }} /> Post Now</>
+                      )}
+                    </button>
+                  </div>
+                  <ExpandableContent content={item.content} maxChars={150} />
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Recent Posts */}
+      <div>
+        <p style={{ ...label, marginBottom: 10 }}>Recent Posts</p>
+        {data.recentPosts.length === 0 ? (
+          <p style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.40)" }}>
+            No recent posts
+          </p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {data.recentPosts.slice(0, 10).map((post) => {
+              const tl = getTypeLabel(post.type);
+              const cleanContent = post.content.replace(/^\[(?:306\s+\w+|THE\s+DISPATCH)\]\s*/i, "");
+              return (
+                <div
+                  key={post.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 8,
+                    padding: "6px 0",
+                    borderBottom: "1px solid rgba(227,229,228,0.06)",
+                  }}
+                >
+                  <span style={{
+                    ...mono,
+                    fontSize: "0.63rem",
+                    padding: "1px 4px",
+                    background: tl.bg,
+                    color: tl.color,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.06em",
+                    flexShrink: 0,
+                    marginTop: 2,
+                  }}>
+                    {tl.tag}
+                  </span>
+                  <ExpandableRecentPost content={cleanContent} maxChars={120} />
+                  <span style={{
+                    ...mono,
+                    fontSize: "0.68rem",
+                    color: "rgba(227,229,228,0.35)",
+                    flexShrink: 0,
+                  }}>
+                    {timeAgo(post.postedAt)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Operations Tab ──────────────────────────────────────────────────────
+
 function OperationsTab() {
   const { toast } = useToast();
-  const [triggering, setTriggering] = useState<string | null>(null);
+  const [postingId, setPostingId] = useState<string | null>(null);
 
-  const { data: house, refetch } = useQuery<any>({
+  const { data: house } = useQuery<any>({
     queryKey: ["/api/house"],
   });
 
@@ -125,30 +737,79 @@ function OperationsTab() {
     queryKey: ["/api/article/state"],
   });
 
+  const { data: overview, isLoading: overviewLoading } = useQuery<{
+    x: PlatformData;
+    farcaster: PlatformData;
+  }>({
+    queryKey: ["/api/posting/overview"],
+    refetchInterval: 30_000,
+  });
+
+  const toggleXMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/posting/x/toggle"),
+    onSuccess: async (res) => {
+      const d = await res.json();
+      queryClient.invalidateQueries({ queryKey: ["/api/posting/overview"] });
+      toast({ title: d.enabled ? "X auto-post enabled" : "X auto-post disabled" });
+    },
+    onError: () => toast({ title: "Toggle failed", variant: "destructive" }),
+  });
+
+  const toggleFcMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/posting/farcaster/toggle"),
+    onSuccess: async (res) => {
+      const d = await res.json();
+      queryClient.invalidateQueries({ queryKey: ["/api/posting/overview"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/farcaster/status"] });
+      toast({ title: d.enabled ? "Farcaster auto-post enabled" : "Farcaster auto-post disabled" });
+    },
+    onError: () => toast({ title: "Toggle failed", variant: "destructive" }),
+  });
+
+  const postXNow = useMutation({
+    mutationFn: (postId: string) => apiRequest("POST", "/api/posting/x/post-now", { postId }),
+    onSuccess: async () => {
+      setPostingId(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/posting/overview"] });
+      toast({ title: "Posted to X" });
+    },
+    onError: () => {
+      setPostingId(null);
+      toast({ title: "Post to X failed", variant: "destructive" });
+    },
+  });
+
+  const postFcNow = useMutation({
+    mutationFn: (postId: string) => apiRequest("POST", "/api/posting/farcaster/post-now", { postId }),
+    onSuccess: async () => {
+      setPostingId(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/posting/overview"] });
+      toast({ title: "Posted to Farcaster" });
+    },
+    onError: () => {
+      setPostingId(null);
+      toast({ title: "Post to Farcaster failed", variant: "destructive" });
+    },
+  });
+
+  const handlePostXNow = (postId: string) => {
+    setPostingId(postId);
+    postXNow.mutate(postId);
+  };
+
+  const handlePostFcNow = (postId: string) => {
+    setPostingId(postId);
+    postFcNow.mutate(postId);
+  };
+
   const coord = house?.coordinator;
-
-  async function trigger(endpoint: string, label: string) {
-    setTriggering(label);
-    try {
-      await apiRequest("POST", endpoint, {});
-      toast({ title: `${label} triggered`, description: "Generating and posting to X + Farcaster..." });
-      setTimeout(() => refetch(), 5000);
-    } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
-    }
-    setTriggering(null);
-  }
-
-  function getEngineState(engineId: string) {
-    return coord?.engines?.find((e: any) => e.engine === engineId);
-  }
 
   return (
     <>
       {/* Compliance guard */}
       <ComplianceCard />
 
-      {/* Active engine indicator */}
+      {/* Active engine indicators */}
       {coord?.activeEngine && (
         <div style={{ background: "rgba(249,115,22,0.1)", border: "1px solid rgba(249,115,22,0.3)", padding: "10px 16px", marginBottom: "8px", display: "flex", alignItems: "center", gap: "10px" }}>
           <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#f97316", animation: "pulse 1s infinite" }} />
@@ -166,7 +827,7 @@ function OperationsTab() {
         </div>
       )}
 
-      {/* Article Engine status card */}
+      {/* Article Engine status */}
       {articleState && (
         <div style={{ background: "#141516", border: "1px solid rgba(45,212,191,0.15)", padding: "12px 16px", marginBottom: "20px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -182,212 +843,104 @@ function OperationsTab() {
         </div>
       )}
 
-      {/* Active Engines Schedule */}
-      <div style={{ marginBottom: "28px" }}>
+      {/* Engine Cards — Generate Now */}
+      <div style={{ marginBottom: "1.5rem" }}>
         <div style={{ ...pixel, fontSize: "0.68rem", color: "rgba(227,229,228,0.60)", marginBottom: "12px" }}>
-          ACTIVE ENGINES
+          CONTENT ENGINES
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "rgba(227,229,228,0.08)" }}>
-          {ACTIVE_ENGINES.map(eng => (
-            <div key={eng.id} style={{ background: "#141516", padding: "10px 20px", display: "flex", alignItems: "center", gap: "16px" }}>
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: eng.color, flexShrink: 0 }} />
-              <div style={{ ...mono, fontSize: "0.83rem", color: eng.color, fontWeight: 600, minWidth: "160px" }}>{eng.label}</div>
-              <div style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.50)", flex: 1 }}>{eng.schedule}</div>
-              <span style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.40)", background: "rgba(227,229,228,0.06)", padding: "2px 8px" }}>{eng.tag}</span>
-              <div style={{ display: "flex", gap: "4px" }}>
-                {eng.platforms.includes('x') && (
-                  <span style={{ ...mono, fontSize: "0.60rem", color: "#f97316", background: "rgba(249,115,22,0.10)", padding: "1px 5px" }}>X</span>
-                )}
-                {eng.platforms.includes('farcaster') && (
-                  <span style={{ ...mono, fontSize: "0.60rem", color: "#8a63d2", background: "rgba(138,99,210,0.10)", padding: "1px 5px" }}>FC</span>
-                )}
+        <EngineCards />
+      </div>
+
+      {/* Summary bar */}
+      {overview && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: "1.5rem" }}>
+          {[
+            {
+              label: "X Queue",
+              value: overview.x.queueDepth,
+              color: overview.x.queueDepth > 0 ? "#f97316" : "rgba(227,229,228,0.5)",
+              icon: <Clock style={{ width: 12, height: 12 }} />,
+            },
+            {
+              label: "X Today",
+              value: overview.x.postedTodayCount,
+              color: "#4ade80",
+              icon: <CheckCircle2 style={{ width: 12, height: 12 }} />,
+            },
+            {
+              label: "FC Queue",
+              value: overview.farcaster.queueDepth,
+              color: overview.farcaster.queueDepth > 0 ? "#8a63d2" : "rgba(227,229,228,0.5)",
+              icon: <Clock style={{ width: 12, height: 12 }} />,
+            },
+            {
+              label: "FC Today",
+              value: overview.farcaster.postedTodayCount,
+              color: "#4ade80",
+              icon: <CheckCircle2 style={{ width: 12, height: 12 }} />,
+            },
+          ].map(({ label: l, value, color, icon }) => (
+            <div key={l} style={card}>
+              <p style={label}>{l}</p>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, color }}>
+                {icon}
+                <span style={{ ...mono, fontSize: "1rem", fontWeight: 700 }}>{value}</span>
               </div>
             </div>
           ))}
         </div>
-      </div>
+      )}
 
-      {/* Content Type Registry */}
-      <div style={{ marginBottom: "28px" }}>
-        <div style={{ ...pixel, fontSize: "0.68rem", color: "rgba(227,229,228,0.60)", marginBottom: "12px" }}>
-          CONTENT TYPE REGISTRY
+      {/* Platform cards */}
+      {overviewLoading ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "2rem" }}>
+          <Loader2 style={{ width: 16, height: 16, color: "rgba(227,229,228,0.5)" }} className="animate-spin" />
+          <span style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.5)" }}>Loading pipelines...</span>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "8px" }}>
-          {CONTENT_TYPE_LIST.map(ct => (
-            <div key={ct.id} style={{
-              background: "#141516",
-              border: "1px solid rgba(227,229,228,0.10)",
-              padding: "12px 16px",
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                <span style={{ ...mono, fontSize: "0.70rem", color: ct.category === 'primary' ? "#fbbf24" : "#a78bfa", background: ct.category === 'primary' ? "rgba(251,191,36,0.12)" : "rgba(167,139,250,0.12)", padding: "2px 6px" }}>
-                  {ct.showTag}
-                </span>
-                <span style={{ ...mono, fontSize: "0.60rem", color: ct.category === 'primary' ? "#4ade80" : "rgba(227,229,228,0.40)" }}>
-                  {ct.category === 'primary' ? 'ACTIVE' : ct.category.toUpperCase()}
-                </span>
-              </div>
-              <div style={{ ...mono, fontSize: "0.78rem", color: "#efefef", fontWeight: 600, marginBottom: "2px" }}>{ct.name}</div>
-              <div style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.50)", lineHeight: 1.5 }}>
-                {ct.description.slice(0, 80)}{ct.description.length > 80 ? '...' : ''}
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "4px" }}>
-                <span style={{ ...mono, fontSize: "0.63rem", color: "rgba(227,229,228,0.35)" }}>{ct.schedule}</span>
-                <div style={{ display: "flex", gap: "3px" }}>
-                  {ct.platforms.includes('x') && (
-                    <span style={{ ...mono, fontSize: "0.56rem", color: "#f97316", background: "rgba(249,115,22,0.10)", padding: "0px 4px" }}>X</span>
-                  )}
-                  {ct.platforms.includes('farcaster') && (
-                    <span style={{ ...mono, fontSize: "0.56rem", color: "#8a63d2", background: "rgba(138,99,210,0.10)", padding: "0px 4px" }}>FC</span>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
+      ) : !overview ? (
+        <div style={{ ...card, display: "flex", alignItems: "center", gap: 8 }}>
+          <AlertCircle style={{ width: 14, height: 14, color: "#ef4444" }} />
+          <span style={{ ...mono, fontSize: "0.83rem", color: "#ef4444" }}>Failed to load posting overview</span>
         </div>
-      </div>
-
-      {/* Triggerable Engines */}
-      <div style={{ marginBottom: "28px" }}>
-        <div style={{ ...pixel, fontSize: "0.68rem", color: "rgba(227,229,228,0.60)", marginBottom: "12px" }}>
-          GENERATE & POST
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <PlatformCard
+            platform="X / Twitter"
+            data={overview.x}
+            accentColor="#f97316"
+            accentBg="rgba(249,115,22,0.03)"
+            accentBorder="rgba(249,115,22,0.15)"
+            icon={<span style={{ ...mono, fontSize: "0.90rem", color: "#f97316" }}>X</span>}
+            onToggle={() => toggleXMutation.mutate()}
+            onPostNow={handlePostXNow}
+            postingId={postingId}
+          />
+          <PlatformCard
+            platform="Farcaster"
+            data={overview.farcaster}
+            accentColor="#8a63d2"
+            accentBg="rgba(138,99,210,0.03)"
+            accentBorder="rgba(138,99,210,0.15)"
+            icon={<span style={{ fontSize: 14 }}>🟣</span>}
+            onToggle={() => toggleFcMutation.mutate()}
+            onPostNow={handlePostFcNow}
+            postingId={postingId}
+          />
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          {TRIGGERABLE.map(ct => {
-            const engineState = getEngineState(ct.id);
-            const isReady = engineState?.isReady ?? true;
-            const lastPosted = engineState?.lastPostedAt ?? null;
-            const lastTweetUrl = engineState?.lastTweetUrl ?? null;
-            const lastCastUrl = engineState?.lastCastUrl ?? null;
-            const isTriggering = triggering === ct.label;
-
-            return (
-              <div key={ct.id} style={{
-                border: `1px solid ${ct.color}25`,
-                background: "#141516",
-                overflow: "hidden",
-              }}>
-                <div style={{ height: 3, background: ct.color }} />
-                <div style={{ padding: "16px 20px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
-                    <div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
-                        <span style={{ ...mono, fontSize: "0.70rem", color: ct.color, background: `${ct.color}15`, padding: "2px 8px" }}>{ct.tag}</span>
-                        {isReady && <span style={{ ...mono, fontSize: "0.63rem", color: "#4ade80" }}>READY</span>}
-                      </div>
-                      <h2 style={{ ...mono, fontSize: "1.05rem", fontWeight: 700, color: ct.color, margin: "0 0 2px" }}>{ct.label}</h2>
-                      <span style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.35)" }}>{ct.schedule}</span>
-                    </div>
-                    <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <div style={{
-                        width: 10, height: 10, borderRadius: "50%",
-                        background: isReady ? "#4ade80" : "rgba(227,229,228,0.35)",
-                        marginLeft: "auto", marginBottom: 6,
-                      }} />
-                      <div style={{ ...mono, fontSize: "0.63rem", color: "rgba(227,229,228,0.45)" }}>
-                        {lastPosted ? `Last: ${timeAgo(lastPosted)}` : "No posts yet"}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-                    <button
-                      onClick={() => trigger(ct.endpoint, ct.label)}
-                      disabled={isTriggering}
-                      style={{
-                        background: isTriggering ? `${ct.color}25` : ct.color,
-                        color: isTriggering ? `${ct.color}80` : "#1a1b1c",
-                        border: "none", ...mono, fontSize: "0.83rem", fontWeight: 700,
-                        padding: "8px 20px", cursor: isTriggering ? "not-allowed" : "pointer",
-                        textTransform: "uppercase" as const, letterSpacing: "0.06em",
-                      }}
-                    >
-                      {isTriggering ? "Generating..." : "Generate & Post"}
-                    </button>
-                    {lastTweetUrl && (
-                      <a href={lastTweetUrl} target="_blank" rel="noopener noreferrer"
-                        style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.55)", textDecoration: "none", border: "1px solid rgba(227,229,228,0.18)", padding: "6px 12px" }}>
-                        View on X
-                      </a>
-                    )}
-                    {lastCastUrl && (
-                      <a href={lastCastUrl} target="_blank" rel="noopener noreferrer"
-                        style={{ ...mono, fontSize: "0.73rem", color: "#8a63d2", textDecoration: "none", border: "1px solid rgba(138,99,210,0.18)", padding: "6px 12px" }}>
-                        View on Farcaster
-                      </a>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Recent posts feed */}
-      <div style={{ marginBottom: "20px" }}>
-        <div style={{ ...pixel, fontSize: "0.68rem", color: "rgba(227,229,228,0.60)", marginBottom: "10px" }}>
-          RECENT POSTS — {coord?.totalPosts ?? 0} total
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "rgba(227,229,228,0.12)" }}>
-          {coord?.recentPosts?.length > 0 ? coord.recentPosts
-            .slice(0, 10)
-            .map((p: any, i: number) => (
-            <div key={i} style={{ background: "#141516", padding: "10px 20px", display: "flex", alignItems: "center", gap: "16px" }}>
-              <div style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.60)", minWidth: "80px" }}>
-                {timeAgo(p.postedAt)}
-              </div>
-              <div style={{ ...mono, fontSize: "0.83rem", color: "#efefef", flex: 1 }}>
-                {p.engine?.toUpperCase() ?? p.key?.toUpperCase() ?? "—"}
-              </div>
-              {p.platform && (
-                <span style={{ ...mono, fontSize: "0.73rem", color: p.platform === "farcaster" ? "#8a63d2" : "rgba(227,229,228,0.48)", textTransform: "uppercase" as const }}>
-                  {p.platform === "farcaster" ? "FC" : "X"}
-                </span>
-              )}
-              {(p.tweetUrl || p.postUrl) && (
-                <a href={p.postUrl || p.tweetUrl} target="_blank" rel="noopener noreferrer"
-                  style={{ ...mono, fontSize: "0.78rem", color: "#a78bfa", textDecoration: "none" }}>
-                  view
-                </a>
-              )}
-            </div>
-          )) : (
-            <div style={{ background: "#141516", padding: "16px 20px", ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.48)" }}>
-              No posts recorded yet — history builds after first post
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Server status */}
-      <div style={{ padding: "12px 20px", background: "#141516", border: "1px solid rgba(227,229,228,0.12)", display: "flex", gap: "32px" }}>
-        <div>
-          <div style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.60)" }}>SERVER</div>
-          <div style={{ ...mono, fontSize: "0.83rem", color: "#4ade80" }}>RAILWAY ONLINE</div>
-        </div>
-        <div>
-          <div style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.60)" }}>X ACCOUNT</div>
-          <div style={{ ...mono, fontSize: "0.83rem", color: "#efefef" }}>{X_ACCOUNT}</div>
-        </div>
-        <div>
-          <div style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.60)" }}>FARCASTER</div>
-          <div style={{ ...mono, fontSize: "0.83rem", color: "#8a63d2" }}>{FC_ACCOUNT}</div>
-        </div>
-      </div>
-
-      <div style={{ marginTop: "12px", ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.35)", textAlign: "center" as const }}>
-        All engines share the same disk-based coordinator — no duplicates across Railway restarts
-      </div>
+      )}
     </>
   );
 }
+
+// ── Main Component ──────────────────────────────────────────────────────
+
+type CmdTab = "operations" | "pipeline";
 
 export default function CommandCenter() {
   const [tab, setTab] = useState<CmdTab>("operations");
 
   return (
-    <div style={{ padding: "24px", maxWidth: "960px", margin: "0 auto" }}>
+    <div style={{ padding: "24px", maxWidth: "1100px", margin: "0 auto" }}>
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
 
       {/* Header */}
@@ -397,7 +950,7 @@ export default function CommandCenter() {
           Command <span style={{ color: "#f97316" }}>Center</span>
         </h1>
         <p style={{ ...mono, fontSize: "0.88rem", color: "rgba(227,229,228,0.68)", margin: 0 }}>
-          Engine-only posting — dedicated engines queue content, scheduler posts to X + Farcaster with compliance guards.
+          Generate content, manage queues, and control posting to X + Farcaster with compliance guards.
         </p>
       </div>
 

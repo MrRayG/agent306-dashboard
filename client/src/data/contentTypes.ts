@@ -82,6 +82,19 @@ export const CONTENT_TYPES: Record<string, ContentType> = {
     slotPreference: ['any'],
     platforms: ['x', 'farcaster'],
   },
+  dispatch: {
+    id: 'dispatch',
+    showTag: '[THE DISPATCH]',
+    name: 'The Dispatch',
+    description: 'Weekly serialized series — one signal, both sides, humble. Each episode builds on prior installments.',
+    format: 'One signal. Two sides. Engage the audience. Tease the next episode. Reference prior episodes naturally.',
+    schedule: 'Weekly',
+    category: 'primary',
+    engine: 'dispatchEngine',
+    queueType: 'dispatch',
+    slotPreference: ['evening'],
+    platforms: ['x', 'farcaster'],
+  },
   roundup: {
     id: 'roundup',
     showTag: '[306 ROUNDUP]',
@@ -110,4 +123,5 @@ export const ACTIVE_ENGINES = [
   { id: 'academy', label: '306 ACADEMY', schedule: 'Tue/Thu/Sat 10am ET', tag: '[306 ACADEMY]', color: '#60a5fa', platforms: ['x', 'farcaster'] },
   { id: 'article', label: 'The Deep Read', schedule: 'Weekly Mon 5pm ET', tag: '[306 ARTICLE]', color: '#2dd4bf', platforms: ['x', 'farcaster'] },
   { id: 'podcast', label: '306 Podcast', schedule: 'Event-driven', tag: '[306 PODCAST]', color: '#f472b6', platforms: ['x', 'farcaster'] },
+  { id: 'dispatch', label: 'The Dispatch', schedule: 'Weekly', tag: '[THE DISPATCH]', color: '#a78bfa', platforms: ['x', 'farcaster'] },
 ] as const;
