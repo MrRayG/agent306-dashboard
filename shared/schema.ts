@@ -5,7 +5,7 @@ import { z } from "zod";
 // Episodes table — generated clips
 export const episodes = sqliteTable("episodes", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  tokenId: integer("token_id").notNull(),
+  tokenId: integer("token_id"),
   title: text("title").notNull(),
   narrative: text("narrative").notNull(),
   phase: text("phase").notNull().default("phase1"), // phase1|phase2|phase3
@@ -23,7 +23,7 @@ export type Episode = typeof episodes.$inferSelect;
 // Render jobs table — 3D render queue
 export const renderJobs = sqliteTable("render_jobs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  tokenId: integer("token_id").notNull(),
+  tokenId: integer("token_id"),
   voxelCount: integer("voxel_count").default(0),
   status: text("status").notNull().default("queued"), // queued|processing|done|failed
   imageUrl: text("image_url"),

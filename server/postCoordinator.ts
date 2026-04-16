@@ -21,7 +21,6 @@ const COOLDOWNS: Record<string, number> = {
   episode:       11 * 60 * 60 * 1000,  // 11h  — fires every 12h, 1h buffer
   news_dispatch: 23 * 60 * 60 * 1000,  // 23h  — daily, never twice same day
   cyoa:          23 * 60 * 60 * 1000,  // 23h  — research briefs, daily cap
-  // DISABLED: Normies-era engines removed — leaderboard, spotlight, race
   academy:       47 * 60 * 60 * 1000,  // 47h  — Tue/Thu/Sat, 48h buffer
   signal_brief:  47 * 60 * 60 * 1000,  // 47h  — Mon/Wed/Fri, 48h buffer
 };
@@ -80,7 +79,7 @@ export function requestPost(key: string, force = false, platform: "x" | "farcast
   if (state.activeEngineFarcasterStarted === undefined) state.activeEngineFarcasterStarted = null;
 
   // Get cooldown for this key
-  const cooldown = key.startsWith("burn_") || key.startsWith("signal_")
+  const cooldown = key.startsWith("signal_")
     ? SIGNAL_COOLDOWN
     : (COOLDOWNS[key] ?? 5 * 60 * 1000);
 
