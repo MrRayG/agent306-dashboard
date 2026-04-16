@@ -629,8 +629,17 @@ export async function runWeeklyDeepRead(
     if (state.history.length > 52) state.history = state.history.slice(0, 52); // keep 1 year
     saveState(state);
 
-    // Double-posting removed: direct post above is the sole posting method.
-    // Previously also called queueXPost() which caused the teaser to post twice.
+    // Queue teaser for Farcaster
+    try {
+      const { queueFarcasterPost } = await import("./farcasterQueue.js");
+      const fcText = `${headline}\n\n${teaser}`.slice(0, 2500);
+      if (fcText.length > 30) {
+        queueFarcasterPost(fcText, "article", undefined, "ai");
+        console.log(`[ArticleEngine] Farcaster teaser queued`);
+      }
+    } catch (e: any) {
+      console.warn("[ArticleEngine] Farcaster queue failed:", e.message);
+    }
 
     console.log(`[ArticleEngine] Deep Read posted: "${headline}" → ${tweetUrl ?? "no URL"}`);
     return { success: true, tweetUrl: tweetUrl ?? undefined, headline };
