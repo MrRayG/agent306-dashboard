@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { CONTENT_TYPE_LIST, ACTIVE_ENGINES, SCHEDULER_SLOTS } from "@/data/contentTypes";
+import { CONTENT_TYPE_LIST, ACTIVE_ENGINES, SCHEDULER_SLOTS, type SchedulerSlot } from "@/data/contentTypes";
 import AutoPilot from "./AutoPilot";
 
 function timeAgo(iso: string | null): string {
@@ -182,10 +182,62 @@ function OperationsTab() {
         </div>
       )}
 
+      {/* 12-Slot Daily Schedule */}
+      <div style={{ marginBottom: "28px" }}>
+        <div style={{ ...pixel, fontSize: "0.68rem", color: "rgba(227,229,228,0.60)", marginBottom: "12px" }}>
+          DAILY SCHEDULE — 12 SLOTS / EVERY 2 HOURS
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "6px" }}>
+          {SCHEDULER_SLOTS.map((slot: SchedulerSlot) => {
+            const isShow = !!slot.show;
+            const label = slot.show ?? '306 THOUGHTS';
+            const borderColor = isShow ? `${slot.color}40` : 'rgba(227,229,228,0.08)';
+            return (
+              <div key={slot.name} style={{
+                background: "#141516",
+                border: `1px solid ${borderColor}`,
+                padding: "10px 12px",
+                borderLeft: `3px solid ${slot.color}`,
+              }}>
+                <div style={{ ...mono, fontSize: "0.88rem", color: "#efefef", fontWeight: 700, marginBottom: "3px" }}>{slot.name}</div>
+                <div style={{
+                  ...mono, fontSize: "0.68rem",
+                  color: slot.color,
+                  fontWeight: isShow ? 600 : 400,
+                  marginBottom: "2px",
+                }}>
+                  {label}
+                </div>
+                {!isShow && (
+                  <div style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.30)" }}>agent speaks freely</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Locked Shows */}
+      <div style={{ marginBottom: "28px" }}>
+        <div style={{ ...pixel, fontSize: "0.68rem", color: "rgba(227,229,228,0.60)", marginBottom: "12px" }}>
+          LOCKED SHOWS
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "rgba(227,229,228,0.08)" }}>
+          {ACTIVE_ENGINES.map(eng => (
+            <div key={eng.id} style={{ background: "#141516", padding: "10px 20px", display: "flex", alignItems: "center", gap: "16px" }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: eng.color, flexShrink: 0 }} />
+              <div style={{ ...mono, fontSize: "0.83rem", color: eng.color, fontWeight: 600, minWidth: "160px" }}>{eng.label}</div>
+              <div style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.50)", flex: 1 }}>{eng.schedule}</div>
+              <span style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.40)", background: "rgba(227,229,228,0.06)", padding: "2px 8px" }}>{eng.tag}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Content Type Registry */}
       <div style={{ marginBottom: "28px" }}>
         <div style={{ ...pixel, fontSize: "0.68rem", color: "rgba(227,229,228,0.60)", marginBottom: "12px" }}>
-          CONTENT TYPE REGISTRY — 10 SHOW TAGS
+          CONTENT TYPE REGISTRY
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "8px" }}>
           {CONTENT_TYPE_LIST.map(ct => (
@@ -207,41 +259,6 @@ function OperationsTab() {
                 {ct.description.slice(0, 80)}{ct.description.length > 80 ? '...' : ''}
               </div>
               <div style={{ ...mono, fontSize: "0.63rem", color: "rgba(227,229,228,0.35)", marginTop: "4px" }}>{ct.schedule}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Active Engines */}
-      <div style={{ marginBottom: "28px" }}>
-        <div style={{ ...pixel, fontSize: "0.68rem", color: "rgba(227,229,228,0.60)", marginBottom: "12px" }}>
-          ACTIVE ENGINES
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "rgba(227,229,228,0.08)" }}>
-          {ACTIVE_ENGINES.map(eng => (
-            <div key={eng.id} style={{ background: "#141516", padding: "10px 20px", display: "flex", alignItems: "center", gap: "16px" }}>
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: eng.color, flexShrink: 0 }} />
-              <div style={{ ...mono, fontSize: "0.83rem", color: eng.color, fontWeight: 600, minWidth: "160px" }}>{eng.label}</div>
-              <div style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.50)", flex: 1 }}>{eng.schedule}</div>
-              <span style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.40)", background: "rgba(227,229,228,0.06)", padding: "2px 8px" }}>{eng.tag}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Post Scheduler Slots */}
-      <div style={{ marginBottom: "28px" }}>
-        <div style={{ ...pixel, fontSize: "0.68rem", color: "rgba(227,229,228,0.60)", marginBottom: "12px" }}>
-          POST SCHEDULER — 4 DAILY SLOTS
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
-          {SCHEDULER_SLOTS.map(slot => (
-            <div key={slot.name} style={{ background: "#141516", border: "1px solid rgba(227,229,228,0.10)", padding: "12px 16px" }}>
-              <div style={{ ...mono, fontSize: "0.83rem", color: "#f97316", fontWeight: 700, marginBottom: "4px" }}>{slot.name}</div>
-              <div style={{ ...mono, fontSize: "0.73rem", color: "#efefef", marginBottom: "6px" }}>{slot.time}</div>
-              <div style={{ ...mono, fontSize: "0.63rem", color: "rgba(227,229,228,0.45)", lineHeight: 1.5 }}>
-                {slot.preferred.join(', ')}
-              </div>
             </div>
           ))}
         </div>
@@ -397,7 +414,7 @@ export default function CommandCenter() {
           Command <span style={{ color: "#f97316" }}>Center</span>
         </h1>
         <p style={{ ...mono, fontSize: "0.88rem", color: "rgba(227,229,228,0.68)", margin: 0 }}>
-          Content engines for X ({X_ACCOUNT}) and Farcaster ({FC_ACCOUNT}). 10 content types, 6 daily posting slots (8am/10am/12pm/5pm/7pm/9pm ET).
+          12 slots every 2 hours — 6 locked shows + 6 open slots filled with 306 THOUGHTS.
         </p>
       </div>
 

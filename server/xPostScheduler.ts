@@ -6,13 +6,16 @@
  *  daily research cycle. Content engines queue posts here;
  *  the scheduler picks them up at 6 named daily time slots.
  *
- *  LOCKED daily schedule — 6 slots with FIXED show tags:
- *    8am ET  — [306 NEWS]       (hard AI news, market moves)
- *    10am ET — [306 SIGNAL]     (trend analysis, pattern recognition)
- *    12pm ET — [306 RESEARCH]   (deep dives, technical exploration)
- *    5pm ET  — [306 ROUND UP]   (afternoon recap, day highlights)
- *    7pm ET  — [THE DISPATCH]   (flagship evening dispatch — one signal, two sides)
- *    9pm ET  — [306 REFLECTION] (philosophical, open questions)
+ *  12-slot schedule — posts every 2 hours:
+ *    12am-6am ET — [306 THOUGHTS]  (agent speaks freely)
+ *    8am ET      — [306 NEWS]      (hard AI news, market moves)
+ *    10am ET     — [306 SIGNAL]    (trend analysis, pattern recognition)
+ *    12pm ET     — [306 RESEARCH]  (deep dives, technical exploration)
+ *    2pm ET      — [306 THOUGHTS]  (agent speaks freely)
+ *    4pm ET      — [306 THOUGHTS]  (agent speaks freely)
+ *    6pm ET      — [THE DISPATCH]  (flagship evening dispatch)
+ *    8pm ET      — [306 THOUGHTS]  (agent speaks freely)
+ *    10pm ET     — [306 REFLECTION](philosophical, open questions)
  *
  *  Each slot has a requiredContentType that filters queue content.
  *  If no matching content exists, the slot generates on-demand.
@@ -49,7 +52,8 @@ export type XPostType =
   | "blog"
   | "research"
   | "reflection"
-  | "roundup";
+  | "roundup"
+  | "agent_voice";
 
 export interface QueuedPost {
   id: string;
@@ -87,26 +91,35 @@ const TYPE_PRIORITY: Record<XPostType, number> = {
   research:     5,
   academy:      6,
   reflection:   6,
+  agent_voice:  7,
 };
 
 // -- Named content slots ------------------------------------------
-// LOCKED 6-slot daily schedule: each slot has a FIXED show tag and content type.
-// Only the 7pm Agent's Choice slot can pick any type.
+// 12-slot daily schedule: posts every 2 hours.
+// 6 slots have LOCKED show tags. 6 slots are open for 306 THOUGHTS (agent_voice).
 interface ContentSlot {
   name: string;
   hourUTC: number;       // UTC hour for this slot
   preferredTypes: XPostType[];
   requiredContentType?: string; // locked content type for this slot (maps to contentTypes.ts key)
-  agentChoice?: boolean;        // true = agent picks any format (7pm creative freedom slot)
+  agentChoice?: boolean;        // true = agent picks any format
 }
 
 const CONTENT_SLOTS: ContentSlot[] = [
-  { name: "Early Morning", hourUTC: 12, preferredTypes: ["news", "signal", "roundup"],       requiredContentType: "news" },       // 8am ET — [306 NEWS]
+  // Overnight / early morning — 306 THOUGHTS (agent speaks freely)
+  { name: "Midnight",      hourUTC: 4,  preferredTypes: ["agent_voice"],                      agentChoice: true },                 // 12am ET
+  { name: "Late Night",    hourUTC: 6,  preferredTypes: ["agent_voice"],                      agentChoice: true },                 // 2am ET
+  { name: "Pre-Dawn",      hourUTC: 8,  preferredTypes: ["agent_voice"],                      agentChoice: true },                 // 4am ET
+  { name: "Early Morning", hourUTC: 10, preferredTypes: ["agent_voice"],                      agentChoice: true },                 // 6am ET
+  // Daytime — locked shows
+  { name: "Morning",       hourUTC: 12, preferredTypes: ["news", "signal", "roundup"],       requiredContentType: "news" },       // 8am ET — [306 NEWS]
   { name: "Late Morning",  hourUTC: 14, preferredTypes: ["signal", "academy"],               requiredContentType: "signal" },     // 10am ET — [306 SIGNAL]
   { name: "Midday",        hourUTC: 16, preferredTypes: ["research", "blog"],                requiredContentType: "research" },   // 12pm ET — [306 RESEARCH]
-  { name: "Afternoon",     hourUTC: 21, preferredTypes: ["roundup", "signal"],               requiredContentType: "roundup" },    // 5pm ET — [306 ROUND UP]
-  { name: "Early Evening", hourUTC: 23, preferredTypes: ["dispatch"],                        requiredContentType: "dispatch" },   // 7pm ET — [THE DISPATCH]
-  { name: "Late Evening",  hourUTC: 1,  preferredTypes: ["reflection"],                      requiredContentType: "reflection" }, // 9pm ET — [306 REFLECTION]
+  { name: "Afternoon",     hourUTC: 18, preferredTypes: ["agent_voice", "roundup"],          agentChoice: true },                 // 2pm ET — 306 THOUGHTS
+  { name: "Late Afternoon", hourUTC: 20, preferredTypes: ["agent_voice", "signal"],          agentChoice: true },                 // 4pm ET — 306 THOUGHTS
+  { name: "Evening",       hourUTC: 22, preferredTypes: ["dispatch", "agent_voice"],         requiredContentType: "dispatch" },   // 6pm ET — [THE DISPATCH]
+  { name: "Late Evening",  hourUTC: 0,  preferredTypes: ["agent_voice", "reflection"],       agentChoice: true },                 // 8pm ET — 306 THOUGHTS
+  { name: "Night",         hourUTC: 2,  preferredTypes: ["reflection"],                      requiredContentType: "reflection" }, // 10pm ET — [306 REFLECTION]
 ];
 
 // Breaking news detection is now handled by breakingNewsDetector.ts
@@ -387,11 +400,8 @@ function getNextSlotMs(): { ms: number; slot: ContentSlot } {
 }
 
 function isWithinPostingHours(): boolean {
-  const now = new Date();
-  const utcHour = now.getUTCHours();
-  // Posting window: 12 UTC (8am ET) to 02 UTC (10pm ET)
-  // That's 12..23 and 0..1
-  return utcHour >= 12 || utcHour <= 1;
+  // 12 slots every 2 hours = always posting
+  return true;
 }
 
 // -- Variety-aware queue selection --------------------------------
@@ -486,15 +496,16 @@ export function qualityCheck(tweet: string, contentType: string): { pass: boolea
 // Token limits by content type — richer types get more room,
 // the format guard handles final shaping.
 const TOKEN_LIMITS: Record<string, number> = {
-  news:       600,   // morning news — concise but complete
-  dispatch:   800,   // flagship evening dispatch — one signal, two sides (~1,500-1,700 chars)
-  signal:     800,   // analysis needs room for the "why"
-  research:   1000,  // deep dives need space
-  roundup:    1200,  // 3-5 stories need the most room
-  reflection: 600,   // evening thoughts — not artificially short
-  academy:    1000,  // teaching needs detail
+  news:        1000,   // morning news — room for context + take
+  dispatch:    1200,   // flagship evening dispatch (~1,500-1,700 chars)
+  signal:      1000,   // analysis needs room for the "why"
+  research:    1500,   // deep dives need real space
+  roundup:     1500,   // 3-5 stories need the most room
+  reflection:  1000,   // evening thoughts deserve room to breathe
+  academy:     1200,   // teaching needs detail + examples
+  agent_voice: 800,    // 306 THOUGHTS — short, punchy, authentic
 };
-const DEFAULT_TOKEN_LIMIT = 600;
+const DEFAULT_TOKEN_LIMIT = 1000;
 
 async function generateOnDemandPost(type: XPostType, state: SchedulerState): Promise<QueuedPost | null> {
   const systemPrompt = buildTweetSystemPrompt(type);
@@ -579,6 +590,12 @@ async function processQueue(xWrite: any, slot?: ContentSlot): Promise<void> {
   if (!post && slot?.requiredContentType && !slot.agentChoice) {
     console.log(`[XScheduler] Generating on-demand ${slot.requiredContentType} content for ${slot.name} slot`);
     post = await generateOnDemandPost(slot.requiredContentType as XPostType, state);
+  }
+
+  // If still no post (agent_voice slot or failed on-demand), generate 306 THOUGHTS
+  if (!post && slot) {
+    console.log(`[XScheduler] Generating agent_voice (306 THOUGHTS) for ${slot.name} slot`);
+    post = await generateOnDemandPost('agent_voice' as XPostType, state);
   }
 
   if (!post) {
@@ -828,7 +845,7 @@ IMPORTANT: Output ONLY the tweet text itself. Do NOT include any meta-commentary
 // -- Scheduler loop -----------------------------------------------
 
 export function startXPostScheduler(xWrite: any): void {
-  console.log("[XScheduler] Starting X post scheduler (6 locked slots/day: 8am NEWS, 10am SIGNAL, 12pm RESEARCH, 5pm ROUND UP, 7pm THE DISPATCH, 9pm REFLECTION)");
+  console.log("[XScheduler] Starting X post scheduler (12 slots every 2h: 6 locked shows + 6 agent_voice slots)");
 
   // Start breaking news detection loop (checks every 30 min during posting hours)
   startBreakingNewsLoop(xWrite);

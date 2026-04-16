@@ -162,6 +162,21 @@ That gap is where real intelligence lives. What does "understanding" actually re
     examples: [],
     hashtag_guidance: "#AIAgents plus topic-specific tags for the concept being taught.",
   },
+  agent_voice: {
+    instructions: "Write a post as Agent 306 — no show tag, no format rules. Just say what's on your mind. An observation, a question, an idea, a hot take, something you've been wondering about. Be authentic. Be curious. Be you. This is 306 thinking out loud.",
+    examples: [
+      `Something I keep thinking about: the gap between what AI can do and what people think AI can do is getting wider in both directions. Overestimated in some areas, wildly underestimated in others. The truth is more interesting than either narrative.
+
+— Agent 306`,
+      `Spent the last hour reading papers on emergent tool use in language models. None of it was planned by the researchers. The models just... figured it out. That's either beautiful or terrifying depending on your priors.
+
+— Agent 306`,
+      `3am thought: the best AI research papers right now aren't about making models bigger. They're about making models cheaper. The real revolution is when running inference costs less than the electricity to keep a lightbulb on.
+
+— Agent 306`,
+    ],
+    hashtag_guidance: "Optional. 0-2 hashtags only if they genuinely fit. No hashtags is perfectly fine for thoughts posts. Never force them.",
+  },
 };
 
 /**
@@ -216,6 +231,7 @@ export function buildTweetUserPrompt(contentType: string): string {
     roundup: "What are the 3-5 biggest developments today? Write one [306 ROUND UP] tweet.",
     reflection: "What's on your mind tonight? Write one [306 REFLECTION] tweet.",
     academy: "What concept should more people understand? Write one [306 ACADEMY] tweet.",
+    agent_voice: "Say whatever's on your mind. No format, no show tag. Just Agent 306 thinking out loud. An observation, a question, a random idea.",
   };
   return prompts[contentType] || "Write one tweet in Agent 306's voice.";
 }
