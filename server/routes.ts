@@ -87,7 +87,7 @@ import {
   seedDreams,
 } from "./dreamEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
-import { startXPostScheduler, getXPostQueue, queueXPost, getTodaysPostsSummary, clearXPostQueue } from "./xPostScheduler.js";
+import { startXPostScheduler, getXPostQueue, queueXPost, getTodaysPostsSummary, clearXPostQueue, isXAutoPostEnabled, setXAutoPostEnabled, getXAutoPostState } from "./xPostScheduler.js";
 import { getVoiceContext } from "./voiceInstructions.js";
 import { enforceShowTag } from "./contentTypes.js";
 import { getCompetencyProfile } from "./competencyFramework.js";
@@ -811,6 +811,19 @@ export function registerRoutes(httpServer: Server, app: Express) {
   app.post("/api/x/queue/clear", requireDashAuth, (_req, res) => {
     const cleared = clearXPostQueue();
     res.json({ cleared });
+  });
+
+  // GET /api/x/auto-post — get current X auto-post state
+  app.get("/api/x/auto-post", (_req, res) => {
+    res.json(getXAutoPostState());
+  });
+
+  // POST /api/x/toggle — enable/disable X auto-posting
+  app.post("/api/x/toggle", requireDashAuth, (req, res) => {
+    const { enabled } = req.body ?? {};
+    const newState = typeof enabled === "boolean" ? enabled : !isXAutoPostEnabled();
+    setXAutoPostEnabled(newState);
+    res.json({ ok: true, enabled: newState });
   });
 
   app.get("/api/x/health", async (_req, res) => {
