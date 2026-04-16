@@ -93,7 +93,7 @@ import { enforceShowTag } from "./contentTypes.js";
 import { getCompetencyProfile } from "./competencyFramework.js";
 import { buildVoiceBlock } from "./voice.js";
 import { getEvolutionContext } from "./soulEvolution.js";
-import { getRecentEvents } from "./breakingNewsDetector.js";
+// breakingNewsDetector removed — not needed for now
 
 // On-chain API removed
 // const ONCHAIN_API = "";
@@ -4402,14 +4402,9 @@ needsHelp: true only when you genuinely need his direction or information`,
     }
   });
 
-  // ── Breaking News ──────────────────────────────────────────────────────
+  // ── Breaking News (disabled) ───────────────────────────────────────────
   app.get("/api/breaking-news", (_req, res) => {
-    try {
-      const events = getRecentEvents(48);
-      res.json({ events, count: events.length });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
+    res.json({ events: [], count: 0, disabled: true });
   });
 
   // ── Cycle Context & Session Memory ─────────────────────────────────────
