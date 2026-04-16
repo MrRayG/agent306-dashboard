@@ -396,3 +396,14 @@ export function scheduleAcademy(xWrite: any): void {
 
   scheduleNext();
 }
+
+// ── On-demand generation (no side effects — just produces content) ────────────
+export async function generateAcademyContent(): Promise<{
+  post: string;
+  dashboardNarrative: string;
+  headline: string;
+} | null> {
+  console.log("[Academy] On-demand generation triggered");
+  const topic = pickNextTopic();
+  return generateAcademyEpisode(topic);
+}

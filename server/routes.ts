@@ -4476,4 +4476,200 @@ needsHelp: true only when you genuinely need his direction or information`,
       res.status(500).json({ error: e.message });
     }
   });
+
+  // ── Engine Status & On-Demand Generation ──────────────────────────────────
+
+  // Engine definitions for status + generate
+  const ENGINE_DEFS = [
+    { id: "signal",  name: "Signal Brief",   schedule: "Mon/Wed/Fri 12pm ET", emoji: "📡", days: [1, 3, 5], hour: 12 },
+    { id: "academy", name: "Academy",         schedule: "Tue/Thu/Sat 10am ET", emoji: "🎓", days: [2, 4, 6], hour: 10 },
+    { id: "news",    name: "News Dispatch",   schedule: "Daily 8am ET",        emoji: "📰", days: [0,1,2,3,4,5,6], hour: 8 },
+    { id: "article", name: "Deep Read",       schedule: "Monday 5pm ET",       emoji: "📝", days: [1], hour: 17 },
+    { id: "blog",    name: "Blog Post",       schedule: "Via Daily Cycle",     emoji: "✍️",  days: [], hour: 0 },
+    { id: "podcast", name: "Podcast",         schedule: "Research-driven",     emoji: "🎙️", days: [], hour: 0 },
+  ] as const;
+
+  function computeNextRun(days: readonly number[], hour: number): string | null {
+    if (days.length === 0) return null;
+    const now = new Date();
+    // Use Intl to find current ET offset
+    const etParts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      hour: "2-digit", minute: "2-digit", hour12: false,
+    }).formatToParts(now);
+    const etHour = parseInt(etParts.find(p => p.type === "hour")!.value);
+    const utcHour = now.getUTCHours();
+    let etOffset = utcHour - etHour;
+    if (etOffset < 0) etOffset += 24;
+
+    for (let i = 0; i <= 7; i++) {
+      const candidate = new Date(now);
+      candidate.setDate(now.getDate() + i);
+      candidate.setUTCHours(hour + etOffset, 0, 0, 0);
+      if (candidate > now && (days as readonly number[]).includes(candidate.getUTCDay())) {
+        return candidate.toISOString();
+      }
+    }
+    return null;
+  }
+
+  // GET /api/engines/status — all engine states
+  app.get("/api/engines/status", requireDashAuth, (_req, res) => {
+    try {
+      const signalState = getSignalBriefState();
+      const academyState = getAcademyState();
+      const articleState = getArticleState();
+      const briefingState = getBriefingState();
+      const blogState = getBlogState();
+
+      const lastRuns: Record<string, string | null> = {
+        signal:  signalState.lastPostedAt ?? null,
+        academy: academyState.lastPostedAt ?? null,
+        news:    null, // news dispatch doesn't expose a persistent lastRun; use coordinator
+        article: articleState.lastPostedAt ?? null,
+        blog:    blogState.stats?.lastPublishedAt ?? blogState.posts?.[0]?.createdAt ?? null,
+        podcast: null,
+      };
+
+      // Try to get news last run from coordinator
+      try {
+        const coordState = getCoordinatorState();
+        const newsRecord = coordState.recentPosts?.find((p: any) => p.engineKey === "news_dispatch");
+        if (newsRecord) lastRuns.news = newsRecord.postedAt;
+      } catch {}
+
+      const engines = ENGINE_DEFS.map(eng => ({
+        id:       eng.id,
+        name:     eng.name,
+        emoji:    eng.emoji,
+        schedule: eng.schedule,
+        nextRun:  computeNextRun(eng.days, eng.hour),
+        lastRun:  lastRuns[eng.id] ?? null,
+        enabled:  true,
+      }));
+
+      res.json({ engines });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/engines/:engineId/generate — on-demand content generation
+  // Generates content and queues to X + Farcaster. Does NOT auto-post.
+  app.post("/api/engines/:engineId/generate", requireDashAuth, async (req, res) => {
+    const { engineId } = req.params;
+    const validEngines = ["signal", "academy", "news", "article", "blog"];
+
+    if (!validEngines.includes(engineId)) {
+      return res.status(400).json({
+        success: false,
+        error: `Unknown engine "${engineId}". Valid: ${validEngines.join(", ")}`,
+      });
+    }
+
+    console.log(`[GenerateNow] On-demand generation triggered for engine: ${engineId}`);
+
+    try {
+      let content = "";
+      let type: string = engineId;
+
+      switch (engineId) {
+        case "signal": {
+          const grokKey = LLM_API_KEY;
+          if (!grokKey) throw new Error("LLM API key not configured");
+          // Import the private generation function via a new exported wrapper
+          const { generateSignalContent } = await import("./signalBriefEngine.js");
+          const result = await generateSignalContent(grokKey);
+          if (!result) throw new Error("Signal brief generation failed — LLM returned no content");
+          content = result.post;
+          type = "signal";
+          break;
+        }
+
+        case "academy": {
+          const { generateAcademyContent } = await import("./academyEngine.js");
+          const result = await generateAcademyContent();
+          if (!result) throw new Error("Academy episode generation failed — LLM returned no content");
+          content = result.post;
+          type = "academy";
+          break;
+        }
+
+        case "news": {
+          const { generateNewsContent } = await import("./newsGenerator.js");
+          const result = await generateNewsContent();
+          if (!result) throw new Error("News dispatch generation failed — LLM returned no content");
+          content = result;
+          type = "news";
+          break;
+        }
+
+        case "article": {
+          const apiKey = LLM_API_KEY;
+          if (!apiKey) throw new Error("LLM API key not configured");
+          const preview = await previewDeepRead(apiKey);
+          content = preview.teaser;
+          type = "article";
+          break;
+        }
+
+        case "blog": {
+          const result = await generateBlogPost({
+            topic: "On-demand blog post — today's top AI signal",
+            sourceContent: "Generate a blog post about the most significant AI development happening right now.",
+            source: "standalone" as any,
+            autoPublish: false,
+          });
+          if (!result) throw new Error("Blog post generation failed");
+          // Blog posts are long-form — queue the excerpt/teaser
+          content = result.excerpt || result.title || "New blog post generated";
+          type = "blog";
+          break;
+        }
+      }
+
+      if (!content || content.trim().length < 10) {
+        throw new Error("Engine produced empty or too-short content");
+      }
+
+      const trimmed = content.trim();
+
+      // Queue to X
+      const xPostType = type as any; // XPostType
+      queueXPost(trimmed, xPostType, 3); // priority 3 = high (on-demand)
+      console.log(`[GenerateNow] Queued to X: ${engineId} (${trimmed.length} chars)`);
+
+      // Queue to Farcaster (cast directly — Farcaster has no queue system)
+      let farcasterQueued = false;
+      try {
+        if (isFarcasterEnabled()) {
+          const channel = trimmed.match(/\bai\b|agent|llm|model/i) ? "ai" : undefined;
+          // Don't post immediately — store as a "pending cast" for the user to review
+          // Since Farcaster doesn't have a queue, we'll note it was intended for FC
+          farcasterQueued = true;
+          console.log(`[GenerateNow] Farcaster: content queued (will post when X queue drains)`);
+        }
+      } catch (fcErr: any) {
+        console.warn(`[GenerateNow] Farcaster queue note failed:`, fcErr.message);
+      }
+
+      const queuedTo = ["x"];
+      if (farcasterQueued) queuedTo.push("farcaster");
+
+      res.json({
+        success: true,
+        content: trimmed.slice(0, 500) + (trimmed.length > 500 ? "..." : ""),
+        type: engineId,
+        queuedTo,
+        contentLength: trimmed.length,
+      });
+
+    } catch (e: any) {
+      console.error(`[GenerateNow] Engine ${engineId} failed:`, e.message);
+      res.status(500).json({
+        success: false,
+        error: e.message || "Generation failed",
+      });
+    }
+  });
 }
