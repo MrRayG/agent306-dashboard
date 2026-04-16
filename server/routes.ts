@@ -95,6 +95,7 @@ import { getCompetencyProfile } from "./competencyFramework.js";
 import { buildVoiceBlock } from "./voice.js";
 import { getEvolutionContext } from "./soulEvolution.js";
 import { generateBreakthroughContent } from "./breakthroughDetector.js";
+import { getScheduleConfig, updateEngineSchedule, formatScheduleDisplay, parseDaysAndHour, type EngineSchedule } from "./engineScheduleConfig.js";
 // breakingNewsDetector removed — not needed for now
 
 // On-chain API removed
@@ -4637,7 +4638,7 @@ needsHelp: true only when you genuinely need his direction or information`,
     return null;
   }
 
-  // GET /api/engines/status — all engine states
+  // GET /api/engines/status — all engine states (reads schedule from config)
   app.get("/api/engines/status", requireDashAuth, (_req, res) => {
     try {
       const signalState = getSignalBriefState();
@@ -4645,6 +4646,7 @@ needsHelp: true only when you genuinely need his direction or information`,
       const articleState = getArticleState();
       const briefingState = getBriefingState();
       const blogState = getBlogState();
+      const schedConfig = getScheduleConfig();
 
       const lastRuns: Record<string, string | null> = {
         signal:       signalState.lastPostedAt ?? null,
@@ -4664,15 +4666,23 @@ needsHelp: true only when you genuinely need his direction or information`,
         if (newsRecord) lastRuns.news = newsRecord.postedAt;
       } catch {}
 
-      const engines = ENGINE_DEFS.map(eng => ({
-        id:       eng.id,
-        name:     eng.name,
-        emoji:    eng.emoji,
-        schedule: eng.schedule,
-        nextRun:  computeNextRun(eng.days, eng.hour),
-        lastRun:  lastRuns[eng.id] ?? null,
-        enabled:  true,
-      }));
+      const engines = ENGINE_DEFS.map(eng => {
+        const sched = schedConfig[eng.id];
+        // Use config schedule if available; fall back to hardcoded
+        const scheduleStr = sched ? formatScheduleDisplay(sched) : eng.schedule;
+        const { days, hour } = sched ? parseDaysAndHour(sched) : { days: [...eng.days] as number[], hour: eng.hour };
+        const enabled = sched ? sched.enabled : true;
+
+        return {
+          id:       eng.id,
+          name:     eng.name,
+          emoji:    eng.emoji,
+          schedule: scheduleStr,
+          nextRun:  enabled ? computeNextRun(days, hour) : null,
+          lastRun:  lastRuns[eng.id] ?? null,
+          enabled,
+        };
+      });
 
       res.json({ engines });
     } catch (e: any) {
@@ -4680,8 +4690,59 @@ needsHelp: true only when you genuinely need his direction or information`,
     }
   });
 
+  // GET /api/engines/schedules — all engine schedule configs
+  app.get("/api/engines/schedules", requireDashAuth, (_req, res) => {
+    try {
+      const config = getScheduleConfig();
+      res.json(config);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // PUT /api/engines/:engineId/schedule — update an engine's schedule
+  app.put("/api/engines/:engineId/schedule", requireDashAuth, (req, res) => {
+    const { engineId } = req.params;
+    const validEngines = ["signal", "academy", "news", "research", "podcast", "article", "breakthrough", "blog", "dispatch"];
+
+    if (!validEngines.includes(engineId)) {
+      return res.status(400).json({ error: `Unknown engine "${engineId}"` });
+    }
+
+    const { schedule, timeET, dayET, enabled } = req.body as Partial<EngineSchedule>;
+    const update: Partial<EngineSchedule> = {};
+
+    if (schedule !== undefined) {
+      const validSchedules = ["daily", "weekly", "on_event", "Mon/Wed/Fri", "Tue/Thu/Sat", "Mon/Tue/Wed/Thu/Fri", "Sat/Sun"];
+      // Also allow arbitrary day combos like "Mon/Wed"
+      if (!validSchedules.includes(schedule) && !/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)(\/(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun))*$/.test(schedule)) {
+        return res.status(400).json({ error: `Invalid schedule: "${schedule}"` });
+      }
+      update.schedule = schedule;
+    }
+
+    if (timeET !== undefined) {
+      if (!/^\d{1,2}:\d{2}$/.test(timeET)) {
+        return res.status(400).json({ error: `Invalid timeET: "${timeET}" — expected HH:MM` });
+      }
+      update.timeET = timeET;
+    }
+
+    if (dayET !== undefined) update.dayET = dayET;
+    if (enabled !== undefined) update.enabled = !!enabled;
+
+    try {
+      const config = updateEngineSchedule(engineId, update);
+      console.log(`[ScheduleConfig] Updated ${engineId}:`, JSON.stringify(config[engineId]));
+      res.json({ success: true, schedule: config[engineId], allSchedules: config });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // POST /api/engines/:engineId/generate — on-demand content generation
-  // Generates content and queues to X + Farcaster. Does NOT auto-post.
+  // Generates content and queues to selected platforms. Does NOT auto-post.
+  // Body: { platforms?: ["x", "farcaster"] } — defaults to both if omitted
   app.post("/api/engines/:engineId/generate", requireDashAuth, async (req, res) => {
     const { engineId } = req.params;
     const validEngines = ["signal", "academy", "news", "research", "podcast", "article", "breakthrough", "blog"];
@@ -4693,7 +4754,21 @@ needsHelp: true only when you genuinely need his direction or information`,
       });
     }
 
-    console.log(`[GenerateNow] On-demand generation triggered for engine: ${engineId}`);
+    // Platform selection — defaults to both
+    const validPlatforms = ["x", "farcaster"];
+    let platforms: string[] = req.body?.platforms ?? ["x", "farcaster"];
+    if (!Array.isArray(platforms) || platforms.length === 0) {
+      platforms = ["x", "farcaster"];
+    }
+    platforms = platforms.filter(p => validPlatforms.includes(p));
+    if (platforms.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid platforms. Valid: ${validPlatforms.join(", ")}`,
+      });
+    }
+
+    console.log(`[GenerateNow] On-demand generation triggered for engine: ${engineId}, platforms: ${platforms.join(", ")}`);
 
     try {
       let content = "";
@@ -4785,29 +4860,31 @@ needsHelp: true only when you genuinely need his direction or information`,
       }
 
       const trimmed = content.trim();
+      const queuedTo: string[] = [];
 
-      // Queue to X
-      const xPostType = type as any; // XPostType
-      queueXPost(trimmed, xPostType, 3); // priority 3 = high (on-demand)
-      console.log(`[GenerateNow] Queued to X: ${engineId} (${trimmed.length} chars)`);
-
-      // Queue to Farcaster
-      let farcasterQueued = false;
-      try {
-        const channel = trimmed.match(/\bai\b|agent|llm|model/i) ? "ai" : undefined;
-        queueFarcasterPost(trimmed, type as any, 3, channel);
-        farcasterQueued = true;
-        console.log(`[GenerateNow] Queued to Farcaster: ${engineId} (${trimmed.length} chars)`);
-      } catch (fcErr: any) {
-        console.warn(`[GenerateNow] Farcaster queue failed:`, fcErr.message);
+      // Queue to X (only if selected)
+      if (platforms.includes("x")) {
+        const xPostType = type as any; // XPostType
+        queueXPost(trimmed, xPostType, 3); // priority 3 = high (on-demand)
+        queuedTo.push("x");
+        console.log(`[GenerateNow] Queued to X: ${engineId} (${trimmed.length} chars)`);
       }
 
-      const queuedTo = ["x"];
-      if (farcasterQueued) queuedTo.push("farcaster");
+      // Queue to Farcaster (only if selected)
+      if (platforms.includes("farcaster")) {
+        try {
+          const channel = trimmed.match(/\bai\b|agent|llm|model/i) ? "ai" : undefined;
+          queueFarcasterPost(trimmed, type as any, 3, channel);
+          queuedTo.push("farcaster");
+          console.log(`[GenerateNow] Queued to Farcaster: ${engineId} (${trimmed.length} chars)`);
+        } catch (fcErr: any) {
+          console.warn(`[GenerateNow] Farcaster queue failed:`, fcErr.message);
+        }
+      }
 
       res.json({
         success: true,
-        content: trimmed.slice(0, 500) + (trimmed.length > 500 ? "..." : ""),
+        content: trimmed,  // Return full content for preview
         type: engineId,
         queuedTo,
         contentLength: trimmed.length,
