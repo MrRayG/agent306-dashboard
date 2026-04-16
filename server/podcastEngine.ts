@@ -1953,8 +1953,15 @@ export async function generatePodcastContent(): Promise<string | null> {
     console.log(`[Podcast] Generating episode from thread: "${best.topic}"`);
     const episode = await generateEpisodeFromThread(best.threadId);
     if (episode?.script) {
-      // Return a teaser/promo derived from the script
-      const scriptPreview = episode.script.slice(0, 1500);
+      // Return a teaser/promo derived from the script segments
+      const fullScript = [
+        episode.script.coldOpen,
+        episode.script.actOne,
+        episode.script.actTwo,
+        episode.script.actThree,
+        episode.script.outro,
+      ].filter(Boolean).join("\n\n");
+      const scriptPreview = fullScript.slice(0, 1500);
       return `[306 PODCAST] New episode: ${episode.title}\n\n${scriptPreview}`;
     }
   }
@@ -1966,7 +1973,12 @@ export async function generatePodcastContent(): Promise<string | null> {
 
   if (scripted.length > 0) {
     const ep = scripted[0];
-    return `[306 PODCAST] ${ep.title}\n\n${(ep.script ?? "").slice(0, 1500)}`;
+    const segments = ep.script;
+    const fullScript = segments
+      ? [segments.coldOpen, segments.actOne, segments.actTwo, segments.actThree, segments.outro]
+          .filter(Boolean).join("\n\n")
+      : "";
+    return `[306 PODCAST] ${ep.title}\n\n${fullScript.slice(0, 1500)}`;
   }
 
   return null;
