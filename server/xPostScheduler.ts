@@ -10,7 +10,7 @@
  *    12am-6am ET — [306 THOUGHTS]  (agent speaks freely)
  *    8am ET      — [306 NEWS]      (hard AI news, market moves)
  *    10am ET     — [306 SIGNAL]    (trend analysis, pattern recognition)
- *    12pm ET     — [306 RESEARCH]  (deep dives, technical exploration)
+ *    12pm ET     — [306 ACADEMY]  (educational, how-to, concept breakdowns)
  *    2pm ET      — [306 THOUGHTS]  (agent speaks freely)
  *    4pm ET      — [306 THOUGHTS]  (agent speaks freely)
  *    6pm ET      — [THE DISPATCH]  (flagship evening dispatch)
@@ -114,7 +114,7 @@ const CONTENT_SLOTS: ContentSlot[] = [
   // Daytime — locked shows
   { name: "Morning",       hourUTC: 12, preferredTypes: ["news", "signal", "roundup"],       requiredContentType: "news" },       // 8am ET — [306 NEWS]
   { name: "Late Morning",  hourUTC: 14, preferredTypes: ["signal", "academy"],               requiredContentType: "signal" },     // 10am ET — [306 SIGNAL]
-  { name: "Midday",        hourUTC: 16, preferredTypes: ["research", "blog"],                requiredContentType: "research" },   // 12pm ET — [306 RESEARCH]
+  { name: "Midday",        hourUTC: 16, preferredTypes: ["academy", "research", "blog"],      requiredContentType: "academy" },    // 12pm ET — [306 ACADEMY]
   { name: "Afternoon",     hourUTC: 18, preferredTypes: ["agent_voice", "roundup"],          agentChoice: true },                 // 2pm ET — 306 THOUGHTS
   { name: "Late Afternoon", hourUTC: 20, preferredTypes: ["agent_voice", "signal"],          agentChoice: true },                 // 4pm ET — 306 THOUGHTS
   { name: "Evening",       hourUTC: 22, preferredTypes: ["dispatch", "agent_voice"],         requiredContentType: "dispatch" },   // 6pm ET — [THE DISPATCH]
