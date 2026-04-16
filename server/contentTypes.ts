@@ -88,6 +88,18 @@ export const CONTENT_TYPES: Record<string, ContentType> = {
     queueType: 'academy',
     slotPreference: ['midday', 'morning'],
   },
+  agent_voice: {
+    id: 'agent_voice',
+    showTag: '',
+    name: 'Agent Voice',
+    description: 'Free-form — Agent 306 speaks freely. Her thoughts, questions, takes, reflections. No required tag or format.',
+    format: 'No required format. Agent 306 writes whatever she wants.',
+    schedule: '6 slots/day (2pm, 4pm, 12am, 2am, 4am, 6am ET)',
+    category: 'new',
+    engine: 'on-demand',
+    queueType: 'agent_voice',
+    slotPreference: ['afternoon', 'late_night'],
+  },
 };
 
 /** Get show tag by queue type */
@@ -114,6 +126,8 @@ export function getContentTypeByQueue(queueType: string): ContentType | undefine
  * Strips any malformed tag attempts before prepending the correct one.
  */
 export function enforceShowTag(postText: string, queueType: string): string {
+  // agent_voice posts have no required tag — return as-is
+  if (queueType === 'agent_voice') return postText;
   const expectedTag = getShowTag(queueType);
   if (!expectedTag) return postText;
   if (postText.startsWith(expectedTag)) return postText;

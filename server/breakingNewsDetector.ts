@@ -258,80 +258,8 @@ export function markEventPosted(eventId: string): void {
   }
 }
 
-export function startBreakingNewsLoop(xWrite: any): void {
-  console.log("[BreakingNews] Starting breaking news detection loop (every 30 min during posting hours)");
-
-  async function runCheck() {
-    if (!isWithinPostingHours()) {
-      console.log("[BreakingNews] Outside posting hours — skipping check");
-      return;
-    }
-
-    const event = await checkBreakingNews();
-    if (!event) return;
-
-    // Novelty gate — check KB before allowing [306 NEWS] framing
-    try {
-      const noveltyResult = await shouldFrameAsBreaking(event);
-      if (!noveltyResult.allowed) {
-        console.log(`[BreakingNews] Novelty gate blocked: ${noveltyResult.reason}`);
-        if (noveltyResult.reframedType === "analysis" || noveltyResult.reframedType === "update") {
-          const post = await generateBreakingPost(event);
-          if (post) {
-            const reframed = post.replace(/\[306 NEWS\]/i,
-              noveltyResult.reframedType === "update" ? "[306 SIGNAL]" : "[306 RESEARCH]");
-            queueXPost(reframed, noveltyResult.reframedType === "update" ? "signal" : "research", 5);
-            markEventPosted(event.id);
-            console.log(`[BreakingNews] Reframed as ${noveltyResult.reframedType}: "${event.headline.slice(0, 60)}"`);
-          }
-          return;
-        }
-        // "skip" recommendation — mark as posted to avoid re-detection
-        markEventPosted(event.id);
-        return;
-      }
-    } catch (err) {
-      // Non-fatal: if novelty gate fails, allow original flow to proceed
-      console.warn("[BreakingNews] Novelty gate check failed, allowing through:", err);
-    }
-
-    if (shouldPostImmediately(event)) {
-      // Tier 1: Queue at highest priority — the slot scheduler will post
-      // it at the next NEWS slot. We no longer bypass the slot system
-      // because immediate posting can collide with protected slots
-      // (e.g. THE DISPATCH at 7pm, ROUNDUP at 5pm).
-      const post = await generateBreakingPost(event);
-      if (post) {
-        queueXPost(post, "news", 0); // priority 0 = highest
-        markEventPosted(event.id);
-        console.log(`[BreakingNews] TIER-1 queued highest-priority: "${post.slice(0, 60)}"`);
-      }
-    } else if (event.tier === 2) {
-      // Tier 2: Queue as high-priority
-      const post = await generateBreakingPost(event);
-      if (post) {
-        queueXPost(post, "news", 1);
-        markEventPosted(event.id);
-        console.log(`[BreakingNews] Tier-2 queued high-priority: "${event.headline.slice(0, 60)}"`);
-      }
-    } else {
-      // Tier 3: Queue as normal
-      const post = await generateBreakingPost(event);
-      if (post) {
-        queueXPost(post, "news", 5);
-        markEventPosted(event.id);
-        console.log(`[BreakingNews] Tier-3 queued normal: "${event.headline.slice(0, 60)}"`);
-      }
-    }
-  }
-
-  // Check every 30 minutes
-  setInterval(() => {
-    runCheck().catch(e => console.error("[BreakingNews] Loop error:", e.message));
-  }, 30 * 60 * 1000);
-
-  // Initial check after 1 minute (let other systems start up)
-  setTimeout(() => {
-    runCheck().catch(e => console.error("[BreakingNews] Initial check error:", e.message));
-  }, 60 * 1000);
+// Breaking news disabled — Agent 306's voice IS the news
+export function startBreakingNewsLoop(_xWrite: any): void {
+  console.log("[BreakingNews] Breaking news detection disabled — Agent 306's voice IS the news");
+  return;
 }

@@ -85,7 +85,7 @@ function checkSimilarity(
 }
 
 // ── Rate limiting ────────────────────────────────────────────
-const MAX_POSTS_PER_24H = 12;
+const MAX_POSTS_PER_24H = 14;
 const MIN_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours
 const GRACE_WINDOW_MS = 60 * 1000; // 60s grace to avoid fence-post rejections at exact boundary
 
