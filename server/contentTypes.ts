@@ -28,18 +28,6 @@ export const CONTENT_TYPES: Record<string, ContentType> = {
     queueType: 'signal',
     slotPreference: ['midday', 'morning'],
   },
-  research: {
-    id: 'research',
-    showTag: '[306 ACADEMY]',
-    name: '306 ACADEMY',
-    description: 'Deep Dive Analysis — technical breakdowns of papers, architectures, benchmarks. High rigor.',
-    format: 'Bullet points: Methodology, Key Findings, Limitations. Citations where possible.',
-    schedule: 'Daily 12pm ET',
-    category: 'primary',
-    engine: 'routes.ts (research brief)',
-    queueType: 'research',
-    slotPreference: ['midday', 'afternoon'],
-  },
   roundup: {
     id: 'roundup',
     showTag: '[306 ROUNDUP]',
