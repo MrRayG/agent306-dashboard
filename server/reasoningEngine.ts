@@ -898,8 +898,8 @@ export async function triageHypothesisEvidence(
     const searchQuery = `${hypothesis.claim} ${hypothesis.prediction}`;
     const results = await semanticSearch(searchQuery, { maxResults: 20, excludeArchived: true });
 
-    // Count entries with relevance > 0.6
-    const relevantResults = results.filter(r => r.similarity > 0.6);
+    // Count entries with relevance > 0.50
+    const relevantResults = results.filter(r => r.similarity > 0.50);
     const matchCount = relevantResults.length;
 
     // Check freshness of top matches
@@ -908,7 +908,7 @@ export async function triageHypothesisEvidence(
       const newestEntry = relevantResults[0].entry;
       const entryDate = new Date(newestEntry.updatedAt ?? newestEntry.learnedAt ?? 0);
       const ageDays = (Date.now() - entryDate.getTime()) / (24 * 60 * 60 * 1000);
-      if (ageDays < 7) freshness = "fresh";
+      if (ageDays < 14) freshness = "fresh";
       else if (ageDays < 30) freshness = "stale";
       // 30+ days or no date = "none"
     }

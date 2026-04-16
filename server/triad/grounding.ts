@@ -12,10 +12,11 @@
  * ─────────────────────────────────────────────────────────────
  */
 
-import { LLM_BASE_URL, getLLMHeaders } from "../llmConfig.js";
+import { LLM_BASE_URL, getLLMHeaders, LLM_TIMEOUTS } from "../llmConfig.js";
 import { getModel } from "../modelRouter.js";
 import { safeParseLLMJson } from "../safeParseLLMJson.js";
 import { getSoulContext } from "../memoryEngine.js";
+import { callLLMWithRetry } from "../llmRetry.js";
 import type { ContentBrief, ContentReview } from "./schemas.js";
 
 /**
@@ -98,22 +99,28 @@ Rules:
 - Only flag FACTUAL claims, not narrative structure or rhetorical devices`;
 
   try {
-    const res = await fetch(LLM_BASE_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
-        model: getModel("triad-grounding-review"),
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.1,
-        max_tokens: 3000,
-      }),
-      signal: AbortSignal.timeout(60_000),
-    });
+    const data = await callLLMWithRetry(
+      async (signal) => {
+        const res = await fetch(LLM_BASE_URL, {
+          method: "POST",
+          headers: getLLMHeaders(),
+          body: JSON.stringify({
+            model: getModel("triad-grounding-review"),
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt },
+            ],
+            temperature: 0.1,
+            max_tokens: 3000,
+          }),
+          signal,
+        });
+        return await res.json() as any;
+      },
+      LLM_TIMEOUTS.triad_grounding,
+      "Triad.grounding",
+    );
 
-    const data = await res.json() as any;
     const raw = data.choices?.[0]?.message?.content ?? "";
     const parsed = safeParseLLMJson<{
       verdict: string;

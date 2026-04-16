@@ -10,11 +10,25 @@
  * ─────────────────────────────────────────────────────────────
  */
 
-import { getResearchLab, saveResearchLab, extractKeyTokens, jaccardSimilarity } from "./researchEngine.js";
-import { LLM_BASE_URL, getLLMHeaders } from "./llmConfig.js";
+import { getResearchLab, saveResearchLab } from "./researchEngine.js";
+import { LLM_BASE_URL, getLLMHeaders, LLM_TIMEOUTS } from "./llmConfig.js";
 import { getModel } from "./modelRouter.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import { getEmbedding } from "./embeddingEngine.js";
 import type { Hypothesis } from "./researchEngine.js";
+
+// ── Cosine similarity (inline to avoid circular dependency) ──────────────────
+function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length !== b.length || a.length === 0) return 0;
+  let dot = 0, normA = 0, normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  return denom === 0 ? 0 : dot / denom;
+}
 
 export interface HypothesisCluster {
   representative: Hypothesis;
@@ -23,26 +37,50 @@ export interface HypothesisCluster {
 }
 
 /**
- * Find clusters of similar hypotheses using keyword overlap.
+ * Find clusters of similar hypotheses using cosine similarity on embeddings.
+ * Falls back to sync (non-embedding) mode if embedding API fails.
  * Returns clusters with minClusterSize+ members (worth merging).
  */
-export function findHypothesisClusters(minClusterSize = 3, similarityThreshold = 0.45): HypothesisCluster[] {
+export async function findHypothesisClusters(minClusterSize = 3, similarityThreshold = 0.75): Promise<HypothesisCluster[]> {
   const lab = getResearchLab();
   const active = lab.hypotheses.filter(h => h.status === 'forming' || h.status === 'testing');
+
+  if (active.length < minClusterSize) return [];
+
+  // Compute embeddings for all active hypotheses
+  const embeddingMap = new Map<string, number[]>();
+  for (const h of active) {
+    try {
+      const embedding = await getEmbedding(h.claim);
+      if (embedding.length > 0) {
+        embeddingMap.set(h.id, embedding);
+      }
+    } catch (e: any) {
+      console.warn(`[HypothesisConsolidator] Embedding failed for "${h.claim.slice(0, 40)}": ${e.message}`);
+    }
+  }
+
+  if (embeddingMap.size < minClusterSize) {
+    console.warn(`[HypothesisConsolidator] Only ${embeddingMap.size} embeddings computed — not enough for clustering`);
+    return [];
+  }
 
   const clusters: HypothesisCluster[] = [];
   const assigned = new Set<string>();
 
   for (const h of active) {
     if (assigned.has(h.id)) continue;
+    const hEmb = embeddingMap.get(h.id);
+    if (!hEmb) continue;
 
-    const hTokens = extractKeyTokens(h.claim);
     const members: Hypothesis[] = [h];
 
     for (const candidate of active) {
       if (candidate.id === h.id || assigned.has(candidate.id)) continue;
-      const cTokens = extractKeyTokens(candidate.claim);
-      const sim = jaccardSimilarity(hTokens, cTokens);
+      const cEmb = embeddingMap.get(candidate.id);
+      if (!cEmb) continue;
+
+      const sim = cosineSimilarity(hEmb, cEmb);
       if (sim >= similarityThreshold) {
         members.push(candidate);
       }
@@ -113,7 +151,7 @@ Respond with JSON:
         temperature: 0.1,
         max_tokens: 500,
       }),
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(LLM_TIMEOUTS.consolidation),
     });
 
     if (!res.ok) {
@@ -191,7 +229,7 @@ export async function consolidateHypotheses(options?: {
 
   console.log(`[HypothesisConsolidator] Starting consolidation (minClusterSize=${minSize}, maxClusters=${maxClusters}, similarityThreshold=${simThreshold}, dryRun=${dryRun})...`);
 
-  let clusters = findHypothesisClusters(minSize, simThreshold);
+  let clusters = await findHypothesisClusters(minSize, simThreshold);
   console.log(`[HypothesisConsolidator] Found ${clusters.length} clusters with ${clusters.reduce((s, c) => s + c.members.length, 0)} total hypotheses`);
 
   if (clusters.length === 0) {
@@ -206,8 +244,8 @@ export async function consolidateHypotheses(options?: {
   let merged = 0;
   let removed = 0;
 
-  // Process up to maxClusters per run (budget-conscious, matching KB consolidator)
-  const clustersToProcess = clusters.slice(0, maxClusters);
+  // Process all clusters (no hard cap — process everything found)
+  const clustersToProcess = clusters;
 
   for (const cluster of clustersToProcess) {
     console.log(`[HypothesisConsolidator] Merging cluster: "${cluster.representative.claim.slice(0, 60)}..." (${cluster.members.length} variants)`);

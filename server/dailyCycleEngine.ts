@@ -140,6 +140,31 @@ export function getBriefingState(): BriefingState { return state; }
 
 // ── Gather context from other engines ─────────────────────────────────────────
 
+// Extract max days from timeframe like "30-90 days", "3 months", "6 months"
+function parseMaxTimeframeDays(tf: string): number {
+  // Range pattern: "30-90 days"
+  const rangeMatch = tf.match(/(\d+)\s*[-–]\s*(\d+)\s*(day|week|month|year)/i);
+  if (rangeMatch) {
+    const maxNum = parseInt(rangeMatch[2]);
+    const unit = rangeMatch[3].toLowerCase();
+    if (unit.startsWith('week')) return maxNum * 7;
+    if (unit.startsWith('month')) return maxNum * 30;
+    if (unit.startsWith('year')) return maxNum * 365;
+    return maxNum;
+  }
+  // Single value: "3 months", "90 days"
+  const match = tf.match(/(\d+)\s*(day|week|month|year)/i);
+  if (match) {
+    const num = parseInt(match[1]);
+    const unit = match[2].toLowerCase();
+    if (unit.startsWith('week')) return num * 7;
+    if (unit.startsWith('month')) return num * 30;
+    if (unit.startsWith('year')) return num * 365;
+    return num;
+  }
+  return 90; // default 90 days
+}
+
 function gatherHypotheses(): { active: any[]; expired: any[] } {
   try {
     const { getResearchLab } = require("./researchEngine.js");
@@ -151,10 +176,11 @@ function gatherHypotheses(): { active: any[]; expired: any[] } {
 
     for (const h of hypotheses) {
       if (h.status === "confirmed" || h.status === "rejected") continue;
-      // Check if expired by timeframe
-      if (h.timeframe) {
-        const resolveDate = new Date(h.timeframe).getTime();
-        if (!isNaN(resolveDate) && resolveDate < now) {
+      // Check if expired by timeframe using proper date math
+      if (h.timeframe && h.formedAt) {
+        const maxDays = parseMaxTimeframeDays(h.timeframe);
+        const formedAt = new Date(h.formedAt).getTime();
+        if (!isNaN(formedAt) && (formedAt + maxDays * 24 * 60 * 60 * 1000) < now) {
           expired.push(h);
           continue;
         }
@@ -428,6 +454,35 @@ async function autoDebateManuscripts(): Promise<number> {
   return debated;
 }
 
+// ── Auto-reject stale forming hypotheses ────────────────────────────────────
+
+function pruneStaleFormingHypotheses(): number {
+  const STALE_FORMING_DAYS = 14;
+  const now = Date.now();
+  const { getResearchLab: getLabForPruning, saveResearchLab: saveLabForPruning } = require("./researchEngine.js");
+  const lab = getLabForPruning();
+  let pruned = 0;
+
+  for (const h of lab.hypotheses) {
+    if (h.status === 'forming') {
+      const createdAt = new Date(h.formedAt ?? h.createdAt ?? 0).getTime();
+      const ageDays = (now - createdAt) / (1000 * 60 * 60 * 24);
+      if (ageDays > STALE_FORMING_DAYS) {
+        h.status = 'expired';
+        h.resolution = 'stale_forming';
+        pruned++;
+        console.log(`[DailyCycle] Auto-rejected stale forming hypothesis (${ageDays.toFixed(0)}d): "${(h.claim ?? h.text ?? "").slice(0, 60)}"`);
+      }
+    }
+  }
+
+  if (pruned > 0) {
+    saveLabForPruning(lab);
+    console.log(`[DailyCycle] Pruned ${pruned} stale forming hypotheses (>14 days with no progress)`);
+  }
+  return pruned;
+}
+
 // ── Auto-resolve mature hypotheses ──────────────────────────────────────────
 
 async function autoResolveHypotheses(): Promise<number> {
@@ -473,12 +528,14 @@ async function autoResolveHypotheses(): Promise<number> {
       let academicEvidence = "";
       const searchQuery = `Evidence for or against: ${hyp.claim}. ${hyp.prediction}. Look for recent data, studies, announcements, or expert analysis.`;
 
-      // Run Perplexity + Semantic Scholar in parallel
-      const [pplxSettled, scholarSettled] = await Promise.allSettled([
+      // Run Perplexity + Semantic Scholar + External Sources in parallel
+      const { searchAllSources } = await import("./externalDataSources.js");
+      const [pplxSettled, scholarSettled, externalSettled] = await Promise.allSettled([
         pplxKey && pplxKey.length > 10
           ? researchWithPerplexity(searchQuery, pplxKey)
           : Promise.resolve({ text: "", sources: [] as string[] }),
         researchWithSemanticScholar(hyp.claim),
+        searchAllSources(hyp.claim, { limit: 2, sources: ["openalex", "arxiv", "crossref", "news"] }),
       ]);
 
       if (pplxSettled.status === "fulfilled" && (pplxSettled.value?.text?.length ?? 0) > 50) {
@@ -497,6 +554,15 @@ async function autoResolveHypotheses(): Promise<number> {
         console.log(`[DailyCycle] Academic evidence gathered for "${hyp.claim.slice(0, 50)}" — ${papers.length} papers`);
       }
 
+      // External data source evidence
+      let externalEvidence = "";
+      if (externalSettled.status === "fulfilled" && externalSettled.value.length > 0) {
+        externalEvidence = externalSettled.value
+          .map(r => `- [${r.source}] "${r.title}": ${(r.text ?? "").slice(0, 200)}${r.url ? ` (${r.url})` : ""}`)
+          .join("\n");
+        console.log(`[DailyCycle] External evidence gathered for "${hyp.claim.slice(0, 50)}" — ${externalSettled.value.length} results`);
+      }
+
       // Rate limit between hypothesis resolution calls
       await new Promise(r => setTimeout(r, 3000));
 
@@ -506,6 +572,9 @@ async function autoResolveHypotheses(): Promise<number> {
       }
       if (academicEvidence) {
         evidenceSection += `\n\nACADEMIC EVIDENCE:\n${academicEvidence}`;
+      }
+      if (externalEvidence) {
+        evidenceSection += `\n\nEXTERNAL SOURCES (academic/regulatory/news):\n${externalEvidence}`;
       }
       if (!evidenceSection) {
         evidenceSection = "\nNote: No live search was performed. Evaluate based on knowledge base only.";
@@ -988,6 +1057,17 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
   // Initialize cycle context accumulator (non-fatal)
   try { startCycleContext(); } catch (e: any) { console.warn("[DailyCycle] Cycle context start failed (non-fatal):", e.message); }
 
+  // ── Phase 0: One-time hypothesis queue reset (runs once, flagged) ──────────
+  try {
+    const { runHypothesisQueueReset } = await import("./archiveHypotheses.js");
+    const didReset = runHypothesisQueueReset();
+    if (didReset) {
+      console.log("[DailyCycle] Hypothesis queue reset completed (one-time)");
+    }
+  } catch (e: any) {
+    console.warn("[DailyCycle] Queue reset check failed (non-fatal):", e.message);
+  }
+
   // ── Phase A: Sequential prerequisites (intake + seeding + gather) ──────────
   const phaseAStart = Date.now();
 
@@ -1199,6 +1279,9 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
         // Round 2: Process evidence between debate and resolve (test/debate gap-filling)
         console.log("[EvidenceDispatcher] Processing evidence queue — round 2 (post-debate)...");
         await processEvidenceQueue().catch(e => console.warn("[DailyCycle] Evidence queue round 2 failed:", e.message));
+
+        console.log("[Reasoning] Pruning stale forming hypotheses...");
+        pruneStaleFormingHypotheses();
 
         console.log("[Reasoning] autoResolveHypotheses...");
         await autoResolveHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis resolution failed:", e.message));
@@ -1575,8 +1658,8 @@ Write a single tweet sharing the most interesting insight from this research. Re
           } catch {}
           const result = await consolidateHypotheses({
             minClusterSize: queueOverloaded ? 2 : 3,
-            maxClusters: queueOverloaded ? 10 : 5,
-            similarityThreshold: queueOverloaded ? 0.35 : 0.45,
+            maxClusters: queueOverloaded ? 50 : 15,
+            similarityThreshold: queueOverloaded ? 0.70 : 0.80,
             weakestDimension: weakDim,
           });
           console.log(`[DailyCycle] Hypothesis consolidation: ${result.clustersFound} clusters, ${result.merged} merged, ${result.removed} removed`);

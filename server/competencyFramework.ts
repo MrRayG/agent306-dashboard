@@ -451,7 +451,9 @@ export function updateCompetencyLevel(id: string, delta: number, reason: string)
 
   const clampedDelta = Math.max(-2, Math.min(2, delta));
   const oldLevel = competency.currentLevel;
-  competency.currentLevel = Math.max(1, Math.min(10, oldLevel + clampedDelta));
+  competency.currentLevel = Math.round(
+    Math.max(1, Math.min(10, oldLevel + clampedDelta)) * 10
+  ) / 10;
 
   if (competency.currentLevel !== oldLevel) {
     profile.levelHistory.push({

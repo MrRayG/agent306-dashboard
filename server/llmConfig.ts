@@ -28,3 +28,20 @@ export function getLLMHeaders(): Record<string, string> {
     "X-Title": "Agent 306",
   };
 }
+
+/**
+ * Centralized LLM timeout configuration.
+ * All values in milliseconds. Overridable via environment variables.
+ */
+export const LLM_TIMEOUTS = {
+  hypothesis_evaluation: parseInt(process.env.LLM_TIMEOUT_HYPOTHESIS ?? "60000", 10),
+  adversarial_evaluation: parseInt(process.env.LLM_TIMEOUT_ADVERSARIAL ?? "60000", 10),
+  triad_fact_sheet: parseInt(process.env.LLM_TIMEOUT_TRIAD_FACT ?? "90000", 10),
+  triad_logic_map: parseInt(process.env.LLM_TIMEOUT_TRIAD_LOGIC ?? "120000", 10),
+  triad_generate: parseInt(process.env.LLM_TIMEOUT_TRIAD_GENERATE ?? "150000", 10),
+  triad_revision: parseInt(process.env.LLM_TIMEOUT_TRIAD_REVISION ?? "150000", 10),
+  triad_grounding: parseInt(process.env.LLM_TIMEOUT_TRIAD_GROUNDING ?? "90000", 10),
+  consolidation: parseInt(process.env.LLM_TIMEOUT_CONSOLIDATION ?? "45000", 10),
+  goal_generation: parseInt(process.env.LLM_TIMEOUT_GOAL ?? "45000", 10),
+  default: parseInt(process.env.LLM_TIMEOUT_DEFAULT ?? "60000", 10),
+};

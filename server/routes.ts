@@ -3206,7 +3206,7 @@ needsHelp: true only when you genuinely need his direction or information`,
   app.get("/api/hypotheses/clusters", async (_req, res) => {
     try {
       const { findHypothesisClusters } = await import("./hypothesisConsolidator.js");
-      const clusters = findHypothesisClusters(3);
+      const clusters = await findHypothesisClusters(3);
       res.json({
         totalClusters: clusters.length,
         totalHypotheses: clusters.reduce((s, c) => s + c.members.length, 0),
