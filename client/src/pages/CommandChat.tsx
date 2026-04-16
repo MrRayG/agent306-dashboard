@@ -157,7 +157,7 @@ export default function CommandChat() {
   const { data: chatState } = useQuery<ChatState>({
     queryKey: ["/api/chat/history"],
     refetchInterval: false,
-    onSuccess: (data) => {
+    onSuccess: (data: ChatState) => {
       if (data?.messages?.length && messages.length === 0) {
         setMessages(data.messages.slice(-40)); // load last 40
       }

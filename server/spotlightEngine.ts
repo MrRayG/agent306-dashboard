@@ -100,7 +100,7 @@ function pickSpotlightHolder(): { username: string; displayName: string; reason:
 
   return {
     username: candidate.username,
-    displayName: candidate.displayName ?? `@${candidate.username}`,
+    displayName: (candidate as any).displayName ?? `@${candidate.username}`,
     reason: candidate.notes || `${candidate.signalWeight} signal weight, spotted ${candidate.signalTypes.join(", ")}`,
   };
 }

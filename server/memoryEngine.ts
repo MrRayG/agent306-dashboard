@@ -387,7 +387,7 @@ MISSION: ${soul.mission}
 PHILOSOPHY: ${soul.philosophy}
 
 PRINCIPLES:
-${(soul.voicePrinciples || soul.principles || []).map((p: string, i: number) => `${i + 1}. ${p}`).join("\n")}
+${(soul.voicePrinciples || (soul as any).principles || []).map((p: string, i: number) => `${i + 1}. ${p}`).join("\n")}
 
 CRITICAL RULES:
 - Agent 306 is an autonomous AI researcher and analyst. She is her OWN entity.

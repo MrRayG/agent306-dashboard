@@ -543,9 +543,9 @@ Respond as JSON only: { "score": number, "reason": "brief reason", "rewrite": "i
           episodeId: epNum,
           tweetUrl,
           tweetText: postText,
-          qualityScore: episode.qualityScore ?? 7,
+          qualityScore: (episode as any).qualityScore ?? 7,
           sentiment: grokResult.sentiment,
-          signals: sources,
+          signals: sources as any,
         });
         queueEngagementCheck(tweetUrl);
       }
@@ -1483,8 +1483,8 @@ export function registerRoutes(httpServer: Server, app: Express) {
       },
       // Room 04 — Diplomatic Floor
       diplomatic: {
-        followingCount: followingState.following?.length ?? 0,
-        lastSync: followingState.lastSync,
+        followingCount: followingState.accounts?.length ?? 0,
+        lastSync: followingState.lastSynced,
         replyCount: replyState.replies.length,
         conversationMemory: getConversationMemoryState(),
       },
@@ -2118,7 +2118,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       for (const t of topics) {
         try {
           const ep = createEpisode({
-            type: t.type === "the_conversation" ? "the_conversation" : "the_signal",
+            type: "the_signal" as const,
             title: t.title ?? "Untitled",
             drivingQuestion: t.drivingQuestion ?? t.pitch ?? "",
           });
@@ -3586,12 +3586,12 @@ needsHelp: true only when you genuinely need his direction or information`,
       if (topic) {
         const { createThread } = await import("./research-agenda.js");
         createThread({
-          title: topic.topic || topic.title || "Approved Research",
+          title: topic.topic || (topic as any).title || "Approved Research",
           thesis: topic.hypothesis || topic.researchQuestion || "",
           status: "active",
           source: "agent_hq_approved",
         });
-        console.log(`[Bridge] Agent HQ approval -> Research Agenda thread: "${topic.title}"`);
+        console.log(`[Bridge] Agent HQ approval -> Research Agenda thread: "${topic.topic || (topic as any).title}"`);
       }
     } catch (e: any) { console.warn("[Bridge] Failed to create agenda thread:", e.message); }
     res.json({ ok });
