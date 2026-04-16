@@ -22,6 +22,11 @@ import { dataPath } from "./dataPaths.js";
 import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import { enforcePostFormat } from "./postFormatGuard.js";
 import { dailyReflection } from "./soulEvolution.js";
+import { getEmbedding } from "./embeddingEngine.js";
+
+// -- Freshness config (env-configurable) ------------------------------
+const X_QUEUE_MAX_AGE_HOURS = parseInt(process.env.X_QUEUE_MAX_AGE_HOURS ?? "4", 10);
+const X_QUEUE_MAX_AGE_MS = X_QUEUE_MAX_AGE_HOURS * 60 * 60 * 1000;
 
 // -- Types --------------------------------------------------------
 
@@ -49,6 +54,8 @@ export interface QueuedPost {
   posted: boolean;
   postedAt: string | null;
   mediaId?: string; // optional pre-uploaded media ID
+  skipped?: boolean;
+  skippedReason?: string;
 }
 
 interface PostHistory {
@@ -191,6 +198,148 @@ export function getTodaysPostsSummary(): string {
   });
 
   return `ALREADY POSTED TODAY:\n${lines.join("\n")}\n\nDo NOT repeat topics already covered today. You may reference them naturally if relevant.`;
+}
+
+// -- Startup: purge stale queued posts ----------------------------
+
+/**
+ * On startup, remove pending posts older than the freshness window.
+ * Prevents stale engine content from being blindly posted after a deploy.
+ */
+function purgeStaleQueuedPosts(): void {
+  const state = loadQueue();
+  const now = Date.now();
+  let purged = 0;
+
+  for (const post of state.queue) {
+    if (post.posted) continue;
+    const age = now - new Date(post.createdAt).getTime();
+    if (age > X_QUEUE_MAX_AGE_MS) {
+      post.posted = true;
+      post.postedAt = new Date().toISOString();
+      post.skipped = true;
+      post.skippedReason = "stale_on_startup";
+      purged++;
+    }
+  }
+
+  if (purged > 0) {
+    saveQueue(state);
+    console.log(`[XScheduler] Purged ${purged} stale queued posts older than ${X_QUEUE_MAX_AGE_HOURS}h`);
+  }
+}
+
+// -- Freshness check (used by posting loop) -----------------------
+
+function isPostStale(post: QueuedPost): boolean {
+  const age = Date.now() - new Date(post.createdAt).getTime();
+  return age > X_QUEUE_MAX_AGE_MS;
+}
+
+// -- Cross-platform deduplication ---------------------------------
+
+const POST_COORDINATOR_FILE = dataPath("post_coordinator.json");
+
+/**
+ * Gather recent post content strings from both X and Farcaster (last 7 days).
+ * X posts: from the queue's posted items (they have content).
+ * Farcaster: the postCoordinator tracks Farcaster post URLs but not content,
+ * so we fall back to comparing the X queue's posted content. Both platforms
+ * share the same engine content, so X posted items reflect Farcaster content.
+ */
+function getRecentPostedContent(): Array<{ content: string; platform: string; postedAt: string }> {
+  const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const results: Array<{ content: string; platform: string; postedAt: string }> = [];
+
+  // X posts from queue (these have content)
+  const state = loadQueue();
+  for (const post of state.queue) {
+    if (!post.posted || !post.postedAt) continue;
+    if (post.skipped) continue;
+    if (new Date(post.postedAt).getTime() < sevenDaysAgo) continue;
+    results.push({ content: post.content, platform: "x", postedAt: post.postedAt });
+  }
+
+  // Farcaster posts: the postCoordinator stores PostRecords with engine keys
+  // but not content. Since engines produce the same content for both platforms,
+  // X posted items already cover the content. We also load the coordinator to
+  // identify Farcaster post timestamps so we can label them correctly.
+  try {
+    if (fs.existsSync(POST_COORDINATOR_FILE)) {
+      const coordState = JSON.parse(fs.readFileSync(POST_COORDINATOR_FILE, "utf8"));
+      const fcPosts = (coordState.posts ?? []).filter(
+        (p: any) => p.platform === "farcaster" && new Date(p.postedAt).getTime() > sevenDaysAgo,
+      );
+      // Mark any X queue content that shares a time window with a Farcaster post
+      // as also being on Farcaster (engines post to both platforms)
+      for (const fcPost of fcPosts) {
+        const fcTime = new Date(fcPost.postedAt).getTime();
+        // Find X post within 2 hours of the Farcaster post — likely same content
+        const matchingX = results.find(
+          r => r.platform === "x" && Math.abs(new Date(r.postedAt).getTime() - fcTime) < 2 * 60 * 60 * 1000,
+        );
+        if (matchingX) {
+          results.push({ content: matchingX.content, platform: "farcaster", postedAt: fcPost.postedAt });
+        }
+      }
+    }
+  } catch {}
+
+  return results;
+}
+
+/**
+ * Check if content is a duplicate of a recently posted item.
+ * Uses embedding cosine similarity when possible, falls back to
+ * prefix string matching.
+ */
+async function isDuplicateContent(
+  content: string,
+): Promise<{ isDuplicate: boolean; matchPlatform?: string; matchDate?: string }> {
+  const recentPosts = getRecentPostedContent();
+  if (recentPosts.length === 0) return { isDuplicate: false };
+
+  // Fast path: exact prefix match (first 100 chars)
+  const prefix = content.slice(0, 100).toLowerCase();
+  for (const recent of recentPosts) {
+    const recentPrefix = recent.content.slice(0, 100).toLowerCase();
+    if (prefix === recentPrefix) {
+      return { isDuplicate: true, matchPlatform: recent.platform, matchDate: recent.postedAt };
+    }
+  }
+
+  // Embedding similarity check
+  try {
+    const queryEmbedding = await getEmbedding(content);
+    if (queryEmbedding.length === 0) return { isDuplicate: false };
+
+    for (const recent of recentPosts) {
+      const recentEmbedding = await getEmbedding(recent.content);
+      if (recentEmbedding.length === 0) continue;
+
+      const similarity = cosineSim(queryEmbedding, recentEmbedding);
+      if (similarity > 0.85) {
+        return { isDuplicate: true, matchPlatform: recent.platform, matchDate: recent.postedAt };
+      }
+    }
+  } catch (e: any) {
+    console.warn("[XScheduler] Embedding dedup failed, using prefix-only:", e.message);
+    // Prefix check already ran above — no duplicate found
+  }
+
+  return { isDuplicate: false };
+}
+
+function cosineSim(a: number[], b: number[]): number {
+  if (a.length !== b.length || a.length === 0) return 0;
+  let dot = 0, normA = 0, normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  return denom === 0 ? 0 : dot / denom;
 }
 
 // -- Public API ---------------------------------------------------
@@ -340,6 +489,33 @@ async function processQueue(xWrite: any): Promise<void> {
 
   console.log(`[XScheduler] Processing: ${post.type} (priority: ${post.priority})`);
 
+  // Freshness guard: skip posts older than the configured max age
+  if (isPostStale(post)) {
+    post.posted = true;
+    post.postedAt = new Date().toISOString();
+    post.skipped = true;
+    post.skippedReason = "stale";
+    saveQueue(state);
+    console.log(`[XScheduler] Skipped stale post: ${post.type} from ${post.createdAt}`);
+    return;
+  }
+
+  // Cross-platform dedup: skip if similar content was already posted
+  try {
+    const dupCheck = await isDuplicateContent(post.content);
+    if (dupCheck.isDuplicate) {
+      post.posted = true;
+      post.postedAt = new Date().toISOString();
+      post.skipped = true;
+      post.skippedReason = `duplicate_${dupCheck.matchPlatform}`;
+      saveQueue(state);
+      console.log(`[XScheduler] Skipped duplicate — similar to ${dupCheck.matchPlatform} post from ${dupCheck.matchDate}`);
+      return;
+    }
+  } catch (e: any) {
+    console.warn("[XScheduler] Dedup check failed, proceeding:", e.message);
+  }
+
   // Run through compliance guard
   const compliance = validateXPost(post.content);
   if (!compliance.allowed) {
@@ -406,6 +582,33 @@ async function processImmediateQueue(xWrite: any): Promise<void> {
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
   for (const post of immediatePosts) {
+    // Freshness guard
+    if (isPostStale(post)) {
+      post.posted = true;
+      post.postedAt = new Date().toISOString();
+      post.skipped = true;
+      post.skippedReason = "stale";
+      saveQueue(state);
+      console.log(`[XScheduler] Skipped stale podcast promo: ${post.type} from ${post.createdAt}`);
+      continue;
+    }
+
+    // Cross-platform dedup
+    try {
+      const dupCheck = await isDuplicateContent(post.content);
+      if (dupCheck.isDuplicate) {
+        post.posted = true;
+        post.postedAt = new Date().toISOString();
+        post.skipped = true;
+        post.skippedReason = `duplicate_${dupCheck.matchPlatform}`;
+        saveQueue(state);
+        console.log(`[XScheduler] Skipped duplicate podcast promo — similar to ${dupCheck.matchPlatform} post from ${dupCheck.matchDate}`);
+        continue;
+      }
+    } catch (e: any) {
+      console.warn("[XScheduler] Dedup check failed, proceeding:", e.message);
+    }
+
     const compliance = validateXPost(post.content);
     if (!compliance.allowed) {
       console.log(`[XScheduler] Podcast promo blocked by compliance: ${compliance.reason}`);
@@ -439,8 +642,35 @@ async function processImmediateQueue(xWrite: any): Promise<void> {
 
 // -- Scheduler loop -----------------------------------------------
 
+/**
+ * Manually clear all pending posts in the queue.
+ * Used by the dashboard clear endpoint.
+ */
+export function clearXPostQueue(): number {
+  const state = loadQueue();
+  let cleared = 0;
+
+  for (const post of state.queue) {
+    if (post.posted) continue;
+    post.posted = true;
+    post.postedAt = new Date().toISOString();
+    post.skipped = true;
+    post.skippedReason = "manual_clear";
+    cleared++;
+  }
+
+  if (cleared > 0) {
+    saveQueue(state);
+    console.log(`[XScheduler] Queue manually cleared — ${cleared} posts archived`);
+  }
+  return cleared;
+}
+
 export function startXPostScheduler(xWrite: any): void {
   console.log("[XScheduler] Starting X post scheduler (engine-only mode — posts queued content from dedicated engines, no on-demand filler)");
+
+  // Purge stale posts before the scheduler loop begins
+  purgeStaleQueuedPosts();
 
   // Process immediate items (podcast promos) every 5 minutes
   setInterval(() => {

@@ -87,7 +87,7 @@ import {
   seedDreams,
 } from "./dreamEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
-import { startXPostScheduler, getXPostQueue, queueXPost, getTodaysPostsSummary } from "./xPostScheduler.js";
+import { startXPostScheduler, getXPostQueue, queueXPost, getTodaysPostsSummary, clearXPostQueue } from "./xPostScheduler.js";
 import { getVoiceContext } from "./voiceInstructions.js";
 import { enforceShowTag } from "./contentTypes.js";
 import { getCompetencyProfile } from "./competencyFramework.js";
@@ -806,6 +806,11 @@ export function registerRoutes(httpServer: Server, app: Express) {
   // ── X Post Queue (dashboard view) ───────────────────────────
   app.get("/api/x/queue", requireDashAuth, (_req, res) => {
     res.json(getXPostQueue());
+  });
+
+  app.post("/api/x/queue/clear", requireDashAuth, (_req, res) => {
+    const cleared = clearXPostQueue();
+    res.json({ cleared });
   });
 
   app.get("/api/x/health", async (_req, res) => {
