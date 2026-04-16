@@ -1,5 +1,9 @@
 /**
- * Tests for enforcePostFormat() — the last-mile safety net for all X posts.
+ * Tests for enforcePostFormat() — the light-touch format safety net.
+ *
+ * Communication Audit v1: Removed tests for force-added hashtags and
+ * injected mentions — those features were removed because they were
+ * reshaping the LLM's voice and hurting post quality.
  *
  * Run: npx tsx --test server/__tests__/postFormatGuard.test.ts
  */
@@ -25,9 +29,8 @@ describe("enforcePostFormat", () => {
   });
 
   it("preserves correct existing signature", () => {
-    const input = "[306 SIGNAL] Test post.\n#AIAgents #DeAI #DePIN #Web3AI\n\n— Agent 306";
+    const input = "[306 SIGNAL] Test post.\n#AIAgents #DeAI\n\n— Agent 306";
     const result = enforcePostFormat(input, "signal");
-    // Should have exactly one signature
     const sigCount = (result.match(/— Agent 306/g) || []).length;
     assert.equal(sigCount, 1, `Expected 1 signature, found ${sigCount}`);
   });
@@ -56,7 +59,6 @@ describe("enforcePostFormat", () => {
     const input = "[306 RESEARCH] New paper on transformer efficiency.";
     const result = enforcePostFormat(input, "research");
     assert.ok(result.startsWith("[306 RESEARCH]"), "Should preserve existing tag");
-    // Should not duplicate the tag
     const tagCount = (result.match(/\[306 RESEARCH\]/g) || []).length;
     assert.equal(tagCount, 1, `Expected 1 tag, found ${tagCount}`);
   });
@@ -67,37 +69,36 @@ describe("enforcePostFormat", () => {
     assert.ok(result.startsWith("[306 SIGNAL]"), `Expected bracketed tag, got: "${result.slice(0, 30)}"`);
   });
 
-  // ── Hashtags ──────────────────────────────────────────────────────────────
+  // ── Hashtag preservation (no longer force-added) ──────────────────────────
 
-  it("adds missing hashtags for signal type", () => {
-    const input = "[306 SIGNAL] AI agents are evolving rapidly.";
+  it("preserves LLM-chosen hashtags exactly as written", () => {
+    const input = "[306 SIGNAL] Test post.\n\n#AIAgents #CryptoAI\n\n— Agent 306";
     const result = enforcePostFormat(input, "signal");
-    assert.ok(result.includes("#AIAgents"), "Should include #AIAgents");
-    assert.ok(result.includes("#DeAI"), "Should include #DeAI");
-    assert.ok(result.includes("#DePIN"), "Should include #DePIN");
-    assert.ok(result.includes("#Web3AI"), "Should include #Web3AI");
+    assert.ok(result.includes("#AIAgents"), "Should keep existing hashtags");
+    assert.ok(result.includes("#CryptoAI"), "Should keep existing hashtags");
   });
 
-  it("does not duplicate existing hashtags", () => {
-    const input = "[306 SIGNAL] AI agents update. #AIAgents #DeAI #DePIN #Web3AI\n\n— Agent 306";
-    const result = enforcePostFormat(input, "signal");
-    const aiAgentsCount = (result.match(/#AIAgents/g) || []).length;
-    assert.equal(aiAgentsCount, 1, `Expected 1 #AIAgents, found ${aiAgentsCount}`);
-  });
-
-  it("adds type-specific hashtags for reflection", () => {
-    const input = "[306 REFLECTION] Thoughts on agency and consciousness.";
+  it("does not force-add hashtags when LLM chose none", () => {
+    const input = "[306 REFLECTION] Sometimes the best insights come without labels.\n\n— Agent 306";
     const result = enforcePostFormat(input, "reflection");
-    assert.ok(result.includes("#AIAgents"), "Should include #AIAgents for reflection");
-    assert.ok(result.includes("#AgenticAI"), "Should include #AgenticAI for reflection");
+    // The format guard no longer adds fallback hashtags — respects LLM's editorial choice
+    assert.ok(result.includes("— Agent 306"), "Should keep signature");
+  });
+
+  // ── No mention injection ─────────────────────────────────────────────────
+
+  it("does not inject @mentions for company names", () => {
+    const input = "[306 NEWS] OpenAI released a new model today.\n\n#AIAgents\n\n— Agent 306";
+    const result = enforcePostFormat(input, "news");
+    assert.ok(!result.includes("(@OpenAI)"), "Should NOT inject @OpenAI mention");
+    assert.ok(result.includes("OpenAI released"), "Should keep original text intact");
   });
 
   // ── Already-correct posts ─────────────────────────────────────────────────
 
   it("passes through already-correct posts unchanged (modulo whitespace)", () => {
-    const input = "[306 SIGNAL] AI agents hit $317B.\n#AIAgents #DeAI #DePIN #Web3AI\n\n— Agent 306";
+    const input = "[306 SIGNAL] AI agents hit $317B.\n#AIAgents #DeAI\n\n— Agent 306";
     const result = enforcePostFormat(input, "signal");
-    // Should have the same key components
     assert.ok(result.startsWith("[306 SIGNAL]"), "Should keep show tag");
     assert.ok(result.includes("#AIAgents"), "Should keep hashtags");
     assert.ok(result.endsWith("— Agent 306"), "Should keep signature");
@@ -121,15 +122,6 @@ describe("enforcePostFormat", () => {
     assert.ok(result.length <= 25000, `Expected <= 25000 chars, got ${result.length}`);
     assert.ok(result.startsWith("[306 SIGNAL]"), "Should preserve show tag");
     assert.ok(result.endsWith("— Agent 306"), "Should preserve signature");
-  });
-
-  // ── No content type ───────────────────────────────────────────────────────
-
-  it("works without content type (uses primary hashtags)", () => {
-    const input = "Something interesting happened in AI today.";
-    const result = enforcePostFormat(input);
-    assert.ok(result.includes("#AIAgents"), "Should add primary hashtag");
-    assert.ok(result.includes("— Agent 306"), "Should add signature");
   });
 
   // ── Edge cases ────────────────────────────────────────────────────────────

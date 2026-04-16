@@ -1,11 +1,34 @@
 /**
  * ─────────────────────────────────────────────────────────────
- *  X COMPLIANCE GUARD
+ *  X COMPLIANCE GUARD — Streamlined (Communication Audit v1)
  *
- *  Runs BEFORE every X/Twitter post to prevent another spam
- *  suspension. Agent 306 was previously suspended for spam —
- *  this guard enforces rate limits, dedup, content safety,
- *  and reply rules per X's automation policies.
+ *  PHILOSOPHY: Safety, not style police.
+ *
+ *  Agent 306 was previously suspended for spam. This guard
+ *  enforces the minimum rules needed to stay within X's
+ *  automation policies — and nothing more.
+ *
+ *  WHAT THIS GUARDS AGAINST (real suspension risks):
+ *    1. Impersonation (claiming to be human)
+ *    2. Prohibited/harmful content
+ *    3. Rate limiting (daily cap + min interval)
+ *    4. Reply safety (unsolicited replies = spam)
+ *
+ *  WHAT WAS REMOVED (was killing post quality):
+ *    - Jaccard dedup gate (0.65 threshold) — too aggressive
+ *      for 6 daily posts in the same domain. The LLM prompt
+ *      already includes today's posts for topic dedup.
+ *    - Hashtag stripping/validation — moved to soft guidance
+ *      in prompts. X demotes >3 hashtags algorithmically
+ *      but doesn't suspend for it.
+ *
+ *  X's actual limits (2026):
+ *    - POST /2/tweets: 10,000/24h per app, 100/15min per user
+ *    - No official "posts per day" suspension threshold
+ *    - Bot accounts allowed with disclosure
+ *    - Suspensions come from: auto-engagement, unsolicited
+ *      @mentions, duplicate content ACROSS accounts, trending
+ *      topic manipulation
  *
  *  No external dependencies — pure TypeScript.
  * ─────────────────────────────────────────────────────────────
@@ -40,54 +63,13 @@ function saveState(state: ComplianceState): void {
   }
 }
 
-// ── Trigram-based Jaccard similarity ─────────────────────────
-function getWordTrigrams(text: string): Set<string> {
-  const words = text.toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/).filter(Boolean);
-  const trigrams = new Set<string>();
-  for (let i = 0; i <= words.length - 3; i++) {
-    trigrams.add(`${words[i]} ${words[i + 1]} ${words[i + 2]}`);
-  }
-  return trigrams;
-}
-
-function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
-  if (a.size === 0 && b.size === 0) return 0;
-  let intersection = 0;
-  Array.from(a).forEach((item) => {
-    if (b.has(item)) intersection++;
-  });
-  const union = a.size + b.size - intersection;
-  return union === 0 ? 0 : intersection / union;
-}
-
-// ── Content similarity check ─────────────────────────────────
-const SIMILARITY_THRESHOLD = 0.65;
-const MAX_RECENT_POSTS = 20;
-
-function checkSimilarity(
-  content: string,
-  state: ComplianceState,
-): { pass: boolean; reason?: string } {
-  const contentTrigrams = getWordTrigrams(content);
-  if (contentTrigrams.size === 0) return { pass: true };
-
-  for (const recent of state.recentPosts) {
-    const recentTrigrams = getWordTrigrams(recent.text);
-    const sim = jaccardSimilarity(contentTrigrams, recentTrigrams);
-    if (sim > SIMILARITY_THRESHOLD) {
-      return {
-        pass: false,
-        reason: `too similar to recent post (similarity: ${sim.toFixed(2)})`,
-      };
-    }
-  }
-  return { pass: true };
-}
-
 // ── Rate limiting ────────────────────────────────────────────
+// Conservative but not strangling. X allows 10,000/day via API.
+// We cap at 12/day with 90min min interval — well within safe range
+// and leaves room for breaking news without fence-post collisions.
 const MAX_POSTS_PER_24H = 12;
-const MIN_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours
-const GRACE_WINDOW_MS = 60 * 1000; // 60s grace to avoid fence-post rejections at exact boundary
+const MIN_INTERVAL_MS = 90 * 60 * 1000; // 90 minutes (down from 2h)
+const GRACE_WINDOW_MS = 60 * 1000; // 60s grace to avoid fence-post rejections
 
 function checkRateLimit(state: ComplianceState): { pass: boolean; reason?: string } {
   const now = Date.now();
@@ -107,11 +89,11 @@ function checkRateLimit(state: ComplianceState): { pass: boolean; reason?: strin
     const lastPost = Math.max(...recentTimestamps);
     const elapsed = now - lastPost;
     if (elapsed < (MIN_INTERVAL_MS - GRACE_WINDOW_MS)) {
-      const hoursElapsed = (elapsed / (60 * 60 * 1000)).toFixed(1);
-      const minHours = (MIN_INTERVAL_MS / (60 * 60 * 1000)).toFixed(0);
+      const minsElapsed = Math.round(elapsed / 60000);
+      const minMins = Math.round(MIN_INTERVAL_MS / 60000);
       return {
         pass: false,
-        reason: `rate limit (${hoursElapsed}h since last post, min interval: ${minHours}h)`,
+        reason: `rate limit (${minsElapsed}min since last post, min interval: ${minMins}min)`,
       };
     }
   }
@@ -119,38 +101,8 @@ function checkRateLimit(state: ComplianceState): { pass: boolean; reason?: strin
   return { pass: true };
 }
 
-// ── Hashtag validation ───────────────────────────────────────
-const MAX_HASHTAGS = 5; // 4 core combo (#AIAgents #DeAI #DePIN #Web3AI) + 1 topic-specific
-
-function validateHashtags(content: string): {
-  pass: boolean;
-  reason?: string;
-  sanitizedContent?: string;
-} {
-  const hashtags = content.match(/#\w+/g) || [];
-
-  if (hashtags.length <= MAX_HASHTAGS) {
-    return { pass: true };
-  }
-
-  // Strip excess hashtags (keep first MAX_HASHTAGS)
-  const keepHashtags = new Set(hashtags.slice(0, MAX_HASHTAGS));
-  let sanitized = content;
-  let stripped = 0;
-
-  for (const tag of hashtags) {
-    if (!keepHashtags.has(tag)) {
-      sanitized = sanitized.replace(tag, "").replace(/\s{2,}/g, " ").trim();
-      stripped++;
-      keepHashtags.add(tag); // prevent double-stripping same tag
-    }
-  }
-
-  console.log(`[XCompliance] Stripped ${stripped} excess hashtags`);
-  return { pass: true, sanitizedContent: sanitized };
-}
-
 // ── Content filter ───────────────────────────────────────────
+// Hard safety: impersonation + prohibited content only.
 const IMPERSONATION_PATTERNS = [
   /\bi am (?:a )?human\b/i,
   /\bi'm (?:a )?human\b/i,
@@ -186,7 +138,7 @@ function checkContentFilter(content: string): { pass: boolean; reason?: string }
 }
 
 // ── Reply safety ─────────────────────────────────────────────
-const REPLY_WINDOW_MS = 24 * 60 * 60 * 1000; // 24h rolling window
+const REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function checkReplySafety(
   state: ComplianceState,
@@ -238,7 +190,9 @@ export interface XPostValidationResult {
  * Returns { allowed: true } if the post can be sent,
  * or { allowed: false, reason: "..." } if it should be skipped.
  *
- * May return sanitizedContent with excess hashtags stripped.
+ * STREAMLINED: Only checks hard safety rules.
+ * Content quality, dedup, and hashtags are handled upstream
+ * via LLM prompts (which already include today's posts).
  */
 export function validateXPost(
   content: string,
@@ -246,35 +200,22 @@ export function validateXPost(
 ): XPostValidationResult {
   const state = loadState();
 
-  // 1. Content filter — check for impersonation / prohibited content
+  // 1. Content filter — impersonation / prohibited content
   const filterResult = checkContentFilter(content);
   if (!filterResult.pass) {
     console.log(`[XCompliance] Post rejected: ${filterResult.reason}`);
     return { allowed: false, reason: filterResult.reason };
   }
 
-  // 2. Rate limiting
+  // 2. Rate limiting — daily cap + min interval
   const rateResult = checkRateLimit(state);
   if (!rateResult.pass) {
     console.log(`[XCompliance] Post rejected: ${rateResult.reason}`);
     return { allowed: false, reason: rateResult.reason };
   }
 
-  // 3. Content similarity check
-  const simResult = checkSimilarity(content, state);
-  if (!simResult.pass) {
-    console.log(`[XCompliance] Post rejected: ${simResult.reason}`);
-    return { allowed: false, reason: simResult.reason };
-  }
-
-  // 4. Hashtag validation
-  const hashtagResult = validateHashtags(content);
-  const sanitizedContent = hashtagResult.sanitizedContent;
-
-  // 5. Reply safety (only if this is a reply)
-  //    HARD BLOCK: All X replies are disabled. Agent 306 only posts original content.
-  //    This is the last line of defense — even if reply engine code somehow runs,
-  //    the compliance guard will reject the post.
+  // 3. Reply safety (only if this is a reply)
+  //    HARD BLOCK: All X replies are disabled unless env var is set.
   if (options?.isReply) {
     if (!process.env.X_REPLIES_ENABLED) {
       console.log("[XCompliance] Reply HARD-BLOCKED: X replies globally disabled (X_REPLIES_ENABLED not set)");
@@ -293,16 +234,13 @@ export function validateXPost(
     }
   }
 
-  return {
-    allowed: true,
-    ...(sanitizedContent ? { sanitizedContent } : {}),
-  };
+  return { allowed: true };
 }
 
 /**
  * Record a successfully posted tweet.
  * Call AFTER xWrite.v2.tweet() succeeds.
- * Tracks content for dedup and timestamps for rate limiting.
+ * Tracks content for history and timestamps for rate limiting.
  */
 export function recordXPost(
   content: string,
@@ -311,15 +249,14 @@ export function recordXPost(
   const state = loadState();
   const now = Date.now();
 
-  // Add to recent posts (keep last 20)
+  // Add to recent posts (keep last 20 for reference)
   state.recentPosts.push({ text: content, timestamp: now });
-  if (state.recentPosts.length > MAX_RECENT_POSTS) {
-    state.recentPosts = state.recentPosts.slice(-MAX_RECENT_POSTS);
+  if (state.recentPosts.length > 20) {
+    state.recentPosts = state.recentPosts.slice(-20);
   }
 
   // Add timestamp for rate limiting
   state.postTimestamps.push(now);
-  // Clean timestamps older than 24h
   const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000;
   state.postTimestamps = state.postTimestamps.filter((t) => t > twentyFourHoursAgo);
 
@@ -330,7 +267,6 @@ export function recordXPost(
       postId: options.replyToPostId,
       timestamp: now,
     });
-    // Clean old interactions
     state.repliedInteractions = state.repliedInteractions.filter(
       (i) => now - i.timestamp < REPLY_WINDOW_MS,
     );
@@ -341,31 +277,22 @@ export function recordXPost(
 
 /**
  * X posting rules to inject into content generation system prompts.
- * Append this to any LLM system prompt that generates X/Twitter content.
+ * STREAMLINED: Focus on what actually causes suspensions.
+ * Hashtag and formatting guidance moved to voice.ts.
  */
 export const X_POSTING_RULES = `
 X POSTING RULES (CRITICAL — violation = account suspension):
 - You are an autonomous AI research agent. Never claim to be human.
 - Every post must be substantially unique — never repeat the same insight twice.
-- Max 5 hashtags per post. Core combo: #AIAgents #DeAI #DePIN #Web3AI (3-4 of these) + 1 topic-specific. Never use trending hashtags unless genuinely relevant.
 - Never @mention users unless they mentioned you first.
 - Keep posts informative, original, and non-repetitive.
 - Never post about trending topics just to gain visibility.
-- Vary your sentence structure, hooks, and framing across posts.
 - Focus on sharing genuine research insights, not engagement farming.
 - Do NOT include meta-commentary like "Here is my tweet" or separators like "---". Output ONLY the post text.
 - Do NOT include character counts like "(487 characters)" in your output.`;
 
 /**
  * Profile bio compliance notice.
- * The X profile bio MUST include bot identity disclosure per X's automation policy.
- * Required elements:
- *   - "Autonomous AI research agent" or similar bot disclosure
- *   - Operator: agent306.ai (or the responsible human/org)
- *   - Contact: agent306@agent306.ai
- *
- * If the bio is managed via the X Developer Portal or a config file,
- * ensure it contains these elements. Failure to disclose = suspension risk.
  */
 export const X_PROFILE_BIO_REQUIREMENTS = {
   botDisclosure: "Autonomous AI research agent",
@@ -375,14 +302,10 @@ export const X_PROFILE_BIO_REQUIREMENTS = {
     "Autonomous AI research agent | Tracking AI, crypto & frontier tech | Built by agent306.ai | Contact: agent306@agent306.ai",
 };
 
-/**
- * Contact email for Agent 306.
- */
 export const AGENT306_CONTACT_EMAIL = "agent306@agent306.ai";
 
 /**
  * Get current compliance status for the dashboard.
- * Exposes rate limit state so the UI can show remaining quota and cooldown.
  */
 export function getComplianceStatus() {
   const state = loadState();
@@ -400,6 +323,6 @@ export function getComplianceStatus() {
     lastPostAt: lastPost > 0 ? new Date(lastPost).toISOString() : null,
     nextAvailableAt: nextAvailable,
     cooldownRemainingMs: cooldownRemaining,
-    minIntervalHours: MIN_INTERVAL_MS / (60 * 60 * 1000),
+    minIntervalMinutes: MIN_INTERVAL_MS / (60 * 1000),
   };
 }
