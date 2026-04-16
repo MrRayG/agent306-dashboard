@@ -270,7 +270,7 @@ async function qualityGateReply(reply: string): Promise<{ pass: boolean; rewrite
         model: getModel("reply_generation"),
         messages: [{
           role: "system",
-          content: "You are a quality editor for @agent306 — Agent 306's X account. Score replies ruthlessly whether they are about 306, AI, technology, or any other topic.",
+          content: "You are a quality editor for @306Agent — Agent 306's X account. Score replies ruthlessly whether they are about 306, AI, technology, or any other topic.",
         }, {
           role: "user",
           content: `Score this reply 1-10: is it sharp, genuine, and worth posting?
