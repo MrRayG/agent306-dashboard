@@ -94,6 +94,7 @@ import { enforceShowTag } from "./contentTypes.js";
 import { getCompetencyProfile } from "./competencyFramework.js";
 import { buildVoiceBlock } from "./voice.js";
 import { getEvolutionContext } from "./soulEvolution.js";
+import { generateBreakthroughContent } from "./breakthroughDetector.js";
 // breakingNewsDetector removed — not needed for now
 
 // On-chain API removed
@@ -4595,6 +4596,265 @@ needsHelp: true only when you genuinely need his direction or information`,
       res.json({ history: history.runs.slice(0, 10), currentContext: context });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── Engine Status & On-Demand Generation ──────────────────────────────────
+
+  // Engine definitions for status + generate
+  const ENGINE_DEFS = [
+    { id: "signal",       name: "Signal Brief",        schedule: "Mon/Wed/Fri 12pm ET", emoji: "📡", days: [1, 3, 5], hour: 12 },
+    { id: "academy",      name: "Academy",              schedule: "Tue/Thu/Sat 10am ET", emoji: "🎓", days: [2, 4, 6], hour: 10 },
+    { id: "news",         name: "News Dispatch",        schedule: "Daily 8am ET",        emoji: "📰", days: [0,1,2,3,4,5,6], hour: 8 },
+    { id: "research",     name: "Research Brief",       schedule: "On completion",       emoji: "🔬", days: [], hour: 0 },
+    { id: "podcast",      name: "Podcast",              schedule: "Research-driven",     emoji: "🎙️", days: [], hour: 0 },
+    { id: "article",      name: "Deep Read",            schedule: "Monday 5pm ET",       emoji: "📝", days: [1], hour: 17 },
+    { id: "breakthrough", name: "Breakthrough Detector", schedule: "On detection",       emoji: "💡", days: [], hour: 0 },
+    { id: "blog",         name: "Blog Post",            schedule: "Via Daily Cycle",     emoji: "✍️",  days: [], hour: 0 },
+  ] as const;
+
+  function computeNextRun(days: readonly number[], hour: number): string | null {
+    if (days.length === 0) return null;
+    const now = new Date();
+    // Use Intl to find current ET offset
+    const etParts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      hour: "2-digit", minute: "2-digit", hour12: false,
+    }).formatToParts(now);
+    const etHour = parseInt(etParts.find(p => p.type === "hour")!.value);
+    const utcHour = now.getUTCHours();
+    let etOffset = utcHour - etHour;
+    if (etOffset < 0) etOffset += 24;
+
+    for (let i = 0; i <= 7; i++) {
+      const candidate = new Date(now);
+      candidate.setDate(now.getDate() + i);
+      candidate.setUTCHours(hour + etOffset, 0, 0, 0);
+      if (candidate > now && (days as readonly number[]).includes(candidate.getUTCDay())) {
+        return candidate.toISOString();
+      }
+    }
+    return null;
+  }
+
+  // GET /api/engines/status — all engine states
+  app.get("/api/engines/status", requireDashAuth, (_req, res) => {
+    try {
+      const signalState = getSignalBriefState();
+      const academyState = getAcademyState();
+      const articleState = getArticleState();
+      const briefingState = getBriefingState();
+      const blogState = getBlogState();
+
+      const lastRuns: Record<string, string | null> = {
+        signal:       signalState.lastPostedAt ?? null,
+        academy:      academyState.lastPostedAt ?? null,
+        news:         null, // news dispatch doesn't expose a persistent lastRun; use coordinator
+        research:     null,
+        podcast:      null,
+        article:      articleState.lastPostedAt ?? null,
+        breakthrough: null,
+        blog:         blogState.stats?.lastPublishedAt ?? blogState.posts?.[0]?.createdAt ?? null,
+      };
+
+      // Try to get news last run from coordinator
+      try {
+        const coordState = getCoordinatorState();
+        const newsRecord = coordState.recentPosts?.find((p: any) => p.engineKey === "news_dispatch");
+        if (newsRecord) lastRuns.news = newsRecord.postedAt;
+      } catch {}
+
+      const engines = ENGINE_DEFS.map(eng => ({
+        id:       eng.id,
+        name:     eng.name,
+        emoji:    eng.emoji,
+        schedule: eng.schedule,
+        nextRun:  computeNextRun(eng.days, eng.hour),
+        lastRun:  lastRuns[eng.id] ?? null,
+        enabled:  true,
+      }));
+
+      res.json({ engines });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/engines/:engineId/generate — on-demand content generation
+  // Generates content and queues to X + Farcaster. Does NOT auto-post.
+  app.post("/api/engines/:engineId/generate", requireDashAuth, async (req, res) => {
+    const { engineId } = req.params;
+    const validEngines = ["signal", "academy", "news", "research", "podcast", "article", "breakthrough", "blog"];
+
+    if (!validEngines.includes(engineId)) {
+      return res.status(400).json({
+        success: false,
+        error: `Unknown engine "${engineId}". Valid: ${validEngines.join(", ")}`,
+      });
+    }
+
+    console.log(`[GenerateNow] On-demand generation triggered for engine: ${engineId}`);
+
+    try {
+      let content = "";
+      let type: string = engineId;
+
+      switch (engineId) {
+        case "signal": {
+          const grokKey = LLM_API_KEY;
+          if (!grokKey) throw new Error("LLM API key not configured");
+          // Import the private generation function via a new exported wrapper
+          const { generateSignalContent } = await import("./signalBriefEngine.js");
+          const result = await generateSignalContent(grokKey);
+          if (!result) throw new Error("Signal brief generation failed — LLM returned no content");
+          content = result.post;
+          type = "signal";
+          break;
+        }
+
+        case "academy": {
+          const { generateAcademyContent } = await import("./academyEngine.js");
+          const result = await generateAcademyContent();
+          if (!result) throw new Error("Academy episode generation failed — LLM returned no content");
+          content = result.post;
+          type = "academy";
+          break;
+        }
+
+        case "news": {
+          const { generateNewsContent } = await import("./newsGenerator.js");
+          const result = await generateNewsContent();
+          if (!result) throw new Error("News dispatch generation failed — LLM returned no content");
+          content = result;
+          type = "news";
+          break;
+        }
+
+        case "research": {
+          const { generateResearchContent } = await import("./researchEngine.js");
+          const result = await generateResearchContent();
+          if (!result) throw new Error("No publishable research found — run research pipeline first");
+          content = result;
+          type = "research";
+          break;
+        }
+
+        case "podcast": {
+          const { generatePodcastContent } = await import("./podcastEngine.js");
+          const result = await generatePodcastContent();
+          if (!result) throw new Error("Podcast generation failed — no research threads ready or no scripted episodes");
+          content = result;
+          type = "podcast";
+          break;
+        }
+
+        case "article": {
+          const apiKey = LLM_API_KEY;
+          if (!apiKey) throw new Error("LLM API key not configured");
+          const preview = await previewDeepRead(apiKey);
+          content = preview.teaser;
+          type = "article";
+          break;
+        }
+
+        case "breakthrough": {
+          const result = generateBreakthroughContent();
+          if (!result) throw new Error("No breakthroughs detected — run analysis first");
+          content = result;
+          type = "breakthrough";
+          break;
+        }
+
+        case "blog": {
+          const result = await generateBlogPost({
+            topic: "On-demand blog post — today's top AI signal",
+            sourceContent: "Generate a blog post about the most significant AI development happening right now.",
+            source: "standalone" as any,
+            autoPublish: false,
+          });
+          if (!result) throw new Error("Blog post generation failed");
+          // Blog posts are long-form — queue the excerpt/teaser
+          content = result.excerpt || result.title || "New blog post generated";
+          type = "blog";
+          break;
+        }
+      }
+
+      if (!content || content.trim().length < 10) {
+        throw new Error("Engine produced empty or too-short content");
+      }
+
+      const trimmed = content.trim();
+
+      // Queue to X
+      const xPostType = type as any; // XPostType
+      queueXPost(trimmed, xPostType, 3); // priority 3 = high (on-demand)
+      console.log(`[GenerateNow] Queued to X: ${engineId} (${trimmed.length} chars)`);
+
+      // Queue to Farcaster
+      let farcasterQueued = false;
+      try {
+        const channel = trimmed.match(/\bai\b|agent|llm|model/i) ? "ai" : undefined;
+        queueFarcasterPost(trimmed, type as any, 3, channel);
+        farcasterQueued = true;
+        console.log(`[GenerateNow] Queued to Farcaster: ${engineId} (${trimmed.length} chars)`);
+      } catch (fcErr: any) {
+        console.warn(`[GenerateNow] Farcaster queue failed:`, fcErr.message);
+      }
+
+      const queuedTo = ["x"];
+      if (farcasterQueued) queuedTo.push("farcaster");
+
+      res.json({
+        success: true,
+        content: trimmed.slice(0, 500) + (trimmed.length > 500 ? "..." : ""),
+        type: engineId,
+        queuedTo,
+        contentLength: trimmed.length,
+      });
+
+    } catch (e: any) {
+      console.error(`[GenerateNow] Engine ${engineId} failed:`, e.message);
+      res.status(500).json({
+        success: false,
+        error: e.message || "Generation failed",
+      });
+    }
+  });
+
+  // ── Farcaster Queue API ───────────────────────────────────────────────────
+
+  // GET /api/farcaster/queue — Farcaster post queue state
+  app.get("/api/farcaster/queue", requireDashAuth, (_req, res) => {
+    try {
+      const { queue, pending, postedToday } = getFarcasterPostQueue();
+      res.json({ queue, pending, postedToday });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/farcaster/queue/:postId/post — Post a specific queued item
+  app.post("/api/farcaster/queue/:postId/post", requireDashAuth, async (req, res) => {
+    try {
+      const result = await postFarcasterQueueItem(req.params.postId);
+      if (result) {
+        res.json({ success: true, castUrl: result.castUrl });
+      } else {
+        res.status(404).json({ success: false, error: "Post not found, already posted, or stale" });
+      }
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST /api/farcaster/queue/clear — Clear all pending Farcaster posts
+  app.post("/api/farcaster/queue/clear", requireDashAuth, (_req, res) => {
+    try {
+      const cleared = clearFarcasterPostQueue();
+      res.json({ success: true, cleared });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
     }
   });
 }

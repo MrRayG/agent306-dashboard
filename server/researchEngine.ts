@@ -2865,3 +2865,36 @@ Evaluate honestly. Return valid JSON:
     console.error("[Aspirations] evaluateAspirations failed:", e.message);
   }
 }
+
+// ── On-demand generation (no side effects — produces a research brief post) ──
+export async function generateResearchContent(): Promise<string | null> {
+  console.log("[Research] On-demand generation triggered");
+  const lab = loadLab();
+
+  // Find the most recent topic with a conclusion or manuscript
+  const publishable = lab.topics
+    .filter(t =>
+      (t.status === "approved" || t.status === "pending_review" || t.status === "published") &&
+      (t.manuscript || t.conclusion),
+    )
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+  if (publishable.length === 0) {
+    // Fallback: use any topic with analysis findings
+    const withFindings = lab.topics
+      .filter(t => t.analysisFindings && t.analysisFindings.length > 50)
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+    if (withFindings.length === 0) return null;
+
+    const topic = withFindings[0];
+    return `[306 RESEARCH] ${topic.topic}\n\n${topic.analysisFindings!.slice(0, 2000)}`;
+  }
+
+  const topic = publishable[0];
+  const body = topic.manuscript
+    ? topic.manuscript.slice(0, 2000)
+    : topic.conclusion!.slice(0, 2000);
+
+  return `[306 RESEARCH] ${topic.topic}\n\n${body}`;
+}

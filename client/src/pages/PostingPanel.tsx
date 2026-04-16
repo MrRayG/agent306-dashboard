@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -25,6 +25,17 @@ function timeAgo(iso: string | null): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+function relativeTime(iso: string | null): string {
+  if (!iso) return "—";
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms < 0) return "overdue";
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  if (h > 24) return `${Math.floor(h / 24)}d ${h % 24}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
 const TYPE_LABELS: Record<string, { tag: string; color: string; bg: string }> = {
   signal:       { tag: "306 SIGNAL",    color: "#f97316", bg: "rgba(249,115,22,0.12)" },
   news:         { tag: "306 NEWS",      color: "#4ade80", bg: "rgba(74,222,128,0.12)" },
@@ -47,6 +58,7 @@ function getTypeLabel(type: string) {
 // ── Shared Styles ────────────────────────────────────────────────────────────
 
 const mono: React.CSSProperties = { fontFamily: "'Courier New', monospace" };
+const pixel: React.CSSProperties = { fontFamily: "'Courier New', monospace", textTransform: "uppercase", letterSpacing: "0.15em" };
 const label: React.CSSProperties = {
   ...mono,
   fontSize: "0.76rem",
@@ -60,6 +72,206 @@ const card: React.CSSProperties = {
   border: "1px solid rgba(227,229,228,0.10)",
   padding: "1.25rem",
 };
+
+// ── Engine Info (for Generate Now) ───────────────────────────────────────────
+
+interface EngineInfo {
+  id: string;
+  name: string;
+  emoji: string;
+  schedule: string;
+  nextRun: string | null;
+  lastRun: string | null;
+  enabled: boolean;
+}
+
+// ── Engine Cards Section ─────────────────────────────────────────────────────
+
+function EngineCards() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [generating, setGenerating] = useState<string | null>(null);
+  const [lastResult, setLastResult] = useState<Record<string, { success: boolean; content?: string; error?: string }>>({});
+
+  const { data: engineData, isLoading } = useQuery<{ engines: EngineInfo[] }>({
+    queryKey: ["/api/engines/status"],
+    refetchInterval: 30_000,
+  });
+
+  async function handleGenerate(engineId: string, engineName: string) {
+    setGenerating(engineId);
+    setLastResult(prev => ({ ...prev, [engineId]: undefined as any }));
+
+    try {
+      const res = await apiRequest("POST", `/api/engines/${engineId}/generate`, {});
+      const data = await res.json();
+
+      if (data.success) {
+        setLastResult(prev => ({ ...prev, [engineId]: { success: true, content: data.content } }));
+        toast({
+          title: `${engineName} generated`,
+          description: `Queued to ${data.queuedTo.join(" + ")} (${data.contentLength} chars)`,
+        });
+        // Refresh posting overview and engine status
+        qc.invalidateQueries({ queryKey: ["/api/posting/overview"] });
+        qc.invalidateQueries({ queryKey: ["/api/engines/status"] });
+      } else {
+        setLastResult(prev => ({ ...prev, [engineId]: { success: false, error: data.error } }));
+        toast({ title: "Generation failed", description: data.error, variant: "destructive" });
+      }
+    } catch (e: any) {
+      setLastResult(prev => ({ ...prev, [engineId]: { success: false, error: e.message } }));
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+    setGenerating(null);
+  }
+
+  const engines = engineData?.engines ?? [];
+
+  const colorMap: Record<string, string> = {
+    signal: "#fbbf24",
+    academy: "#60a5fa",
+    news: "#4ade80",
+    research: "#818cf8",
+    podcast: "#f97316",
+    article: "#2dd4bf",
+    breakthrough: "#ef4444",
+    blog: "#a78bfa",
+  };
+
+  if (isLoading) {
+    return (
+      <div style={{ padding: "20px" }}>
+        <div style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.48)" }}>Loading engines...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      {engines.map(eng => {
+        const color = colorMap[eng.id] ?? "#efefef";
+        const isGenerating = generating === eng.id;
+        const result = lastResult[eng.id];
+        const canGenerate = ["signal", "academy", "news", "research", "podcast", "article", "breakthrough", "blog"].includes(eng.id);
+
+        return (
+          <div key={eng.id} style={{
+            background: "#141516",
+            border: `1px solid ${color}20`,
+            overflow: "hidden",
+          }}>
+            <div style={{ height: 3, background: color }} />
+            <div style={{ padding: "14px 18px" }}>
+              {/* Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                    <span style={{ fontSize: "1rem" }}>{eng.emoji}</span>
+                    <span style={{ ...mono, fontSize: "0.95rem", fontWeight: 700, color }}>{eng.name}</span>
+                  </div>
+                  <div style={{ ...mono, fontSize: "0.70rem", color: "rgba(227,229,228,0.45)", marginBottom: "2px" }}>
+                    {eng.schedule}
+                  </div>
+                  <div style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.35)" }}>
+                    {eng.nextRun
+                      ? <>Next: <span style={{ color: "rgba(227,229,228,0.60)" }}>{relativeTime(eng.nextRun)}</span></>
+                      : "On demand"
+                    }
+                    {eng.lastRun && (
+                      <> &middot; Last: {timeAgo(eng.lastRun)}</>
+                    )}
+                  </div>
+                </div>
+                <div style={{ flexShrink: 0 }}>
+                  {canGenerate && (
+                    <button
+                      onClick={() => handleGenerate(eng.id, eng.name)}
+                      disabled={isGenerating || generating !== null}
+                      style={{
+                        background: isGenerating ? `${color}20` : color,
+                        color: isGenerating ? color : "#1a1b1c",
+                        border: "none",
+                        padding: "6px 14px",
+                        fontFamily: "'Courier New', monospace",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.08em",
+                        cursor: isGenerating || generating !== null ? "not-allowed" : "pointer",
+                        opacity: generating !== null && !isGenerating ? 0.4 : 1,
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      {isGenerating ? "Generating..." : "Generate Now"}
+                    </button>
+                  )}
+                  {!canGenerate && (
+                    <span style={{ ...mono, fontSize: "0.63rem", color: "rgba(227,229,228,0.30)", padding: "6px 0" }}>
+                      Not available
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Loading indicator */}
+              {isGenerating && (
+                <div style={{
+                  marginTop: "10px",
+                  padding: "8px 12px",
+                  background: `${color}08`,
+                  border: `1px solid ${color}15`,
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <div style={{
+                      width: 8, height: 8, borderRadius: "50%",
+                      background: color,
+                      animation: "pulse 1s infinite",
+                    }} />
+                    <span style={{ ...mono, fontSize: "0.73rem", color }}>
+                      Generating content... (this may take 15-30s)
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Result feedback */}
+              {result && !isGenerating && (
+                <div style={{
+                  marginTop: "10px",
+                  padding: "8px 12px",
+                  background: result.success ? "rgba(74,222,128,0.06)" : "rgba(239,68,68,0.06)",
+                  border: `1px solid ${result.success ? "rgba(74,222,128,0.15)" : "rgba(239,68,68,0.15)"}`,
+                }}>
+                  {result.success ? (
+                    <>
+                      <div style={{ ...mono, fontSize: "0.70rem", color: "#4ade80", marginBottom: "4px" }}>
+                        Content generated and queued!
+                      </div>
+                      {result.content && (
+                        <div style={{
+                          ...mono, fontSize: "0.70rem", color: "rgba(227,229,228,0.55)",
+                          lineHeight: 1.5, maxHeight: "80px", overflow: "hidden",
+                          whiteSpace: "pre-wrap",
+                        }}>
+                          {result.content.slice(0, 200)}{result.content.length > 200 ? "..." : ""}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div style={{ ...mono, fontSize: "0.70rem", color: "#ef4444" }}>
+                      Failed: {result.error}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 // ── Platform Card ────────────────────────────────────────────────────────────
 
@@ -406,8 +618,16 @@ export default function PostingPanel() {
           POSTING CONTROL PANEL
         </h1>
         <p style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.60)", marginTop: 4 }}>
-          Preview, manage, and manually trigger posts for X and Farcaster
+          Generate content on demand, preview, manage, and manually trigger posts for X and Farcaster
         </p>
+      </div>
+
+      {/* Content Engines — Generate Now */}
+      <div style={{ marginBottom: "1.5rem" }}>
+        <div style={{ ...(pixel as any), fontSize: "0.68rem", color: "rgba(227,229,228,0.60)", marginBottom: "12px" }}>
+          CONTENT ENGINES
+        </div>
+        <EngineCards />
       </div>
 
       {isLoading ? (

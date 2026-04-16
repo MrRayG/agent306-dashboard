@@ -21,7 +21,7 @@ import PerplexityAttribution from "@/components/PerplexityAttribution";
 
 const nav = [
   { href: "/",         label: "Command Center", desc: "All engines · Status" },
-  { href: "/posting",  label: "Posting",        desc: "X · Farcaster queue" },
+  { href: "/posting",  label: "Posting",        desc: "Generate · Queues" },
   { href: "/eval",     label: "306Eval",        desc: "Benchmark · Growth"  },
   { href: "/episodes", label: "Episodes",       desc: "Queue & post"        },
   { href: "/writing",  label: "Writing Studio", desc: "Articles · Blog"     },

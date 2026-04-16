@@ -418,3 +418,13 @@ export function scheduleSignalBrief(xWrite: any, grokKey: string): void {
 
   scheduleNext();
 }
+
+// ── On-demand generation (no side effects — just produces content) ────────────
+export async function generateSignalContent(grokKey: string): Promise<{
+  post: string;
+  signals: SignalEntry[];
+  weekLabel: string;
+} | null> {
+  console.log("[SignalBrief] On-demand generation triggered");
+  return generateSignalBrief(grokKey);
+}
