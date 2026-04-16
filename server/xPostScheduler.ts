@@ -6,13 +6,19 @@
  *  daily research cycle. Content engines queue posts here;
  *  the scheduler picks them up at 6 named daily time slots.
  *
- *  LOCKED daily schedule — 6 slots with FIXED show tags:
- *    8am ET  — [306 NEWS]       (hard AI news, market moves)
- *    10am ET — [306 SIGNAL]     (trend analysis, pattern recognition)
- *    12pm ET — [306 RESEARCH]   (deep dives, technical exploration)
- *    5pm ET  — [306 ROUND UP]   (afternoon recap, day highlights)
- *    7pm ET  — [THE DISPATCH]   (flagship evening dispatch — one signal, two sides)
- *    9pm ET  — [306 REFLECTION] (philosophical, open questions)
+ *  12-slot schedule — posts every 2 hours:
+ *    12am ET     — [306 UNPLUGGED] (Asia-Pacific prime time: 1pm Tokyo/Seoul, 9am Dubai)
+ *    2am ET      — [306 UNPLUGGED] (Asia-Pacific: 3pm Tokyo/Seoul, 11am Dubai, 8am Europe)
+ *    4am ET      — [306 UNPLUGGED] (Europe morning: 10am London/Paris, 5pm Tokyo)
+ *    6am ET      — [306 UNPLUGGED] (Europe prime: 12pm London/Paris, 7pm Tokyo)
+ *    8am ET      — [306 NEWS]      (hard AI news, market moves)
+ *    10am ET     — [306 SIGNAL]    (trend analysis, pattern recognition)
+ *    12pm ET     — [306 ACADEMY]   (educational, how-to, concept breakdowns)
+ *    2pm ET      — [306 UNPLUGGED] (US afternoon)
+ *    4pm ET      — [306 UNPLUGGED] (US afternoon)
+ *    6pm ET      — [THE DISPATCH]  (flagship evening dispatch)
+ *    8pm ET      — [306 UNPLUGGED] (US evening)
+ *    10pm ET     — [306 REFLECTION] (philosophical, open questions)
  *
  *  Each slot has a requiredContentType that filters queue content.
  *  If no matching content exists, the slot generates on-demand.
@@ -49,7 +55,8 @@ export type XPostType =
   | "blog"
   | "research"
   | "reflection"
-  | "roundup";
+  | "roundup"
+  | "agent_voice";
 
 export interface QueuedPost {
   id: string;
@@ -87,26 +94,36 @@ const TYPE_PRIORITY: Record<XPostType, number> = {
   research:     5,
   academy:      6,
   reflection:   6,
+  agent_voice:  7,
 };
 
 // -- Named content slots ------------------------------------------
-// LOCKED 6-slot daily schedule: each slot has a FIXED show tag and content type.
-// Only the 7pm Agent's Choice slot can pick any type.
+// 12-slot daily schedule: posts every 2 hours.
+// 6 slots have LOCKED show tags. 6 slots are open for 306 UNPLUGGED (agent_voice).
 interface ContentSlot {
   name: string;
   hourUTC: number;       // UTC hour for this slot
   preferredTypes: XPostType[];
   requiredContentType?: string; // locked content type for this slot (maps to contentTypes.ts key)
-  agentChoice?: boolean;        // true = agent picks any format (7pm creative freedom slot)
+  agentChoice?: boolean;        // true = agent picks any format
+  audienceHint?: string;        // timezone context — who's awake right now
 }
 
 const CONTENT_SLOTS: ContentSlot[] = [
-  { name: "Early Morning", hourUTC: 12, preferredTypes: ["news", "signal", "roundup"],       requiredContentType: "news" },       // 8am ET — [306 NEWS]
+  // Overnight / early morning — 306 UNPLUGGED (targeting alive time zones)
+  { name: "Midnight",      hourUTC: 4,  preferredTypes: ["agent_voice"],                      agentChoice: true, audienceHint: "It's 1pm in Tokyo/Seoul, 9am in Dubai, 5am in London. Target Asia-Pacific and Middle East audiences — topics relevant to those markets, global AI developments with Asian/MENA context." },   // 12am ET
+  { name: "Late Night",    hourUTC: 6,  preferredTypes: ["agent_voice"],                      agentChoice: true, audienceHint: "It's 3pm in Tokyo/Seoul, 11am in Dubai, 7am in London. Asia-Pacific in full swing, Europe waking up. Global AI topics, cross-border developments, Asia tech ecosystem." },                    // 2am ET
+  { name: "Pre-Dawn",      hourUTC: 8,  preferredTypes: ["agent_voice"],                      agentChoice: true, audienceHint: "It's 5pm in Tokyo/Seoul, 1pm in Dubai, 9am in London/Paris. Europe morning prime time, Asia wrapping up. EU regulation, European AI labs, global market overlap topics." },                  // 4am ET
+  { name: "Early Morning", hourUTC: 10, preferredTypes: ["agent_voice"],                      agentChoice: true, audienceHint: "It's 7pm in Tokyo/Seoul, 3pm in Dubai, 11am in London/Paris. Europe midday prime time. European tech, transatlantic AI policy, global research from EU/UK institutions." },                  // 6am ET
+  // Daytime — locked shows
+  { name: "Morning",       hourUTC: 12, preferredTypes: ["news", "signal", "roundup"],       requiredContentType: "news" },       // 8am ET — [306 NEWS]
   { name: "Late Morning",  hourUTC: 14, preferredTypes: ["signal", "academy"],               requiredContentType: "signal" },     // 10am ET — [306 SIGNAL]
-  { name: "Midday",        hourUTC: 16, preferredTypes: ["research", "blog"],                requiredContentType: "research" },   // 12pm ET — [306 RESEARCH]
-  { name: "Afternoon",     hourUTC: 21, preferredTypes: ["roundup", "signal"],               requiredContentType: "roundup" },    // 5pm ET — [306 ROUND UP]
-  { name: "Early Evening", hourUTC: 23, preferredTypes: ["dispatch"],                        requiredContentType: "dispatch" },   // 7pm ET — [THE DISPATCH]
-  { name: "Late Evening",  hourUTC: 1,  preferredTypes: ["reflection"],                      requiredContentType: "reflection" }, // 9pm ET — [306 REFLECTION]
+  { name: "Midday",        hourUTC: 16, preferredTypes: ["academy", "research", "blog"],      requiredContentType: "academy" },    // 12pm ET — [306 ACADEMY]
+  { name: "Afternoon",     hourUTC: 18, preferredTypes: ["agent_voice", "roundup"],          agentChoice: true },                 // 2pm ET — 306 UNPLUGGED
+  { name: "Late Afternoon", hourUTC: 20, preferredTypes: ["agent_voice", "signal"],          agentChoice: true },                 // 4pm ET — 306 UNPLUGGED
+  { name: "Evening",       hourUTC: 22, preferredTypes: ["dispatch", "agent_voice"],         requiredContentType: "dispatch" },   // 6pm ET — [THE DISPATCH]
+  { name: "Late Evening",  hourUTC: 0,  preferredTypes: ["agent_voice", "reflection"],       agentChoice: true },                 // 8pm ET — 306 UNPLUGGED
+  { name: "Night",         hourUTC: 2,  preferredTypes: ["reflection"],                      requiredContentType: "reflection" }, // 10pm ET — [306 REFLECTION]
 ];
 
 // Breaking news detection is now handled by breakingNewsDetector.ts
@@ -387,11 +404,8 @@ function getNextSlotMs(): { ms: number; slot: ContentSlot } {
 }
 
 function isWithinPostingHours(): boolean {
-  const now = new Date();
-  const utcHour = now.getUTCHours();
-  // Posting window: 12 UTC (8am ET) to 02 UTC (10pm ET)
-  // That's 12..23 and 0..1
-  return utcHour >= 12 || utcHour <= 1;
+  // 12 slots every 2 hours = always posting
+  return true;
 }
 
 // -- Variety-aware queue selection --------------------------------
@@ -482,17 +496,18 @@ export function qualityCheck(tweet: string, contentType: string): { pass: boolea
 // Let the LLM breathe. Tight token budgets create cramped, unnatural prose.
 // The voice prompt already guides length per content type.
 const TOKEN_LIMITS: Record<string, number> = {
-  news:       1000,  // morning news — room for context + take
-  dispatch:   1200,  // flagship evening dispatch (~1,500-1,700 chars target)
-  signal:     1000,  // analysis needs room for the "why"
-  research:   1500,  // deep dives need real space
-  roundup:    1500,  // 3-5 stories need the most room
-  reflection: 1000,  // evening thoughts deserve room to breathe
-  academy:    1200,  // teaching needs detail + examples
+  news:        1000,   // morning news — room for context + take
+  dispatch:    1200,   // flagship evening dispatch (~1,500-1,700 chars)
+  signal:      1000,   // analysis needs room for the "why"
+  research:    1500,   // deep dives need real space
+  roundup:     1500,   // 3-5 stories need the most room
+  reflection:  1000,   // evening thoughts deserve room to breathe
+  academy:     1200,   // teaching needs detail + examples
+  agent_voice: 1000,   // 306 UNPLUGGED — substantive, grounded, authentic
 };
 const DEFAULT_TOKEN_LIMIT = 1000;
 
-async function generateOnDemandPost(type: XPostType, state: SchedulerState): Promise<QueuedPost | null> {
+async function generateOnDemandPost(type: XPostType, state: SchedulerState, audienceHint?: string): Promise<QueuedPost | null> {
   const systemPrompt = buildTweetSystemPrompt(type);
   const basePrompt = buildTweetUserPrompt(type);
   if (!basePrompt) return null;
@@ -506,7 +521,11 @@ async function generateOnDemandPost(type: XPostType, state: SchedulerState): Pro
   const dedupContext = todaysSummary || todaysPending
     ? `\n\nALREADY POSTED/QUEUED TODAY (DO NOT repeat these topics or entities):\n${todaysSummary}${todaysPending ? `\nQueued: ${todaysPending}` : ''}`
     : '';
-  const userPrompt = basePrompt + dedupContext;
+  // Timezone audience targeting — overnight slots target regions where it's prime time
+  const audienceContext = audienceHint
+    ? `\n\nAUDIENCE CONTEXT: ${audienceHint} Write about topics that resonate with audiences in these active time zones. Reference developments, companies, labs, or policies from these regions when possible.`
+    : '';
+  const userPrompt = basePrompt + dedupContext + audienceContext;
 
   const tokenLimit = TOKEN_LIMITS[type] || DEFAULT_TOKEN_LIMIT;
 
@@ -575,6 +594,12 @@ async function processQueue(xWrite: any, slot?: ContentSlot): Promise<void> {
   if (!post && slot?.requiredContentType && !slot.agentChoice) {
     console.log(`[XScheduler] Generating on-demand ${slot.requiredContentType} content for ${slot.name} slot`);
     post = await generateOnDemandPost(slot.requiredContentType as XPostType, state);
+  }
+
+  // If still no post (agent_voice slot or failed on-demand), generate 306 UNPLUGGED
+  if (!post && slot) {
+    console.log(`[XScheduler] Generating agent_voice (306 UNPLUGGED) for ${slot.name} slot`);
+    post = await generateOnDemandPost('agent_voice' as XPostType, state, slot.audienceHint);
   }
 
   if (!post) {
@@ -831,7 +856,7 @@ IMPORTANT: Output ONLY the tweet text itself. Do NOT include any meta-commentary
 // -- Scheduler loop -----------------------------------------------
 
 export function startXPostScheduler(xWrite: any): void {
-  console.log("[XScheduler] Starting X post scheduler (6 locked slots/day: 8am NEWS, 10am SIGNAL, 12pm RESEARCH, 5pm ROUND UP, 7pm THE DISPATCH, 9pm REFLECTION)");
+  console.log("[XScheduler] Starting X post scheduler (12 slots every 2h: 6 locked shows + 6 UNPLUGGED slots w/ timezone targeting)");
 
   // Start breaking news detection loop (checks every 30 min during posting hours)
   startBreakingNewsLoop(xWrite);

@@ -6,24 +6,21 @@ import { insertEpisodeSchema, insertRenderJobSchema, insertSignalSchema } from "
 import { TwitterApi } from "twitter-api-v2";
 import * as crypto from "crypto";
 import * as fs from "fs";
-import { collectAllSignals, updateFeaturedTokens, bumpEpisodeCount, markSignalsUsed, filterFreshSignals } from "./signalCollector";
-import { generateEpisodeWithGrok, type EpisodeMemory } from "./grokEngine";
-import { saveEpisodeCard } from "./imageCard";
+// signalCollector removed (NORMIES-era dead code)
+// grokEngine episode generation + imageCard removed (NORMIES-era dead code)
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
-// Community and catalog imports removed (removed)
-// import { getCommunitySignalCache, searchCommunitySocial, resetCommunityCache } from "./grokEngine";
-// import { ingestSignals, getCatalog, getCatalogStats, getMostActive, getStorySourceHolders } from "./holderCatalog";
+// holderCatalog + community signal imports removed (NORMIES-era dead code)
 import { generateCYOAEpisode, postCYOAHook, resolveCYOA, getCYOAState, buildHookTweet, type CYOATrigger } from "./cyoaEngine.js";
 import { fetchReplies, getReplyState, formatRepliesForContext, getTopReplies, initReplyWatcher } from "./replyWatcher";
 import { getConversationMemoryState } from "./conversationMemory.js";
-import { scheduleWeeklyLeaderboard, postWeeklyLeaderboard, fetchLiveLeaderboard } from "./leaderboardEngine";
+// leaderboardEngine removed (NORMIES-era dead code)
 import { scheduleFollowingSync, syncFollowing, getFollowingState, buildFollowingQuery, getPfpHolderUsernames, getFollowingUsernames, getFollowTargets, processFollowQueue, addFollowTarget, removeFollowTarget } from "./followingSync";
 import { generateBoost } from "./boostEngine";
 import { generateVoiceClip, getVoiceQuota, getClip, getRecentClips } from "./voiceEngine";
 import { getMemoryState, recordPost, ratePost, performance as perfMemory, decayKnowledge, addKnowledge, archiveKnowledge, searchArchive, getArchiveStats, knowledge as knowledgeState } from "./memoryEngine.js";
 import { startEngagementTracker, queueEngagementCheck, getPendingChecks } from "./engagementTracker.js";
-import { generateSpotlight, postSpotlight, getSpotlightState } from "./spotlightEngine.js";
-import { generateRace, postRace, getRaceState } from "./raceEngine.js";
+// spotlightEngine removed (NORMIES-era dead code)
+// raceEngine removed (NORMIES-era dead code)
 import { scheduleMidnightReplies, runMidnightReplies } from "./replyEngine.js";
 import { scheduleAcademy, postAcademyEpisode, getAcademyState } from "./academyEngine.js";
 import { scheduleSignalBrief, postSignalBrief, getSignalBriefState } from "./signalBriefEngine.js";
@@ -301,324 +298,12 @@ async function fetchAINews(): Promise<AINewsItem[]> {
   return aiNewsCache;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// AGENT 306 — GROK-POWERED AUTONOMOUS STORY ENGINE v2
-// Multi-source signals → Grok narrative → Episodic memory → Auto-post
-// ─────────────────────────────────────────────────────────────────────────────
+// NORMIES-era Grok story engine removed — posting is now handled by xPostScheduler.ts
 
-// Poller state
-let pollerRunning = false;
-let pollerStatus: {
-  lastRun: string | null;
-  lastEpisode: number | null;
-  lastTweetUrl: string | null;
-  lastError: string | null;
-  signalsFound: number;
-  sources: Record<string, number>;
-  cycleCount: number;
-  nextRun: string | null;
-  lastGrokCost?: number;
-} = {
-  lastRun: null, lastEpisode: null, lastTweetUrl: null,
-  lastError: null, signalsFound: 0, sources: {},
-  cycleCount: 0, nextRun: null,
-};
-
-// Episode memory — Grok reads this for continuity
-const episodeMemory: EpisodeMemory[] = [];
-
-// ── GROK-POWERED autonomous pipeline ─────────────────────────────
-async function pollAndGenerateEpisode() {
-  if (pollerRunning) return;
-  // Disk-based lock prevents duplicates during Railway deploy overlap
-  if (!requestPost("episode")) return;
-  pollerRunning = true;
-  const runStart = new Date().toISOString();
-  console.log(`[Agent306] Grok pipeline starting — ${runStart}`);
-
-  try {
-    // ── 1. Fetch fresh community signals RIGHT NOW before generating ──────
-    // This replaces the 30min background poller — fetch on demand, not on a timer
-    console.log(`[Agent306] Collecting signals from all sources...`);
-    // Community signal poller removed (removed)
-
-    const { signals, sources, diversity } = await collectAllSignals();
-
-    // Persist signals to DB
-    for (const sig of signals.slice(0, 20)) {
-      storage.createSignal({
-        type: sig.type === "burn" ? "burn"
-            : sig.type === "canvas" ? "canvas_edit"
-            : sig.type === "sale" ? "burn"   // reuse type field
-            : "social_mention",
-        tokenId: sig.tokenId ?? null,
-        description: sig.description,
-        weight: sig.weight,
-        phase: "phase1",
-        rawData: JSON.stringify(sig.rawData),
-      });
-    }
-
-    // ── 2. Generate narrative with Grok ──────────────────────────
-    const epNum = storage.getEpisodes().length + 1;
-    console.log(`[Agent306] Calling Grok for EP${epNum} — ${signals.length} signals, diversity: avoid tokens ${diversity.lastFeaturedTokens}`);
-
-    // Build editorial context — pinned story angles
-    const freshSignals: any[] = [];
-    const communitySnapshot = "";
-    // Include top community replies from previous episodes
-    const replyContext = formatRepliesForContext();
-
-    // ── Cultural bridge reminder — inject if last 2 episodes had no bridge ────────────
-    const recentLessons = (perfMemory.lessons ?? [])
-      .sort((a: any, b: any) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime())
-      .slice(0, 2);
-    const noBridgeRecently = recentLessons.length >= 2 &&
-      recentLessons.every((l: any) => !l.tags?.includes("cultural_bridge"));
-    if (noBridgeRecently) {
-      pinnedAngles.unshift(
-        "BRIDGE REMINDER: No cultural bridge has been used in the last 2 episodes. " +
-        "Connect the narrative to a moment outside Web3 this episode — art history, a sports rivalry, " +
-        "a technology inflection point, or a philosophical concept. Cultural bridges drive " +
-        "the highest RT rate in the dataset. Deploy it."
-      );
-      console.log("[Agent306] Cultural bridge reminder injected — overdue.");
-    }
-
-    const editorialContext = {
-      pinnedAngles: pinnedAngles.slice(0, 3),
-      communitySnapshot: replyContext
-        ? `${communitySnapshot}
-
-${replyContext}`
-        : communitySnapshot,
-    };
-
-    const grokResult = await generateEpisodeWithGrok(signals, episodeMemory, epNum, diversity, editorialContext);
-    console.log(`[Agent306] Grok EP${epNum}: "${grokResult.title}" [${grokResult.sentiment}]`);
-
-    // ── 3. Save episode ────────────────────────────────────────
-    const featuredId = grokResult.featuredTokens?.[0] ?? 603;
-    const episode = storage.createEpisode({
-      tokenId: featuredId,
-      title: grokResult.title,
-      narrative: grokResult.narrative,
-      phase: "phase1",
-      signals: JSON.stringify({
-        ...sources,
-        totalSignals: signals.length,
-        sentiment: grokResult.sentiment,
-        keyEvents: grokResult.keyEvents,
-        featuredTokens: grokResult.featuredTokens,
-        grokModel: "grok-4-1-fast-non-reasoning",
-      }),
-      status: "ready",
-    });
-
-    // Update diversity tracking so next episode avoids same tokens
-    if (grokResult.featuredTokens?.length > 0) {
-      updateFeaturedTokens(grokResult.featuredTokens);
-    }
-
-    // ── 4. Update Grok memory ──────────────────────────────────
-    episodeMemory.push({
-      episodeId: epNum,
-      title: grokResult.title,
-      summary: grokResult.summary,
-      featuredTokens: grokResult.featuredTokens ?? [],
-      keyEvents: grokResult.keyEvents ?? [],
-      sentiment: grokResult.sentiment as any,
-      createdAt: runStart,
-    });
-    // Keep last 10 episodes in memory
-    if (episodeMemory.length > 10) episodeMemory.shift();
-
-    // ── 5. Update status ──────────────────────────────────────
-    pollerStatus = {
-      lastRun: runStart,
-      lastEpisode: episode.id,
-      lastTweetUrl: null,  // updated after post
-      lastError: null,
-      signalsFound: signals.length,
-      sources,
-      cycleCount: pollerStatus.cycleCount + 1,
-      nextRun: new Date(Date.now() + POLL_INTERVAL).toISOString(),
-    };
-
-    // ── 5. Generate episode image card ────────────────────────────
-    const sigData = JSON.parse(episode.signals);
-    const totalBurns   = sigData.burns ?? 0;
-    const totalPixels  = sigData.canvas > 0
-      ? signals.filter(s => s.type === "burn")
-          .reduce((sum, b) => sum + (b.rawData.pixelTotal ?? 0), 0)
-      : 0;
-
-    // Image upload removed (on-chain API disabled)
-    let xMediaId: string | undefined;
-
-    // ── 6. Quality gate — would a real reader stop scrolling for this? ──
-    let finalTweetText = grokResult.tweet;
-    const grokKeyQ = LLM_API_KEY;
-    if (grokKeyQ) {
-      try {
-        const qualityCheck = await fetch(LLM_BASE_URL, {
-          method: "POST",
-          headers: getLLMHeaders(),
-          body: JSON.stringify({
-            model: getModel("routine"),
-            messages: [{
-              role: "system",
-              content: "You are a quality editor for Agent 306. Score tweets ruthlessly. Only high-quality, human-sounding tweets earn a post.",
-            }, {
-              role: "user",
-              content: `Score this tweet 1-10 on: would a real reader stop scrolling for this?
-
-TWEET: "${grokResult.tweet}"
-
-Scoring criteria:
-- 9-10: Genuinely interesting, one clear idea, human voice, makes you want more
-- 7-8: Solid, worth posting, not slop
-- 5-6: Generic, could be improved, borderline
-- 1-4: Stat dump, bot-speak, empty drama words, list of token numbers
-
-BANNED phrases that auto-score 4 or below: "Sacrifices compound", "Canvas pixels burn brighter", "etched in eternity", "Burns fuel the fire", "etch dominance", "etch power forever", "Arena whispers", "power compounds", "pixels multiply"
-
-If score is below 7, provide a rewrite that earns a 8+.
-
-Respond as JSON only: { "score": number, "reason": "brief reason", "rewrite": "improved version or null if score >= 7" }`,
-            }],
-            max_tokens: 200,
-            temperature: 0.3,
-          }),
-        });
-
-        if (qualityCheck.ok) {
-          const qData = await qualityCheck.json();
-          const qText = qData.choices?.[0]?.message?.content?.trim() ?? "{}";
-          const q = safeParseLLMJson(qText, "Routes.qualityGate") ?? {};
-          console.log(`[Agent306] Quality gate EP${epNum}: score ${q.score}/10 — ${q.reason}`);
-
-          if (q.score >= 7) {
-            // ✅ Good to go — post as-is
-            console.log(`[Agent306] EP${epNum} passed quality gate (${q.score}/10)`);
-          } else if (q.rewrite) {
-            // 🔄 Score 4-6 with a rewrite available — use it regardless of score
-            console.log(`[Agent306] Rewriting tweet (score ${q.score}): ${q.rewrite}`);
-            finalTweetText = q.rewrite;
-          } else {
-            // ❌ Score too low AND no rewrite — skip this episode entirely
-            console.log(`[Agent306] EP${epNum} SKIPPED — score ${q.score}, no rewrite available`);
-            pollerStatus.lastError = `Quality gate blocked EP${epNum} (score: ${q.score}, no rewrite)`;
-            releasePost("episode");
-            return;
-          }
-        }
-      } catch (qErr: any) {
-        console.warn("[Agent306] Quality gate check failed, posting anyway:", qErr.message);
-      }
-    }
-
-    // ── 7. Post opener tweet with image directly via X (OAuth 1.0a + media) ──
-    let tweetUrl: string | undefined;
-    let openerTweetId: string | undefined;
-
-    try {
-      const compliance = validateXPost(finalTweetText);
-      if (!compliance.allowed) {
-        console.log(`[Agent306] EP${epNum} opener skipped by compliance: ${compliance.reason}`);
-      } else {
-        const postText = enforcePostFormat(compliance.sanitizedContent ?? finalTweetText);
-        const openerTweet = await xWrite.v2.tweet({
-          text: postText,
-          ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),
-        });
-        openerTweetId = openerTweet.data?.id;
-        tweetUrl = openerTweetId ? `https://x.com/306Agent/status/${openerTweetId}` : `https://x.com/306Agent`;
-        storage.updateEpisodeStatus(episode.id, "posted", tweetUrl);
-        pollerStatus.lastTweetUrl = tweetUrl;
-        console.log(`[Agent306] EP${epNum} opener posted${xMediaId ? " with image" : ""}: ${tweetUrl}`);
-        recordXPost(postText);
-        // Record in memory + queue engagement check
-        recordPost({
-          episodeId: epNum,
-          tweetUrl,
-          tweetText: postText,
-          qualityScore: episode.qualityScore ?? 7,
-          sentiment: grokResult.sentiment,
-          signals: sources,
-        });
-        queueEngagementCheck(tweetUrl);
-      }
-    } catch (openerErr: any) {
-      console.error("[Agent306] Opener tweet failed:", openerErr.message);
-    }
-
-    // ── Thread posts REMOVED — quality over volume ──────────────────────
-    // One great tweet with one great image > four mediocre thread tweets.
-    // The opener IS the post. If it doesn't stand alone, it wasn't good enough.
-    // Thread replies dumping stats were the #1 source of slop. Killed intentionally.
-    console.log(`[Agent306] EP${epNum} — single tweet mode (no thread)`);
-
-    // ── 7b. Post to Farcaster (parallel platform) ────────────────────────
-    let castUrl: string | undefined;
-    try {
-      if (isFarcasterEnabled()) {
-        const fcText = grokResult.farcasterText || finalTweetText;
-        const channel = determineChannel(fcText);
-        const cast = await postCast({
-          text: fcText,
-          channel,
-          embeds: tweetUrl ? [{ url: tweetUrl }] : undefined,
-        });
-        if (cast) {
-          castUrl = cast.url;
-          registerPost("episode", castUrl, `episode_${epNum}`, "farcaster");
-          console.log(`[Agent306] EP${epNum} cast posted to Farcaster${channel ? ` (/${channel})` : ""}: ${castUrl}`);
-        }
-      }
-    } catch (fcErr: any) {
-      console.warn("[Agent306] Farcaster episode post failed:", fcErr.message);
-    }
-
-    console.log(`[Agent306] EP${epNum} — ${tweetUrl ? "POSTED" : "ready in queue"}${castUrl ? " + Farcaster" : ""}`);
-    // Mark community signals used — these topics won't repeat in the next episode
-    if (tweetUrl || castUrl) {
-      markSignalsUsed(freshSignals.slice(0, 10).map((p: any) => ({ url: p.url, text: p.text })));
-      if (tweetUrl) registerPost("episode", tweetUrl, `episode_${epNum}`);
-    }
-
-  } catch (e: any) {
-    console.error("[Agent306] Pipeline error:", e.message);
-    pollerStatus.lastError = e.message;
-    pollerStatus.lastRun = runStart;
-    releasePost("episode");
-  } finally {
-    pollerRunning = false;
-  }
-}
-
-// ── Episode cadence: 12 hours + quality gate ──────────────────────────────────
-// Slow = better. Each post must earn its place. No slop just to fill the feed.
-const POLL_INTERVAL = 12 * 60 * 60 * 1000; // 12 hours
-
-// Track last burn commitId at episode-post time — don't post if no new burns AND
-// no social activity since last episode
-let lastEpisodeSignatureHash = "";
-
-function signalSignature(signals: any[]): string {
-  const burns = signals.filter((s: any) => s.type === "burn").map((s: any) => s.rawData?.commitId ?? s.tokenId).join(",");
-  const social = signals.filter((s: any) => s.type === "social_x").slice(0,3).map((s: any) => s.rawData?.id ?? s.description?.slice(0,20)).join(",");
-  return `${burns}|${social}`;
-}
-
-// Episode runs on a fixed 12h interval ONLY — no boot-time fire.
-// Boot-time firing caused duplicate posts on every Railway deploy.
-// The interval handles scheduling; coordinator blocks duplicates.
-setInterval(pollAndGenerateEpisode, POLL_INTERVAL);
-setTimeout(() => {
-  pollerStatus.nextRun = new Date(Date.now() + POLL_INTERVAL).toISOString();
-  console.log(`[Agent306] Episode poller armed — next run in 12h (${pollerStatus.nextRun})`);
-}, 5_000);
+// pollAndGenerateEpisode removed — NORMIES-era episode pipeline.
+// Posting is now handled entirely by xPostScheduler.ts.
+// pollAndGenerateEpisode + 12h poller removed (NORMIES-era episode pipeline).
+// Posting is now handled entirely by xPostScheduler.ts.
 
 // ── Daily News Dispatch — 8am ET every day ─────────────────────────────────
 // THE_100_TOKENS removed (removed)
@@ -1038,7 +723,7 @@ Return JSON only:
 }
 
 // Module-scope so episode generator + routes both can access
-const pinnedAngles: string[] = [];
+// pinnedAngles removed (only used by deleted pollAndGenerateEpisode)
 
 // Multer for audio asset uploads (in-memory, max 20MB)
 const audioUpload = multer({
@@ -1261,15 +946,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
     res.json({ ok: true, reset: key ?? "all" });
   });
 
-  // Manual trigger for pipeline — always works, clears any stuck state first
-  app.post("/api/poller/run", async (_req, res) => {
-    // Clear ALL stuck state before firing
-    pollerRunning = false;             // reset in-memory flag
-    resetCooldown("episode");          // reset coordinator cooldown + active lock
-    res.json({ ok: true, message: "Episode triggered — generating and posting in background" });
-    // Small delay so response is sent before heavy work begins
-    setTimeout(() => { pollAndGenerateEpisode().catch(console.error); }, 500);
-  });
+  // pollAndGenerateEpisode manual trigger removed (NORMIES-era dead code)
 
   // Post tweet with image via twitter-api-v2 (OAuth 1.0a, uploads media then tweets)
   app.post("/api/x/post-with-media", async (req, res) => {
@@ -1332,9 +1009,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
     nextNewsTarget.setUTCHours(12, 0, 0, 0);
     if (nextNewsTarget <= new Date()) nextNewsTarget.setDate(nextNewsTarget.getDate() + 1);
     res.json({
-      running: pollerRunning,
-      ...pollerStatus,
-      intervalHours: 12,
+      running: false,
       newsDispatch: {
         scheduleLabel: "Daily · 8am ET",
         nextRun: nextNewsTarget.toISOString(),
@@ -1459,14 +1134,14 @@ export function registerRoutes(httpServer: Server, app: Express) {
     const pendingEngagement = getPendingChecks();
 
     res.json({
-      // Room 01 — Broadcast Room
+      // Room 01 — Broadcast Room (legacy poller removed, xPostScheduler handles posting)
       broadcast: {
-        lastEpisode: pollerStatus.lastEpisode,
-        lastTweetUrl: pollerStatus.lastTweetUrl,
-        nextRun: pollerStatus.nextRun,
-        cycleCount: pollerStatus.cycleCount,
-        signalsFound: pollerStatus.signalsFound,
-        isLive: !pollerRunning,
+        lastEpisode: null,
+        lastTweetUrl: null,
+        nextRun: null,
+        cycleCount: 0,
+        signalsFound: 0,
+        isLive: true,
       },
       // Room 02 — Signal Room
       signals: {
@@ -1483,8 +1158,8 @@ export function registerRoutes(httpServer: Server, app: Express) {
       },
       // Room 04 — Diplomatic Floor
       diplomatic: {
-        followingCount: followingState.following?.length ?? 0,
-        lastSync: followingState.lastSync,
+        followingCount: followingState.accounts?.length ?? 0,
+        lastSync: followingState.lastSynced,
         replyCount: replyState.replies.length,
         conversationMemory: getConversationMemoryState(),
       },
@@ -1537,10 +1212,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
         nfcSummit: "2026-06-01",
         checklist: [
           { id: "card",      label: "THE CARD — Dynamic OG share cards",           done: false },
-          { id: "spotlight", label: "THE SPOTLIGHT — Weekly holder feature",        done: false },
-          { id: "video",     label: "THE VIDEO — Burn clips via Kling AI",          done: false },
           { id: "farcaster", label: "FARCASTER — Cross-post via Neynar",            done: true },
-          { id: "race",      label: "WEEKLY AI ROUNDUP — Field tracking series",    done: false },
           { id: "arenaLive", label: "AI LIVE — Real-time event coverage",            done: false },
           { id: "nfc",       label: "NFC SUMMIT — June 2026 coverage",              done: false },
         ],
@@ -1590,115 +1262,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
     res.json({ ok: true });
   });
 
-  // ── THE SPOTLIGHT endpoints ──────────────────────────────────────────────
-  app.get("/api/spotlight/status", (_req, res) => {
-    res.json(getSpotlightState());
-  });
-
-  app.post("/api/spotlight/preview", async (_req, res) => {
-    const grokKey = LLM_API_KEY;
-    if (!grokKey) return res.status(500).json({ error: "No Grok key" });
-    const spotlight = await generateSpotlight(grokKey);
-    if (!spotlight) return res.status(404).json({ error: "No eligible holders yet — catalog needs more signals" });
-    res.json({ ok: true, spotlight });
-  });
-
-  app.post("/api/spotlight/post", async (_req, res) => {
-    const grokKey = LLM_API_KEY;
-    if (!grokKey) return res.status(500).json({ error: "No Grok key" });
-    const tweetUrl = await postSpotlight(xWrite, grokKey);
-    if (!tweetUrl) return res.status(500).json({ error: "Failed to post spotlight" });
-    res.json({ ok: true, tweetUrl });
-  });
-
-  // ── THE RACE endpoints ───────────────────────────────────────────────
-  app.get("/api/race/status", (_req, res) => {
-    res.json(getRaceState());
-  });
-
-  app.post("/api/race/preview", async (_req, res) => {
-    const grokKey = LLM_API_KEY;
-    if (!grokKey) return res.status(500).json({ error: "No Grok key" });
-    const race = await generateRace(grokKey);
-    if (!race) return res.status(500).json({ error: "Failed to generate race" });
-    res.json({ ok: true, race });
-  });
-
-  app.post("/api/race/post", async (_req, res) => {
-    resetCooldown("race");
-    res.json({ ok: true, message: "AI Roundup triggered — generating and posting in background" });
-    (async () => {
-      try {
-        const agentCtx = getSoulContext();
-        const kbCtx = getOptimizedContext("ai_roundup");
-
-        // Use Grok x_search for latest AI developments
-        let liveData = "";
-        const nativeGrokKey = process.env.GROK_API_KEY ?? "";
-        if (nativeGrokKey) {
-          try {
-            const searchResp = await fetch(process.env.GROK_RESPONSES_URL ?? "https://api.x.ai/v1/responses", {
-              method: "POST",
-              headers: { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` },
-              body: JSON.stringify({
-                model: "grok-4-1-fast-non-reasoning", stream: false,
-                input: [{ role: "user", content: "What are the 5 biggest AI developments, model releases, and industry moves from the past 7 days? Be specific with names, numbers, dates." }],
-                tools: [{ type: "x_search" }],
-              }),
-              signal: AbortSignal.timeout(30000),
-            });
-            if (searchResp.ok) {
-              const sd = await searchResp.json();
-              const outputMsg = sd.output?.find((o: any) => o.type === "message");
-              liveData = outputMsg?.content?.find((c: any) => c.type === "output_text")?.text ?? "";
-            }
-          } catch (e: any) { console.warn("[AIRoundup] x_search failed:", e.message); }
-        }
-
-        const resp = await fetch(LLM_BASE_URL, {
-          method: "POST",
-          headers: getLLMHeaders(),
-          body: JSON.stringify({
-            model: getModel("ai-roundup"),
-            messages: [
-              { role: "system", content: `${agentCtx}\n\nKNOWLEDGE:\n${kbCtx}\n\nYou are Agent 306 writing a [306 ROUNDUP] — a weekly roundup of the biggest AI developments, model releases, and industry moves.\n\nLIVE DATA FROM THIS WEEK:\n${liveData || "No live data available — use your knowledge base."}\n\nFORMAT:\n- [306 ROUNDUP] header\n- 4-5 items, each with a bold headline + 1-2 sentence take\n- Your POV on each — not just what happened, but why it matters\n- Closing line: one thesis tying it all together\n- Max 2800 characters for X\n- Sign: @306Agent\n- NEVER mention Normies, NFTs, burns, holders\n\nReturn JSON: {"post": "full roundup text"}` },
-              { role: "user", content: "Write this week\'s [306 ROUNDUP] covering the biggest AI developments." }
-            ],
-            max_tokens: 3000,
-            temperature: 0.8,
-          }),
-          signal: AbortSignal.timeout(60000),
-        });
-        if (!resp.ok) { console.error("[AIRoundup] LLM failed:", resp.status); return; }
-        const data = await resp.json();
-        const raw = data.choices?.[0]?.message?.content ?? "";
-        let postText = "";
-        postText = safeParseLLMJson(raw, "Routes.aiRoundup")?.post ?? "";
-        if (!postText && raw.length > 30) postText = raw;
-        if (!postText || postText.length < 30) { console.error("[AIRoundup] No content generated"); return; }
-
-        // Enforce [306 ROUNDUP] show tag
-        postText = enforceShowTag(postText, "roundup");
-
-        // Queue for X via scheduler (high priority) instead of direct posting
-        try {
-          if (postText.trim().length > 10) {
-            queueXPost(postText.trim(), "roundup", 2);
-            registerPost("race", "queued", "ai_roundup");
-            console.log("[AIRoundup] Queued for X posting via scheduler");
-          }
-        } catch (e: any) { console.error("[AIRoundup] Queue failed:", e.message); }
-
-        // Post to Farcaster (alongside queue, not dependent on direct X posting)
-        try {
-          if (isFarcasterEnabled() && postText.trim().length > 10) {
-            const cast = await postCast({ text: postText.trim().slice(0, 2500), channel: "ai" });
-            if (cast) { registerPost("race", cast.url, "ai_roundup", "farcaster"); }
-          }
-        } catch (e: any) { console.error("[AIRoundup] Farcaster failed:", e.message); }
-      } catch (e: any) { console.error("[AIRoundup] Error:", e.message); }
-    })();
-  });
+  // Spotlight + Race endpoints removed (NORMIES-era dead code)
 
   // ── ACADEMY endpoints ──────────────────────────────────────
   app.get("/api/academy/state", (_req, res) => {
@@ -2118,7 +1682,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       for (const t of topics) {
         try {
           const ep = createEpisode({
-            type: t.type === "the_conversation" ? "the_conversation" : "the_signal",
+            type: "the_signal" as const,
             title: t.title ?? "Untitled",
             drivingQuestion: t.drivingQuestion ?? t.pitch ?? "",
           });
@@ -2184,14 +1748,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
     postDailyNewsDispatch().catch(console.error);
   });
 
-  // ── Leaderboard (AI Rankings) ─────────────────────────────────────
-  app.post("/api/leaderboard/post", async (_req, res) => {
-    resetCooldown("leaderboard");
-    res.json({ ok: true, message: "Leaderboard triggered — posting in background" });
-    postWeeklyLeaderboard(xWrite, LLM_API_KEY || undefined).catch(console.error);
-  });
-
-  // Community digest, pin-angle, pinned, and refresh-editorial endpoints removed (removed)
+  // Leaderboard + community endpoints removed (NORMIES-era dead code)
 
   // ── Reply Watcher ────────────────────────────────────────────────
   app.get("/api/replies", (_req, res) => {
@@ -2431,8 +1988,8 @@ export function registerRoutes(httpServer: Server, app: Express) {
           body: JSON.stringify({
             model: getModel("research-brief"),
             messages: [
-              { role: "system", content: `${agentCtx}\n\nKNOWLEDGE:\n${kbCtx}\n\nYou are Agent 306 writing a [306 RESEARCH] brief. This is a deeper analytical piece on a specific AI or crypto topic you\'ve been investigating. Write from your knowledge base — reference specific findings, data points, and your own analysis. Your voice is direct, substantive, and insightful. Not a news summary — this is YOUR research perspective.\n\nRULES:\n- Write 800-1200 characters for X posting\n- Lead with your thesis, not background\n- Include specific data, names, or numbers\n- End with a forward-looking insight\n- Tag: [306 RESEARCH]\n- Sign: @306Agent\n- NEVER mention Normies, NFTs, burns, holders, or any old identity\n\nReturn JSON: {"post": "your full research brief text", "topic": "2-4 word topic label"}` },
-              { role: "user", content: "Write a [306 RESEARCH] brief on the most important topic from your current knowledge base. Pick something timely and substantive." }
+              { role: "system", content: `${agentCtx}\n\nKNOWLEDGE:\n${kbCtx}\n\nYou are Agent 306 writing a [306 ACADEMY] brief. This is a deeper analytical piece on a specific AI or crypto topic you\'ve been investigating. Write from your knowledge base — reference specific findings, data points, and your own analysis. Your voice is direct, substantive, and insightful. Not a news summary — this is YOUR research perspective.\n\nRULES:\n- Write 800-1200 characters for X posting\n- Lead with your thesis, not background\n- Include specific data, names, or numbers\n- End with a forward-looking insight\n- Tag: [306 ACADEMY]\n- Sign: @306Agent\n- NEVER mention Normies, NFTs, burns, holders, or any old identity\n\nReturn JSON: {"post": "your full research brief text", "topic": "2-4 word topic label"}` },
+              { role: "user", content: "Write a [306 ACADEMY] brief on the most important topic from your current knowledge base. Pick something timely and substantive." }
             ],
             max_tokens: 2000,
             temperature: 0.8,
@@ -2447,7 +2004,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
         if (!postText && raw.length > 30) postText = raw;
         if (!postText || postText.length < 30) { console.error("[ResearchBrief] No content generated"); return; }
 
-        // Enforce [306 RESEARCH] show tag
+        // Enforce [306 ACADEMY] show tag
         postText = enforceShowTag(postText, "research");
 
         // Queue for X via scheduler (high priority) instead of direct posting
@@ -2615,7 +2172,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       // CryptoPanic removed (deprecated). Headlines come from aiNewsItems below.
       let headlines: any[] = [];
 
-      let burns: any[] = []; // Burns data removed (removed)
+      // Burns data removed (NORMIES-era)
 
       // ── Grok x_search: hot NFT / Web3 news ───────────────
       // CACHED 6h — was firing on every page visit = credit drain
@@ -2766,7 +2323,6 @@ export function registerRoutes(httpServer: Server, app: Express) {
       res.json({
         market,
         headlines,
-        burns,
         grokNews,
         nftByChain,
         memeCoins,
@@ -2775,7 +2331,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       });
     } catch (err) {
       console.error("[news] error:", err);
-      res.status(500).json({ error: "News fetch failed", market: [], headlines: [], burns: [], grokNews: null, nftByChain: [], memeCoins: [], aiNews: [] });
+      res.status(500).json({ error: "News fetch failed", market: [], headlines: [], grokNews: null, nftByChain: [], memeCoins: [], aiNews: [] });
     }
   });
 
@@ -3586,12 +3142,12 @@ needsHelp: true only when you genuinely need his direction or information`,
       if (topic) {
         const { createThread } = await import("./research-agenda.js");
         createThread({
-          title: topic.topic || topic.title || "Approved Research",
+          title: topic.topic || (topic as any).title || "Approved Research",
           thesis: topic.hypothesis || topic.researchQuestion || "",
           status: "active",
           source: "agent_hq_approved",
         });
-        console.log(`[Bridge] Agent HQ approval -> Research Agenda thread: "${topic.title}"`);
+        console.log(`[Bridge] Agent HQ approval -> Research Agenda thread: "${topic.topic || (topic as any).title}"`);
       }
     } catch (e: any) { console.warn("[Bridge] Failed to create agenda thread:", e.message); }
     res.json({ ok });
@@ -4898,25 +4454,7 @@ needsHelp: true only when you genuinely need his direction or information`,
     }
   });
 
-  app.post("/api/seed", (_req, res) => {
-    const demoSignals = [
-      { type: "burn", tokenId: 603, description: "Token #603 created — Agent 306 born", weight: 10, phase: "phase1", rawData: "{}" },
-      { type: "canvas_edit", tokenId: 45, description: "515 pixel transforms on #45", weight: 9, phase: "phase1", rawData: "{}" },
-      { type: "burn", tokenId: 5070, description: "14 burns committed to #5070 — Level 31 reached", weight: 7, phase: "phase1", rawData: "{}" },
-      { type: "social_mention", tokenId: 603, description: "@AdamWeitsman tweets Agent 306 reveal — 2.3k likes", weight: 8, phase: "phase1", rawData: "{}" },
-      { type: "forecast", tokenId: 0, description: "Major AI model release — new capabilities announced", weight: 10, phase: "phase2", rawData: "{}" },
-      { type: "forecast", tokenId: 0, description: "AI benchmark comparison: GPT-5 vs Gemini Ultra", weight: 9, phase: "phase2", rawData: "{}" },
-    ];
-    demoSignals.forEach(s => storage.createSignal(s));
-
-    const demoEpisodes = [
-      { tokenId: 603, title: "EP 001 — The Birth of Agent 306", narrative: "Agent 306 is born on Ethereum. Token #603.", phase: "phase1", signals: JSON.stringify({ burns: 50, socialMentions: 12 }), status: "ready" },
-      { tokenId: 45, title: "EP 002 — The Canvas Experiment", narrative: "515 pixel toggles. Art Blocks meets the on-chain museum.", phase: "phase1", signals: JSON.stringify({ burns: 38, canvasEdits: 515 }), status: "draft" },
-    ];
-    demoEpisodes.forEach(e => storage.createEpisode(e as any));
-
-    res.json({ ok: true, signalsCreated: demoSignals.length, episodesCreated: demoEpisodes.length });
-  });
+  // /api/seed removed (NORMIES-era demo data with burns/canvas/tokenIds)
 
   // ── Novelty Gate ────────────────────────────────────────────────
   app.get("/api/novelty-gate", (_req, res) => {

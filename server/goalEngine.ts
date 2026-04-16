@@ -213,7 +213,7 @@ export async function buildGoalContext(evalResult?: EvalResult): Promise<GoalGen
     .map((g: AgentGoal) => g.title);
 
   const plan = getLatestPlan();
-  const improvementPlanAreas = plan?.actionAreas?.map((a: any) => a.area ?? a.title ?? a) ?? [];
+  const improvementPlanAreas = plan?.actions?.map((a: any) => a.area ?? a.title ?? a) ?? [];
 
   // System metrics
   const kbEntryCount = getActiveKnowledgeCount();
@@ -456,7 +456,7 @@ Return JSON:
 
 // ── Main Entry Point ───────────────────────────────────────────
 
-export async function runGoalEngine(evalResult: EvalResult, grokKey: string): Promise<GoalEngineResult> {
+export async function runGoalEngine(evalResult?: EvalResult, grokKey?: string): Promise<GoalEngineResult> {
   const result: GoalEngineResult = {
     goalsGenerated: 0,
     goalsResolved: 0,
@@ -476,7 +476,7 @@ export async function runGoalEngine(evalResult: EvalResult, grokKey: string): Pr
     }
   }
 
-  console.log(`[GoalEngine] Starting self-improvement cycle (eval composite: ${evalResult.composite}, weakest: ${evalResult.weakestDimension})...`);
+  console.log(`[GoalEngine] Starting self-improvement cycle (eval composite: ${evalResult?.composite ?? 'N/A'}, weakest: ${evalResult?.weakestDimension ?? 'N/A'})...`);
 
   // ── STEP 1: Resolve stale goals ──────────────────────────────
   try {
@@ -618,8 +618,8 @@ export async function runGoalEngine(evalResult: EvalResult, grokKey: string): Pr
   try {
     history.runs.unshift({
       timestamp: new Date().toISOString(),
-      evalComposite: evalResult.composite,
-      weakestDimension: evalResult.weakestDimension,
+      evalComposite: evalResult?.composite ?? 0,
+      weakestDimension: evalResult?.weakestDimension ?? 'unknown',
       result,
     });
     saveHistory(history);

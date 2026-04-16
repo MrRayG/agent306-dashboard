@@ -7,7 +7,7 @@
 
 import { TwitterApi } from "twitter-api-v2";
 import * as fs from "fs";
-import { upsertHolder, getCatalog, type HolderEntry } from "./holderCatalog";
+// holderCatalog removed (NORMIES-era dead code)
 
 import { dataPath } from "./dataPaths.js";
 const FOLLOWING_FILE  = dataPath("following.json");
@@ -145,25 +145,8 @@ export async function syncFollowing(xClient: TwitterApi): Promise<FollowingState
 
   saveState(followingState);
 
-  // ── Seed holder catalog with confirmed community ─────────────────────────
-  let seeded = 0;
-  for (const entry of entries) {
-    // Skip the account itself and known bots
-    if (entry.username.toLowerCase() === "agent_306") continue;
-
-    upsertHolder({
-      username:    entry.username,
-      signalType:  entry.isPfpHolder ? "pfp_holder" : "community",
-      show:        "[306 COMMUNITY]",
-      text:        entry.description,
-      tokenIds:    entry.detectedTokenIds,
-      confirmedHolder: true,
-    });
-    seeded++;
-  }
-
   console.log(
-    `[FollowingSync] Done. ${entries.length} accounts synced, ${seeded} seeded into catalog.`,
+    `[FollowingSync] Done. ${entries.length} accounts synced.`,
     `PFP holders: ${entries.filter(e => e.isPfpHolder).length}`
   );
 

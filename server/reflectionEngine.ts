@@ -195,7 +195,7 @@ async function reflectOnPost(lesson: {
   tweetText: string;
   engagement: { likes: number; replies: number; retweets: number; bookmarks: number; impressions: number };
   score: number;
-  signals?: { burns: number; canvas: number; twitter: number };
+  signals?: { twitter: number };
 }): Promise<Reflection | null> {
   // Get recent high/low performers for comparison
   const sorted = [...performance.lessons]
@@ -214,7 +214,7 @@ You must respond with ONLY valid JSON:
   "whyWorked": "string — what made this post succeed or fail",
   "patterns": ["actionable pattern 1", "pattern 2"],
   "styleNote": "observation about voice/tone effectiveness",
-  "ruleCandidate": "if confident enough, a rule like 'burn stories with specific token IDs get 3x engagement' — or null if no clear rule emerges"
+  "ruleCandidate": "if confident enough, a rule like 'research deep-dives with specific findings get 3x engagement' — or null if no clear rule emerges"
 }
 
 Be brutally honest. Look for causal patterns, not just correlations.`;
@@ -224,7 +224,7 @@ Be brutally honest. Look for causal patterns, not just correlations.`;
 Post text: "${lesson.tweetText}"
 Engagement: ${lesson.engagement.likes} likes, ${lesson.engagement.replies} replies, ${lesson.engagement.retweets} RTs, ${lesson.engagement.bookmarks} bookmarks, ${lesson.engagement.impressions} impressions
 Score: ${lesson.score}/10
-Signals used: ${lesson.signals ? `burns: ${lesson.signals.burns}, canvas: ${lesson.signals.canvas}, twitter: ${lesson.signals.twitter}` : "unknown"}
+Signals used: ${lesson.signals ? `twitter: ${lesson.signals.twitter}` : "unknown"}
 
 TOP PERFORMERS (for comparison):
 ${topPosts || "No data yet"}

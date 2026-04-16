@@ -279,7 +279,7 @@ export function startBreakingNewsLoop(xWrite: any): void {
           const post = await generateBreakingPost(event);
           if (post) {
             const reframed = post.replace(/\[306 NEWS\]/i,
-              noveltyResult.reframedType === "update" ? "[306 SIGNAL]" : "[306 RESEARCH]");
+              noveltyResult.reframedType === "update" ? "[306 SIGNAL]" : "[306 ACADEMY]");
             queueXPost(reframed, noveltyResult.reframedType === "update" ? "signal" : "research", 5);
             markEventPosted(event.id);
             console.log(`[BreakingNews] Reframed as ${noveltyResult.reframedType}: "${event.headline.slice(0, 60)}"`);

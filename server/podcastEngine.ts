@@ -304,7 +304,7 @@ let state = loadState();
 {
   const beforeCount = state.episodes.length;
   state.episodes = state.episodes.filter(ep => {
-    const text = (ep.narrative || '') + (ep.title || '');
+    const text = ((ep as any).narrative || '') + (ep.title || '');
     return !text.includes('@NORMIES_TV') && !text.includes('@normiesART') && !text.includes('NORMIES');
   });
   if (state.episodes.length < beforeCount) {

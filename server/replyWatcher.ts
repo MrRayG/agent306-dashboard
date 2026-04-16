@@ -410,7 +410,7 @@ export async function fetchReplies(): Promise<void> {
   // Keep latest 100 (up from 50), weight toward questions and lore suggestions
   replyState.replies = [...fresh, ...replyState.replies]
     .sort((a, b) => {
-      const typeScore = { question: 4, lore_suggestion: 4, callout: 3, holder_mention: 3, excitement: 2, general: 1 };
+      const typeScore: Record<string, number> = { question: 4, lore_suggestion: 4, callout: 3, holder_mention: 3, excitement: 2, general: 1 };
       return (typeScore[b.replyType] ?? 1) - (typeScore[a.replyType] ?? 1);
     })
     .slice(0, 100);

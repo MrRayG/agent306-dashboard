@@ -136,18 +136,23 @@ export function createThread(data: {
 }): any {
   const agenda = loadAgenda();
   const id = `thread_${Date.now()}`;
-  const thread = {
+  const thread: ResearchThread = {
     id,
     title: data.title,
     thesis: data.thesis || "",
-    status: data.status || "exploring",
+    status: (data.status as ResearchThread["status"]) || "exploring",
     priority: 5,
+    maturityScore: 0,
     evidence: { supporting: [], contradicting: [], gaps: [] },
-    advances: [],
-    podcastCandidate: false,
+    audienceRelevance: "",
+    actionableTips: [],
+    subThreads: [],
+    parentThread: null,
     createdAt: new Date().toISOString(),
-    lastAdvancedAt: null,
-    source: data.source || "manual",
+    lastUpdated: new Date().toISOString(),
+    podcastCandidate: false,
+    advanceCount: 0,
+    advanceScores: [],
   };
   agenda.threads.push(thread);
   saveAgenda(agenda);

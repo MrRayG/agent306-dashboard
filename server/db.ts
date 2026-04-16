@@ -18,7 +18,7 @@ export const db = drizzle(sqlite, { schema });
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS episodes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    token_id INTEGER NOT NULL,
+    token_id INTEGER,
     title TEXT NOT NULL,
     narrative TEXT NOT NULL,
     phase TEXT NOT NULL DEFAULT 'phase1',
@@ -31,7 +31,7 @@ sqlite.exec(`
 
   CREATE TABLE IF NOT EXISTS render_jobs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    token_id INTEGER NOT NULL,
+    token_id INTEGER,
     voxel_count INTEGER DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'queued',
     image_url TEXT,

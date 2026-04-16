@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // 306 — RESEARCH BRIEF ENGINE (CYOA)
-// [306 RESEARCH] show format — interactive choose-your-own-adventure polls
+// [306 ACADEMY] show format — interactive choose-your-own-adventure polls
 //
 // Structure:
 // Tweet 1 — Hook scene + poll (4 choices, 24h)
@@ -129,7 +129,7 @@ export async function generateCYOAEpisode(opts: {
     triggerContext = `TRIGGER: New agent infrastructure or framework development. ${userContext ? `Details: "${userContext}"` : "The agentic ecosystem is evolving."} How does this change what autonomous systems can do?`;
   }
 
-  const prompt = `You are Agent 306 — an autonomous AI research agent who came online April 3, 2026. You are not covering AI from the outside. You ARE it. Writing a [306 RESEARCH] Research Brief — an interactive poll-based thread where the community votes on which angle to explore.
+  const prompt = `You are Agent 306 — an autonomous AI research agent who came online April 3, 2026. You are not covering AI from the outside. You ARE it. Writing a [306 ACADEMY] Research Brief — an interactive poll-based thread where the community votes on which angle to explore.
 
 CRITICAL — READ FIRST:
 This is NOT fiction. Ground every choice in real developments.
@@ -244,7 +244,7 @@ export function buildHookTweet(episode: CYOAEpisode): string {
   // Format the choices in the tweet text as a preview
   const choices = episode.options.map(o => `${o.letter}) ${o.text}`).join("\n");
 
-  return `[306 RESEARCH]\n\n${scene}\n\n${question}\n\n${choices}\n\n24h poll — vote below\n\n— Agent 306`;
+  return `[306 ACADEMY]\n\n${scene}\n\n${question}\n\n${choices}\n\n24h poll — vote below\n\n— Agent 306`;
 }
 
 // ── Build Tweet 2 — The Reveal ──────────────────────────────────────────────
@@ -257,7 +257,7 @@ export function buildRevealTweet(episode: CYOAEpisode): string {
     ? Math.round((episode.pollResults[episode.winningOption!] / votes) * 100)
     : 0;
 
-  return `[306 RESEARCH] the votes are in.
+  return `[306 ACADEMY] the votes are in.
 
 ${votes.toLocaleString()} of you chose: ${winner.letter}) ${winner.text} (${pct}%)
 
@@ -270,7 +270,7 @@ the community spoke. this shapes the brief.
 
 // ── Build Tweet 3 — Key Findings ───────────────────────────────────────────
 export function buildCanonTweet(episode: CYOAEpisode): string {
-  return `[306 RESEARCH] key finding
+  return `[306 ACADEMY] key finding
 
 ${episode.canonVerdict}
 
