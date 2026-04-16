@@ -2,8 +2,8 @@
  * -----------------------------------------------------------------
  *  BREAKING NEWS DETECTOR
  *
- *  Checks for major AI/crypto developments every 30 minutes during
- *  posting hours using the Perplexity sonar API. When a tier-1 event
+ *  Checks for major AI/crypto developments every 30 minutes using
+ *  the Perplexity sonar API. When a tier-1 event
  *  is detected, generates a [306 NEWS] post and queues it at highest
  *  priority. During protected slot windows (e.g. THE DISPATCH at 7pm),
  *  even tier-1 news is queued rather than posted immediately to avoid
@@ -242,10 +242,8 @@ export async function generateBreakingPost(event: BreakingNewsEvent): Promise<st
 }
 
 function isWithinPostingHours(): boolean {
-  const now = new Date();
-  const utcHour = now.getUTCHours();
-  // Posting hours: 8am-10pm ET = 12 UTC to 02 UTC (next day)
-  return utcHour >= 12 || utcHour < 2;
+  // 12-slot schedule covers all 24 hours — always posting
+  return true;
 }
 
 export function markEventPosted(eventId: string): void {
