@@ -37,7 +37,7 @@ import { getOptimizedContext } from "./contextWindow.js";
 import { CONTENT_TYPES, getShowTagDescriptions, getShowTag, enforceShowTag } from "./contentTypes.js";
 import { getVoiceContext } from "./voiceInstructions.js";
 import { enforcePostFormat } from "./postFormatGuard.js";
-import { startBreakingNewsLoop } from "./breakingNewsDetector.js";
+// breakingNewsDetector removed — not needed for now
 import { buildTweetSystemPrompt, buildTweetUserPrompt } from "./tweetPromptBuilder.js";
 import { dailyReflection } from "./soulEvolution.js";
 
@@ -126,7 +126,7 @@ const CONTENT_SLOTS: ContentSlot[] = [
   { name: "Night",         hourUTC: 2,  preferredTypes: ["reflection"],                      requiredContentType: "reflection" }, // 10pm ET — [306 REFLECTION]
 ];
 
-// Breaking news detection is now handled by breakingNewsDetector.ts
+// Breaking news detection disabled for now
 // Tier-1 events post immediately; tier-2/3 are queued via queueXPost().
 
 // -- State persistence --------------------------------------------
@@ -858,8 +858,7 @@ IMPORTANT: Output ONLY the tweet text itself. Do NOT include any meta-commentary
 export function startXPostScheduler(xWrite: any): void {
   console.log("[XScheduler] Starting X post scheduler (12 slots every 2h: 6 locked shows + 6 UNPLUGGED slots w/ timezone targeting)");
 
-  // Start breaking news detection loop (checks every 30 min during posting hours)
-  startBreakingNewsLoop(xWrite);
+  // Breaking news detection disabled for now
 
   // Process immediate items (podcast promos) every 5 minutes
   setInterval(() => {

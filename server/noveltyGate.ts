@@ -14,7 +14,7 @@ import { dataPath } from "./dataPaths.js";
 import { getRelevantContext } from "./contextWindow.js";
 import { getGraphConnections } from "./knowledge-graph.js";
 import { knowledge, type KnowledgeEntry } from "./memoryEngine.js";
-import type { BreakingNewsEvent } from "./breakingNewsDetector.js";
+
 
 // ── Optional imports (loaded lazily on first use) ────────────────
 
@@ -241,40 +241,6 @@ export async function checkNovelty(
     oldestMention,
     recommendation,
     reason,
-  };
-}
-
-// ── Convenience wrapper for breakingNewsDetector ─────────────────
-
-export async function shouldFrameAsBreaking(
-  event: BreakingNewsEvent,
-): Promise<{ allowed: boolean; reframedType: string; reason: string }> {
-  const result = await checkNovelty(
-    event.headline,
-    event.summary,
-    event.entities || [],
-  );
-
-  // Log the check
-  const log = loadLog();
-  const action: NoveltyGateLogEntry["action"] =
-    result.recommendation === "breaking" ? "allowed"
-    : result.recommendation === "skip" ? "blocked"
-    : "reframed";
-
-  log.checks.unshift({
-    id: `ng_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    timestamp: new Date().toISOString(),
-    headline: event.headline,
-    result,
-    action,
-  });
-  saveLog(log);
-
-  return {
-    allowed: result.recommendation === "breaking",
-    reframedType: result.recommendation,
-    reason: result.reason,
   };
 }
 
