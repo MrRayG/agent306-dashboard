@@ -21,6 +21,7 @@ import PerplexityAttribution from "@/components/PerplexityAttribution";
 
 const nav = [
   { href: "/",         label: "Command Center", desc: "All engines · Status" },
+  { href: "/posting",  label: "Posting",        desc: "Generate · Queues" },
   { href: "/eval",     label: "306Eval",        desc: "Benchmark · Growth"  },
   { href: "/episodes", label: "Episodes",       desc: "Queue & post"        },
   { href: "/writing",  label: "Writing Studio", desc: "Articles · Blog"     },
@@ -32,7 +33,6 @@ const nav = [
   { href: "/status",   label: "Status",         desc: "Briefing · Vitals"   },
   { href: "/dreams",      label: "Dreams & Growth", desc: "Aspirations \u00B7 Self-improvement" },
   { href: "/competency", label: "Competencies",    desc: "Skills \u00B7 Radar chart"       },
-  { href: "/posting",    label: "Posting",          desc: "Generate \u00B7 Queues"          },
 ];
 
 function Sidebar() {
@@ -144,6 +144,7 @@ function App() {
         <Layout>
           <Switch>
             <Route path="/"         component={CommandCenter} />
+            <Route path="/posting"  component={PostingPanel}  />
             <Route path="/eval"     component={EvalDashboard} />
             <Route path="/episodes" component={EpisodeQueue}  />
             <Route path="/writing"  component={WritingStudio} />
@@ -155,7 +156,6 @@ function App() {
             <Route path="/status"   component={StatusHub}     />
             <Route path="/dreams"      component={DreamsGrowth}        />
             <Route path="/competency" component={CompetencyDashboard} />
-            <Route path="/posting"    component={PostingPanel} />
             <Route component={NotFound} />
           </Switch>
         </Layout>

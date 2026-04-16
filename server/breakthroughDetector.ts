@@ -17,6 +17,7 @@ import { getOptimizedContext } from "./contextWindow.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { knowledge } from "./memoryEngine.js";
 import { queueXPost } from "./xPostScheduler.js";
+import { queueFarcasterPost } from "./farcasterQueue.js";
 import { getVoiceContext } from "./voiceInstructions.js";
 import { enforceShowTag } from "./contentTypes.js";
 import { buildTweetSystemPrompt } from "./tweetPromptBuilder.js";
@@ -577,6 +578,7 @@ Required JSON schema:
     // Enforce [306 SIGNAL] show tag
     breakthroughPost = enforceShowTag(breakthroughPost, "signal");
     queueXPost(breakthroughPost, "breakthrough");
+    queueFarcasterPost(breakthroughPost.slice(0, 2500), "breakthrough", undefined, "ai");
 
     console.log(`[Breakthrough] BREAKTHROUGH DETECTED: "${breakthrough.title}" (composite: ${compositeScore})`);
     return breakthrough;

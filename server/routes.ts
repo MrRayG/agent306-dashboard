@@ -87,14 +87,14 @@ import {
   seedDreams,
 } from "./dreamEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
-import { startXPostScheduler, getXPostQueue, queueXPost, getTodaysPostsSummary, clearXPostQueue, isXAutoPostEnabled, setXAutoPostEnabled, getXAutoPostState } from "./xPostScheduler.js";
+import { startXPostScheduler, getXPostQueue, queueXPost, getTodaysPostsSummary, clearXPostQueue, postXQueueItem, isXAutoPostEnabled, setXAutoPostEnabled, getXAutoPostState } from "./xPostScheduler.js";
+import { startFarcasterPostScheduler, getFarcasterPostQueue, queueFarcasterPost, clearFarcasterPostQueue, postFarcasterQueueItem } from "./farcasterQueue.js";
 import { getVoiceContext } from "./voiceInstructions.js";
 import { enforceShowTag } from "./contentTypes.js";
 import { getCompetencyProfile } from "./competencyFramework.js";
 import { buildVoiceBlock } from "./voice.js";
 import { getEvolutionContext } from "./soulEvolution.js";
 import { generateBreakthroughContent } from "./breakthroughDetector.js";
-import { queueFarcasterPost, getFarcasterPostQueue, postFarcasterQueueItem, clearFarcasterPostQueue, startFarcasterPostScheduler } from "./farcasterQueue.js";
 // breakingNewsDetector removed — not needed for now
 
 // On-chain API removed
@@ -430,21 +430,15 @@ Return JSON: {"post": "..."}`
 
     registerPost("news_dispatch", "queued", "news_dispatch");
 
-    // ── 5. Post to Farcaster ───────────────────────────────────────────────
+    // ── 5. Queue for Farcaster ───────────────────────────────────────────────
     try {
-      if (isFarcasterEnabled() && postText.trim().length > 10) {
+      if (postText.trim().length > 10) {
         const channel = postText.match(/\bai\b|agent|llm|model/i) ? "ai" : undefined;
-        const cast = await postCast({
-          text: postText.trim().slice(0, 2500),
-          channel,
-        });
-        if (cast) {
-          registerPost("news_dispatch", cast.url, "news_dispatch", "farcaster");
-          console.log(`[Agent306:News] Farcaster dispatch posted: ${cast.url}`);
-        }
+        queueFarcasterPost(postText.trim().slice(0, 2500), "news", undefined, channel);
+        console.log(`[Agent306:News] Farcaster dispatch queued`);
       }
     } catch (fcErr: any) {
-      console.warn("[Agent306:News] Farcaster dispatch failed:", fcErr.message);
+      console.warn("[Agent306:News] Farcaster queue failed:", fcErr.message);
     }
 
     console.log(`[Agent306:News] Daily Dispatch complete — single post`);
@@ -617,6 +611,11 @@ setTimeout(() => {
 setTimeout(() => {
   startXPostScheduler(xWrite);
 }, 65_000);
+
+// ── FARCASTER POST SCHEDULER — parallel to X scheduler ────────────────────────
+setTimeout(() => {
+  startFarcasterPostScheduler();
+}, 70_000);
 
 // ── Editorial Summary Cache ─────────────────────────────────────────────────────
 // Decoupled from signal collection — generated async, served instantly from cache.
@@ -924,6 +923,127 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
   // POST /api/farcaster/toggle — enable/disable Farcaster posting
   app.post("/api/farcaster/toggle", requireDashAuth, (req, res) => {
+    const { enabled } = req.body ?? {};
+    const newState = typeof enabled === "boolean" ? enabled : !getFarcasterState().enabled;
+    setFarcasterEnabled(newState);
+    res.json({ ok: true, enabled: newState });
+  });
+
+  // ── Posting Control Panel API ──────────────────────────────────────────────
+
+  // GET /api/posting/overview — unified view of both platforms
+  app.get("/api/posting/overview", requireDashAuth, (_req, res) => {
+    const xQueue = getXPostQueue();
+    const fcQueue = getFarcasterPostQueue();
+    const coordinatorState = getCoordinatorState();
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    // X recent posts (from queue: posted, not skipped, last 10)
+    const xRecentPosts = xQueue.queue
+      .filter(p => p.posted && p.postedAt && !p.skipped)
+      .sort((a, b) => new Date(b.postedAt!).getTime() - new Date(a.postedAt!).getTime())
+      .slice(0, 10)
+      .map(p => ({
+        id: p.id,
+        content: p.content,
+        type: p.type,
+        postedAt: p.postedAt,
+        platform: "x" as const,
+      }));
+
+    // Farcaster recent posts (from queue: posted, not skipped, last 10)
+    const fcRecentPosts = fcQueue.queue
+      .filter(p => p.posted && p.postedAt && !p.skipped)
+      .sort((a, b) => new Date(b.postedAt!).getTime() - new Date(a.postedAt!).getTime())
+      .slice(0, 10)
+      .map(p => ({
+        id: p.id,
+        content: p.content,
+        type: p.type,
+        postedAt: p.postedAt,
+        platform: "farcaster" as const,
+        castUrl: p.castUrl,
+      }));
+
+    res.json({
+      x: {
+        autoPost: isXAutoPostEnabled(),
+        queue: xQueue.pending.map(p => ({
+          id: p.id,
+          content: p.content,
+          type: p.type,
+          priority: p.priority,
+          createdAt: p.createdAt,
+        })),
+        recentPosts: xRecentPosts,
+        postedTodayCount: xQueue.postedToday.length,
+        queueDepth: xQueue.pending.length,
+      },
+      farcaster: {
+        autoPost: isFarcasterEnabled(),
+        configured: getFarcasterState().configured,
+        queue: fcQueue.pending.map(p => ({
+          id: p.id,
+          content: p.content,
+          type: p.type,
+          priority: p.priority,
+          createdAt: p.createdAt,
+          channel: p.channel,
+        })),
+        recentPosts: fcRecentPosts,
+        postedTodayCount: fcQueue.postedToday.length,
+        queueDepth: fcQueue.pending.length,
+      },
+    });
+  });
+
+  // POST /api/posting/x/post-now — immediately post a queued X item
+  app.post("/api/posting/x/post-now", requireDashAuth, async (req, res) => {
+    const { postId } = req.body;
+    if (!postId) return res.status(400).json({ error: "postId required" });
+
+    try {
+      const posted = await postXQueueItem(postId, xWrite);
+      if (posted) {
+        res.json({ ok: true, post: posted });
+      } else {
+        res.status(404).json({ error: "Post not found, already posted, or stale" });
+      }
+    } catch (e: any) {
+      console.error("[PostingPanel] X post-now failed:", e.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/posting/farcaster/post-now — immediately post a queued Farcaster item
+  app.post("/api/posting/farcaster/post-now", requireDashAuth, async (req, res) => {
+    const { postId } = req.body;
+    if (!postId) return res.status(400).json({ error: "postId required" });
+
+    try {
+      const posted = await postFarcasterQueueItem(postId);
+      if (posted) {
+        res.json({ ok: true, post: posted });
+      } else {
+        res.status(404).json({ error: "Post not found, already posted, or stale" });
+      }
+    } catch (e: any) {
+      console.error("[PostingPanel] Farcaster post-now failed:", e.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/posting/x/toggle — toggle X auto-posting
+  app.post("/api/posting/x/toggle", requireDashAuth, (req, res) => {
+    const { enabled } = req.body ?? {};
+    const newState = typeof enabled === "boolean" ? enabled : !isXAutoPostEnabled();
+    setXAutoPostEnabled(newState);
+    res.json({ ok: true, enabled: newState });
+  });
+
+  // POST /api/posting/farcaster/toggle — toggle Farcaster auto-posting (alias)
+  app.post("/api/posting/farcaster/toggle", requireDashAuth, (req, res) => {
     const { enabled } = req.body ?? {};
     const newState = typeof enabled === "boolean" ? enabled : !getFarcasterState().enabled;
     setFarcasterEnabled(newState);
@@ -1903,15 +2023,15 @@ export function registerRoutes(httpServer: Server, app: Express) {
         console.error("[CommunityBoost] X post failed:", xErr.message);
       }
 
-      // Post to Farcaster
+      // Queue for Farcaster
       try {
-        if (isFarcasterEnabled()) {
-          const cast = await postCast({ text: tweet.trim().slice(0, 2500), channel: "nft" });
-          castUrl = cast?.url ?? null;
-          if (castUrl) console.log(`[CommunityBoost] Farcaster cast: ${castUrl}`);
+        if (tweet.trim().length > 10) {
+          queueFarcasterPost(tweet.trim().slice(0, 2500), "roundup", undefined, "nft");
+          castUrl = "queued";
+          console.log(`[CommunityBoost] Farcaster cast queued`);
         }
       } catch (fcErr: any) {
-        console.warn("[CommunityBoost] Farcaster post failed:", fcErr.message);
+        console.warn("[CommunityBoost] Farcaster queue failed:", fcErr.message);
       }
 
       res.json({ ok: true, tweetUrl, castUrl });
@@ -2014,13 +2134,13 @@ export function registerRoutes(httpServer: Server, app: Express) {
           }
         } catch (e: any) { console.error("[ResearchBrief] Queue failed:", e.message); }
 
-        // Post to Farcaster (alongside queue, not dependent on direct X posting)
+        // Queue for Farcaster (alongside X queue)
         try {
-          if (isFarcasterEnabled() && postText.trim().length > 10) {
-            const cast = await postCast({ text: postText.trim().slice(0, 2500), channel: "ai" });
-            if (cast) { registerPost("cyoa", cast.url, "research_brief", "farcaster"); }
+          if (postText.trim().length > 10) {
+            queueFarcasterPost(postText.trim().slice(0, 2500), "research", undefined, "ai");
+            console.log("[ResearchBrief] Farcaster cast queued");
           }
-        } catch (e: any) { console.error("[ResearchBrief] Farcaster failed:", e.message); }
+        } catch (e: any) { console.error("[ResearchBrief] Farcaster queue failed:", e.message); }
       } catch (e: any) { console.error("[ResearchBrief] Error:", e.message); }
     })();
   });

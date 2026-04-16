@@ -315,24 +315,20 @@ export async function postAcademyEpisode(xWrite: any): Promise<void> {
     console.error("[Academy] Queue failed:", e.message);
   }
 
-  // Post to Farcaster
-  let castUrl: string | null = null;
+  // Queue for Farcaster (parallel to X queue)
+  let castQueued = false;
   try {
-    const { postCast, isFarcasterEnabled } = await import("./farcasterEngine.js");
-    if (isFarcasterEnabled()) {
-      const cast = await postCast({ text: generated.post.trim().slice(0, 2500), channel: "web3" });
-      if (cast) {
-        castUrl = cast.url;
-        const { registerPost: regPost } = await import("./postCoordinator.js");
-        regPost("academy", cast.url, "academy", "farcaster");
-        console.log(`[Academy] Farcaster cast posted: ${cast.url}`);
-      }
+    const { queueFarcasterPost } = await import("./farcasterQueue.js");
+    if (generated.post.trim().length > 10) {
+      queueFarcasterPost(generated.post.trim().slice(0, 2500), "academy", undefined, "web3");
+      castQueued = true;
+      console.log(`[Academy] Farcaster cast queued`);
     }
   } catch (fcErr: any) {
-    console.warn("[Academy] Farcaster post failed:", fcErr.message);
+    console.warn("[Academy] Farcaster queue failed:", fcErr.message);
   }
 
-  if (!tweetUrl && !castUrl) {
+  if (!tweetUrl && !castQueued) {
     releasePost("academy");
     return;
   }

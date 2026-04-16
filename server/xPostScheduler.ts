@@ -714,6 +714,58 @@ export function clearXPostQueue(): number {
   return cleared;
 }
 
+/**
+ * Post a specific queued item immediately (manual trigger from dashboard).
+ * Returns the posted item or null on failure.
+ */
+export async function postXQueueItem(postId: string, xWrite: any): Promise<QueuedPost | null> {
+  const state = loadQueue();
+  const post = state.queue.find(p => p.id === postId && !p.posted);
+  if (!post) return null;
+
+  // Freshness guard
+  if (isPostStale(post)) {
+    post.posted = true;
+    post.postedAt = new Date().toISOString();
+    post.skipped = true;
+    post.skippedReason = "stale";
+    saveQueue(state);
+    console.log(`[XScheduler] Skipped stale post on manual trigger: ${post.type}`);
+    return null;
+  }
+
+  const compliance = validateXPost(post.content);
+  if (!compliance.allowed) {
+    console.log(`[XScheduler] Manual post blocked by compliance: ${compliance.reason}`);
+    return null;
+  }
+
+  let safeContent = compliance.sanitizedContent ?? post.content;
+  safeContent = enforcePostFormat(safeContent, post.type);
+
+  try {
+    const tweetPayload: any = { text: safeContent };
+    if (post.mediaId) {
+      tweetPayload.media = { media_ids: [post.mediaId] };
+    }
+    const tweet = await xWrite.v2.tweet(tweetPayload);
+    const tweetId = tweet.data?.id;
+    if (tweetId) {
+      recordXPost(safeContent);
+      recordPostType(state, post.type);
+      post.posted = true;
+      post.postedAt = new Date().toISOString();
+      saveQueue(state);
+      console.log(`[XScheduler] Manual post: https://x.com/306Agent/status/${tweetId}`);
+      return post;
+    }
+  } catch (e: any) {
+    console.error("[XScheduler] Manual post failed:", e.message);
+  }
+
+  return null;
+}
+
 export function startXPostScheduler(xWrite: any): void {
   console.log("[XScheduler] Starting X post scheduler (engine-only mode — posts queued content from dedicated engines, no on-demand filler)");
 
