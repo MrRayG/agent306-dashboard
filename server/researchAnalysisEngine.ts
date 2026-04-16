@@ -603,9 +603,13 @@ export async function runThreadAnalysis(thread: ResearchThread): Promise<Researc
       analysis.lastAnalysisPhase = "deep-analysis";
       analysis.lastAnalysisDate = new Date().toISOString();
 
-      // Feed contradictions into hypothesis formation
+      // Feed contradictions and gaps into hypothesis formation (capped at 3 per thread)
+      const MAX_ANALYSIS_HYPOTHESES_PER_THREAD = 3;
+      let analysisHypothesesCreated = 0;
+
       if (contradictions?.contradictions?.length) {
         for (const c of contradictions.contradictions) {
+          if (analysisHypothesesCreated >= MAX_ANALYSIS_HYPOTHESES_PER_THREAD) break;
           try {
             addHypothesis({
               claim: `"${c.sourceA}" position ("${(c.positionA ?? "").slice(0, 80)}") is more accurate than "${c.sourceB}" position ("${(c.positionB ?? "").slice(0, 80)}")`,
@@ -617,6 +621,7 @@ export async function runThreadAnalysis(thread: ResearchThread): Promise<Researc
               relatedTopicId: thread.id,
               source: "analysis",
             });
+            analysisHypothesesCreated++;
             console.log(`[ResearchAnalysis] Created hypothesis from contradiction: "${(c.positionA ?? "").slice(0, 60)}..."`);
           } catch (e: any) {
             console.warn(`[ResearchAnalysis] Failed to create contradiction hypothesis:`, e.message);
@@ -624,9 +629,9 @@ export async function runThreadAnalysis(thread: ResearchThread): Promise<Researc
         }
       }
 
-      // Feed gaps into hypothesis formation
       if (gaps?.gaps?.length) {
         for (const g of gaps.gaps) {
+          if (analysisHypothesesCreated >= MAX_ANALYSIS_HYPOTHESES_PER_THREAD) break;
           try {
             addHypothesis({
               claim: `The research gap "${(g.question ?? "").slice(0, 100)}" exists because: ${(g.whyExists ?? "").slice(0, 100)}`,
@@ -638,6 +643,7 @@ export async function runThreadAnalysis(thread: ResearchThread): Promise<Researc
               relatedTopicId: thread.id,
               source: "analysis",
             });
+            analysisHypothesesCreated++;
             console.log(`[ResearchAnalysis] Created hypothesis from gap: "${(g.question ?? "").slice(0, 60)}..."`);
           } catch (e: any) {
             console.warn(`[ResearchAnalysis] Failed to create gap hypothesis:`, e.message);
@@ -751,9 +757,12 @@ export async function runQualityCheck(thread: ResearchThread): Promise<{
       runAssumptionKiller(thread).catch(e => { console.error(`[ResearchAnalysis] Assumption killer failed:`, e.message); return null; }),
     ]);
 
-    // Feed untested assumptions into hypothesis formation
+    // Feed untested assumptions into hypothesis formation (capped at 3)
     if (assumptions?.assumptions?.length) {
+      const maxAssumptionHypotheses = 3;
+      let assumptionCount = 0;
       for (const a of assumptions.assumptions) {
+        if (assumptionCount >= maxAssumptionHypotheses) break;
         try {
           addHypothesis({
             claim: `The common assumption that "${(a.assumption ?? "").slice(0, 120)}" may be incorrect`,
@@ -765,6 +774,7 @@ export async function runQualityCheck(thread: ResearchThread): Promise<{
             relatedTopicId: thread.id,
             source: "analysis",
           });
+          assumptionCount++;
           console.log(`[ResearchAnalysis] Created hypothesis from assumption: "${(a.assumption ?? "").slice(0, 60)}..."`);
         } catch (e: any) {
           console.warn(`[ResearchAnalysis] Failed to create assumption hypothesis:`, e.message);

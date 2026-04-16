@@ -68,7 +68,7 @@ export function recordIncoming(username: string, text: string, tweetUrl?: string
   }
 
   const convo = state.conversations[key];
-  const cappedText = text.slice(0, 280);
+  const cappedText = text.slice(0, 25000);
   convo.entries.push({
     direction: "them",
     text: cappedText,
@@ -109,7 +109,7 @@ export function recordOutgoing(username: string, text: string, tweetUrl?: string
   }
 
   const convo = state.conversations[key];
-  const cappedText = text.slice(0, 280);
+  const cappedText = text.slice(0, 25000);
   convo.entries.push({
     direction: "us",
     text: cappedText,

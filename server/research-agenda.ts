@@ -136,18 +136,23 @@ export function createThread(data: {
 }): any {
   const agenda = loadAgenda();
   const id = `thread_${Date.now()}`;
-  const thread = {
+  const thread: ResearchThread = {
     id,
     title: data.title,
     thesis: data.thesis || "",
-    status: data.status || "exploring",
+    status: (data.status as ResearchThread["status"]) || "exploring",
     priority: 5,
+    maturityScore: 0,
     evidence: { supporting: [], contradicting: [], gaps: [] },
-    advances: [],
-    podcastCandidate: false,
+    audienceRelevance: "",
+    actionableTips: [],
+    subThreads: [],
+    parentThread: null,
     createdAt: new Date().toISOString(),
-    lastAdvancedAt: null,
-    source: data.source || "manual",
+    lastUpdated: new Date().toISOString(),
+    podcastCandidate: false,
+    advanceCount: 0,
+    advanceScores: [],
   };
   agenda.threads.push(thread);
   saveAgenda(agenda);
@@ -576,7 +581,7 @@ async function parallelPerplexitySearch(
             max_tokens: 800,
             temperature: 0.1,
           }),
-          signal: AbortSignal.timeout(25000),
+          signal: AbortSignal.timeout(35000),
         });
 
         if (!pplxRes.ok) {
@@ -669,7 +674,7 @@ ${combinedResults}`
       temperature: 0.2,
       max_tokens: 2000,
     }),
-    signal: AbortSignal.timeout(40000),
+    signal: AbortSignal.timeout(60000),
   });
 
   if (!res.ok) {
@@ -753,6 +758,30 @@ export async function advanceThread(threadId: string): Promise<ResearchThread | 
     }
   } catch (e: any) {
     console.warn(`[ParallelSearch] Thread "${thread.title}": parallel search failed (${e.message}), falling back to single query`);
+  }
+
+  // Supplement with academic sources from external data APIs
+  try {
+    const { searchOpenAlex, searchArxiv } = await import("./externalDataSources.js");
+    const [oaResults, arxivResults] = await Promise.allSettled([
+      searchOpenAlex(thread.thesis ?? thread.title, 3),
+      searchArxiv(thread.thesis ?? thread.title, 3),
+    ]);
+    const academicHits = [
+      ...(oaResults.status === "fulfilled" ? oaResults.value : []),
+      ...(arxivResults.status === "fulfilled" ? arxivResults.value : []),
+    ];
+    if (academicHits.length > 0) {
+      const academicContext = academicHits
+        .map(r => `- [${r.source}] "${r.title}" (${r.date ?? "n.d."}${r.citations ? `, ${r.citations} citations` : ""}): ${(r.text ?? "").slice(0, 200)}`)
+        .join("\n");
+      liveContext = liveContext
+        ? `${liveContext}\n\nACADEMIC SOURCES:\n${academicContext}`
+        : `ACADEMIC SOURCES:\n${academicContext}`;
+      console.log(`[ResearchAgenda] Academic supplement: ${academicHits.length} papers for "${thread.title.slice(0, 40)}"`);
+    }
+  } catch (e: any) {
+    console.warn(`[ResearchAgenda] Academic supplement failed:`, e.message);
   }
 
   // Fallback: single Perplexity query if parallel search produced nothing
@@ -866,9 +895,9 @@ Think deeply. What are we missing? What assumptions are we making? What would ch
           }
         ],
         temperature: 0.3,
-        max_tokens: 1200,
+        max_tokens: 4000,
       }),
-      signal: AbortSignal.timeout(40000),
+      signal: AbortSignal.timeout(60000),
     });
 
     if (reasoningRes.ok) {

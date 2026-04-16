@@ -11,8 +11,8 @@
 import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
-import { dataPath, DATA_DIR } from "./dataPaths.js";
-import { getEpisode, type Episode } from "./podcastEngine.js";
+import { DATA_DIR } from "./dataPaths.js";
+import { getEpisode, getPodcastState, saveState as savePodcastState, type Episode } from "./podcastEngine.js";
 import { LLM_BASE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { getModel } from "./modelRouter.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
@@ -49,29 +49,7 @@ function isFfmpegAvailable(): boolean {
   }
 }
 
-// ── State file (same pattern as podcastEngine) ──────────────────────────────
-
-const PODCAST_FILE = dataPath("podcast_state.json");
-
-interface PodcastState {
-  episodes: Episode[];
-  guests: any[];
-  counters: any;
-}
-
-function loadState(): PodcastState {
-  try {
-    return JSON.parse(fs.readFileSync(PODCAST_FILE, "utf-8"));
-  } catch {
-    return { episodes: [], guests: [], counters: {} };
-  }
-}
-
-function saveState(s: PodcastState) {
-  try {
-    fs.writeFileSync(PODCAST_FILE, JSON.stringify(s, null, 2));
-  } catch {}
-}
+// ── State access — uses podcastEngine's in-memory state to avoid race conditions ──
 
 // ── Script formatting ───────────────────────────────────────────────────────
 
@@ -187,9 +165,9 @@ export async function generateAudio(episodeId: string): Promise<boolean> {
     return false;
   }
 
-  // Re-read state fresh to avoid stale references
-  const state = loadState();
-  const episode = state.episodes.find((e) => e.id === episodeId);
+  // Use podcastEngine's in-memory state to avoid race conditions
+  const podState = getPodcastState();
+  const episode = podState.episodes.find((e) => e.id === episodeId);
   if (!episode) {
     console.error(`[AudioEngine] Episode ${episodeId} not found`);
     return false;
@@ -240,15 +218,17 @@ export async function generateAudio(episodeId: string): Promise<boolean> {
     fs.writeFileSync(filepath, fullAudio);
     console.log(`[AudioEngine] Saved to ${filepath}`);
 
-    // Update episode state — re-read state to avoid race conditions
-    const freshState = loadState();
-    const freshEpisode = freshState.episodes.find((e) => e.id === episodeId);
-    if (freshEpisode) {
-      freshEpisode.audioUrl = `data/audio/${filename}`;
-      (freshEpisode as any).audioGeneratedAt = new Date().toISOString();
-      freshEpisode.status = "audio_ready" as any;
-      saveState(freshState);
-      console.log(`[AudioEngine] Episode "${freshEpisode.title}" status → audio_ready`);
+    // Update episode state — mutate podcastEngine's in-memory state directly
+    // to avoid race conditions where podcastEngine's next saveState() overwrites
+    // our file-based changes.
+    const podState = getPodcastState();
+    const liveEpisode = podState.episodes.find((e) => e.id === episodeId);
+    if (liveEpisode) {
+      liveEpisode.audioUrl = `data/audio/${filename}`;
+      (liveEpisode as any).audioGeneratedAt = new Date().toISOString();
+      liveEpisode.status = "audio_ready" as any;
+      savePodcastState(podState);
+      console.log(`[AudioEngine] Episode "${liveEpisode.title}" status → audio_ready`);
     }
 
     // Auto-stitch intro/outro music if assets exist
@@ -278,8 +258,8 @@ export function getAudioFilePath(episodeId: string): string | null {
   if (fs.existsSync(filepath)) return filepath;
 
   // Fall back to checking the episode's audioUrl field
-  const state = loadState();
-  const episode = state.episodes.find((e) => e.id === episodeId);
+  const podState = getPodcastState();
+  const episode = podState.episodes.find((e) => e.id === episodeId);
   if (episode?.audioUrl) {
     const altPath = path.resolve(DATA_DIR, "..", episode.audioUrl);
     if (fs.existsSync(altPath)) return altPath;
@@ -379,11 +359,11 @@ export async function stitchFullEpisode(episodeId: string): Promise<boolean> {
     console.log(`[AudioEngine] Stitched full episode saved to ${outputPath}`);
 
     // Update episode state with full audio URL
-    const state = loadState();
-    const episode = state.episodes.find((e) => e.id === episodeId);
-    if (episode) {
-      (episode as any).fullAudioUrl = `data/audio/episode_${episodeId}_full.mp3`;
-      saveState(state);
+    const stitchState = getPodcastState();
+    const stitchEpisode = stitchState.episodes.find((e) => e.id === episodeId);
+    if (stitchEpisode) {
+      (stitchEpisode as any).fullAudioUrl = `data/audio/episode_${episodeId}_full.mp3`;
+      savePodcastState(stitchState);
       console.log(`[AudioEngine] Episode ${episodeId} updated with fullAudioUrl`);
     }
 
@@ -415,8 +395,8 @@ export async function generateSocialPreview(episodeId: string): Promise<boolean>
     return false;
   }
 
-  const state = loadState();
-  const episode = state.episodes.find((e) => e.id === episodeId);
+  const previewState = getPodcastState();
+  const episode = previewState.episodes.find((e) => e.id === episodeId);
   if (!episode) {
     console.error(`[AudioEngine] Episode ${episodeId} not found`);
     return false;
@@ -455,13 +435,13 @@ export async function generateSocialPreview(episodeId: string): Promise<boolean>
     fs.writeFileSync(filepath, audioBuffer);
     console.log(`[AudioEngine] Preview saved to ${filepath}`);
 
-    // Step 4: Update episode state
-    const freshState = loadState();
-    const freshEpisode = freshState.episodes.find((e) => e.id === episodeId);
+    // Step 4: Update episode state via podcastEngine's in-memory state
+    const previewPodState = getPodcastState();
+    const freshEpisode = previewPodState.episodes.find((e) => e.id === episodeId);
     if (freshEpisode) {
       (freshEpisode as any).previewAudioUrl = `data/audio/${filename}`;
       (freshEpisode as any).previewText = previewText;
-      saveState(freshState);
+      savePodcastState(previewPodState);
       console.log(`[AudioEngine] Episode ${episodeId} updated with preview data`);
     }
 

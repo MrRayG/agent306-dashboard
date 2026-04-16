@@ -1,8 +1,8 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Send, CheckCircle2, Loader2, Zap, RefreshCw, Edit2, Twitter, ExternalLink, Flame, TrendingUp } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { Send, CheckCircle2, Loader2, Zap, RefreshCw, Edit2, Twitter, ExternalLink, Flame } from "lucide-react";
+import { useState, useEffect } from "react";
 import type { Episode } from "@shared/schema";
 
 // ── helpers ──────────────────────────────────────────────────────────
@@ -20,95 +20,6 @@ function timeAgo(iso: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 const mono: React.CSSProperties = { fontFamily: "'Courier New', monospace" };
-
-// ── Animated pixel canvas — shows the token "breathing" ─────────────
-function TokenPreview({ tokenId, size = 80 }: { tokenId: number; size?: number }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [pixels, setPixels] = useState<string | null>(null);
-  const frameRef = useRef(0);
-  const rafRef = useRef<number>(0);
-
-  useEffect(() => {
-    fetch(`/api/tokens/pixels/${tokenId}`)
-      .then(r => r.json())
-      .then(d => { if (d.pixels) setPixels(d.pixels); })
-      .catch(() => {});
-  }, [tokenId]);
-
-  useEffect(() => {
-    if (!pixels || !canvasRef.current) return;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d")!;
-    const W = 40;
-
-    function draw() {
-      frameRef.current++;
-      const t = frameRef.current;
-      ctx.clearRect(0, 0, size, size);
-      const px = size / W;
-
-      // Subtle scan-line glow animation
-      const scanY = ((t * 0.3) % (size + 4)) - 4;
-
-      for (let row = 0; row < W; row++) {
-        for (let col = 0; col < W; col++) {
-          const on = pixels![row * W + col] === "1";
-          if (!on) continue;
-
-          // Base pixel color with slight pulse
-          const pulse = 0.85 + 0.15 * Math.sin(t * 0.04 + row * 0.3);
-          const dist = Math.abs(row * px - scanY);
-          const scanGlow = dist < 3 ? 0.3 * (1 - dist / 3) : 0;
-          const bright = Math.min(1, pulse + scanGlow);
-
-          const r = Math.round(72 * bright);
-          const g = Math.round(73 * bright);
-          const b = Math.round(75 * bright);
-          ctx.fillStyle = `rgb(${r},${g},${b})`;
-          ctx.fillRect(col * px, row * px, px - 0.3, px - 0.3);
-        }
-      }
-
-      // Scan line overlay
-      const grad = ctx.createLinearGradient(0, scanY - 4, 0, scanY + 4);
-      grad.addColorStop(0, "rgba(249,115,22,0)");
-      grad.addColorStop(0.5, "rgba(249,115,22,0.08)");
-      grad.addColorStop(1, "rgba(249,115,22,0)");
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, scanY - 4, size, 8);
-
-      rafRef.current = requestAnimationFrame(draw);
-    }
-    draw();
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [pixels, size]);
-
-  return (
-    <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
-      {/* Glow behind */}
-      <div style={{
-        position: "absolute", inset: -6,
-        background: "radial-gradient(circle, rgba(249,115,22,0.15) 0%, transparent 70%)",
-        pointerEvents: "none",
-      }} />
-      <canvas
-        ref={canvasRef}
-        width={size}
-        height={size}
-        style={{
-          imageRendering: "pixelated",
-          border: "1px solid rgba(249,115,22,0.3)",
-          background: "#0e0f10",
-          display: "block",
-        }}
-      />
-      <div style={{
-        position: "absolute", bottom: 2, right: 3,
-        ...mono, fontSize: "0.63rem", color: "rgba(249,115,22,0.5)",
-      }}>#{tokenId}</div>
-    </div>
-  );
-}
 
 // ── Animated stat number ───────────────────────────────────────────
 function AnimatedStat({ value, label, color, icon }: { value: number; label: string; color: string; icon?: React.ReactNode }) {
@@ -150,10 +61,12 @@ function AnimatedStat({ value, label, color, icon }: { value: number; label: str
 }
 
 // ── Pending card — full visual treatment ─────────────────────────────
-function PendingCard({ ep, onMarkPosted, isPosting }: {
+function PendingCard({ ep, onMarkPosted, onDismiss, isPosting, isDismissing }: {
   ep: Episode;
   onMarkPosted: (ep: Episode) => void;
+  onDismiss: (ep: Episode) => void;
   isPosting: boolean;
+  isDismissing: boolean;
 }) {
   const [tweet, setTweet] = useState(() => buildTweet(ep));
   const [editing, setEditing] = useState(false);
@@ -164,7 +77,6 @@ function PendingCard({ ep, onMarkPosted, isPosting }: {
   // Entrance animation
   useEffect(() => { setTimeout(() => setVisible(true), 60); }, []);
 
-  const signals = (() => { try { return JSON.parse(ep.signals); } catch { return {}; } })();
   const xUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweet)}`;
 
   const handleCopy = async () => {
@@ -212,36 +124,7 @@ function PendingCard({ ep, onMarkPosted, isPosting }: {
       </div>
 
       {/* Main content */}
-      <div style={{ display: "flex", gap: 16, padding: "1.25rem" }}>
-        {/* Left: animated token */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-          <TokenPreview tokenId={ep.tokenId} size={96} />
-          {/* On-chain stats under the token */}
-          {signals.burnCount > 0 && (
-            <div style={{ textAlign: "center" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "center" }}>
-                <Flame style={{ width: 10, height: 10, color: "#f97316" }} />
-                <span style={{ ...mono, fontSize: "0.83rem", color: "#f97316", fontWeight: 700 }}>
-                  {signals.burnCount}
-                </span>
-              </div>
-              <span style={{ ...mono, fontSize: "0.70rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase", letterSpacing: "0.1em" }}>burns</span>
-            </div>
-          )}
-          {signals.topLeader && (
-            <div style={{ textAlign: "center" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "center" }}>
-                <TrendingUp style={{ width: 10, height: 10, color: "#a78bfa" }} />
-                <span style={{ ...mono, fontSize: "0.83rem", color: "#a78bfa", fontWeight: 700 }}>
-                  {signals.topLeader.ap}AP
-                </span>
-              </div>
-              <span style={{ ...mono, fontSize: "0.70rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase", letterSpacing: "0.1em" }}>top canvas</span>
-            </div>
-          )}
-        </div>
-
-        {/* Right: content */}
+      <div style={{ padding: "1.25rem" }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ ...mono, fontSize: "1.03rem", color: "#efefef", fontWeight: 700, marginBottom: 8, letterSpacing: "0.03em" }}>
             {ep.title}
@@ -355,6 +238,26 @@ function PendingCard({ ep, onMarkPosted, isPosting }: {
                 : <><CheckCircle2 style={{ width: 11, height: 11 }} /> Mark Posted</>
               }
             </button>
+
+            {/* Dismiss */}
+            <button
+              onClick={() => onDismiss(ep)}
+              disabled={isDismissing}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "0.7rem 0.9rem",
+                background: "rgba(239,68,68,0.08)",
+                border: "1px solid rgba(239,68,68,0.3)",
+                color: "#ef4444",
+                cursor: isDismissing ? "not-allowed" : "pointer",
+                ...mono, fontSize: "0.80rem", letterSpacing: "0.08em",
+              }}
+            >
+              {isDismissing
+                ? <><Loader2 style={{ width: 11, height: 11 }} className="animate-spin" /> Removing...</>
+                : <>✕ Dismiss</>
+              }
+            </button>
           </div>
 
           <p style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.35)", marginTop: 7 }}>
@@ -376,11 +279,6 @@ function PostedCard({ ep }: { ep: Episode }) {
       background: "rgba(74,222,128,0.02)",
       marginBottom: 6,
     }}>
-      <img
-        src={`/api/tokens/${ep.tokenId}/image.svg`}
-        alt={`#${ep.tokenId}`}
-        style={{ width: 32, height: 32, imageRendering: "pixelated", border: "1px solid rgba(227,229,228,0.18)", flexShrink: 0 }}
-      />
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{ ...mono, fontSize: "0.88rem", color: "#efefef", marginBottom: 2 }}>{ep.title}</p>
         <p style={{ ...mono, fontSize: "0.76rem", color: "rgba(227,229,228,0.48)" }}>
@@ -411,14 +309,11 @@ function EmptyState({ onGenerate, isPending }: { onGenerate: () => void; isPendi
       border: "1px dashed rgba(249,115,22,0.25)",
       background: "rgba(249,115,22,0.02)",
     }}>
-      <div style={{ marginBottom: 20 }}>
-        <TokenPreview tokenId={306} size={100} />
-      </div>
       <p style={{ ...mono, fontSize: "0.78rem", color: "#efefef", marginBottom: 6, fontWeight: 600 }}>
         No episodes yet
       </p>
       <p style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.55)", marginBottom: 20, maxWidth: 320, lineHeight: 1.7 }}>
-        The system is waiting. Hit Generate to pull live on-chain activity + signals and create the first episode.
+        The system is waiting. Hit Generate to pull live signals and create the first episode.
       </p>
       <button
         onClick={onGenerate}
@@ -445,6 +340,7 @@ function EmptyState({ onGenerate, isPending }: { onGenerate: () => void; isPendi
 export default function EpisodeQueue() {
   const { toast } = useToast();
   const [postingId, setPostingId] = useState<number | null>(null);
+  const [dismissingId, setDismissingId] = useState<number | null>(null);
 
   const { data: episodes = [], isLoading, refetch } = useQuery<Episode[]>({
     queryKey: ["/api/episodes"],
@@ -463,6 +359,19 @@ export default function EpisodeQueue() {
       setTimeout(() => queryClient.invalidateQueries({ queryKey: ["/api/episodes"] }), 16_000);
     },
   });
+
+  const handleDismiss = async (ep: Episode) => {
+    setDismissingId(ep.id);
+    try {
+      await apiRequest("DELETE", `/api/episodes/${ep.id}`);
+      toast({ title: "Episode dismissed" });
+      queryClient.invalidateQueries({ queryKey: ["/api/episodes"] });
+    } catch (e: any) {
+      toast({ title: "Failed to delete", description: e.message, variant: "destructive" });
+    } finally {
+      setDismissingId(null);
+    }
+  };
 
   const handleMarkPosted = (ep: Episode) => {
     setPostingId(ep.id);
@@ -553,7 +462,7 @@ export default function EpisodeQueue() {
           <EmptyState onGenerate={() => pollerMutation.mutate()} isPending={pollerMutation.isPending} />
         ) : (
           pending.map(ep => (
-            <PendingCard key={ep.id} ep={ep} onMarkPosted={handleMarkPosted} isPosting={postingId === ep.id} />
+            <PendingCard key={ep.id} ep={ep} onMarkPosted={handleMarkPosted} onDismiss={handleDismiss} isPosting={postingId === ep.id} isDismissing={dismissingId === ep.id} />
           ))
         )}
       </div>
@@ -566,7 +475,6 @@ export default function EpisodeQueue() {
           </div>
           {drafts.map(ep => (
             <div key={ep.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "0.7rem 1rem", border: "1px solid rgba(227,229,228,0.15)", marginBottom: 6 }}>
-              <img src={`/api/tokens/${ep.tokenId}/image.svg`} alt="" style={{ width: 32, height: 32, imageRendering: "pixelated", flexShrink: 0 }} />
               <div style={{ flex: 1 }}>
                 <p style={{ ...mono, fontSize: "0.88rem", color: "#efefef" }}>{ep.title}</p>
                 <p style={{ ...mono, fontSize: "0.78rem", color: "rgba(227,229,228,0.55)" }}>{ep.narrative.slice(0, 80)}…</p>

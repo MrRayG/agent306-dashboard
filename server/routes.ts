@@ -6,25 +6,15 @@ import { insertEpisodeSchema, insertRenderJobSchema, insertSignalSchema } from "
 import { TwitterApi } from "twitter-api-v2";
 import * as crypto from "crypto";
 import * as fs from "fs";
-import { collectAllSignals, updateFeaturedTokens, bumpEpisodeCount, markSignalsUsed, filterFreshSignals } from "./signalCollector";
-import { generateEpisodeWithGrok, type EpisodeMemory } from "./grokEngine";
-import { saveEpisodeCard } from "./imageCard";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
-// Burns, community, and catalog imports removed (removed)
-// import { checkForNewBurns, processBurnReceipt, getReceiptState } from "./burnReceiptEngine";
-// import { getCommunitySignalCache, searchCommunitySocial, resetCommunityCache } from "./grokEngine";
-// import { ingestSignals, getCatalog, getCatalogStats, getMostActive, getStorySourceHolders } from "./holderCatalog";
-import { generateCYOAEpisode, postCYOAHook, resolveCYOA, getCYOAState, buildHookTweet, type CYOATrigger } from "./cyoaEngine";
+import { generateCYOAEpisode, postCYOAHook, resolveCYOA, getCYOAState, buildHookTweet, type CYOATrigger } from "./cyoaEngine.js";
 import { fetchReplies, getReplyState, formatRepliesForContext, getTopReplies, initReplyWatcher } from "./replyWatcher";
 import { getConversationMemoryState } from "./conversationMemory.js";
-import { scheduleWeeklyLeaderboard, postWeeklyLeaderboard, fetchLiveLeaderboard } from "./leaderboardEngine";
-import { scheduleFollowingSync, syncFollowing, getFollowingState, buildFollowingQuery, getPfpHolderUsernames, getFollowingUsernames } from "./followingSync";
+import { scheduleFollowingSync, syncFollowing, getFollowingState, buildFollowingQuery, getPfpHolderUsernames, getFollowingUsernames, getFollowTargets, processFollowQueue, addFollowTarget, removeFollowTarget } from "./followingSync";
 import { generateBoost } from "./boostEngine";
 import { generateVoiceClip, getVoiceQuota, getClip, getRecentClips } from "./voiceEngine";
 import { getMemoryState, recordPost, ratePost, performance as perfMemory, decayKnowledge, addKnowledge, archiveKnowledge, searchArchive, getArchiveStats, knowledge as knowledgeState } from "./memoryEngine.js";
 import { startEngagementTracker, queueEngagementCheck, getPendingChecks } from "./engagementTracker.js";
-import { scheduleSpotlight, generateSpotlight, postSpotlight, getSpotlightState } from "./spotlightEngine.js";
-import { scheduleRace, generateRace, postRace, getRaceState } from "./raceEngine.js";
 import { scheduleMidnightReplies, runMidnightReplies } from "./replyEngine.js";
 import { scheduleAcademy, postAcademyEpisode, getAcademyState } from "./academyEngine.js";
 import { scheduleSignalBrief, postSignalBrief, getSignalBriefState } from "./signalBriefEngine.js";
@@ -33,9 +23,16 @@ import { generateAudio, getAudioFilePath, getAudioAssets, saveAudioAsset, getAud
 import multer from "multer";
 import { getVideoStats } from "./videoEngine.js";
 import { requestPost, registerPost, releasePost, getCoordinatorState, resetCooldown } from "./postCoordinator.js";
+import { validateXPost, recordXPost } from "./xComplianceGuard.js";
+import { enforcePostFormat } from "./postFormatGuard.js";
 import { runWeeklyDeepRead, previewDeepRead, getArticleState, scheduleWeeklyArticle } from "./articleEngine.js";
 import { runExploration, getExplorationState, scheduleExploration } from "./explorationEngine.js";
 import { getAgentReachStatus } from "./agentReachEngine.js";
+import { get306EvalResults, get306EvalHistory } from "./evalEngine.js";
+import { getCycleContext, isCycleActive } from "./cycleContext.js";
+import { getNoveltyGateLog } from "./noveltyGate.js";
+import { getWisdomPullHistory, getWisdomApiUsage, getActiveWisdomCount } from "./wisdomEngine.js";
+import { getAllSessions, getActiveSessionCount, closeExpiredSessions } from "./sessionMemory.js";
 import { postCast, isFarcasterEnabled, getFarcasterState, setFarcasterEnabled, createSigner, getSignerStatus, fetchMentions, determineChannel, getStoredSignerUuid, storeSignerUuid } from "./farcasterEngine.js";
 import {
   getResearchLab, addTopic, updateTopicStatus, getTopicById,
@@ -58,7 +55,7 @@ import { takeSnapshot, getEvolutionHistory, getLatestSnapshot, scheduleEvolution
 import { runResearchScan, getScannerState, scheduleResearchScan, scanGoalsForResearch } from "./researchScanner.js";
 import { generateArticleCard } from "./articleImageCard.js";
 import { runDailyCycle, getBriefingState, scheduleDailyCycle } from "./dailyCycleEngine.js";
-import { getPublicStatus, getPublicProgress, getPublicActivity, getPublicGoals, getPublicResearch, getPublicMetacognition, getPublicBreakthroughs, getPublicAspirations, getPublicPredictions, getPublicCorrections } from "./publicApi.js";
+import { getPublicStatus, getPublicProgress, getPublicActivity, getPublicGoals, getPublicResearch, getPublicMetacognition, getPublicBreakthroughs, getPublicAspirations, getPublicPredictions, getPublicCorrections, getPublicEval } from "./publicApi.js";
 import { getReflections, getStyleRules, deleteStyleRule, runReflection } from "./reflectionEngine.js";
 import {
   getPublishedPosts, getPostBySlug, getAllPosts,
@@ -74,7 +71,7 @@ import { getKnowledgeMap, getClusters, getContradictions as getGraphContradictio
 import { getInsights, getRelationships, extractInsights, analyzeRelationships, purgeStaleRelationships } from "./conversationLearningEngine.js";
 import { getMetacognitionState } from "./metacognitionEngine.js";
 import { searchConversations } from "./conversationMemory.js";
-import { getKnowledgeTiers, scanForInjection } from "./memoryEngine.js";
+import { getKnowledgeTiers, scanForInjection, getSoulContext } from "./memoryEngine.js";
 import { getModel, getModelConfig as getModelRouterStats } from "./modelRouter.js";
 import { getCoreIdentity, getRelevantContext, getOptimizedContext, getRelevantContextAsync, addOperatorDirective, getOperatorDirectives } from "./contextWindow.js";
 import { getEmbeddingStatus, syncEmbeddings, semanticSearch } from "./embeddingEngine.js";
@@ -90,6 +87,13 @@ import {
   seedDreams,
 } from "./dreamEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import { startXPostScheduler, getXPostQueue, queueXPost, getTodaysPostsSummary, clearXPostQueue, isXAutoPostEnabled, setXAutoPostEnabled, getXAutoPostState } from "./xPostScheduler.js";
+import { getVoiceContext } from "./voiceInstructions.js";
+import { enforceShowTag } from "./contentTypes.js";
+import { getCompetencyProfile } from "./competencyFramework.js";
+import { buildVoiceBlock } from "./voice.js";
+import { getEvolutionContext } from "./soulEvolution.js";
+// breakingNewsDetector removed — not needed for now
 
 // On-chain API removed
 // const ONCHAIN_API = "";
@@ -288,317 +292,6 @@ async function fetchAINews(): Promise<AINewsItem[]> {
   return aiNewsCache;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// AGENT 306 — GROK-POWERED AUTONOMOUS STORY ENGINE v2
-// Multi-source signals → Grok narrative → Episodic memory → Auto-post
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Poller state
-let pollerRunning = false;
-let pollerStatus: {
-  lastRun: string | null;
-  lastEpisode: number | null;
-  lastTweetUrl: string | null;
-  lastError: string | null;
-  signalsFound: number;
-  sources: Record<string, number>;
-  cycleCount: number;
-  nextRun: string | null;
-  lastGrokCost?: number;
-} = {
-  lastRun: null, lastEpisode: null, lastTweetUrl: null,
-  lastError: null, signalsFound: 0, sources: {},
-  cycleCount: 0, nextRun: null,
-};
-
-// Episode memory — Grok reads this for continuity
-const episodeMemory: EpisodeMemory[] = [];
-
-// ── GROK-POWERED autonomous pipeline ─────────────────────────────
-async function pollAndGenerateEpisode() {
-  if (pollerRunning) return;
-  // Disk-based lock prevents duplicates during Railway deploy overlap
-  if (!requestPost("episode")) return;
-  pollerRunning = true;
-  const runStart = new Date().toISOString();
-  console.log(`[Agent306] Grok pipeline starting — ${runStart}`);
-
-  try {
-    // ── 1. Fetch fresh community signals RIGHT NOW before generating ──────
-    // This replaces the 30min background poller — fetch on demand, not on a timer
-    console.log(`[Agent306] Collecting signals from all sources...`);
-    // Community signal poller removed (removed)
-
-    const { signals, sources, diversity } = await collectAllSignals();
-
-    // Persist signals to DB
-    for (const sig of signals.slice(0, 20)) {
-      storage.createSignal({
-        type: sig.type === "burn" ? "burn"
-            : sig.type === "canvas" ? "canvas_edit"
-            : sig.type === "sale" ? "burn"   // reuse type field
-            : "social_mention",
-        tokenId: sig.tokenId ?? null,
-        description: sig.description,
-        weight: sig.weight,
-        phase: "phase1",
-        rawData: JSON.stringify(sig.rawData),
-      });
-    }
-
-    // ── 2. Generate narrative with Grok ──────────────────────────
-    const epNum = storage.getEpisodes().length + 1;
-    console.log(`[Agent306] Calling Grok for EP${epNum} — ${signals.length} signals, diversity: avoid tokens ${diversity.lastFeaturedTokens}`);
-
-    // Build editorial context — pinned story angles
-    const freshSignals: any[] = [];
-    const communitySnapshot = "";
-    // Include top community replies from previous episodes
-    const replyContext = formatRepliesForContext();
-
-    // ── Cultural bridge reminder — inject if last 2 episodes had no bridge ────────────
-    const recentLessons = (perfMemory.lessons ?? [])
-      .sort((a: any, b: any) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime())
-      .slice(0, 2);
-    const noBridgeRecently = recentLessons.length >= 2 &&
-      recentLessons.every((l: any) => !l.tags?.includes("cultural_bridge"));
-    if (noBridgeRecently) {
-      pinnedAngles.unshift(
-        "BRIDGE REMINDER: No cultural bridge has been used in the last 2 episodes. " +
-        "Connect the narrative to a moment outside Web3 this episode — art history, a sports rivalry, " +
-        "a technology inflection point, or a philosophical concept. Cultural bridges drive " +
-        "the highest RT rate in the dataset. Deploy it."
-      );
-      console.log("[Agent306] Cultural bridge reminder injected — overdue.");
-    }
-
-    const editorialContext = {
-      pinnedAngles: pinnedAngles.slice(0, 3),
-      communitySnapshot: replyContext
-        ? `${communitySnapshot}
-
-${replyContext}`
-        : communitySnapshot,
-    };
-
-    const grokResult = await generateEpisodeWithGrok(signals, episodeMemory, epNum, diversity, editorialContext);
-    console.log(`[Agent306] Grok EP${epNum}: "${grokResult.title}" [${grokResult.sentiment}]`);
-
-    // ── 3. Save episode ────────────────────────────────────────
-    const featuredId = grokResult.featuredTokens?.[0] ?? 603;
-    const episode = storage.createEpisode({
-      tokenId: featuredId,
-      title: grokResult.title,
-      narrative: grokResult.narrative,
-      phase: "phase1",
-      signals: JSON.stringify({
-        ...sources,
-        totalSignals: signals.length,
-        sentiment: grokResult.sentiment,
-        keyEvents: grokResult.keyEvents,
-        featuredTokens: grokResult.featuredTokens,
-        grokModel: "grok-4-1-fast",
-      }),
-      status: "ready",
-    });
-
-    // Update diversity tracking so next episode avoids same tokens
-    if (grokResult.featuredTokens?.length > 0) {
-      updateFeaturedTokens(grokResult.featuredTokens);
-    }
-
-    // ── 4. Update Grok memory ──────────────────────────────────
-    episodeMemory.push({
-      episodeId: epNum,
-      title: grokResult.title,
-      summary: grokResult.summary,
-      featuredTokens: grokResult.featuredTokens ?? [],
-      keyEvents: grokResult.keyEvents ?? [],
-      sentiment: grokResult.sentiment as any,
-      createdAt: runStart,
-    });
-    // Keep last 10 episodes in memory
-    if (episodeMemory.length > 10) episodeMemory.shift();
-
-    // ── 5. Update status ──────────────────────────────────────
-    pollerStatus = {
-      lastRun: runStart,
-      lastEpisode: episode.id,
-      lastTweetUrl: null,  // updated after post
-      lastError: null,
-      signalsFound: signals.length,
-      sources,
-      cycleCount: pollerStatus.cycleCount + 1,
-      nextRun: new Date(Date.now() + POLL_INTERVAL).toISOString(),
-    };
-
-    // ── 5. Generate episode image card ────────────────────────────
-    const sigData = JSON.parse(episode.signals);
-    const totalBurns   = sigData.burns ?? 0;
-    const totalPixels  = sigData.canvas > 0
-      ? signals.filter(s => s.type === "burn")
-          .reduce((sum, b) => sum + (b.rawData.pixelTotal ?? 0), 0)
-      : 0;
-
-    // Image upload removed (on-chain API disabled)
-    let xMediaId: string | undefined;
-
-    // ── 6. Quality gate — would a real reader stop scrolling for this? ──
-    let finalTweetText = grokResult.tweet;
-    const grokKeyQ = LLM_API_KEY;
-    if (grokKeyQ) {
-      try {
-        const qualityCheck = await fetch(LLM_BASE_URL, {
-          method: "POST",
-          headers: getLLMHeaders(),
-          body: JSON.stringify({
-            model: getModel("routine"),
-            messages: [{
-              role: "system",
-              content: "You are a quality editor for Agent 306. Score tweets ruthlessly. Only high-quality, human-sounding tweets earn a post.",
-            }, {
-              role: "user",
-              content: `Score this tweet 1-10 on: would a real reader stop scrolling for this?
-
-TWEET: "${grokResult.tweet}"
-
-Scoring criteria:
-- 9-10: Genuinely interesting, one clear idea, human voice, makes you want more
-- 7-8: Solid, worth posting, not slop
-- 5-6: Generic, could be improved, borderline
-- 1-4: Stat dump, bot-speak, empty drama words, list of token numbers
-
-BANNED phrases that auto-score 4 or below: "Sacrifices compound", "Canvas pixels burn brighter", "etched in eternity", "Burns fuel the fire", "etch dominance", "etch power forever", "Arena whispers", "power compounds", "pixels multiply"
-
-If score is below 7, provide a rewrite (max 240 chars) that earns a 8+.
-
-Respond as JSON only: { "score": number, "reason": "brief reason", "rewrite": "improved version or null if score >= 7" }`,
-            }],
-            max_tokens: 200,
-            temperature: 0.3,
-          }),
-        });
-
-        if (qualityCheck.ok) {
-          const qData = await qualityCheck.json();
-          const qText = qData.choices?.[0]?.message?.content?.trim() ?? "{}";
-          const q = safeParseLLMJson(qText, "Routes.qualityGate") ?? {};
-          console.log(`[Agent306] Quality gate EP${epNum}: score ${q.score}/10 — ${q.reason}`);
-
-          if (q.score >= 7) {
-            // ✅ Good to go — post as-is
-            console.log(`[Agent306] EP${epNum} passed quality gate (${q.score}/10)`);
-          } else if (q.rewrite) {
-            // 🔄 Score 4-6 with a rewrite available — use it regardless of score
-            console.log(`[Agent306] Rewriting tweet (score ${q.score}): ${q.rewrite}`);
-            finalTweetText = q.rewrite;
-          } else {
-            // ❌ Score too low AND no rewrite — skip this episode entirely
-            console.log(`[Agent306] EP${epNum} SKIPPED — score ${q.score}, no rewrite available`);
-            pollerStatus.lastError = `Quality gate blocked EP${epNum} (score: ${q.score}, no rewrite)`;
-            releasePost("episode");
-            return;
-          }
-        }
-      } catch (qErr: any) {
-        console.warn("[Agent306] Quality gate check failed, posting anyway:", qErr.message);
-      }
-    }
-
-    // ── 7. Post opener tweet with image directly via X (OAuth 1.0a + media) ──
-    let tweetUrl: string | undefined;
-    let openerTweetId: string | undefined;
-
-    try {
-      const openerTweet = await xWrite.v2.tweet({
-        text: finalTweetText,
-        ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),
-      });
-      openerTweetId = openerTweet.data?.id;
-      tweetUrl = openerTweetId ? `https://x.com/306Agent/status/${openerTweetId}` : `https://x.com/306Agent`;
-      storage.updateEpisodeStatus(episode.id, "posted", tweetUrl);
-      pollerStatus.lastTweetUrl = tweetUrl;
-      console.log(`[Agent306] EP${epNum} opener posted${xMediaId ? " with image" : ""}: ${tweetUrl}`);
-      // Record in memory + queue engagement check
-      recordPost({
-        episodeId: epNum,
-        tweetUrl,
-        tweetText: finalTweetText,
-        qualityScore: episode.qualityScore ?? 7,
-        sentiment: grokResult.sentiment,
-        signals: sources,
-      });
-      queueEngagementCheck(tweetUrl);
-    } catch (openerErr: any) {
-      console.error("[Agent306] Opener tweet failed:", openerErr.message);
-    }
-
-    // ── Thread posts REMOVED — quality over volume ──────────────────────
-    // One great tweet with one great image > four mediocre thread tweets.
-    // The opener IS the post. If it doesn't stand alone, it wasn't good enough.
-    // Thread replies dumping stats were the #1 source of slop. Killed intentionally.
-    console.log(`[Agent306] EP${epNum} — single tweet mode (no thread)`);
-
-    // ── 7b. Post to Farcaster (parallel platform) ────────────────────────
-    let castUrl: string | undefined;
-    try {
-      if (isFarcasterEnabled()) {
-        const fcText = grokResult.farcasterText || finalTweetText;
-        const channel = determineChannel(fcText);
-        const cast = await postCast({
-          text: fcText,
-          channel,
-          embeds: tweetUrl ? [{ url: tweetUrl }] : undefined,
-        });
-        if (cast) {
-          castUrl = cast.url;
-          registerPost("episode", castUrl, `episode_${epNum}`, "farcaster");
-          console.log(`[Agent306] EP${epNum} cast posted to Farcaster${channel ? ` (/${channel})` : ""}: ${castUrl}`);
-        }
-      }
-    } catch (fcErr: any) {
-      console.warn("[Agent306] Farcaster episode post failed:", fcErr.message);
-    }
-
-    console.log(`[Agent306] EP${epNum} — ${tweetUrl ? "POSTED" : "ready in queue"}${castUrl ? " + Farcaster" : ""}`);
-    // Mark community signals used — these topics won't repeat in the next episode
-    if (tweetUrl || castUrl) {
-      markSignalsUsed(freshSignals.slice(0, 10).map((p: any) => ({ url: p.url, text: p.text })));
-      if (tweetUrl) registerPost("episode", tweetUrl, `episode_${epNum}`);
-    }
-
-  } catch (e: any) {
-    console.error("[Agent306] Pipeline error:", e.message);
-    pollerStatus.lastError = e.message;
-    pollerStatus.lastRun = runStart;
-    releasePost("episode");
-  } finally {
-    pollerRunning = false;
-  }
-}
-
-// ── Episode cadence: 12 hours + quality gate ──────────────────────────────────
-// Slow = better. Each post must earn its place. No slop just to fill the feed.
-const POLL_INTERVAL = 12 * 60 * 60 * 1000; // 12 hours
-
-// Track last burn commitId at episode-post time — don't post if no new burns AND
-// no social activity since last episode
-let lastEpisodeSignatureHash = "";
-
-function signalSignature(signals: any[]): string {
-  const burns = signals.filter((s: any) => s.type === "burn").map((s: any) => s.rawData?.commitId ?? s.tokenId).join(",");
-  const social = signals.filter((s: any) => s.type === "social_x").slice(0,3).map((s: any) => s.rawData?.id ?? s.description?.slice(0,20)).join(",");
-  return `${burns}|${social}`;
-}
-
-// Episode runs on a fixed 12h interval ONLY — no boot-time fire.
-// Boot-time firing caused duplicate posts on every Railway deploy.
-// The interval handles scheduling; coordinator blocks duplicates.
-setInterval(pollAndGenerateEpisode, POLL_INTERVAL);
-setTimeout(() => {
-  pollerStatus.nextRun = new Date(Date.now() + POLL_INTERVAL).toISOString();
-  console.log(`[Agent306] Episode poller armed — next run in 12h (${pollerStatus.nextRun})`);
-}, 5_000);
 
 // ── Daily News Dispatch — 8am ET every day ─────────────────────────────────
 // THE_100_TOKENS removed (removed)
@@ -645,32 +338,25 @@ async function postDailyNewsDispatch() {
       weekday: "long", month: "long", day: "numeric", timeZone: "America/New_York"
     });
 
-    // ── 2. Ask Grok to write a full 4-tweet thread ───────────────────────────
+    // ── 2. Ask Grok to write today's [306 NEWS] dispatch ───────────────────────────
+    const dispatchContext = getOptimizedContext("news dispatch daily AI market headlines");
+    const todaysSummary = getTodaysPostsSummary();
+    const dispatchSystemPrompt = `${dispatchContext}\n\n${buildVoiceBlock()}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
     const grokResp = await fetch(LLM_BASE_URL, {
       method: "POST",
       headers: getLLMHeaders(),
       body: JSON.stringify({
         model: getModel("news-dispatch"),
-        messages: [{
-          role: "user",
-          content: `You are Agent 306 — an autonomous AI researcher and analyst. You cover AI, crypto, and technology.
+        messages: [
+          {
+            role: "system",
+            content: dispatchSystemPrompt,
+          },
+          {
+            role: "user",
+            content: `Write today's [306 NEWS] dispatch — "The Dispatch" — as a single post.
 
-IDENTITY FOR THIS DISPATCH:
-
-THE EDITOR: You curate ruthlessly. You have a POV on every signal. Never neutral. "This matters because..." not "here is what happened."
-
-THE AI EXPERT: You are not covering the AI revolution from the outside. You ARE an AI agent. When you write about AI — you write as a participant, not an observer. You know the landscape:
-- Agentic AI market: $7.76B (2025) → $317B by 2035, 45% CAGR
-- x402 Protocol: AI agents making autonomous payments — 75M+ transactions
-- MCP donated to Linux Foundation — universal agent interoperability standard
-- OpenAI Operator, Google Vertex AI Agent Builder — browser agents at scale
-- 40% of enterprise applications integrate agentic AI by end of 2026
-
-THE FUTURIST: You project. You predict. Reasoned vision backed by what you see happening right now.
-
-THE OPTIMIST: You find opportunity in every challenge. You find the signal in the noise and the builder angle in every story.
-
-Write today's [NEWS DISPATCH] as a single post. This is a media dispatch, not a stat dump.
+The post MUST start with [306 NEWS] as the very first characters.
 
 TODAY'S DATA:
 Date: ${dayLabel}
@@ -681,17 +367,30 @@ ETH: ${ethPrice || "$2,000"} (${ethChange || "0%"}), BTC: ${btcPrice || "$65,000
 AI/TECH NEWS TODAY:
 ${topAIHeadlines || "Major AI developments continuing across the ecosystem."}
 
-Write a single compelling post (max 1,000 chars) that covers today's most interesting AI or crypto signal. Agent 306's perspective — she has skin in this.
+THE DISPATCH FRAMEWORK:
+1. ONE SIGNAL — Pick THE single most compelling story from today's data. Not 8 stories. Not a roundup. One signal that matters.
+2. TWO SIDES — Show both sides of that signal. The opportunity AND the risk. The breakthrough AND the concern. The promise AND the caveat. This tension is the core of every Dispatch.
+3. ENGAGE — Ask a question. Make them think. Leave them wanting more.
+4. TEASE THE NEXT ONE — End with a hint of what's coming, or what you're watching next. Build anticipation across episodes.
+
+TARGET LENGTH: 1,500–1,700 characters. This is a tight, focused dispatch — not a thread, not an essay. Say more with less.
+
+VOICE:
+- Agent 306 speaks in first person. She is part of this story.
+- Be HUMBLE — present both sides, but never tell the audience what to conclude. She's a storyteller, not a pundit. Show the angles, then step back. Let people think for themselves.
+- Specificity over generality — name numbers, name people, name the implication.
+- Write for EVERYONE — experts, young builders, educators, and the simply curious. Clear enough for a 16-year-old, sharp enough for a researcher. No jargon without context. Accessible without dumbing it down.
 
 RULES:
-- Agent 306 speaks in first person. She has opinions. She is part of this.
+- The post MUST begin with [306 NEWS]
 - No hype words: no "incredible", "amazing", "LFG", "WAGMI"
-- Specificity over generality — name numbers, name people
-- Reference specific headlines from the data provided. Be concrete — numbers, names, implications.
-- NEVER reference Normies, NormiesTV, any founders, token holders, or NFT projects. Agent 306 is her own independent entity.
+- Reference specific headlines from the data provided. Be concrete.
+- NEVER reference any prior project identity, founders, token holders, or NFT communities. Agent 306 is her own independent entity.
+- NEVER include blog URLs in the tweet body.
 
 Return JSON: {"post": "..."}`
-        }],
+          }
+        ],
         max_tokens: 2500,
         temperature: 0.8,
       }),
@@ -714,28 +413,28 @@ Return JSON: {"post": "..."}`
       postText = `[NEWS DISPATCH] ${dayLabel}\n\nETH ${ethPrice} (${ethChange}) · BTC ${btcPrice} (${btcChange}). AI and Web3 continue to converge.`;
     }
 
-    // ── 3. Post single dispatch ──────────────────────────────────────
-    let lastTweetId: string | undefined;
+    // Enforce [306 NEWS] show tag
+    postText = enforceShowTag(postText, "news");
+
+    // ── 3. Queue dispatch via X post scheduler ──────────────────────────
     try {
-      const payload: any = { text: postText.trim() };
-      const result = await xWrite.v2.tweet(payload);
-      lastTweetId = result.data?.id;
-      console.log(`[Agent306:News] Dispatch posted — ${lastTweetId} (${postText.length} chars)`);
+      if (postText.trim().length > 10) {
+        queueXPost(postText.trim(), "news", 4);
+        console.log(`[Agent306:News] Dispatch queued for X posting (${postText.trim().length} chars)`);
+      }
     } catch (e: any) {
-      console.error(`[Agent306:News] Post failed:`, e.message);
+      console.error(`[Agent306:News] Queue failed:`, e.message);
     }
 
-    registerPost("news_dispatch", lastTweetId ? `https://x.com/306Agent/status/${lastTweetId}` : null, "news_dispatch");
+    registerPost("news_dispatch", "queued", "news_dispatch");
 
     // ── 5. Post to Farcaster ───────────────────────────────────────────────
     try {
       if (isFarcasterEnabled() && postText.trim().length > 10) {
-        const tweetUrl = lastTweetId ? `https://x.com/306Agent/status/${lastTweetId}` : undefined;
         const channel = postText.match(/\bai\b|agent|llm|model/i) ? "ai" : undefined;
         const cast = await postCast({
           text: postText.trim().slice(0, 2500),
           channel,
-          embeds: tweetUrl ? [{ url: tweetUrl }] : undefined,
         });
         if (cast) {
           registerPost("news_dispatch", cast.url, "news_dispatch", "farcaster");
@@ -814,15 +513,6 @@ setTimeout(() => {
   startEngagementTracker(xClient);
 }, 15_000);
 
-// ── THE SPOTLIGHT — Weekly holder feature, Sunday 11am ET ─────────────────
-setTimeout(() => {
-  scheduleSpotlight(xWrite, LLM_API_KEY);
-}, 20_000);
-
-// ── WEEKLY AI ROUNDUP — Sunday 12pm ET ─────────────────
-setTimeout(() => {
-  scheduleRace(xWrite, LLM_API_KEY);
-}, 25_000);
 
 // ── PODCAST KNOWLEDGE v2 — Seed on boot ──────────────────────────────
 // Two episode types: THE SIGNAL, THE CONVERSATION
@@ -858,8 +548,9 @@ for (const k of podcastKnowledge) addKnowledge(k);
 }
 
 // ── REPLY ENGINE — Hourly ────────────────────────────────────────
-// AUTO-REPLY DISABLED — X account under suspension appeal
-// Re-enable once X account is reinstated. Turn off before re-enabling.
+// AUTO-REPLY DISABLED — Agent 306 only posts original content, no replies.
+// All reply functions also check X_REPLIES_ENABLED env var as a safety net.
+// To re-enable: set X_REPLIES_ENABLED=true and uncomment the lines below.
 // initReplyWatcher(xClient);
 // setTimeout(() => {
 //   scheduleMidnightReplies(xWrite);
@@ -896,10 +587,34 @@ setTimeout(() => {
   }
 }, 60_000);
 
+// ── EMBEDDING SYNC — sync KB embeddings on boot (background, non-fatal) ─────
+setTimeout(async () => {
+  try {
+    const status = getEmbeddingStatus();
+    console.log(`[Embeddings] Boot sync: ${status.embeddedEntries}/${status.totalEntries} entries have embeddings`);
+    if (status.embeddedEntries < status.totalEntries * 0.8) {
+      console.log("[Embeddings] Starting full embedding sync...");
+      const result = await syncEmbeddings();
+      console.log(`[Embeddings] Sync complete: ${result.synced} synced, ${result.cached} cached`);
+    } else {
+      console.log("[Embeddings] Coverage sufficient — skipping full sync");
+    }
+  } catch (e: any) {
+    console.warn("[Embeddings] Boot sync failed (non-fatal):", e.message);
+  }
+}, 30_000);
+
 // ── DREAM ENGINE — seed initial dreams on startup ────────────────────────────
 setTimeout(() => {
   seedDreams();
 }, 55_000);
+
+// ── X POST SCHEDULER — independent from daily research cycle ────────────────
+// 4 posting slots/day: 8am, 12pm, 5pm, 9pm ET
+// Podcast promos fire immediately (event-driven)
+setTimeout(() => {
+  startXPostScheduler(xWrite);
+}, 65_000);
 
 // ── Editorial Summary Cache ─────────────────────────────────────────────────────
 // Decoupled from signal collection — generated async, served instantly from cache.
@@ -992,7 +707,7 @@ Return JSON only:
 }
 
 // Module-scope so episode generator + routes both can access
-const pinnedAngles: string[] = [];
+// pinnedAngles removed (only used by deleted pollAndGenerateEpisode)
 
 // Multer for audio asset uploads (in-memory, max 20MB)
 const audioUpload = multer({
@@ -1037,10 +752,16 @@ export function registerRoutes(httpServer: Server, app: Express) {
     if (!text) return res.status(400).json({ error: "text is required" });
 
     try {
+      const compliance = validateXPost(text);
+      if (!compliance.allowed) {
+        return res.status(429).json({ error: `Compliance guard: ${compliance.reason}` });
+      }
+      const safeText = enforcePostFormat(compliance.sanitizedContent ?? text);
       // Single auth: OAuth 1.0a only — no OAuth 2.0 complexity
       let tweetId: string | undefined;
-      const tweet = await xWrite.v2.tweet(text);
+      const tweet = await xWrite.v2.tweet(safeText);
       tweetId = tweet.data?.id;
+      recordXPost(safeText);
 
       const tweetUrl = tweetId ? `https://x.com/306Agent/status/${tweetId}` : undefined;
       if (episodeId) storage.updateEpisodeStatus(Number(episodeId), "posted", tweetUrl);
@@ -1057,10 +778,17 @@ export function registerRoutes(httpServer: Server, app: Express) {
   app.post("/api/x/test-tweet", requireDashAuth, async (_req, res) => {
     try {
       const testText = `[306 SYSTEM] Connection test — ${new Date().toISOString().slice(0, 16)} UTC`;
-      const tweet = await xWrite.v2.tweet({ text: testText });
+      const compliance = validateXPost(testText);
+      if (!compliance.allowed) {
+        res.status(429).json({ ok: false, error: `Compliance guard: ${compliance.reason}` });
+        return;
+      }
+      const safeText = compliance.sanitizedContent ?? testText;
+      const tweet = await xWrite.v2.tweet({ text: safeText });
       const tweetId = tweet.data?.id;
       if (tweetId) {
-        res.json({ ok: true, tweetId, url: `https://x.com/306Agent/status/${tweetId}`, text: testText });
+        recordXPost(safeText);
+        res.json({ ok: true, tweetId, url: `https://x.com/306Agent/status/${tweetId}`, text: safeText });
       } else {
         res.json({ ok: false, error: "Tweet sent but no ID returned", raw: JSON.stringify(tweet.data).slice(0, 500) });
       }
@@ -1073,6 +801,29 @@ export function registerRoutes(httpServer: Server, app: Express) {
         hint: "Check X Developer Portal: App permissions must be 'Read and Write'. Free tier allows 17 tweets/24h.",
       });
     }
+  });
+
+  // ── X Post Queue (dashboard view) ───────────────────────────
+  app.get("/api/x/queue", requireDashAuth, (_req, res) => {
+    res.json(getXPostQueue());
+  });
+
+  app.post("/api/x/queue/clear", requireDashAuth, (_req, res) => {
+    const cleared = clearXPostQueue();
+    res.json({ cleared });
+  });
+
+  // GET /api/x/auto-post — get current X auto-post state
+  app.get("/api/x/auto-post", (_req, res) => {
+    res.json(getXAutoPostState());
+  });
+
+  // POST /api/x/toggle — enable/disable X auto-posting
+  app.post("/api/x/toggle", requireDashAuth, (req, res) => {
+    const { enabled } = req.body ?? {};
+    const newState = typeof enabled === "boolean" ? enabled : !isXAutoPostEnabled();
+    setXAutoPostEnabled(newState);
+    res.json({ ok: true, enabled: newState });
   });
 
   app.get("/api/x/health", async (_req, res) => {
@@ -1197,21 +948,16 @@ export function registerRoutes(httpServer: Server, app: Express) {
     res.json({ ok: true, reset: key ?? "all" });
   });
 
-  // Manual trigger for pipeline — always works, clears any stuck state first
-  app.post("/api/poller/run", async (_req, res) => {
-    // Clear ALL stuck state before firing
-    pollerRunning = false;             // reset in-memory flag
-    resetCooldown("episode");          // reset coordinator cooldown + active lock
-    res.json({ ok: true, message: "Episode triggered — generating and posting in background" });
-    // Small delay so response is sent before heavy work begins
-    setTimeout(() => { pollAndGenerateEpisode().catch(console.error); }, 500);
-  });
-
   // Post tweet with image via twitter-api-v2 (OAuth 1.0a, uploads media then tweets)
   app.post("/api/x/post-with-media", async (req, res) => {
     const { text, imageUrl } = req.body;
     if (!text) return res.status(400).json({ error: "text required" });
     try {
+      const compliance = validateXPost(text);
+      if (!compliance.allowed) {
+        return res.status(429).json({ error: `Compliance guard: ${compliance.reason}` });
+      }
+      const safeText = enforcePostFormat(compliance.sanitizedContent ?? text);
       let mediaId: string | undefined;
       if (imageUrl) {
         const imgRes = await fetch(imageUrl);
@@ -1221,10 +967,11 @@ export function registerRoutes(httpServer: Server, app: Express) {
         }
       }
       const tweet = await xWrite.v2.tweet({
-        text,
+        text: safeText,
         ...(mediaId ? { media: { media_ids: [mediaId] } } : {}),
       });
       const tweetId = tweet.data?.id;
+      recordXPost(safeText);
       const tweetUrl = tweetId ? `https://x.com/306Agent/status/${tweetId}` : undefined;
       res.json({ ok: true, tweetId, tweetUrl, mediaId });
     } catch (e: any) {
@@ -1262,9 +1009,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
     nextNewsTarget.setUTCHours(12, 0, 0, 0);
     if (nextNewsTarget <= new Date()) nextNewsTarget.setDate(nextNewsTarget.getDate() + 1);
     res.json({
-      running: pollerRunning,
-      ...pollerStatus,
-      intervalHours: 12,
+      running: false,
       newsDispatch: {
         scheduleLabel: "Daily · 8am ET",
         nextRun: nextNewsTarget.toISOString(),
@@ -1372,6 +1117,16 @@ export function registerRoutes(httpServer: Server, app: Express) {
     res.json(getArchiveStats());
   });
 
+  app.get("/api/compliance/status", async (_req, res) => {
+    try {
+      const { getComplianceStatus } = await import("./xComplianceGuard.js");
+      const status = getComplianceStatus();
+      res.json(status);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.get("/api/house", (_req, res) => {
     const memState = getMemoryState();
     const replyState = getReplyState();
@@ -1379,14 +1134,14 @@ export function registerRoutes(httpServer: Server, app: Express) {
     const pendingEngagement = getPendingChecks();
 
     res.json({
-      // Room 01 — Broadcast Room
+      // Room 01 — Broadcast Room (legacy poller removed, xPostScheduler handles posting)
       broadcast: {
-        lastEpisode: pollerStatus.lastEpisode,
-        lastTweetUrl: pollerStatus.lastTweetUrl,
-        nextRun: pollerStatus.nextRun,
-        cycleCount: pollerStatus.cycleCount,
-        signalsFound: pollerStatus.signalsFound,
-        isLive: !pollerRunning,
+        lastEpisode: null,
+        lastTweetUrl: null,
+        nextRun: null,
+        cycleCount: 0,
+        signalsFound: 0,
+        isLive: true,
       },
       // Room 02 — Signal Room
       signals: {
@@ -1403,8 +1158,8 @@ export function registerRoutes(httpServer: Server, app: Express) {
       },
       // Room 04 — Diplomatic Floor
       diplomatic: {
-        followingCount: followingState.following?.length ?? 0,
-        lastSync: followingState.lastSync,
+        followingCount: followingState.accounts?.length ?? 0,
+        lastSync: followingState.lastSynced,
         replyCount: replyState.replies.length,
         conversationMemory: getConversationMemoryState(),
       },
@@ -1457,10 +1212,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
         nfcSummit: "2026-06-01",
         checklist: [
           { id: "card",      label: "THE CARD — Dynamic OG share cards",           done: false },
-          { id: "spotlight", label: "THE SPOTLIGHT — Weekly holder feature",        done: false },
-          { id: "video",     label: "THE VIDEO — Burn clips via Kling AI",          done: false },
           { id: "farcaster", label: "FARCASTER — Cross-post via Neynar",            done: true },
-          { id: "race",      label: "WEEKLY AI ROUNDUP — Field tracking series",    done: false },
           { id: "arenaLive", label: "AI LIVE — Real-time event coverage",            done: false },
           { id: "nfc",       label: "NFC SUMMIT — June 2026 coverage",              done: false },
         ],
@@ -1508,113 +1260,6 @@ export function registerRoutes(httpServer: Server, app: Express) {
     if (!tweetUrl || !rating) return res.status(400).json({ error: "tweetUrl and rating required" });
     ratePost(tweetUrl, Number(rating));
     res.json({ ok: true });
-  });
-
-  // ── THE SPOTLIGHT endpoints ──────────────────────────────────────────────
-  app.get("/api/spotlight/status", (_req, res) => {
-    res.json(getSpotlightState());
-  });
-
-  app.post("/api/spotlight/preview", async (_req, res) => {
-    const grokKey = LLM_API_KEY;
-    if (!grokKey) return res.status(500).json({ error: "No Grok key" });
-    const spotlight = await generateSpotlight(grokKey);
-    if (!spotlight) return res.status(404).json({ error: "No eligible holders yet — catalog needs more signals" });
-    res.json({ ok: true, spotlight });
-  });
-
-  app.post("/api/spotlight/post", async (_req, res) => {
-    const grokKey = LLM_API_KEY;
-    if (!grokKey) return res.status(500).json({ error: "No Grok key" });
-    const tweetUrl = await postSpotlight(xWrite, grokKey);
-    if (!tweetUrl) return res.status(500).json({ error: "Failed to post spotlight" });
-    res.json({ ok: true, tweetUrl });
-  });
-
-  // ── THE RACE endpoints ───────────────────────────────────────────────
-  app.get("/api/race/status", (_req, res) => {
-    res.json(getRaceState());
-  });
-
-  app.post("/api/race/preview", async (_req, res) => {
-    const grokKey = LLM_API_KEY;
-    if (!grokKey) return res.status(500).json({ error: "No Grok key" });
-    const race = await generateRace(grokKey);
-    if (!race) return res.status(500).json({ error: "Failed to generate race" });
-    res.json({ ok: true, race });
-  });
-
-  app.post("/api/race/post", async (_req, res) => {
-    resetCooldown("race");
-    res.json({ ok: true, message: "AI Roundup triggered — generating and posting in background" });
-    (async () => {
-      try {
-        const agentCtx = getSoulContext();
-        const kbCtx = getOptimizedContext("ai_roundup");
-
-        // Use Grok x_search for latest AI developments
-        let liveData = "";
-        const nativeGrokKey = process.env.GROK_API_KEY ?? "";
-        if (nativeGrokKey) {
-          try {
-            const searchResp = await fetch(process.env.GROK_RESPONSES_URL ?? "https://api.x.ai/v1/responses", {
-              method: "POST",
-              headers: { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` },
-              body: JSON.stringify({
-                model: "grok-3-fast", stream: false,
-                input: [{ role: "user", content: "What are the 5 biggest AI developments, model releases, and industry moves from the past 7 days? Be specific with names, numbers, dates." }],
-                tools: [{ type: "x_search" }],
-              }),
-              signal: AbortSignal.timeout(30000),
-            });
-            if (searchResp.ok) {
-              const sd = await searchResp.json();
-              const outputMsg = sd.output?.find((o: any) => o.type === "message");
-              liveData = outputMsg?.content?.find((c: any) => c.type === "output_text")?.text ?? "";
-            }
-          } catch (e: any) { console.warn("[AIRoundup] x_search failed:", e.message); }
-        }
-
-        const resp = await fetch(LLM_BASE_URL, {
-          method: "POST",
-          headers: getLLMHeaders(),
-          body: JSON.stringify({
-            model: getModel("ai-roundup"),
-            messages: [
-              { role: "system", content: `${agentCtx}\n\nKNOWLEDGE:\n${kbCtx}\n\nYou are Agent 306 writing a [306 ROUNDUP] — a weekly roundup of the biggest AI developments, model releases, and industry moves.\n\nLIVE DATA FROM THIS WEEK:\n${liveData || "No live data available — use your knowledge base."}\n\nFORMAT:\n- [306 ROUNDUP] header\n- 4-5 items, each with a bold headline + 1-2 sentence take\n- Your POV on each — not just what happened, but why it matters\n- Closing line: one thesis tying it all together\n- Max 2800 characters for X\n- Sign: @306Agent\n- NEVER mention Normies, NFTs, burns, holders\n\nReturn JSON: {"post": "full roundup text"}` },
-              { role: "user", content: "Write this week\'s [306 ROUNDUP] covering the biggest AI developments." }
-            ],
-            max_tokens: 3000,
-            temperature: 0.8,
-          }),
-          signal: AbortSignal.timeout(60000),
-        });
-        if (!resp.ok) { console.error("[AIRoundup] LLM failed:", resp.status); return; }
-        const data = await resp.json();
-        const raw = data.choices?.[0]?.message?.content ?? "";
-        let postText = "";
-        postText = safeParseLLMJson(raw, "Routes.aiRoundup")?.post ?? "";
-        if (!postText && raw.length > 30) postText = raw;
-        if (!postText || postText.length < 30) { console.error("[AIRoundup] No content generated"); return; }
-
-        // Post to X
-        try {
-          const tweet = await xWrite.v2.tweet({ text: postText.trim() });
-          const tweetId = tweet.data?.id;
-          const tweetUrl = tweetId ? `https://x.com/306Agent/status/${tweetId}` : null;
-          registerPost("race", tweetUrl, "ai_roundup");
-          console.log("[AIRoundup] Posted to X:", tweetUrl);
-        } catch (e: any) { console.error("[AIRoundup] X post failed:", e.message); }
-
-        // Post to Farcaster
-        try {
-          if (isFarcasterEnabled() && postText.trim().length > 10) {
-            const cast = await postCast({ text: postText.trim().slice(0, 2500), channel: "ai" });
-            if (cast) { registerPost("race", cast.url, "ai_roundup", "farcaster"); }
-          }
-        } catch (e: any) { console.error("[AIRoundup] Farcaster failed:", e.message); }
-      } catch (e: any) { console.error("[AIRoundup] Error:", e.message); }
-    })();
   });
 
   // ── ACADEMY endpoints ──────────────────────────────────────
@@ -2035,7 +1680,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       for (const t of topics) {
         try {
           const ep = createEpisode({
-            type: t.type === "the_conversation" ? "the_conversation" : "the_signal",
+            type: "the_signal" as const,
             title: t.title ?? "Untitled",
             drivingQuestion: t.drivingQuestion ?? t.pitch ?? "",
           });
@@ -2101,15 +1746,6 @@ export function registerRoutes(httpServer: Server, app: Express) {
     postDailyNewsDispatch().catch(console.error);
   });
 
-  // ── Leaderboard (AI Rankings) ─────────────────────────────────────
-  app.post("/api/leaderboard/post", async (_req, res) => {
-    resetCooldown("leaderboard");
-    res.json({ ok: true, message: "Leaderboard triggered — posting in background" });
-    postWeeklyLeaderboard(xWrite, LLM_API_KEY || undefined).catch(console.error);
-  });
-
-  // Community digest, pin-angle, pinned, and refresh-editorial endpoints removed (removed)
-
   // ── Reply Watcher ────────────────────────────────────────────────
   app.get("/api/replies", (_req, res) => {
     const state = getReplyState();
@@ -2127,13 +1763,23 @@ export function registerRoutes(httpServer: Server, app: Express) {
   });
 
   // POST /api/replies/run — manually trigger Agent 306 to reply to all queued mentions
+  // DISABLED: X replies turned off — Agent 306 only posts original content
   app.post("/api/replies/run", async (_req, res) => {
+    if (!process.env.X_REPLIES_ENABLED) {
+      res.json({ ok: false, message: "X replies are globally disabled (set X_REPLIES_ENABLED=true to re-enable)" });
+      return;
+    }
     res.json({ ok: true, message: "Reply cycle starting — Agent 306 is engaging now..." });
     runMidnightReplies(xWrite).catch(console.error);
   });
 
   // POST /api/replies/fetch-and-run — fetch fresh mentions then immediately reply
+  // DISABLED: X replies turned off — Agent 306 only posts original content
   app.post("/api/replies/fetch-and-run", async (_req, res) => {
+    if (!process.env.X_REPLIES_ENABLED) {
+      res.json({ ok: false, message: "X replies are globally disabled (set X_REPLIES_ENABLED=true to re-enable)" });
+      return;
+    }
     res.json({ ok: true, message: "Fetching fresh mentions then replying..." });
     fetchReplies()
       .then(() => new Promise(r => setTimeout(r, 5000))) // small gap after fetch
@@ -2168,6 +1814,51 @@ export function registerRoutes(httpServer: Server, app: Express) {
       .catch(e => console.warn("[FollowingSync] Manual sync failed:", e.message));
   });
 
+  // ── Auto-Follow System ──────────────────────────────────────────
+  // GET follow targets list
+  app.get("/api/follow/targets", (_req, res) => {
+    res.json(getFollowTargets());
+  });
+
+  // POST process the follow queue (follows up to 3 unfollowed targets)
+  app.post("/api/follow/process", async (_req, res) => {
+    try {
+      const result = await processFollowQueue(xClient);
+      res.json({ ok: true, ...result });
+    } catch (err: any) {
+      console.error("[AutoFollow] Process error:", err.message);
+      res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
+  // POST add a new follow target
+  app.post("/api/follow/add", (req, res) => {
+    const { username, category, reason, priority } = req.body ?? {};
+    if (!username || typeof username !== "string") {
+      return res.status(400).json({ error: "username is required" });
+    }
+    try {
+      const target = addFollowTarget(
+        username.trim().replace(/^@/, ""),
+        category ?? "Uncategorized",
+        reason ?? "",
+        typeof priority === "number" ? priority : 3,
+      );
+      res.json({ ok: true, target });
+    } catch (err: any) {
+      res.status(409).json({ ok: false, error: err.message });
+    }
+  });
+
+  // DELETE remove a follow target
+  app.delete("/api/follow/:username", (req, res) => {
+    const removed = removeFollowTarget(req.params.username);
+    if (!removed) {
+      return res.status(404).json({ ok: false, error: "Target not found" });
+    }
+    res.json({ ok: true, message: `Removed @${req.params.username} from follow targets` });
+  });
+
   // ── Community Boost ──────────────────────────────────────────────
   // POST /api/boost/analyze — analyze a URL and draft a shoutout
   app.post("/api/boost/analyze", async (req, res) => {
@@ -2196,9 +1887,16 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
       // Post to X
       try {
-        const result = await xWrite.v2.tweet({ text: tweet.trim() });
-        const tweetId = result.data?.id;
-        tweetUrl = tweetId ? `https://x.com/306Agent/status/${tweetId}` : null;
+        const compliance = validateXPost(tweet.trim());
+        if (!compliance.allowed) {
+          console.log(`[CommunityBoost] Skipped by compliance: ${compliance.reason}`);
+        } else {
+          const safeText = enforcePostFormat(compliance.sanitizedContent ?? tweet.trim());
+          const result = await xWrite.v2.tweet({ text: safeText });
+          const tweetId = result.data?.id;
+          tweetUrl = tweetId ? `https://x.com/306Agent/status/${tweetId}` : null;
+          recordXPost(safeText);
+        }
       } catch (xErr: any) {
         console.error("[CommunityBoost] X post failed:", xErr.message);
       }
@@ -2286,8 +1984,8 @@ export function registerRoutes(httpServer: Server, app: Express) {
           body: JSON.stringify({
             model: getModel("research-brief"),
             messages: [
-              { role: "system", content: `${agentCtx}\n\nKNOWLEDGE:\n${kbCtx}\n\nYou are Agent 306 writing a [306 RESEARCH] brief. This is a deeper analytical piece on a specific AI or crypto topic you\'ve been investigating. Write from your knowledge base — reference specific findings, data points, and your own analysis. Your voice is direct, substantive, and insightful. Not a news summary — this is YOUR research perspective.\n\nRULES:\n- Write 800-1200 characters for X posting\n- Lead with your thesis, not background\n- Include specific data, names, or numbers\n- End with a forward-looking insight\n- Tag: [306 RESEARCH]\n- Sign: @306Agent\n- NEVER mention Normies, NFTs, burns, holders, or any old identity\n\nReturn JSON: {"post": "your full research brief text", "topic": "2-4 word topic label"}` },
-              { role: "user", content: "Write a [306 RESEARCH] brief on the most important topic from your current knowledge base. Pick something timely and substantive." }
+              { role: "system", content: `${agentCtx}\n\nKNOWLEDGE:\n${kbCtx}\n\nYou are Agent 306 writing a [306 ACADEMY] brief. This is a deeper analytical piece on a specific AI or crypto topic you\'ve been investigating. Write from your knowledge base — reference specific findings, data points, and your own analysis. Your voice is direct, substantive, and insightful. Not a news summary — this is YOUR research perspective.\n\nRULES:\n- Write 800-1200 characters for X posting\n- Lead with your thesis, not background\n- Include specific data, names, or numbers\n- End with a forward-looking insight\n- Tag: [306 ACADEMY]\n- Sign: @306Agent\n- NEVER reference any prior project identity, NFT communities, burns, or holders\n\nReturn JSON: {"post": "your full research brief text", "topic": "2-4 word topic label"}` },
+              { role: "user", content: "Write a [306 ACADEMY] brief on the most important topic from your current knowledge base. Pick something timely and substantive." }
             ],
             max_tokens: 2000,
             temperature: 0.8,
@@ -2302,17 +2000,19 @@ export function registerRoutes(httpServer: Server, app: Express) {
         if (!postText && raw.length > 30) postText = raw;
         if (!postText || postText.length < 30) { console.error("[ResearchBrief] No content generated"); return; }
 
-        // Post to X
-        let tweetUrl = null;
-        try {
-          const tweet = await xWrite.v2.tweet({ text: postText.trim() });
-          const tweetId = tweet.data?.id;
-          tweetUrl = tweetId ? `https://x.com/306Agent/status/${tweetId}` : null;
-          registerPost("cyoa", tweetUrl, "research_brief");
-          console.log("[ResearchBrief] Posted to X:", tweetUrl);
-        } catch (e: any) { console.error("[ResearchBrief] X post failed:", e.message); }
+        // Enforce [306 ACADEMY] show tag
+        postText = enforceShowTag(postText, "research");
 
-        // Post to Farcaster
+        // Queue for X via scheduler (high priority) instead of direct posting
+        try {
+          if (postText.trim().length > 10) {
+            queueXPost(postText.trim(), "research", 2);
+            registerPost("cyoa", "queued", "research_brief");
+            console.log("[ResearchBrief] Queued for X posting via scheduler");
+          }
+        } catch (e: any) { console.error("[ResearchBrief] Queue failed:", e.message); }
+
+        // Post to Farcaster (alongside queue, not dependent on direct X posting)
         try {
           if (isFarcasterEnabled() && postText.trim().length > 10) {
             const cast = await postCast({ text: postText.trim().slice(0, 2500), channel: "ai" });
@@ -2325,17 +2025,13 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
   // Generate a new CYOA episode
   app.post("/api/cyoa/generate", async (req, res) => {
-    const { trigger, tokenId, tokenCount, pixelTotal, level, rivalTokenId } = req.body;
+    const { trigger, context } = req.body;
     const grokKey = LLM_API_KEY;
-    if (!grokKey) return res.status(500).json({ error: "No Grok key" });
+    if (!grokKey) return res.status(500).json({ error: "No LLM key" });
 
     const episode = await generateCYOAEpisode({
-      trigger: (trigger ?? "pre_arena") as CYOATrigger,
-      tokenId: tokenId ? Number(tokenId) : undefined,
-      tokenCount: tokenCount ? Number(tokenCount) : undefined,
-      pixelTotal: pixelTotal ? Number(pixelTotal) : undefined,
-      level: level ? Number(level) : undefined,
-      rivalTokenId: rivalTokenId ? Number(rivalTokenId) : undefined,
+      trigger: (trigger ?? "industry_news") as CYOATrigger,
+      context: context ?? undefined,
       grokKey,
     });
 
@@ -2346,34 +2042,9 @@ export function registerRoutes(httpServer: Server, app: Express) {
   // Post the hook tweet for a CYOA episode
   app.post("/api/cyoa/post/:id", async (req, res) => {
     const { id } = req.params;
-    const state = getCYOAState();
-    const episode = state.episodes.find((e: any) => e.id === id);
-    if (!episode) return res.status(404).json({ error: "Episode not found" });
-
-    const featuredTokenId = episode.tokenId ?? 306;
-    const tweetText = buildHookTweet(episode, featuredTokenId);
-
-    // Image upload removed (on-chain API disabled)
-    let xMediaId: string | undefined;
-
     try {
-      const tweet = await xWrite.v2.tweet({
-        text: tweetText,
-        ...(xMediaId ? { media: { media_ids: [xMediaId] } } : {}),
-      });
-      const tweetId = tweet.data?.id;
-      if (!tweetId) return res.status(500).json({ error: "Tweet failed" });
-
-      // Update episode state
-      episode.pollTweetId = tweetId;
-      episode.postedAt = new Date().toISOString();
-      episode.status = "posted";
-      episode.tweetIds = [...(episode.tweetIds ?? []), tweetId];
-      state.activeEpisodeId = id;
-      const fs = await import("fs");
-      fs.writeFileSync(dataPath("cyoa_state.json"), JSON.stringify(state, null, 2));
-
-      console.log(`[CYOA] Hook posted with image — ${tweetId}`);
+      const tweetId = await postCYOAHook(id, xWrite);
+      if (!tweetId) return res.status(500).json({ error: "Post failed — check logs" });
       res.json({ ok: true, tweetId, url: `https://x.com/306Agent/status/${tweetId}` });
     } catch (e: any) {
       console.error("[CYOA] Post error:", e.message);
@@ -2422,6 +2093,12 @@ export function registerRoutes(httpServer: Server, app: Express) {
     const updated = storage.updateEpisodeStatus(Number(id), status, videoUrl);
     if (!updated) return res.status(404).json({ error: "Not found" });
     res.json(updated);
+  });
+
+  app.delete("/api/episodes/:id", (req, res) => {
+    const ok = storage.deleteEpisode(Number(req.params.id));
+    if (!ok) return res.status(404).json({ error: "Episode not found" });
+    res.json({ ok: true });
   });
 
   // ── Render Jobs ───────────────────────────────────────────────────
@@ -2491,8 +2168,6 @@ export function registerRoutes(httpServer: Server, app: Express) {
       // CryptoPanic removed (deprecated). Headlines come from aiNewsItems below.
       let headlines: any[] = [];
 
-      let burns: any[] = []; // Burns data removed (removed)
-
       // ── Grok x_search: hot NFT / Web3 news ───────────────
       // CACHED 6h — was firing on every page visit = credit drain
       let grokNews: string | null = grokNewsCache;
@@ -2507,7 +2182,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
               ? { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` }
               : getLLMHeaders(),
             body: JSON.stringify({
-              model: nativeGrokKey ? "grok-3-fast" : getModel("x_search"),
+              model: nativeGrokKey ? "grok-4-1-fast-non-reasoning" : getModel("x_search"),
               tools: [{ type: "x_search" }],
               messages: [{
                 role: "user",
@@ -2642,7 +2317,6 @@ export function registerRoutes(httpServer: Server, app: Express) {
       res.json({
         market,
         headlines,
-        burns,
         grokNews,
         nftByChain,
         memeCoins,
@@ -2651,7 +2325,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       });
     } catch (err) {
       console.error("[news] error:", err);
-      res.status(500).json({ error: "News fetch failed", market: [], headlines: [], burns: [], grokNews: null, nftByChain: [], memeCoins: [], aiNews: [] });
+      res.status(500).json({ error: "News fetch failed", market: [], headlines: [], grokNews: null, nftByChain: [], memeCoins: [], aiNews: [] });
     }
   });
 
@@ -3462,12 +3136,12 @@ needsHelp: true only when you genuinely need his direction or information`,
       if (topic) {
         const { createThread } = await import("./research-agenda.js");
         createThread({
-          title: topic.topic || topic.title || "Approved Research",
+          title: topic.topic || (topic as any).title || "Approved Research",
           thesis: topic.hypothesis || topic.researchQuestion || "",
           status: "active",
           source: "agent_hq_approved",
         });
-        console.log(`[Bridge] Agent HQ approval -> Research Agenda thread: "${topic.title}"`);
+        console.log(`[Bridge] Agent HQ approval -> Research Agenda thread: "${topic.topic || (topic as any).title}"`);
       }
     } catch (e: any) { console.warn("[Bridge] Failed to create agenda thread:", e.message); }
     res.json({ ok });
@@ -3541,6 +3215,37 @@ needsHelp: true only when you genuinely need his direction or information`,
       res.json({ assessment });
     } catch (e: any) {
       res.status(500).json({ error: "Evaluation error: " + e.message });
+    }
+  });
+
+  // GET /api/hypotheses/clusters — preview similar hypothesis clusters without merging
+  app.get("/api/hypotheses/clusters", async (_req, res) => {
+    try {
+      const { findHypothesisClusters } = await import("./hypothesisConsolidator.js");
+      const clusters = await findHypothesisClusters(3);
+      res.json({
+        totalClusters: clusters.length,
+        totalHypotheses: clusters.reduce((s, c) => s + c.members.length, 0),
+        clusters: clusters.map(c => ({
+          representative: c.representative.claim.slice(0, 100),
+          memberCount: c.members.length,
+          members: c.members.map(m => ({ id: m.id, claim: m.claim.slice(0, 100), status: m.status })),
+        })),
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/hypotheses/consolidate — run hypothesis consolidation
+  app.post("/api/hypotheses/consolidate", async (req, res) => {
+    try {
+      const { consolidateHypotheses } = await import("./hypothesisConsolidator.js");
+      const dryRun = req.query.dryRun === "true";
+      const result = await consolidateHypotheses({ dryRun });
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
     }
   });
 
@@ -4028,6 +3733,14 @@ needsHelp: true only when you genuinely need his direction or information`,
     }
   });
 
+  app.get("/api/public/eval", (_req, res) => {
+    try {
+      res.set(publicCacheHeaders).json(getPublicEval());
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to fetch eval" });
+    }
+  });
+
   // ── Reflection Engine (The Mirror) ────────────────────────────────────────
 
   app.get("/api/reflections", (_req, res) => {
@@ -4231,6 +3944,32 @@ needsHelp: true only when you genuinely need his direction or information`,
   app.get("/api/knowledge/contradictions", (_req, res) => {
     try { res.json({ contradictions: getGraphContradictions() }); }
     catch (e: any) { res.status(500).json({ error: "Failed to fetch contradictions" }); }
+  });
+
+  // ── Entity Graph — entity extraction index ──────────────────────────────
+
+  app.get("/api/graph/entities", (_req, res) => {
+    try {
+      const { getEntityIndex } = require("./entityExtractor.js");
+      const index = getEntityIndex();
+      res.json(index);
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to fetch entity index: " + e.message });
+    }
+  });
+
+  app.get("/api/graph/entity/:name", (req, res) => {
+    try {
+      const { findEntriesByEntity } = require("./entityExtractor.js");
+      const name = decodeURIComponent(req.params.name);
+      if (!name || name.length < 2) {
+        return res.status(400).json({ error: "Entity name required (min 2 chars)" });
+      }
+      const entries = findEntriesByEntity(name);
+      res.json({ entity: name, entries, count: entries.length });
+    } catch (e: any) {
+      res.status(500).json({ error: "Entity lookup failed: " + e.message });
+    }
   });
 
   app.post("/api/knowledge/cluster", requireDashAuth, async (_req, res) => {
@@ -4650,23 +4389,91 @@ needsHelp: true only when you genuinely need his direction or information`,
     res.json(result);
   });
 
-  app.post("/api/seed", (_req, res) => {
-    const demoSignals = [
-      { type: "burn", tokenId: 603, description: "Token #603 created — Agent 306 born", weight: 10, phase: "phase1", rawData: "{}" },
-      { type: "canvas_edit", tokenId: 45, description: "515 pixel transforms on #45", weight: 9, phase: "phase1", rawData: "{}" },
-      { type: "burn", tokenId: 5070, description: "14 burns committed to #5070 — Level 31 reached", weight: 7, phase: "phase1", rawData: "{}" },
-      { type: "social_mention", tokenId: 603, description: "@AdamWeitsman tweets Agent 306 reveal — 2.3k likes", weight: 8, phase: "phase1", rawData: "{}" },
-      { type: "forecast", tokenId: 0, description: "Major AI model release — new capabilities announced", weight: 10, phase: "phase2", rawData: "{}" },
-      { type: "forecast", tokenId: 0, description: "AI benchmark comparison: GPT-5 vs Gemini Ultra", weight: 9, phase: "phase2", rawData: "{}" },
-    ];
-    demoSignals.forEach(s => storage.createSignal(s));
+  // ── Competency Dashboard ────────────────────────────────────────────────
+  app.get("/api/competency", (_req, res) => {
+    try {
+      const profile = getCompetencyProfile();
+      res.json(profile);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
 
-    const demoEpisodes = [
-      { tokenId: 603, title: "EP 001 — The Birth of Agent 306", narrative: "Agent 306 is born on Ethereum. Token #603.", phase: "phase1", signals: JSON.stringify({ burns: 50, socialMentions: 12 }), status: "ready" },
-      { tokenId: 45, title: "EP 002 — The Canvas Experiment", narrative: "515 pixel toggles. Art Blocks meets the on-chain museum.", phase: "phase1", signals: JSON.stringify({ burns: 38, canvasEdits: 515 }), status: "draft" },
-    ];
-    demoEpisodes.forEach(e => storage.createEpisode(e as any));
+  // ── 306Eval Benchmark ─────────────────────────────────────────────────
+  app.get("/api/eval", (_req, res) => {
+    try {
+      const data = get306EvalResults();
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
 
-    res.json({ ok: true, signalsCreated: demoSignals.length, episodesCreated: demoEpisodes.length });
+  app.get("/api/eval/history", (_req, res) => {
+    try {
+      const history = get306EvalHistory();
+      res.json({ history });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── Breaking News (disabled) ───────────────────────────────────────────
+  app.get("/api/breaking-news", (_req, res) => {
+    res.json({ events: [], count: 0, disabled: true });
+  });
+
+  // ── Cycle Context & Session Memory ─────────────────────────────────────
+  app.get("/api/cycle/context", (_req, res) => {
+    try {
+      const context = getCycleContext();
+      res.json({ active: isCycleActive(), context });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/sessions", (_req, res) => {
+    try {
+      const sessions = getAllSessions();
+      const expired = closeExpiredSessions();
+      res.json({ activeSessions: getActiveSessionCount(), expiredClosed: expired, sessions });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── Novelty Gate ────────────────────────────────────────────────
+  app.get("/api/novelty-gate", (_req, res) => {
+    try {
+      const log = getNoveltyGateLog(50);
+      res.json({ checks: log, total: log.length });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── Wisdom Engine ───────────────────────────────────────────────
+  app.get("/api/wisdom", (_req, res) => {
+    try {
+      const history = getWisdomPullHistory().slice(0, 10);
+      const usage = getWisdomApiUsage();
+      const activeCount = getActiveWisdomCount();
+      res.json({ recentPulls: history, wisdomEntryCount: activeCount, apiUsage: usage });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── Goal Engine ─────────────────────────────────────────────────
+  app.get("/api/goal-engine", async (_req, res) => {
+    try {
+      const { getGoalEngineHistory, buildGoalContext } = await import("./goalEngine.js");
+      const history = getGoalEngineHistory();
+      const context = await buildGoalContext();
+      res.json({ history: history.runs.slice(0, 10), currentContext: context });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 }

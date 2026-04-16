@@ -75,6 +75,7 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "synthesis-report": "premium",
   "article-draft": "premium",
   "article_draft": "premium",
+  "intro-post": "standard",
   "manuscript-generation": "premium",
   "skill-extraction": "premium",
   "daily-briefing": "premium",

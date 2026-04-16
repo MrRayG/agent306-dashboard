@@ -17,6 +17,7 @@ import { getMetacognitionState } from "./metacognitionEngine.js";
 import { getLatestSnapshot, getEvolutionHistory } from "./evolutionTracker.js";
 import { getBreakthroughs, getPredictions } from "./breakthroughDetector.js";
 import { getCorrections } from "./reasoningEngine.js";
+import { get306EvalResults } from "./evalEngine.js";
 
 // ── In-memory cache (30-second TTL) ─────────────────────────
 
@@ -590,6 +591,90 @@ export function getPublicCorrections() {
     return {
       corrections,
       total: corrections.length,
+      generatedAt: new Date().toISOString(),
+    };
+  });
+}
+
+// -- 11. Eval (306Eval benchmark) -------------------------------------------
+
+const DIMENSION_AGENT_MAP: Record<string, "Researcher" | "Reasoner" | "Writer"> = {
+  signalAcquisition:   "Researcher",
+  sourceIntegrity:     "Researcher",
+  reasoningRigor:      "Reasoner",
+  intellectualHonesty: "Reasoner",
+  voiceEvolution:      "Writer",
+  audienceImpact:      "Writer",
+};
+
+const DIMENSION_DISPLAY_NAMES: Record<string, string> = {
+  signalAcquisition:   "Signal Acquisition",
+  sourceIntegrity:     "Source Integrity",
+  reasoningRigor:      "Reasoning Rigor",
+  intellectualHonesty: "Intellectual Honesty",
+  voiceEvolution:      "Voice Evolution",
+  audienceImpact:      "Audience Impact",
+};
+
+const NARRATIVE_MESSAGES: Record<string, string[]> = {
+  signalAcquisition:   ["expanding research sources", "diversifying knowledge intake", "research pipeline hitting stride", "broad, deep signal coverage", "elite source diversity"],
+  sourceIntegrity:     ["establishing credibility baselines", "building contradiction resolution habits", "sources consistently verified", "predictions tracking accurately", "exceptional source reliability"],
+  reasoningRigor:      ["developing debate habits", "stress-testing ideas regularly", "debates producing solid consensus", "rigorous hypothesis lifecycle", "world-class reasoning discipline"],
+  intellectualHonesty: ["learning to prune", "building correction reflexes", "actively pruning stale claims", "strong self-correction culture", "exceptional intellectual honesty"],
+  voiceEvolution:      ["finding her voice", "style patterns emerging", "voice gaining consistency", "distinctive voice maturing", "voice fully realized"],
+  audienceImpact:      ["building first audience", "early engagement signals", "content landing with audience", "consistent audience growth", "high-impact content creation"],
+};
+
+function dimensionNarrative(key: string, score: number): string {
+  const messages = NARRATIVE_MESSAGES[key] ?? ["developing", "building", "progressing", "strong", "exceptional"];
+  if (score < 30) return `Early stage — ${messages[0]}`;
+  if (score < 50) return `Building foundation — ${messages[1]}`;
+  if (score < 70) return `Gaining momentum — ${messages[2]}`;
+  if (score < 85) return `Strong and growing — ${messages[3]}`;
+  return `Operating at high level — ${messages[4]}`;
+}
+
+function dimensionTrend(currentScore: number, previousScore: number | undefined): "up" | "down" | "steady" {
+  if (previousScore === undefined) return "steady";
+  const delta = currentScore - previousScore;
+  if (delta > 2) return "up";
+  if (delta < -2) return "down";
+  return "steady";
+}
+
+export function getPublicEval() {
+  return cached("eval", () => {
+    const { latest, recent } = get306EvalResults();
+
+    if (!latest) {
+      return {
+        benchmark: null,
+        generatedAt: new Date().toISOString(),
+      };
+    }
+
+    const previous = recent.length > 1 ? recent[1] : null;
+
+    const dimensions = latest.dimensions.map(d => {
+      const prevDim = previous?.dimensions.find(pd => pd.key === d.key);
+      return {
+        name: DIMENSION_DISPLAY_NAMES[d.key] ?? d.name,
+        key: d.key,
+        agent: DIMENSION_AGENT_MAP[d.key] ?? ("Researcher" as const),
+        score: d.score,
+        trend: dimensionTrend(d.score, prevDim?.score),
+        narrative: dimensionNarrative(d.key, d.score),
+      };
+    });
+
+    return {
+      benchmark: {
+        composite: latest.composite,
+        drift: latest.drift.direction,
+        dimensions,
+        calibrationDirective: latest.calibrationDirective,
+        weakestDimension: DIMENSION_DISPLAY_NAMES[latest.weakestDimension] ?? latest.weakestDimension,
+      },
       generatedAt: new Date().toISOString(),
     };
   });

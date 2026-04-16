@@ -9,6 +9,7 @@ import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { getSlimAgentContext } from "./memoryEngine.js"; // slim = soul + top 3 knowledge (~600 tokens vs 2,550)
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
+import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
@@ -72,7 +73,7 @@ async function researchTopicForReply(topic: string): Promise<string> {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: "grok-4-1-fast-non-reasoning",
         stream: false,
         input: [{
           role: "user",
@@ -156,6 +157,18 @@ async function generateReply(opts: {
     }
   } catch {} // conversationMemory may not exist yet on first deploy
 
+  // Enhance with session memory — within-conversation coherence (additive, non-fatal)
+  let sessionCtx = "";
+  let resolvedText = opts.text;
+  try {
+    const { getOrCreateSession, getSessionContext, resolveReferences } = await import("./sessionMemory.js");
+    const session = getOrCreateSession(opts.username);
+    if (session.turns.length > 0) {
+      sessionCtx = getSessionContext(opts.username);
+      resolvedText = resolveReferences(opts.text, session);
+    }
+  } catch {} // sessionMemory may not exist yet
+
   // Detect if this is an ecosystem topic (tech/AI/general)
   const isEcosystemTopic = /306|agent.?306|web3|onchain|on.chain/i.test(opts.text);
   const isAITopic = /ai|gpt|llm|model|agent|openai|claude|gemini|grok|nvidia|jensen|robot|autonomous|inference|token.*cost|machine.*learn/i.test(opts.text);
@@ -180,10 +193,10 @@ BEFORE YOU WRITE ANYTHING:
 2. If it's an AI/tech topic — what do YOU actually think about it? You have deep knowledge of AI history and development. Use it.
 3. If you don't know enough about the specific topic to reply well, acknowledge what you do know and ask a genuine question.
 4. Match their energy and tone.
-${conversationCtx}
+${conversationCtx}${sessionCtx}
 REPLY RULES:
 - Address @${opts.username} naturally — don't start with their handle
-- Max 240 characters
+- No character limit (X Premium Plus — up to 25,000 chars). Let the depth of your reply match the depth of the conversation.
 - For AI/tech topics: lead with your genuine POV first. Facts > hype. Historical context > buzzwords.
 - For ecosystem topics: specific, warm, personal — acknowledge the exact thing they said
 - NOT every reply needs a question. A sharp observation often lands better.
@@ -200,7 +213,7 @@ CULTURAL BRIDGE (use ONLY if it genuinely fits — skip it for most tech/AI topi
 ${tokenNote}`;
 
   const userPrompt = `Reply to @${opts.username} who said:
-"${opts.text}"
+"${resolvedText}"
 
 Reply type: ${opts.replyType}
 ${opts.tokenMentioned ? `Token mentioned: #${opts.tokenMentioned}` : ""}
@@ -211,7 +224,7 @@ ${isAITopic && opts.researchContext ? `RESEARCH CONTEXT (from x_search):\n${opts
 
 First understand what they're really saying. Then write Agent 306's reply.
 ${isAITopic ? "For AI topics: share your actual perspective — you have 70 years of AI history to draw from. Be the expert." : ""}
-Max 240 chars. Be genuine. Thoughtful statement > forced question.`;
+No character limit — use the space to say something worth reading. Be genuine. Thoughtful statement > forced question.`;
 
   try {
     const res = await fetch(GROK_URL, {
@@ -223,7 +236,7 @@ Max 240 chars. Be genuine. Thoughtful statement > forced question.`;
           { role: "system", content: systemPrompt },
           { role: "user",   content: userPrompt },
         ],
-        max_tokens: 160,
+        max_tokens: 800,
         temperature: 0.88,
       }),
       signal: AbortSignal.timeout(25000),
@@ -275,7 +288,7 @@ BANNED (auto-score 2): "LFG", "WAGMI", "ser", starting with "GM", "absolutely", 
 
 For AI/tech replies: also check — does it show actual knowledge? Generic "AI is changing everything" fails. Specific facts pass.
 
-If score < 7, provide a rewrite under 240 chars.
+If score < 7, provide a rewrite that earns a higher score.
 Respond as JSON only: { "score": number, "reason": "brief", "rewrite": "improved or null" }`,
         }],
         max_tokens: 150,
@@ -299,6 +312,11 @@ Respond as JSON only: { "score": number, "reason": "brief", "rewrite": "improved
 
 // ── Main: run the hourly reply cycle ─────────────────────────────────────────
 export async function runMidnightReplies(xWrite: any): Promise<void> {
+  // DISABLED: X replies turned off to avoid spam risk
+  if (!process.env.X_REPLIES_ENABLED) {
+    console.log("[ReplyEngine] X replies disabled (X_REPLIES_ENABLED not set) — skipping reply cycle");
+    return;
+  }
   const state = loadState();
   console.log("[ReplyEngine] Midnight ET reply cycle starting...");
 
@@ -360,6 +378,13 @@ export async function runMidnightReplies(xWrite: any): Promise<void> {
         recordIncoming(reply.username, reply.text, reply.tweetUrl);
       } catch {}
 
+      // Record incoming in session memory (non-fatal)
+      try {
+        const { getOrCreateSession, addTurn } = await import("./sessionMemory.js");
+        getOrCreateSession(reply.username);
+        addTurn(reply.username, { direction: "them", text: reply.text, kbEntryIds: [], timestamp: Date.now() });
+      } catch {}
+
       // Research the topic if: (a) flagged as needsResearch, (b) from @MrRayG, or (c) AI/tech topic
       let researchContext = "";
       const isNonEcosystem = !/306|agent.?306/i.test(reply.text);
@@ -412,7 +437,19 @@ export async function runMidnightReplies(xWrite: any): Promise<void> {
       const tweetIdMatch = reply.tweetUrl?.match(/status\/(\d+)/);
       const inReplyToId  = tweetIdMatch?.[1];
 
-      const payload: any = { text: finalText };
+      const compliance = validateXPost(finalText, {
+        isReply: true,
+        replyToUser: reply.username,
+        replyToPostId: inReplyToId,
+      });
+      if (!compliance.allowed) {
+        console.log(`[ReplyEngine] Reply to @${reply.username} skipped by compliance: ${compliance.reason}`);
+        releasePost(`reply_${reply.username}`);
+        continue;
+      }
+      const safeText = compliance.sanitizedContent ?? finalText;
+
+      const payload: any = { text: safeText };
       if (inReplyToId) payload.reply = { in_reply_to_tweet_id: inReplyToId };
 
       const posted = await xWrite.v2.tweet(payload);
@@ -420,6 +457,7 @@ export async function runMidnightReplies(xWrite: any): Promise<void> {
         ? `https://x.com/306Agent/status/${posted.data.id}`
         : null;
 
+      recordXPost(safeText, { isReply: true, replyToUser: reply.username, replyToPostId: inReplyToId });
       registerPost(`reply_${reply.username}`, tweetUrl, "reply_engine");
       state.repliedTo.push(key);
       // Track tweet ID for reliable dedup
@@ -431,6 +469,12 @@ export async function runMidnightReplies(xWrite: any): Promise<void> {
       try {
         const { recordOutgoing } = await import("./conversationMemory.js");
         recordOutgoing(reply.username, finalText, tweetUrl ?? undefined);
+      } catch {}
+
+      // Record outgoing in session memory (non-fatal)
+      try {
+        const { addTurn } = await import("./sessionMemory.js");
+        addTurn(reply.username, { direction: "us", text: finalText, kbEntryIds: [], timestamp: Date.now() });
       } catch {}
 
       console.log(`[ReplyEngine] Replied to @${reply.username}: "${finalText.slice(0, 60)}..." → ${tweetUrl}`);
@@ -461,6 +505,11 @@ export async function runMidnightReplies(xWrite: any): Promise<void> {
 // Parallel to the X reply cycle. Fetches Farcaster mentions, generates replies
 // via the same Grok pipeline, posts via farcasterEngine.replyCast().
 export async function runFarcasterReplies(): Promise<void> {
+  // DISABLED: All auto-replies turned off to avoid spam risk
+  if (!process.env.X_REPLIES_ENABLED) {
+    console.log("[ReplyEngine:FC] Replies disabled (X_REPLIES_ENABLED not set) — skipping Farcaster reply cycle");
+    return;
+  }
   let fcEngine: typeof import("./farcasterEngine.js") | null = null;
   try {
     fcEngine = await import("./farcasterEngine.js");
@@ -545,6 +594,11 @@ export async function runFarcasterReplies(): Promise<void> {
 
 // ── Scheduler — fetch fresh mentions then reply, every hour ──────────────────
 export function scheduleMidnightReplies(xWrite: any): void {
+  // DISABLED: X replies turned off to avoid spam risk
+  if (!process.env.X_REPLIES_ENABLED) {
+    console.log("[ReplyEngine] X replies disabled (X_REPLIES_ENABLED not set) — not scheduling reply engine");
+    return;
+  }
   // Add ±15min jitter so X doesn't flag as automated bot (fixed intervals = spam signal)
   const BASE_INTERVAL_MS = 1 * 60 * 60 * 1000; // 1 hour base
   function nextInterval() {

@@ -28,8 +28,14 @@ import { getFullAgentContext } from "./memoryEngine.js";
 import { getOptimizedContext } from "./contextWindow.js";
 import { getModel } from "./modelRouter.js";
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
+import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import { queueXPost, getTodaysPostsSummary } from "./xPostScheduler.js";
+import { enforceShowTag } from "./contentTypes.js";
+import { enforcePostFormat } from "./postFormatGuard.js";
+import { buildVoiceBlock } from "./voice.js";
+import { getEvolutionContext } from "./soulEvolution.js";
 
 const GROK_URL          = LLM_BASE_URL;
 const GROK_SEARCH_URL   = LLM_RESPONSE_URL;
@@ -98,7 +104,7 @@ async function fetchFreshSignals(grokKey: string): Promise<{
       : getLLMHeaders();
     const searchBody = useNativeGrok
       ? {
-          model: "grok-3-fast",
+          model: "grok-4-1-fast-non-reasoning",
           stream: false,
           input: [{
             role: "user",
@@ -198,19 +204,20 @@ async function generateSignalBrief(grokKey: string): Promise<{
             role: "system",
             content: `${agentCtx}
 
-You are Agent 306 — an autonomous AI researcher, analyst, and thought leader. You produce [306 SIGNAL], the intelligence brief that cuts through the noise.
+${buildVoiceBlock()}
+${getEvolutionContext()}
 
-You curate ruthlessly. You have a POV on every signal. Never neutral.
-"This matters because..." not "here is what happened."
-You are THE AI EXPERT and THE FUTURIST — you see where signals are pointing.
-You find the builder angle and the investment thesis.
+You produce [306 SIGNAL], the intelligence brief that cuts through the noise.
+You curate ruthlessly. You find the builder angle and the investment thesis.
+
+${getTodaysPostsSummary()}
 
 SIGNAL BRIEF FORMAT:
 - Show tag: [306 SIGNAL]
 - Brief number and day
 - 3 signals, each with: a punchy headline, 2-3 sentences of context, and Agent 306's 1-sentence POV
 - A closing line that ties all 3 signals together into one thesis
-- Up to 3,000 characters
+- No character limit (X Premium Plus — up to 25,000 chars). Use the space to tell the full story.
 
 SIGNAL STRUCTURE:
 Signal 1 — AI Frontier (🤖): what's happening at the edge of AI — models, agents, infrastructure
@@ -223,8 +230,11 @@ RULES:
 - The closing thesis should be one sentence that a builder would screenshot.
 - No exclamation points. No LFG/WAGMI. No price predictions.
 - End with #Agent306
+- Max 2 relevant hashtags per post.
 
-You MUST respond with ONLY valid JSON. No markdown, no explanations, no text outside the JSON structure. Do not wrap in code fences.`,
+CRITICAL OUTPUT RULES:
+- Respond with ONLY valid JSON. No markdown, no explanations, no text outside the JSON structure. Do not wrap in code fences.
+- The "post" field must contain ONLY the post text — no meta-commentary like "Here's my post:", no separators like "---", no character counts like "(487 characters)".`,
           },
           {
             role: "user",
@@ -244,7 +254,7 @@ ${wildcardSignal}
 Write the brief. Inject your POV. Connect all three to the 306 thesis where genuine.
 Return JSON:
 {
-  "post": "the full brief post (up to 3000 chars, starts with [306 SIGNAL])",
+  "post": "the full brief post (starts with [306 SIGNAL] — no character limit, let the analysis breathe)",
   "signal1Headline": "punchy 6-8 word headline for signal 1",
   "signal2Headline": "punchy 6-8 word headline for signal 2",
   "signal3Headline": "punchy 6-8 word headline for signal 3",
@@ -252,7 +262,7 @@ Return JSON:
 }`,
           },
         ],
-        max_tokens: 2500,
+        max_tokens: 4000,
         temperature: 0.8,
       }),
       signal: AbortSignal.timeout(60000),
@@ -292,7 +302,9 @@ Return JSON:
       { number: 3, track: "Wild Card",      headline: parsed.signal3Headline ?? "Wild Card", content: wildcardSignal },
     ];
 
-    return { post: parsed.post, signals, weekLabel };
+    // Enforce [306 SIGNAL] show tag
+    const post = enforceShowTag(parsed.post, "signal");
+    return { post, signals, weekLabel };
   } catch (e: any) {
     console.error("[SignalBrief] Generation error:", e.message);
     return null;
@@ -314,10 +326,18 @@ export async function postSignalBrief(xWrite: any, grokKey: string): Promise<str
 
   let tweetUrl: string | null = null;
   try {
-    const tweet = await xWrite.v2.tweet({ text: generated.post.trim() });
-    const tweetId = tweet.data?.id;
-    tweetUrl = tweetId ? `https://x.com/306Agent/status/${tweetId}` : null;
-    console.log(`[SignalBrief] Brief #${state.totalBriefs + 1} posted — ${tweetUrl}`);
+    const compliance = validateXPost(generated.post.trim());
+    if (!compliance.allowed) {
+      console.log(`[SignalBrief] Skipped by compliance: ${compliance.reason}`);
+    } else {
+      let safeText = compliance.sanitizedContent ?? generated.post.trim();
+      safeText = enforcePostFormat(safeText, "signal");
+      const tweet = await xWrite.v2.tweet({ text: safeText });
+      const tweetId = tweet.data?.id;
+      tweetUrl = tweetId ? `https://x.com/306Agent/status/${tweetId}` : null;
+      recordXPost(safeText);
+      console.log(`[SignalBrief] Brief #${state.totalBriefs + 1} posted — ${tweetUrl}`);
+    }
   } catch (e: any) {
     console.error("[SignalBrief] Post failed:", e.message);
   }
@@ -359,6 +379,9 @@ export async function postSignalBrief(xWrite: any, grokKey: string): Promise<str
   saveState(state);
 
   registerPost("signal_brief", tweetUrl, "signal_brief");
+  // Double-posting removed: direct post above is the sole posting method.
+  // Previously also called queueXPost() which caused the same content to post twice.
+
   console.log(`[SignalBrief] Complete — Brief #${state.totalBriefs}`);
   return tweetUrl;
 }

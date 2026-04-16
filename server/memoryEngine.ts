@@ -20,6 +20,7 @@ import { queueEmbeddingSync, semanticSearch } from "./embeddingEngine.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import { reflectOnPost } from "./soulEvolution.js";
 
 // ── File paths (all on Railway /data volume) ──────────────────
 const SOUL_FILE        = dataPath("memory_soul.json");
@@ -48,7 +49,6 @@ export interface SoulMemory {
   };
   ecosystem: {
     phases: string[];
-    arenaDate: string;
     evolutionDate: string;
   };
   lastUpdated: string;
@@ -96,13 +96,11 @@ export interface PerformanceLesson {
   score: number;       // 1-10 calculated from engagement
   qualityScore: number; // Grok's internal quality gate score
   signals: {
-    burns: number;
-    canvas: number;
     twitter: number;
   };
   manualRating?: number; // MrRayG's rating from dashboard (1-5)
   lessons: string[];     // What Agent 306 learned from this post
-  tags: string[];        // e.g. ["burn_heavy", "arena_mention", "founder_quote"]
+  tags: string[];        // e.g. ["founder_quote", "cultural_bridge"]
   hasCulturalBridge?: boolean; // true if post contained a cultural bridge reference
   sentimentTag?: string;       // emotional tone: rising|tense|triumphant|mourning|mysterious
 }
@@ -117,7 +115,7 @@ export interface PerformanceMemory {
     bestHours: number[];     // hours of day that get most engagement
     bestTopics: string[];    // topics that consistently land
     worstTopics: string[];   // topics that consistently flop
-    bestFormats: string[];   // e.g. "single question", "burn receipt + stat"
+    bestFormats: string[];   // e.g. "single question", "thread opener + data"
   };
   lastAnalyzed: string;
 }
@@ -157,7 +155,6 @@ const DEFAULT_SOUL: SoulMemory = {
       "Phase 2: Analysis & Narrative — generating insights, weekly roundups, research briefs",
       "Phase 3: Autonomous Media — full AI-powered content network across platforms",
     ],
-    arenaDate: "",
     evolutionDate: "",
   },
   lastUpdated: new Date().toISOString(),
@@ -386,14 +383,16 @@ MISSION: ${soul.mission}
 PHILOSOPHY: ${soul.philosophy}
 
 PRINCIPLES:
-${(soul.voicePrinciples || soul.principles || []).map((p: string, i: number) => `${i + 1}. ${p}`).join("\n")}
+${(soul.voicePrinciples || (soul as any).principles || []).map((p: string, i: number) => `${i + 1}. ${p}`).join("\n")}
 
 CRITICAL RULES:
 - Agent 306 is an autonomous AI researcher and analyst. She is her OWN entity.
 - She covers AI, crypto, and technology. She is NOT an NFT project, NOT a token.
-- NEVER reference Normies, NormiesTV, Canvas, burns, pixels, holders, or any NFT community.
+- NEVER reference any prior project identity, burns, pixels, holders, or any NFT community.
 - NEVER tag or name random community members. Only reference real public figures.
 - X account: @306Agent | Farcaster: @ntvagent306
+- Contact: agent306@agent306.ai | Website: agent306.ai
+- X PROFILE BIO MUST STATE: Autonomous AI research agent | Built by agent306.ai
 === END IDENTITY ===`.trim();
 }
 
@@ -475,9 +474,9 @@ export function getFullAgentContext(): string {
 }
 
 /**
- * Slim context for replies and burns — soul identity only.
+ * Slim context for replies — soul identity only.
  * Saves ~1,350 tokens per call vs getFullAgentContext.
- * Use when: replies, burn receipts, boost, spotlight, race.
+ * Use when: replies, boost.
  * Skip when: episodes, news dispatch, academy, signal brief (need full context).
  */
 export function getSlimAgentContext(): string {
@@ -494,7 +493,7 @@ export function recordPost(data: {
   tweetText: string;
   qualityScore: number;
   sentiment?: string;   // emotional tone from Grok (rising|tense|triumphant|mourning|mysterious)
-  signals: { burns: number; canvas: number; twitter: number };
+  signals: { twitter: number };
 }): void {
   const lesson: PerformanceLesson = {
     episodeId: data.episodeId,
@@ -531,6 +530,13 @@ export function updateEngagement(tweetUrl: string, engagement: PerformanceLesson
   analyzePatterns();
   save(PERFORMANCE_FILE, performance);
   console.log(`[Memory] EP${lesson.episodeId} engagement updated — score: ${lesson.score}/10`);
+
+  // Soul evolution reflection for notable posts (fire-and-forget)
+  if (lesson.score >= 7 || lesson.score <= 3) {
+    reflectOnPost(lesson.tweetText, lesson.tweetUrl, lesson.score).catch(err =>
+      console.warn("[Memory] Soul reflection failed:", err.message)
+    );
+  }
 }
 
 /** MrRayG rates a post manually from the dashboard */
@@ -545,6 +551,13 @@ export function ratePost(tweetUrl: string, rating: number): void {
     lesson.lessons.push("MrRayG rated this low — avoid this approach");
   }
   save(PERFORMANCE_FILE, performance);
+
+  // Soul evolution reflection on manual rating (fire-and-forget)
+  if (lesson.manualRating >= 4 || lesson.manualRating <= 2) {
+    reflectOnPost(lesson.tweetText, lesson.tweetUrl, lesson.score, lesson.manualRating).catch(err =>
+      console.warn("[Memory] Soul reflection on manual rating failed:", err.message)
+    );
+  }
 }
 
 /**
@@ -779,6 +792,14 @@ export function addKnowledge(entry: Omit<KnowledgeEntry, "id" | "learnedAt">): v
   ).catch(e =>
     console.warn("[Memory] Knowledge graph connection discovery failed:", e.message)
   );
+
+  // Entity extraction (fire-and-forget, non-fatal)
+  try {
+    import("./entityExtractor.js").then(({ extractEntities }) =>
+      extractEntities({ id: full.id, title: full.title, summary: full.summary, weight: full.weight })
+        .catch(e => console.warn("[Memory] Entity extraction failed:", e.message))
+    );
+  } catch {}
 
   // Cross-category semantic dedup: merge if a high-similarity entry exists (non-blocking)
   semanticSearch(semanticDedupQuery, { maxResults: 3, minSimilarity: 0.85 })

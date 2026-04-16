@@ -13,8 +13,13 @@ import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, getLLMHeaders } from "./llmConfig.js";
+import { getOptimizedContext } from "./contextWindow.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { knowledge } from "./memoryEngine.js";
+import { queueXPost } from "./xPostScheduler.js";
+import { getVoiceContext } from "./voiceInstructions.js";
+import { enforceShowTag } from "./contentTypes.js";
+import { buildTweetSystemPrompt } from "./tweetPromptBuilder.js";
 
 // -- Types ------------------------------------------------------------------
 
@@ -537,6 +542,41 @@ Required JSON schema:
 
     store.breakthroughs.unshift(breakthrough);
     saveBreakthroughs(store);
+
+    // Rewrite breakthrough into Agent 306's voice with [306 SIGNAL] tag
+    let breakthroughPost = `[306 SIGNAL] ${breakthrough.title}\n\n${breakthrough.description.slice(0, 2200)}`;
+    try {
+      const breakthroughSystemPrompt = buildTweetSystemPrompt('signal', breakthrough.title);
+      const voiceResp = await fetch(LLM_BASE_URL, {
+        method: "POST",
+        headers: getLLMHeaders(),
+        body: JSON.stringify({
+          model: getModel("breakthrough-evaluation"),
+          messages: [
+            { role: "system", content: breakthroughSystemPrompt },
+            {
+              role: "user",
+              content: `Rewrite this breakthrough detection into a [306 SIGNAL] tweet.\n\nTitle: ${breakthrough.title}\nDescription: ${breakthrough.description.slice(0, 1500)}\nComposite Score: ${compositeScore}\n\nOutput ONLY the tweet text. No meta-commentary.`,
+            },
+          ],
+          max_tokens: 600,
+          temperature: 0.7,
+        }),
+        signal: AbortSignal.timeout(30000),
+      });
+      if (voiceResp.ok) {
+        const voiceData = await voiceResp.json() as any;
+        const voiced = voiceData.choices?.[0]?.message?.content?.trim() ?? "";
+        if (voiced.length >= 50) {
+          breakthroughPost = voiced;
+        }
+      }
+    } catch (e: any) {
+      console.warn(`[Breakthrough] Voice injection failed, using fallback:`, e.message);
+    }
+    // Enforce [306 SIGNAL] show tag
+    breakthroughPost = enforceShowTag(breakthroughPost, "signal");
+    queueXPost(breakthroughPost, "breakthrough");
 
     console.log(`[Breakthrough] BREAKTHROUGH DETECTED: "${breakthrough.title}" (composite: ${compositeScore})`);
     return breakthrough;

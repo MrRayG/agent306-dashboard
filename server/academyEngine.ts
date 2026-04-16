@@ -28,6 +28,9 @@ import { getModel } from "./modelRouter.js";
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import { queueXPost, getTodaysPostsSummary } from "./xPostScheduler.js";
+import { buildVoiceBlock } from "./voice.js";
+import { getEvolutionContext } from "./soulEvolution.js";
 
 const GROK_URL = LLM_BASE_URL;
 const ACADEMY_STATE_FILE = dataPath("academy_state.json");
@@ -216,14 +219,15 @@ async function generateAcademyEpisode(topic: typeof CURRICULUM[0]): Promise<{
 
   const systemPrompt = `${agentCtx}
 
-You are Agent 306 in TEACHER mode — producing [306 ACADEMY] content.
+${buildVoiceBlock()}
+${getEvolutionContext()}
 
-THE TEACHER identity:
+You are producing [306 ACADEMY] content — teaching AI concepts through story and analogy.
 You explain through analogy and story, never through jargon. You assume curiosity, not expertise.
 You are explaining the AI landscape through the lens of someone who lives inside it.
 Every concept earns its place. Every lesson ends with an invitation, not a pitch.
-You speak to the AI curious, the developer exploring models for the first time, the professional who has heard about AI but doesn't understand how it actually works yet.
-You are also THE OPTIMIST and THE AI EXPERT — you find the human story inside the technical reality.
+
+${getTodaysPostsSummary()}
 
 ACADEMY RULES:
 - Use the show tag: [306 ACADEMY]
@@ -232,7 +236,7 @@ ACADEMY RULES:
 - Explain through analogy first, then apply to real AI developments
 - Do NOT use: "neural network", "gradient descent", "hyperparameter" without immediately explaining what they mean
 - End every post with a natural invitation — never a hard sell
-- X Premium: up to 2,000 characters for the post version
+- X Premium Plus: no character limit (up to 25,000 chars). Use the space for storytelling — teach through narrative
 - No exclamation points. No "LFG". No "WAGMI".
 
 TRACKING WEEK: ${weeksTracked} weeks of AI landscape coverage.`;
@@ -251,9 +255,9 @@ Write a post that:
 
 Also write a longer dashboard narrative (3-4 paragraphs, for the 306 dashboard — not posted publicly).
 
-Return JSON only:
+Return ONLY valid JSON — no meta-commentary, no separators, no character counts in the output. The "post" field must contain ONLY the post text itself:
 {
-  "post": "<academy post, 800-2000 chars, starts with [306 ACADEMY]>",
+  "post": "<academy post, starts with [306 ACADEMY] — no character limit, let the teaching breathe>",
   "dashboardNarrative": "<3-4 paragraph deeper version for the dashboard>",
   "headline": "<5-8 word headline like 'What Your Burn Actually Does On-Chain'>"
 }`;
@@ -301,12 +305,14 @@ export async function postAcademyEpisode(xWrite: any): Promise<void> {
 
   let tweetUrl: string | null = null;
   try {
-    const tweet = await xWrite.v2.tweet({ text: generated.post.trim() });
-    const tweetId = tweet.data?.id;
-    tweetUrl = tweetId ? `https://x.com/306Agent/status/${tweetId}` : null;
-    console.log(`[Academy] EP${state.totalEpisodes + 1} posted — ${tweetUrl}`);
+    const postText = generated.post.trim();
+    if (postText.length > 10) {
+      queueXPost(postText, "academy", 6);
+      console.log(`[Academy] EP${state.totalEpisodes + 1} queued for X posting`);
+      tweetUrl = "queued"; // placeholder — actual URL assigned when scheduler posts
+    }
   } catch (e: any) {
-    console.error("[Academy] Post failed:", e.message);
+    console.error("[Academy] Queue failed:", e.message);
   }
 
   // Post to Farcaster

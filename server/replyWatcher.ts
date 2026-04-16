@@ -23,6 +23,11 @@ let xClient: any = null;
 let agent306UserId: string | null = null;
 
 export function initReplyWatcher(client: any): void {
+  // DISABLED: X replies turned off to avoid spam risk
+  if (!process.env.X_REPLIES_ENABLED) {
+    console.log("[ReplyWatcher] X replies disabled (X_REPLIES_ENABLED not set) — skipping init");
+    return;
+  }
   xClient = client;
   // Fetch our own user ID on init (needed for mentions endpoint)
   client.v2.me().then((me: any) => {
@@ -209,7 +214,7 @@ async function fetchMentionsViaGrok(): Promise<CommunityReply[]> {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: "grok-4-1-fast-non-reasoning",
         stream: false,
         input: [{
           role: "user",
@@ -304,7 +309,7 @@ async function fetchMrRayGMentions(): Promise<CommunityReply[]> {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` },
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: "grok-4-1-fast-non-reasoning",
         stream: false,
         input: [{
           role: "user",
@@ -369,6 +374,11 @@ Return JSON array:
 
 // ── Main fetch function — combines all three sources ─────────────────────────
 export async function fetchReplies(): Promise<void> {
+  // DISABLED: X replies turned off to avoid spam risk
+  if (!process.env.X_REPLIES_ENABLED) {
+    console.log("[ReplyWatcher] X replies disabled (X_REPLIES_ENABLED not set) — skipping fetch");
+    return;
+  }
   console.log("[ReplyWatcher] Fetching mentions from all sources...");
 
   // Run all three sources in parallel
@@ -400,7 +410,7 @@ export async function fetchReplies(): Promise<void> {
   // Keep latest 100 (up from 50), weight toward questions and lore suggestions
   replyState.replies = [...fresh, ...replyState.replies]
     .sort((a, b) => {
-      const typeScore = { question: 4, lore_suggestion: 4, callout: 3, holder_mention: 3, excitement: 2, general: 1 };
+      const typeScore: Record<string, number> = { question: 4, lore_suggestion: 4, callout: 3, holder_mention: 3, excitement: 2, general: 1 };
       return (typeScore[b.replyType] ?? 1) - (typeScore[a.replyType] ?? 1);
     })
     .slice(0, 100);

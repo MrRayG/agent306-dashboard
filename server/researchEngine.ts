@@ -20,7 +20,7 @@ import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { addKnowledge } from "./memoryEngine.js";
 import { getModel } from "./modelRouter.js";
-import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders, LLM_TIMEOUTS } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 const GROK_CHAT_API    = LLM_BASE_URL;
@@ -230,6 +230,7 @@ function saveLab(lab: ResearchLab) {
 }
 
 export function getResearchLab(): ResearchLab { return loadLab(); }
+export function saveResearchLab(lab: ResearchLab): void { saveLab(lab); }
 
 export function resetResearchLab(): { cleared: { topics: number; hypotheses: number } } {
   const lab = loadLab();
@@ -331,10 +332,122 @@ export function getTopicById(id: string): ResearchTopic | undefined {
   return loadLab().topics.find(t => t.id === id);
 }
 
+// ── Hypothesis similarity helpers ────────────────────────────────────────────
+
+const STOP_WORDS = new Set(['the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might',
+  'shall', 'can', 'that', 'this', 'these', 'those', 'it', 'its', 'of', 'in', 'to', 'for', 'with',
+  'on', 'at', 'by', 'from', 'as', 'into', 'through', 'during', 'before', 'after', 'and', 'but',
+  'or', 'not', 'no', 'nor', 'so', 'yet', 'both', 'each', 'more', 'most', 'other', 'some', 'such',
+  'than', 'too', 'very', 'just', 'about', 'above', 'also', 'between', 'under', 'again', 'further',
+  'then', 'once', 'here', 'there', 'when', 'where', 'why', 'how', 'all', 'any', 'few', 'own']);
+
+export function extractKeyTokens(text: string): Set<string> {
+  return new Set(
+    text.toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, ' ')
+      .split(/\s+/)
+      .filter(t => t.length > 2 && !STOP_WORDS.has(t))
+  );
+}
+
+export function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
+  const intersection = new Set(Array.from(a).filter(x => b.has(x)));
+  const union = new Set(Array.from(a).concat(Array.from(b)));
+  return union.size === 0 ? 0 : intersection.size / union.size;
+}
+
+// Regex-based entity extraction for hypothesis dedup (lightweight, no LLM)
+const ENTITY_PATTERN = /\b([A-Z][a-zA-Z0-9]*(?:[-\s][A-Z0-9][a-zA-Z0-9]*)*)\b/g;
+const ENTITY_SKIP = new Set([
+  "I", "A", "The", "This", "That", "It", "My", "We", "He", "She", "They",
+  "But", "And", "Or", "So", "If", "No", "Yes", "Not", "What", "How", "Why",
+  "When", "Where", "Who", "Which", "Just", "Also",
+]);
+
+export function extractEntitiesFromClaim(text: string): string[] {
+  const entities = new Set<string>();
+  const pattern = new RegExp(ENTITY_PATTERN.source, "g");
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text)) !== null) {
+    const candidate = match[1].trim();
+    if (candidate.length < 2) continue;
+    if (ENTITY_SKIP.has(candidate)) continue;
+    entities.add(candidate);
+  }
+  return Array.from(entities);
+}
+
+export function findSimilarHypothesis(claim: string, hypotheses: Hypothesis[]): Hypothesis | null {
+  const claimTokens = extractKeyTokens(claim);
+  for (const h of hypotheses) {
+    const hTokens = extractKeyTokens(h.claim);
+    const overlap = jaccardSimilarity(claimTokens, hTokens);
+    if (overlap >= 0.55) return h;
+  }
+  return null;
+}
+
 // ── Hypothesis management ─────────────────────────────────────────────────────
 
 export function addHypothesis(input: Omit<Hypothesis, "id" | "formedAt" | "status">): Hypothesis {
   const lab = loadLab();
+
+  // Global queue cap: reject when queue is too large
+  const MAX_HYPOTHESIS_QUEUE = parseInt(process.env.MAX_HYPOTHESIS_QUEUE ?? "250", 10);
+  const activeCount = lab.hypotheses.filter(h => h.status === 'forming' || h.status === 'testing').length;
+  if (activeCount >= MAX_HYPOTHESIS_QUEUE) {
+    console.log(`[ResearchLab] Queue full (${activeCount}/${MAX_HYPOTHESIS_QUEUE}) — rejecting new hypothesis`);
+    return null as any;
+  }
+
+  // Similarity gate: skip if a similar active hypothesis already exists
+  try {
+    const active = lab.hypotheses.filter(h => h.status === 'forming' || h.status === 'testing');
+    const duplicate = findSimilarHypothesis(input.claim, active);
+    if (duplicate) {
+      console.log(`[ResearchLab] Skipped duplicate hypothesis — similar to "${duplicate.claim.slice(0, 60)}..." (${duplicate.id})`);
+      return duplicate;
+    }
+  } catch (e: any) {
+    console.warn("[ResearchLab] Similarity check failed (non-fatal):", e.message);
+  }
+
+  // Entity-level dedup: check if core entities already appear in active hypotheses
+  try {
+    const newEntities = extractEntitiesFromClaim(input.claim);
+
+    if (newEntities.length > 0) {
+      const active = lab.hypotheses.filter(h => h.status === "forming" || h.status === "testing");
+      const newNames = new Set(newEntities.map(e => e.toLowerCase()));
+
+      for (const existing of active) {
+        const existingEntities = extractEntitiesFromClaim(existing.claim);
+        if (existingEntities.length === 0) continue;
+
+        const existingNames = new Set(existingEntities.map(e => e.toLowerCase()));
+        const overlap = [...newNames].filter(n => existingNames.has(n)).length;
+        const overlapRatio = overlap / Math.min(newNames.size, existingNames.size);
+
+        if (overlapRatio > 0.6) {
+          const keywordSim = jaccardSimilarity(
+            extractKeyTokens(input.claim),
+            extractKeyTokens(existing.claim),
+          );
+          if (keywordSim > 0.3) {
+            console.log(`[ResearchLab] Entity dedup: "${input.claim.slice(0, 60)}" overlaps with "${existing.claim.slice(0, 60)}" (entities: ${overlap}/${Math.min(newNames.size, existingNames.size)}, keywords: ${keywordSim.toFixed(2)})`);
+            existing.trustScore = Math.min(100, (existing.trustScore ?? 5) + 0.5);
+            saveLab(lab);
+            return existing;
+          }
+        }
+      }
+    }
+  } catch (e: any) {
+    // Non-fatal: if entity extraction fails, fall through to normal creation
+    console.warn("[ResearchLab] Entity dedup check failed (non-fatal):", e.message);
+  }
+
   const hyp: Hypothesis = {
     ...input,
     id:       `hyp_${Date.now()}`,
@@ -566,7 +679,7 @@ async function callGrok(
         max_tokens: opts?.maxTokens ?? 1500,
         temperature: opts?.temperature ?? 0.3,
       }),
-      signal: AbortSignal.timeout(40000),
+      signal: AbortSignal.timeout(LLM_TIMEOUTS.hypothesis_evaluation),
     });
     if (!res.ok) return null;
     const data = await res.json() as any;
@@ -1403,7 +1516,7 @@ async function generateContentSuggestions(topicId: string, grokKey: string): Pro
   const parsed = await callGrok(
     grokKey,
     `You are a content strategist for Agent 306, an AI thought leader in Web3/AI. Generate actionable content suggestions from completed research. Return valid JSON.`,
-    `Research topic: "${topic.topic}"\nConclusion: ${(topic.conclusion ?? "").slice(0, 300)}\nManuscript excerpt: ${(topic.manuscript ?? "").slice(0, 1500)}\n\nGenerate content ideas:\n1. A 3-5 tweet thread that distills the key findings for Twitter/X (each tweet should be punchy, under 280 chars)\n2. A podcast episode pitch — title, angle, and 3 discussion points. Assume Agent 306 is the host discussing what she learned.\n3. A long-form article angle for a deeper publication\n\nReturn JSON:\n{\n  "postThread": ["tweet 1", "tweet 2", "tweet 3", "tweet 4"],\n  "podcastTopic": "Episode title + 2-3 sentence pitch with discussion points",\n  "articleAngle": "angle + what makes this compelling for long-form"\n}`,
+    `Research topic: "${topic.topic}"\nConclusion: ${(topic.conclusion ?? "").slice(0, 300)}\nManuscript excerpt: ${(topic.manuscript ?? "").slice(0, 1500)}\n\nGenerate content ideas:\n1. A 3-5 post thread that distills the key findings for X (each post should be punchy and let content dictate length)\n2. A podcast episode pitch — title, angle, and 3 discussion points. Assume Agent 306 is the host discussing what she learned.\n3. A long-form article angle for a deeper publication\n\nReturn JSON:\n{\n  "postThread": ["tweet 1", "tweet 2", "tweet 3", "tweet 4"],\n  "podcastTopic": "Episode title + 2-3 sentence pitch with discussion points",\n  "articleAngle": "angle + what makes this compelling for long-form"\n}`,
     { maxTokens: 1500, temperature: 0.8, skipPreamble: true },
   );
 
@@ -1527,6 +1640,17 @@ export interface AgentGoal {
 
   // MrRayG
   mrraygNote?:   string;         // his feedback or encouragement
+
+  // Goal Engine — structured milestone data (parallel to milestones[])
+  milestoneSpecs?: Array<{
+    text: string;
+    metric: string;
+    target: number | string;
+    deadline: string;
+    measuredBy: "system" | "grok";
+  }>;
+  targetDimension?: string;          // 306Eval dimension this goal targets
+  targetCompetencies?: string[];     // competency IDs that strengthen on completion
 }
 
 interface GoalsStore {

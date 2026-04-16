@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { ACTIVE_ENGINES } from "@/data/contentTypes";
 import { Zap, Radio, Flame, Twitter, RefreshCw, Clock, CheckCircle2, AlertCircle, Activity, TrendingUp, Loader2, ExternalLink } from "lucide-react";
 
 function timeAgo(iso: string | null): string {
@@ -340,6 +341,96 @@ function FarcasterSetupCard({ mono, card, label, toast }: {
   );
 }
 
+// ── X Auto-Post Toggle Card ────────────────────────────────────────────────
+// Mirrors the Farcaster enable/disable pattern for X posting.
+
+function XAutoPostCard({ mono, card, label, toast }: {
+  mono: React.CSSProperties;
+  card: React.CSSProperties;
+  label: React.CSSProperties;
+  toast: (opts: any) => void;
+}) {
+  const { data: xStatus, refetch: refetchX } = useQuery<any>({
+    queryKey: ["/api/x/auto-post"],
+    refetchInterval: 30_000,
+  });
+
+  const enabled = xStatus?.enabled ?? true;
+
+  const handleToggle = useCallback(async () => {
+    try {
+      const r = await apiRequest("POST", "/api/x/toggle");
+      const d = await r.json();
+      refetchX();
+      queryClient.invalidateQueries({ queryKey: ["/api/poller/status"] });
+      toast({ title: d.enabled ? "X auto-posting enabled" : "X auto-posting disabled" });
+    } catch {
+      toast({ title: "Toggle failed", variant: "destructive" });
+    }
+  }, [toast, refetchX]);
+
+  const orange = "#f97316";
+  const orangeBg = "rgba(249,115,22,0.04)";
+  const orangeBorder = "rgba(249,115,22,0.2)";
+  const green = "#4ade80";
+  const muted = "rgba(227,229,228,0.60)";
+
+  const btnBase: React.CSSProperties = {
+    ...mono, fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.1em",
+    cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6,
+  };
+
+  const ghostBtn: React.CSSProperties = {
+    ...btnBase, color: orange, background: "transparent",
+    border: `1px solid rgba(249,115,22,0.3)`, padding: "3px 10px",
+  };
+
+  const badgeText = enabled ? "ENABLED" : "DISABLED";
+  const badgeColor = enabled ? green : muted;
+  const badgeBg = enabled ? "rgba(74,222,128,0.12)" : "rgba(227,229,228,0.12)";
+
+  return (
+    <div style={{ ...card, marginBottom: "1.5rem", background: orangeBg, borderColor: orangeBorder }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Twitter style={{ width: 14, height: 14, color: orange }} />
+          <span style={{ ...mono, fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.12em", color: orange }}>
+            X · @306Agent
+          </span>
+          <span style={{ ...mono, fontSize: "0.73rem", padding: "1px 8px", background: badgeBg, color: badgeColor, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+            {badgeText}
+          </span>
+        </div>
+        <button onClick={handleToggle} style={ghostBtn}>
+          {enabled ? "Disable" : "Enable"}
+        </button>
+      </div>
+
+      {/* Engine list */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {ACTIVE_ENGINES.filter(e => e.platforms.includes('x')).map(eng => (
+          <div key={eng.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: eng.color }} />
+              <span style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.68)" }}>{eng.label}</span>
+            </div>
+            <span style={{ ...mono, fontSize: "0.76rem", color: enabled ? "#4ade80" : muted }}>
+              {enabled ? `Auto · ${eng.schedule}` : "Queuing only"}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <p style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.35)", marginTop: 12, lineHeight: 1.5 }}>
+        {enabled
+          ? "Engines queue content → scheduler posts to X via OAuth 1.0a with compliance guards."
+          : "Auto-posting disabled. Engines still queue content but the scheduler skips posting."}
+      </p>
+    </div>
+  );
+}
+
 export default function AutoPilot() {
   const { toast } = useToast();
 
@@ -349,10 +440,6 @@ export default function AutoPilot() {
 
   const { data: episodes = [] } = useQuery<any[]>({
     queryKey: ["/api/episodes"],
-  });
-
-  const { data: burns = [] } = useQuery<any[]>({
-    queryKey: ["/api/burns/feed"],
   });
 
   const { data: signals = [] } = useQuery<any[]>({
@@ -371,7 +458,6 @@ export default function AutoPilot() {
 
   const recentEpisodes = episodes.slice(0, 5);
   const postedEpisodes = episodes.filter((e: any) => e.status === "posted");
-  const recentBurns = Array.isArray(burns) ? burns.slice(0, 8) : [];
   const recentSignals = Array.isArray(signals) ? signals.slice(0, 10) : [];
 
   const mono: React.CSSProperties = { fontFamily: "'Courier New', monospace" };
@@ -515,39 +601,10 @@ export default function AutoPilot() {
       {/* Farcaster Integration — Setup Wizard + Status */}
       <FarcasterSetupCard mono={mono} card={card} label={label} toast={toast} />
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: "1.5rem" }}>
+      {/* X Auto-Post Toggle Card */}
+      <XAutoPostCard mono={mono} card={card} label={label} toast={toast} />
 
-        {/* X (@306Agent) Status */}
-        <div style={card}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: "1rem" }}>
-            <Twitter style={{ width: 13, height: 13, color: "#f97316" }} />
-            <span style={{ ...mono, fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.14em", color: "#f97316" }}>
-              X · @306Agent
-            </span>
-            <span style={{ ...mono, fontSize: "0.76rem", color: "rgba(74,222,128,0.7)", marginLeft: "auto" }}>connected</span>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.68)" }}>Signal Brief</span>
-              <span style={{ ...mono, fontSize: "0.76rem", color: "#4ade80" }}>Auto · Daily</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.68)" }}>News Dispatch</span>
-              <span style={{ ...mono, fontSize: "0.76rem", color: "#4ade80" }}>Auto · Daily 8am</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.68)" }}>Deep Read Article</span>
-              <span style={{ ...mono, fontSize: "0.76rem", color: "#4ade80" }}>Auto · Weekly Mon</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.68)" }}>Reply Engine</span>
-              <span style={{ ...mono, fontSize: "0.76rem", color: "#4ade80" }}>Auto · Hourly</span>
-            </div>
-          </div>
-          <p style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.35)", marginTop: 12, lineHeight: 1.5 }}>
-            All content auto-posts to X via OAuth 1.0a. Manage content types in Command Center.
-          </p>
-        </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: "1.5rem" }}>
 
         {/* Community Pulse */}
         <div style={card}>

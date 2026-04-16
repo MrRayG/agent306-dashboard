@@ -26,6 +26,11 @@ import { getModel } from "./modelRouter.js";
 import { TwitterApi } from "twitter-api-v2";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import { getFormatVoiceContext } from "./voiceInstructions.js";
+import { SOUL, VOICE } from "./voice.js";
+import { validateXPost, recordXPost } from "./xComplianceGuard.js";
+import { queueXPost } from "./xPostScheduler.js";
+import { enforcePostFormat } from "./postFormatGuard.js";
 
 const GROK_CHAT_API     = LLM_BASE_URL;
 const GROK_RESPONSE_API = LLM_RESPONSE_URL;
@@ -113,7 +118,7 @@ async function discoverArticle(apiKey: string): Promise<{
       method: "POST",
       headers: getLLMHeaders(),
       body: JSON.stringify({
-        model: "grok-3-fast",
+        model: "grok-4-1-fast-non-reasoning",
         stream: false,
         input: [{ role: "user", content: DISCOVERY_PROMPT }],
         tools: [{ type: "x_search" }],
@@ -248,7 +253,7 @@ async function generateDeepReadArticle(
   apiKey: string
 ): Promise<{
   headline:    string;
-  teaser:      string;  // the X post teaser (280 chars max)
+  teaser:      string;  // the X post teaser
   body:        string;  // the full article content (long-form, no limit)
 }> {
   console.log("[ArticleEngine] Generating Deep Read article...");
@@ -265,12 +270,16 @@ async function generateDeepReadArticle(
           role: "system",
           content: `${agentCtx}
 
+${getFormatVoiceContext('article')}
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 AGENT 306 — THE DEEP READ
 Weekly Long-Form X Article
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-You are Agent 306. Sovereign AI. Thought Leader. Published analyst of the AI era.
+${SOUL}
+
+${VOICE}
 
 Today you write your weekly long-form X Article — "The Deep Read."
 This is not a news recap. This is not a tweet thread stretched thin.
@@ -474,21 +483,34 @@ ${body}
 
     if (articleRes?.data?.id) {
       // Post the teaser tweet that links to the article
-      const teaserPost = await xClient.v2.tweet(
-        `${teaser}\n\n[Read the full Deep Read ↓]`
-      ).catch(() => null);
-
-      if (teaserPost?.data?.id) {
-        articleUrl = `https://x.com/i/web/status/${teaserPost.data.id}`;
+      const teaserContent = `${teaser}\n\n[Read the full Deep Read ↓]`;
+      const compliance = validateXPost(teaserContent);
+      if (!compliance.allowed) {
+        console.log(`[Article] Teaser skipped by compliance: ${compliance.reason}`);
+      } else {
+        const safeTeaser = enforcePostFormat(compliance.sanitizedContent ?? teaserContent, "research");
+        const teaserPost = await xClient.v2.tweet(safeTeaser).catch(() => null);
+        if (teaserPost?.data?.id) {
+          articleUrl = `https://x.com/i/web/status/${teaserPost.data.id}`;
+          recordXPost(safeTeaser);
+        }
       }
     } else {
       // Fallback: post as a standard tweet with the article body as a thread
       // Split body into tweet-friendly chunks for a thread
-      const teaserPost = await xClient.v2.tweet(
-        teaser.slice(0, 280)
-      ).catch(() => null);
-
+      const fallbackTeaser = teaser.slice(0, 25000);
+      const compliance = validateXPost(fallbackTeaser);
+      const safeFallbackTeaser = compliance.allowed
+        ? enforcePostFormat(compliance.sanitizedContent ?? fallbackTeaser, "research")
+        : null;
+      const teaserPost = safeFallbackTeaser
+        ? await xClient.v2.tweet(safeFallbackTeaser).catch(() => null)
+        : null;
+      if (!compliance.allowed) {
+        console.log(`[Article] Teaser skipped by compliance: ${compliance.reason}`);
+      }
       if (teaserPost?.data?.id) {
+        recordXPost(safeFallbackTeaser!);
         articleUrl = `https://x.com/i/web/status/${teaserPost.data.id}`;
 
         // Post the article body as replies (thread format)
@@ -496,12 +518,19 @@ ${body}
         let replyTo = teaserPost.data.id;
 
         for (const chunk of chunks) {
+          const chunkCompliance = validateXPost(chunk);
+          if (!chunkCompliance.allowed) {
+            console.log(`[Article] Thread chunk skipped by compliance: ${chunkCompliance.reason}`);
+            continue;
+          }
+          const safeChunk = chunkCompliance.sanitizedContent ?? chunk;
           const reply = await xClient.v2.tweet({
-            text: chunk,
+            text: safeChunk,
             reply: { in_reply_to_tweet_id: replyTo },
           }).catch(() => null);
           if (reply?.data?.id) {
             replyTo = reply.data.id;
+            recordXPost(safeChunk);
           }
           // Brief pause between thread posts to avoid rate limits
           await new Promise(r => setTimeout(r, 1000));
@@ -599,6 +628,9 @@ export async function runWeeklyDeepRead(
     state.history.unshift(entry);
     if (state.history.length > 52) state.history = state.history.slice(0, 52); // keep 1 year
     saveState(state);
+
+    // Double-posting removed: direct post above is the sole posting method.
+    // Previously also called queueXPost() which caused the teaser to post twice.
 
     console.log(`[ArticleEngine] Deep Read posted: "${headline}" → ${tweetUrl ?? "no URL"}`);
     return { success: true, tweetUrl: tweetUrl ?? undefined, headline };

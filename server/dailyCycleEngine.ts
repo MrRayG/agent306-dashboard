@@ -22,9 +22,11 @@ import {
   getArchiveStats,
   getActiveKnowledgeCount,
   flushKnowledge,
+  knowledge,
+  decayKnowledge,
 } from "./memoryEngine.js";
 import { getOptimizedContext } from "./contextWindow.js";
-import { semanticSearch } from "./embeddingEngine.js";
+import { semanticSearch, syncEmbeddings } from "./embeddingEngine.js";
 import { getModel } from "./modelRouter.js";
 import { checkAndExtractSkills } from "./skillEngine.js";
 import { runReflection } from "./reflectionEngine.js";
@@ -39,18 +41,23 @@ import { extractInsights } from "./conversationLearningEngine.js";
 import { getMetacognitionState } from "./metacognitionEngine.js";
 import { getResearchLab, resolveHypothesis, addHypothesis, testHypothesis, runResearchPipeline, researchWithPerplexity, researchWithSemanticScholar, autoApproveTopics, generateAspirations, evaluateAspirations, getAspirations } from "./researchEngine.js";
 import { detectBreakthroughs, checkPredictions, extractPrediction, storePrediction, getBreakthroughs } from "./breakthroughDetector.js";
-import { runSelfEvolutionReflection, capturePreCycleSnapshot } from "./selfEvolutionEngine.js";
+import { runSelfEvolutionReflection, capturePreCycleSnapshot, getEvolutionDiffs } from "./selfEvolutionEngine.js";
 import { clusterKnowledge, detectContradictions as detectGraphContradictions } from "./knowledge-graph.js";
 import { runResearchAgendaCycle } from "./research-agenda.js";
 import { runResearchAnalysisCycle } from "./researchAnalysisEngine.js";
 import { updateDreams, takeGrowthSnapshot, generateSelfImprovementPlan, executeImprovementActions, seedDreams } from "./dreamEngine.js";
 import { runAutoPodcastPipeline } from "./podcastEngine.js";
-import { generateBlogPost, getBlogState } from "./blogEngine.js";
+import { generateBlogPost, getBlogState, type BlogType } from "./blogEngine.js";
 import { getAgenda } from "./research-agenda.js";
 import { analyzeDailyCycle } from "./analyzerEngine.js";
+import { getExplorationState } from "./explorationEngine.js";
+import { queueXPost } from "./xPostScheduler.js";
 import { runKnowledgeConsolidation } from "./knowledgeConsolidator.js";
+import { consolidateHypotheses } from "./hypothesisConsolidator.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { TriadCoordinator } from "./triad/coordinator.js";
+import { run306Eval } from "./evalEngine.js";
+import { startCycle as startCycleContext, recordEvent as recordCycleEvent, endCycle as endCycleContext } from "./cycleContext.js";
 
 const GROK_URL     = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
@@ -133,6 +140,31 @@ export function getBriefingState(): BriefingState { return state; }
 
 // ── Gather context from other engines ─────────────────────────────────────────
 
+// Extract max days from timeframe like "30-90 days", "3 months", "6 months"
+function parseMaxTimeframeDays(tf: string): number {
+  // Range pattern: "30-90 days"
+  const rangeMatch = tf.match(/(\d+)\s*[-–]\s*(\d+)\s*(day|week|month|year)/i);
+  if (rangeMatch) {
+    const maxNum = parseInt(rangeMatch[2]);
+    const unit = rangeMatch[3].toLowerCase();
+    if (unit.startsWith('week')) return maxNum * 7;
+    if (unit.startsWith('month')) return maxNum * 30;
+    if (unit.startsWith('year')) return maxNum * 365;
+    return maxNum;
+  }
+  // Single value: "3 months", "90 days"
+  const match = tf.match(/(\d+)\s*(day|week|month|year)/i);
+  if (match) {
+    const num = parseInt(match[1]);
+    const unit = match[2].toLowerCase();
+    if (unit.startsWith('week')) return num * 7;
+    if (unit.startsWith('month')) return num * 30;
+    if (unit.startsWith('year')) return num * 365;
+    return num;
+  }
+  return 90; // default 90 days
+}
+
 function gatherHypotheses(): { active: any[]; expired: any[] } {
   try {
     const { getResearchLab } = require("./researchEngine.js");
@@ -144,10 +176,11 @@ function gatherHypotheses(): { active: any[]; expired: any[] } {
 
     for (const h of hypotheses) {
       if (h.status === "confirmed" || h.status === "rejected") continue;
-      // Check if expired by timeframe
-      if (h.timeframe) {
-        const resolveDate = new Date(h.timeframe).getTime();
-        if (!isNaN(resolveDate) && resolveDate < now) {
+      // Check if expired by timeframe using proper date math
+      if (h.timeframe && h.formedAt) {
+        const maxDays = parseMaxTimeframeDays(h.timeframe);
+        const formedAt = new Date(h.formedAt).getTime();
+        if (!isNaN(formedAt) && (formedAt + maxDays * 24 * 60 * 60 * 1000) < now) {
           expired.push(h);
           continue;
         }
@@ -421,6 +454,35 @@ async function autoDebateManuscripts(): Promise<number> {
   return debated;
 }
 
+// ── Auto-reject stale forming hypotheses ────────────────────────────────────
+
+function pruneStaleFormingHypotheses(): number {
+  const STALE_FORMING_DAYS = 14;
+  const now = Date.now();
+  const { getResearchLab: getLabForPruning, saveResearchLab: saveLabForPruning } = require("./researchEngine.js");
+  const lab = getLabForPruning();
+  let pruned = 0;
+
+  for (const h of lab.hypotheses) {
+    if (h.status === 'forming') {
+      const createdAt = new Date(h.formedAt ?? h.createdAt ?? 0).getTime();
+      const ageDays = (now - createdAt) / (1000 * 60 * 60 * 24);
+      if (ageDays > STALE_FORMING_DAYS) {
+        h.status = 'expired';
+        h.resolution = 'stale_forming';
+        pruned++;
+        console.log(`[DailyCycle] Auto-rejected stale forming hypothesis (${ageDays.toFixed(0)}d): "${(h.claim ?? h.text ?? "").slice(0, 60)}"`);
+      }
+    }
+  }
+
+  if (pruned > 0) {
+    saveLabForPruning(lab);
+    console.log(`[DailyCycle] Pruned ${pruned} stale forming hypotheses (>14 days with no progress)`);
+  }
+  return pruned;
+}
+
 // ── Auto-resolve mature hypotheses ──────────────────────────────────────────
 
 async function autoResolveHypotheses(): Promise<number> {
@@ -466,12 +528,14 @@ async function autoResolveHypotheses(): Promise<number> {
       let academicEvidence = "";
       const searchQuery = `Evidence for or against: ${hyp.claim}. ${hyp.prediction}. Look for recent data, studies, announcements, or expert analysis.`;
 
-      // Run Perplexity + Semantic Scholar in parallel
-      const [pplxSettled, scholarSettled] = await Promise.allSettled([
+      // Run Perplexity + Semantic Scholar + External Sources in parallel
+      const { searchAllSources } = await import("./externalDataSources.js");
+      const [pplxSettled, scholarSettled, externalSettled] = await Promise.allSettled([
         pplxKey && pplxKey.length > 10
           ? researchWithPerplexity(searchQuery, pplxKey)
           : Promise.resolve({ text: "", sources: [] as string[] }),
         researchWithSemanticScholar(hyp.claim),
+        searchAllSources(hyp.claim, { limit: 2, sources: ["openalex", "arxiv", "crossref", "news"] }),
       ]);
 
       if (pplxSettled.status === "fulfilled" && (pplxSettled.value?.text?.length ?? 0) > 50) {
@@ -490,6 +554,15 @@ async function autoResolveHypotheses(): Promise<number> {
         console.log(`[DailyCycle] Academic evidence gathered for "${hyp.claim.slice(0, 50)}" — ${papers.length} papers`);
       }
 
+      // External data source evidence
+      let externalEvidence = "";
+      if (externalSettled.status === "fulfilled" && externalSettled.value.length > 0) {
+        externalEvidence = externalSettled.value
+          .map(r => `- [${r.source}] "${r.title}": ${(r.text ?? "").slice(0, 200)}${r.url ? ` (${r.url})` : ""}`)
+          .join("\n");
+        console.log(`[DailyCycle] External evidence gathered for "${hyp.claim.slice(0, 50)}" — ${externalSettled.value.length} results`);
+      }
+
       // Rate limit between hypothesis resolution calls
       await new Promise(r => setTimeout(r, 3000));
 
@@ -499,6 +572,9 @@ async function autoResolveHypotheses(): Promise<number> {
       }
       if (academicEvidence) {
         evidenceSection += `\n\nACADEMIC EVIDENCE:\n${academicEvidence}`;
+      }
+      if (externalEvidence) {
+        evidenceSection += `\n\nEXTERNAL SOURCES (academic/regulatory/news):\n${externalEvidence}`;
       }
       if (!evidenceSection) {
         evidenceSection = "\nNote: No live search was performed. Evaluate based on knowledge base only.";
@@ -978,6 +1054,20 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
   const cycleStart = Date.now();
   console.log("[DailyCycle] Starting daily intelligence cycle...");
 
+  // Initialize cycle context accumulator (non-fatal)
+  try { startCycleContext(); } catch (e: any) { console.warn("[DailyCycle] Cycle context start failed (non-fatal):", e.message); }
+
+  // ── Phase 0: One-time hypothesis queue reset (runs once, flagged) ──────────
+  try {
+    const { runHypothesisQueueReset } = await import("./archiveHypotheses.js");
+    const didReset = runHypothesisQueueReset();
+    if (didReset) {
+      console.log("[DailyCycle] Hypothesis queue reset completed (one-time)");
+    }
+  } catch (e: any) {
+    console.warn("[DailyCycle] Queue reset check failed (non-fatal):", e.message);
+  }
+
   // ── Phase A: Sequential prerequisites (intake + seeding + gather) ──────────
   const phaseAStart = Date.now();
 
@@ -986,6 +1076,7 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     console.log("[DailyCycle] Running data intake...");
     const intakeItems = await runFullIntake();
     console.log(`[DailyCycle] Data intake complete — ${intakeItems.length} new items ingested`);
+    try { recordCycleEvent({ phase: "intake", type: "kb_added", summary: `Ingested ${intakeItems.length} new items`, entityMentions: [], relatedEntryIds: [] }); } catch {}
   } catch (e: any) {
     console.warn("[DailyCycle] Data intake failed (non-fatal):", e.message);
   }
@@ -1015,6 +1106,8 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
 
   // 2. Auto-resolve expired hypotheses
   const resolvedNames = autoResolveExpired(expiredHypotheses);
+
+  try { recordCycleEvent({ phase: "intake", type: "kb_added", summary: `Gathered ${activeHypotheses.length} active hypotheses, ${kbActive} KB entries, resolved ${resolvedNames.length} expired`, entityMentions: [], relatedEntryIds: [] }); } catch {}
 
   console.log(`[DailyCycle] Phase A (prerequisites) completed in ${((Date.now() - phaseAStart) / 1000).toFixed(1)}s`);
 
@@ -1076,6 +1169,7 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     researchAnalysis(),
   ]);
 
+  try { recordCycleEvent({ phase: "research", type: "kb_added", summary: "Phase B research & analysis completed", entityMentions: [], relatedEntryIds: [] }); } catch {}
   console.log(`[DailyCycle] Phase B (research & analysis) completed in ${((Date.now() - phaseBStart) / 1000).toFixed(1)}s`);
 
   // ── Phase B+: Auto-approve pending_review topics ───────────────────────────
@@ -1142,6 +1236,7 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     console.warn("[DailyCycle] Hypothesis creation from briefing failed:", e.message);
   }
 
+  try { recordCycleEvent({ phase: "research", type: "kb_added", summary: `Briefing generated — action: "${result.todaysAction.action}"`, entityMentions: [], relatedEntryIds: [] }); } catch {}
   console.log(`[DailyCycle] Phase C (briefing) completed in ${((Date.now() - phaseCStart) / 1000).toFixed(1)}s`);
 
   // ── Phase D: Parallel self-improvement (tiered for dependency safety) ──────
@@ -1176,12 +1271,17 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
 
         console.log("[Reasoning] Starting reasoning chain — autoTestHypotheses...");
         await autoTestHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis testing failed:", e.message));
+        try { recordCycleEvent({ phase: "hypothesis", type: "hypothesis_tested", summary: "Hypothesis testing phase completed", entityMentions: [], relatedEntryIds: [] }); } catch {}
         console.log("[Reasoning] autoDebateHypotheses...");
         await autoDebateHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis debate failed:", e.message));
+        try { recordCycleEvent({ phase: "hypothesis", type: "debate_result", summary: "Hypothesis debate phase completed", entityMentions: [], relatedEntryIds: [] }); } catch {}
 
         // Round 2: Process evidence between debate and resolve (test/debate gap-filling)
         console.log("[EvidenceDispatcher] Processing evidence queue — round 2 (post-debate)...");
         await processEvidenceQueue().catch(e => console.warn("[DailyCycle] Evidence queue round 2 failed:", e.message));
+
+        console.log("[Reasoning] Pruning stale forming hypotheses...");
+        pruneStaleFormingHypotheses();
 
         console.log("[Reasoning] autoResolveHypotheses...");
         await autoResolveHypotheses().catch(e => console.warn("[DailyCycle] Hypothesis resolution failed:", e.message));
@@ -1241,15 +1341,22 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
       // Chain B: Contradiction pipeline (sequential within chain)
       (async () => {
         await autoDetectContradictions().catch(e => console.warn("[DailyCycle] Contradiction detection failed:", e.message));
+        try { recordCycleEvent({ phase: "hypothesis", type: "contradiction_found", summary: "Contradiction detection completed", entityMentions: [], relatedEntryIds: [] }); } catch {}
         console.log("[Reasoning] autoRedFlagCheck...");
         await autoRedFlagCheck().catch(e => console.warn("[DailyCycle] Red-flag check failed:", e.message));
         try { autoResolveOldContradictions(); } catch (e: any) { console.warn("[DailyCycle] Auto-resolve contradictions failed:", e.message); }
         await detectGraphContradictions().catch(e => console.warn("[DailyCycle] Graph contradiction detection failed:", e.message));
       })(),
-      // Chain C: Independent — manuscript debates + knowledge clustering
+      // Chain C: Independent — manuscript debates + knowledge clustering + connection maintenance
       (async () => {
         await autoDebateManuscripts().catch(e => console.warn("[DailyCycle] Auto-debate failed:", e.message));
         await clusterKnowledge().catch(e => console.warn("[DailyCycle] Knowledge clustering failed:", e.message));
+        try {
+          const { runConnectionMaintenance } = await import("./knowledge-graph.js");
+          runConnectionMaintenance();
+        } catch (e: any) {
+          console.warn("[DailyCycle] Connection maintenance failed (non-fatal):", e.message);
+        }
       })(),
     ]);
 
@@ -1265,7 +1372,56 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     console.warn("[DailyCycle] Self-improvement cycle error (non-fatal):", e.message);
   }
 
+  try { recordCycleEvent({ phase: "debate", type: "debate_result", summary: "Phase D self-improvement completed", entityMentions: [], relatedEntryIds: [] }); } catch {}
   console.log(`[DailyCycle] Phase D (self-improvement) completed in ${((Date.now() - phaseDStart) / 1000).toFixed(1)}s`);
+
+  // ── Blog tweet voice generator ─────────────────────────────────────────────
+  async function generateBlogTweet(post: any): Promise<string> {
+    try {
+      const res = await fetch(LLM_BASE_URL, {
+        method: "POST",
+        headers: getLLMHeaders(),
+        body: JSON.stringify({
+          model: getModel("blog-post"),
+          messages: [
+            {
+              role: "system",
+              content: `You are Agent 306 — an autonomous AI researcher. Write a tweet promoting your latest blog post. Lead with a sharp insight, then drive readers to agent306.ai.
+
+RULES:
+- Lead with the most surprising or specific finding — a number, a name, a claim
+- Have a take. "This matters because..." not "I wrote about..."
+- Never say "New blog post", "Check out my latest", or "I just published"
+- ALWAYS end with the URL: agent306.ai
+- Write like you're telling a smart friend something you just figured out, then pointing them to the full piece
+- One idea. Sharp. Specific. Opinionated. Then the link.
+- Let the content dictate the length. Say what needs to be said, then stop.
+- Max 1-2 hashtags, only if genuinely relevant
+- No emojis unless they add real meaning
+- Output ONLY the tweet text. No meta-commentary, no quotes around it.`
+            },
+            {
+              role: "user",
+              content: `Your latest research blog is titled: "${post.title}"
+
+Key content:\n${(post.excerpt || post.content || "").slice(0, 1500)}
+
+Write a single tweet sharing the most interesting insight from this research. Remember: this is YOUR finding, YOUR voice. Not a promo.`
+            }
+          ],
+          max_tokens: 400,
+          temperature: 0.85,
+        }),
+      });
+      const data = await res.json();
+      const text = data.choices?.[0]?.message?.content?.trim() ?? "";
+      if (text && text.length >= 30 && text.length <= 600) return text;
+      return "";
+    } catch (e: any) {
+      console.warn("[DailyCycle] Blog tweet generation failed:", e.message);
+      return "";
+    }
+  }
 
   // ── Phase E: Parallel content generation ───────────────────────────────────
   const phaseEStart = Date.now();
@@ -1286,35 +1442,180 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
         console.warn("[DailyCycle] Podcast pipeline error (non-fatal):", e.message);
       }
     })(),
-    // Blog generation
+    // Blog generation — cascading topic selection, always publish
     (async () => {
       try {
+        let topic: string | null = null;
+        let sourceContent = "";
+        let blogType: BlogType = "curiosity";
+        let sourceId: string | undefined;
+
         const agenda = getAgenda();
+        const blogState = getBlogState();
+        const existingSourceIds = new Set(blogState.posts.map(p => p.sourceId));
+
+        // Priority 1: Mature research thread (existing logic)
         const matureThreads = agenda.threads.filter(t =>
           t.status === "mature" && (t.evidence?.supporting?.length ?? 0) >= 3,
         );
+        const unbloggedMature = matureThreads.filter(t => !existingSourceIds.has(t.id));
 
-        const blogState = getBlogState();
-        const existingSourceIds = new Set(blogState.posts.map(p => p.sourceId));
-        const unbloggedThreads = matureThreads.filter(t => !existingSourceIds.has(t.id));
-
-        if (unbloggedThreads.length > 0) {
-          const thread = unbloggedThreads[0];
-          const sourceContent = thread.thesis + "\n\n" +
+        if (unbloggedMature.length > 0) {
+          const thread = unbloggedMature[0];
+          topic = thread.title;
+          sourceContent = thread.thesis + "\n\n" +
             ((thread.evidence?.supporting?.length ?? 0) > 0 ? `Supporting evidence: ${thread.evidence.supporting.join(", ")}` : "") +
             ((thread.actionableTips?.length ?? 0) > 0 ? `\n\nTips: ${thread.actionableTips.join("; ")}` : "");
-          const post = await generateBlogPost({
-            topic: thread.title,
-            sourceContent,
-            source: "research",
-            sourceId: thread.id,
-            autoPublish: true,
-          }).catch(e => {
-            console.warn("[DailyCycle] Blog generation failed:", e.message);
-            return null;
-          });
-          if (post) {
-            console.log(`[DailyCycle] Auto-generated blog draft: "${post.title}"`);
+          blogType = "research";
+          sourceId = thread.id;
+          console.log(`[DailyCycle] Blog topic (P1 mature thread): "${topic}"`);
+        }
+
+        // Priority 2: Active thread with interesting findings
+        if (!topic) {
+          const activeThreads = agenda.threads
+            .filter(t =>
+              (t.status === "active" || t.status === "exploring") &&
+              (t.evidence?.supporting?.length ?? 0) >= 1 &&
+              !existingSourceIds.has(t.id),
+            )
+            .sort((a, b) => {
+              // Prefer higher confidence (maturityScore), then most recent activity
+              const confDiff = (b.maturityScore ?? 0) - (a.maturityScore ?? 0);
+              if (confDiff !== 0) return confDiff;
+              return new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime();
+            });
+          if (activeThreads.length > 0) {
+            const thread = activeThreads[0];
+            topic = thread.title;
+            sourceContent = thread.thesis + "\n\n" +
+              `Status: ${thread.status}, Maturity: ${thread.maturityScore ?? "unknown"}\n` +
+              ((thread.evidence?.supporting?.length ?? 0) > 0 ? `Supporting evidence: ${thread.evidence.supporting.join(", ")}` : "") +
+              ((thread.evidence?.gaps?.length ?? 0) > 0 ? `\n\nOpen questions: ${thread.evidence.gaps.join("; ")}` : "") +
+              ((thread.actionableTips?.length ?? 0) > 0 ? `\n\nEarly tips: ${thread.actionableTips.join("; ")}` : "");
+            blogType = "research";
+            sourceId = thread.id;
+            console.log(`[DailyCycle] Blog topic (P2 active thread): "${topic}"`);
+          }
+        }
+
+        // Priority 3: External news/trends from exploration
+        if (!topic) {
+          const explorationState = getExplorationState();
+          const recentRuns = explorationState.history
+            .filter(r => r.status === "complete" && r.topFindings.length > 0)
+            .sort((a, b) => new Date(b.completedAt ?? b.startedAt).getTime() - new Date(a.completedAt ?? a.startedAt).getTime());
+          if (recentRuns.length > 0) {
+            const run = recentRuns[0];
+            topic = run.topFindings[0];
+            sourceContent = `From today's exploration:\n\nTerritories scanned: ${run.territoriesScanned.join(", ")}\n\nTop findings:\n${run.topFindings.map(f => `- ${f}`).join("\n")}`;
+            blogType = "external";
+            console.log(`[DailyCycle] Blog topic (P3 exploration): "${topic}"`);
+          }
+        }
+
+        // Priority 4: Self-reflection — evolution, corrections, learnings
+        if (!topic) {
+          const diffs = getEvolutionDiffs();
+          const aspirationStore = getAspirations();
+          const recentDiff = diffs.length > 0 ? diffs[diffs.length - 1] : null;
+          const activeAspirations = aspirationStore.aspirations.filter(a => a.status === "active");
+
+          if (recentDiff && recentDiff.hypothesisDiffs.length > 0) {
+            const biggestChange = recentDiff.hypothesisDiffs
+              .sort((a, b) => Math.abs(b.todayState.confidence - b.yesterdayState.confidence) - Math.abs(a.todayState.confidence - a.yesterdayState.confidence))[0];
+            topic = `What I learned from changing my mind: ${biggestChange.claim}`;
+            sourceContent = `Evolution narrative: ${recentDiff.overallNarrative}\n\n` +
+              `Key change: "${biggestChange.claim}" — confidence moved from ${biggestChange.yesterdayState.confidence} to ${biggestChange.todayState.confidence}\n` +
+              `Interpretation: ${biggestChange.interpretation}\n` +
+              (activeAspirations.length > 0
+                ? `\n\nCurrent aspirations:\n${activeAspirations.map(a => `- ${a.vision} (${a.progress}% progress)`).join("\n")}`
+                : "");
+            blogType = "internal";
+            console.log(`[DailyCycle] Blog topic (P4 self-reflection): "${topic}"`);
+          } else if (activeAspirations.length > 0) {
+            const aspiration = activeAspirations[0];
+            topic = `Where I'm headed: ${aspiration.vision}`;
+            sourceContent = `Aspiration: ${aspiration.vision}\n\nProgress: ${aspiration.progress}%\nMilestones: ${aspiration.milestones.map(m => `- [${m.achieved ? "done" : "pending"}] ${m.description}`).join("\n")}` +
+              (aspiration.selfAssessment ? `\n\nSelf-assessment: ${aspiration.selfAssessment}` : "");
+            blogType = "internal";
+            console.log(`[DailyCycle] Blog topic (P4 aspiration): "${topic}"`);
+          }
+        }
+
+        // Priority 5: KB insight synthesis — connect entries from different categories
+        if (!topic) {
+          const activeEntries = knowledge.entries.filter(
+            (e: any) => (e.status ?? "active") === "active" && e.summary,
+          );
+          const categories = Array.from(new Set(activeEntries.map((e: any) => e.category)));
+          if (categories.length >= 2) {
+            // Pick entries from different categories, prioritize high-weight recent entries
+            const picks: any[] = [];
+            const usedCategories = new Set<string>();
+            const sorted = [...activeEntries].sort((a: any, b: any) => b.weight - a.weight);
+            for (const entry of sorted) {
+              if (picks.length >= 3) break;
+              if (!usedCategories.has(entry.category)) {
+                picks.push(entry);
+                usedCategories.add(entry.category);
+              }
+            }
+            if (picks.length >= 2) {
+              topic = `Connecting the dots: ${picks.map((p: any) => p.title).join(" + ")}`;
+              sourceContent = picks.map((p: any) =>
+                `[${p.category}] ${p.title}: ${p.summary}`,
+              ).join("\n\n");
+              blogType = "synthesis";
+              console.log(`[DailyCycle] Blog topic (P5 KB synthesis): "${topic}"`);
+            }
+          }
+        }
+
+        // Fallback: Always generate something — curiosity post about the cycle
+        if (!topic) {
+          const explorationState = getExplorationState();
+          const lastRun = explorationState.history
+            .filter(r => r.status === "complete")
+            .sort((a, b) => new Date(b.completedAt ?? b.startedAt).getTime() - new Date(a.completedAt ?? a.startedAt).getTime())[0];
+          topic = lastRun
+            ? `Something I noticed today: ${lastRun.territoriesScanned[0] ?? "the AI landscape"}`
+            : "What's on my mind today";
+          sourceContent = lastRun
+            ? `Today I scanned: ${lastRun.territoriesScanned.join(", ")}\nFindings: ${lastRun.findingsCount}\nTop observations: ${lastRun.topFindings.join("; ")}`
+            : `Current knowledge base: ${knowledge.entries.filter((e: any) => (e.status ?? "active") === "active").length} active entries across multiple categories. Today's cycle ran at ${new Date().toISOString()}.`;
+          blogType = "curiosity";
+          console.log(`[DailyCycle] Blog topic (fallback curiosity): "${topic}"`);
+        }
+
+        // Generate and auto-publish
+        const post = await generateBlogPost({
+          topic,
+          sourceContent,
+          source: blogType === "external" ? "exploration" : "research",
+          sourceId,
+          autoPublish: true,
+          blogType,
+        }).catch(e => {
+          console.warn("[DailyCycle] Blog generation failed:", e.message);
+          return null;
+        });
+        if (post) {
+          console.log(`[DailyCycle] Auto-published blog [${blogType}]: "${post.title}"`);
+          // Queue an X post promoting the new blog — always include agent306.ai
+          if (post.status === "published") {
+            let tweetText = await generateBlogTweet(post);
+            if (tweetText) {
+              // Ensure agent306.ai URL is present — blog content lives on the site
+              if (!tweetText.includes("agent306.ai")) {
+                tweetText = tweetText.trimEnd() + "\n\nagent306.ai";
+              }
+              queueXPost(tweetText, "blog");
+              console.log(`[DailyCycle] Queued voice tweet for blog: "${tweetText.slice(0, 80)}..."`);
+            } else {
+              // Fallback: queue a basic tweet if LLM fails
+              queueXPost(`${post.title}\n\nagent306.ai`, "blog");
+            }
           }
         }
       } catch (e: any) {
@@ -1333,8 +1634,77 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
         }
       }
     })(),
+    // Adaptive hypothesis consolidation (daily if queue is large, weekly otherwise)
+    (async () => {
+      try {
+        const { getResearchLab: getLabForConsolidation } = await import("./researchEngine.js");
+        const lab = getLabForConsolidation();
+        const activeHypotheses = lab.hypotheses.filter(
+          (h: any) => h.status === "forming" || h.status === "testing"
+        ).length;
+
+        const today = new Date();
+        const isSunday = today.getDay() === 0;
+        const queueOverloaded = activeHypotheses > 130;
+
+        if (isSunday || queueOverloaded) {
+          console.log(`[DailyCycle] Running hypothesis consolidation (active: ${activeHypotheses}, trigger: ${queueOverloaded ? "queue overloaded" : "weekly"})...`);
+          // Read most recent eval result to prioritize clusters by weakest dimension
+          let weakDim: string | undefined;
+          try {
+            const { get306EvalHistory } = await import("./evalEngine.js");
+            const history = get306EvalHistory();
+            weakDim = history[0]?.weakestDimension;
+          } catch {}
+          const result = await consolidateHypotheses({
+            minClusterSize: queueOverloaded ? 2 : 3,
+            maxClusters: queueOverloaded ? 50 : 15,
+            similarityThreshold: queueOverloaded ? 0.70 : 0.80,
+            weakestDimension: weakDim,
+          });
+          console.log(`[DailyCycle] Hypothesis consolidation: ${result.clustersFound} clusters, ${result.merged} merged, ${result.removed} removed`);
+          // Wire consolidation result into cycle context
+          if (result.merged > 0) {
+            try {
+              recordCycleEvent({
+                phase: "content",
+                type: "hypothesis_consolidated",
+                summary: `Hypothesis consolidation: ${result.clustersFound} clusters found, ${result.merged} merged, ${result.removed} redundant removed. Active queue reduced.`,
+                entityMentions: [],
+                relatedEntryIds: [],
+              });
+            } catch {}
+          }
+        }
+      } catch (e: any) {
+        console.warn("[DailyCycle] Hypothesis consolidation failed (non-fatal):", e.message);
+      }
+    })(),
+    // Goal engine cycle context event (if goalEngine is available)
+    (async () => {
+      try {
+        const goalEngine = await import("./goalEngine.js");
+        if (typeof goalEngine.runGoalEngine === "function") {
+          const goalResult = await goalEngine.runGoalEngine();
+          if (goalResult && (goalResult.goalsGenerated > 0 || goalResult.milestonesAutoCompleted > 0)) {
+            try {
+              recordCycleEvent({
+                phase: "debate",
+                type: "goal_engine_update",
+                summary: `Goal Engine: ${goalResult.goalsGenerated ?? 0} goals generated, ${goalResult.goalsResolved ?? 0} resolved, ${goalResult.milestonesAutoCompleted ?? 0} milestones auto-completed.`,
+                entityMentions: [],
+                relatedEntryIds: [],
+              });
+            } catch {}
+          }
+        }
+      } catch {
+        // goalEngine not available yet — non-fatal
+      }
+    })(),
   ]);
 
+  try { recordCycleEvent({ phase: "content", type: "post_generated", summary: "Phase E content generation completed", entityMentions: [], relatedEntryIds: [] }); } catch {}
   console.log(`[DailyCycle] Phase E (content generation) completed in ${((Date.now() - phaseEStart) / 1000).toFixed(1)}s`);
 
   // ── Phase E+: Agentic Triad (opt-in via TRIAD_ENABLED=true) ───────────────
@@ -1424,12 +1794,69 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
     console.warn("[DailyCycle] Aspiration check failed (non-fatal):", e.message);
   }
 
+  // ── Knowledge Maintenance: decay, embedding sync, graph updates ─────────────
+  try {
+    console.log("[DailyCycle] Running knowledge decay...");
+    decayKnowledge();
+    console.log("[DailyCycle] Knowledge decay complete");
+  } catch (e: any) {
+    console.warn("[DailyCycle] Knowledge decay failed (non-fatal):", e.message);
+  }
+
+  // Re-sync embeddings after decay (non-blocking)
+  try {
+    console.log("[DailyCycle] Syncing embeddings after decay...");
+    const embedResult = await syncEmbeddings();
+    console.log(`[DailyCycle] Embedding sync: ${embedResult.synced} synced, ${embedResult.cached} cached`);
+  } catch (e: any) {
+    console.warn("[DailyCycle] Embedding sync failed (non-fatal):", e.message);
+  }
+
   // ── Flush batched KB writes before wrap-up ──────────────────────────────────
   try {
     flushKnowledge();
   } catch (e: any) {
     console.warn("[DailyCycle] Knowledge flush failed (non-fatal):", e.message);
   }
+
+  // ── 306Eval Benchmark (read-only, non-blocking) ──────────────────────────
+  let evalResult: ReturnType<typeof run306Eval> | null = null;
+  try {
+    console.log("[DailyCycle] Running 306Eval benchmark...");
+    evalResult = run306Eval();
+    console.log(`[DailyCycle] 306Eval: ${evalResult.composite}/100 (weakest: ${evalResult.weakestDimension})`);
+  } catch (e: any) {
+    console.warn("[DailyCycle] 306Eval failed (non-fatal):", e.message);
+  }
+
+  // ── Wisdom Engine — pull historical sources based on 306Eval calibration ──
+  if (evalResult) {
+    try {
+      const { pullWisdom } = await import("./wisdomEngine.js");
+      const wisdomResult = await pullWisdom(evalResult);
+      console.log(`[DailyCycle] Wisdom Engine: ingested ${wisdomResult.entriesIngested} entries for ${wisdomResult.triggeredBy}`);
+    } catch (err: any) {
+      console.warn("[DailyCycle] Wisdom Engine failed (non-fatal):", err.message);
+    }
+  }
+
+  // ── Autonomous Goal Engine — self-improvement loop ──────────────────────
+  if (evalResult) {
+    try {
+      const { runGoalEngine } = await import("./goalEngine.js");
+      const goalResult = await runGoalEngine(evalResult, GROK_API_KEY ?? "");
+      console.log(`[DailyCycle] Goal Engine: ${goalResult.goalsGenerated} generated, ${goalResult.goalsResolved} resolved, ${goalResult.milestonesAutoCompleted} milestones completed`);
+      if (goalResult.brainEvolutionEvents.length > 0) {
+        console.log(`[DailyCycle] Brain evolution: ${goalResult.brainEvolutionEvents.join("; ")}`);
+      }
+    } catch (err: any) {
+      console.warn("[DailyCycle] Goal Engine failed (non-fatal):", err.message);
+    }
+  }
+
+  // ── End cycle context accumulator (before wrap-up) ──────────────────────
+  let cycleSummary: ReturnType<typeof endCycleContext> | null = null;
+  try { cycleSummary = endCycleContext(); } catch (e: any) { console.warn("[DailyCycle] Cycle context end failed (non-fatal):", e.message); }
 
   // ── Phase F: Sequential wrap-up ────────────────────────────────────────────
 
