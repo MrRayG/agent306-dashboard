@@ -2,13 +2,12 @@
  * -----------------------------------------------------------------
  *  TWEET PROMPT BUILDER -- Voice-First Generation
  *
- *  PHILOSOPHY: Agent 306's personality is her product.
- *  Her soul and voice (voice.ts) define WHO she is.
- *  This file just tells her WHAT show she's on.
+ *  NOTE: No longer used for scheduled X posts. The X scheduler now
+ *  operates in engine-only mode — all content comes from dedicated
+ *  engines (Signal Brief, Academy, News Dispatch, etc.).
  *
- *  The old approach drowned her in instructions — char counts,
- *  structure rules, format mandates. She sounded like a bot
- *  following a script. Now: soul + show tag + go.
+ *  Still used by breakthroughDetector.ts for rewriting breakthrough
+ *  detections into Agent 306's voice.
  * -----------------------------------------------------------------
  */
 
