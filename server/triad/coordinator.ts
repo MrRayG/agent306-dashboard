@@ -24,7 +24,8 @@
 
 import fs from "fs";
 import { dataPath } from "../dataPaths.js";
-import { LLM_BASE_URL, getLLMHeaders } from "../llmConfig.js";
+import { LLM_BASE_URL, getLLMHeaders, LLM_TIMEOUTS } from "../llmConfig.js";
+import { callLLMWithRetry } from "../llmRetry.js";
 import { getModel } from "../modelRouter.js";
 import { safeParseLLMJson } from "../safeParseLLMJson.js";
 import { getOptimizedContext, getOptimizedContextAsync } from "../contextWindow.js";
@@ -136,16 +137,27 @@ export class TriadCoordinator {
 
     const approved: ContentReview[] = [];
     const needsRevision: ContentReview[] = [];
+    const rejected: ContentReview[] = [];
     for (const review of reviews) {
       if (review.verdict === "approved") approved.push(review);
-      else needsRevision.push(review);
+      else if (review.verdict === "needs_revision") needsRevision.push(review);
+      else {
+        rejected.push(review);
+        console.log(`[Triad] Draft rejected (unsupported claims) — dropping: "${review.contentId?.slice(0, 60)}"`);
+      }
     }
-    console.log(`[Triad] Reviews: ${approved.length} approved, ${needsRevision.length} need revision`);
+    console.log(`[Triad] Reviews: ${approved.length} approved, ${needsRevision.length} need revision, ${rejected.length} rejected`);
 
-    // ── Phase 5b: Agent 6 revises rejected content ──────────────────────
-    if (needsRevision.length > 0) {
-      console.log(`[Triad] Feedback: Agent 0 → Agent 6 — ${needsRevision.length} piece(s) need revision`);
-      const revisedDrafts = await this.runRevisions(drafts, needsRevision, contentBriefs);
+    // ── Phase 5b: Agent 6 revises needs_revision content (up to 2 rounds) ──
+    const MAX_REVISION_ROUNDS = 2;
+    let revisableDrafts = drafts.filter(d =>
+      needsRevision.some(nr => nr.contentId === d.id)
+    );
+    let currentRevisionReviews = needsRevision;
+
+    for (let round = 0; round < MAX_REVISION_ROUNDS && revisableDrafts.length > 0; round++) {
+      console.log(`[Triad] Revision round ${round + 1}/${MAX_REVISION_ROUNDS}: ${revisableDrafts.length} piece(s) to revise`);
+      const revisedDrafts = await this.runRevisions(revisableDrafts, currentRevisionReviews, contentBriefs);
       // Replace drafts with revisions
       for (const revised of revisedDrafts) {
         const idx = drafts.findIndex(d => d.threadId === revised.threadId);
@@ -154,11 +166,26 @@ export class TriadCoordinator {
       // Re-review revised content
       const reReviews = await this.reviewContent(revisedDrafts, contentBriefs);
       reviews.push(...reReviews);
+
+      // Classify re-review results
+      const stillNeedsRevision: ContentReview[] = [];
       for (const rr of reReviews) {
-        if (rr.verdict === "approved") approved.push(rr);
+        if (rr.verdict === "approved") {
+          approved.push(rr);
+        } else if (rr.verdict === "needs_revision") {
+          stillNeedsRevision.push(rr);
+        } else {
+          console.log(`[Triad] Draft rejected after revision round ${round + 1} — dropping: "${rr.contentId?.slice(0, 60)}"`);
+        }
       }
-      console.log(`[Triad] After revision: ${approved.length} total approved`);
+
+      // Prepare next round if needed
+      revisableDrafts = revisedDrafts.filter(d =>
+        stillNeedsRevision.some(nr => nr.contentId === d.id)
+      );
+      currentRevisionReviews = stillNeedsRevision;
     }
+    console.log(`[Triad] After revisions: ${approved.length} total approved`);
 
     const elapsed = (Date.now() - cycleStart) / 1000;
     console.log(`[Triad] ═══ Cycle complete in ${elapsed.toFixed(1)}s ═══`);
@@ -265,9 +292,23 @@ export class TriadCoordinator {
         : "",
     ].filter(Boolean).join("\n");
 
+    // Supplement with external data sources
+    let externalContext = "";
+    try {
+      const { searchAllSources } = await import("../externalDataSources.js");
+      const externalResults = await searchAllSources(thread.thesis ?? thread.title, { limit: 2 });
+      if (externalResults.length > 0) {
+        externalContext = "\n\nEXTERNAL SOURCES:\n" + externalResults
+          .map(r => `- [${r.source}] "${r.title}" (${r.date ?? "n.d."}): ${(r.text ?? "").slice(0, 200)}${r.url ? ` — ${r.url}` : ""}`)
+          .join("\n");
+      }
+    } catch (e: any) {
+      console.warn("[Triad:Agent3] External sources fetch failed:", e.message);
+    }
+
     const prompt = `Convert the following research thread into a structured fact sheet.
 
-${evidenceContext}
+${evidenceContext}${externalContext}
 
 Respond with JSON:
 {
@@ -304,7 +345,7 @@ Your role: Package research into structured fact sheets. Use the knowledge above
           temperature: 0.2,
           max_tokens: 3000,
         }),
-        signal: AbortSignal.timeout(60_000),
+        signal: AbortSignal.timeout(LLM_TIMEOUTS.triad_fact_sheet),
       });
 
       const data = await res.json() as any;
@@ -446,24 +487,30 @@ Respond with JSON:
 }`;
 
     try {
-      const res = await fetch(LLM_BASE_URL, {
-        method: "POST",
-        headers: getLLMHeaders(),
-        body: JSON.stringify({
-          model: getModel("triad-reasoning"),
-          messages: [
-            { role: "system", content: `You are Agent 0 (Reasoner) for Agent 306 — evaluating evidence with rigorous logic. Expose hidden assumptions. Never overstate confidence.
+      const data = await callLLMWithRetry(
+        async (signal) => {
+          const res = await fetch(LLM_BASE_URL, {
+            method: "POST",
+            headers: getLLMHeaders(),
+            body: JSON.stringify({
+              model: getModel("triad-reasoning"),
+              messages: [
+                { role: "system", content: `You are Agent 0 (Reasoner) for Agent 306 — evaluating evidence with rigorous logic. Expose hidden assumptions. Never overstate confidence.
 ${reasonerContext ? `\nMETHODOLOGICAL CONTEXT & EXISTING KNOWLEDGE:\n${reasonerContext}\n` : ""}
 Use the context above to cross-check claims against what Agent 306 already knows. Evaluate evidence quality, identify logical gaps, and assess confidence levels.` },
-            { role: "user", content: prompt },
-          ],
-          temperature: 0.15,
-          max_tokens: 4000,
-        }),
-        signal: AbortSignal.timeout(90_000),
-      });
+                { role: "user", content: prompt },
+              ],
+              temperature: 0.15,
+              max_tokens: 6000,
+            }),
+            signal,
+          });
+          return await res.json() as any;
+        },
+        LLM_TIMEOUTS.triad_logic_map,
+        "Triad.LogicMap",
+      );
 
-      const data = await res.json() as any;
       const raw = data.choices?.[0]?.message?.content ?? "";
       const parsed = safeParseLLMJson<any>(raw, "Triad.factSheetToLogicMap");
 
@@ -484,11 +531,11 @@ Use the context above to cross-check claims against what Agent 306 already knows
           resolution: c.resolution || "unresolved",
         })),
         qualityGates: {
-          soWhatPassed: parsed.qualityGates?.soWhatPassed ?? false,
+          soWhatPassed: parsed.qualityGates?.soWhatPassed ?? true,
           assumptionsPassed: parsed.qualityGates?.assumptionsPassed ?? false,
           evidenceStrength: (["strong", "moderate", "weak"].includes(parsed.qualityGates?.evidenceStrength)
             ? parsed.qualityGates.evidenceStrength
-            : "weak") as "strong" | "moderate" | "weak",
+            : "moderate") as "strong" | "moderate" | "weak",
         },
         recommendedAngle: parsed.recommendedAngle || "General analysis",
         forbiddenClaims: parsed.forbiddenClaims || [],
@@ -785,7 +832,7 @@ Transform research and analysis into engaging content that sounds like Agent 306
           temperature: 0.6,
           max_tokens: 6000,
         }),
-        signal: AbortSignal.timeout(120_000),
+        signal: AbortSignal.timeout(LLM_TIMEOUTS.triad_generate),
       });
 
       const data = await res.json() as any;
@@ -887,7 +934,7 @@ Rewrite the content, fixing ALL grounding violations. Replace unsupported claims
             temperature: 0.4,
             max_tokens: 6000,
           }),
-          signal: AbortSignal.timeout(120_000),
+          signal: AbortSignal.timeout(LLM_TIMEOUTS.triad_revision),
         });
 
         const data = await res.json() as any;

@@ -17,6 +17,7 @@ import { getModel } from "./modelRouter.js";
 import { researchWithPerplexity, researchWithSemanticScholar, researchMultiSource } from "./researchEngine.js";
 import { addKnowledge } from "./memoryEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import { searchAllSources } from "./externalDataSources.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -426,6 +427,27 @@ export async function processEvidenceQueue(): Promise<{
             addedToKB: false,
           };
         }
+      }
+
+      // Supplement with external data sources (academic, news, regulatory)
+      try {
+        const externalResults = await searchAllSources(request.query, { limit: 2 });
+        if (externalResults.length > 0) {
+          const externalContent = externalResults
+            .map(r => `[${r.source}] ${r.title}: ${r.text?.slice(0, 200)}`)
+            .join("\n");
+          const externalCitations = externalResults
+            .map(r => r.url)
+            .filter((u): u is string => !!u);
+          bestResult = {
+            content: [bestResult.content, externalContent].filter(Boolean).join("\n\n--- External Sources ---\n"),
+            citations: [...bestResult.citations, ...externalCitations],
+            source: bestResult.source,
+            addedToKB: false,
+          };
+        }
+      } catch (e: any) {
+        console.warn(`[EvidenceDispatcher] External sources supplementation failed:`, e.message);
       }
 
       if (bestResult.content.length > 0) {

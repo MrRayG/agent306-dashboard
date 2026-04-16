@@ -20,7 +20,7 @@ import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { addKnowledge } from "./memoryEngine.js";
 import { getModel } from "./modelRouter.js";
-import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders, LLM_TIMEOUTS } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 const GROK_CHAT_API    = LLM_BASE_URL;
@@ -393,6 +393,14 @@ export function findSimilarHypothesis(claim: string, hypotheses: Hypothesis[]): 
 export function addHypothesis(input: Omit<Hypothesis, "id" | "formedAt" | "status">): Hypothesis {
   const lab = loadLab();
 
+  // Global queue cap: reject when queue is too large
+  const MAX_HYPOTHESIS_QUEUE = parseInt(process.env.MAX_HYPOTHESIS_QUEUE ?? "250", 10);
+  const activeCount = lab.hypotheses.filter(h => h.status === 'forming' || h.status === 'testing').length;
+  if (activeCount >= MAX_HYPOTHESIS_QUEUE) {
+    console.log(`[ResearchLab] Queue full (${activeCount}/${MAX_HYPOTHESIS_QUEUE}) — rejecting new hypothesis`);
+    return null as any;
+  }
+
   // Similarity gate: skip if a similar active hypothesis already exists
   try {
     const active = lab.hypotheses.filter(h => h.status === 'forming' || h.status === 'testing');
@@ -671,7 +679,7 @@ async function callGrok(
         max_tokens: opts?.maxTokens ?? 1500,
         temperature: opts?.temperature ?? 0.3,
       }),
-      signal: AbortSignal.timeout(40000),
+      signal: AbortSignal.timeout(LLM_TIMEOUTS.hypothesis_evaluation),
     });
     if (!res.ok) return null;
     const data = await res.json() as any;
