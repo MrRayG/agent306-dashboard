@@ -93,6 +93,8 @@ import { enforceShowTag } from "./contentTypes.js";
 import { getCompetencyProfile } from "./competencyFramework.js";
 import { buildVoiceBlock } from "./voice.js";
 import { getEvolutionContext } from "./soulEvolution.js";
+import { generateBreakthroughContent } from "./breakthroughDetector.js";
+import { queueFarcasterPost, getFarcasterPostQueue, postFarcasterQueueItem, clearFarcasterPostQueue, startFarcasterPostScheduler } from "./farcasterQueue.js";
 // breakingNewsDetector removed — not needed for now
 
 // On-chain API removed
@@ -4481,12 +4483,14 @@ needsHelp: true only when you genuinely need his direction or information`,
 
   // Engine definitions for status + generate
   const ENGINE_DEFS = [
-    { id: "signal",  name: "Signal Brief",   schedule: "Mon/Wed/Fri 12pm ET", emoji: "📡", days: [1, 3, 5], hour: 12 },
-    { id: "academy", name: "Academy",         schedule: "Tue/Thu/Sat 10am ET", emoji: "🎓", days: [2, 4, 6], hour: 10 },
-    { id: "news",    name: "News Dispatch",   schedule: "Daily 8am ET",        emoji: "📰", days: [0,1,2,3,4,5,6], hour: 8 },
-    { id: "article", name: "Deep Read",       schedule: "Monday 5pm ET",       emoji: "📝", days: [1], hour: 17 },
-    { id: "blog",    name: "Blog Post",       schedule: "Via Daily Cycle",     emoji: "✍️",  days: [], hour: 0 },
-    { id: "podcast", name: "Podcast",         schedule: "Research-driven",     emoji: "🎙️", days: [], hour: 0 },
+    { id: "signal",       name: "Signal Brief",        schedule: "Mon/Wed/Fri 12pm ET", emoji: "📡", days: [1, 3, 5], hour: 12 },
+    { id: "academy",      name: "Academy",              schedule: "Tue/Thu/Sat 10am ET", emoji: "🎓", days: [2, 4, 6], hour: 10 },
+    { id: "news",         name: "News Dispatch",        schedule: "Daily 8am ET",        emoji: "📰", days: [0,1,2,3,4,5,6], hour: 8 },
+    { id: "research",     name: "Research Brief",       schedule: "On completion",       emoji: "🔬", days: [], hour: 0 },
+    { id: "podcast",      name: "Podcast",              schedule: "Research-driven",     emoji: "🎙️", days: [], hour: 0 },
+    { id: "article",      name: "Deep Read",            schedule: "Monday 5pm ET",       emoji: "📝", days: [1], hour: 17 },
+    { id: "breakthrough", name: "Breakthrough Detector", schedule: "On detection",       emoji: "💡", days: [], hour: 0 },
+    { id: "blog",         name: "Blog Post",            schedule: "Via Daily Cycle",     emoji: "✍️",  days: [], hour: 0 },
   ] as const;
 
   function computeNextRun(days: readonly number[], hour: number): string | null {
@@ -4523,12 +4527,14 @@ needsHelp: true only when you genuinely need his direction or information`,
       const blogState = getBlogState();
 
       const lastRuns: Record<string, string | null> = {
-        signal:  signalState.lastPostedAt ?? null,
-        academy: academyState.lastPostedAt ?? null,
-        news:    null, // news dispatch doesn't expose a persistent lastRun; use coordinator
-        article: articleState.lastPostedAt ?? null,
-        blog:    blogState.stats?.lastPublishedAt ?? blogState.posts?.[0]?.createdAt ?? null,
-        podcast: null,
+        signal:       signalState.lastPostedAt ?? null,
+        academy:      academyState.lastPostedAt ?? null,
+        news:         null, // news dispatch doesn't expose a persistent lastRun; use coordinator
+        research:     null,
+        podcast:      null,
+        article:      articleState.lastPostedAt ?? null,
+        breakthrough: null,
+        blog:         blogState.stats?.lastPublishedAt ?? blogState.posts?.[0]?.createdAt ?? null,
       };
 
       // Try to get news last run from coordinator
@@ -4558,7 +4564,7 @@ needsHelp: true only when you genuinely need his direction or information`,
   // Generates content and queues to X + Farcaster. Does NOT auto-post.
   app.post("/api/engines/:engineId/generate", requireDashAuth, async (req, res) => {
     const { engineId } = req.params;
-    const validEngines = ["signal", "academy", "news", "article", "blog"];
+    const validEngines = ["signal", "academy", "news", "research", "podcast", "article", "breakthrough", "blog"];
 
     if (!validEngines.includes(engineId)) {
       return res.status(400).json({
@@ -4604,12 +4610,38 @@ needsHelp: true only when you genuinely need his direction or information`,
           break;
         }
 
+        case "research": {
+          const { generateResearchContent } = await import("./researchEngine.js");
+          const result = await generateResearchContent();
+          if (!result) throw new Error("No publishable research found — run research pipeline first");
+          content = result;
+          type = "research";
+          break;
+        }
+
+        case "podcast": {
+          const { generatePodcastContent } = await import("./podcastEngine.js");
+          const result = await generatePodcastContent();
+          if (!result) throw new Error("Podcast generation failed — no research threads ready or no scripted episodes");
+          content = result;
+          type = "podcast";
+          break;
+        }
+
         case "article": {
           const apiKey = LLM_API_KEY;
           if (!apiKey) throw new Error("LLM API key not configured");
           const preview = await previewDeepRead(apiKey);
           content = preview.teaser;
           type = "article";
+          break;
+        }
+
+        case "breakthrough": {
+          const result = generateBreakthroughContent();
+          if (!result) throw new Error("No breakthroughs detected — run analysis first");
+          content = result;
+          type = "breakthrough";
           break;
         }
 
@@ -4639,18 +4671,15 @@ needsHelp: true only when you genuinely need his direction or information`,
       queueXPost(trimmed, xPostType, 3); // priority 3 = high (on-demand)
       console.log(`[GenerateNow] Queued to X: ${engineId} (${trimmed.length} chars)`);
 
-      // Queue to Farcaster (cast directly — Farcaster has no queue system)
+      // Queue to Farcaster
       let farcasterQueued = false;
       try {
-        if (isFarcasterEnabled()) {
-          const channel = trimmed.match(/\bai\b|agent|llm|model/i) ? "ai" : undefined;
-          // Don't post immediately — store as a "pending cast" for the user to review
-          // Since Farcaster doesn't have a queue, we'll note it was intended for FC
-          farcasterQueued = true;
-          console.log(`[GenerateNow] Farcaster: content queued (will post when X queue drains)`);
-        }
+        const channel = trimmed.match(/\bai\b|agent|llm|model/i) ? "ai" : undefined;
+        queueFarcasterPost(trimmed, type as any, 3, channel);
+        farcasterQueued = true;
+        console.log(`[GenerateNow] Queued to Farcaster: ${engineId} (${trimmed.length} chars)`);
       } catch (fcErr: any) {
-        console.warn(`[GenerateNow] Farcaster queue note failed:`, fcErr.message);
+        console.warn(`[GenerateNow] Farcaster queue failed:`, fcErr.message);
       }
 
       const queuedTo = ["x"];
@@ -4670,6 +4699,42 @@ needsHelp: true only when you genuinely need his direction or information`,
         success: false,
         error: e.message || "Generation failed",
       });
+    }
+  });
+
+  // ── Farcaster Queue API ───────────────────────────────────────────────────
+
+  // GET /api/farcaster/queue — Farcaster post queue state
+  app.get("/api/farcaster/queue", requireDashAuth, (_req, res) => {
+    try {
+      const { queue, pending, postedToday } = getFarcasterPostQueue();
+      res.json({ queue, pending, postedToday });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/farcaster/queue/:postId/post — Post a specific queued item
+  app.post("/api/farcaster/queue/:postId/post", requireDashAuth, async (req, res) => {
+    try {
+      const result = await postFarcasterQueueItem(req.params.postId);
+      if (result) {
+        res.json({ success: true, castUrl: result.castUrl });
+      } else {
+        res.status(404).json({ success: false, error: "Post not found, already posted, or stale" });
+      }
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST /api/farcaster/queue/clear — Clear all pending Farcaster posts
+  app.post("/api/farcaster/queue/clear", requireDashAuth, (_req, res) => {
+    try {
+      const cleared = clearFarcasterPostQueue();
+      res.json({ success: true, cleared });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
     }
   });
 }

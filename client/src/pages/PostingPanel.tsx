@@ -77,6 +77,7 @@ function EngineCards() {
         });
         // Refresh queues
         queryClient.invalidateQueries({ queryKey: ["/api/x/queue"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/farcaster/queue"] });
         queryClient.invalidateQueries({ queryKey: ["/api/engines/status"] });
       } else {
         setLastResult(prev => ({ ...prev, [engineId]: { success: false, error: data.error } }));
@@ -95,9 +96,11 @@ function EngineCards() {
     signal: "#fbbf24",
     academy: "#60a5fa",
     news: "#4ade80",
-    article: "#2dd4bf",
-    blog: "#a78bfa",
+    research: "#818cf8",
     podcast: "#f97316",
+    article: "#2dd4bf",
+    breakthrough: "#ef4444",
+    blog: "#a78bfa",
   };
 
   if (isLoading) {
@@ -114,7 +117,7 @@ function EngineCards() {
         const color = colorMap[eng.id] ?? "#efefef";
         const isGenerating = generating === eng.id;
         const result = lastResult[eng.id];
-        const canGenerate = ["signal", "academy", "news", "article", "blog"].includes(eng.id);
+        const canGenerate = ["signal", "academy", "news", "research", "podcast", "article", "breakthrough", "blog"].includes(eng.id);
 
         return (
           <div key={eng.id} style={{
@@ -241,18 +244,22 @@ function QueuePanel({ title, platform, color }: { title: string; platform: "x" |
   const queryClient = useQueryClient();
   const [posting, setPosting] = useState<string | null>(null);
 
+  const queueEndpoint = platform === "x" ? "/api/x/queue" : "/api/farcaster/queue";
+
   const { data: queueData, isLoading } = useQuery<any>({
-    queryKey: ["/api/x/queue"],
+    queryKey: [queueEndpoint],
     refetchInterval: 15_000,
   });
 
   const { data: autoPostState } = useQuery<any>({
     queryKey: ["/api/x/auto-post"],
     refetchInterval: 30_000,
+    enabled: platform === "x",
   });
 
-  const queue: QueuedPost[] = queueData?.queue ?? [];
-  const pending = queue.filter(p => !p.posted && !p.skipped);
+  const pending: QueuedPost[] = platform === "farcaster"
+    ? (queueData?.pending ?? [])
+    : (queueData?.queue ?? []).filter((p: QueuedPost) => !p.posted && !p.skipped);
 
   async function handlePostNow(postId: string, content: string) {
     setPosting(postId);
@@ -261,10 +268,10 @@ function QueuePanel({ title, platform, color }: { title: string; platform: "x" |
         await apiRequest("POST", "/api/x/post", { text: content });
         toast({ title: "Posted to X", description: "Content posted successfully" });
       } else {
-        await apiRequest("POST", "/api/farcaster/test-cast", { text: content.slice(0, 2500) });
+        await apiRequest("POST", `/api/farcaster/queue/${postId}/post`, {});
         toast({ title: "Posted to Farcaster", description: "Cast sent successfully" });
       }
-      queryClient.invalidateQueries({ queryKey: ["/api/x/queue"] });
+      queryClient.invalidateQueries({ queryKey: [queueEndpoint] });
     } catch (e: any) {
       toast({ title: "Post failed", description: e.message, variant: "destructive" });
     }
