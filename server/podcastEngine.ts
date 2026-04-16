@@ -713,19 +713,15 @@ export function publishEpisode(episodeId: string, publishedTo: string[]): boolea
     queuePodcastPromo(promoText.slice(0, 2500), episodeId);
   }
 
-  // Auto-post to Farcaster if enabled and social post content exists (fire-and-forget)
+  // Queue for Farcaster (parallel to X queue)
   if (episode.metadata?.socialPost) {
     (async () => {
       try {
-        const { postCast, isFarcasterEnabled } = await import("./farcasterEngine.js");
-        if (isFarcasterEnabled()) {
-          const cast = await postCast({ text: episode.metadata!.socialPost.slice(0, 2500), channel: "ai" });
-          if (cast) {
-            console.log(`[Podcast] Auto-posted to Farcaster: "${episode.title}"`);
-          }
-        }
+        const { queueFarcasterPost } = await import("./farcasterQueue.js");
+        queueFarcasterPost(episode.metadata!.socialPost.slice(0, 2500), "podcast", 1, "ai");
+        console.log(`[Podcast] Farcaster cast queued: "${episode.title}"`);
       } catch (e: any) {
-        console.warn("[Podcast] Farcaster auto-post failed:", e.message);
+        console.warn("[Podcast] Farcaster queue failed:", e.message);
       }
     })();
   }

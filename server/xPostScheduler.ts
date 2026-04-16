@@ -28,6 +28,34 @@ import { getEmbedding } from "./embeddingEngine.js";
 const X_QUEUE_MAX_AGE_HOURS = parseInt(process.env.X_QUEUE_MAX_AGE_HOURS ?? "4", 10);
 const X_QUEUE_MAX_AGE_MS = X_QUEUE_MAX_AGE_HOURS * 60 * 60 * 1000;
 
+// -- Auto-post toggle (persisted to disk) ------------------------------
+const X_AUTO_POST_FILE = dataPath("x_auto_post.json");
+
+function loadXAutoPost(): boolean {
+  try {
+    if (fs.existsSync(X_AUTO_POST_FILE)) {
+      const data = JSON.parse(fs.readFileSync(X_AUTO_POST_FILE, "utf8"));
+      return data.enabled ?? true;
+    }
+  } catch {}
+  return true; // default: auto-post enabled
+}
+
+function saveXAutoPost(enabled: boolean): void {
+  try {
+    fs.writeFileSync(X_AUTO_POST_FILE, JSON.stringify({ enabled, updatedAt: new Date().toISOString() }, null, 2));
+  } catch {}
+}
+
+export function isXAutoPostEnabled(): boolean {
+  return loadXAutoPost();
+}
+
+export function setXAutoPostEnabled(enabled: boolean): void {
+  saveXAutoPost(enabled);
+  console.log(`[XScheduler] Auto-post ${enabled ? "ENABLED" : "DISABLED"}`);
+}
+
 // -- Types --------------------------------------------------------
 
 export type XPostType =
@@ -475,6 +503,11 @@ export function qualityCheck(tweet: string, contentType: string): { pass: boolea
  * content from dedicated engines (same as Farcaster).
  */
 async function processQueue(xWrite: any): Promise<void> {
+  if (!isXAutoPostEnabled()) {
+    console.log("[XScheduler] Auto-post disabled — queue preserved");
+    return;
+  }
+
   const state = loadQueue();
   pruneOldHistory(state);
 
@@ -664,6 +697,58 @@ export function clearXPostQueue(): number {
     console.log(`[XScheduler] Queue manually cleared — ${cleared} posts archived`);
   }
   return cleared;
+}
+
+/**
+ * Post a specific queued item immediately (manual trigger from dashboard).
+ * Returns the posted item or null on failure.
+ */
+export async function postXQueueItem(postId: string, xWrite: any): Promise<QueuedPost | null> {
+  const state = loadQueue();
+  const post = state.queue.find(p => p.id === postId && !p.posted);
+  if (!post) return null;
+
+  // Freshness guard
+  if (isPostStale(post)) {
+    post.posted = true;
+    post.postedAt = new Date().toISOString();
+    post.skipped = true;
+    post.skippedReason = "stale";
+    saveQueue(state);
+    console.log(`[XScheduler] Skipped stale post on manual trigger: ${post.type}`);
+    return null;
+  }
+
+  const compliance = validateXPost(post.content);
+  if (!compliance.allowed) {
+    console.log(`[XScheduler] Manual post blocked by compliance: ${compliance.reason}`);
+    return null;
+  }
+
+  let safeContent = compliance.sanitizedContent ?? post.content;
+  safeContent = enforcePostFormat(safeContent, post.type);
+
+  try {
+    const tweetPayload: any = { text: safeContent };
+    if (post.mediaId) {
+      tweetPayload.media = { media_ids: [post.mediaId] };
+    }
+    const tweet = await xWrite.v2.tweet(tweetPayload);
+    const tweetId = tweet.data?.id;
+    if (tweetId) {
+      recordXPost(safeContent);
+      recordPostType(state, post.type);
+      post.posted = true;
+      post.postedAt = new Date().toISOString();
+      saveQueue(state);
+      console.log(`[XScheduler] Manual post: https://x.com/306Agent/status/${tweetId}`);
+      return post;
+    }
+  } catch (e: any) {
+    console.error("[XScheduler] Manual post failed:", e.message);
+  }
+
+  return null;
 }
 
 export function startXPostScheduler(xWrite: any): void {

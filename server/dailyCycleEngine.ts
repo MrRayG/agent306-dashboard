@@ -52,6 +52,7 @@ import { getAgenda } from "./research-agenda.js";
 import { analyzeDailyCycle } from "./analyzerEngine.js";
 import { getExplorationState } from "./explorationEngine.js";
 import { queueXPost } from "./xPostScheduler.js";
+import { queueFarcasterPost } from "./farcasterQueue.js";
 import { runKnowledgeConsolidation } from "./knowledgeConsolidator.js";
 import { consolidateHypotheses } from "./hypothesisConsolidator.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
@@ -1611,10 +1612,13 @@ Write a single tweet sharing the most interesting insight from this research. Re
                 tweetText = tweetText.trimEnd() + "\n\nagent306.ai";
               }
               queueXPost(tweetText, "blog");
-              console.log(`[DailyCycle] Queued voice tweet for blog: "${tweetText.slice(0, 80)}..."`);
+              queueFarcasterPost(tweetText.slice(0, 2500), "blog");
+              console.log(`[DailyCycle] Queued voice tweet for blog (X + Farcaster): "${tweetText.slice(0, 80)}..."`);
             } else {
               // Fallback: queue a basic tweet if LLM fails
-              queueXPost(`${post.title}\n\nagent306.ai`, "blog");
+              const fallbackText = `${post.title}\n\nagent306.ai`;
+              queueXPost(fallbackText, "blog");
+              queueFarcasterPost(fallbackText.slice(0, 2500), "blog");
             }
           }
         }
