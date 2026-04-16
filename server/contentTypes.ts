@@ -30,8 +30,8 @@ export const CONTENT_TYPES: Record<string, ContentType> = {
   },
   research: {
     id: 'research',
-    showTag: '[306 RESEARCH]',
-    name: '306 RESEARCH',
+    showTag: '[306 ACADEMY]',
+    name: '306 ACADEMY',
     description: 'Deep Dive Analysis — technical breakdowns of papers, architectures, benchmarks. High rigor.',
     format: 'Bullet points: Methodology, Key Findings, Limitations. Citations where possible.',
     schedule: 'Daily 12pm ET',

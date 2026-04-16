@@ -108,7 +108,7 @@ export default function WeeklyEngines() {
       </div>
 
       {/* ── THE DEEP READ (Article Engine) ── */}
-      <Section title="[306 RESEARCH] THE DEEP READ — WEEKLY X ARTICLE" accent="#2dd4bf">
+      <Section title="[306 ACADEMY] THE DEEP READ — WEEKLY X ARTICLE" accent="#2dd4bf">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "16px", marginBottom: "20px" }}>
           <div>
             <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>AUTO-POSTS</div>

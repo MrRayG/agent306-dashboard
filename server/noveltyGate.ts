@@ -4,7 +4,7 @@
  *
  *  Checks Agent 306's KB + knowledge graph + entity index before
  *  allowing [306 NEWS] framing. Prevents old news from being
- *  presented as breaking — reframes to [306 SIGNAL] or [306 RESEARCH]
+ *  presented as breaking — reframes to [306 SIGNAL] or [306 ACADEMY]
  *  when the topic already exists in the knowledge base.
  * -----------------------------------------------------------------
  */

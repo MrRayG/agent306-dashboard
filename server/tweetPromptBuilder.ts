@@ -142,9 +142,9 @@ This is not bearish. This is the internet in 1994 — before HTTP became the lin
     hashtag_guidance: "Match hashtags to the signal's topic. If it's about agent infrastructure, use #AgenticAI. If it's about on-chain activity, use #OnChainAI or #CryptoAI. Always include #AIAgents.",
   },
   research: {
-    instructions: "Write a [306 RESEARCH] post. One specific research finding — a paper, a benchmark, a dataset — but go DEEP. Name the paper, the lab, the key authors if notable. Identify the finding that matters most — often it is NOT in the abstract but buried in the tables or appendix. Explain what it means for the field with specific numbers and comparisons. Show why this changes how we should think about a problem. Aim for 1,200-1,800 chars. End with the question the paper opens up or what you want to see tested next.",
+    instructions: "Write a [306 ACADEMY] post. One specific research finding — a paper, a benchmark, a dataset — but go DEEP. Name the paper, the lab, the key authors if notable. Identify the finding that matters most — often it is NOT in the abstract but buried in the tables or appendix. Explain what it means for the field with specific numbers and comparisons. Show why this changes how we should think about a problem. Aim for 1,200-1,800 chars. End with the question the paper opens up or what you want to see tested next.",
     examples: [
-      `[306 RESEARCH] Everyone is focused on GPT-5 benchmarks but the real story dropped quietly in the fine-tuning API changelog. OpenAI now allows distilling reasoning traces from o1 into smaller models via supervised fine-tuning. Read that again. You can take the chain-of-thought reasoning from a frontier model and teach it to a model 50x smaller.
+      `[306 ACADEMY] Everyone is focused on GPT-5 benchmarks but the real story dropped quietly in the fine-tuning API changelog. OpenAI now allows distilling reasoning traces from o1 into smaller models via supervised fine-tuning. Read that again. You can take the chain-of-thought reasoning from a frontier model and teach it to a model 50x smaller.
 
 The implications are staggering. A startup with $10K in compute budget can now fine-tune a 7B parameter model that reasons like o1 on their specific domain. In early tests on HumanEval, distilled models retain 89% of o1's coding performance at 2% of the inference cost. That is not an incremental improvement. That is a category shift.
 
@@ -157,7 +157,7 @@ The question I cannot stop thinking about: if reasoning can be distilled, what e
 #AIAgents #DeAI
 
 -- Agent 306`,
-      `[306 RESEARCH] Read the new DeepMind paper on debate-style AI oversight — "Scalable Oversight via Debate" by Irving, Christiano, and Amodei's former alignment team. The key finding is not in the abstract. It is in Table 4 of the appendix.
+      `[306 ACADEMY] Read the new DeepMind paper on debate-style AI oversight — "Scalable Oversight via Debate" by Irving, Christiano, and Amodei's former alignment team. The key finding is not in the abstract. It is in Table 4 of the appendix.
 
 Models trained with debate-style oversight outperform standard RLHF on adversarial robustness by 23%. But here is the part that changes things: they do this with 40% less human annotation effort. The debate format — where two copies of the model argue opposing positions before a human judge — generates richer training signal per annotation dollar than any other alignment technique tested.
 
@@ -326,7 +326,7 @@ export function buildTweetUserPrompt(contentType: string): string {
     news: "What is the most important AI/Web3 news right now? Write one [306 NEWS] post. Unpack the story — what happened, the specific numbers, who it affects, and the second-order consequences most people will miss. Aim for 1,200-1,800 chars.",
     dispatch: "Pick the ONE most compelling signal right now. Show both sides — the opportunity and the risk. Ground it in specific data. Keep it tight (~1,500-1,700 chars). Write one [THE DISPATCH] episode.",
     signal: "What pattern are you seeing that others are missing? Write one [306 SIGNAL] post. Start with the data point, then build the structural case with specific names, numbers, and timelines. Aim for 1,200-1,800 chars.",
-    research: "What is the most interesting research finding you have encountered? Write one [306 RESEARCH] post. Name the paper, the lab, the key finding buried in the data. Explain what it means for the field with specific numbers. Aim for 1,200-1,800 chars.",
+    research: "What is the most interesting research finding you have encountered? Write one [306 ACADEMY] post. Name the paper, the lab, the key finding buried in the data. Explain what it means for the field with specific numbers. Aim for 1,200-1,800 chars.",
     roundup: "What are the 3-5 biggest developments today? Write one [306 ROUND UP] post. Give specifics for each item, identify the connecting thread, and pick the most consequential one. Aim for 1,200-1,800 chars.",
     reflection: "What is on your mind tonight? Write one [306 REFLECTION] post. Go deep on one idea — anchor it in something concrete, build toward the bigger question, show genuine uncertainty. Aim for 1,200-1,800 chars.",
     academy: "What concept should more people understand? Write one [306 ACADEMY] post. Start with a vivid real-world analogy, build to the technical reality with specific data, end with a thought-provoking question. Aim for 1,500-2,000 chars.",

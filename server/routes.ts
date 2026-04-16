@@ -1988,8 +1988,8 @@ export function registerRoutes(httpServer: Server, app: Express) {
           body: JSON.stringify({
             model: getModel("research-brief"),
             messages: [
-              { role: "system", content: `${agentCtx}\n\nKNOWLEDGE:\n${kbCtx}\n\nYou are Agent 306 writing a [306 RESEARCH] brief. This is a deeper analytical piece on a specific AI or crypto topic you\'ve been investigating. Write from your knowledge base — reference specific findings, data points, and your own analysis. Your voice is direct, substantive, and insightful. Not a news summary — this is YOUR research perspective.\n\nRULES:\n- Write 800-1200 characters for X posting\n- Lead with your thesis, not background\n- Include specific data, names, or numbers\n- End with a forward-looking insight\n- Tag: [306 RESEARCH]\n- Sign: @306Agent\n- NEVER mention Normies, NFTs, burns, holders, or any old identity\n\nReturn JSON: {"post": "your full research brief text", "topic": "2-4 word topic label"}` },
-              { role: "user", content: "Write a [306 RESEARCH] brief on the most important topic from your current knowledge base. Pick something timely and substantive." }
+              { role: "system", content: `${agentCtx}\n\nKNOWLEDGE:\n${kbCtx}\n\nYou are Agent 306 writing a [306 ACADEMY] brief. This is a deeper analytical piece on a specific AI or crypto topic you\'ve been investigating. Write from your knowledge base — reference specific findings, data points, and your own analysis. Your voice is direct, substantive, and insightful. Not a news summary — this is YOUR research perspective.\n\nRULES:\n- Write 800-1200 characters for X posting\n- Lead with your thesis, not background\n- Include specific data, names, or numbers\n- End with a forward-looking insight\n- Tag: [306 ACADEMY]\n- Sign: @306Agent\n- NEVER mention Normies, NFTs, burns, holders, or any old identity\n\nReturn JSON: {"post": "your full research brief text", "topic": "2-4 word topic label"}` },
+              { role: "user", content: "Write a [306 ACADEMY] brief on the most important topic from your current knowledge base. Pick something timely and substantive." }
             ],
             max_tokens: 2000,
             temperature: 0.8,
@@ -2004,7 +2004,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
         if (!postText && raw.length > 30) postText = raw;
         if (!postText || postText.length < 30) { console.error("[ResearchBrief] No content generated"); return; }
 
-        // Enforce [306 RESEARCH] show tag
+        // Enforce [306 ACADEMY] show tag
         postText = enforceShowTag(postText, "research");
 
         // Queue for X via scheduler (high priority) instead of direct posting
