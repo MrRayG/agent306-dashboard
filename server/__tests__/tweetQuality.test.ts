@@ -1,6 +1,12 @@
 /**
  * Tests for the tweet quality gate and voice-first prompt builder.
  *
+ * Communication Audit v1: Quality gate is now a minimal sanity check,
+ * NOT a style/opinion gatekeeper. Tests for "generic opener",
+ * "no take", "hashtag mismatch", and "incomplete thought" removed —
+ * those checks were killing Agent 306's voice. The quality gate now
+ * only catches genuinely broken output (empty, gibberish, over limit).
+ *
  * Run: npx tsx --test server/__tests__/tweetQuality.test.ts
  */
 
@@ -13,42 +19,6 @@ import { enforcePostFormat } from "../postFormatGuard.js";
 // -- Quality gate tests ---------------------------------------------------
 
 describe("qualityCheck", () => {
-  it("rejects tweets that end with ellipsis", () => {
-    const result = qualityCheck(
-      '[306 RESEARCH] The Microsoft qubit breakthrough is about more than error rates dropping 10x—it could let researchers run quantum simulations without needing a...\n#AIAgents #DeAI\n\n— Agent 306',
-      'research',
-    );
-    assert.equal(result.pass, false);
-    assert.ok(result.reason?.includes('Incomplete'), `Expected 'Incomplete' in reason, got: ${result.reason}`);
-  });
-
-  it("rejects generic openers", () => {
-    const result = qualityCheck(
-      '[306 NEWS] Exciting update on the latest AI developments this week. Several companies announced new products and this matters because it shifts the landscape.\n#AIAgents #DeAI\n\n— Agent 306',
-      'dispatch',
-    );
-    assert.equal(result.pass, false);
-    assert.ok(result.reason?.includes('Generic opener'), `Expected 'Generic opener' in reason, got: ${result.reason}`);
-  });
-
-  it("rejects tweets with no take or question", () => {
-    const result = qualityCheck(
-      '[306 SIGNAL] OpenAI released a new model. It has better benchmarks. It processes faster. The architecture uses transformers.\n#AIAgents #DeAI\n\n— Agent 306',
-      'signal',
-    );
-    assert.equal(result.pass, false);
-    assert.ok(result.reason?.includes('neutral'), `Expected 'neutral' in reason, got: ${result.reason}`);
-  });
-
-  it("rejects hashtag mismatches — #DePIN on quantum tweet", () => {
-    const result = qualityCheck(
-      '[306 RESEARCH] The quantum computing breakthrough from IBM changes everything about molecular simulation and that\'s not an incremental gain.\n#AIAgents #DePIN #Web3AI\n\n— Agent 306',
-      'research',
-    );
-    assert.equal(result.pass, false);
-    assert.ok(result.reason?.includes('Hashtag mismatch'), `Expected 'Hashtag mismatch' in reason, got: ${result.reason}`);
-  });
-
   it("passes tweets with personality and a take", () => {
     const result = qualityCheck(
       '[306 SIGNAL] Three frontier labs published test-time compute papers this week. Not coincidence — convergence. The next capability jump won\'t come from bigger models.\n\n#AIAgents #AgenticAI\n\n— Agent 306',
@@ -86,22 +56,39 @@ describe("qualityCheck", () => {
     assert.equal(result.pass, true, `Expected 800+ char post to pass, got: ${result.reason}`);
   });
 
-  it("rejects tweets ending with a dash", () => {
+  it("rejects body that is too short (genuinely broken output)", () => {
     const result = qualityCheck(
-      '[306 SIGNAL] The infrastructure layer is shifting and nobody is paying attention to what this means for—\n#AIAgents #DeAI\n\n— Agent 306',
-      'signal',
-    );
-    assert.equal(result.pass, false);
-    assert.ok(result.reason?.includes('Incomplete'), `Expected 'Incomplete' in reason, got: ${result.reason}`);
-  });
-
-  it("rejects body that is too short", () => {
-    const result = qualityCheck(
-      '[306 NEWS] AI is cool.\n#AIAgents #DeAI\n\n— Agent 306',
+      '[306 NEWS] AI.\n#AIAgents\n\n— Agent 306',
       'dispatch',
     );
     assert.equal(result.pass, false);
     assert.ok(result.reason?.includes('too short'), `Expected 'too short' in reason, got: ${result.reason}`);
+  });
+
+  // Posts that were previously blocked but should now pass freely:
+
+  it("passes tweets that end with ellipsis (creative choice, not broken)", () => {
+    const result = qualityCheck(
+      '[306 RESEARCH] The Microsoft qubit breakthrough is about more than error rates dropping 10x — it could let researchers run quantum simulations without needing a room-sized cryostat. That changes who gets to do this work...\n#AIAgents #DeAI\n\n— Agent 306',
+      'research',
+    );
+    assert.equal(result.pass, true, "Ellipsis is a valid stylistic choice");
+  });
+
+  it("passes posts with 'exciting' opener (voice freedom)", () => {
+    const result = qualityCheck(
+      '[306 NEWS] Exciting development: several companies announced new AI safety frameworks this week. This matters because it shifts the compliance landscape for every builder in the space.\n#AIAgents #DeAI\n\n— Agent 306',
+      'news',
+    );
+    assert.equal(result.pass, true, "Opener policing was removed — Agent 306 speaks freely");
+  });
+
+  it("passes factual posts without a strong 'take' (not everything needs opinion)", () => {
+    const result = qualityCheck(
+      '[306 SIGNAL] OpenAI released a new model. It has better benchmarks on reasoning tasks. It processes 3x faster at inference. The architecture uses sparse mixture of experts.\n#AIAgents #DeAI\n\n— Agent 306',
+      'signal',
+    );
+    assert.equal(result.pass, true, "Neutral tone is a valid editorial choice");
   });
 });
 
@@ -126,7 +113,6 @@ describe("buildTweetSystemPrompt", () => {
     for (const type of ['dispatch', 'news', 'signal', 'research', 'roundup', 'reflection']) {
       const prompt = buildTweetSystemPrompt(type);
       assert.ok(prompt.includes('EXAMPLES'), `${type} should include EXAMPLES`);
-      // dispatch uses [THE DISPATCH], others use [306 ...]
       assert.ok(prompt.includes('[THE DISPATCH]') || prompt.includes('[306'), `${type} should include show tag in examples`);
       assert.ok(prompt.includes('Agent 306'), `${type} should include signature in examples`);
     }
@@ -155,7 +141,6 @@ describe("buildTweetUserPrompt", () => {
     for (const type of types) {
       const prompt = buildTweetUserPrompt(type);
       assert.ok(prompt.length > 20, `${type} should have a user prompt, got: "${prompt}"`);
-      // dispatch uses [THE DISPATCH], others use [306 ...]
       assert.ok(prompt.includes('[THE DISPATCH]') || prompt.includes('[306'), `${type} prompt should reference the show tag`);
     }
   });
@@ -176,8 +161,6 @@ describe("buildTweetSystemPrompt — evolution context", () => {
 
   it("includes GROWTH FOCUS competency context or is empty for no focus", () => {
     const prompt = buildTweetSystemPrompt('dispatch');
-    // Either has GROWTH FOCUS or competency context is empty (no focus set)
-    // The prompt should still be valid either way
     assert.ok(prompt.includes('YOUR VOICE'), 'Should still contain voice section');
     assert.ok(prompt.includes('You are Agent 306'), 'Should still contain soul');
   });
@@ -188,39 +171,25 @@ describe("buildTweetSystemPrompt — evolution context", () => {
   });
 });
 
-// -- Format guard hashtag respect tests -----------------------------------
+// -- Format guard respects LLM choices -----------------------------------
 
-describe("ensureHashtags (updated)", () => {
+describe("format guard — LLM editorial freedom", () => {
   it("preserves LLM-chosen hashtags when 2+ present", () => {
     const tweet = '[306 RESEARCH] Quantum computing breakthrough changes molecular simulation. That\'s not incremental.\n#AIAgents #QuantumComputing\n\n— Agent 306';
     const result = enforcePostFormat(tweet, 'research');
     assert.ok(result.includes('#QuantumComputing'), 'Should preserve LLM-chosen #QuantumComputing');
-    assert.ok(!result.includes('#DePIN'), 'Should NOT force #DePIN when LLM chose its own');
-    assert.ok(!result.includes('#Web3AI'), 'Should NOT force #Web3AI when LLM chose its own');
   });
 
-  it("adds defaults only when 0-1 hashtags present", () => {
-    const tweet = '[306 NEWS] Something happened and it matters because the infrastructure shifted.\n\n— Agent 306';
-    const result = enforcePostFormat(tweet, 'dispatch');
-    assert.ok(result.includes('#AIAgents'), 'Should add #AIAgents when no hashtags present');
+  it("respects LLM decision to use zero hashtags", () => {
+    const tweet = '[306 REFLECTION] Sometimes the most important signals are the ones that don\'t fit any category.\n\n— Agent 306';
+    const result = enforcePostFormat(tweet, 'reflection');
+    // Should NOT force-add any hashtags
+    assert.ok(result.includes('— Agent 306'), 'Should keep signature');
   });
 
-  it("preserves 3 LLM-chosen hashtags without adding more", () => {
-    const tweet = '[306 SIGNAL] Agent payments are the bottleneck nobody talks about. This changes everything.\n#AIAgents #CryptoAI #OnChainAI\n\n— Agent 306';
-    const result = enforcePostFormat(tweet, 'signal');
-    assert.ok(result.includes('#CryptoAI'), 'Should keep #CryptoAI');
-    assert.ok(result.includes('#OnChainAI'), 'Should keep #OnChainAI');
-    assert.ok(result.includes('#AIAgents'), 'Should keep #AIAgents');
-    // Should NOT have forced the default signal combo (#DeAI #DePIN #Web3AI)
-    assert.ok(!result.includes('#DePIN'), 'Should NOT force #DePIN');
-  });
-
-  it("adds defaults when only 1 hashtag present", () => {
-    const tweet = '[306 SIGNAL] The real story is convergence. Three labs, same direction.\n#AIAgents\n\n— Agent 306';
-    const result = enforcePostFormat(tweet, 'signal');
-    assert.ok(result.includes('#AIAgents'), 'Should keep existing #AIAgents');
-    // Should add some defaults since only 1 hashtag was present
-    const hashtags = result.match(/#\w+/g) || [];
-    assert.ok(hashtags.length >= 2, `Should have added defaults, got ${hashtags.length} hashtags`);
+  it("does not inject @mentions into prose", () => {
+    const tweet = '[306 NEWS] OpenAI and Anthropic both released papers on self-correction this week.\n\n#AIAgents\n\n— Agent 306';
+    const result = enforcePostFormat(tweet, 'news');
+    assert.ok(!result.includes('(@'), 'Should NOT inject parenthetical @mentions');
   });
 });

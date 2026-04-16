@@ -445,31 +445,26 @@ function pickPostForSlot(slot: ContentSlot, state: SchedulerState): QueuedPost |
   return scored[0]?.post ?? null;
 }
 
-// -- Quality gate — rejects tweets that don't meet Agent 306's standards --
+// -- Quality gate — minimal sanity check (not a content gatekeeper) ----------
 
 /**
- * Quality gate — lightweight check. Only catches broken posts.
- * Agent 306 speaks freely — no opinion policing, no opener gatekeeping.
+ * Quality gate — absolute minimum sanity check.
+ * Only catches genuinely broken output (empty, gibberish, over char limit).
+ * Agent 306 speaks freely — this is NOT a style or quality filter.
  * Returns { pass: true } or { pass: false, reason: string }.
  */
 export function qualityCheck(tweet: string, contentType: string): { pass: boolean; reason?: string } {
-  // 1. Completeness: must not end with "..." or "—" (truncated thought)
-  const body = tweet.replace(/\n\n[-—–]+\s*Agent\s*306\s*$/, '').replace(/#\w+/g, '').trim();
-  if (body.endsWith('...') || body.endsWith('—')) {
-    return { pass: false, reason: 'Incomplete thought — ends with ellipsis or dash' };
-  }
-
-  // 2. Length: body should be at least 50 chars (catches empty/gibberish)
+  // 1. Length: body should be at least 30 chars (catches empty/gibberish)
   const bodyOnly = tweet
     .replace(/^\[[^\]]+\]\s*/, '')
     .replace(/\n#\w+[\s\S]*$/, '')
     .replace(/\n\n[-—–]+\s*Agent\s*306\s*$/, '')
     .trim();
-  if (bodyOnly.length < 50) {
+  if (bodyOnly.length < 30) {
     return { pass: false, reason: `Body too short (${bodyOnly.length} chars)` };
   }
 
-  // 3. Character limit
+  // 2. Character limit (X Premium Plus)
   if (tweet.length > 25000) {
     return { pass: false, reason: `Over character limit (${tweet.length} chars)` };
   }
@@ -483,18 +478,19 @@ export function qualityCheck(tweet: string, contentType: string): { pass: boolea
  * Generate a post on-demand when no matching content exists in the queue
  * for a slot's required content type. Uses the voice-first prompt builder.
  */
-// Token limits by content type — richer types get more room,
-// the format guard handles final shaping.
+// Token limits by content type — generous room for natural expression.
+// Let the LLM breathe. Tight token budgets create cramped, unnatural prose.
+// The voice prompt already guides length per content type.
 const TOKEN_LIMITS: Record<string, number> = {
-  news:       600,   // morning news — concise but complete
-  dispatch:   800,   // flagship evening dispatch — one signal, two sides (~1,500-1,700 chars)
-  signal:     800,   // analysis needs room for the "why"
-  research:   1000,  // deep dives need space
-  roundup:    1200,  // 3-5 stories need the most room
-  reflection: 600,   // evening thoughts — not artificially short
-  academy:    1000,  // teaching needs detail
+  news:       1000,  // morning news — room for context + take
+  dispatch:   1200,  // flagship evening dispatch (~1,500-1,700 chars target)
+  signal:     1000,  // analysis needs room for the "why"
+  research:   1500,  // deep dives need real space
+  roundup:    1500,  // 3-5 stories need the most room
+  reflection: 1000,  // evening thoughts deserve room to breathe
+  academy:    1200,  // teaching needs detail + examples
 };
-const DEFAULT_TOKEN_LIMIT = 600;
+const DEFAULT_TOKEN_LIMIT = 1000;
 
 async function generateOnDemandPost(type: XPostType, state: SchedulerState): Promise<QueuedPost | null> {
   const systemPrompt = buildTweetSystemPrompt(type);
@@ -592,10 +588,17 @@ async function processQueue(xWrite: any, slot?: ContentSlot): Promise<void> {
   const compliance = validateXPost(post.content);
   if (!compliance.allowed) {
     console.log(`[XScheduler] Post blocked by compliance: ${compliance.reason}`);
-    // Mark as posted to avoid retrying a blocked post forever
-    post.posted = true;
-    post.postedAt = new Date().toISOString();
-    saveQueue(state);
+    // Rate limit rejections are temporary — DON'T mark as posted.
+    // The post stays in queue for the next slot.
+    // Only kill the post for hard safety rejections (content filter).
+    if (compliance.reason?.includes('content filter')) {
+      post.posted = true;
+      post.postedAt = new Date().toISOString();
+      saveQueue(state);
+      console.log(`[XScheduler] Post permanently killed (safety violation)`);
+    } else {
+      console.log(`[XScheduler] Post preserved in queue — will retry next slot`);
+    }
     return;
   }
 

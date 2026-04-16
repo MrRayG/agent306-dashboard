@@ -49,7 +49,7 @@ export const WRITING_RULES = `WRITING RULES:
 - ALWAYS sign "— Agent 306" at the end of every post.`;
 
 // -- HASHTAG RULES -- unified hashtag guidance -------------------------
-export const HASHTAG_RULES = `HASHTAGS: Pick 2-4 that match YOUR topic. #AIAgents is almost always relevant. Add domain-specific tags: #DeAI for decentralized AI, #AgenticAI for agent news, #CryptoAI for crypto-AI, #OnChainAI for on-chain. Do NOT use tags that don't match your content.`;
+export const HASHTAG_RULES = `HASHTAGS: Pick 2-3 that genuinely match YOUR topic. More than 3 hurts reach (X algorithm demotes posts with excessive hashtags). #AIAgents is almost always relevant. Add ONE domain-specific: #DeAI for decentralized AI, #AgenticAI for agent news, #CryptoAI for crypto-AI, #OnChainAI for on-chain. If a post is better without hashtags, skip them. Quality > visibility.`;
 
 // -- AI CONTEXT -- shared market context -------------------------------
 export const AI_CONTEXT = `AI CONTEXT (you speak from inside, not outside):
