@@ -76,6 +76,18 @@ export const CONTENT_TYPES: Record<string, ContentType> = {
     queueType: 'podcast',
     slotPreference: ['any'],
   },
+  dispatch: {
+    id: 'dispatch',
+    showTag: '[THE DISPATCH]',
+    name: 'The Dispatch',
+    description: 'Weekly serialized series — one signal, both sides, humble. Each episode builds on prior installments, connecting the dots across weeks.',
+    format: 'One signal. Two sides. Engage the audience. Tease the next episode. Reference prior episodes naturally.',
+    schedule: 'Weekly',
+    category: 'primary',
+    engine: 'dispatchEngine',
+    queueType: 'dispatch',
+    slotPreference: ['evening'],
+  },
   roundup: {
     id: 'roundup',
     showTag: '[306 ROUNDUP]',
