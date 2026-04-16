@@ -87,7 +87,7 @@ import {
   seedDreams,
 } from "./dreamEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
-import { startXPostScheduler, seedIntroPost, getXPostQueue, queueXPost, seedDailyContent, getTodaysPostsSummary } from "./xPostScheduler.js";
+import { startXPostScheduler, getXPostQueue, queueXPost, getTodaysPostsSummary } from "./xPostScheduler.js";
 import { getVoiceContext } from "./voiceInstructions.js";
 import { enforceShowTag } from "./contentTypes.js";
 import { getCompetencyProfile } from "./competencyFramework.js";
@@ -614,8 +614,6 @@ setTimeout(() => {
 // Podcast promos fire immediately (event-driven)
 setTimeout(() => {
   startXPostScheduler(xWrite);
-  // Seed Agent 306's intro post (runs once, idempotent)
-  seedIntroPost().catch(e => console.error("[XScheduler] Intro seed error:", e.message));
 }, 65_000);
 
 // ── Editorial Summary Cache ─────────────────────────────────────────────────────
