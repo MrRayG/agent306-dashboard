@@ -24,6 +24,43 @@ import { enforcePostFormat } from "./postFormatGuard.js";
 import { dailyReflection } from "./soulEvolution.js";
 import { getEmbedding } from "./embeddingEngine.js";
 
+// -- X auto-post toggle -----------------------------------------------
+// Mirrors Farcaster's enable/disable pattern. When disabled, engines
+// still queue content but the scheduler skips posting.
+const X_AUTO_POST_FILE = dataPath("x_auto_post.json");
+
+function loadXAutoPost(): boolean {
+  try {
+    if (fs.existsSync(X_AUTO_POST_FILE)) {
+      const data = JSON.parse(fs.readFileSync(X_AUTO_POST_FILE, "utf8"));
+      return data.enabled !== false; // default true if file exists but field missing
+    }
+  } catch {}
+  // Default: enabled (matches existing behavior — X posts were always on)
+  return true;
+}
+
+function saveXAutoPost(enabled: boolean): void {
+  try {
+    fs.writeFileSync(X_AUTO_POST_FILE, JSON.stringify({ enabled, updatedAt: new Date().toISOString() }, null, 2));
+  } catch (e: any) {
+    console.warn("[XScheduler] Failed to save auto-post state:", e.message);
+  }
+}
+
+export function isXAutoPostEnabled(): boolean {
+  return loadXAutoPost();
+}
+
+export function setXAutoPostEnabled(enabled: boolean): void {
+  saveXAutoPost(enabled);
+  console.log(`[XScheduler] Auto-posting ${enabled ? "ENABLED" : "DISABLED"}`);
+}
+
+export function getXAutoPostState(): { enabled: boolean } {
+  return { enabled: loadXAutoPost() };
+}
+
 // -- Freshness config (env-configurable) ------------------------------
 const X_QUEUE_MAX_AGE_HOURS = parseInt(process.env.X_QUEUE_MAX_AGE_HOURS ?? "4", 10);
 const X_QUEUE_MAX_AGE_MS = X_QUEUE_MAX_AGE_HOURS * 60 * 60 * 1000;
@@ -475,6 +512,12 @@ export function qualityCheck(tweet: string, contentType: string): { pass: boolea
  * content from dedicated engines (same as Farcaster).
  */
 async function processQueue(xWrite: any): Promise<void> {
+  // Check auto-post toggle before processing
+  if (!isXAutoPostEnabled()) {
+    console.log("[XScheduler] Auto-posting disabled — queuing only");
+    return;
+  }
+
   const state = loadQueue();
   pruneOldHistory(state);
 
@@ -576,6 +619,11 @@ async function processQueue(xWrite: any): Promise<void> {
 // -- Immediate posting for podcast promos -------------------------
 
 async function processImmediateQueue(xWrite: any): Promise<void> {
+  if (!isXAutoPostEnabled()) {
+    console.log("[XScheduler] Auto-posting disabled — queuing only");
+    return;
+  }
+
   const state = loadQueue();
   const immediatePosts = state.queue
     .filter(p => !p.posted && p.type === "podcast")
