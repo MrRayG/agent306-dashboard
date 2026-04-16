@@ -9,6 +9,7 @@ import { purgeConversationalPosts } from "./blogEngine.js";
 import { purgeStaleRelationships, purgeStaleConversationMemory } from "./conversationLearningEngine.js";
 import { getResearchLab } from "./researchEngine.js";
 import { getAgenda } from "./research-agenda.js";
+import { runHypothesisQueueReset } from "./archiveHypotheses.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -129,6 +130,16 @@ app.use((req, res, next) => {
       // Purge stale Normies relationships (one-time cleanup)
       const relPurged = purgeStaleRelationships();
       if (relPurged.purged > 0) console.log(`[Startup] Purged ${relPurged.purged} stale relationships`);
+
+      // One-time hypothesis queue reset (runs at boot, flagged to run once)
+      try {
+        const didReset = runHypothesisQueueReset();
+        if (didReset) {
+          console.log("[Startup] Hypothesis queue reset completed");
+        }
+      } catch (e: any) {
+        console.warn("[Startup] Hypothesis queue reset failed (non-fatal):", e.message);
+      }
 
       // Research pipeline health check
       try {

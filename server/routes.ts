@@ -3373,6 +3373,17 @@ needsHelp: true only when you genuinely need his direction or information`,
     }
   });
 
+  // POST /api/hypotheses/reset — force-run the hypothesis queue archive/reset
+  app.post("/api/hypotheses/reset", requireDashAuth, async (_req, res) => {
+    try {
+      const { forceHypothesisQueueReset } = await import("./archiveHypotheses.js");
+      const result = forceHypothesisQueueReset();
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // GET /api/reasoning/trust-scores — view all hypothesis trust scores
   app.get("/api/reasoning/trust-scores", async (_req, res) => {
     try {

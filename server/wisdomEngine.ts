@@ -68,6 +68,44 @@ const RATE_LIMITS: Record<string, number> = {
   gutenberg: 20,
 };
 
+// ── Google Books daily budget & cache ───────────────────────────
+const GOOGLE_BOOKS_BUDGET_FILE = dataPath("google_books_daily.json");
+const GOOGLE_BOOKS_CACHE_FILE = dataPath("google_books_cache.json");
+const GOOGLE_BOOKS_DAILY_LIMIT = 1000;
+const GOOGLE_BOOKS_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+interface GoogleBooksBudget { date: string; count: number }
+interface GoogleBooksCacheEntry { results: WisdomEntry[]; cachedAt: number }
+interface GoogleBooksCache { [query: string]: GoogleBooksCacheEntry }
+
+function loadGoogleBooksBudget(): GoogleBooksBudget {
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    if (fs.existsSync(GOOGLE_BOOKS_BUDGET_FILE)) {
+      const b = JSON.parse(fs.readFileSync(GOOGLE_BOOKS_BUDGET_FILE, "utf-8")) as GoogleBooksBudget;
+      if (b.date === today) return b;
+    }
+  } catch {}
+  return { date: today, count: 0 };
+}
+
+function saveGoogleBooksBudget(b: GoogleBooksBudget): void {
+  try { fs.writeFileSync(GOOGLE_BOOKS_BUDGET_FILE, JSON.stringify(b, null, 2)); } catch {}
+}
+
+function loadGoogleBooksCache(): GoogleBooksCache {
+  try {
+    if (fs.existsSync(GOOGLE_BOOKS_CACHE_FILE)) {
+      return JSON.parse(fs.readFileSync(GOOGLE_BOOKS_CACHE_FILE, "utf-8")) as GoogleBooksCache;
+    }
+  } catch {}
+  return {};
+}
+
+function saveGoogleBooksCache(cache: GoogleBooksCache): void {
+  try { fs.writeFileSync(GOOGLE_BOOKS_CACHE_FILE, JSON.stringify(cache, null, 2)); } catch {}
+}
+
 // ── Dimension → Domain Mapping ───────────────────────────────────
 
 const DIMENSION_DOMAIN_MAP: Record<string, WisdomDomain> = {
@@ -187,11 +225,31 @@ async function queryGoogleBooks(searchTerms: string[], usage: WisdomApiUsage): P
     return [];
   }
 
-  const query = encodeURIComponent(searchTerms.slice(0, 2).join(" "));
+  // Check daily budget
+  const budget = loadGoogleBooksBudget();
+  if (budget.count >= GOOGLE_BOOKS_DAILY_LIMIT) {
+    console.warn("[WisdomEngine] Google Books daily budget exhausted — skipping");
+    return [];
+  }
+
+  const queryRaw = searchTerms.slice(0, 2).join(" ");
+  const query = encodeURIComponent(queryRaw);
+
+  // Check cache first
+  const cache = loadGoogleBooksCache();
+  const cached = cache[queryRaw];
+  if (cached && Date.now() - cached.cachedAt < GOOGLE_BOOKS_CACHE_TTL_MS) {
+    console.log(`[WisdomEngine] Google Books cache hit for "${queryRaw}"`);
+    return cached.results;
+  }
+
   try {
     incrementUsage("google_books", usage);
+    budget.count++;
+    saveGoogleBooksBudget(budget);
 
-    // Retry with exponential backoff on 429 (rate limit)
+    // Retry with exponential backoff on 429: 30s, 120s, 300s
+    const backoffDelays = [30_000, 120_000, 300_000];
     let res: Response | null = null;
     for (let attempt = 0; attempt < 3; attempt++) {
       res = await fetch(
@@ -199,7 +257,7 @@ async function queryGoogleBooks(searchTerms: string[], usage: WisdomApiUsage): P
         { signal: AbortSignal.timeout(10000) },
       );
       if (res.status === 429 && attempt < 2) {
-        const delay = (attempt + 1) * 5000; // 5s, 10s
+        const delay = backoffDelays[attempt];
         console.warn(`[WisdomEngine] Google Books 429 — retrying in ${delay / 1000}s (attempt ${attempt + 1}/3)`);
         await new Promise(r => setTimeout(r, delay));
         continue;
@@ -207,12 +265,16 @@ async function queryGoogleBooks(searchTerms: string[], usage: WisdomApiUsage): P
       break;
     }
     if (!res || !res.ok) {
-      console.warn(`[WisdomEngine] Google Books API error: ${res?.status ?? "no response"}`);
+      if (res?.status === 429) {
+        console.warn("[WisdomEngine] Google Books 429 after all retries — degrading gracefully");
+      } else {
+        console.warn(`[WisdomEngine] Google Books API error: ${res?.status ?? "no response"}`);
+      }
       return [];
     }
     const data = await res.json() as any;
     const items = data.items ?? [];
-    return items.slice(0, 3).map((item: any) => {
+    const results = items.slice(0, 3).map((item: any) => {
       const vol = item.volumeInfo ?? {};
       return {
         source: "google_books" as const,
@@ -224,6 +286,20 @@ async function queryGoogleBooks(searchTerms: string[], usage: WisdomApiUsage): P
         url: vol.infoLink ?? undefined,
       };
     });
+
+    // Cache successful response
+    if (results.length > 0) {
+      cache[queryRaw] = { results, cachedAt: Date.now() };
+      // Prune expired entries while we're at it
+      for (const key of Object.keys(cache)) {
+        if (Date.now() - cache[key].cachedAt >= GOOGLE_BOOKS_CACHE_TTL_MS) {
+          delete cache[key];
+        }
+      }
+      saveGoogleBooksCache(cache);
+    }
+
+    return results;
   } catch (e) {
     console.warn("[WisdomEngine] Google Books query failed:", e);
     return [];
@@ -253,7 +329,8 @@ async function queryBible(topics: string[], usage: WisdomApiUsage): Promise<Wisd
       },
     );
     if (!res.ok) {
-      console.warn(`[WisdomEngine] Bible API error: ${res.status}`);
+      const body = await res.text().catch(() => "(unreadable)");
+      console.warn(`[WisdomEngine] Bible API error: ${res.status} — ${body}`);
       return [];
     }
     const data = await res.json() as any;
