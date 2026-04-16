@@ -342,24 +342,20 @@ export async function postSignalBrief(xWrite: any, grokKey: string): Promise<str
     console.error("[SignalBrief] Post failed:", e.message);
   }
 
-  // Post to Farcaster
-  let castUrl: string | null = null;
+  // Queue for Farcaster (parallel to X queue)
+  let castQueued = false;
   try {
-    const { postCast, isFarcasterEnabled } = await import("./farcasterEngine.js");
-    if (isFarcasterEnabled() && generated.post.trim().length > 10) {
-      const cast = await postCast({ text: generated.post.trim().slice(0, 2500), channel: "ai" });
-      if (cast) {
-        castUrl = cast.url;
-        const { registerPost: regPost } = await import("./postCoordinator.js");
-        regPost("signal_brief", cast.url, "signal_brief", "farcaster");
-        console.log(`[SignalBrief] Farcaster cast posted: ${cast.url}`);
-      }
+    const { queueFarcasterPost } = await import("./farcasterQueue.js");
+    if (generated.post.trim().length > 10) {
+      queueFarcasterPost(generated.post.trim().slice(0, 2500), "signal", undefined, "ai");
+      castQueued = true;
+      console.log(`[SignalBrief] Farcaster cast queued`);
     }
   } catch (fcErr: any) {
-    console.warn("[SignalBrief] Farcaster post failed:", fcErr.message);
+    console.warn("[SignalBrief] Farcaster queue failed:", fcErr.message);
   }
 
-  if (!tweetUrl && !castUrl) {
+  if (!tweetUrl && !castQueued) {
     releasePost("signal_brief");
     return null;
   }
@@ -421,4 +417,14 @@ export function scheduleSignalBrief(xWrite: any, grokKey: string): void {
   }
 
   scheduleNext();
+}
+
+// ── On-demand generation (no side effects — just produces content) ────────────
+export async function generateSignalContent(grokKey: string): Promise<{
+  post: string;
+  signals: SignalEntry[];
+  weekLabel: string;
+} | null> {
+  console.log("[SignalBrief] On-demand generation triggered");
+  return generateSignalBrief(grokKey);
 }

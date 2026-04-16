@@ -713,19 +713,15 @@ export function publishEpisode(episodeId: string, publishedTo: string[]): boolea
     queuePodcastPromo(promoText.slice(0, 2500), episodeId);
   }
 
-  // Auto-post to Farcaster if enabled and social post content exists (fire-and-forget)
+  // Queue for Farcaster (parallel to X queue)
   if (episode.metadata?.socialPost) {
     (async () => {
       try {
-        const { postCast, isFarcasterEnabled } = await import("./farcasterEngine.js");
-        if (isFarcasterEnabled()) {
-          const cast = await postCast({ text: episode.metadata!.socialPost.slice(0, 2500), channel: "ai" });
-          if (cast) {
-            console.log(`[Podcast] Auto-posted to Farcaster: "${episode.title}"`);
-          }
-        }
+        const { queueFarcasterPost } = await import("./farcasterQueue.js");
+        queueFarcasterPost(episode.metadata!.socialPost.slice(0, 2500), "podcast", 1, "ai");
+        console.log(`[Podcast] Farcaster cast queued: "${episode.title}"`);
       } catch (e: any) {
-        console.warn("[Podcast] Farcaster auto-post failed:", e.message);
+        console.warn("[Podcast] Farcaster queue failed:", e.message);
       }
     })();
   }
@@ -1940,4 +1936,46 @@ export function getPipelineStatus(): {
       createdAt: latestEp.createdAt,
     } : null,
   };
+}
+
+// ── On-demand generation (no side effects — produces a podcast promo post) ──
+export async function generatePodcastContent(): Promise<string | null> {
+  console.log("[Podcast] On-demand generation triggered");
+
+  // Try to auto-generate from a ready research thread
+  const candidates = getThreadCandidates();
+  if (candidates.length > 0) {
+    const best = candidates[0];
+    console.log(`[Podcast] Generating episode from thread: "${best.topic}"`);
+    const episode = await generateEpisodeFromThread(best.threadId);
+    if (episode?.script) {
+      // Return a teaser/promo derived from the script segments
+      const fullScript = [
+        episode.script.coldOpen,
+        episode.script.actOne,
+        episode.script.actTwo,
+        episode.script.actThree,
+        episode.script.outro,
+      ].filter(Boolean).join("\n\n");
+      const scriptPreview = fullScript.slice(0, 1500);
+      return `[306 PODCAST] New episode: ${episode.title}\n\n${scriptPreview}`;
+    }
+  }
+
+  // Fallback: create a promo from the latest scripted episode
+  const scripted = state.episodes
+    .filter(e => e.script && (e.status === "scripted" || e.status === "reviewed" || e.status === "published"))
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  if (scripted.length > 0) {
+    const ep = scripted[0];
+    const segments = ep.script;
+    const fullScript = segments
+      ? [segments.coldOpen, segments.actOne, segments.actTwo, segments.actThree, segments.outro]
+          .filter(Boolean).join("\n\n")
+      : "";
+    return `[306 PODCAST] ${ep.title}\n\n${fullScript.slice(0, 1500)}`;
+  }
+
+  return null;
 }

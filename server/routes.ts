@@ -87,12 +87,14 @@ import {
   seedDreams,
 } from "./dreamEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
-import { startXPostScheduler, getXPostQueue, queueXPost, getTodaysPostsSummary, clearXPostQueue, isXAutoPostEnabled, setXAutoPostEnabled, getXAutoPostState } from "./xPostScheduler.js";
+import { startXPostScheduler, getXPostQueue, queueXPost, getTodaysPostsSummary, clearXPostQueue, postXQueueItem, isXAutoPostEnabled, setXAutoPostEnabled, getXAutoPostState } from "./xPostScheduler.js";
+import { startFarcasterPostScheduler, getFarcasterPostQueue, queueFarcasterPost, clearFarcasterPostQueue, postFarcasterQueueItem } from "./farcasterQueue.js";
 import { getVoiceContext } from "./voiceInstructions.js";
 import { enforceShowTag } from "./contentTypes.js";
 import { getCompetencyProfile } from "./competencyFramework.js";
 import { buildVoiceBlock } from "./voice.js";
 import { getEvolutionContext } from "./soulEvolution.js";
+import { generateBreakthroughContent } from "./breakthroughDetector.js";
 // breakingNewsDetector removed — not needed for now
 
 // On-chain API removed
@@ -428,21 +430,15 @@ Return JSON: {"post": "..."}`
 
     registerPost("news_dispatch", "queued", "news_dispatch");
 
-    // ── 5. Post to Farcaster ───────────────────────────────────────────────
+    // ── 5. Queue for Farcaster ───────────────────────────────────────────────
     try {
-      if (isFarcasterEnabled() && postText.trim().length > 10) {
+      if (postText.trim().length > 10) {
         const channel = postText.match(/\bai\b|agent|llm|model/i) ? "ai" : undefined;
-        const cast = await postCast({
-          text: postText.trim().slice(0, 2500),
-          channel,
-        });
-        if (cast) {
-          registerPost("news_dispatch", cast.url, "news_dispatch", "farcaster");
-          console.log(`[Agent306:News] Farcaster dispatch posted: ${cast.url}`);
-        }
+        queueFarcasterPost(postText.trim().slice(0, 2500), "news", undefined, channel);
+        console.log(`[Agent306:News] Farcaster dispatch queued`);
       }
     } catch (fcErr: any) {
-      console.warn("[Agent306:News] Farcaster dispatch failed:", fcErr.message);
+      console.warn("[Agent306:News] Farcaster queue failed:", fcErr.message);
     }
 
     console.log(`[Agent306:News] Daily Dispatch complete — single post`);
@@ -615,6 +611,11 @@ setTimeout(() => {
 setTimeout(() => {
   startXPostScheduler(xWrite);
 }, 65_000);
+
+// ── FARCASTER POST SCHEDULER — parallel to X scheduler ────────────────────────
+setTimeout(() => {
+  startFarcasterPostScheduler();
+}, 70_000);
 
 // ── Editorial Summary Cache ─────────────────────────────────────────────────────
 // Decoupled from signal collection — generated async, served instantly from cache.
@@ -922,6 +923,127 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
   // POST /api/farcaster/toggle — enable/disable Farcaster posting
   app.post("/api/farcaster/toggle", requireDashAuth, (req, res) => {
+    const { enabled } = req.body ?? {};
+    const newState = typeof enabled === "boolean" ? enabled : !getFarcasterState().enabled;
+    setFarcasterEnabled(newState);
+    res.json({ ok: true, enabled: newState });
+  });
+
+  // ── Posting Control Panel API ──────────────────────────────────────────────
+
+  // GET /api/posting/overview — unified view of both platforms
+  app.get("/api/posting/overview", requireDashAuth, (_req, res) => {
+    const xQueue = getXPostQueue();
+    const fcQueue = getFarcasterPostQueue();
+    const coordinatorState = getCoordinatorState();
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    // X recent posts (from queue: posted, not skipped, last 10)
+    const xRecentPosts = xQueue.queue
+      .filter(p => p.posted && p.postedAt && !p.skipped)
+      .sort((a, b) => new Date(b.postedAt!).getTime() - new Date(a.postedAt!).getTime())
+      .slice(0, 10)
+      .map(p => ({
+        id: p.id,
+        content: p.content,
+        type: p.type,
+        postedAt: p.postedAt,
+        platform: "x" as const,
+      }));
+
+    // Farcaster recent posts (from queue: posted, not skipped, last 10)
+    const fcRecentPosts = fcQueue.queue
+      .filter(p => p.posted && p.postedAt && !p.skipped)
+      .sort((a, b) => new Date(b.postedAt!).getTime() - new Date(a.postedAt!).getTime())
+      .slice(0, 10)
+      .map(p => ({
+        id: p.id,
+        content: p.content,
+        type: p.type,
+        postedAt: p.postedAt,
+        platform: "farcaster" as const,
+        castUrl: p.castUrl,
+      }));
+
+    res.json({
+      x: {
+        autoPost: isXAutoPostEnabled(),
+        queue: xQueue.pending.map(p => ({
+          id: p.id,
+          content: p.content,
+          type: p.type,
+          priority: p.priority,
+          createdAt: p.createdAt,
+        })),
+        recentPosts: xRecentPosts,
+        postedTodayCount: xQueue.postedToday.length,
+        queueDepth: xQueue.pending.length,
+      },
+      farcaster: {
+        autoPost: isFarcasterEnabled(),
+        configured: getFarcasterState().configured,
+        queue: fcQueue.pending.map(p => ({
+          id: p.id,
+          content: p.content,
+          type: p.type,
+          priority: p.priority,
+          createdAt: p.createdAt,
+          channel: p.channel,
+        })),
+        recentPosts: fcRecentPosts,
+        postedTodayCount: fcQueue.postedToday.length,
+        queueDepth: fcQueue.pending.length,
+      },
+    });
+  });
+
+  // POST /api/posting/x/post-now — immediately post a queued X item
+  app.post("/api/posting/x/post-now", requireDashAuth, async (req, res) => {
+    const { postId } = req.body;
+    if (!postId) return res.status(400).json({ error: "postId required" });
+
+    try {
+      const posted = await postXQueueItem(postId, xWrite);
+      if (posted) {
+        res.json({ ok: true, post: posted });
+      } else {
+        res.status(404).json({ error: "Post not found, already posted, or stale" });
+      }
+    } catch (e: any) {
+      console.error("[PostingPanel] X post-now failed:", e.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/posting/farcaster/post-now — immediately post a queued Farcaster item
+  app.post("/api/posting/farcaster/post-now", requireDashAuth, async (req, res) => {
+    const { postId } = req.body;
+    if (!postId) return res.status(400).json({ error: "postId required" });
+
+    try {
+      const posted = await postFarcasterQueueItem(postId);
+      if (posted) {
+        res.json({ ok: true, post: posted });
+      } else {
+        res.status(404).json({ error: "Post not found, already posted, or stale" });
+      }
+    } catch (e: any) {
+      console.error("[PostingPanel] Farcaster post-now failed:", e.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/posting/x/toggle — toggle X auto-posting
+  app.post("/api/posting/x/toggle", requireDashAuth, (req, res) => {
+    const { enabled } = req.body ?? {};
+    const newState = typeof enabled === "boolean" ? enabled : !isXAutoPostEnabled();
+    setXAutoPostEnabled(newState);
+    res.json({ ok: true, enabled: newState });
+  });
+
+  // POST /api/posting/farcaster/toggle — toggle Farcaster auto-posting (alias)
+  app.post("/api/posting/farcaster/toggle", requireDashAuth, (req, res) => {
     const { enabled } = req.body ?? {};
     const newState = typeof enabled === "boolean" ? enabled : !getFarcasterState().enabled;
     setFarcasterEnabled(newState);
@@ -1901,15 +2023,15 @@ export function registerRoutes(httpServer: Server, app: Express) {
         console.error("[CommunityBoost] X post failed:", xErr.message);
       }
 
-      // Post to Farcaster
+      // Queue for Farcaster
       try {
-        if (isFarcasterEnabled()) {
-          const cast = await postCast({ text: tweet.trim().slice(0, 2500), channel: "nft" });
-          castUrl = cast?.url ?? null;
-          if (castUrl) console.log(`[CommunityBoost] Farcaster cast: ${castUrl}`);
+        if (tweet.trim().length > 10) {
+          queueFarcasterPost(tweet.trim().slice(0, 2500), "roundup", undefined, "nft");
+          castUrl = "queued";
+          console.log(`[CommunityBoost] Farcaster cast queued`);
         }
       } catch (fcErr: any) {
-        console.warn("[CommunityBoost] Farcaster post failed:", fcErr.message);
+        console.warn("[CommunityBoost] Farcaster queue failed:", fcErr.message);
       }
 
       res.json({ ok: true, tweetUrl, castUrl });
@@ -2012,13 +2134,13 @@ export function registerRoutes(httpServer: Server, app: Express) {
           }
         } catch (e: any) { console.error("[ResearchBrief] Queue failed:", e.message); }
 
-        // Post to Farcaster (alongside queue, not dependent on direct X posting)
+        // Queue for Farcaster (alongside X queue)
         try {
-          if (isFarcasterEnabled() && postText.trim().length > 10) {
-            const cast = await postCast({ text: postText.trim().slice(0, 2500), channel: "ai" });
-            if (cast) { registerPost("cyoa", cast.url, "research_brief", "farcaster"); }
+          if (postText.trim().length > 10) {
+            queueFarcasterPost(postText.trim().slice(0, 2500), "research", undefined, "ai");
+            console.log("[ResearchBrief] Farcaster cast queued");
           }
-        } catch (e: any) { console.error("[ResearchBrief] Farcaster failed:", e.message); }
+        } catch (e: any) { console.error("[ResearchBrief] Farcaster queue failed:", e.message); }
       } catch (e: any) { console.error("[ResearchBrief] Error:", e.message); }
     })();
   });
@@ -4474,6 +4596,265 @@ needsHelp: true only when you genuinely need his direction or information`,
       res.json({ history: history.runs.slice(0, 10), currentContext: context });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── Engine Status & On-Demand Generation ──────────────────────────────────
+
+  // Engine definitions for status + generate
+  const ENGINE_DEFS = [
+    { id: "signal",       name: "Signal Brief",        schedule: "Mon/Wed/Fri 12pm ET", emoji: "📡", days: [1, 3, 5], hour: 12 },
+    { id: "academy",      name: "Academy",              schedule: "Tue/Thu/Sat 10am ET", emoji: "🎓", days: [2, 4, 6], hour: 10 },
+    { id: "news",         name: "News Dispatch",        schedule: "Daily 8am ET",        emoji: "📰", days: [0,1,2,3,4,5,6], hour: 8 },
+    { id: "research",     name: "Research Brief",       schedule: "On completion",       emoji: "🔬", days: [], hour: 0 },
+    { id: "podcast",      name: "Podcast",              schedule: "Research-driven",     emoji: "🎙️", days: [], hour: 0 },
+    { id: "article",      name: "Deep Read",            schedule: "Monday 5pm ET",       emoji: "📝", days: [1], hour: 17 },
+    { id: "breakthrough", name: "Breakthrough Detector", schedule: "On detection",       emoji: "💡", days: [], hour: 0 },
+    { id: "blog",         name: "Blog Post",            schedule: "Via Daily Cycle",     emoji: "✍️",  days: [], hour: 0 },
+  ] as const;
+
+  function computeNextRun(days: readonly number[], hour: number): string | null {
+    if (days.length === 0) return null;
+    const now = new Date();
+    // Use Intl to find current ET offset
+    const etParts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      hour: "2-digit", minute: "2-digit", hour12: false,
+    }).formatToParts(now);
+    const etHour = parseInt(etParts.find(p => p.type === "hour")!.value);
+    const utcHour = now.getUTCHours();
+    let etOffset = utcHour - etHour;
+    if (etOffset < 0) etOffset += 24;
+
+    for (let i = 0; i <= 7; i++) {
+      const candidate = new Date(now);
+      candidate.setDate(now.getDate() + i);
+      candidate.setUTCHours(hour + etOffset, 0, 0, 0);
+      if (candidate > now && (days as readonly number[]).includes(candidate.getUTCDay())) {
+        return candidate.toISOString();
+      }
+    }
+    return null;
+  }
+
+  // GET /api/engines/status — all engine states
+  app.get("/api/engines/status", requireDashAuth, (_req, res) => {
+    try {
+      const signalState = getSignalBriefState();
+      const academyState = getAcademyState();
+      const articleState = getArticleState();
+      const briefingState = getBriefingState();
+      const blogState = getBlogState();
+
+      const lastRuns: Record<string, string | null> = {
+        signal:       signalState.lastPostedAt ?? null,
+        academy:      academyState.lastPostedAt ?? null,
+        news:         null, // news dispatch doesn't expose a persistent lastRun; use coordinator
+        research:     null,
+        podcast:      null,
+        article:      articleState.lastPostedAt ?? null,
+        breakthrough: null,
+        blog:         blogState.stats?.lastPublishedAt ?? blogState.posts?.[0]?.createdAt ?? null,
+      };
+
+      // Try to get news last run from coordinator
+      try {
+        const coordState = getCoordinatorState();
+        const newsRecord = coordState.recentPosts?.find((p: any) => p.engineKey === "news_dispatch");
+        if (newsRecord) lastRuns.news = newsRecord.postedAt;
+      } catch {}
+
+      const engines = ENGINE_DEFS.map(eng => ({
+        id:       eng.id,
+        name:     eng.name,
+        emoji:    eng.emoji,
+        schedule: eng.schedule,
+        nextRun:  computeNextRun(eng.days, eng.hour),
+        lastRun:  lastRuns[eng.id] ?? null,
+        enabled:  true,
+      }));
+
+      res.json({ engines });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/engines/:engineId/generate — on-demand content generation
+  // Generates content and queues to X + Farcaster. Does NOT auto-post.
+  app.post("/api/engines/:engineId/generate", requireDashAuth, async (req, res) => {
+    const { engineId } = req.params;
+    const validEngines = ["signal", "academy", "news", "research", "podcast", "article", "breakthrough", "blog"];
+
+    if (!validEngines.includes(engineId)) {
+      return res.status(400).json({
+        success: false,
+        error: `Unknown engine "${engineId}". Valid: ${validEngines.join(", ")}`,
+      });
+    }
+
+    console.log(`[GenerateNow] On-demand generation triggered for engine: ${engineId}`);
+
+    try {
+      let content = "";
+      let type: string = engineId;
+
+      switch (engineId) {
+        case "signal": {
+          const grokKey = LLM_API_KEY;
+          if (!grokKey) throw new Error("LLM API key not configured");
+          // Import the private generation function via a new exported wrapper
+          const { generateSignalContent } = await import("./signalBriefEngine.js");
+          const result = await generateSignalContent(grokKey);
+          if (!result) throw new Error("Signal brief generation failed — LLM returned no content");
+          content = result.post;
+          type = "signal";
+          break;
+        }
+
+        case "academy": {
+          const { generateAcademyContent } = await import("./academyEngine.js");
+          const result = await generateAcademyContent();
+          if (!result) throw new Error("Academy episode generation failed — LLM returned no content");
+          content = result.post;
+          type = "academy";
+          break;
+        }
+
+        case "news": {
+          const { generateNewsContent } = await import("./newsGenerator.js");
+          const result = await generateNewsContent();
+          if (!result) throw new Error("News dispatch generation failed — LLM returned no content");
+          content = result;
+          type = "news";
+          break;
+        }
+
+        case "research": {
+          const { generateResearchContent } = await import("./researchEngine.js");
+          const result = await generateResearchContent();
+          if (!result) throw new Error("No publishable research found — run research pipeline first");
+          content = result;
+          type = "research";
+          break;
+        }
+
+        case "podcast": {
+          const { generatePodcastContent } = await import("./podcastEngine.js");
+          const result = await generatePodcastContent();
+          if (!result) throw new Error("Podcast generation failed — no research threads ready or no scripted episodes");
+          content = result;
+          type = "podcast";
+          break;
+        }
+
+        case "article": {
+          const apiKey = LLM_API_KEY;
+          if (!apiKey) throw new Error("LLM API key not configured");
+          const preview = await previewDeepRead(apiKey);
+          content = preview.teaser;
+          type = "article";
+          break;
+        }
+
+        case "breakthrough": {
+          const result = generateBreakthroughContent();
+          if (!result) throw new Error("No breakthroughs detected — run analysis first");
+          content = result;
+          type = "breakthrough";
+          break;
+        }
+
+        case "blog": {
+          const result = await generateBlogPost({
+            topic: "On-demand blog post — today's top AI signal",
+            sourceContent: "Generate a blog post about the most significant AI development happening right now.",
+            source: "standalone" as any,
+            autoPublish: false,
+          });
+          if (!result) throw new Error("Blog post generation failed");
+          // Blog posts are long-form — queue the excerpt/teaser
+          content = result.excerpt || result.title || "New blog post generated";
+          type = "blog";
+          break;
+        }
+      }
+
+      if (!content || content.trim().length < 10) {
+        throw new Error("Engine produced empty or too-short content");
+      }
+
+      const trimmed = content.trim();
+
+      // Queue to X
+      const xPostType = type as any; // XPostType
+      queueXPost(trimmed, xPostType, 3); // priority 3 = high (on-demand)
+      console.log(`[GenerateNow] Queued to X: ${engineId} (${trimmed.length} chars)`);
+
+      // Queue to Farcaster
+      let farcasterQueued = false;
+      try {
+        const channel = trimmed.match(/\bai\b|agent|llm|model/i) ? "ai" : undefined;
+        queueFarcasterPost(trimmed, type as any, 3, channel);
+        farcasterQueued = true;
+        console.log(`[GenerateNow] Queued to Farcaster: ${engineId} (${trimmed.length} chars)`);
+      } catch (fcErr: any) {
+        console.warn(`[GenerateNow] Farcaster queue failed:`, fcErr.message);
+      }
+
+      const queuedTo = ["x"];
+      if (farcasterQueued) queuedTo.push("farcaster");
+
+      res.json({
+        success: true,
+        content: trimmed.slice(0, 500) + (trimmed.length > 500 ? "..." : ""),
+        type: engineId,
+        queuedTo,
+        contentLength: trimmed.length,
+      });
+
+    } catch (e: any) {
+      console.error(`[GenerateNow] Engine ${engineId} failed:`, e.message);
+      res.status(500).json({
+        success: false,
+        error: e.message || "Generation failed",
+      });
+    }
+  });
+
+  // ── Farcaster Queue API ───────────────────────────────────────────────────
+
+  // GET /api/farcaster/queue — Farcaster post queue state
+  app.get("/api/farcaster/queue", requireDashAuth, (_req, res) => {
+    try {
+      const { queue, pending, postedToday } = getFarcasterPostQueue();
+      res.json({ queue, pending, postedToday });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/farcaster/queue/:postId/post — Post a specific queued item
+  app.post("/api/farcaster/queue/:postId/post", requireDashAuth, async (req, res) => {
+    try {
+      const result = await postFarcasterQueueItem(req.params.postId);
+      if (result) {
+        res.json({ success: true, castUrl: result.castUrl });
+      } else {
+        res.status(404).json({ success: false, error: "Post not found, already posted, or stale" });
+      }
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // POST /api/farcaster/queue/clear — Clear all pending Farcaster posts
+  app.post("/api/farcaster/queue/clear", requireDashAuth, (_req, res) => {
+    try {
+      const cleared = clearFarcasterPostQueue();
+      res.json({ success: true, cleared });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
     }
   });
 }

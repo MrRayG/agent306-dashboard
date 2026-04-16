@@ -17,6 +17,7 @@ import { getOptimizedContext } from "./contextWindow.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { knowledge } from "./memoryEngine.js";
 import { queueXPost } from "./xPostScheduler.js";
+import { queueFarcasterPost } from "./farcasterQueue.js";
 import { getVoiceContext } from "./voiceInstructions.js";
 import { enforceShowTag } from "./contentTypes.js";
 import { buildTweetSystemPrompt } from "./tweetPromptBuilder.js";
@@ -577,6 +578,7 @@ Required JSON schema:
     // Enforce [306 SIGNAL] show tag
     breakthroughPost = enforceShowTag(breakthroughPost, "signal");
     queueXPost(breakthroughPost, "breakthrough");
+    queueFarcasterPost(breakthroughPost.slice(0, 2500), "breakthrough", undefined, "ai");
 
     console.log(`[Breakthrough] BREAKTHROUGH DETECTED: "${breakthrough.title}" (composite: ${compositeScore})`);
     return breakthrough;
@@ -598,4 +600,31 @@ export function getBreakthroughCount(): number {
 
 export function getPredictions(): PredictionStore {
   return loadPredictions();
+}
+
+// ── On-demand generation (no side effects — produces a breakthrough report post) ──
+export function generateBreakthroughContent(): string | null {
+  console.log("[Breakthrough] On-demand generation triggered");
+  const store = loadBreakthroughs();
+
+  // Find most recent unpublished breakthrough
+  const unpublished = store.breakthroughs
+    .filter(b => !b.published)
+    .sort((a, b) => b.detectedAt - a.detectedAt);
+
+  if (unpublished.length > 0) {
+    const bt = unpublished[0];
+    return `[306 SIGNAL] Breakthrough: ${bt.title}\n\nComposite score: ${bt.compositeScore}/100\n\n${bt.description.slice(0, 2000)}`;
+  }
+
+  // Fallback: summarize most recent breakthrough (even if published)
+  const latest = store.breakthroughs
+    .sort((a, b) => b.detectedAt - a.detectedAt);
+
+  if (latest.length > 0) {
+    const bt = latest[0];
+    return `[306 SIGNAL] ${bt.title}\n\n${bt.description.slice(0, 2000)}`;
+  }
+
+  return null;
 }
