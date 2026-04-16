@@ -190,7 +190,7 @@ function OperationsTab() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "6px" }}>
           {SCHEDULER_SLOTS.map((slot: SchedulerSlot) => {
             const isShow = !!slot.show;
-            const label = slot.show ?? '306 THOUGHTS';
+            const label = slot.show ?? '[306 UNPLUGGED]';
             const borderColor = isShow ? `${slot.color}40` : 'rgba(227,229,228,0.08)';
             return (
               <div key={slot.name} style={{
@@ -208,8 +208,11 @@ function OperationsTab() {
                 }}>
                   {label}
                 </div>
-                {!isShow && (
-                  <div style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.30)" }}>agent speaks freely</div>
+                {!isShow && slot.audienceHint && (
+                  <div style={{ ...mono, fontSize: "0.54rem", color: "rgba(227,229,228,0.35)" }}>{slot.audienceHint}</div>
+                )}
+                {!isShow && !slot.audienceHint && (
+                  <div style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.30)" }}>agent unplugged</div>
                 )}
               </div>
             );
@@ -414,7 +417,7 @@ export default function CommandCenter() {
           Command <span style={{ color: "#f97316" }}>Center</span>
         </h1>
         <p style={{ ...mono, fontSize: "0.88rem", color: "rgba(227,229,228,0.68)", margin: 0 }}>
-          12 slots every 2 hours — 6 locked shows + 6 open slots filled with 306 THOUGHTS.
+          12 slots every 2 hours — 6 locked shows + 6 open slots filled with 306 UNPLUGGED. Overnight slots target audiences in alive time zones.
         </p>
       </div>
 

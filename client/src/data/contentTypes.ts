@@ -102,8 +102,8 @@ export const CONTENT_TYPES: Record<string, ContentType> = {
   },
   agent_voice: {
     id: 'agent_voice',
-    showTag: '[306 THOUGHTS]',
-    name: '306 THOUGHTS',
+    showTag: '[306 UNPLUGGED]',
+    name: '306 UNPLUGGED',
     description: 'Free-form posts — whatever is on Agent 306\'s mind. Observations, questions, ideas, hot takes. No format rules.',
     format: 'Unstructured. Stream of consciousness, sharp observations, random ideas. Authentic voice, no template.',
     schedule: 'Every 2h (fills open slots)',
@@ -127,7 +127,7 @@ export const ACTIVE_ENGINES = [
   { id: 'academy', label: '306 ACADEMY', schedule: 'Daily 12pm ET', tag: '[306 ACADEMY]', color: '#60a5fa' },
   { id: 'dispatch', label: 'THE DISPATCH', schedule: 'Daily 6pm ET', tag: '[THE DISPATCH]', color: '#f472b6' },
   { id: 'reflection', label: '306 REFLECTION', schedule: 'Daily 10pm ET', tag: '[306 REFLECTION]', color: '#a78bfa' },
-  { id: 'agent_voice', label: '306 THOUGHTS', schedule: 'Every 2h (fills gaps)', tag: '[306 THOUGHTS]', color: '#94a3b8' },
+  { id: 'agent_voice', label: '306 UNPLUGGED', schedule: 'Every 2h (fills gaps)', tag: '[306 UNPLUGGED]', color: '#94a3b8' },
 ] as const;
 
 /** 12-slot daily schedule — posts every 2 hours */
@@ -135,15 +135,16 @@ export interface SchedulerSlot {
   name: string;
   time: string;
   utcHour: number;
-  show: string | null;     // locked show tag, or null for agent_voice
+  show: string | null;     // locked show tag, or null for agent_voice (306 UNPLUGGED)
   color: string;
+  audienceHint?: string;   // short timezone label for overnight slots
 }
 
 export const SCHEDULER_SLOTS: SchedulerSlot[] = [
-  { name: '12am', time: '12:00 AM ET', utcHour: 4,  show: null,               color: '#94a3b8' },
-  { name: '2am',  time: '2:00 AM ET',  utcHour: 6,  show: null,               color: '#94a3b8' },
-  { name: '4am',  time: '4:00 AM ET',  utcHour: 8,  show: null,               color: '#94a3b8' },
-  { name: '6am',  time: '6:00 AM ET',  utcHour: 10, show: null,               color: '#94a3b8' },
+  { name: '12am', time: '12:00 AM ET', utcHour: 4,  show: null,               color: '#94a3b8', audienceHint: '🌏 APAC prime • 1pm Tokyo' },
+  { name: '2am',  time: '2:00 AM ET',  utcHour: 6,  show: null,               color: '#94a3b8', audienceHint: '🌏 APAC + EU wake • 3pm Tokyo' },
+  { name: '4am',  time: '4:00 AM ET',  utcHour: 8,  show: null,               color: '#94a3b8', audienceHint: '🌍 EU morning • 10am London' },
+  { name: '6am',  time: '6:00 AM ET',  utcHour: 10, show: null,               color: '#94a3b8', audienceHint: '🌍 EU prime • 12pm London' },
   { name: '8am',  time: '8:00 AM ET',  utcHour: 12, show: '[306 NEWS]',       color: '#4ade80' },
   { name: '10am', time: '10:00 AM ET', utcHour: 14, show: '[306 SIGNAL]',     color: '#fbbf24' },
   { name: '12pm', time: '12:00 PM ET', utcHour: 16, show: '[306 ACADEMY]',    color: '#60a5fa' },
