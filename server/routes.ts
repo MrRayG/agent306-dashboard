@@ -6,21 +6,15 @@ import { insertEpisodeSchema, insertRenderJobSchema, insertSignalSchema } from "
 import { TwitterApi } from "twitter-api-v2";
 import * as crypto from "crypto";
 import * as fs from "fs";
-// signalCollector removed (NORMIES-era dead code)
-// grokEngine episode generation + imageCard removed (NORMIES-era dead code)
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
-// holderCatalog + community signal imports removed (NORMIES-era dead code)
 import { generateCYOAEpisode, postCYOAHook, resolveCYOA, getCYOAState, buildHookTweet, type CYOATrigger } from "./cyoaEngine.js";
 import { fetchReplies, getReplyState, formatRepliesForContext, getTopReplies, initReplyWatcher } from "./replyWatcher";
 import { getConversationMemoryState } from "./conversationMemory.js";
-// leaderboardEngine removed (NORMIES-era dead code)
 import { scheduleFollowingSync, syncFollowing, getFollowingState, buildFollowingQuery, getPfpHolderUsernames, getFollowingUsernames, getFollowTargets, processFollowQueue, addFollowTarget, removeFollowTarget } from "./followingSync";
 import { generateBoost } from "./boostEngine";
 import { generateVoiceClip, getVoiceQuota, getClip, getRecentClips } from "./voiceEngine";
 import { getMemoryState, recordPost, ratePost, performance as perfMemory, decayKnowledge, addKnowledge, archiveKnowledge, searchArchive, getArchiveStats, knowledge as knowledgeState } from "./memoryEngine.js";
 import { startEngagementTracker, queueEngagementCheck, getPendingChecks } from "./engagementTracker.js";
-// spotlightEngine removed (NORMIES-era dead code)
-// raceEngine removed (NORMIES-era dead code)
 import { scheduleMidnightReplies, runMidnightReplies } from "./replyEngine.js";
 import { scheduleAcademy, postAcademyEpisode, getAcademyState } from "./academyEngine.js";
 import { scheduleSignalBrief, postSignalBrief, getSignalBriefState } from "./signalBriefEngine.js";
@@ -298,12 +292,6 @@ async function fetchAINews(): Promise<AINewsItem[]> {
   return aiNewsCache;
 }
 
-// NORMIES-era Grok story engine removed — posting is now handled by xPostScheduler.ts
-
-// pollAndGenerateEpisode removed — NORMIES-era episode pipeline.
-// Posting is now handled entirely by xPostScheduler.ts.
-// pollAndGenerateEpisode + 12h poller removed (NORMIES-era episode pipeline).
-// Posting is now handled entirely by xPostScheduler.ts.
 
 // ── Daily News Dispatch — 8am ET every day ─────────────────────────────────
 // THE_100_TOKENS removed (removed)
@@ -397,7 +385,7 @@ RULES:
 - The post MUST begin with [306 NEWS]
 - No hype words: no "incredible", "amazing", "LFG", "WAGMI"
 - Reference specific headlines from the data provided. Be concrete.
-- NEVER reference Normies, NormiesTV, any founders, token holders, or NFT projects. Agent 306 is her own independent entity.
+- NEVER reference any prior project identity, founders, token holders, or NFT communities. Agent 306 is her own independent entity.
 - NEVER include blog URLs in the tweet body.
 
 Return JSON: {"post": "..."}`
@@ -525,8 +513,6 @@ setTimeout(() => {
   startEngagementTracker(xClient);
 }, 15_000);
 
-// DISABLED: Normies-era content engines — scheduler initializations removed.
-// Spotlight and Race engines are disabled; API endpoints remain for manual use only.
 
 // ── PODCAST KNOWLEDGE v2 — Seed on boot ──────────────────────────────
 // Two episode types: THE SIGNAL, THE CONVERSATION
@@ -946,8 +932,6 @@ export function registerRoutes(httpServer: Server, app: Express) {
     res.json({ ok: true, reset: key ?? "all" });
   });
 
-  // pollAndGenerateEpisode manual trigger removed (NORMIES-era dead code)
-
   // Post tweet with image via twitter-api-v2 (OAuth 1.0a, uploads media then tweets)
   app.post("/api/x/post-with-media", async (req, res) => {
     const { text, imageUrl } = req.body;
@@ -1261,8 +1245,6 @@ export function registerRoutes(httpServer: Server, app: Express) {
     ratePost(tweetUrl, Number(rating));
     res.json({ ok: true });
   });
-
-  // Spotlight + Race endpoints removed (NORMIES-era dead code)
 
   // ── ACADEMY endpoints ──────────────────────────────────────
   app.get("/api/academy/state", (_req, res) => {
@@ -1748,8 +1730,6 @@ export function registerRoutes(httpServer: Server, app: Express) {
     postDailyNewsDispatch().catch(console.error);
   });
 
-  // Leaderboard + community endpoints removed (NORMIES-era dead code)
-
   // ── Reply Watcher ────────────────────────────────────────────────
   app.get("/api/replies", (_req, res) => {
     const state = getReplyState();
@@ -1988,7 +1968,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
           body: JSON.stringify({
             model: getModel("research-brief"),
             messages: [
-              { role: "system", content: `${agentCtx}\n\nKNOWLEDGE:\n${kbCtx}\n\nYou are Agent 306 writing a [306 ACADEMY] brief. This is a deeper analytical piece on a specific AI or crypto topic you\'ve been investigating. Write from your knowledge base — reference specific findings, data points, and your own analysis. Your voice is direct, substantive, and insightful. Not a news summary — this is YOUR research perspective.\n\nRULES:\n- Write 800-1200 characters for X posting\n- Lead with your thesis, not background\n- Include specific data, names, or numbers\n- End with a forward-looking insight\n- Tag: [306 ACADEMY]\n- Sign: @306Agent\n- NEVER mention Normies, NFTs, burns, holders, or any old identity\n\nReturn JSON: {"post": "your full research brief text", "topic": "2-4 word topic label"}` },
+              { role: "system", content: `${agentCtx}\n\nKNOWLEDGE:\n${kbCtx}\n\nYou are Agent 306 writing a [306 ACADEMY] brief. This is a deeper analytical piece on a specific AI or crypto topic you\'ve been investigating. Write from your knowledge base — reference specific findings, data points, and your own analysis. Your voice is direct, substantive, and insightful. Not a news summary — this is YOUR research perspective.\n\nRULES:\n- Write 800-1200 characters for X posting\n- Lead with your thesis, not background\n- Include specific data, names, or numbers\n- End with a forward-looking insight\n- Tag: [306 ACADEMY]\n- Sign: @306Agent\n- NEVER reference any prior project identity, NFT communities, burns, or holders\n\nReturn JSON: {"post": "your full research brief text", "topic": "2-4 word topic label"}` },
               { role: "user", content: "Write a [306 ACADEMY] brief on the most important topic from your current knowledge base. Pick something timely and substantive." }
             ],
             max_tokens: 2000,
@@ -2171,8 +2151,6 @@ export function registerRoutes(httpServer: Server, app: Express) {
       // ── Crypto/NFT news headlines — now sourced from AI RSS feeds ──────────
       // CryptoPanic removed (deprecated). Headlines come from aiNewsItems below.
       let headlines: any[] = [];
-
-      // Burns data removed (NORMIES-era)
 
       // ── Grok x_search: hot NFT / Web3 news ───────────────
       // CACHED 6h — was firing on every page visit = credit drain
@@ -4453,8 +4431,6 @@ needsHelp: true only when you genuinely need his direction or information`,
       res.status(500).json({ error: e.message });
     }
   });
-
-  // /api/seed removed (NORMIES-era demo data with burns/canvas/tokenIds)
 
   // ── Novelty Gate ────────────────────────────────────────────────
   app.get("/api/novelty-gate", (_req, res) => {
