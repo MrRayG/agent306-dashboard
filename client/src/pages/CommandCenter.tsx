@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { CONTENT_TYPE_LIST, ACTIVE_ENGINES, SCHEDULER_SLOTS, type SchedulerSlot } from "@/data/contentTypes";
+import { CONTENT_TYPE_LIST, ACTIVE_ENGINES } from "@/data/contentTypes";
 import AutoPilot from "./AutoPilot";
 
 function timeAgo(iso: string | null): string {
@@ -25,10 +25,10 @@ function formatCooldown(ms: number): string {
 const mono = { fontFamily: "'Courier New', monospace" } as const;
 const pixel = { fontFamily: "'Courier New', monospace", textTransform: "uppercase" as const, letterSpacing: "0.15em" } as const;
 
-// Triggerable content types — removed disabled CYOA and Race engines
+// Triggerable content types — only engines with manual trigger endpoints
 const TRIGGERABLE = [
-  { id: "signal_brief", label: "SIGNAL Brief", tag: "[306 SIGNAL]", color: "#fbbf24", endpoint: "/api/signal-brief/post", schedule: "Mon/Wed/Fri 12pm ET" },
   { id: "news_dispatch", label: "News Dispatch", tag: "[306 NEWS]", color: "#4ade80", endpoint: "/api/news/dispatch", schedule: "Daily 8am ET" },
+  { id: "signal_brief", label: "SIGNAL Brief", tag: "[306 SIGNAL]", color: "#fbbf24", endpoint: "/api/signal-brief/post", schedule: "Mon/Wed/Fri 12pm ET" },
   { id: "academy", label: "Academy", tag: "[306 ACADEMY]", color: "#60a5fa", endpoint: "/api/academy/post", schedule: "Tue/Thu/Sat 10am ET" },
 ] as const;
 
@@ -182,48 +182,10 @@ function OperationsTab() {
         </div>
       )}
 
-      {/* 12-Slot Daily Schedule */}
+      {/* Active Engines Schedule */}
       <div style={{ marginBottom: "28px" }}>
         <div style={{ ...pixel, fontSize: "0.68rem", color: "rgba(227,229,228,0.60)", marginBottom: "12px" }}>
-          DAILY SCHEDULE — 12 SLOTS / EVERY 2 HOURS
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "6px" }}>
-          {SCHEDULER_SLOTS.map((slot: SchedulerSlot) => {
-            const isShow = !!slot.show;
-            const label = slot.show ?? '[306 UNPLUGGED]';
-            const borderColor = isShow ? `${slot.color}40` : 'rgba(227,229,228,0.08)';
-            return (
-              <div key={slot.name} style={{
-                background: "#141516",
-                border: `1px solid ${borderColor}`,
-                padding: "10px 12px",
-                borderLeft: `3px solid ${slot.color}`,
-              }}>
-                <div style={{ ...mono, fontSize: "0.88rem", color: "#efefef", fontWeight: 700, marginBottom: "3px" }}>{slot.name}</div>
-                <div style={{
-                  ...mono, fontSize: "0.68rem",
-                  color: slot.color,
-                  fontWeight: isShow ? 600 : 400,
-                  marginBottom: "2px",
-                }}>
-                  {label}
-                </div>
-                {!isShow && slot.audienceHint && (
-                  <div style={{ ...mono, fontSize: "0.54rem", color: "rgba(227,229,228,0.35)" }}>{slot.audienceHint}</div>
-                )}
-                {!isShow && !slot.audienceHint && (
-                  <div style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.30)" }}>agent unplugged</div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Locked Shows */}
-      <div style={{ marginBottom: "28px" }}>
-        <div style={{ ...pixel, fontSize: "0.68rem", color: "rgba(227,229,228,0.60)", marginBottom: "12px" }}>
-          LOCKED SHOWS
+          ACTIVE ENGINES
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "rgba(227,229,228,0.08)" }}>
           {ACTIVE_ENGINES.map(eng => (
@@ -232,6 +194,14 @@ function OperationsTab() {
               <div style={{ ...mono, fontSize: "0.83rem", color: eng.color, fontWeight: 600, minWidth: "160px" }}>{eng.label}</div>
               <div style={{ ...mono, fontSize: "0.73rem", color: "rgba(227,229,228,0.50)", flex: 1 }}>{eng.schedule}</div>
               <span style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.40)", background: "rgba(227,229,228,0.06)", padding: "2px 8px" }}>{eng.tag}</span>
+              <div style={{ display: "flex", gap: "4px" }}>
+                {eng.platforms.includes('x') && (
+                  <span style={{ ...mono, fontSize: "0.60rem", color: "#f97316", background: "rgba(249,115,22,0.10)", padding: "1px 5px" }}>X</span>
+                )}
+                {eng.platforms.includes('farcaster') && (
+                  <span style={{ ...mono, fontSize: "0.60rem", color: "#8a63d2", background: "rgba(138,99,210,0.10)", padding: "1px 5px" }}>FC</span>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -254,14 +224,24 @@ function OperationsTab() {
                   {ct.showTag}
                 </span>
                 <span style={{ ...mono, fontSize: "0.60rem", color: ct.category === 'primary' ? "#4ade80" : "rgba(227,229,228,0.40)" }}>
-                  {ct.category === 'primary' ? 'ACTIVE' : 'SEED'}
+                  {ct.category === 'primary' ? 'ACTIVE' : ct.category.toUpperCase()}
                 </span>
               </div>
               <div style={{ ...mono, fontSize: "0.78rem", color: "#efefef", fontWeight: 600, marginBottom: "2px" }}>{ct.name}</div>
               <div style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.50)", lineHeight: 1.5 }}>
                 {ct.description.slice(0, 80)}{ct.description.length > 80 ? '...' : ''}
               </div>
-              <div style={{ ...mono, fontSize: "0.63rem", color: "rgba(227,229,228,0.35)", marginTop: "4px" }}>{ct.schedule}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "4px" }}>
+                <span style={{ ...mono, fontSize: "0.63rem", color: "rgba(227,229,228,0.35)" }}>{ct.schedule}</span>
+                <div style={{ display: "flex", gap: "3px" }}>
+                  {ct.platforms.includes('x') && (
+                    <span style={{ ...mono, fontSize: "0.56rem", color: "#f97316", background: "rgba(249,115,22,0.10)", padding: "0px 4px" }}>X</span>
+                  )}
+                  {ct.platforms.includes('farcaster') && (
+                    <span style={{ ...mono, fontSize: "0.56rem", color: "#8a63d2", background: "rgba(138,99,210,0.10)", padding: "0px 4px" }}>FC</span>
+                  )}
+                </div>
+              </div>
             </div>
           ))}
         </div>
@@ -417,7 +397,7 @@ export default function CommandCenter() {
           Command <span style={{ color: "#f97316" }}>Center</span>
         </h1>
         <p style={{ ...mono, fontSize: "0.88rem", color: "rgba(227,229,228,0.68)", margin: 0 }}>
-          12 slots every 2 hours — 6 locked shows + 6 open slots filled with 306 UNPLUGGED. Overnight slots target audiences in alive time zones.
+          Engine-only posting — dedicated engines queue content, scheduler posts to X + Farcaster with compliance guards.
         </p>
       </div>
 
