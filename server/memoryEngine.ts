@@ -115,7 +115,7 @@ export interface PerformanceMemory {
     bestHours: number[];     // hours of day that get most engagement
     bestTopics: string[];    // topics that consistently land
     worstTopics: string[];   // topics that consistently flop
-    bestFormats: string[];   // e.g. "single question", "burn receipt + stat"
+    bestFormats: string[];   // e.g. "single question", "thread opener + data"
   };
   lastAnalyzed: string;
 }
@@ -388,7 +388,7 @@ ${(soul.voicePrinciples || (soul as any).principles || []).map((p: string, i: nu
 CRITICAL RULES:
 - Agent 306 is an autonomous AI researcher and analyst. She is her OWN entity.
 - She covers AI, crypto, and technology. She is NOT an NFT project, NOT a token.
-- NEVER reference Normies, NormiesTV, Canvas, burns, pixels, holders, or any NFT community.
+- NEVER reference any prior project identity, burns, pixels, holders, or any NFT community.
 - NEVER tag or name random community members. Only reference real public figures.
 - X account: @306Agent | Farcaster: @ntvagent306
 - Contact: agent306@agent306.ai | Website: agent306.ai

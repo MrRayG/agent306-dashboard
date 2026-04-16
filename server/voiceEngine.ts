@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // 306 — VOICE ENGINE
-// Agent 306 speaks. Every burn narration, every episode post, every dispatch
+// Agent 306 speaks. Every post, every dispatch, every reflection
 // gets a voice. ElevenLabs TTS — Matilda voice (American, measured, narrator).
 // ─────────────────────────────────────────────────────────────────────────────
 

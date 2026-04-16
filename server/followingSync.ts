@@ -7,7 +7,7 @@
 
 import { TwitterApi } from "twitter-api-v2";
 import * as fs from "fs";
-// holderCatalog removed (NORMIES-era dead code)
+
 
 import { dataPath } from "./dataPaths.js";
 const FOLLOWING_FILE  = dataPath("following.json");

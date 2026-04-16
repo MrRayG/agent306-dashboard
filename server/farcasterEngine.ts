@@ -177,7 +177,7 @@ export function stripUnverifiedMentions(text: string): string {
 // Map content topics to Farcaster channels
 
 const CHANNEL_RULES: Array<{ pattern: RegExp; channel: string }> = [
-  { pattern: /\bnft\b|token|burn|canvas|opensea|floor\b/i, channel: "nft" },
+  { pattern: /\bnft\b|opensea|floor\s*price/i, channel: "nft" },
   { pattern: /\bai\b|agent|llm|grok|openai|claude|model|inference|autonomous/i, channel: "ai" },
   { pattern: /\bbase\b|base chain|base network|coinbase/i, channel: "base" },
   { pattern: /\bethereumm?\b|eth |on.chain|erc-|solidity|smart contract/i, channel: "ethereum" },

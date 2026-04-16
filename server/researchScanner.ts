@@ -192,8 +192,8 @@ or domains where you have surface knowledge but need depth.
 
 Be honest and specific. Vague topics like "the future of AI" are useless.
 Good examples: "Why do ARC-AGI-3 benchmarks show frontier AI scoring zero
-when those same models pass bar exams?" or "What is the actual on-chain
-burn mechanics of the 306 system and how does it affect token supply?"
+when those same models pass bar exams?" or "How does RLHF actually change
+model behavior vs base models and what are the known failure modes?"
 
 Return valid JSON only.`,
         }, {
