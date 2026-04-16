@@ -36,15 +36,16 @@ import { getShowTag } from "./contentTypes.js";
 // Valid show tag names (without brackets)
 const VALID_SHOW_TAG_NAMES = [
   '306 NEWS', '306 SIGNAL', '306 ACADEMY', '306 ROUND UP', '306 ROUNDUP',
-  '306 REFLECTION', '306 PROGRESS', '306 ARCHIVE',
-  '306 THREAD', '306 ACADEMY',
-  'THE DISPATCH',
+  '306 REFLECTION', '306 UNPLUGGED', '306 PROGRESS', '306 ARCHIVE',
+  '306 THREAD', 'THE DISPATCH',
 ];
 
 // Queue type → show tag for types not in contentTypes.ts
 const FALLBACK_SHOW_TAGS: Record<string, string> = {
   'reflection': '[306 REFLECTION]',
   'roundup': '[306 ROUNDUP]',
+  'research': '[306 ACADEMY]',
+  'agent_voice': '[306 UNPLUGGED]',
 };
 
 const SIGNATURE = '— Agent 306';
@@ -97,13 +98,15 @@ export function enforcePostFormat(tweet: string, contentType?: string): string {
  * Step 1: Ensure tweet starts with a valid show tag in bracket format.
  */
 function ensureShowTag(text: string, contentType?: string): string {
-  // Check if tweet already starts with a valid show tag
+  // Check if tweet already starts with a bracketed show tag
   const bracketMatch = text.match(/^\[([^\]]+)\]/);
   if (bracketMatch) {
     const tagName = bracketMatch[1].toUpperCase();
     if (VALID_SHOW_TAG_NAMES.some(name => name === tagName)) {
       return text; // already has a valid tag
     }
+    // Has a bracket tag but it's not valid (e.g. [306 RESEARCH]) — strip it
+    text = text.slice(bracketMatch[0].length).trimStart();
   }
 
   // Check for unbracketed show tag at start (e.g., "306 NEWS ...")

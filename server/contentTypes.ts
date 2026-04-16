@@ -76,6 +76,18 @@ export const CONTENT_TYPES: Record<string, ContentType> = {
     queueType: 'academy',
     slotPreference: ['midday'],
   },
+  reflection: {
+    id: 'reflection',
+    showTag: '[306 REFLECTION]',
+    name: '306 REFLECTION',
+    description: 'Evening thought — go deep on one idea, think in public, show genuine uncertainty.',
+    format: 'One idea, deeply explored. Honest about what you are still figuring out.',
+    schedule: 'Daily 10pm ET',
+    category: 'primary',
+    engine: 'tweetPromptBuilder (reflection)',
+    queueType: 'reflection',
+    slotPreference: ['night'],
+  },
   agent_voice: {
     id: 'agent_voice',
     showTag: '[306 UNPLUGGED]',
