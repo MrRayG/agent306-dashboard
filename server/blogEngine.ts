@@ -22,6 +22,7 @@ import { getFormatVoiceContext } from "./voiceInstructions.js";
 import { getKnowledgeContext } from "./memoryEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
+import { postChatCompletions } from "./llmCall.js";
 const BLOG_FILE = dataPath("blog_state.json");
 
 // ── Types ─────────────────────────────────────────────────────
@@ -124,10 +125,7 @@ export async function scanBlogForSensitiveContent(content: string): Promise<Cont
   // LLM-based IP check for more nuanced issues
   if (LLM_API_KEY) {
     try {
-      const res = await fetch(LLM_BASE_URL, {
-        method: "POST",
-        headers: getLLMHeaders(),
-        body: JSON.stringify({
+      const res = await postChatCompletions({
           model: getModel("routine"),
           messages: [{
             role: "system",
@@ -146,9 +144,7 @@ If safe, return {"safe": true, "issues": []}`
           }],
           temperature: 0.1,
           max_tokens: 300,
-        }),
-        signal: AbortSignal.timeout(15000),
-      });
+        }, AbortSignal.timeout(15000));
 
       if (res.ok) {
         const data = await res.json() as any;
@@ -358,10 +354,7 @@ export async function generateBlogPost(opts: {
   }
 
   try {
-    const res = await fetch(LLM_BASE_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model: getModel("blog-post"),
         messages: [
           {
@@ -435,9 +428,7 @@ Write the full blog post following the blog structure template. Hook the reader 
         ],
         temperature: 0.75,
         max_tokens: 4000,
-      }),
-      signal: AbortSignal.timeout(60000),
-    });
+      }, AbortSignal.timeout(60000));
 
     if (!res.ok) {
       console.error(`[Blog] LLM error: ${res.status}`);

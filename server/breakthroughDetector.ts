@@ -22,6 +22,7 @@ import { getVoiceContext } from "./voiceInstructions.js";
 import { enforceShowTag } from "./contentTypes.js";
 import { buildTweetSystemPrompt } from "./tweetPromptBuilder.js";
 
+import { postChatCompletions } from "./llmCall.js";
 // -- Types ------------------------------------------------------------------
 
 export interface BreakthroughScoreV2 {
@@ -441,10 +442,7 @@ Required JSON schema:
 
     const userPrompt = `The finding to evaluate:\n\n${finding}`;
 
-    const res = await fetch(LLM_BASE_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model: getModel("breakthrough-evaluation"),
         messages: [
           { role: "system", content: systemPrompt },
@@ -452,9 +450,7 @@ Required JSON schema:
         ],
         max_tokens: 500,
         temperature: 0.2,
-      }),
-      signal: AbortSignal.timeout(30000),
-    });
+      }, AbortSignal.timeout(30000));
 
     if (!res.ok) {
       console.error(`[Breakthrough] LLM call failed: ${res.status}`);
@@ -548,10 +544,7 @@ Required JSON schema:
     let breakthroughPost = `[306 SIGNAL] ${breakthrough.title}\n\n${breakthrough.description.slice(0, 2200)}`;
     try {
       const breakthroughSystemPrompt = buildTweetSystemPrompt('signal', breakthrough.title);
-      const voiceResp = await fetch(LLM_BASE_URL, {
-        method: "POST",
-        headers: getLLMHeaders(),
-        body: JSON.stringify({
+      const voiceResp = await postChatCompletions({
           model: getModel("breakthrough-evaluation"),
           messages: [
             { role: "system", content: breakthroughSystemPrompt },
@@ -562,9 +555,7 @@ Required JSON schema:
           ],
           max_tokens: 600,
           temperature: 0.7,
-        }),
-        signal: AbortSignal.timeout(30000),
-      });
+        }, AbortSignal.timeout(30000));
       if (voiceResp.ok) {
         const voiceData = await voiceResp.json() as any;
         const voiced = voiceData.choices?.[0]?.message?.content?.trim() ?? "";

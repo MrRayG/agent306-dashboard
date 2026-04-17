@@ -12,6 +12,7 @@ import { getEvolutionContext } from "./soulEvolution.js";
 import { enforceShowTag } from "./contentTypes.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
+import { postChatCompletions } from "./llmCall.js";
 export async function generateNewsContent(): Promise<string | null> {
   const grokKey = LLM_API_KEY;
   if (!grokKey) return null;
@@ -42,10 +43,7 @@ export async function generateNewsContent(): Promise<string | null> {
     const todaysSummary = getTodaysPostsSummary();
     const dispatchSystemPrompt = `${dispatchContext}\n\n${buildVoiceBlock()}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
 
-    const grokResp = await fetch(LLM_BASE_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const grokResp = await postChatCompletions({
         model: getModel("news-dispatch"),
         messages: [
           { role: "system", content: dispatchSystemPrompt },
@@ -85,9 +83,7 @@ Return JSON: {"post": "..."}`
         ],
         max_tokens: 2500,
         temperature: 0.8,
-      }),
-      signal: AbortSignal.timeout(60000),
-    });
+      }, AbortSignal.timeout(60000));
 
     let postText = "";
     if (grokResp.ok) {

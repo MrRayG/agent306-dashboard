@@ -19,6 +19,7 @@ import { LLM_BASE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { getConnections as getSynthesisConnections } from "./synthesisEngine.js";
 
+import { postChatCompletions } from "./llmCall.js";
 const CONNECTIONS_FILE = dataPath("knowledge-connections-graph.json");
 const CLUSTERS_FILE = dataPath("knowledge-clusters.json");
 
@@ -114,10 +115,7 @@ async function callLLM(
 
   let raw = "";
   try {
-    const res = await fetch(LLM_BASE_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model: getModel(task),
         messages: [
           { role: "system", content: systemPrompt },
@@ -125,9 +123,7 @@ async function callLLM(
         ],
         max_tokens: maxTokens,
         temperature,
-      }),
-      signal: AbortSignal.timeout(60000),
-    });
+      }, AbortSignal.timeout(60000));
     if (!res.ok) {
       const errBody = await res.text().catch(() => "");
       console.error(`[KnowledgeGraph] LLM API error (${task}): ${res.status} ${res.statusText} — model: ${getModel(task)} — ${errBody.slice(0, 300)}`);
@@ -135,10 +131,7 @@ async function callLLM(
       // Retry with standard model if routine model failed
       if (getModel(task) !== "x-ai/grok-4.20") {
         console.log(`[KnowledgeGraph] Retrying ${task} with x-ai/grok-4.20...`);
-        const retryRes = await fetch(LLM_BASE_URL, {
-          method: "POST",
-          headers: getLLMHeaders(),
-          body: JSON.stringify({
+        const retryRes = await postChatCompletions({
             model: "x-ai/grok-4.20",
             messages: [
               { role: "system", content: systemPrompt },
@@ -146,9 +139,7 @@ async function callLLM(
             ],
             max_tokens: maxTokens,
             temperature,
-          }),
-          signal: AbortSignal.timeout(60000),
-        });
+          }, AbortSignal.timeout(60000));
         if (retryRes.ok) {
           const retryData = await retryRes.json() as any;
           raw = retryData.choices?.[0]?.message?.content ?? "{}";

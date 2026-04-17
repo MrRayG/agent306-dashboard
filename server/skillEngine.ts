@@ -15,6 +15,7 @@ import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
+import { postChatCompletions } from "./llmCall.js";
 const GROK_URL = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
 const SKILLS_FILE = dataPath("skills.json");
@@ -130,10 +131,7 @@ export async function extractSkill(input: {
   };
 
   try {
-    const res = await fetch(GROK_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model: getModel("skill_extraction"),
         messages: [
           {
@@ -161,9 +159,7 @@ What made this work? Extract a reusable template.`,
         ],
         max_tokens: 800,
         temperature: 0.3,
-      }),
-      signal: AbortSignal.timeout(30000),
-    });
+      }, AbortSignal.timeout(30000));
 
     if (!res.ok) return null;
 

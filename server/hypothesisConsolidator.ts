@@ -17,6 +17,7 @@ import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { getEmbedding } from "./embeddingEngine.js";
 import type { Hypothesis } from "./researchEngine.js";
 
+import { postChatCompletions } from "./llmCall.js";
 // ── Cosine similarity (inline to avoid circular dependency) ──────────────────
 function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length || a.length === 0) return 0;
@@ -139,10 +140,7 @@ Respond with JSON:
 }`;
 
   try {
-    const res = await fetch(LLM_BASE_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model: getModel("hypothesis-consolidation"),
         messages: [
           { role: "system", content: "You merge redundant research hypotheses into canonical versions. Be precise and testable." },
@@ -150,9 +148,7 @@ Respond with JSON:
         ],
         temperature: 0.1,
         max_tokens: 500,
-      }),
-      signal: AbortSignal.timeout(LLM_TIMEOUTS.consolidation),
-    });
+      }, AbortSignal.timeout(LLM_TIMEOUTS.consolidation));
 
     if (!res.ok) {
       console.warn(`[HypothesisConsolidator] LLM error: ${res.status}`);

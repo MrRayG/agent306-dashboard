@@ -26,6 +26,7 @@ import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
+import { postChatCompletions } from "./llmCall.js";
 const GROK_CHAT_API  = LLM_BASE_URL;
 const KNOWLEDGE_FILE = dataPath("memory_knowledge.json");
 const SCANNER_FILE   = dataPath("scanner_state.json");
@@ -174,10 +175,7 @@ export async function runResearchScan(grokKey: string): Promise<ScanResult> {
 
   // ── Ask Grok to find the gaps ─────────────────────────────────────────────
   try {
-    const res = await fetch(GROK_CHAT_API, {
-      method:  "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model:           getModel("research_scan"),
         messages: [{
           role:    "system",
@@ -202,9 +200,7 @@ Return valid JSON only.`,
         }],
         max_tokens:  1800,
         temperature: 0.8,
-      }),
-      signal: AbortSignal.timeout(40000),
-    });
+      }, AbortSignal.timeout(40000));
 
     if (!res.ok) {
       console.error("[Scanner] Grok API error:", res.status);
@@ -349,10 +345,7 @@ export async function scanGoalsForResearch(grokKey: string): Promise<GoalScanRes
     }
 
     try {
-      const res = await fetch(GROK_CHAT_API, {
-        method:  "POST",
-        headers: getLLMHeaders(),
-        body: JSON.stringify({
+      const res = await postChatCompletions({
           model:           getModel("research_scan"),
           messages: [{
             role:    "system",
@@ -390,9 +383,7 @@ Return JSON:
           }],
           max_tokens:  800,
           temperature: 0.75,
-        }),
-        signal: AbortSignal.timeout(25000),
-      });
+        }, AbortSignal.timeout(25000));
 
       if (!res.ok) {
         result.skipped    = true;

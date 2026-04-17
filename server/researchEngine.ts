@@ -23,6 +23,7 @@ import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders, LLM_TIMEOUTS } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
+import { postChatCompletions } from "./llmCall.js";
 const GROK_CHAT_API    = LLM_BASE_URL;
 const PERPLEXITY_API   = "https://api.perplexity.ai";
 const RESEARCH_FILE    = dataPath("research_lab.json");
@@ -2298,10 +2299,7 @@ Required JSON schema:
   "reasoning": "1-2 sentence summary of your evaluation"
 }`;
 
-        const res = await fetch(LLM_BASE_URL, {
-          method: "POST",
-          headers: getLLMHeaders(),
-          body: JSON.stringify({
+        const res = await postChatCompletions({
             model: getModel("topic-quality-evaluation"),
             messages: [
               { role: "system", content: systemPrompt },
@@ -2309,9 +2307,7 @@ Required JSON schema:
             ],
             max_tokens: 400,
             temperature: 0.2,
-          }),
-          signal: AbortSignal.timeout(30000),
-        });
+          }, AbortSignal.timeout(30000));
 
         if (!res.ok) {
           console.error(`[AutoApproval] LLM call failed for "${topic.topic}": ${res.status}`);
@@ -2690,10 +2686,7 @@ Return valid JSON only:
   ]
 }`;
 
-    const res = await fetch(LLM_BASE_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model: getModel("aspiration-generation"),
         messages: [
           { role: "system", content: systemPrompt },
@@ -2701,9 +2694,7 @@ Return valid JSON only:
         ],
         max_tokens: 2000,
         temperature: 0.7,
-      }),
-      signal: AbortSignal.timeout(60000),
-    });
+      }, AbortSignal.timeout(60000));
 
     if (!res.ok) {
       console.error(`[Aspirations] LLM call failed: ${res.status}`);
@@ -2806,10 +2797,7 @@ Evaluate honestly. Return valid JSON:
   "milestonesAchieved": [<indices of achieved milestones, 0-indexed>]
 }`;
 
-        const res = await fetch(LLM_BASE_URL, {
-          method: "POST",
-          headers: getLLMHeaders(),
-          body: JSON.stringify({
+        const res = await postChatCompletions({
             model: getModel("aspiration-evaluation"),
             messages: [
               { role: "system", content: systemPrompt },
@@ -2817,9 +2805,7 @@ Evaluate honestly. Return valid JSON:
             ],
             max_tokens: 400,
             temperature: 0.3,
-          }),
-          signal: AbortSignal.timeout(30000),
-        });
+          }, AbortSignal.timeout(30000));
 
         if (!res.ok) continue;
 

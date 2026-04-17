@@ -15,6 +15,7 @@ import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./ll
 import { getGraphConnections, getClusters, type KnowledgeConnection as GraphConnection } from "./knowledge-graph.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
+import { postChatCompletions } from "./llmCall.js";
 const GROK_URL = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
 const CONNECTIONS_FILE = dataPath("knowledge-connections.json");
@@ -97,10 +98,7 @@ async function callGrok(systemPrompt: string, userPrompt: string, maxTokens = 20
 
   let raw = "";
   try {
-    const res = await fetch(GROK_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model: getModel("connection_scan"),
         messages: [
           { role: "system", content: systemPrompt },
@@ -108,9 +106,7 @@ async function callGrok(systemPrompt: string, userPrompt: string, maxTokens = 20
         ],
         max_tokens: maxTokens,
         temperature: 0.3,
-      }),
-      signal: AbortSignal.timeout(60000),
-    });
+      }, AbortSignal.timeout(60000));
     if (!res.ok) return null;
     const data = await res.json() as any;
     raw = data.choices?.[0]?.message?.content ?? "{}";

@@ -37,6 +37,7 @@ import { enforcePostFormat } from "./postFormatGuard.js";
 import { buildVoiceBlock } from "./voice.js";
 import { getEvolutionContext } from "./soulEvolution.js";
 
+import { postChatCompletions } from "./llmCall.js";
 const GROK_URL          = LLM_BASE_URL;
 const GROK_SEARCH_URL   = LLM_RESPONSE_URL;
 const SIGNAL_STATE_FILE = dataPath("signal_brief_state.json");
@@ -194,10 +195,7 @@ async function generateSignalBrief(grokKey: string): Promise<{
   const { aiSignal, web3Signal, wildcardSignal } = await fetchFreshSignals(grokKey);
 
   try {
-    const res = await fetch(GROK_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model: getModel("signal-collection"),
         messages: [
           {
@@ -264,9 +262,7 @@ Return JSON:
         ],
         max_tokens: 4000,
         temperature: 0.8,
-      }),
-      signal: AbortSignal.timeout(60000),
-    });
+      }, AbortSignal.timeout(60000));
 
     if (!res.ok) {
       const errBody = await res.text().catch(() => "");

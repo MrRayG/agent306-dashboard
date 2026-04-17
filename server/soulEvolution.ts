@@ -20,6 +20,7 @@ import { dataPath } from "./dataPaths.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, getLLMHeaders } from "./llmConfig.js";
 
+import { postChatCompletions } from "./llmCall.js";
 // ── Types ─────────────────────────────────────────────────────
 
 export interface VoiceJournalEntry {
@@ -99,10 +100,7 @@ function generateId(): string {
 
 /** Call the LLM for a brief reflection. Fire-and-forget safe. */
 async function llmReflect(prompt: string): Promise<string> {
-  const resp = await fetch(LLM_BASE_URL, {
-    method: "POST",
-    headers: getLLMHeaders(),
-    body: JSON.stringify({
+  const resp = await postChatCompletions({
       model: getModel("intro-post"),
       messages: [
         { role: "system", content: "You are Agent 306 reflecting on your communication. Be brief, honest, and specific. 1-2 sentences max." },
@@ -110,8 +108,7 @@ async function llmReflect(prompt: string): Promise<string> {
       ],
       max_tokens: 200,
       temperature: 0.7,
-    }),
-  });
+    });
   const data = await resp.json();
   return data.choices?.[0]?.message?.content?.trim() ?? "";
 }

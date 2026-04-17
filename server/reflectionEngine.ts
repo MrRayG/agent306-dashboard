@@ -14,6 +14,7 @@ import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
+import { postChatCompletions } from "./llmCall.js";
 const GROK_URL = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
 const REFLECTIONS_FILE = dataPath("reflections.json");
@@ -164,10 +165,7 @@ async function callGrok(systemPrompt: string, userPrompt: string): Promise<any |
 
   let raw = "";
   try {
-    const res = await fetch(GROK_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model: getModel("reflection"),
         messages: [
           { role: "system", content: systemPrompt },
@@ -175,9 +173,7 @@ async function callGrok(systemPrompt: string, userPrompt: string): Promise<any |
         ],
         max_tokens: 1500,
         temperature: 0.3,
-      }),
-      signal: AbortSignal.timeout(40000),
-    });
+      }, AbortSignal.timeout(40000));
     if (!res.ok) return null;
     const data = await res.json() as any;
     raw = data.choices?.[0]?.message?.content ?? "{}";
@@ -365,10 +361,7 @@ export async function runReflection(): Promise<Reflection[]> {
           .sort((a, b) => a.avg - b.avg);
 
         if (weakDimensions.length > 0) {
-          const podcastRuleRes = await fetch(GROK_URL, {
-            method: "POST",
-            headers: getLLMHeaders(),
-            body: JSON.stringify({
+          const podcastRuleRes = await postChatCompletions({
               model: getModel("reflection"),
               messages: [{
                 role: "system",
@@ -379,9 +372,7 @@ export async function runReflection(): Promise<Reflection[]> {
               }],
               temperature: 0.3,
               max_tokens: 300,
-            }),
-            signal: AbortSignal.timeout(15000),
-          });
+            }, AbortSignal.timeout(15000));
 
           if (podcastRuleRes.ok) {
             const data = await podcastRuleRes.json() as any;

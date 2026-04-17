@@ -18,6 +18,49 @@ import {
 import { getModel } from "./modelRouter.js";
 import { callResponsesAPI } from "./responsesAdapter.js";
 
+/**
+ * postChatCompletions — PR P low-level helper for migrating raw
+ * `fetch(LLM_BASE_URL, ...)` call sites to the same xAI-direct routing
+ * the high-level callLLM() uses.
+ *
+ * Drop-in replacement preserving the caller's payload, error handling, and
+ * response parsing. The ONLY thing this helper changes is which URL/headers
+ * the request lands on:
+ *   - Grok models   → https://api.x.ai/v1/chat/completions (direct)
+ *   - Everything else → OpenRouter
+ *
+ * Routing is decided by resolveChatRoute() based on payload.model. The
+ * provider-native model name is substituted into the outgoing payload so
+ * api.x.ai sees "grok-4-fast-non-reasoning" instead of "x-ai/grok-4-fast...".
+ *
+ * The caller's `payload` object is NOT mutated.
+ *
+ * Returns the raw Response so callers keep ownership of:
+ *   - status / .ok checks (and any custom error logging)
+ *   - .json() vs .text() body parsing
+ *   - usage extraction from the parsed body
+ *
+ * Pass an existing AbortSignal (typically AbortSignal.timeout(N)) through
+ * unchanged so per-engine timeouts are preserved.
+ *
+ * Hard-fail policy: no auto-retry, no fallback to OpenRouter on xAI errors
+ * — matches the user's explicit policy for xAI overrides.
+ */
+export async function postChatCompletions(
+  payload: { model: string; [k: string]: any },
+  signal?: AbortSignal,
+): Promise<Response> {
+  const route = resolveChatRoute(payload.model);
+  // Substitute the provider-native model name without mutating the caller's object.
+  const outgoing = route.model === payload.model ? payload : { ...payload, model: route.model };
+  return fetch(route.url, {
+    method: "POST",
+    headers: route.headers,
+    body: JSON.stringify(outgoing),
+    signal,
+  });
+}
+
 export async function callChatCompletions(opts: LLMCallOptions, model: string): Promise<LLMResponse> {
   const timeoutMs = opts.timeoutMs ?? LLM_TIMEOUTS.default;
   const messages = opts.messages ?? opts.input ?? [];

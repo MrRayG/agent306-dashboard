@@ -18,6 +18,7 @@ import { getEvolutionContext } from "./soulEvolution.js";
 import { enforceShowTag } from "./contentTypes.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
+import { postChatCompletions } from "./llmCall.js";
 // ── Types ───────────────────────────────────────────────────────────────
 
 interface DispatchEpisode {
@@ -158,10 +159,7 @@ export async function generateDispatchContent(): Promise<string | null> {
 
     const systemPrompt = `${dispatchContext}\n\n${buildVoiceBlock()}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
 
-    const grokResp = await fetch(LLM_BASE_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const grokResp = await postChatCompletions({
         model: getModel("news-dispatch"),
         messages: [
           { role: "system", content: systemPrompt },
@@ -207,9 +205,7 @@ Return JSON: {"post": "...", "title": "...", "summary": "..."}`
         ],
         max_tokens: 2500,
         temperature: 0.8,
-      }),
-      signal: AbortSignal.timeout(60000),
-    });
+      }, AbortSignal.timeout(60000));
 
     let postText = "";
     let title = `Episode ${nextEpisode}`;

@@ -19,6 +19,7 @@ import { getModel } from "./modelRouter.js";
 import type { ResearchThread } from "./research-agenda.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
+import { postChatCompletions } from "./llmCall.js";
 const ANALYZER_FILE = dataPath("analyzer_nodes.json");
 const MAX_NODES = 200;
 
@@ -147,10 +148,7 @@ async function runAnalysis(
   const model = getModel("reflection");
 
   try {
-    const res = await fetch(LLM_BASE_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model,
         messages: [
           { role: "system", content: ANALYZER_SYSTEM_PROMPT },
@@ -169,9 +167,7 @@ Produce your structured analysis as JSON.`,
         ],
         temperature: 0.4,
         max_tokens: 1500,
-      }),
-      signal: AbortSignal.timeout(45000),
-    });
+      }, AbortSignal.timeout(45000));
 
     if (!res.ok) {
       console.warn(`[Analyzer] LLM error ${res.status} for ${type}:${sourceId}`);

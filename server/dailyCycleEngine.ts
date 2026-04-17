@@ -60,6 +60,7 @@ import { TriadCoordinator } from "./triad/coordinator.js";
 import { run306Eval } from "./evalEngine.js";
 import { startCycle as startCycleContext, recordEvent as recordCycleEvent, endCycle as endCycleContext } from "./cycleContext.js";
 
+import { postChatCompletions } from "./llmCall.js";
 const GROK_URL     = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
 const TRIAD_ENABLED = (process.env.TRIAD_ENABLED ?? "false").toLowerCase() === "true";
@@ -1379,10 +1380,7 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
   // ── Blog tweet voice generator ─────────────────────────────────────────────
   async function generateBlogTweet(post: any): Promise<string> {
     try {
-      const res = await fetch(LLM_BASE_URL, {
-        method: "POST",
-        headers: getLLMHeaders(),
-        body: JSON.stringify({
+      const res = await postChatCompletions({
           model: getModel("blog-post"),
           messages: [
             {
@@ -1412,8 +1410,7 @@ Write a single tweet sharing the most interesting insight from this research. Re
           ],
           max_tokens: 400,
           temperature: 0.85,
-        }),
-      });
+        });
       const data = await res.json();
       const text = data.choices?.[0]?.message?.content?.trim() ?? "";
       if (text && text.length >= 30 && text.length <= 600) return text;

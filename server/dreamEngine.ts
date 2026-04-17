@@ -22,6 +22,7 @@ import { getPodcastState, getEpisode } from "./podcastEngine.js";
 import { getResearchLab, addTopic } from "./researchEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
+import { postChatCompletions } from "./llmCall.js";
 const GROK_URL = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
 
@@ -186,10 +187,7 @@ async function callLLM(
   lastLLMCall = Date.now();
 
   try {
-    const res = await fetch(GROK_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model: getModel(task),
         messages: [
           { role: "system", content: systemPrompt },
@@ -197,9 +195,7 @@ async function callLLM(
         ],
         temperature: opts.temperature ?? 0.4,
         max_tokens: opts.maxTokens ?? 1500,
-      }),
-      signal: AbortSignal.timeout(45000),
-    });
+      }, AbortSignal.timeout(45000));
 
     if (!res.ok) {
       console.error(`[DreamEngine] LLM API error: ${res.status}`);

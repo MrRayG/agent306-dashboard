@@ -28,6 +28,7 @@ import { addHypothesis } from "./researchEngine.js";
 import { addKnowledge, knowledge } from "./memoryEngine.js";
 import { findConnections } from "./knowledge-graph.js";
 
+import { postChatCompletions } from "./llmCall.js";
 const LLM_RATE_MS = 5000;
 let lastLLMCall = 0;
 
@@ -51,10 +52,7 @@ async function callAnalysisLLM(
   lastLLMCall = Date.now();
 
   try {
-    const res = await fetch(LLM_BASE_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model: getModel(task),
         messages: [
           { role: "system", content: systemPrompt },
@@ -62,9 +60,7 @@ async function callAnalysisLLM(
         ],
         max_tokens: maxTokens,
         temperature,
-      }),
-      signal: AbortSignal.timeout(90000),
-    });
+      }, AbortSignal.timeout(90000));
 
     if (!res.ok) {
       const errBody = await res.text().catch(() => "");
