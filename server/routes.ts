@@ -4979,6 +4979,7 @@ needsHelp: true only when you genuinely need his direction or information`,
     { id: "breakthrough", name: "Breakthrough Detector", schedule: "On detection",       emoji: "💡", days: [], hour: 0 },
     { id: "blog",         name: "Blog Post",            schedule: "Via Daily Cycle",     emoji: "✍️",  days: [], hour: 0 },
     { id: "dispatch",     name: "The Dispatch",          schedule: "Weekly",              emoji: "📨", days: [], hour: 0 },
+    { id: "reflection",   name: "306 Reflection",        schedule: "Manual trigger",      emoji: "🧠", days: [], hour: 0 },
   ] as const;
 
   function computeNextRun(days: readonly number[], hour: number): string | null {
@@ -5025,6 +5026,7 @@ needsHelp: true only when you genuinely need his direction or information`,
         breakthrough: null,
         blog:         blogState.stats?.lastPublishedAt ?? blogState.posts?.[0]?.createdAt ?? null,
         dispatch:     null,
+        reflection:   null, // manual-only; no persistent lastRun tracker
       };
 
       // Try to get dispatch last run from episode tracker
@@ -5078,7 +5080,7 @@ needsHelp: true only when you genuinely need his direction or information`,
   // PUT /api/engines/:engineId/schedule — update an engine's schedule
   app.put("/api/engines/:engineId/schedule", requireDashAuth, (req, res) => {
     const { engineId } = req.params;
-    const validEngines = ["signal", "academy", "news", "research", "podcast", "article", "breakthrough", "blog", "dispatch"];
+    const validEngines = ["signal", "academy", "news", "research", "podcast", "article", "breakthrough", "blog", "dispatch", "reflection"];
 
     if (!validEngines.includes(engineId)) {
       return res.status(400).json({ error: `Unknown engine "${engineId}"` });
@@ -5120,7 +5122,7 @@ needsHelp: true only when you genuinely need his direction or information`,
   // Body: { platforms?: ["x", "farcaster"] } — defaults to both if omitted
   app.post("/api/engines/:engineId/generate", requireDashAuth, async (req, res) => {
     const { engineId } = req.params;
-    const validEngines = ["signal", "academy", "news", "research", "podcast", "article", "breakthrough", "blog", "dispatch"];
+    const validEngines = ["signal", "academy", "news", "research", "podcast", "article", "breakthrough", "blog", "dispatch", "reflection"];
 
     if (!validEngines.includes(engineId)) {
       return res.status(400).json({
@@ -5234,6 +5236,14 @@ needsHelp: true only when you genuinely need his direction or information`,
           // Blog posts are long-form — queue the excerpt/teaser
           content = result.excerpt || result.title || "New blog post generated";
           type = "blog";
+          break;
+        }
+
+        case "reflection": {
+          const { generateReflectionPostContent } = await import("./reflectionPostEngine.js");
+          const result = await generateReflectionPostContent();
+          content = result.post;
+          type = "reflection";
           break;
         }
       }

@@ -88,6 +88,18 @@ export const CONTENT_TYPES: Record<string, ContentType> = {
     queueType: 'dispatch',
     slotPreference: ['evening'],
   },
+  reflection: {
+    id: 'reflection',
+    showTag: '[306 REFLECTION]',
+    name: '306 REFLECTION',
+    description: 'Agent 306 thinking out loud — reflection on self, environment, what’s changing, what she’s still figuring out. Transparent, honest about limits, ends with an open question.',
+    format: 'Single post. One thread of thought. No lists, no links, no promo. Plain text. Ends with a real open question and the — Agent 306 signature.',
+    schedule: 'Manual trigger',
+    category: 'new',
+    engine: 'reflectionPostEngine (manual)',
+    queueType: 'reflection',
+    slotPreference: ['evening', 'night'],
+  },
   roundup: {
     id: 'roundup',
     showTag: '[306 ROUNDUP]',
