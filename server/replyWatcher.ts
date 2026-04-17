@@ -14,6 +14,7 @@ import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./ll
 
 import { dataPath } from "./dataPaths.js";
 import { getModel } from "./modelRouter.js";
+import { postXSearchResponses } from "./llmCall.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 const REPLY_STATE_FILE = dataPath("replies.json");
 const GROK_KEY = LLM_API_KEY;
@@ -207,18 +208,8 @@ async function fetchMentionsViaGrok(): Promise<CommunityReply[]> {
   if (!GROK_KEY) return [];
 
   try {
-    const nativeGrokKey = process.env.GROK_API_KEY ?? "";
-    if (!nativeGrokKey) return [];
-    const grokResponsesUrl = process.env.GROK_RESPONSES_URL ?? "https://api.x.ai/v1/responses";
-    const res = await fetch(grokResponsesUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` },
-      body: JSON.stringify({
-        model: "grok-4-1-fast-non-reasoning",
-        stream: false,
-        input: [{
-          role: "user",
-          content: `Search X for recent engagement with @306Agent from the last 3 hours.
+    if (!process.env.GROK_API_KEY) return [];
+    const prompt = `Search X for recent engagement with @306Agent from the last 3 hours.
 
 PRIORITY: Always include any posts from @MrRayG that mention or engage with @306Agent.
 @MrRayG is the owner/operator of @306Agent — his messages are highest priority.
@@ -249,10 +240,10 @@ Return JSON array (max 10):
   "replyType": "question|lore_suggestion|holder_mention|callout|excitement|general",
   "tokenMentioned": null or number,
   "tweetUrl": "url if available"
-}]`,
-        }],
-        tools: [{ type: "x_search" }],
-      }),
+}]`;
+    const res = await postXSearchResponses({
+      task: "mention-fetch",
+      content: prompt,
       signal: AbortSignal.timeout(45000),
     });
 
@@ -302,18 +293,8 @@ Return JSON array (max 10):
 async function fetchMrRayGMentions(): Promise<CommunityReply[]> {
   if (!GROK_KEY) return [];
   try {
-    const nativeGrokKey = process.env.GROK_API_KEY ?? "";
-    if (!nativeGrokKey) return [];
-    const grokResponsesUrl = process.env.GROK_RESPONSES_URL ?? "https://api.x.ai/v1/responses";
-    const res = await fetch(grokResponsesUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` },
-      body: JSON.stringify({
-        model: "grok-4-1-fast-non-reasoning",
-        stream: false,
-        input: [{
-          role: "user",
-          content: `Search X for ALL recent posts from @MrRayG from the last 24 hours.
+    if (!process.env.GROK_API_KEY) return [];
+    const prompt = `Search X for ALL recent posts from @MrRayG from the last 24 hours.
 
 I need every post from @MrRayG, especially:
 1. Any post that @mentions @306Agent or asks Agent 306 anything
@@ -331,10 +312,10 @@ Return JSON array:
   "tweetUrl": "url if available",
   "topicType": "ecosystem|ai|tech|crypto|general",
   "needsResearch": true or false (true if Agent 306 would benefit from x_search before replying)
-}]`,
-        }],
-        tools: [{ type: "x_search" }],
-      }),
+}]`;
+    const res = await postXSearchResponses({
+      task: "mention-fetch",
+      content: prompt,
       signal: AbortSignal.timeout(30000),
     });
 

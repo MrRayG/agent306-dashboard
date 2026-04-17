@@ -37,7 +37,7 @@ import { enforcePostFormat } from "./postFormatGuard.js";
 import { buildVoiceBlock } from "./voice.js";
 import { getEvolutionContext } from "./soulEvolution.js";
 
-import { postChatCompletions } from "./llmCall.js";
+import { postChatCompletions, postXSearchResponses } from "./llmCall.js";
 const GROK_URL          = LLM_BASE_URL;
 const GROK_SEARCH_URL   = LLM_RESPONSE_URL;
 const SIGNAL_STATE_FILE = dataPath("signal_brief_state.json");
@@ -97,19 +97,8 @@ async function fetchFreshSignals(grokKey: string): Promise<{
 
   try {
     // Try native Grok key for x_search first, fall back to OpenRouter
-    const grokNativeKey = process.env.GROK_API_KEY ?? "";
-    const useNativeGrok = !!grokNativeKey;
-    const searchUrl = useNativeGrok ? (process.env.GROK_RESPONSES_URL ?? "https://api.x.ai/v1/responses") : GROK_SEARCH_URL;
-    const searchHeaders = useNativeGrok
-      ? { "Content-Type": "application/json", "Authorization": `Bearer ${grokNativeKey}` }
-      : getLLMHeaders();
-    const searchBody = useNativeGrok
-      ? {
-          model: "grok-4-1-fast-non-reasoning",
-          stream: false,
-          input: [{
-            role: "user",
-            content: `Search X and the web for the 3 most signal-rich developments from the last 48 hours across these tracks:
+    const useNativeGrok = !!process.env.GROK_API_KEY;
+    const xSearchPrompt = `Search X and the web for the 3 most signal-rich developments from the last 48 hours across these tracks:
 
 TRACK 1 — AI frontier: major model releases, reasoning breakthroughs, agentic AI systems, AI policy/regulation, AI infrastructure shifts
 TRACK 2 — Crypto/Web3: major protocol updates, market structure shifts, institutional adoption, DeFi developments, regulatory changes
@@ -124,23 +113,25 @@ Return JSON:
   "aiSignal": "2-3 sentence description of the AI development with specifics",
   "web3Signal": "2-3 sentence description of the crypto/Web3 development with specifics",
   "wildcardSignal": "2-3 sentence description of the wild card signal with specifics"
-}`,
-          }],
-          tools: [{ type: "x_search" }],
-        }
-      : {
-          model: getModel("x_search"),
-          messages: [{ role: "user", content: `Find the 3 most important tech/AI/crypto developments from the last 48 hours. Return JSON with aiSignal, web3Signal, wildcardSignal fields, each 2-3 sentences.` }],
-          max_tokens: 800,
-          temperature: 0.3,
-        };
+}`;
 
-    const res = await fetch(searchUrl, {
-      method: "POST",
-      headers: searchHeaders,
-      body: JSON.stringify(searchBody),
-      signal: AbortSignal.timeout(45000),
-    });
+    const res = useNativeGrok
+      ? await postXSearchResponses({
+          task: "signal-brief",
+          content: xSearchPrompt,
+          signal: AbortSignal.timeout(45000),
+        })
+      : await fetch(GROK_SEARCH_URL, {
+          method: "POST",
+          headers: getLLMHeaders(),
+          body: JSON.stringify({
+            model: getModel("x_search"),
+            messages: [{ role: "user", content: `Find the 3 most important tech/AI/crypto developments from the last 48 hours. Return JSON with aiSignal, web3Signal, wildcardSignal fields, each 2-3 sentences.` }],
+            max_tokens: 800,
+            temperature: 0.3,
+          }),
+          signal: AbortSignal.timeout(45000),
+        });
 
     if (!res.ok) {
       const errorBody = await res.text().catch(() => "");

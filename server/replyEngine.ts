@@ -14,7 +14,7 @@ import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
-import { postChatCompletions } from "./llmCall.js";
+import { postChatCompletions, postXSearchResponses } from "./llmCall.js";
 const GROK_KEY   = LLM_API_KEY;
 const GROK_URL   = LLM_BASE_URL;
 const STATE_FILE = dataPath("reply_engine.json");
@@ -67,18 +67,8 @@ function randomBridge(): string {
 async function researchTopicForReply(topic: string): Promise<string> {
   if (!GROK_KEY) return "";
   try {
-    const nativeGrokKey = process.env.GROK_API_KEY ?? "";
-    if (!nativeGrokKey) return "";
-    const grokResponsesUrl = process.env.GROK_RESPONSES_URL ?? "https://api.x.ai/v1/responses";
-    const res = await fetch(grokResponsesUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` },
-      body: JSON.stringify({
-        model: "grok-4-1-fast-non-reasoning",
-        stream: false,
-        input: [{
-          role: "user",
-          content: `Search X and summarize what people are saying about this topic right now: "${topic}"
+    if (!process.env.GROK_API_KEY) return "";
+    const prompt = `Search X and summarize what people are saying about this topic right now: "${topic}"
 
 I need:
 1. The core facts or claims being discussed
@@ -86,10 +76,10 @@ I need:
 3. The main debate or point of tension
 4. Any recent developments from the last 7 days
 
-Keep it under 200 words — I need to reply intelligently on X, not write an essay.`,
-        }],
-        tools: [{ type: "x_search" }],
-      }),
+Keep it under 200 words — I need to reply intelligently on X, not write an essay.`;
+    const res = await postXSearchResponses({
+      task: "reply",
+      content: prompt,
       signal: AbortSignal.timeout(20000),
     });
     if (!res.ok) return "";
