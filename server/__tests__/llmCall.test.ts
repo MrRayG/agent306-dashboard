@@ -239,3 +239,118 @@ describe("callLLM routing", () => {
     assert.equal(fetchMock.mock.callCount(), 2);
   });
 });
+
+describe("postXSearchResponses — provider guard (router-tier-split PR)", () => {
+  const savedGrokKey = process.env.GROK_API_KEY;
+  const savedMultiAgent = process.env.MODEL_MULTI_AGENT;
+  let originalFetch: typeof globalThis.fetch;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+    process.env.GROK_API_KEY = "test-xai-key";
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    if (savedGrokKey === undefined) delete process.env.GROK_API_KEY;
+    else process.env.GROK_API_KEY = savedGrokKey;
+    if (savedMultiAgent === undefined) delete process.env.MODEL_MULTI_AGENT;
+    else process.env.MODEL_MULTI_AGENT = savedMultiAgent;
+  });
+
+  it("throws when resolved provider is not xai-direct (routine → openrouter)", async () => {
+    // `tier-assignment` resolves to routine → openrouter. The guard must fire
+    // BEFORE any fetch is issued.
+    const fetchMock = mock.fn(async () => makeChatResponse("should not be called") as any);
+    globalThis.fetch = fetchMock as any;
+
+    const { postXSearchResponses } = await import(`../llmCall.js?t=${Date.now()}-guard1`);
+    await assert.rejects(
+      () => postXSearchResponses({ task: "tier-assignment", content: "hello" }),
+      /postXSearchResponses requires xai-direct tier.*task=tier-assignment.*provider=openrouter/,
+    );
+    assert.equal(fetchMock.mock.callCount(), 0, "no fetch should be issued when guard trips");
+  });
+
+  it("throws when resolved provider is perplexity (news-research)", async () => {
+    const fetchMock = mock.fn(async () => makeChatResponse("should not be called") as any);
+    globalThis.fetch = fetchMock as any;
+
+    const { postXSearchResponses } = await import(`../llmCall.js?t=${Date.now()}-guard2`);
+    await assert.rejects(
+      () => postXSearchResponses({ task: "news-research", content: "hello" }),
+      /postXSearchResponses requires xai-direct tier.*provider=perplexity/,
+    );
+    assert.equal(fetchMock.mock.callCount(), 0);
+  });
+
+  it("allows xai-direct-tier tasks (live-social / signal-brief) through", async () => {
+    const fetchMock = mock.fn(async () => ({
+      ok: true, status: 200,
+      json: async () => ({ output: [{ type: "message", content: [{ type: "output_text", text: "hi" }] }] }),
+      text: async () => "",
+    }) as any);
+    globalThis.fetch = fetchMock as any;
+
+    const { postXSearchResponses } = await import(`../llmCall.js?t=${Date.now()}-guard3`);
+    const res = await postXSearchResponses({ task: "signal-brief", content: "q" });
+    assert.equal(res.ok, true);
+    assert.equal(fetchMock.mock.callCount(), 1);
+    const calledUrl = String(fetchMock.mock.calls[0].arguments[0]);
+    assert.ok(calledUrl.includes("api.x.ai"), `expected api.x.ai, got ${calledUrl}`);
+  });
+});
+
+describe("postChatCompletions — provider dispatch for perplexity tier", () => {
+  const savedPplxKey = process.env.PERPLEXITY_API_KEY;
+  let originalFetch: typeof globalThis.fetch;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+    process.env.PERPLEXITY_API_KEY = "test-pplx-key";
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    if (savedPplxKey === undefined) delete process.env.PERPLEXITY_API_KEY;
+    else process.env.PERPLEXITY_API_KEY = savedPplxKey;
+  });
+
+  it("routes perplexity-tier tasks to api.perplexity.ai/chat/completions", async () => {
+    const fetchMock = mock.fn(async () => makeChatResponse("pplx reply") as any);
+    globalThis.fetch = fetchMock as any;
+
+    const { postChatCompletions } = await import(`../llmCall.js?t=${Date.now()}-pplx1`);
+    await postChatCompletions(
+      { model: "sonar-pro", messages: [{ role: "user", content: "hi" }] },
+      undefined,
+      "news-research",
+    );
+    assert.equal(fetchMock.mock.callCount(), 1);
+    const url = String(fetchMock.mock.calls[0].arguments[0]);
+    assert.ok(url.includes("perplexity.ai"), `expected perplexity URL, got ${url}`);
+    const headers = fetchMock.mock.calls[0].arguments[1].headers;
+    assert.equal(headers["Authorization"], "Bearer test-pplx-key");
+  });
+
+  it("postPerplexity throws when task routes to non-perplexity provider", async () => {
+    const { postPerplexity } = await import(`../llmCall.js?t=${Date.now()}-pplx2`);
+    await assert.rejects(
+      () => postPerplexity({ task: "article", messages: [] }),
+      /postPerplexity.*routed to provider=xai-direct/,
+    );
+  });
+
+  it("postChatCompletions for perplexity throws without PERPLEXITY_API_KEY", async () => {
+    delete process.env.PERPLEXITY_API_KEY;
+    const { postChatCompletions } = await import(`../llmCall.js?t=${Date.now()}-pplx3`);
+    await assert.rejects(
+      () => postChatCompletions(
+        { model: "sonar-pro", messages: [] },
+        undefined,
+        "news-research",
+      ),
+      /PERPLEXITY_API_KEY is not set/,
+    );
+  });
+});

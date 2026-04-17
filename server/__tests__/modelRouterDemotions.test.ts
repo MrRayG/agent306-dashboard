@@ -53,7 +53,9 @@ const MUST_STAY_STANDARD = [
   "reply-generation",
   "episode-generation",
   "intro-post",
-  "blog-post",
+  // NOTE: blog-post moved to premium-voice in router-tier-split PR — spec
+  // matrix: {manuscript, blog, long-form, podcast, podcast-script} →
+  // premium-voice. Verified in MUST_STAY_PREMIUM below.
   // Quality-sensitive tooling — grounded Class-1 synthesis stays on Grok 4.20
   "triad-fact-synthesis",
 ];
@@ -74,6 +76,10 @@ const MUST_STAY_PREMIUM = [
   "analysis-synthesis",
   "analysis-knowledge-map",
   "parallel-search-reduce",
+  // Router-tier-split PR: blog/long-form joined the premium-voice tier.
+  "blog-post",
+  "long-form",
+  "blog",
 ];
 
 describe("PR D + PR J — P5 task demotions", () => {

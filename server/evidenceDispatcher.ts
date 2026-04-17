@@ -14,6 +14,7 @@
  */
 
 import { getModel } from "./modelRouter.js";
+import { postXSearchResponses } from "./llmCall.js";
 import { researchWithPerplexity, researchWithSemanticScholar, researchMultiSource } from "./researchEngine.js";
 import { addKnowledge } from "./memoryEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
@@ -268,16 +269,13 @@ export async function searchXPlatform(query: string): Promise<EvidenceResult> {
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, 2000);
-    const grokResponsesUrl = process.env.GROK_RESPONSES_URL ?? "https://api.x.ai/v1/responses";
-    const res = await fetch(grokResponsesUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` },
-      body: JSON.stringify({
-        model: getModel("x_search"),
-        stream: false,
-        input: [{ role: "user", content: sanitizedQuery }],
-        tools: [{ type: "x_search" }],
-      }),
+    // PR #181 missed this site: raw fetch sent `getModel("x_search")` (routine
+    // tier → Gemini) to api.x.ai, causing 400 "Model not found". Route through
+    // postXSearchResponses so the model comes from a live-social-tier task
+    // (xai-direct, Grok 4.20), and the provider guard hard-fails on misroute.
+    const res = await postXSearchResponses({
+      task: "signal-brief",
+      content: sanitizedQuery,
       signal: AbortSignal.timeout(45000),
     });
 

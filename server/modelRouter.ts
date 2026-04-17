@@ -1,196 +1,287 @@
 /**
  * Smart Model Router for Agent 306.
  *
- * Routes tasks to appropriate models via OpenRouter:
- *   routine     → google/gemini-3-flash-preview    (thinking model at routine prices, PR E)
- *   standard    → x-ai/grok-4.20                   (Class 1 grounded synthesis; xAI Responses API eligible)
- *   premium     → anthropic/claude-sonnet-4.6      (long-form public-facing content)
- *   frontier    → anthropic/claude-opus-4.6        (Class 2 reasoning — ASI-sensitive identity tasks, PR E)
- *   multi-agent → x-ai/grok-4.20-multi-agent       (4-agent collaborative debate)
+ * Locked routing matrix (PR: router-tier-split):
+ *   frontier-factual    → xai-direct   grok-4.20-0309-reasoning       (17% hallucination flagship — factual eval)
+ *   frontier-reasoning  → openrouter   anthropic/claude-opus-4.6      (identity-shaping reasoning)
+ *   premium-voice       → openrouter   anthropic/claude-sonnet-4.6    (long-form public voice)
+ *   standard-voice      → xai-direct   grok-4.20-0309-non-reasoning   (public voice, article/reply)
+ *   multi-agent         → xai-direct   grok-4.20-multi-agent-0309     (4-agent debate)
+ *   live-social         → xai-direct   grok-4.20-0309-non-reasoning   (+x_search tool)
+ *   live-research       → perplexity   sonar-pro                      (news grounding)
+ *   routine             → openrouter   google/gemini-3-flash-preview  (structured JSON / scoring)
  *
- * The "frontier" tier exists specifically for tasks where hallucinated output
- * would compound into Agent 306's identity or hypothesis base over time.
- * Claude Opus 4.6 was selected because it has the strongest hallucination-refusal
- * profile (0-14% on AA-Omniscience) among frontier models as of April 2026.
+ * frontier-factual exists specifically so hypothesis-eval / fact-verification
+ * / red-flag analysis / evidence eval hit Grok 4.20 Reasoning (lowest recorded
+ * hallucination rate on AA-Omniscience) instead of getting collapsed into a
+ * single "frontier" bucket that was exclusively serving Claude Opus.
  *
- * OpenRouter model names use provider/model format.
- * If a model is unavailable, OpenRouter returns an error —
- * callers should handle gracefully.
+ * Backwards-compat aliases:
+ *   frontier → frontier-reasoning
+ *   premium  → premium-voice
+ *   standard → standard-voice
+ * Any external caller that still resolves by the old tier name keeps working.
  */
 
-export type TaskComplexity = "routine" | "standard" | "premium" | "frontier" | "multi-agent" | "live-social";
+export type TaskComplexity =
+  | "routine"
+  | "standard-voice"
+  | "premium-voice"
+  | "frontier-factual"
+  | "frontier-reasoning"
+  | "multi-agent"
+  | "live-social"
+  | "live-research";
 
-const MODEL_MAP: Record<TaskComplexity, string> = {
-  routine:       process.env.MODEL_ROUTINE     ?? "google/gemini-3-flash-preview",
-  standard:      process.env.MODEL_STANDARD    ?? "x-ai/grok-4.20",
-  premium:       process.env.MODEL_PREMIUM     ?? "anthropic/claude-sonnet-4.6",
-  frontier:      process.env.MODEL_FRONTIER    ?? "anthropic/claude-opus-4.6",
-  "multi-agent": process.env.MODEL_MULTI_AGENT ?? "x-ai/grok-4.20-multi-agent",
-  // "live-social" — tasks requiring live X/web search via xAI Responses API + x_search tool.
-  // Must resolve to an xAI-hosted model so toXAINativeModel() returns non-null in
-  // postXSearchResponses; otherwise the helper throws. Grok 4.20 is the flagship x_search-
-  // compatible model today.
-  "live-social": process.env.MODEL_LIVE_SOCIAL ?? "x-ai/grok-4.20",
+export type RouteProvider = "xai-direct" | "openrouter" | "perplexity";
+
+export interface TierConfig {
+  provider: RouteProvider;
+  model: string;
+}
+
+/**
+ * Tier → {provider, model}. Defaults use OpenRouter-format strings for
+ * xAI tiers so resolveChatRoute()/toXAINativeModel() (in llmConfig) continue
+ * to translate them to the correct native name (e.g. grok-4.20-0309-reasoning)
+ * before dispatch. Env overrides may use either format.
+ */
+const TIER_MAP: Record<TaskComplexity, TierConfig> = {
+  "routine": {
+    provider: "openrouter",
+    model: process.env.MODEL_ROUTINE ?? "google/gemini-3-flash-preview",
+  },
+  "standard-voice": {
+    provider: "xai-direct",
+    model: process.env.MODEL_STANDARD_VOICE ?? "x-ai/grok-4.20-non-reasoning",
+  },
+  "premium-voice": {
+    provider: "openrouter",
+    model: process.env.MODEL_PREMIUM_VOICE ?? "anthropic/claude-sonnet-4.6",
+  },
+  "frontier-factual": {
+    provider: "xai-direct",
+    // x-ai/grok-4.20-reasoning → grok-4.20-0309-reasoning via toXAINativeModel()
+    model: process.env.MODEL_FRONTIER_FACTUAL ?? "x-ai/grok-4.20-reasoning",
+  },
+  "frontier-reasoning": {
+    provider: "openrouter",
+    model: process.env.MODEL_FRONTIER_REASONING ?? "anthropic/claude-opus-4.6",
+  },
+  "multi-agent": {
+    provider: "xai-direct",
+    model: process.env.MODEL_MULTI_AGENT ?? "x-ai/grok-4.20-multi-agent",
+  },
+  "live-social": {
+    // Tasks that need xAI Responses API + x_search tool. Must resolve to an
+    // xAI-hosted model so toXAINativeModel() returns non-null in
+    // postXSearchResponses; otherwise the helper hard-fails.
+    provider: "xai-direct",
+    model: process.env.MODEL_LIVE_SOCIAL ?? "x-ai/grok-4.20-non-reasoning",
+  },
+  "live-research": {
+    provider: "perplexity",
+    model: process.env.MODEL_LIVE_RESEARCH ?? "sonar-pro",
+  },
 };
 
+/**
+ * Collapsed-alias map. Pre-PR callers (and one external integration) still
+ * use the short tier names; these keep resolving without a code change.
+ */
+const TIER_ALIAS: Record<string, TaskComplexity> = {
+  "frontier": "frontier-reasoning",
+  "premium":  "premium-voice",
+  "standard": "standard-voice",
+};
+
+function resolveTier(name: string): TaskComplexity {
+  if ((TIER_MAP as Record<string, TierConfig>)[name]) return name as TaskComplexity;
+  const aliased = TIER_ALIAS[name];
+  if (aliased) return aliased;
+  return "standard-voice";
+}
+
 const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
-  // Routine — cheap/fast, no deep reasoning needed
+  // ── Routine — structured JSON outputs, rubric scoring, short extraction ──
   "reflection": "routine",
   "confidence-decay": "routine",
   "contradiction-scan": "routine",
   "connection-scan": "routine",
   "conversation-insights": "routine",
-  "hypothesis-resolution": "premium",         // Claude Sonnet 4.6 — multi-agent model uses Responses API (incompatible with Chat Completions JSON output)
   "knowledge-categorization": "routine",
   "tier-assignment": "routine",
   "injection-scan": "routine",
   "cluster-scan": "routine",
   "dream-update": "routine",
   "growth-snapshot": "routine",
+  "social-preview": "routine",
+  "breakthrough-evaluation": "routine",
+  "topic-quality-evaluation": "routine",
+  "aspiration-evaluation": "routine",
+  "analysis-so-what": "routine",
+  "analysis-assumptions": "routine",
+  "analysis-intake": "routine",
+  "signal-collection": "routine",
+  "parallel-search-subqueries": "routine",
+  "perspective-generation": "routine",
+  "episode-reflection": "routine",
+  "ai-roundup": "routine",
+  "community-boost": "routine",
+  "prediction-verification": "routine",
+  "knowledge-gap-scan": "routine",
+  "goal-evaluation": "routine",
+  "x-search": "routine",
+  "hypothesis-decomposition": "routine",
+  "trust-scoring": "routine",
+  "evidence-triage": "routine",
+  "evidence-search-query-gen": "routine",
+  "cross-score": "routine",
+  "graph-analysis": "routine",
+  "conversation-insight": "routine",
+  "research-scan": "routine",
 
-  // Routine (demoted in PR D — P5 batch) — rubric scoring, structured extraction,
-  // and short templated outputs. All produce JSON with clear schemas that Gemini
-  // flash-lite handles reliably. Previously standard, ~10x cost on calls via getModel().
-  "social-preview": "routine",              // Pick best 50-80 word passage from script
-  "breakthrough-evaluation": "routine",     // Single novelty score 0-100 + title
-  "topic-quality-evaluation": "routine",    // 5 rubric scores 1-10
-  "aspiration-evaluation": "routine",       // Progress % + 1-2 sentence self-assessment
-  "analysis-so-what": "routine",            // 3-field compression output
-  "analysis-assumptions": "routine",        // Structured list of untested assumptions
-  "analysis-intake": "routine",             // Phase 1 landscape-mapping extraction
-  "signal-collection": "routine",           // Structured signal selection from live data
-  // Wave 1 follow-up: signal-brief uses postXSearchResponses (xAI Responses API + x_search tool),
-  // which requires an xAI-hosted model. Previous "routine" mapping → Gemini, which caused
-  // toXAINativeModel() to return null and the helper to throw. "live-social" tier pins it to
-  // Grok 4.20 via xAI Direct. Hyphen form covers signal_brief via normalizeTaskName().
-  "signal-brief": "live-social",
-  "parallel-search-subqueries": "routine",  // Generate 3-5 search subqueries from a claim
-  "perspective-generation": "routine",      // Alt-perspective generation in knowledge graph
-  "episode-reflection": "routine",          // Short post-episode notes
-  "ai-roundup": "routine",                  // Roundup packaging (formatting)
-  "community-boost": "routine",             // Short supportive reply draft
-  "prediction-verification": "routine",     // Rubric-driven prediction check
+  // ── Frontier-factual — lowest-hallucination Grok 4.20 Reasoning ──
+  // Tasks whose hallucinations would compound into the hypothesis / evidence
+  // base. Routes to xai-direct so api.x.ai actually sees Grok 4.20 Reasoning,
+  // not a silent collapse to Claude Opus via OpenRouter.
+  "hypothesis-evaluation":   "frontier-factual",
+  "fact-verification":       "frontier-factual",
+  "red-flag-analysis":       "frontier-factual",
+  "evidence-evaluation":     "frontier-factual",
 
-  // Routine (demoted in PR J — P5 routing audit) — structured JSON outputs and
-  // short templated scoring. These match the shape of earlier routine demotions
-  // (aspiration-evaluation, parallel-search-subqueries, signal-collection).
-  // Gemini 3 Flash handles JSON schema output reliably at ~10x cost savings.
-  // Canary: watch knowledge-gap-scan / goal-evaluation hit rate for 1 week;
-  // revert via env overrides (MODEL_ROUTINE) if quality regresses.
-  "knowledge-gap-scan": "routine",          // Structured gap list, no long-form synthesis
-  "goal-evaluation": "routine",             // Rubric-style scoring (same family as aspiration-evaluation)
-  "x-search": "routine",                    // Short search-query crafting (same family as parallel-search-subqueries). Note: map key is hyphenated because getModel normalizes underscores to hyphens before lookup.
+  // ── Frontier-reasoning — Claude Opus 4.6 ──
+  // Pure reasoning, identity-shaping tasks; factual freshness less critical.
+  "deep-reasoning":           "frontier-reasoning",
+  "synthesis-report":         "frontier-reasoning",
+  "architecture":             "frontier-reasoning",
+  "complex-code-reasoning":   "frontier-reasoning",
+  "triad-reasoning":          "frontier-reasoning",
+  "aspiration-generation":    "frontier-reasoning",
+  "self-evolution-reflection":"frontier-reasoning",
 
-  // Standard — good reasoning, moderate cost
-  "research-phase": "standard",
-  "self-debate": "standard",
-  "exploration": "standard",
-  "news-dispatch": "standard",              // Public-facing market commentary
-  "research-brief": "premium",
-  "reply-generation": "standard",           // Public-facing voice
-  "episode-generation": "standard",         // Public-facing script
-  "research-agenda-advance": "standard",
-  "parallel-search-reduce": "premium",
+  // ── Premium-voice — Claude Sonnet 4.6 (long-form public) ──
+  "manuscript":               "premium-voice",
+  "manuscript-generation":    "premium-voice",
+  "blog":                     "premium-voice",
+  "blog-post":                "premium-voice",
+  "long-form":                "premium-voice",
+  "podcast":                  "premium-voice",
+  "podcast-script":           "premium-voice",
+  "podcast-from-thread":      "premium-voice",
+  "research-brief":           "premium-voice",
+  "research-agenda-generate": "premium-voice",
+  "article-draft":            "premium-voice",
+  "article_draft":            "premium-voice",
+  "daily-briefing":           "premium-voice",
+  "improvement-plan":         "premium-voice",
+  "skill-extraction":         "premium-voice",
+  "academy":                  "premium-voice",
+  "hypothesis-resolution":    "premium-voice",
+  "analysis-contradictions":  "premium-voice",
+  "analysis-citation-chains": "premium-voice",
+  "analysis-gap-scan":        "premium-voice",
+  "analysis-methodology-audit":"premium-voice",
+  "analysis-synthesis":       "premium-voice",
+  "analysis-knowledge-map":   "premium-voice",
+  "triad-grounding-review":   "premium-voice",
+  "parallel-search-reduce":   "premium-voice",
 
-  // Reasoning pipeline — diverse models for hypothesis evaluation
-  "hypothesis-evaluation": "frontier",       // PR E: Claude Opus 4.6 — keystone reasoning. Hallucinated verdicts compound into hypothesis base.
-  "adversarial-evaluation": "standard",      // Grok 4.20 — different model for diversity
-  "hypothesis-decomposition": "routine",     // Gemini Flash — fast decomposition
-  "trust-scoring": "routine",                // Gemini Flash — formulaic calculation
-  "evidence-triage": "routine",              // Gemini Flash — lightweight evidence availability check
-  "evidence-search-query-gen": "routine",    // Gemini Flash — generate search queries from claims
+  // ── Standard-voice — Grok 4.20 non-reasoning (public voice, Class 1 grounded) ──
+  "article":                 "standard-voice",
+  "exploration":             "standard-voice",
+  "exploration-synthesis":   "standard-voice",
+  "reply":                   "standard-voice",
+  "reply-generation":        "standard-voice",
+  "boost":                   "standard-voice",
+  "public-voice":            "standard-voice",
+  "research-phase":          "standard-voice",
+  "self-debate":             "standard-voice",
+  "news-dispatch":           "standard-voice",
+  "episode-generation":      "standard-voice",
+  "research-agenda-advance": "standard-voice",
+  "adversarial-evaluation":  "standard-voice",
+  "triad-fact-synthesis":    "standard-voice",
+  "skeptic-debate":          "standard-voice",
+  "builder-debate":          "standard-voice",
+  "intro-post":              "standard-voice",
+  "cyoa":                    "standard-voice",
+  "goal-generation":         "standard-voice",
+  "hypothesis-consolidation":"standard-voice",
 
-  // Premium — highest quality for public-facing content
-  "deep-reasoning": "frontier",              // PR E: Claude Opus 4.6 — pure reasoning, hallucination-sensitive
-  "research-agenda-generate": "premium",
-  "podcast-script": "premium",
-  "podcast-from-thread": "premium",
-  "synthesis-report": "frontier",            // PR E: Claude Opus 4.6 — master synthesis shapes downstream research
-  "article-draft": "premium",
-  "article_draft": "premium",
-  "intro-post": "standard",                 // Public-facing (kept at standard)
-  "manuscript-generation": "premium",
-  "skill-extraction": "premium",
-  "daily-briefing": "premium",
-  "improvement-plan": "premium",
-  "blog-post": "standard",                  // Public-facing long-form
+  // ── Multi-agent — Grok 4.20 multi-agent ──
+  "triad":          "multi-agent",
+  "multi-agent":    "multi-agent",
+  // self-debate stays at standard-voice (single-agent debate);
+  // a dedicated 4-agent debate task would use "multi-agent" explicitly.
 
-  // Research analysis framework (9-prompt, 4-phase)
-  "analysis-contradictions": "premium",    // Phase 2: deep critical thinking
-  "analysis-citation-chains": "premium",   // Phase 2: intellectual lineage
-  "analysis-gap-scan": "premium",          // Phase 2: gap identification
-  "analysis-methodology-audit": "premium", // Phase 2: methodology comparison
-  "analysis-synthesis": "premium",         // Phase 3: master synthesis
-  "analysis-knowledge-map": "premium",     // Phase 3: knowledge map building
-  // (analysis-intake, analysis-so-what, analysis-assumptions demoted to routine above)
+  // ── Live-social — xAI Responses API + x_search ──
+  "signal-brief":  "live-social",
 
-  // Agentic Triad tasks
-  "triad-fact-synthesis": "standard",       // Agent 3: package research → FactSheet (Class 1 grounded, Grok fine)
-  "triad-reasoning": "frontier",            // PR E: Claude Opus 4.6 — Agent 0 analytical brain; hallucinated LogicMap corrupts triad
-  "triad-grounding-review": "premium",     // Agent 0: review Agent 6 output for grounding violations
-
-  // Self-evolution components
-  "aspiration-generation": "frontier",      // PR E: Claude Opus 4.6 — shapes Agent 306's forward-looking identity
-  "self-evolution-reflection": "frontier",  // PR E: Claude Opus 4.6 — daily self-reflection directly modifies identity
-  // (topic-quality-evaluation, breakthrough-evaluation, aspiration-evaluation demoted to routine above)
-
-  // Intelligence v2 — Dual-persona debate
-  "skeptic-debate": "standard",            // Skeptic pass — rigorous critic
-  "builder-debate": "standard",            // Builder pass — optimistic builder
-  "cross-score": "routine",                // Cross-scoring of both verdicts
-  "graph-analysis": "routine",             // Graph gap analysis for aspirations
-  // (prediction-verification demoted to routine above)
-
-  // PR #4 — explicit aliases for tasks that were silently falling through
-  // to the default "standard" tier. Each entry matches how the task is
-  // invoked in the codebase; both hyphenated and underscored variants
-  // resolve via normalizeTaskName() below, but we keep explicit entries
-  // where the underscore form is the one in active use.
-  "academy": "premium",                    // Long-form academy content — public-facing voice
-  "boost": "standard",                     // Community boost post — Agent 306's voice
-  "cyoa": "standard",                      // Choose-your-own-adventure episodes — public voice
-  "manuscript": "premium",                 // Long-form manuscript — public-facing voice
-  "conversation-insight": "routine",       // Short insight extraction, same family as conversation-insights
-  "research-scan": "routine",              // Goal-scan research pass — structured enumeration
-
-  // Wave 1 follow-up sweep: tasks invoked in server/ with no explicit entry were
-  // silently hitting the "standard" default. Pinned explicitly so routing is
-  // visible in getModelConfig() and regressions surface immediately.
-  "exploration-synthesis": "standard",     // explorationEngine synthesis passes (4 call sites)
-  "goal-generation": "standard",           // goalEngine goal-generation step
-  "hypothesis-consolidation": "standard",  // hypothesisConsolidator + batch runner
+  // ── Live-research — Perplexity sonar-pro ──
+  "news-research":        "live-research",
+  "breakthrough-research":"live-research",
+  "evidence-research":    "live-research",
 };
 
 /**
  * Normalize a task name to the canonical form used as TASK_COMPLEXITY keys.
- * Replaces underscores with hyphens and lowercases, so "Hypothesis_Resolution"
- * and "hypothesis-resolution" and "HYPOTHESIS_RESOLUTION" all resolve the same.
  */
 export function normalizeTaskName(task: string): string {
   return task.replace(/_/g, "-").toLowerCase();
 }
 
 /**
- * Get the appropriate model for a task.
- * Normalizes via normalizeTaskName() so both "hypothesis_resolution" and
- * "hypothesis-resolution" resolve to the same routing entry.
- * @param task - Task identifier (e.g., "podcast-script", "reflection")
- * @returns OpenRouter model string (e.g., "anthropic/claude-sonnet-4.6")
+ * Resolve a task to its {tier, provider, model} routing decision.
+ * Preferred entry point for new call sites — exposes the tier name so
+ * observability / logging emits the specific tier ("frontier-factual") rather
+ * than the collapsed alias.
  */
-export function getModel(task: string): string {
+export function resolveTask(task: string): { tier: TaskComplexity; provider: RouteProvider; model: string } {
   const normalized = normalizeTaskName(task);
-  const complexity = TASK_COMPLEXITY[normalized] ?? "standard";
-  return MODEL_MAP[complexity];
+  const tier = TASK_COMPLEXITY[normalized] ?? "standard-voice";
+  const cfg = TIER_MAP[tier];
+  return { tier, provider: cfg.provider, model: cfg.model };
 }
 
 /**
- * Get all model mappings (for the /api/model-router status endpoint).
+ * Get the appropriate model string for a task (backwards-compat shim).
+ * Returns the configured model string — OpenRouter-format for openrouter/xai
+ * tiers, native name for perplexity. Callers that route via resolveChatRoute()
+ * continue to work unchanged; xAI native-name translation happens downstream
+ * in toXAINativeModel().
+ */
+export function getModel(task: string): string {
+  return resolveTask(task).model;
+}
+
+/**
+ * Legacy MODEL_MAP surface for callers that inspected it directly.
+ * Mirrors the old flat {tierName → modelString} shape. The new tier names
+ * appear as first-class keys; the collapsed aliases resolve through
+ * resolveTierModel() below.
  */
 export function getModelConfig(): { models: Record<string, string>; tasks: Record<string, string> } {
-  return {
-    models: { ...MODEL_MAP },
-    tasks: Object.fromEntries(
-      Object.entries(TASK_COMPLEXITY).map(([task, complexity]) => [task, MODEL_MAP[complexity]])
-    ),
-  };
+  const models: Record<string, string> = {};
+  for (const [tier, cfg] of Object.entries(TIER_MAP)) {
+    models[tier] = cfg.model;
+  }
+  // Backwards-compat alias keys.
+  models["frontier"] = TIER_MAP["frontier-reasoning"].model;
+  models["premium"]  = TIER_MAP["premium-voice"].model;
+  models["standard"] = TIER_MAP["standard-voice"].model;
+
+  const tasks: Record<string, string> = {};
+  for (const [task, tier] of Object.entries(TASK_COMPLEXITY)) {
+    tasks[task] = TIER_MAP[tier].model;
+  }
+  return { models, tasks };
+}
+
+/**
+ * Resolve a tier name (including aliases) to its model string.
+ * Used by callers that want to query the active config for a specific tier.
+ */
+export function resolveTierModel(tier: string): string {
+  return TIER_MAP[resolveTier(tier)].model;
 }
