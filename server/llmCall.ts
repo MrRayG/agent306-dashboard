@@ -14,6 +14,7 @@ import {
   LLM_TIMEOUTS,
   getLLMHeaders,
   resolveMode,
+  toXAINativeModel,
 } from "./llmConfig.js";
 import { getModel } from "./modelRouter.js";
 import { callResponsesAPI } from "./responsesAdapter.js";
@@ -68,8 +69,15 @@ export async function callLLM(opts: LLMCallOptions): Promise<LLMResponse> {
     return callChatCompletions(opts, model);
   }
 
+  // mode === "responses" — verify the model can actually use xAI Responses API.
+  // Non-xAI models (Anthropic, Google, etc.) silently downgrade to chat/completions.
+  const xaiModel = toXAINativeModel(model);
+  if (xaiModel === null) {
+    return callChatCompletions(opts, model);
+  }
+
   try {
-    return await callResponsesAPI(opts, model);
+    return await callResponsesAPI(opts, xaiModel);
   } catch (err: any) {
     const fallbackEnabled = (process.env.RESPONSES_API_FALLBACK ?? "true") !== "false";
     if (!fallbackEnabled) throw err;
