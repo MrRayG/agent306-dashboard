@@ -62,11 +62,19 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "community-boost": "routine",             // Short supportive reply draft
   "prediction-verification": "routine",     // Rubric-driven prediction check
 
+  // Routine (demoted in PR J — P5 routing audit) — structured JSON outputs and
+  // short templated scoring. These match the shape of earlier routine demotions
+  // (aspiration-evaluation, parallel-search-subqueries, signal-collection).
+  // Gemini 3 Flash handles JSON schema output reliably at ~10x cost savings.
+  // Canary: watch knowledge-gap-scan / goal-evaluation hit rate for 1 week;
+  // revert via env overrides (MODEL_ROUTINE) if quality regresses.
+  "knowledge-gap-scan": "routine",          // Structured gap list, no long-form synthesis
+  "goal-evaluation": "routine",             // Rubric-style scoring (same family as aspiration-evaluation)
+  "x-search": "routine",                    // Short search-query crafting (same family as parallel-search-subqueries). Note: map key is hyphenated because getModel normalizes underscores to hyphens before lookup.
+
   // Standard — good reasoning, moderate cost
   "research-phase": "standard",
   "self-debate": "standard",
-  "knowledge-gap-scan": "standard",
-  "goal-evaluation": "standard",
   "exploration": "standard",
   "news-dispatch": "standard",              // Public-facing market commentary
   "research-brief": "premium",
@@ -74,7 +82,6 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "episode-generation": "standard",         // Public-facing script
   "research-agenda-advance": "standard",
   "parallel-search-reduce": "premium",
-  "x_search": "standard",                   // Search-query crafting (quality matters)
 
   // Reasoning pipeline — diverse models for hypothesis evaluation
   "hypothesis-evaluation": "frontier",       // PR E: Claude Opus 4.6 — keystone reasoning. Hallucinated verdicts compound into hypothesis base.
