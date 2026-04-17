@@ -16,6 +16,7 @@ import { getEpisode, getPodcastState, saveState as savePodcastState, type Episod
 import { LLM_BASE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { getModel } from "./modelRouter.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import { getTtsProvider, callXaiTts, recordTtsCall, estimateXaiTtsCost, DEFAULT_XAI_VOICE, type XaiVoice } from "./xaiTtsEngine.js";
 
 // ── ElevenLabs Configuration ────────────────────────────────────────────────
 
@@ -147,6 +148,55 @@ async function callElevenLabsTTS(text: string, apiKey: string): Promise<Buffer> 
   return Buffer.from(arrayBuffer);
 }
 
+// ── Provider-aware TTS call ─────────────────────────────────────────────────
+
+/**
+ * Call the active TTS provider for a single chunk.
+ *
+ * Provider selected by TTS_PROVIDER env var. On xAI failure we log and
+ * fall back to ElevenLabs so podcast generation never breaks on a provider
+ * swap — this is the same additive/graceful pattern as imageEngine.
+ */
+async function callTtsForChunk(
+  text: string,
+  elevenLabsKey: string,
+  opts?: { episodeId?: string },
+): Promise<{ buffer: Buffer; provider: "elevenlabs" | "xai"; voice: string }> {
+  const provider = getTtsProvider();
+
+  if (provider === "xai") {
+    try {
+      const voice: XaiVoice = DEFAULT_XAI_VOICE;
+      const buffer = await callXaiTts({ text, voice });
+      recordTtsCall({
+        provider: "xai",
+        characters: text.length,
+        cost: estimateXaiTtsCost(text.length),
+        episodeId: opts?.episodeId,
+        voice,
+      });
+      return { buffer, provider: "xai", voice };
+    } catch (e: any) {
+      console.warn(
+        `[AudioEngine] xAI TTS failed (${e.message}) — falling back to ElevenLabs for this chunk`,
+      );
+      // fall through to ElevenLabs below
+    }
+  }
+
+  const buffer = await callElevenLabsTTS(text, elevenLabsKey);
+  // ElevenLabs cost is approximate — Creator tier is ~$0.18/1k chars.
+  const cost = text.length * (18 / 1_000_000);
+  recordTtsCall({
+    provider: "elevenlabs",
+    characters: text.length,
+    cost,
+    episodeId: opts?.episodeId,
+    voice: AGENT_306_VOICE_ID,
+  });
+  return { buffer, provider: "elevenlabs", voice: AGENT_306_VOICE_ID };
+}
+
 // ── Main generation function ────────────────────────────────────────────────
 
 /**
@@ -159,9 +209,12 @@ async function callElevenLabsTTS(text: string, apiKey: string): Promise<Buffer> 
  * 5. Updates episode with audio URL and status
  */
 export async function generateAudio(episodeId: string): Promise<boolean> {
-  const apiKey = process.env.ELEVENLABS_API_KEY;
-  if (!apiKey) {
-    console.error("[AudioEngine] ELEVENLABS_API_KEY not set — cannot generate audio");
+  const apiKey = process.env.ELEVENLABS_API_KEY ?? "";
+  const provider = getTtsProvider();
+  // Need either ElevenLabs key (for default/fallback) or xAI-selected + xAI key present
+  const xaiKey = process.env.GROK_API_KEY ?? process.env.XAI_API_KEY ?? "";
+  if (!apiKey && !(provider === "xai" && xaiKey)) {
+    console.error("[AudioEngine] No TTS provider credentials available (ELEVENLABS_API_KEY or GROK_API_KEY required)");
     return false;
   }
 
@@ -199,14 +252,17 @@ export async function generateAudio(episodeId: string): Promise<boolean> {
     const chunks = chunkText(speechText, MAX_CHUNK_CHARS);
     console.log(`[AudioEngine] Split into ${chunks.length} chunk(s)`);
 
-    // Generate audio for each chunk
+    // Generate audio for each chunk — provider selected by TTS_PROVIDER flag
     const audioBuffers: Buffer[] = [];
+    const providersUsed = new Set<string>();
     for (let i = 0; i < chunks.length; i++) {
       console.log(`[AudioEngine] Processing chunk ${i + 1}/${chunks.length} (${chunks[i].length} chars)...`);
-      const buffer = await callElevenLabsTTS(chunks[i], apiKey);
+      const { buffer, provider } = await callTtsForChunk(chunks[i], apiKey, { episodeId });
       audioBuffers.push(buffer);
-      console.log(`[AudioEngine] Chunk ${i + 1} complete — ${buffer.length} bytes`);
+      providersUsed.add(provider);
+      console.log(`[AudioEngine] Chunk ${i + 1} complete — ${buffer.length} bytes (provider=${provider})`);
     }
+    console.log(`[AudioEngine] Providers used for ${episodeId}: ${Array.from(providersUsed).join(", ")}`);
 
     // Concatenate MP3 buffers
     const fullAudio = Buffer.concat(audioBuffers);
@@ -389,9 +445,11 @@ export function getFullAudioFilePath(episodeId: string): string | null {
  * Uses LLM to identify the most compelling passage, then TTS to generate audio.
  */
 export async function generateSocialPreview(episodeId: string): Promise<boolean> {
-  const apiKey = process.env.ELEVENLABS_API_KEY;
-  if (!apiKey) {
-    console.error("[AudioEngine] ELEVENLABS_API_KEY not set — cannot generate preview");
+  const apiKey = process.env.ELEVENLABS_API_KEY ?? "";
+  const provider = getTtsProvider();
+  const xaiKey = process.env.GROK_API_KEY ?? process.env.XAI_API_KEY ?? "";
+  if (!apiKey && !(provider === "xai" && xaiKey)) {
+    console.error("[AudioEngine] No TTS provider credentials available for preview");
     return false;
   }
 
@@ -425,9 +483,9 @@ export async function generateSocialPreview(episodeId: string): Promise<boolean>
 
     console.log(`[AudioEngine] Selected preview passage: ${previewText.length} chars`);
 
-    // Step 2: Generate TTS for the preview passage
-    const audioBuffer = await callElevenLabsTTS(previewText, apiKey);
-    console.log(`[AudioEngine] Preview audio generated: ${audioBuffer.length} bytes`);
+    // Step 2: Generate TTS for the preview passage (provider-aware)
+    const { buffer: audioBuffer, provider } = await callTtsForChunk(previewText, apiKey, { episodeId });
+    console.log(`[AudioEngine] Preview audio generated: ${audioBuffer.length} bytes (provider=${provider})`);
 
     // Step 3: Save the preview audio
     const filename = `episode_${episodeId}_preview.mp3`;
