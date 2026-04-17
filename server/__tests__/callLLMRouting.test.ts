@@ -113,7 +113,7 @@ describe("callLLM — Responses API model translation + non-xAI downgrade", () =
 
   it("silently auto-downgrades Google model to chat/completions", async () => {
     process.env.RESPONSES_API_ENABLED_TASKS = "reflection";
-    process.env.MODEL_ROUTINE = "google/gemini-2.5-flash-lite";
+    process.env.MODEL_ROUTINE = "google/gemini-3-flash-preview";
 
     const fetchMock = mock.fn(async () => chatOk("reply") as any);
     globalThis.fetch = fetchMock as any;
@@ -127,7 +127,7 @@ describe("callLLM — Responses API model translation + non-xAI downgrade", () =
     assert.equal(out.mode, "chat");
     assert.equal(fetchMock.mock.callCount(), 1);
     const body = JSON.parse(fetchMock.mock.calls[0].arguments[1].body);
-    assert.equal(body.model, "google/gemini-2.5-flash-lite");
+    assert.equal(body.model, "google/gemini-3-flash-preview");
   });
 
   it("falls back to chat/completions with ORIGINAL OpenRouter model name when Responses API errors", async () => {

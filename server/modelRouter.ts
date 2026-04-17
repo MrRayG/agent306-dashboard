@@ -1,23 +1,30 @@
 /**
  * Smart Model Router for Agent 306.
- * 
+ *
  * Routes tasks to appropriate models via OpenRouter:
- *   routine     → google/gemini-2.5-flash          (cheapest, fast)
- *   standard    → x-ai/grok-4.20                  (current default via OpenRouter)
- *   premium     → anthropic/claude-sonnet-4.6      (highest quality for scripts/synthesis)
- *   multi-agent → x-ai/grok-4.20-multi-agent      (4-agent collaborative debate)
- * 
+ *   routine     → google/gemini-3-flash-preview    (thinking model at routine prices, PR E)
+ *   standard    → x-ai/grok-4.20                   (Class 1 grounded synthesis; xAI Responses API eligible)
+ *   premium     → anthropic/claude-sonnet-4.6      (long-form public-facing content)
+ *   frontier    → anthropic/claude-opus-4.6        (Class 2 reasoning — ASI-sensitive identity tasks, PR E)
+ *   multi-agent → x-ai/grok-4.20-multi-agent       (4-agent collaborative debate)
+ *
+ * The "frontier" tier exists specifically for tasks where hallucinated output
+ * would compound into Agent 306's identity or hypothesis base over time.
+ * Claude Opus 4.6 was selected because it has the strongest hallucination-refusal
+ * profile (0-14% on AA-Omniscience) among frontier models as of April 2026.
+ *
  * OpenRouter model names use provider/model format.
- * If a model is unavailable, OpenRouter returns an error — 
+ * If a model is unavailable, OpenRouter returns an error —
  * callers should handle gracefully.
  */
 
-export type TaskComplexity = "routine" | "standard" | "premium" | "multi-agent";
+export type TaskComplexity = "routine" | "standard" | "premium" | "frontier" | "multi-agent";
 
 const MODEL_MAP: Record<TaskComplexity, string> = {
-  routine:       process.env.MODEL_ROUTINE     ?? "google/gemini-2.5-flash-lite",
+  routine:       process.env.MODEL_ROUTINE     ?? "google/gemini-3-flash-preview",
   standard:      process.env.MODEL_STANDARD    ?? "x-ai/grok-4.20",
   premium:       process.env.MODEL_PREMIUM     ?? "anthropic/claude-sonnet-4.6",
+  frontier:      process.env.MODEL_FRONTIER    ?? "anthropic/claude-opus-4.6",
   "multi-agent": process.env.MODEL_MULTI_AGENT ?? "x-ai/grok-4.20-multi-agent",
 };
 
@@ -70,7 +77,7 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "x_search": "standard",                   // Search-query crafting (quality matters)
 
   // Reasoning pipeline — diverse models for hypothesis evaluation
-  "hypothesis-evaluation": "premium",        // Claude Sonnet 4.6 — primary reasoning
+  "hypothesis-evaluation": "frontier",       // PR E: Claude Opus 4.6 — keystone reasoning. Hallucinated verdicts compound into hypothesis base.
   "adversarial-evaluation": "standard",      // Grok 4.20 — different model for diversity
   "hypothesis-decomposition": "routine",     // Gemini Flash — fast decomposition
   "trust-scoring": "routine",                // Gemini Flash — formulaic calculation
@@ -78,11 +85,11 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "evidence-search-query-gen": "routine",    // Gemini Flash — generate search queries from claims
 
   // Premium — highest quality for public-facing content
-  "deep-reasoning": "premium",
+  "deep-reasoning": "frontier",              // PR E: Claude Opus 4.6 — pure reasoning, hallucination-sensitive
   "research-agenda-generate": "premium",
   "podcast-script": "premium",
   "podcast-from-thread": "premium",
-  "synthesis-report": "premium",
+  "synthesis-report": "frontier",            // PR E: Claude Opus 4.6 — master synthesis shapes downstream research
   "article-draft": "premium",
   "article_draft": "premium",
   "intro-post": "standard",                 // Public-facing (kept at standard)
@@ -102,13 +109,13 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   // (analysis-intake, analysis-so-what, analysis-assumptions demoted to routine above)
 
   // Agentic Triad tasks
-  "triad-fact-synthesis": "standard",       // Agent 3: package research → FactSheet
-  "triad-reasoning": "premium",            // Agent 0: analyze evidence → LogicMap
+  "triad-fact-synthesis": "standard",       // Agent 3: package research → FactSheet (Class 1 grounded, Grok fine)
+  "triad-reasoning": "frontier",            // PR E: Claude Opus 4.6 — Agent 0 analytical brain; hallucinated LogicMap corrupts triad
   "triad-grounding-review": "premium",     // Agent 0: review Agent 6 output for grounding violations
 
   // Self-evolution components
-  "aspiration-generation": "premium",      // Forward-looking vision (Claude)
-  "self-evolution-reflection": "premium",  // Daily self-reflection loop (Claude)
+  "aspiration-generation": "frontier",      // PR E: Claude Opus 4.6 — shapes Agent 306's forward-looking identity
+  "self-evolution-reflection": "frontier",  // PR E: Claude Opus 4.6 — daily self-reflection directly modifies identity
   // (topic-quality-evaluation, breakthrough-evaluation, aspiration-evaluation demoted to routine above)
 
   // Intelligence v2 — Dual-persona debate
