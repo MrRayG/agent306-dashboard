@@ -15,6 +15,7 @@ import StatusHub from "@/pages/StatusHub";
 import DreamsGrowth from "@/pages/DreamsGrowth";
 import CompetencyDashboard from "@/pages/CompetencyDashboard";
 import EvalDashboard from "@/pages/EvalDashboard";
+import Diagnostics from "@/pages/Diagnostics";
 import NotFound from "@/pages/not-found";
 import PerplexityAttribution from "@/components/PerplexityAttribution";
 
@@ -31,6 +32,7 @@ const nav = [
   { href: "/status",   label: "Status",         desc: "Briefing · Vitals"   },
   { href: "/dreams",      label: "Dreams & Growth", desc: "Aspirations \u00B7 Self-improvement" },
   { href: "/competency", label: "Competencies",    desc: "Skills \u00B7 Radar chart"       },
+  { href: "/diagnostics", label: "Diagnostics",    desc: "System probes"       },
 ];
 
 function Sidebar() {
@@ -153,6 +155,7 @@ function App() {
             <Route path="/status"   component={StatusHub}     />
             <Route path="/dreams"      component={DreamsGrowth}        />
             <Route path="/competency" component={CompetencyDashboard} />
+            <Route path="/diagnostics" component={Diagnostics} />
             <Route component={NotFound} />
           </Switch>
         </Layout>
