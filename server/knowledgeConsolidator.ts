@@ -15,6 +15,16 @@ import { getModel } from "./modelRouter.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 import { postChatCompletions } from "./llmCall.js";
+import { waitForBatchComplete } from "./xaiBatchEngine.js";
+import {
+  shouldUseKnowledgeBatch,
+  submitKnowledgeConsolidationBatch,
+  collectKnowledgeConsolidationResults,
+  sanitizeGroupKey,
+  KNOWLEDGE_CONSOLIDATION_SYSTEM_PROMPT,
+  buildKnowledgeUserPrompt,
+  type KnowledgeGroup,
+} from "./knowledgeConsolidationBatch.js";
 interface ConsolidationResult {
   groupsFound: number;
   entriesMerged: number;
@@ -80,42 +90,22 @@ function findConsolidationGroups(entries: any[]): Map<string, any[]> {
 
 /**
  * Consolidate a group of related entries into 1-2 comprehensive entries.
+ * Sync path — used when the batch flag is off, or as a per-group fallback
+ * when the batch didn't produce a result for this group.
+ *
+ * Uses the shared prompt strings from knowledgeConsolidationBatch.ts so
+ * sync and batch paths produce semantically identical outputs.
  */
 async function consolidateGroup(entries: any[]): Promise<any[]> {
-  const entrySummaries = entries.map(e => `[${e.title}] ${e.summary} (weight: ${e.weight})`).join("\n");
-
   try {
     const res = await postChatCompletions({
         model: getModel("routine"),
         messages: [{
           role: "system",
-          content: `You consolidate multiple related knowledge entries into fewer, more comprehensive entries.
-
-RULES:
-- Preserve ALL unique facts, numbers, dates, and insights
-- Combine overlapping information, remove redundancy
-- Keep the most important/recent data points
-- Maintain specificity — don't lose precision by over-generalizing
-- Output 1-2 consolidated entries (1 if the topic is narrow, 2 if there are distinct sub-topics)
-- Each summary should be up to 300 chars — pack in maximum useful information
-- Set weight to the MAX weight from the source entries
-
-You MUST respond with ONLY valid JSON. No markdown, no explanations, no text outside the JSON structure. Do not wrap in code fences.
-
-Required JSON schema:
-{
-  "consolidated": [
-    {
-      "title": "comprehensive title covering the merged topic",
-      "summary": "dense, fact-packed summary combining all unique insights (up to 300 chars)",
-      "category": "category name",
-      "weight": 8
-    }
-  ]
-}`
+          content: KNOWLEDGE_CONSOLIDATION_SYSTEM_PROMPT,
         }, {
           role: "user",
-          content: `Consolidate these ${entries.length} related knowledge entries into 1-2 comprehensive entries:\n\n${entrySummaries}`
+          content: buildKnowledgeUserPrompt({ key: "sync", entries }),
         }],
         temperature: 0.2,
         max_tokens: 600,
@@ -125,9 +115,9 @@ Required JSON schema:
 
     const data = await res.json() as any;
     const raw = data.choices?.[0]?.message?.content ?? "";
-    const parsed = safeParseLLMJson(raw, "KnowledgeConsolidator") ?? {};
+    const parsed = safeParseLLMJson(raw, "KnowledgeConsolidator") as { consolidated?: any[] } | null;
 
-    if (!parsed.consolidated?.length) return entries;
+    if (!parsed?.consolidated?.length) return entries;
 
     const maxWeight = Math.max(...entries.map((e: any) => e.weight ?? 5));
 
@@ -143,6 +133,43 @@ Required JSON schema:
     console.warn(`[Consolidation] Failed to consolidate group:`, e.message);
     return entries; // fail safe
   }
+}
+
+/**
+ * Apply a set of consolidated entries for a single group to the
+ * knowledge state, mutating `knowledge.entries` in place.
+ *
+ * Shared by sync and batch paths so the insert/delete shape is
+ * identical. Only commits when the consolidation actually reduces
+ * entry count (matches the original sync gate).
+ *
+ * @returns the number of entries merged away (>=0)
+ */
+function applyConsolidationToKnowledge(
+  knowledge: any,
+  groupKey: string,
+  groupEntries: any[],
+  consolidated: any[],
+  nowIso: string,
+): number {
+  if (consolidated.length >= groupEntries.length) return 0;
+
+  const oldIds = new Set(groupEntries.map((e: any) => e.id));
+  knowledge.entries = knowledge.entries.filter((e: any) => !oldIds.has(e.id));
+
+  for (const c of consolidated) {
+    knowledge.entries.push({
+      ...c,
+      id: `k_consolidated_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+      learnedAt: nowIso,
+      updatedAt: nowIso,
+      status: "active",
+    });
+  }
+
+  const merged = groupEntries.length - consolidated.length;
+  console.log(`[Consolidation] "${groupKey}": ${groupEntries.length} → ${consolidated.length} entries`);
+  return merged;
 }
 
 /**
@@ -173,32 +200,10 @@ export async function runKnowledgeConsolidation(): Promise<ConsolidationResult> 
   // Process up to 5 groups per run (budget-conscious)
   const groupsToProcess = Array.from(groups.entries()).slice(0, 5);
 
-  for (const [groupKey, groupEntries] of groupsToProcess) {
-    const consolidated = await consolidateGroup(groupEntries);
-
-    if (consolidated.length < groupEntries.length) {
-      // Remove old entries
-      const oldIds = new Set(groupEntries.map((e: any) => e.id));
-      knowledge.entries = knowledge.entries.filter((e: any) => !oldIds.has(e.id));
-
-      // Add consolidated entries
-      const now = new Date().toISOString();
-      for (const c of consolidated) {
-        knowledge.entries.push({
-          ...c,
-          id: `k_consolidated_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
-          learnedAt: now,
-          updatedAt: now,
-          status: "active",
-        });
-      }
-
-      totalMerged += groupEntries.length - consolidated.length;
-      console.log(`[Consolidation] "${groupKey}": ${groupEntries.length} → ${consolidated.length} entries`);
-    }
-
-    // Small delay between groups to be nice to the API
-    await new Promise(resolve => setTimeout(resolve, 1000));
+  if (shouldUseKnowledgeBatch()) {
+    totalMerged += await consolidateViaBatch(knowledge, groupsToProcess);
+  } else {
+    totalMerged += await consolidateViaSync(knowledge, groupsToProcess);
   }
 
   // Save
@@ -214,6 +219,103 @@ export async function runKnowledgeConsolidation(): Promise<ConsolidationResult> 
 
   console.log(`[Consolidation] Complete: ${entriesBefore} → ${result.entriesAfter} entries (saved ${result.savings})`);
   return result;
+}
+
+/**
+ * Sync consolidation path — issue per-group LLM calls serially with a
+ * 1s delay between groups (matches historical behavior).
+ */
+async function consolidateViaSync(
+  knowledge: any,
+  groupsToProcess: Array<[string, any[]]>,
+): Promise<number> {
+  let merged = 0;
+  for (const [groupKey, groupEntries] of groupsToProcess) {
+    const consolidated = await consolidateGroup(groupEntries);
+    merged += applyConsolidationToKnowledge(
+      knowledge,
+      groupKey,
+      groupEntries,
+      consolidated,
+      new Date().toISOString(),
+    );
+    // Small delay between groups to be nice to the API
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  return merged;
+}
+
+/**
+ * Batch consolidation path — submit every group as a single xAI
+ * /v1/batches job, poll for completion, then apply results.
+ *
+ * On submit/wait failure every group is left untouched (no silent
+ * fallback) and the error is logged. The caller writes the knowledge
+ * file regardless so partial progress from earlier groups is preserved.
+ */
+async function consolidateViaBatch(
+  knowledge: any,
+  groupsToProcess: Array<[string, any[]]>,
+): Promise<number> {
+  const pollMs = Number(process.env.KNOWLEDGE_CONSOLIDATION_BATCH_POLL_MS) || 60_000;
+  const timeoutMs = Number(process.env.KNOWLEDGE_CONSOLIDATION_BATCH_TIMEOUT_MS) || 6 * 60 * 60 * 1000;
+
+  // Shape groups for the batch module and build sanitized-key lookups
+  const groups: KnowledgeGroup[] = groupsToProcess.map(([key, entries]) => ({ key, entries }));
+  const groupsBySanitizedKey = new Map<string, KnowledgeGroup>();
+  const originalKeyBySanitized = new Map<string, string>();
+  for (const g of groups) {
+    const sk = sanitizeGroupKey(g.key);
+    groupsBySanitizedKey.set(sk, g);
+    originalKeyBySanitized.set(sk, g.key);
+  }
+  const validGroupKeys = new Set(groupsBySanitizedKey.keys());
+
+  let batchId: string;
+  let added = 0;
+  try {
+    const submit = await submitKnowledgeConsolidationBatch(groups);
+    batchId = submit.batch_id;
+    added = submit.added;
+    console.log(`[Consolidation] Submitted batch ${batchId} with ${added} groups`);
+  } catch (e: any) {
+    console.warn(`[Consolidation] Batch submit failed, leaving groups unmerged:`, e?.message ?? e);
+    return 0;
+  }
+
+  try {
+    await waitForBatchComplete(batchId, { pollIntervalMs: pollMs, timeoutMs });
+  } catch (e: any) {
+    console.warn(`[Consolidation] Batch ${batchId} wait failed:`, e?.message ?? e);
+    return 0;
+  }
+
+  const { consolidations, failures } = await collectKnowledgeConsolidationResults(
+    batchId,
+    validGroupKeys,
+    groupsBySanitizedKey,
+  );
+
+  if (failures.length > 0) {
+    console.warn(`[Consolidation] Batch ${batchId} had ${failures.length} failures`);
+  }
+
+  // Apply results
+  let merged = 0;
+  const now = new Date().toISOString();
+  for (const [sanitizedKey, entries] of consolidations) {
+    const group = groupsBySanitizedKey.get(sanitizedKey);
+    if (!group) continue;
+    const origKey = originalKeyBySanitized.get(sanitizedKey) ?? sanitizedKey;
+    merged += applyConsolidationToKnowledge(
+      knowledge,
+      origKey,
+      group.entries,
+      entries,
+      now,
+    );
+  }
+  return merged;
 }
 
 /** Get current KB efficiency stats */
