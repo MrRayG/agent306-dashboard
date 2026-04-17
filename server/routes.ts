@@ -98,6 +98,15 @@ import {
   XAI_MAX_CHUNK_CHARS,
   type XaiVoice,
 } from "./xaiTtsEngine.js";
+import {
+  createBatch,
+  addRequests as addBatchRequests,
+  getBatchStatus,
+  getBatchResultsPage,
+  getBatchStats,
+  isBatchEnabled,
+  type BatchChatRequest,
+} from "./xaiBatchEngine.js";
 import { startFarcasterPostScheduler, getFarcasterPostQueue, queueFarcasterPost, clearFarcasterPostQueue, postFarcasterQueueItem } from "./farcasterQueue.js";
 import { getVoiceContext } from "./voiceInstructions.js";
 import { enforceShowTag } from "./contentTypes.js";
@@ -914,6 +923,68 @@ export function registerRoutes(httpServer: Server, app: Express) {
       res.send(buffer);
     } catch (e: any) {
       console.error("[TTS] xAI preview failed:", e.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── Batch API (PR I — P4) ──────────────────────────────────────────────
+  // Read-only status: is batch enabled + last-batch stats
+  app.get("/api/batch/status", (_req, res) => {
+    res.json({ enabled: isBatchEnabled(), stats: getBatchStats() });
+  });
+
+  // Create a new batch. Protected — this writes to xAI.
+  // Body: { name: string }
+  app.post("/api/batch/create", requireDashAuth, async (req, res) => {
+    const { name } = req.body ?? {};
+    if (!name || typeof name !== "string") {
+      return res.status(400).json({ error: "name (string) required" });
+    }
+    try {
+      const out = await createBatch({ name });
+      res.json(out);
+    } catch (e: any) {
+      console.error("[Batch] createBatch failed:", e.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Add chat-completion requests to an existing batch.
+  // Body: { batchId: string, requests: BatchChatRequest[] }
+  app.post("/api/batch/:id/requests", requireDashAuth, async (req, res) => {
+    const batchId = req.params.id;
+    const { requests } = req.body ?? {};
+    if (!Array.isArray(requests) || requests.length === 0) {
+      return res.status(400).json({ error: "requests (non-empty array) required" });
+    }
+    try {
+      const out = await addBatchRequests(batchId, requests as BatchChatRequest[]);
+      res.json(out);
+    } catch (e: any) {
+      console.error("[Batch] addRequests failed:", e.message);
+      res.status(400).json({ error: e.message });
+    }
+  });
+
+  // Get batch progress
+  app.get("/api/batch/:id", async (req, res) => {
+    try {
+      const status = await getBatchStatus(req.params.id);
+      res.json(status);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Paginated results
+  // Query: ?limit=100&token=<pagination_token>
+  app.get("/api/batch/:id/results", async (req, res) => {
+    const limit = Math.min(parseInt(String(req.query.limit ?? "100"), 10) || 100, 500);
+    const token = typeof req.query.token === "string" ? req.query.token : undefined;
+    try {
+      const page = await getBatchResultsPage(req.params.id, { limit, paginationToken: token });
+      res.json(page);
+    } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
   });
