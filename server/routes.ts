@@ -87,7 +87,8 @@ import {
   seedDreams,
 } from "./dreamEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
-import { startXPostScheduler, getXPostQueue, queueXPost, getTodaysPostsSummary, clearXPostQueue, postXQueueItem, isXAutoPostEnabled, setXAutoPostEnabled, getXAutoPostState } from "./xPostScheduler.js";
+import { startXPostScheduler, getXPostQueue, queueXPost, getTodaysPostsSummary, clearXPostQueue, postXQueueItem, isXAutoPostEnabled, setXAutoPostEnabled, getXAutoPostState, setQueuedPostImage, defaultIncludeImageForType } from "./xPostScheduler.js";
+import { generatePostImage, generateImagePrompt, getImageStats } from "./imageEngine.js";
 import { startFarcasterPostScheduler, getFarcasterPostQueue, queueFarcasterPost, clearFarcasterPostQueue, postFarcasterQueueItem } from "./farcasterQueue.js";
 import { getVoiceContext } from "./voiceInstructions.js";
 import { enforceShowTag } from "./contentTypes.js";
@@ -809,6 +810,62 @@ export function registerRoutes(httpServer: Server, app: Express) {
   // ── X Post Queue (dashboard view) ───────────────────────────
   app.get("/api/x/queue", requireDashAuth, (_req, res) => {
     res.json(getXPostQueue());
+  });
+
+  // ── Image toggle for queued posts ───────────────────────
+  // Body: { includeImage: boolean, imagePrompt?: string }
+  app.post("/api/x/queue/:id/image", requireDashAuth, (req, res) => {
+    const { id } = req.params;
+    const { includeImage, imagePrompt } = req.body ?? {};
+    if (typeof includeImage !== "boolean") {
+      return res.status(400).json({ error: "includeImage (boolean) required" });
+    }
+    const updated = setQueuedPostImage(id, includeImage, imagePrompt);
+    if (!updated) {
+      return res.status(404).json({ error: "Post not found or already posted" });
+    }
+    res.json({ ok: true, post: updated });
+  });
+
+  // Preview an image for a post (generates + returns PNG bytes, does NOT post)
+  // Body: { tweetText: string, prompt?: string, type?: string }
+  app.post("/api/image/preview", requireDashAuth, async (req, res) => {
+    const { tweetText, prompt, type } = req.body ?? {};
+    if (!tweetText && !prompt) {
+      return res.status(400).json({ error: "tweetText or prompt required" });
+    }
+    try {
+      const img = await generatePostImage({ tweetText: tweetText ?? "", prompt, type });
+      res.setHeader("Content-Type", "image/png");
+      res.setHeader("X-Image-Prompt", encodeURIComponent(img.prompt));
+      res.setHeader("X-Image-Model", img.model);
+      res.send(img.buffer);
+    } catch (e: any) {
+      console.error("[Image] Preview failed:", e.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Get a text-only auto-generated prompt for a given tweet (no image generated)
+  app.post("/api/image/prompt", requireDashAuth, async (req, res) => {
+    const { tweetText } = req.body ?? {};
+    if (!tweetText) return res.status(400).json({ error: "tweetText required" });
+    try {
+      const prompt = await generateImagePrompt(String(tweetText));
+      res.json({ ok: true, prompt });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Image generation stats (cost, count, engagement comparison)
+  app.get("/api/image/stats", (_req, res) => {
+    res.json(getImageStats());
+  });
+
+  // Default image policy for a given post type (for UI to show correct initial state)
+  app.get("/api/image/default/:type", (req, res) => {
+    res.json({ type: req.params.type, includeImage: defaultIncludeImageForType(req.params.type as any) });
   });
 
   // ── Manual engagement tracking ──────────────────────────────

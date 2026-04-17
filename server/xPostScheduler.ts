@@ -23,6 +23,29 @@ import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import { enforcePostFormat } from "./postFormatGuard.js";
 import { dailyReflection } from "./soulEvolution.js";
 import { getEmbedding } from "./embeddingEngine.js";
+import { generatePostImage } from "./imageEngine.js";
+
+/**
+ * If `post.includeImage === true` and no pre-uploaded mediaId exists,
+ * generate an image via imageEngine and upload it via the X v1 media endpoint.
+ * Returns a media ID on success, or null on any failure (post continues text-only).
+ */
+async function prepareMediaForPost(xWrite: any, post: QueuedPost, text: string): Promise<string | null> {
+  if (!post.includeImage || post.mediaId) return post.mediaId ?? null;
+  try {
+    const { buffer } = await generatePostImage({
+      tweetText: text,
+      prompt: post.imagePrompt,
+      type: post.type,
+    });
+    // twitter-api-v2 exposes uploadMedia on v1 client
+    const mediaId = await xWrite.v1.uploadMedia(buffer, { mimeType: "image/png" });
+    return mediaId ?? null;
+  } catch (e: any) {
+    console.warn(`[XScheduler] Image generation/upload failed (posting text-only): ${e.message}`);
+    return null;
+  }
+}
 
 // -- X auto-post toggle -----------------------------------------------
 // Mirrors Farcaster's enable/disable pattern. When disabled, engines
@@ -91,6 +114,8 @@ export interface QueuedPost {
   posted: boolean;
   postedAt: string | null;
   mediaId?: string; // optional pre-uploaded media ID
+  includeImage?: boolean; // if true, generate + attach image at post time
+  imagePrompt?: string;   // optional override; auto-generated if omitted
   skipped?: boolean;
   skippedReason?: string;
 }
@@ -393,6 +418,8 @@ export function queueXPost(
 ): QueuedPost {
   const state = loadQueue();
   const sanitized = sanitizePostContent(content);
+  // Default-by-type image policy: engine slots get an image; agent_voice skips.
+  const includeImage = defaultIncludeImageForType(type);
   const post: QueuedPost = {
     id: `xq_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     content: sanitized,
@@ -401,13 +428,41 @@ export function queueXPost(
     createdAt: new Date().toISOString(),
     posted: false,
     postedAt: null,
+    includeImage,
     ...(mediaId ? { mediaId } : {}),
   };
 
   state.queue.push(post);
   saveQueue(state);
-  console.log(`[XScheduler] Queued ${type} post (priority: ${post.priority}): ${content.slice(0, 80)}...`);
+  console.log(`[XScheduler] Queued ${type} post (priority: ${post.priority}, image: ${includeImage ? "on" : "off"}): ${content.slice(0, 80)}...`);
   return post;
+}
+
+/**
+ * Toggle includeImage on a queued (not-yet-posted) post.
+ * Returns the updated post or null if not found / already posted.
+ */
+export function setQueuedPostImage(
+  id: string,
+  includeImage: boolean,
+  imagePrompt?: string,
+): QueuedPost | null {
+  const state = loadQueue();
+  const post = state.queue.find(p => p.id === id);
+  if (!post) return null;
+  if (post.posted) return null;
+  post.includeImage = includeImage;
+  if (typeof imagePrompt === "string") post.imagePrompt = imagePrompt;
+  saveQueue(state);
+  return post;
+}
+
+/**
+ * Default-by-type image policy. Exported for UI + tests.
+ * agent_voice posts stay text-only; all other types default to image on.
+ */
+export function defaultIncludeImageForType(type: XPostType): boolean {
+  return type !== "agent_voice";
 }
 
 /**
@@ -584,8 +639,11 @@ async function processQueue(xWrite: any): Promise<void> {
 
   try {
     const tweetPayload: any = { text: safeContent };
-    if (post.mediaId) {
-      tweetPayload.media = { media_ids: [post.mediaId] };
+    // Generate + attach image if requested (respects includeImage flag)
+    const mediaId = await prepareMediaForPost(xWrite, post, safeContent);
+    if (mediaId) {
+      tweetPayload.media = { media_ids: [mediaId] };
+      post.mediaId = mediaId;
     }
     const tweet = await xWrite.v2.tweet(tweetPayload);
     const tweetId = tweet.data?.id;
@@ -595,7 +653,7 @@ async function processQueue(xWrite: any): Promise<void> {
       post.posted = true;
       post.postedAt = new Date().toISOString();
       saveQueue(state);
-      console.log(`[XScheduler] Posted ${post.type}: https://x.com/306Agent/status/${tweetId}`);
+      console.log(`[XScheduler] Posted ${post.type}${mediaId ? " (with image)" : ""}: https://x.com/306Agent/status/${tweetId}`);
 
       // Trigger daily soul reflection after the last post of the day (after 10pm ET / 02:00 UTC)
       const nowUTC = new Date().getUTCHours();
@@ -672,7 +730,13 @@ async function processImmediateQueue(xWrite: any): Promise<void> {
     safeContent = enforcePostFormat(safeContent, post.type);
 
     try {
-      const tweet = await xWrite.v2.tweet({ text: safeContent });
+      const tweetPayload: any = { text: safeContent };
+      const mediaId = await prepareMediaForPost(xWrite, post, safeContent);
+      if (mediaId) {
+        tweetPayload.media = { media_ids: [mediaId] };
+        post.mediaId = mediaId;
+      }
+      const tweet = await xWrite.v2.tweet(tweetPayload);
       const tweetId = tweet.data?.id;
       if (tweetId) {
         recordXPost(safeContent);

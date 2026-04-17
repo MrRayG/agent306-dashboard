@@ -771,8 +771,31 @@ function QueueItemCard({
   onPostNow: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [includeImage, setIncludeImage] = useState<boolean>(item.includeImage ?? (item.type !== "agent_voice"));
+  const [toggling, setToggling] = useState(false);
   const tl = getTypeLabel(item.type);
   const isLong = item.content.length > 200;
+  const isXPost = !item.channel || item.channel === "x";
+
+  async function onToggleImage(next: boolean) {
+    if (toggling) return;
+    setToggling(true);
+    const prev = includeImage;
+    setIncludeImage(next); // optimistic
+    try {
+      const res = await fetch(`/api/x/queue/${item.id}/image`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ includeImage: next }),
+      });
+      if (!res.ok) throw new Error(`${res.status}`);
+    } catch {
+      setIncludeImage(prev); // rollback
+    } finally {
+      setToggling(false);
+    }
+  }
 
   return (
     <div
@@ -805,6 +828,30 @@ function QueueItemCard({
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {isXPost && (
+            <button
+              onClick={() => onToggleImage(!includeImage)}
+              disabled={toggling}
+              title={includeImage ? "Image will be generated (~$0.07)" : "Text-only"}
+              style={{
+                ...mono,
+                fontSize: "0.64rem",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 3,
+                padding: "2px 6px",
+                background: includeImage ? "rgba(249,115,22,0.14)" : "rgba(227,229,228,0.06)",
+                border: `1px solid ${includeImage ? "rgba(249,115,22,0.40)" : "rgba(227,229,228,0.12)"}`,
+                color: includeImage ? "#f97316" : "rgba(227,229,228,0.50)",
+                cursor: toggling ? "not-allowed" : "pointer",
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+                opacity: toggling ? 0.6 : 1,
+              }}
+            >
+              {includeImage ? "◉ IMG" : "○ IMG"}
+            </button>
+          )}
           {isLong && (
             <button
               onClick={() => setExpanded(!expanded)}
@@ -887,6 +934,9 @@ interface QueueItem {
   priority: number;
   createdAt: string;
   channel?: string;
+  includeImage?: boolean;
+  imagePrompt?: string;
+  mediaId?: string;
 }
 
 interface RecentPost {
