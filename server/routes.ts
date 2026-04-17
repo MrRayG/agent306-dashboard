@@ -1808,14 +1808,13 @@ export function registerRoutes(httpServer: Server, app: Express) {
         },
       },
       {
-        label: "tts (grok-2-tts, 1 word)",
+        label: "tts (voice=eve, 1 word)",
         method: "POST",
-        url: "https://api.x.ai/v1/audio/speech",
+        url: "https://api.x.ai/v1/tts",
         body: {
-          model: "grok-2-tts",
-          voice: "eve",
-          input: "test",
-          response_format: "mp3",
+          text: "test",
+          voice_id: "eve",
+          language: "en",
         },
       },
     ];

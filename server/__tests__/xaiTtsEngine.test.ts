@@ -189,3 +189,47 @@ describe("xaiTtsEngine — callXaiTts input validation", () => {
     }
   });
 });
+
+describe("xaiTtsEngine — wire format (per docs.x.ai)", () => {
+  const originalFetch = globalThis.fetch;
+
+  after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("posts to /v1/tts with {text, voice_id, language} body — NOT /v1/audio/speech", async () => {
+    let capturedUrl = "";
+    let capturedBody: any = null;
+    let capturedAuth = "";
+    globalThis.fetch = (async (url: any, init: any) => {
+      capturedUrl = String(url);
+      capturedBody = init?.body ? JSON.parse(init.body) : null;
+      capturedAuth = init?.headers?.["Authorization"] ?? "";
+      return {
+        ok: true,
+        status: 200,
+        text: async () => "",
+        arrayBuffer: async () => new ArrayBuffer(8),
+      } as any;
+    }) as any;
+
+    const buf = await callXaiTts({ text: "hello world", voice: "eve", apiKey: "test-key" });
+    assert.ok(Buffer.isBuffer(buf), "returns a Buffer");
+
+    // Endpoint correctness — the entire bug from the prior session
+    assert.equal(capturedUrl, "https://api.x.ai/v1/tts");
+    assert.ok(!capturedUrl.includes("/audio/speech"), "must NOT use OpenAI-style /audio/speech");
+
+    // Body shape per docs.x.ai/developers/model-capabilities/audio/voice
+    assert.equal(capturedBody.text, "hello world");
+    assert.equal(capturedBody.voice_id, "eve");
+    assert.equal(capturedBody.language, "en");
+    assert.equal(capturedBody.model, undefined, "xAI TTS body must NOT include `model`");
+    assert.equal(capturedBody.voice, undefined, "xAI TTS body must NOT include `voice` (it is `voice_id`)");
+    assert.equal(capturedBody.input, undefined, "xAI TTS body must NOT include `input` (it is `text`)");
+    assert.equal(capturedBody.response_format, undefined, "xAI TTS body must NOT include `response_format`");
+
+    // Auth header preserved
+    assert.equal(capturedAuth, "Bearer test-key");
+  });
+});
