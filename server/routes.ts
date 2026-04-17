@@ -811,6 +811,40 @@ export function registerRoutes(httpServer: Server, app: Express) {
     res.json(getXPostQueue());
   });
 
+  // ── Manual engagement tracking ──────────────────────────────
+  // Record a tweet that was posted outside the normal engine pipeline
+  // (e.g., MrRayG posting manually) so the engagement tracker still
+  // scores it at T+1h and feeds the competency + soul evolution loops.
+  //
+  // Body: { tweetUrl: string, tweetText: string, qualityScore?: number, sentiment?: string }
+  app.post("/api/engagement/track", requireDashAuth, (req, res) => {
+    const { tweetUrl, tweetText, qualityScore, sentiment } = req.body ?? {};
+    if (!tweetUrl || !tweetText) {
+      return res.status(400).json({ error: "tweetUrl and tweetText required" });
+    }
+    const tweetId = String(tweetUrl).split("/").pop()?.split("?")[0] ?? "";
+    if (!tweetId || !/^\d+$/.test(tweetId)) {
+      return res.status(400).json({ error: "tweetUrl must end in a numeric tweet ID" });
+    }
+    // Use a synthetic negative episodeId to distinguish manual posts from engine posts.
+    const episodeId = -Math.floor(Date.now() / 1000);
+    recordPost({
+      episodeId,
+      tweetUrl: `https://x.com/306Agent/status/${tweetId}`,
+      tweetText: String(tweetText),
+      qualityScore: typeof qualityScore === "number" ? qualityScore : 7,
+      sentiment: typeof sentiment === "string" ? sentiment : undefined,
+      signals: { twitter: 0 },
+    });
+    queueEngagementCheck(`https://x.com/306Agent/status/${tweetId}`);
+    res.json({
+      ok: true,
+      tweetId,
+      episodeId,
+      message: "Post recorded; engagement check will run ~1h after postedAt.",
+    });
+  });
+
   app.post("/api/x/queue/clear", requireDashAuth, (_req, res) => {
     const cleared = clearXPostQueue();
     res.json({ cleared });
