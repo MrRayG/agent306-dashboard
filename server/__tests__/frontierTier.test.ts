@@ -22,7 +22,7 @@ const ROUTINE_TASKS_SAMPLE = [
   "tier-assignment",
   "social-preview",          // demoted in PR D
   "breakthrough-evaluation", // demoted in PR D
-  "signal-brief",            // demoted in PR D
+  // signal-brief promoted to "live-social" tier (Wave 1 follow-up) — verified in modelRouter.test.ts
   "hypothesis-decomposition",
   "trust-scoring",
 ];

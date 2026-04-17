@@ -18,7 +18,7 @@
  * callers should handle gracefully.
  */
 
-export type TaskComplexity = "routine" | "standard" | "premium" | "frontier" | "multi-agent";
+export type TaskComplexity = "routine" | "standard" | "premium" | "frontier" | "multi-agent" | "live-social";
 
 const MODEL_MAP: Record<TaskComplexity, string> = {
   routine:       process.env.MODEL_ROUTINE     ?? "google/gemini-3-flash-preview",
@@ -26,6 +26,11 @@ const MODEL_MAP: Record<TaskComplexity, string> = {
   premium:       process.env.MODEL_PREMIUM     ?? "anthropic/claude-sonnet-4.6",
   frontier:      process.env.MODEL_FRONTIER    ?? "anthropic/claude-opus-4.6",
   "multi-agent": process.env.MODEL_MULTI_AGENT ?? "x-ai/grok-4.20-multi-agent",
+  // "live-social" — tasks requiring live X/web search via xAI Responses API + x_search tool.
+  // Must resolve to an xAI-hosted model so toXAINativeModel() returns non-null in
+  // postXSearchResponses; otherwise the helper throws. Grok 4.20 is the flagship x_search-
+  // compatible model today.
+  "live-social": process.env.MODEL_LIVE_SOCIAL ?? "x-ai/grok-4.20",
 };
 
 const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
@@ -54,7 +59,11 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "analysis-assumptions": "routine",        // Structured list of untested assumptions
   "analysis-intake": "routine",             // Phase 1 landscape-mapping extraction
   "signal-collection": "routine",           // Structured signal selection from live data
-  "signal-brief": "routine",                // Same family as signal-collection (also matches signal_brief via underscore normalization)
+  // Wave 1 follow-up: signal-brief uses postXSearchResponses (xAI Responses API + x_search tool),
+  // which requires an xAI-hosted model. Previous "routine" mapping → Gemini, which caused
+  // toXAINativeModel() to return null and the helper to throw. "live-social" tier pins it to
+  // Grok 4.20 via xAI Direct. Hyphen form covers signal_brief via normalizeTaskName().
+  "signal-brief": "live-social",
   "parallel-search-subqueries": "routine",  // Generate 3-5 search subqueries from a claim
   "perspective-generation": "routine",      // Alt-perspective generation in knowledge graph
   "episode-reflection": "routine",          // Short post-episode notes
@@ -143,6 +152,13 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "manuscript": "premium",                 // Long-form manuscript — public-facing voice
   "conversation-insight": "routine",       // Short insight extraction, same family as conversation-insights
   "research-scan": "routine",              // Goal-scan research pass — structured enumeration
+
+  // Wave 1 follow-up sweep: tasks invoked in server/ with no explicit entry were
+  // silently hitting the "standard" default. Pinned explicitly so routing is
+  // visible in getModelConfig() and regressions surface immediately.
+  "exploration-synthesis": "standard",     // explorationEngine synthesis passes (4 call sites)
+  "goal-generation": "standard",           // goalEngine goal-generation step
+  "hypothesis-consolidation": "standard",  // hypothesisConsolidator + batch runner
 };
 
 /**
