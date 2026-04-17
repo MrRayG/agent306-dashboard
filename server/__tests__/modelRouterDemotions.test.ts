@@ -51,24 +51,21 @@ const MUST_STAY_STANDARD = [
   "triad-fact-synthesis",
 ];
 
+// PR E (Apr 2026): hypothesis-evaluation, synthesis-report, triad-reasoning,
+// self-evolution-reflection, aspiration-generation, deep-reasoning moved from
+// premium → frontier (Claude Opus 4.6). They are verified in frontierTier.test.ts.
 const MUST_STAY_PREMIUM = [
-  "hypothesis-evaluation",
   "hypothesis-resolution",
   "podcast-script",
   "research-brief",
   "article-draft",
-  "synthesis-report",
-  "triad-reasoning",
   "triad-grounding-review",
-  "self-evolution-reflection",
-  "aspiration-generation",
   "analysis-contradictions",
   "analysis-citation-chains",
   "analysis-gap-scan",
   "analysis-methodology-audit",
   "analysis-synthesis",
   "analysis-knowledge-map",
-  "deep-reasoning",
   "parallel-search-reduce",
 ];
 
