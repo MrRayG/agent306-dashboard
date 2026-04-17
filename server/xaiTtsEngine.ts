@@ -14,6 +14,11 @@
  *    - Default: "eve" (configurable via TTS_XAI_VOICE)
  *    - Available per docs.x.ai: ara, eve, leo, rex, sal
  *
+ *  Endpoint: POST https://api.x.ai/v1/tts
+ *    Body: { text, voice_id, language }
+ *    Response: raw mp3 bytes
+ *  See https://docs.x.ai/developers/model-capabilities/audio/voice
+ *
  *  Pricing: $4.20 / 1M characters (xAI)
  *  vs ElevenLabs Multilingual v2: ~$18 / 1M characters at the
  *  Creator tier — roughly 4x cheaper.
@@ -31,8 +36,8 @@ import { dataPath } from "./dataPaths.js";
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
-const XAI_TTS_API_URL = "https://api.x.ai/v1/audio/speech";
-const XAI_TTS_MODEL = process.env.TTS_XAI_MODEL ?? "grok-tts-1";
+const XAI_TTS_API_URL = "https://api.x.ai/v1/tts";
+const XAI_TTS_LANGUAGE = process.env.TTS_XAI_LANGUAGE ?? "en";
 
 /** Max characters per xAI TTS request (per docs.x.ai) */
 export const XAI_MAX_CHUNK_CHARS = 15000;
@@ -248,10 +253,9 @@ export async function callXaiTts(opts: {
       "Accept": "audio/mpeg",
     },
     body: JSON.stringify({
-      model: XAI_TTS_MODEL,
-      voice,
-      input: opts.text,
-      response_format: "mp3",
+      text: opts.text,
+      voice_id: voice,
+      language: XAI_TTS_LANGUAGE,
     }),
   });
 
