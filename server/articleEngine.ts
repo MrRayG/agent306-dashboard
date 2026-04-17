@@ -32,7 +32,7 @@ import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import { queueXPost } from "./xPostScheduler.js";
 import { enforcePostFormat } from "./postFormatGuard.js";
 
-import { postChatCompletions } from "./llmCall.js";
+import { postChatCompletions, postXSearchResponses } from "./llmCall.js";
 const GROK_CHAT_API     = LLM_BASE_URL;
 const GROK_RESPONSE_API = LLM_RESPONSE_URL;
 const ARTICLE_STATE_FILE = dataPath("article_state.json");
@@ -111,28 +111,17 @@ async function discoverArticle(apiKey: string): Promise<{
 } | null> {
   console.log("[ArticleEngine] Discovering this week's AI article...");
 
-  // Attempt 1: Grok x_search via Responses API (requires xAI-direct bearer)
+  // Attempt 1: Grok x_search via Responses API (xAI-native endpoint).
   //
-  // BUG FIX: Previously sent OpenRouter's bearer (via getLLMHeaders()) to
-  // api.x.ai/v1/responses — guaranteed 401 silently. The /responses endpoint
-  // is xAI-native and requires XAI_DIRECT_API_KEY (= GROK_API_KEY env var).
-  //
-  // Hard-fail if the key is missing — matches the project's no-silent-fallback
-  // policy for xAI overrides.
-  if (!XAI_DIRECT_API_KEY) {
-    console.warn("[ArticleEngine] GROK_API_KEY not set — skipping x_search, using chat completions fallback");
-  } else try {
+  // Routes through postXSearchResponses which enforces GROK_API_KEY (xAI-direct
+  // bearer) with no silent fallback, and resolves the model via modelRouter
+  // (task="article" → flagship Grok 4.20). Previously this site sent
+  // OpenRouter's bearer to api.x.ai/v1/responses — guaranteed 401 silently.
+  try {
     console.log("[ArticleEngine] Trying Grok x_search (Responses API, xAI direct)...");
-    const res = await fetch(GROK_RESPONSES_URL, {
-      method: "POST",
-      headers: getXAIDirectHeaders(),
-      body: JSON.stringify({
-        // Use flagship Grok 4.20 for article discovery (lowest hallucination rate).
-        model: "grok-4.20-0309-non-reasoning",
-        stream: false,
-        input: [{ role: "user", content: DISCOVERY_PROMPT }],
-        tools: [{ type: "x_search" }],
-      }),
+    const res = await postXSearchResponses({
+      task: "article",
+      content: DISCOVERY_PROMPT,
       signal: AbortSignal.timeout(45000),
     });
 

@@ -25,7 +25,7 @@ import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
-import { postChatCompletions } from "./llmCall.js";
+import { postChatCompletions, postXSearchResponses } from "./llmCall.js";
 const GROK_CHAT_API      = LLM_BASE_URL;
 const GROK_RESPONSE_API  = LLM_RESPONSE_URL;
 const PERPLEXITY_API     = "https://api.perplexity.ai";
@@ -128,8 +128,7 @@ async function searchWithPerplexity(
 // ── Grok x_search — X/Twitter social signal scan ────────────────────────────
 async function searchXSocial(query: string, grokKey: string): Promise<string> {
   // x_search requires the native Grok Responses API, NOT OpenRouter
-  const nativeGrokKey = process.env.GROK_API_KEY ?? "";
-  if (!nativeGrokKey) {
+  if (!process.env.GROK_API_KEY) {
     console.warn("[Exploration] GROK_API_KEY not set — skipping x_search");
     return "";
   }
@@ -141,16 +140,9 @@ async function searchXSocial(query: string, grokKey: string): Promise<string> {
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, 2000);
-    const grokResponsesUrl = process.env.GROK_RESPONSES_URL ?? "https://api.x.ai/v1/responses";
-    const res = await fetch(grokResponsesUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` },
-      body: JSON.stringify({
-        model: "grok-4-1-fast-non-reasoning",
-        stream: false,
-        input: [{ role: "user", content: sanitizedQuery }],
-        tools: [{ type: "x_search" }],
-      }),
+    const res = await postXSearchResponses({
+      task: "exploration",
+      content: sanitizedQuery,
       signal: AbortSignal.timeout(35000),
     });
 

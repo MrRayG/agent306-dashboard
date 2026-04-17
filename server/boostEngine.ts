@@ -38,7 +38,7 @@ import { buildVoiceBlock } from "./voice.js";
 import { getEvolutionContext } from "./soulEvolution.js";
 import { getTodaysPostsSummary } from "./xPostScheduler.js";
 
-import { postChatCompletions } from "./llmCall.js";
+import { postChatCompletions, postXSearchResponses } from "./llmCall.js";
 const GROK_CHAT_API     = LLM_BASE_URL;
 const GROK_RESPONSE_API = LLM_RESPONSE_URL;
 
@@ -88,18 +88,7 @@ async function readTweetWithXSearch(url: string, apiKey: string): Promise<{
   communityMood: string;
 } | null> {
   try {
-    const nativeGrokKey = process.env.GROK_API_KEY ?? "";
-    if (!nativeGrokKey) throw new Error("GROK_API_KEY not set for x_search");
-    const grokResponsesUrl = process.env.GROK_RESPONSES_URL ?? "https://api.x.ai/v1/responses";
-    const res = await fetch(grokResponsesUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` },
-      body: JSON.stringify({
-        model: "grok-4-1-fast-non-reasoning",
-        stream: false,
-        input: [{
-          role: "user",
-          content: `Search X for this specific post and its replies: ${url}
+    const prompt = `Search X for this specific post and its replies: ${url}
 
 Find:
 1. The EXACT, FULL text of the post — every word matters. Do not summarize.
@@ -117,10 +106,10 @@ Return JSON:
   "topReplies": ["reply 1 with full text", "reply 2", "reply 3"],
   "engagement": "approximate engagement description",
   "communityMood": "one to two sentences on the quality and tone of community reaction"
-}`,
-        }],
-        tools: [{ type: "x_search" }],
-      }),
+}`;
+    const res = await postXSearchResponses({
+      task: "boost",
+      content: prompt,
       signal: AbortSignal.timeout(45000),
     });
 

@@ -100,6 +100,90 @@ export async function postChatCompletions(
   return res;
 }
 
+/**
+ * postXSearchResponses — PR Q helper for migrating raw Grok x_search
+ * `fetch("https://api.x.ai/v1/responses", ...)` call sites off hardcoded
+ * model names and onto modelRouter + GROK_API_KEY routing.
+ *
+ * Centralizes all xAI Responses API calls that use the x_search tool so that:
+ *   - The model comes from getModel(task) → toXAINativeModel() (no hardcoding).
+ *   - GROK_API_KEY is the single source of auth. Missing key → throw, no silent fallback.
+ *   - URL can still be overridden via GROK_RESPONSES_URL for testing.
+ *
+ * Returns the raw Response so callers keep ownership of status checks, .text()
+ * error logging, and custom timeout handling. The caller decides what to do
+ * with non-ok responses — this helper does not throw on HTTP errors, only on
+ * missing API key or a non-xAI routed model (which would indicate misconfig).
+ *
+ * Pass an existing AbortSignal (typically AbortSignal.timeout(N)) through
+ * unchanged so per-engine timeouts are preserved.
+ */
+export async function postXSearchResponses(args: {
+  task: string;
+  content: string;
+  signal?: AbortSignal;
+}): Promise<Response> {
+  const { task, content, signal } = args;
+  const nativeGrokKey = process.env.GROK_API_KEY;
+  if (!nativeGrokKey) {
+    throw new Error(
+      `postXSearchResponses(task="${task}"): GROK_API_KEY is not set. x_search requires a native xAI key — no silent fallback.`,
+    );
+  }
+  const routedModel = getModel(task);
+  const xaiModel = toXAINativeModel(routedModel);
+  if (xaiModel === null) {
+    throw new Error(
+      `postXSearchResponses(task="${task}"): routed model "${routedModel}" is not xAI-hosted. x_search requires an xAI model.`,
+    );
+  }
+  const url = process.env.GROK_RESPONSES_URL ?? "https://api.x.ai/v1/responses";
+
+  const startedAt = Date.now();
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${nativeGrokKey}`,
+      },
+      body: JSON.stringify({
+        model: xaiModel,
+        stream: false,
+        input: [{ role: "user", content }],
+        tools: [{ type: "x_search" }],
+      }),
+      signal,
+    });
+  } catch (err: any) {
+    logRoute({
+      task,
+      tier:      inferTier(xaiModel),
+      provider:  "xai-direct",
+      model:     xaiModel,
+      mode:      "responses",
+      latencyMs: Date.now() - startedAt,
+      status:    "error",
+      errorMsg:  `network: ${err?.message ?? String(err)}`,
+    });
+    throw err;
+  }
+
+  logRoute({
+    task,
+    tier:      inferTier(xaiModel),
+    provider:  "xai-direct",
+    model:     xaiModel,
+    mode:      "responses",
+    latencyMs: Date.now() - startedAt,
+    status:    res.ok ? "ok" : "error",
+    errorMsg:  res.ok ? undefined : `http ${res.status}`,
+  });
+
+  return res;
+}
+
 export async function callChatCompletions(opts: LLMCallOptions, model: string): Promise<LLMResponse> {
   const timeoutMs = opts.timeoutMs ?? LLM_TIMEOUTS.default;
   const messages = opts.messages ?? opts.input ?? [];
