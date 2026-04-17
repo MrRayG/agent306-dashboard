@@ -131,17 +131,38 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "cross-score": "routine",                // Cross-scoring of both verdicts
   "graph-analysis": "routine",             // Graph gap analysis for aspirations
   // (prediction-verification demoted to routine above)
+
+  // PR #4 — explicit aliases for tasks that were silently falling through
+  // to the default "standard" tier. Each entry matches how the task is
+  // invoked in the codebase; both hyphenated and underscored variants
+  // resolve via normalizeTaskName() below, but we keep explicit entries
+  // where the underscore form is the one in active use.
+  "academy": "premium",                    // Long-form academy content — public-facing voice
+  "boost": "standard",                     // Community boost post — Agent 306's voice
+  "cyoa": "standard",                      // Choose-your-own-adventure episodes — public voice
+  "manuscript": "premium",                 // Long-form manuscript — public-facing voice
+  "conversation-insight": "routine",       // Short insight extraction, same family as conversation-insights
+  "research-scan": "routine",              // Goal-scan research pass — structured enumeration
 };
 
 /**
+ * Normalize a task name to the canonical form used as TASK_COMPLEXITY keys.
+ * Replaces underscores with hyphens and lowercases, so "Hypothesis_Resolution"
+ * and "hypothesis-resolution" and "HYPOTHESIS_RESOLUTION" all resolve the same.
+ */
+export function normalizeTaskName(task: string): string {
+  return task.replace(/_/g, "-").toLowerCase();
+}
+
+/**
  * Get the appropriate model for a task.
- * Normalizes underscores to hyphens so both "hypothesis_resolution" and
+ * Normalizes via normalizeTaskName() so both "hypothesis_resolution" and
  * "hypothesis-resolution" resolve to the same routing entry.
  * @param task - Task identifier (e.g., "podcast-script", "reflection")
  * @returns OpenRouter model string (e.g., "anthropic/claude-sonnet-4.6")
  */
 export function getModel(task: string): string {
-  const normalized = task.replace(/_/g, "-");
+  const normalized = normalizeTaskName(task);
   const complexity = TASK_COMPLEXITY[normalized] ?? "standard";
   return MODEL_MAP[complexity];
 }
