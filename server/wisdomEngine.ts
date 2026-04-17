@@ -306,10 +306,22 @@ async function queryGoogleBooks(searchTerms: string[], usage: WisdomApiUsage): P
   }
 }
 
+// Disable Bible calls for the rest of the process once we see an auth failure —
+// the key won't become valid without an env change + restart, so retrying
+// every cycle just spams logs and burns quota.
+let bibleAuthDisabled = false;
+
+export function buildBibleHeaders(apiKey: string): Record<string, string> {
+  return { "api-key": apiKey };
+}
+
 async function queryBible(topics: string[], usage: WisdomApiUsage): Promise<WisdomEntry[]> {
   const apiKey = process.env.BIBLE_API_KEY;
   if (!apiKey) {
-    console.log("[WisdomEngine] No BIBLE_API_KEY — skipping Bible API");
+    console.log("[WisdomEngine] BIBLE_API_KEY not set — Bible integration disabled (set env var on Railway to enable)");
+    return [];
+  }
+  if (bibleAuthDisabled) {
     return [];
   }
   if (!canCallApi("bible", usage)) {
@@ -324,12 +336,22 @@ async function queryBible(topics: string[], usage: WisdomApiUsage): Promise<Wisd
     const res = await fetch(
       `https://api.scripture.api.bible/v1/bibles/${bibleId}/search?query=${query}`,
       {
-        headers: { "api-key": apiKey },
+        headers: buildBibleHeaders(apiKey),
         signal: AbortSignal.timeout(10000),
       },
     );
     if (!res.ok) {
       const body = await res.text().catch(() => "(unreadable)");
+      // 401/403 are permanent for this process — disable to avoid log-spam every cycle.
+      // 429/5xx are transient; let future cycles retry naturally.
+      if (res.status === 401 || res.status === 403) {
+        bibleAuthDisabled = true;
+        console.warn(
+          `[WisdomEngine] Bible API ${res.status} (auth failure) — disabling Bible integration for this process. ` +
+          `Verify BIBLE_API_KEY is a valid scripture.api.bible key (header format: 'api-key: <key>'). Body: ${body}`,
+        );
+        return [];
+      }
       console.warn(`[WisdomEngine] Bible API error: ${res.status} — ${body}`);
       return [];
     }
@@ -555,3 +577,14 @@ export function getActiveWisdomCount(): number {
 
 // Export for testing
 export { DIMENSION_DOMAIN_MAP, MAX_WISDOM_ENTRIES, RATE_LIMITS };
+
+// Reset bible auth-disabled flag (test-only helper; harmless in prod since
+// flag only gets set after a 401/403 response)
+export function __resetBibleAuthDisabledForTest(): void {
+  bibleAuthDisabled = false;
+}
+
+// Startup diagnostic — log once at module load whether Bible key is configured
+if (!process.env.BIBLE_API_KEY) {
+  console.log("[WisdomEngine] BIBLE_API_KEY not set — Bible integration disabled (set env var on Railway to enable)");
+}

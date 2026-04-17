@@ -308,6 +308,78 @@ describe("WisdomEngine", () => {
     });
   });
 
+  describe("Bible API integration", () => {
+    it("should build the auth header as 'api-key: <key>' (not Authorization: Bearer)", async () => {
+      const mod = await import("../wisdomEngine.js");
+      const headers = mod.buildBibleHeaders("test-key-123");
+      assert.equal(headers["api-key"], "test-key-123");
+      assert.equal(headers["Authorization"], undefined);
+      assert.equal(headers["X-API-Key"], undefined);
+    });
+
+    it("should hit api.scripture.api.bible/v1 with api-key header and NOT retry on 401", async () => {
+      process.env.BIBLE_API_KEY = "fake-bad-key";
+      const mod = await import("../wisdomEngine.js");
+      mod.__resetBibleAuthDisabledForTest();
+
+      let bibleCallCount = 0;
+      let sawApiKeyHeader = false;
+      let sawBearer = false;
+      let url = "";
+      globalThis.fetch = (async (u: string, opts?: any) => {
+        if (typeof u === "string" && u.includes("scripture.api.bible")) {
+          bibleCallCount++;
+          url = u;
+          const h = opts?.headers ?? {};
+          if (h["api-key"]) sawApiKeyHeader = true;
+          const authVal = h["Authorization"] ?? h["authorization"];
+          if (typeof authVal === "string" && authVal.startsWith("Bearer")) sawBearer = true;
+          return {
+            ok: false,
+            status: 401,
+            text: async () => '{"statusCode":401,"error":"Unauthorized","message":"bad api-key"}',
+          };
+        }
+        return { ok: true, json: async () => ({ items: [], results: [], data: { verses: [], matches: [] } }) };
+      }) as any;
+
+      const evalResult = mockEvalResult({ weakestDimension: "reasoningRigor" });
+      await pullWisdom(evalResult);
+
+      assert.ok(url.startsWith("https://api.scripture.api.bible/v1/"), `base URL should be api.scripture.api.bible/v1, got: ${url}`);
+      assert.equal(sawApiKeyHeader, true, "Bible call must send 'api-key' header");
+      assert.equal(sawBearer, false, "Bible call must NOT send Authorization: Bearer");
+      assert.equal(bibleCallCount, 1, "401 must not be retried");
+
+      // Second pull — Bible disabled after 401, should not call again
+      await pullWisdom(evalResult);
+      assert.equal(bibleCallCount, 1, "after 401, Bible calls must be disabled for the process");
+
+      delete process.env.BIBLE_API_KEY;
+      mod.__resetBibleAuthDisabledForTest();
+    });
+
+    it("should skip Bible call cleanly when BIBLE_API_KEY is unset", async () => {
+      delete process.env.BIBLE_API_KEY;
+      const mod = await import("../wisdomEngine.js");
+      mod.__resetBibleAuthDisabledForTest();
+
+      let bibleCallCount = 0;
+      globalThis.fetch = (async (u: string) => {
+        if (typeof u === "string" && u.includes("scripture.api.bible")) {
+          bibleCallCount++;
+        }
+        return { ok: true, json: async () => ({ items: [], results: [], data: { verses: [], matches: [] } }) };
+      }) as any;
+
+      const evalResult = mockEvalResult({ weakestDimension: "reasoningRigor" });
+      const result = await pullWisdom(evalResult);
+
+      assert.equal(bibleCallCount, 0, "no Bible call should be made when key is unset");
+      assert.ok(result.entriesIngested >= 0);
+    });
+  });
+
   describe("getActiveWisdomCount()", () => {
     it("should count only active wisdom entries", () => {
       const before = getActiveWisdomCount();
