@@ -485,6 +485,7 @@ function EngineCards() {
     breakthrough: "#ef4444",
     blog: "#a78bfa",
     dispatch: "#a78bfa",
+    reflection: "#c084fc",
   };
 
   if (isLoading) {
@@ -501,7 +502,7 @@ function EngineCards() {
         const color = colorMap[eng.id] ?? "#efefef";
         const isGenerating = generating === eng.id;
         const result = lastResult[eng.id];
-        const canGenerate = ["signal", "academy", "news", "research", "podcast", "article", "breakthrough", "blog", "dispatch"].includes(eng.id);
+        const canGenerate = ["signal", "academy", "news", "research", "podcast", "article", "breakthrough", "blog", "dispatch", "reflection"].includes(eng.id);
         const isDispatch = eng.id === "dispatch";
         const episodeCount = dispatchState?.currentEpisode ?? 0;
         const isEditingSchedule = editingSchedule === eng.id;
