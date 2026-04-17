@@ -9,13 +9,12 @@ import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { getFullAgentContext, knowledge } from "./memoryEngine.js";
 import { getOptimizedContext } from "./contextWindow.js";
-import { getModel } from "./modelRouter.js";
-import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { LLM_API_KEY } from "./llmConfig.js";
+import { callLLM } from "./llmCall.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { semanticSearch } from "./embeddingEngine.js";
 import { evidenceQueue, routeEvidenceSearch } from "./evidenceDispatcher.js";
 
-const GROK_URL = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
 const DEBATES_FILE = dataPath("reasoning-debates.json");
 const CONTRADICTIONS_FILE = dataPath("contradictions.json");
@@ -183,23 +182,17 @@ async function callGrok(systemPrompt: string, userPrompt: string): Promise<any |
 
   let raw = "";
   try {
-    const res = await fetch(GROK_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
-        model: getModel("self_debate"),
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        max_tokens: 2000,
-        temperature: 0.4,
-      }),
-      signal: AbortSignal.timeout(40000),
+    const response = await callLLM({
+      task: "self-debate",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      maxTokens: 2000,
+      temperature: 0.4,
+      timeoutMs: 40000,
     });
-    if (!res.ok) return null;
-    const data = await res.json() as any;
-    raw = data.choices?.[0]?.message?.content ?? "{}";
+    raw = response.text || "{}";
     return safeParseLLMJson(raw, "Reasoning.debate");
   } catch (e: any) {
     console.error(`[ReasoningEngine] LLM JSON parse failed:`, e.message, `— raw response: ${raw?.slice(0, 200)}`);
@@ -1150,23 +1143,17 @@ async function callGrokWithModel(taskName: string, systemPrompt: string, userPro
 
   let raw = "";
   try {
-    const res = await fetch(GROK_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
-        model: getModel(taskName),
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        max_tokens: 2000,
-        temperature: 0.4,
-      }),
-      signal: AbortSignal.timeout(40000),
+    const response = await callLLM({
+      task: taskName,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      maxTokens: 2000,
+      temperature: 0.4,
+      timeoutMs: 40000,
     });
-    if (!res.ok) return null;
-    const data = await res.json() as any;
-    raw = data.choices?.[0]?.message?.content ?? "{}";
+    raw = response.text || "{}";
     return safeParseLLMJson(raw, "Reasoning.task");
   } catch (e: any) {
     console.error(`[ReasoningEngine] LLM call failed (${taskName}):`, e.message, `— raw: ${raw?.slice(0, 200)}`);
