@@ -23,7 +23,9 @@ const DEMOTED_TO_ROUTINE = [
   "analysis-assumptions",
   "analysis-intake",
   "signal-collection",
-  "signal_brief",
+  // signal_brief promoted from "routine" to the new "live-social" tier
+  // (Wave 1 follow-up) — it invokes postXSearchResponses which requires an
+  // xAI-hosted model. Verified separately in modelRouter.test.ts.
   "parallel-search-subqueries",
   "perspective-generation",
   "episode-reflection",

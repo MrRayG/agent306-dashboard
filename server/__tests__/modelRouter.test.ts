@@ -84,6 +84,46 @@ describe("getModel — new aliases resolve to expected tier", () => {
   });
 });
 
+describe("getModel — live-social tier (Wave 1 follow-up)", () => {
+  it("signal-brief resolves to the live-social tier (Grok 4.20, xAI-hosted for x_search)", () => {
+    const model = getModel("signal-brief");
+    assert.equal(model, "x-ai/grok-4.20");
+    // Must be xAI-hosted so toXAINativeModel() returns non-null in postXSearchResponses.
+    assert.ok(model.startsWith("x-ai/"), `signal-brief must resolve to an xAI model, got ${model}`);
+  });
+
+  it("signal_brief underscore form resolves identically to signal-brief", () => {
+    assert.equal(getModel("signal_brief"), getModel("signal-brief"));
+  });
+
+  it("does not regress signal-brief to routine (Gemini)", () => {
+    const { models } = getModelConfig();
+    assert.notEqual(getModel("signal-brief"), models.routine);
+  });
+
+  it("live-social tier is exposed in getModelConfig().models", () => {
+    const { models } = getModelConfig();
+    assert.equal((models as Record<string, string>)["live-social"], "x-ai/grok-4.20");
+  });
+});
+
+describe("getModel — explicit sweep entries (Wave 1 follow-up)", () => {
+  const { models } = getModelConfig();
+
+  it("exploration-synthesis resolves to standard (explicit, previously default)", () => {
+    assert.equal(getModel("exploration-synthesis"), models.standard);
+    assert.equal(getModel("exploration_synthesis"), models.standard);
+  });
+
+  it("goal-generation resolves to standard (explicit, previously default)", () => {
+    assert.equal(getModel("goal-generation"), models.standard);
+  });
+
+  it("hypothesis-consolidation resolves to standard (explicit, previously default)", () => {
+    assert.equal(getModel("hypothesis-consolidation"), models.standard);
+  });
+});
+
 describe("getModel — default fallback", () => {
   const { models } = getModelConfig();
 
