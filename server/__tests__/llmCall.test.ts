@@ -197,14 +197,14 @@ describe("callLLM routing", () => {
     assert.ok(String(calledUrl).includes("openrouter") || String(calledUrl).includes("chat/completions"));
   });
 
-  it("routes to responses API when task is in enabled list", async () => {
-    process.env.RESPONSES_API_ENABLED_TASKS = "hypothesis-evaluation";
+  it("routes to responses API when task is in enabled list (xAI-routed task)", async () => {
+    process.env.RESPONSES_API_ENABLED_TASKS = "self-debate";
     const fetchMock = mock.fn(async () => makeResponsesResponse("responses reply", "resp_999") as any);
     globalThis.fetch = fetchMock as any;
 
     const { callLLM } = await import(`../llmCall.js?t=${Date.now()}`);
     const out = await callLLM({
-      task: "hypothesis-evaluation",
+      task: "self-debate",
       input: [{ role: "user", content: "hi" }],
     });
 
@@ -217,7 +217,7 @@ describe("callLLM routing", () => {
   });
 
   it("falls back to chat completions when responses API errors", async () => {
-    process.env.RESPONSES_API_ENABLED_TASKS = "hypothesis-evaluation";
+    process.env.RESPONSES_API_ENABLED_TASKS = "self-debate";
     process.env.RESPONSES_API_FALLBACK = "true";
 
     let call = 0;
@@ -230,7 +230,7 @@ describe("callLLM routing", () => {
 
     const { callLLM } = await import(`../llmCall.js?t=${Date.now()}`);
     const out = await callLLM({
-      task: "hypothesis-evaluation",
+      task: "self-debate",
       messages: [{ role: "user", content: "hi" }],
     });
 
