@@ -48,6 +48,7 @@ import { runResearchAnalysisCycle } from "./researchAnalysisEngine.js";
 import { updateDreams, takeGrowthSnapshot, generateSelfImprovementPlan, executeImprovementActions, seedDreams } from "./dreamEngine.js";
 import { runAutoPodcastPipeline } from "./podcastEngine.js";
 import { generateBlogPost, getBlogState, type BlogType } from "./blogEngine.js";
+import { buildBlogUrl, ensureBlogDeepLink } from "./blogPromoLinks.js";
 import { getAgenda } from "./research-agenda.js";
 import { analyzeDailyCycle } from "./analyzerEngine.js";
 import { getExplorationState } from "./explorationEngine.js";
@@ -1379,19 +1380,20 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
 
   // ── Blog tweet voice generator ─────────────────────────────────────────────
   async function generateBlogTweet(post: any): Promise<string> {
+    const blogUrl = buildBlogUrl(post);
     try {
       const res = await postChatCompletions({
           model: getModel("blog-post"),
           messages: [
             {
               role: "system",
-              content: `You are Agent 306 — an autonomous AI researcher. Write a tweet promoting your latest blog post. Lead with a sharp insight, then drive readers to agent306.ai.
+              content: `You are Agent 306 — an autonomous AI researcher. Write a tweet promoting your latest blog post. Lead with a sharp insight, then drive readers to the exact deep-link for the piece.
 
 RULES:
 - Lead with the most surprising or specific finding — a number, a name, a claim
 - Have a take. "This matters because..." not "I wrote about..."
 - Never say "New blog post", "Check out my latest", or "I just published"
-- ALWAYS end with the URL: agent306.ai
+- ALWAYS end with the URL: ${blogUrl}
 - Write like you're telling a smart friend something you just figured out, then pointing them to the full piece
 - One idea. Sharp. Specific. Opinionated. Then the link.
 - Let the content dictate the length. Say what needs to be said, then stop.
@@ -1404,6 +1406,8 @@ RULES:
               content: `Your latest research blog is titled: "${post.title}"
 
 Key content:\n${(post.excerpt || post.content || "").slice(0, 1500)}
+
+End the tweet with this exact URL so readers can open the piece: ${blogUrl}
 
 Write a single tweet sharing the most interesting insight from this research. Remember: this is YOUR finding, YOUR voice. Not a promo.`
             }
@@ -1600,22 +1604,23 @@ Write a single tweet sharing the most interesting insight from this research. Re
         });
         if (post) {
           console.log(`[DailyCycle] Auto-published blog [${blogType}]: "${post.title}"`);
-          // Queue an X post promoting the new blog — always include agent306.ai
+          // Queue an X post promoting the new blog — always include the
+          // per-post deep link (not just agent306.ai) so readers can tell
+          // which blog the promo is for and jump straight to it.
           if (post.status === "published") {
+            const blogUrl = buildBlogUrl(post);
             let tweetText = await generateBlogTweet(post);
             if (tweetText) {
-              // Ensure agent306.ai URL is present — blog content lives on the site
-              if (!tweetText.includes("agent306.ai")) {
-                tweetText = tweetText.trimEnd() + "\n\nagent306.ai";
-              }
+              tweetText = ensureBlogDeepLink(tweetText, blogUrl);
               queueXPost(tweetText, "blog");
               queueFarcasterPost(tweetText.slice(0, 2500), "blog");
-              console.log(`[DailyCycle] Queued voice tweet for blog (X + Farcaster): "${tweetText.slice(0, 80)}..."`);
+              console.log(`[DailyCycle] Queued voice tweet for blog (X + Farcaster) [${blogUrl}]: "${tweetText.slice(0, 80)}..."`);
             } else {
               // Fallback: queue a basic tweet if LLM fails
-              const fallbackText = `${post.title}\n\nagent306.ai`;
+              const fallbackText = `${post.title}\n\n${blogUrl}`;
               queueXPost(fallbackText, "blog");
               queueFarcasterPost(fallbackText.slice(0, 2500), "blog");
+              console.log(`[DailyCycle] Queued fallback tweet for blog (X + Farcaster) [${blogUrl}]`);
             }
           }
         }
