@@ -89,6 +89,15 @@ import {
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { startXPostScheduler, getXPostQueue, queueXPost, getTodaysPostsSummary, clearXPostQueue, postXQueueItem, isXAutoPostEnabled, setXAutoPostEnabled, getXAutoPostState, setQueuedPostImage, defaultIncludeImageForType } from "./xPostScheduler.js";
 import { generatePostImage, generateImagePrompt, getImageStats } from "./imageEngine.js";
+import {
+  callXaiTts,
+  getTtsProvider,
+  getTtsStats,
+  DEFAULT_XAI_VOICE,
+  XAI_VOICES,
+  XAI_MAX_CHUNK_CHARS,
+  type XaiVoice,
+} from "./xaiTtsEngine.js";
 import { startFarcasterPostScheduler, getFarcasterPostQueue, queueFarcasterPost, clearFarcasterPostQueue, postFarcasterQueueItem } from "./farcasterQueue.js";
 import { getVoiceContext } from "./voiceInstructions.js";
 import { enforceShowTag } from "./contentTypes.js";
@@ -866,6 +875,47 @@ export function registerRoutes(httpServer: Server, app: Express) {
   // Default image policy for a given post type (for UI to show correct initial state)
   app.get("/api/image/default/:type", (req, res) => {
     res.json({ type: req.params.type, includeImage: defaultIncludeImageForType(req.params.type as any) });
+  });
+
+  // ── TTS provider preview + stats (PR H — xAI TTS A/B) ───────────────────
+  // Read-only: who is the active provider?
+  app.get("/api/tts/provider", (_req, res) => {
+    res.json({
+      provider: getTtsProvider(),
+      xaiDefaultVoice: DEFAULT_XAI_VOICE,
+      xaiVoices: XAI_VOICES,
+      xaiMaxChunkChars: XAI_MAX_CHUNK_CHARS,
+    });
+  });
+
+  // Cost + usage comparison (both providers)
+  app.get("/api/tts/stats", (_req, res) => {
+    res.json(getTtsStats());
+  });
+
+  // A/B preview endpoint. Protected — generating audio costs money.
+  // Body: { text: string, voice?: "ara"|"eve"|"leo"|"rex"|"sal" }
+  // Returns: audio/mpeg bytes from xAI TTS (single chunk, max 15k chars).
+  app.post("/api/tts/preview", requireDashAuth, async (req, res) => {
+    const { text, voice } = req.body ?? {};
+    if (!text || typeof text !== "string") {
+      return res.status(400).json({ error: "text (string) required" });
+    }
+    const sample = text.slice(0, XAI_MAX_CHUNK_CHARS);
+    const chosenVoice: XaiVoice = (XAI_VOICES as readonly string[]).includes(voice)
+      ? (voice as XaiVoice)
+      : DEFAULT_XAI_VOICE;
+    try {
+      const buffer = await callXaiTts({ text: sample, voice: chosenVoice });
+      res.setHeader("Content-Type", "audio/mpeg");
+      res.setHeader("X-Tts-Provider", "xai");
+      res.setHeader("X-Tts-Voice", chosenVoice);
+      res.setHeader("X-Tts-Chars", String(sample.length));
+      res.send(buffer);
+    } catch (e: any) {
+      console.error("[TTS] xAI preview failed:", e.message);
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // ── Manual engagement tracking ──────────────────────────────
