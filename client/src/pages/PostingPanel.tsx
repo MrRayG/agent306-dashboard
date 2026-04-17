@@ -543,6 +543,7 @@ function EngineCards() {
     article: "#2dd4bf",
     breakthrough: "#ef4444",
     blog: "#a78bfa",
+    dispatch: "#a78bfa",
   };
 
   if (isLoading) {
@@ -559,7 +560,7 @@ function EngineCards() {
         const color = colorMap[eng.id] ?? "#efefef";
         const isGenerating = generating === eng.id;
         const result = lastResult[eng.id];
-        const canGenerate = ["signal", "academy", "news", "research", "podcast", "article", "breakthrough", "blog"].includes(eng.id);
+        const canGenerate = ["signal", "academy", "news", "research", "podcast", "article", "breakthrough", "blog", "dispatch"].includes(eng.id);
         const plats = getPlatforms(eng.id);
         const isEditingSchedule = editingSchedule === eng.id;
         const sched = scheduleData?.[eng.id];

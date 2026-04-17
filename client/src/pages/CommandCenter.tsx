@@ -13,6 +13,9 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronUp,
+  Settings,
+  X,
+  Save,
 } from "lucide-react";
 
 // ── Helpers ─────────────────────────────────────────────────────────────
@@ -171,15 +174,270 @@ interface EngineInfo {
   enabled: boolean;
 }
 
+interface EngineSchedule {
+  schedule: string;
+  timeET: string;
+  dayET?: string;
+  enabled: boolean;
+}
+
+type ScheduleConfig = Record<string, EngineSchedule>;
+
+// ── Schedule Editor ─────────────────────────────────────────────────────────
+
+const ALL_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+const WEEKLY_DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
+
+function ScheduleEditor({
+  engineId,
+  schedule,
+  color,
+  onClose,
+}: {
+  engineId: string;
+  schedule: EngineSchedule;
+  color: string;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [schedType, setSchedType] = useState<string>(() => {
+    if (schedule.schedule === "daily" || schedule.schedule === "weekly" || schedule.schedule === "on_event") {
+      return schedule.schedule;
+    }
+    return "specific_days";
+  });
+  const [selectedDays, setSelectedDays] = useState<string[]>(() => {
+    if (schedType === "specific_days") {
+      return schedule.schedule.split("/");
+    }
+    return ["Mon", "Wed", "Fri"];
+  });
+  const [timeET, setTimeET] = useState(schedule.timeET);
+  const [dayET, setDayET] = useState(schedule.dayET ?? "Sunday");
+  const [enabled, setEnabled] = useState(schedule.enabled);
+  const [saving, setSaving] = useState(false);
+
+  function toggleDay(day: string) {
+    setSelectedDays(prev =>
+      prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
+    );
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    const finalSchedule = schedType === "specific_days"
+      ? ALL_DAYS.filter(d => selectedDays.includes(d)).join("/")
+      : schedType;
+
+    try {
+      await apiRequest("PUT", `/api/engines/${engineId}/schedule`, {
+        schedule: finalSchedule,
+        timeET,
+        dayET: schedType === "weekly" ? dayET : undefined,
+        enabled,
+      });
+      toast({ title: "Schedule saved" });
+      qc.invalidateQueries({ queryKey: ["/api/engines/status"] });
+      qc.invalidateQueries({ queryKey: ["/api/engines/schedules"] });
+      onClose();
+    } catch (e: any) {
+      toast({ title: "Failed to save schedule", description: e.message, variant: "destructive" });
+    }
+    setSaving(false);
+  }
+
+  return (
+    <div style={{
+      marginTop: 10,
+      padding: "12px 14px",
+      background: "rgba(227,229,228,0.04)",
+      border: `1px solid ${color}25`,
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <span style={{ ...mono, fontSize: "0.72rem", color, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+          Edit Schedule
+        </span>
+        <button onClick={onClose} style={{ background: "none", border: "none", color: "rgba(227,229,228,0.45)", cursor: "pointer", padding: 2 }}>
+          <X style={{ width: 12, height: 12 }} />
+        </button>
+      </div>
+
+      {/* Schedule type */}
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ ...mono, fontSize: "0.66rem", color: "rgba(227,229,228,0.45)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+          Frequency
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          {[
+            { value: "daily", label: "Daily" },
+            { value: "specific_days", label: "Specific Days" },
+            { value: "weekly", label: "Weekly" },
+            { value: "on_event", label: "On Event" },
+          ].map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => setSchedType(opt.value)}
+              style={{
+                ...mono,
+                fontSize: "0.68rem",
+                padding: "3px 8px",
+                background: schedType === opt.value ? `${color}20` : "rgba(227,229,228,0.06)",
+                border: `1px solid ${schedType === opt.value ? `${color}40` : "rgba(227,229,228,0.12)"}`,
+                color: schedType === opt.value ? color : "rgba(227,229,228,0.55)",
+                cursor: "pointer",
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Day checkboxes for specific_days */}
+      {schedType === "specific_days" && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ ...mono, fontSize: "0.66rem", color: "rgba(227,229,228,0.45)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+            Days
+          </div>
+          <div style={{ display: "flex", gap: 4 }}>
+            {ALL_DAYS.map(day => (
+              <button
+                key={day}
+                onClick={() => toggleDay(day)}
+                style={{
+                  ...mono,
+                  fontSize: "0.66rem",
+                  padding: "3px 6px",
+                  background: selectedDays.includes(day) ? `${color}20` : "rgba(227,229,228,0.04)",
+                  border: `1px solid ${selectedDays.includes(day) ? `${color}40` : "rgba(227,229,228,0.10)"}`,
+                  color: selectedDays.includes(day) ? color : "rgba(227,229,228,0.40)",
+                  cursor: "pointer",
+                  minWidth: 32,
+                }}
+              >
+                {day}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Weekly day selector */}
+      {schedType === "weekly" && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ ...mono, fontSize: "0.66rem", color: "rgba(227,229,228,0.45)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+            Day of Week
+          </div>
+          <select
+            value={dayET}
+            onChange={e => setDayET(e.target.value)}
+            style={{
+              ...mono,
+              fontSize: "0.72rem",
+              background: "rgba(227,229,228,0.06)",
+              border: "1px solid rgba(227,229,228,0.15)",
+              color: "#efefef",
+              padding: "4px 8px",
+              cursor: "pointer",
+            }}
+          >
+            {WEEKLY_DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+        </div>
+      )}
+
+      {/* Time picker (not for on_event) */}
+      {schedType !== "on_event" && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ ...mono, fontSize: "0.66rem", color: "rgba(227,229,228,0.45)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+            Time (ET)
+          </div>
+          <input
+            type="time"
+            value={timeET}
+            onChange={e => setTimeET(e.target.value)}
+            style={{
+              ...mono,
+              fontSize: "0.72rem",
+              background: "rgba(227,229,228,0.06)",
+              border: "1px solid rgba(227,229,228,0.15)",
+              color: "#efefef",
+              padding: "4px 8px",
+            }}
+          />
+        </div>
+      )}
+
+      {/* Enable/Disable + Save */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <button
+          onClick={() => setEnabled(!enabled)}
+          style={{
+            ...mono,
+            fontSize: "0.68rem",
+            textTransform: "uppercase",
+            letterSpacing: "0.1em",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "4px 10px",
+            background: enabled ? "rgba(74,222,128,0.12)" : "rgba(239,68,68,0.12)",
+            border: `1px solid ${enabled ? "rgba(74,222,128,0.35)" : "rgba(239,68,68,0.35)"}`,
+            color: enabled ? "#4ade80" : "#ef4444",
+            cursor: "pointer",
+          }}
+        >
+          <span style={{
+            width: 7, height: 7, borderRadius: "50%",
+            background: enabled ? "#4ade80" : "#ef4444",
+            display: "inline-block",
+          }} />
+          {enabled ? "Enabled" : "Disabled"}
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={saving || (schedType === "specific_days" && selectedDays.length === 0)}
+          style={{
+            ...mono,
+            fontSize: "0.70rem",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+            padding: "5px 14px",
+            background: color,
+            border: "none",
+            color: "#1a1b1c",
+            fontWeight: 700,
+            cursor: saving ? "not-allowed" : "pointer",
+            opacity: saving ? 0.6 : 1,
+          }}
+        >
+          {saving ? <Loader2 style={{ width: 10, height: 10 }} className="animate-spin" /> : <Save style={{ width: 10, height: 10 }} />}
+          {saving ? "Saving..." : "Save"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function EngineCards() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [generating, setGenerating] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<Record<string, { success: boolean; content?: string; error?: string }>>({});
+  const [editingSchedule, setEditingSchedule] = useState<string | null>(null);
 
   const { data: engineData, isLoading } = useQuery<{ engines: EngineInfo[] }>({
     queryKey: ["/api/engines/status"],
     refetchInterval: 30_000,
+  });
+
+  const { data: scheduleData } = useQuery<ScheduleConfig>({
+    queryKey: ["/api/engines/schedules"],
+    refetchInterval: 60_000,
   });
 
   const { data: dispatchState } = useQuery<{ currentEpisode: number; episodes: any[] }>({
@@ -246,6 +504,8 @@ function EngineCards() {
         const canGenerate = ["signal", "academy", "news", "research", "podcast", "article", "breakthrough", "blog", "dispatch"].includes(eng.id);
         const isDispatch = eng.id === "dispatch";
         const episodeCount = dispatchState?.currentEpisode ?? 0;
+        const isEditingSchedule = editingSchedule === eng.id;
+        const sched = scheduleData?.[eng.id];
 
         return (
           <div key={eng.id} style={{
@@ -253,14 +513,19 @@ function EngineCards() {
             border: `1px solid ${color}20`,
             overflow: "hidden",
           }}>
-            <div style={{ height: 3, background: color }} />
+            <div style={{ height: 3, background: eng.enabled ? color : "rgba(227,229,228,0.15)" }} />
             <div style={{ padding: "14px 18px" }}>
               {/* Header */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
                     <span style={{ fontSize: "1rem" }}>{eng.emoji}</span>
-                    <span style={{ ...mono, fontSize: "0.95rem", fontWeight: 700, color }}>{eng.name}</span>
+                    <span style={{ ...mono, fontSize: "0.95rem", fontWeight: 700, color: eng.enabled ? color : "rgba(227,229,228,0.35)" }}>{eng.name}</span>
+                    {!eng.enabled && (
+                      <span style={{ ...mono, fontSize: "0.60rem", color: "#ef4444", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                        disabled
+                      </span>
+                    )}
                     {isDispatch && episodeCount > 0 && (
                       <span style={{
                         ...mono, fontSize: "0.63rem", color: "#a78bfa",
@@ -270,8 +535,25 @@ function EngineCards() {
                       </span>
                     )}
                   </div>
-                  <div style={{ ...mono, fontSize: "0.70rem", color: "rgba(227,229,228,0.45)", marginBottom: "2px" }}>
-                    {eng.schedule}
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
+                    <span style={{ ...mono, fontSize: "0.70rem", color: "rgba(227,229,228,0.45)" }}>
+                      {eng.schedule}
+                    </span>
+                    <button
+                      onClick={() => setEditingSchedule(isEditingSchedule ? null : eng.id)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: isEditingSchedule ? color : "rgba(227,229,228,0.30)",
+                        cursor: "pointer",
+                        padding: "0 2px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                      }}
+                      title="Edit schedule"
+                    >
+                      <Settings style={{ width: 10, height: 10 }} />
+                    </button>
                   </div>
                   <div style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.35)" }}>
                     {eng.nextRun
@@ -313,6 +595,16 @@ function EngineCards() {
                   )}
                 </div>
               </div>
+
+              {/* Schedule Editor */}
+              {isEditingSchedule && sched && (
+                <ScheduleEditor
+                  engineId={eng.id}
+                  schedule={sched}
+                  color={color}
+                  onClose={() => setEditingSchedule(null)}
+                />
+              )}
 
               {/* Loading indicator */}
               {isGenerating && (
