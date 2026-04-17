@@ -111,12 +111,26 @@ export function isXAIOnlyFeature(feature: string): boolean {
 export function toXAINativeModel(openrouterModel: string): string | null {
   if (!openrouterModel.startsWith("x-ai/")) return null;
 
+  // Per https://docs.x.ai/docs/models — grok-4.20 and grok-4-1-fast are
+  // DIFFERENT models with different pricing ($2/$6 vs $0.20/$0.50 per 1M).
+  // The old mapping silently downgraded every flagship grok-4.20 call to
+  // the budget Fast model. This caused Agent 306 to never actually invoke
+  // Grok 4.20 (confirmed empirically: 0 api.x.ai hits across 1001 log events).
+  //
+  // AA-Omniscience leaderboard (April 2026):
+  //   grok-4.20-0309-reasoning     → 17% hallucination (lowest recorded)
+  //   grok-4.20-0309-non-reasoning → 22% hallucination
+  //   grok-4-1-fast                → 72% hallucination (budget tier)
   const mapping: Record<string, string> = {
-    "x-ai/grok-4.20": "grok-4-1-fast-non-reasoning",
-    "x-ai/grok-4.20-non-reasoning": "grok-4-1-fast-non-reasoning",
-    "x-ai/grok-4.20-multi-agent": "grok-4-1-fast-non-reasoning",
+    // Flagship Grok 4.20 family — actual native IDs per docs.x.ai
+    "x-ai/grok-4.20": "grok-4.20-0309-non-reasoning",
+    "x-ai/grok-4.20-non-reasoning": "grok-4.20-0309-non-reasoning",
+    "x-ai/grok-4.20-reasoning": "grok-4.20-0309-reasoning",
+    "x-ai/grok-4.20-multi-agent": "grok-4.20-multi-agent-0309",
+    // Grok 4 (original)
     "x-ai/grok-4": "grok-4",
     "x-ai/grok-4-0709": "grok-4-0709",
+    // Budget Fast tier — kept as-is for cost-sensitive routine tasks
     "x-ai/grok-4-fast-reasoning": "grok-4-fast-reasoning",
     "x-ai/grok-4-fast-non-reasoning": "grok-4-fast-non-reasoning",
     "x-ai/grok-4-1-fast-reasoning": "grok-4-1-fast-reasoning",
