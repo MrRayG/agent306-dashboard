@@ -97,6 +97,148 @@ function formatDate(iso: string | null | undefined): string {
   });
 }
 
+// ─── TTS helpers (PR L) ─────────────────────────────────────────────────────
+// Rough estimate of the character count that will be sent to TTS. Mirrors
+// formatScriptForSpeech in audioEngine.ts at a high level — exact count is
+// server-side, but this is close enough for a cost preview.
+function scriptCharCount(ep: any): number {
+  const s = ep?.script;
+  if (!s) return 0;
+  return (
+    (s.coldOpen?.length ?? 0) +
+    (s.actOne?.length ?? 0) +
+    (s.actTwo?.length ?? 0) +
+    (s.actThree?.length ?? 0) +
+    (s.outro?.length ?? 0)
+  );
+}
+
+// Cost preview for each provider. xAI: $4.20/1M chars. ElevenLabs (Creator): $18/1M chars.
+function estimateTtsCost(chars: number, provider: "elevenlabs" | "xai"): number {
+  const perMillion = provider === "xai" ? 4.2 : 18;
+  return (chars * perMillion) / 1_000_000;
+}
+
+function TtsProviderSelector({
+  episodeId,
+  scriptLength,
+  ttsDefaults,
+  choice,
+  onChange,
+  disabled,
+}: {
+  episodeId: string;
+  scriptLength: number;
+  ttsDefaults: { provider: "elevenlabs" | "xai"; xaiDefaultVoice: string; xaiVoices: string[] } | undefined;
+  choice: { provider: "elevenlabs" | "xai"; xaiVoice?: string };
+  onChange: (patch: Partial<{ provider: "elevenlabs" | "xai"; xaiVoice?: string }>) => void;
+  disabled?: boolean;
+}) {
+  const xaiVoices = ttsDefaults?.xaiVoices ?? ["ara", "eve", "leo", "rex", "sal"];
+  const elCost = estimateTtsCost(scriptLength, "elevenlabs");
+  const xaiCost = estimateTtsCost(scriptLength, "xai");
+  const isXai = choice.provider === "xai";
+
+  // Button style for the two provider pills
+  const pillBase = {
+    ...mono,
+    fontSize: "11px",
+    padding: "5px 10px",
+    cursor: (disabled ? "not-allowed" : "pointer") as "not-allowed" | "pointer",
+    background: "transparent",
+    letterSpacing: "0.1em",
+    transition: "all 0.12s",
+  };
+
+  return (
+    <div
+      style={{
+        marginTop: "10px",
+        padding: "8px 10px",
+        background: "rgba(227,229,228,0.03)",
+        border: "1px solid rgba(227,229,228,0.08)",
+        display: "flex",
+        flexWrap: "wrap",
+        gap: "10px",
+        alignItems: "center",
+      }}
+      data-testid={`tts-selector-${episodeId}`}
+    >
+      <span style={{ ...pixel, fontSize: "10px", color: TEXT_DIM }}>TTS:</span>
+
+      {/* Provider pills */}
+      <div style={{ display: "flex", gap: "4px" }}>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange({ provider: "elevenlabs" })}
+          style={{
+            ...pillBase,
+            color: !isXai ? TEAL : TEXT_DIM,
+            border: `1px solid ${!isXai ? TEAL : "rgba(227,229,228,0.15)"}`,
+            background: !isXai ? `${TEAL}15` : "transparent",
+          }}
+          data-testid={`tts-pill-elevenlabs-${episodeId}`}
+        >
+          {!isXai ? "◉ " : "○ "}ElevenLabs · Matilda
+        </button>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange({ provider: "xai" })}
+          style={{
+            ...pillBase,
+            color: isXai ? PURPLE : TEXT_DIM,
+            border: `1px solid ${isXai ? PURPLE : "rgba(227,229,228,0.15)"}`,
+            background: isXai ? `${PURPLE}15` : "transparent",
+          }}
+          data-testid={`tts-pill-xai-${episodeId}`}
+        >
+          {isXai ? "◉ " : "○ "}xAI · Grok
+        </button>
+      </div>
+
+      {/* xAI voice picker */}
+      {isXai && (
+        <select
+          value={choice.xaiVoice ?? ttsDefaults?.xaiDefaultVoice ?? "eve"}
+          onChange={(e) => onChange({ xaiVoice: e.target.value })}
+          disabled={disabled}
+          style={{
+            ...mono,
+            fontSize: "11px",
+            background: SURFACE,
+            color: TEXT,
+            border: "1px solid rgba(227,229,228,0.15)",
+            padding: "5px 8px",
+            cursor: disabled ? "not-allowed" : "pointer",
+            outline: "none",
+          }}
+          data-testid={`tts-voice-${episodeId}`}
+        >
+          {xaiVoices.map((v) => (
+            <option key={v} value={v}>
+              {v}
+            </option>
+          ))}
+        </select>
+      )}
+
+      {/* Cost preview */}
+      <div style={{ flex: 1 }} />
+      <span style={{ ...mono, fontSize: "10px", color: TEXT_FAINT }}>
+        ~{scriptLength.toLocaleString()} chars →{" "}
+        <span style={{ color: isXai ? PURPLE : TEAL }}>
+          ${(isXai ? xaiCost : elCost).toFixed(3)}
+        </span>
+        <span style={{ color: TEXT_FAINT }}>
+          {" "}(alt: ${(isXai ? elCost : xaiCost).toFixed(3)})
+        </span>
+      </span>
+    </div>
+  );
+}
+
 // ─── Inline sub-components ───────────────────────────────────────────────────
 
 function StatusBadge({ status, color }: { status: string; color?: string }) {
@@ -223,6 +365,35 @@ export default function PodcastStudio() {
   const [working, setWorking] = useState<string | null>(null);
   const [scanTimeframe, setScanTimeframe] = useState<"recent" | "quarterly" | "annual">("recent");
 
+  // ── TTS provider override (PR L) ─────────────────────────────────────────
+  // Per-episode choice; defaults come from /api/tts/provider on mount.
+  type TtsChoice = { provider: "elevenlabs" | "xai"; xaiVoice?: string };
+  const [ttsChoices, setTtsChoices] = useState<Record<string, TtsChoice>>({});
+  const { data: ttsDefaults } = useQuery<{
+    provider: "elevenlabs" | "xai";
+    xaiDefaultVoice: string;
+    xaiVoices: string[];
+  }>({
+    queryKey: ["/api/tts/provider"],
+  });
+  function getTtsChoiceFor(id: string): TtsChoice {
+    return (
+      ttsChoices[id] ?? {
+        provider: ttsDefaults?.provider ?? "elevenlabs",
+        xaiVoice: ttsDefaults?.xaiDefaultVoice ?? "eve",
+      }
+    );
+  }
+  function setTtsChoiceFor(id: string, patch: Partial<TtsChoice>) {
+    setTtsChoices((prev) => {
+      const current = prev[id] ?? {
+        provider: ttsDefaults?.provider ?? "elevenlabs",
+        xaiVoice: ttsDefaults?.xaiDefaultVoice ?? "eve",
+      };
+      return { ...prev, [id]: { ...current, ...patch } };
+    });
+  }
+
   // ─── Data fetching ───────────────────────────────────────────────────────
   const { data: state } = useQuery<any>({
     queryKey: ["podcast-state"],
@@ -327,10 +498,15 @@ export default function PodcastStudio() {
 
   async function generateAudio(id: string) {
     setWorking(`audio-${id}`);
-    toast({ title: "Generating audio...", description: "ElevenLabs TTS running in background" });
+    const choice = getTtsChoiceFor(id);
+    const body: { provider: string; xaiVoice?: string } = { provider: choice.provider };
+    if (choice.provider === "xai" && choice.xaiVoice) body.xaiVoice = choice.xaiVoice;
+    const providerLabel =
+      choice.provider === "xai" ? `xAI · ${choice.xaiVoice ?? "eve"}` : "ElevenLabs · Matilda";
+    toast({ title: "Generating audio...", description: `${providerLabel} TTS running in background` });
     try {
-      await apiRequest("POST", `/api/podcast/episodes/${id}/generate-audio`, {});
-      toast({ title: "Audio generation started", description: "Will appear when complete — check back shortly" });
+      await apiRequest("POST", `/api/podcast/episodes/${id}/generate-audio`, body);
+      toast({ title: "Audio generation started", description: `Using ${providerLabel} — check back shortly` });
       refetchAll();
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
@@ -575,6 +751,9 @@ export default function PodcastStudio() {
             onGeneratePreview={generatePreview}
             onRefetch={refetchAll}
             toast={toast}
+            ttsDefaults={ttsDefaults}
+            getTtsChoiceFor={getTtsChoiceFor}
+            setTtsChoiceFor={setTtsChoiceFor}
           />
         )}
         {activeTab === "conversation" && (
@@ -721,6 +900,9 @@ function SignalTab({
   onGeneratePreview,
   onRefetch,
   toast,
+  ttsDefaults,
+  getTtsChoiceFor,
+  setTtsChoiceFor,
 }: {
   episodes: any[];
   working: string | null;
@@ -738,6 +920,9 @@ function SignalTab({
   onGeneratePreview: (id: string) => void;
   onRefetch: () => void;
   toast: any;
+  ttsDefaults: { provider: "elevenlabs" | "xai"; xaiDefaultVoice: string; xaiVoices: string[] } | undefined;
+  getTtsChoiceFor: (id: string) => { provider: "elevenlabs" | "xai"; xaiVoice?: string };
+  setTtsChoiceFor: (id: string, patch: Partial<{ provider: "elevenlabs" | "xai"; xaiVoice?: string }>) => void;
 }) {
   const [showCreate, setShowCreate] = useState(false);
 
@@ -825,6 +1010,9 @@ function SignalTab({
         onGeneratePreview={onGeneratePreview}
         toast={toast}
         onRefetch={onRefetch}
+        ttsDefaults={ttsDefaults}
+        getTtsChoiceFor={getTtsChoiceFor}
+        setTtsChoiceFor={setTtsChoiceFor}
       />
     </div>
   );
@@ -1066,6 +1254,9 @@ function EpisodePipeline({
   onGeneratePreview,
   toast,
   onRefetch,
+  ttsDefaults,
+  getTtsChoiceFor,
+  setTtsChoiceFor,
 }: {
   episodes: any[];
   accentColor: string;
@@ -1080,6 +1271,9 @@ function EpisodePipeline({
   onGeneratePreview: (id: string) => void;
   toast: (opts: any) => void;
   onRefetch: () => void;
+  ttsDefaults: { provider: "elevenlabs" | "xai"; xaiDefaultVoice: string; xaiVoices: string[] } | undefined;
+  getTtsChoiceFor: (id: string) => { provider: "elevenlabs" | "xai"; xaiVoice?: string };
+  setTtsChoiceFor: (id: string, patch: Partial<{ provider: "elevenlabs" | "xai"; xaiVoice?: string }>) => void;
 }) {
   const [expandedScript, setExpandedScript] = useState<string | null>(null);
 
@@ -1460,6 +1654,45 @@ function EpisodePipeline({
                           }}
                         >
                           Script generating in the background...
+                        </div>
+                      )}
+
+                      {/* TTS provider selector (reviewed only) — PR L */}
+                      {status === "reviewed" && (
+                        <TtsProviderSelector
+                          episodeId={ep.id}
+                          scriptLength={scriptCharCount(ep)}
+                          ttsDefaults={ttsDefaults}
+                          choice={getTtsChoiceFor(ep.id)}
+                          onChange={(patch) => setTtsChoiceFor(ep.id, patch)}
+                          disabled={working === `audio-${ep.id}`}
+                        />
+                      )}
+
+                      {/* TTS provenance badge (once audio is generated) — PR L */}
+                      {(ep.ttsProvider || ep.ttsVoice) && status !== "reviewed" && (
+                        <div
+                          style={{
+                            ...mono,
+                            fontSize: "11px",
+                            color: TEXT_DIM,
+                            marginTop: "8px",
+                            padding: "4px 8px",
+                            background: "rgba(227,229,228,0.04)",
+                            borderLeft: `2px solid ${ep.ttsProvider === "xai" ? PURPLE : TEAL}40`,
+                            display: "inline-block",
+                          }}
+                        >
+                          voice:{" "}
+                          <span style={{ color: ep.ttsProvider === "xai" ? PURPLE : TEAL }}>
+                            {ep.ttsProvider === "xai" ? `xAI · ${ep.ttsVoice ?? "eve"}` : "ElevenLabs · Matilda"}
+                          </span>
+                          {typeof ep.ttsCostUsd === "number" && (
+                            <span style={{ marginLeft: "8px", color: TEXT_FAINT }}>
+                              ${ep.ttsCostUsd.toFixed(3)}
+                              {typeof ep.ttsCharacters === "number" && ` · ${ep.ttsCharacters.toLocaleString()} chars`}
+                            </span>
+                          )}
                         </div>
                       )}
 

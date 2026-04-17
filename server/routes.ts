@@ -1713,16 +1713,46 @@ export function registerRoutes(httpServer: Server, app: Express) {
       return res.status(400).json({ error: `Episode must be in "reviewed" status (current: ${episode.status})` });
     }
 
-    if (!process.env.ELEVENLABS_API_KEY) {
+    // ── Per-episode TTS provider override (PR L) ────────────────────────
+    // Body: { provider?: "elevenlabs" | "xai", xaiVoice?: "ara"|"eve"|"leo"|"rex"|"sal" }
+    // When omitted, falls back to the TTS_PROVIDER env var (legacy behavior).
+    const body = (req.body ?? {}) as { provider?: string; xaiVoice?: string };
+    let providerOverride: "elevenlabs" | "xai" | undefined;
+    if (body.provider !== undefined) {
+      if (body.provider !== "elevenlabs" && body.provider !== "xai") {
+        return res.status(400).json({ error: `Invalid provider "${body.provider}". Must be "elevenlabs" or "xai".` });
+      }
+      providerOverride = body.provider;
+    }
+    let xaiVoice: XaiVoice | undefined;
+    if (body.xaiVoice !== undefined) {
+      if (!(XAI_VOICES as readonly string[]).includes(body.xaiVoice)) {
+        return res.status(400).json({ error: `Invalid xaiVoice "${body.xaiVoice}". Valid: ${XAI_VOICES.join(", ")}.` });
+      }
+      xaiVoice = body.xaiVoice as XaiVoice;
+    }
+
+    // Credential check against the effective provider — reject early with a clear error.
+    const effectiveProvider = providerOverride ?? getTtsProvider();
+    if (effectiveProvider === "xai") {
+      if (!(process.env.GROK_API_KEY || process.env.XAI_API_KEY)) {
+        return res.status(500).json({ error: "xAI provider selected but GROK_API_KEY/XAI_API_KEY is not configured" });
+      }
+    } else if (!process.env.ELEVENLABS_API_KEY) {
       console.warn("[AudioEngine] ELEVENLABS_API_KEY not set");
       return res.status(500).json({ error: "ElevenLabs API key not configured" });
     }
 
     // Return immediately — generation runs in background (same async pattern as script generation)
-    res.json({ status: "generating", episodeId: req.params.id });
+    res.json({
+      status: "generating",
+      episodeId: req.params.id,
+      provider: effectiveProvider,
+      voice: effectiveProvider === "xai" ? (xaiVoice ?? DEFAULT_XAI_VOICE) : "matilda",
+    });
 
     // Fire-and-forget background generation
-    generateAudio(req.params.id).catch((e) =>
+    generateAudio(req.params.id, { providerOverride, xaiVoice }).catch((e) =>
       console.error(`[AudioEngine] Background audio generation failed for ${req.params.id}:`, e.message),
     );
   });
