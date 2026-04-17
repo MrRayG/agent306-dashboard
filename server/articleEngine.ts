@@ -24,7 +24,7 @@ import { getFullAgentContext } from "./memoryEngine.js";
 import { getOptimizedContext } from "./contextWindow.js";
 import { getModel } from "./modelRouter.js";
 import { TwitterApi } from "twitter-api-v2";
-import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders, getXAIDirectHeaders, XAI_DIRECT_API_KEY } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { getFormatVoiceContext } from "./voiceInstructions.js";
 import { SOUL, VOICE } from "./voice.js";
@@ -111,15 +111,24 @@ async function discoverArticle(apiKey: string): Promise<{
 } | null> {
   console.log("[ArticleEngine] Discovering this week's AI article...");
 
-  // Attempt 1: Grok x_search via Responses API (requires native Grok key)
-  const grokKey = GROK_NATIVE_KEY || apiKey;
-  try {
-    console.log("[ArticleEngine] Trying Grok x_search (Responses API)...");
+  // Attempt 1: Grok x_search via Responses API (requires xAI-direct bearer)
+  //
+  // BUG FIX: Previously sent OpenRouter's bearer (via getLLMHeaders()) to
+  // api.x.ai/v1/responses — guaranteed 401 silently. The /responses endpoint
+  // is xAI-native and requires XAI_DIRECT_API_KEY (= GROK_API_KEY env var).
+  //
+  // Hard-fail if the key is missing — matches the project's no-silent-fallback
+  // policy for xAI overrides.
+  if (!XAI_DIRECT_API_KEY) {
+    console.warn("[ArticleEngine] GROK_API_KEY not set — skipping x_search, using chat completions fallback");
+  } else try {
+    console.log("[ArticleEngine] Trying Grok x_search (Responses API, xAI direct)...");
     const res = await fetch(GROK_RESPONSES_URL, {
       method: "POST",
-      headers: getLLMHeaders(),
+      headers: getXAIDirectHeaders(),
       body: JSON.stringify({
-        model: "grok-4-1-fast-non-reasoning",
+        // Use flagship Grok 4.20 for article discovery (lowest hallucination rate).
+        model: "grok-4.20-0309-non-reasoning",
         stream: false,
         input: [{ role: "user", content: DISCOVERY_PROMPT }],
         tools: [{ type: "x_search" }],
