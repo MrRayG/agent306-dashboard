@@ -15,6 +15,16 @@ import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./ll
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 import { postChatCompletions } from "./llmCall.js";
+import { waitForBatchComplete } from "./xaiBatchEngine.js";
+import {
+  shouldUseReflectionBatch,
+  submitReflectionBatch,
+  collectReflectionResults,
+  hashTweetUrl,
+  type ReflectionLesson,
+  type ReflectionPrompts,
+  type ReflectionAnalysis,
+} from "./reflectionBatch.js";
 const GROK_URL = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
 const REFLECTIONS_FILE = dataPath("reflections.json");
@@ -186,19 +196,21 @@ async function callGrok(systemPrompt: string, userPrompt: string): Promise<any |
 
 // ── Core: reflect on a post ───────────────────────────────────────────────────
 
-async function reflectOnPost(lesson: {
-  tweetUrl: string;
-  tweetText: string;
-  engagement: { likes: number; replies: number; retweets: number; bookmarks: number; impressions: number };
-  score: number;
-  signals?: { twitter: number };
-}): Promise<Reflection | null> {
-  // Get recent high/low performers for comparison
+/**
+ * Build the shared system prompt + per-lesson user-prompt builder used
+ * by both the sync reflectOnPost path and the batch path.
+ *
+ * Captures `currentRules` and the sorted top/bottom-performers snapshot
+ * at call time so every request in a single run shares the exact same
+ * context (matches the sync-loop behavior where these were recomputed
+ * per lesson but in practice never changed within a run).
+ */
+export function buildReflectionPromptsFromState(): ReflectionPrompts {
   const sorted = [...performance.lessons]
     .filter(l => l.checkedAt)
     .sort((a, b) => b.score - a.score);
-  const topPosts = sorted.slice(0, 3).map(l => `"${l.tweetText.slice(0, 100)}..." (score: ${l.score})`).join("\n");
-  const bottomPosts = sorted.slice(-3).map(l => `"${l.tweetText.slice(0, 100)}..." (score: ${l.score})`).join("\n");
+  const topPosts = sorted.slice(0, 3).map(l => `"${l.tweetText.slice(0, 100)}..." (score: ${l.score})`).join("\n") || "No data yet";
+  const bottomPosts = sorted.slice(-3).map(l => `"${l.tweetText.slice(0, 100)}..." (score: ${l.score})`).join("\n") || "No data yet";
 
   const currentRules = styleRules.rules.map(r => `- ${r.rule}`).join("\n") || "No rules yet.";
 
@@ -215,7 +227,7 @@ You must respond with ONLY valid JSON:
 
 Be brutally honest. Look for causal patterns, not just correlations.`;
 
-  const userPrompt = `REFLECT ON THIS POST:
+  const buildUserPrompt = (lesson: ReflectionLesson) => `REFLECT ON THIS POST:
 
 Post text: "${lesson.tweetText}"
 Engagement: ${lesson.engagement.likes} likes, ${lesson.engagement.replies} replies, ${lesson.engagement.retweets} RTs, ${lesson.engagement.bookmarks} bookmarks, ${lesson.engagement.impressions} impressions
@@ -223,47 +235,78 @@ Score: ${lesson.score}/10
 Signals used: ${lesson.signals ? `twitter: ${lesson.signals.twitter}` : "unknown"}
 
 TOP PERFORMERS (for comparison):
-${topPosts || "No data yet"}
+${topPosts}
 
 LOW PERFORMERS (for comparison):
-${bottomPosts || "No data yet"}
+${bottomPosts}
 
 CURRENT STYLE RULES:
 ${currentRules}
 
 Analyze what worked or didn't work about this post. If you spot a strong enough pattern, propose a rule candidate.`;
 
-  const result = await callGrok(systemPrompt, userPrompt);
-  if (!result) return null;
+  return { systemPrompt, buildUserPrompt };
+}
 
+/**
+ * Apply a parsed analysis to the reflection state. Shared by sync and
+ * batch paths so the Reflection record shape, unshift-and-cap-100
+ * semantics, save I/O, and style-rule side effect are all identical.
+ *
+ * Each call advances a monotonic counter appended to the reflection id
+ * so batch-mode applies produce unique ids even when `Date.now()` is
+ * the same for multiple back-to-back applies.
+ */
+let reflectionApplyCounter = 0;
+function applyReflectionResult(
+  lesson: ReflectionLesson,
+  analysis: ReflectionAnalysis,
+): Reflection {
+  reflectionApplyCounter++;
   const reflection: Reflection = {
-    id: `ref_${Date.now()}`,
+    id: `ref_${Date.now()}_${reflectionApplyCounter}`,
     postUrl: lesson.tweetUrl,
     postText: lesson.tweetText,
     engagement: lesson.engagement,
     score: lesson.score,
     analysis: {
-      whyWorked: result.whyWorked ?? "Analysis unavailable",
-      patterns: result.patterns ?? [],
-      styleNote: result.styleNote ?? "",
-      ruleCandidate: result.ruleCandidate ?? null,
+      whyWorked: analysis.whyWorked || "Analysis unavailable",
+      patterns: analysis.patterns ?? [],
+      styleNote: analysis.styleNote ?? "",
+      ruleCandidate: analysis.ruleCandidate ?? null,
     },
     createdAt: new Date().toISOString(),
   };
 
-  // Save reflection
   reflections.reflections.unshift(reflection);
   if (reflections.reflections.length > 100) reflections.reflections = reflections.reflections.slice(0, 100);
   reflections.lastRunAt = reflection.createdAt;
   saveReflections(reflections);
 
-  // If there's a rule candidate, add it
   if (reflection.analysis.ruleCandidate) {
     addStyleRule(reflection.analysis.ruleCandidate, reflection.id);
   }
 
   console.log(`[Reflection] Analyzed post — score: ${lesson.score}, patterns: ${reflection.analysis.patterns.length}`);
   return reflection;
+}
+
+async function reflectOnPost(
+  lesson: ReflectionLesson,
+  prompts: ReflectionPrompts,
+): Promise<Reflection | null> {
+  const userPrompt = prompts.buildUserPrompt(lesson);
+  const result = await callGrok(prompts.systemPrompt, userPrompt);
+  if (!result) return null;
+
+  const analysis: ReflectionAnalysis = {
+    whyWorked: result.whyWorked ?? "Analysis unavailable",
+    patterns: Array.isArray(result.patterns) ? result.patterns : [],
+    styleNote: result.styleNote ?? "",
+    ruleCandidate: typeof result.ruleCandidate === "string" && result.ruleCandidate.trim() ? result.ruleCandidate.trim() : null,
+  };
+
+  return applyReflectionResult(lesson, analysis);
 }
 
 // ── Style rule management ─────────────────────────────────────────────────────
@@ -315,23 +358,99 @@ export function deleteStyleRule(ruleId: string): boolean {
 
 // ── Public: run reflection on unchecked posts ─────────────────────────────────
 
+/**
+ * Sync reflection path — issue per-lesson LLM calls serially, respecting
+ * the 5-second GROK_RATE_MS rate limit between calls (matches historical
+ * behavior).
+ */
+async function reflectViaSync(
+  lessons: ReflectionLesson[],
+  prompts: ReflectionPrompts,
+): Promise<Reflection[]> {
+  const out: Reflection[] = [];
+  for (const lesson of lessons) {
+    const ref = await reflectOnPost(lesson, prompts);
+    if (ref) out.push(ref);
+  }
+  return out;
+}
+
+/**
+ * Batch reflection path — submit every unchecked-post reflection as a
+ * single xAI /v1/batches job, poll for completion, then apply results
+ * in lesson order so unshift semantics match sync.
+ *
+ * On submit/wait failure, no lesson is reflected on (no silent fallback
+ * to sync). The caller is free to re-run later.
+ */
+async function reflectViaBatch(
+  lessons: ReflectionLesson[],
+  prompts: ReflectionPrompts,
+): Promise<Reflection[]> {
+  if (lessons.length === 0) return [];
+
+  const pollMs = Number(process.env.REFLECTION_BATCH_POLL_MS) || 60_000;
+  const timeoutMs = Number(process.env.REFLECTION_BATCH_TIMEOUT_MS) || 6 * 60 * 60 * 1000;
+
+  // Results come back keyed by request-id hash; we want to apply them in
+  // lesson order so that unshift order + addStyleRule order match sync.
+  const lessonsByHash = new Map<string, ReflectionLesson>();
+  for (const l of lessons) lessonsByHash.set(hashTweetUrl(l.tweetUrl), l);
+
+  let batchId: string;
+  let added = 0;
+  try {
+    const submit = await submitReflectionBatch(lessons, prompts);
+    batchId = submit.batch_id;
+    added = submit.added;
+    console.log(`[Reflection] Submitted batch ${batchId} with ${added} lessons`);
+  } catch (e: any) {
+    console.warn(`[Reflection] Batch submit failed, leaving lessons unreflected:`, e?.message ?? e);
+    return [];
+  }
+
+  try {
+    await waitForBatchComplete(batchId, { pollIntervalMs: pollMs, timeoutMs });
+  } catch (e: any) {
+    console.warn(`[Reflection] Batch ${batchId} wait failed:`, e?.message ?? e);
+    return [];
+  }
+
+  const { analyses, failures } = await collectReflectionResults(batchId, lessonsByHash);
+  if (failures.length > 0) {
+    console.warn(`[Reflection] Batch ${batchId} had ${failures.length} failures`);
+  }
+
+  // Apply in original lesson order so insertion + style-rule mutation
+  // order match the sync path byte-for-byte.
+  const out: Reflection[] = [];
+  for (const lesson of lessons) {
+    const analysis = analyses.get(lesson.tweetUrl);
+    if (!analysis) continue;
+    out.push(applyReflectionResult(lesson, analysis));
+  }
+  return out;
+}
+
 export async function runReflection(): Promise<Reflection[]> {
   const unchecked = performance.lessons
     .filter(l => l.checkedAt && !reflections.reflections.find(r => r.postUrl === l.tweetUrl))
     .sort((a, b) => new Date(b.checkedAt!).getTime() - new Date(a.checkedAt!).getTime())
     .slice(0, 5); // Max 5 per run
 
-  const results: Reflection[] = [];
-  for (const lesson of unchecked) {
-    const ref = await reflectOnPost({
-      tweetUrl: lesson.tweetUrl,
-      tweetText: lesson.tweetText,
-      engagement: lesson.engagement,
-      score: lesson.score,
-      signals: lesson.signals,
-    });
-    if (ref) results.push(ref);
-  }
+  const lessons: ReflectionLesson[] = unchecked.map(l => ({
+    tweetUrl: l.tweetUrl,
+    tweetText: l.tweetText,
+    engagement: l.engagement,
+    score: l.score,
+    signals: l.signals,
+  }));
+
+  const prompts = buildReflectionPromptsFromState();
+
+  const results: Reflection[] = shouldUseReflectionBatch()
+    ? await reflectViaBatch(lessons, prompts)
+    : await reflectViaSync(lessons, prompts);
 
   // Also reflect on podcast episode quality → style rules
   try {
