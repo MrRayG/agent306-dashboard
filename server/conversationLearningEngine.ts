@@ -9,11 +9,10 @@ import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { addKnowledge, getFullAgentContext, scanForInjection } from "./memoryEngine.js";
 import { getOptimizedContext } from "./contextWindow.js";
-import { getModel } from "./modelRouter.js";
-import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
+import { LLM_API_KEY } from "./llmConfig.js";
+import { callLLM } from "./llmCall.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
-const GROK_URL = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
 const INSIGHTS_FILE = dataPath("conversation-insights.json");
 const RELATIONSHIPS_FILE = dataPath("relationships.json");
@@ -132,23 +131,17 @@ async function callGrok(systemPrompt: string, userPrompt: string): Promise<any |
 
   let raw = "";
   try {
-    const res = await fetch(GROK_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
-        model: getModel("conversation_insight"),
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        max_tokens: 2000,
-        temperature: 0.3,
-      }),
-      signal: AbortSignal.timeout(40000),
+    const response = await callLLM({
+      task: "conversation-insight",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      maxTokens: 2000,
+      temperature: 0.3,
+      timeoutMs: 40000,
     });
-    if (!res.ok) return null;
-    const data = await res.json() as any;
-    raw = data.choices?.[0]?.message?.content ?? "{}";
+    raw = response.text || "{}";
     return safeParseLLMJson(raw, "ConversationLearning");
   } catch (e: any) {
     console.error(`[ConversationLearning] LLM JSON parse failed:`, e.message, `— raw response: ${raw?.slice(0, 200)}`);
