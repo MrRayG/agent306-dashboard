@@ -92,6 +92,11 @@ export interface PerformanceLesson {
     retweets: number;
     bookmarks: number;
     impressions: number;
+    // Owner-only metrics from X API non_public_metrics (optional — only present when
+    // the tweet is owned by the authenticated user and the endpoint returns the field).
+    // Added in PR C (engagementTracker non_public_metrics extension).
+    userProfileClicks?: number;
+    urlLinkClicks?: number;
   };
   score: number;       // 1-10 calculated from engagement
   qualityScore: number; // Grok's internal quality gate score
@@ -500,7 +505,7 @@ export function recordPost(data: {
     tweetUrl: data.tweetUrl,
     tweetText: data.tweetText,
     postedAt: new Date().toISOString(),
-    engagement: { likes: 0, replies: 0, retweets: 0, bookmarks: 0, impressions: 0 },
+    engagement: { likes: 0, replies: 0, retweets: 0, bookmarks: 0, impressions: 0, userProfileClicks: 0, urlLinkClicks: 0 },
     score: 0,
     qualityScore: data.qualityScore,
     signals: data.signals,
