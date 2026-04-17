@@ -1770,6 +1770,94 @@ export function registerRoutes(httpServer: Server, app: Express) {
     res.json({ ok: true, removedFiles: result.removedFiles });
   });
 
+  // ── xAI entitlement diagnostic (PR M) ──────────────────────────────
+  // Probes multiple api.x.ai endpoints with the configured GROK_API_KEY and
+  // reports which ones return 200 vs 403. Useful for diagnosing whether a
+  // team-level authorization issue is TTS-only or broader. Response body
+  // shapes are truncated; no secrets are ever echoed.
+  app.get("/api/diagnostic/xai-entitlement", requireDashAuth, async (_req, res) => {
+    const key = process.env.GROK_API_KEY ?? process.env.XAI_API_KEY ?? "";
+    if (!key) {
+      return res.status(500).json({ error: "GROK_API_KEY / XAI_API_KEY not set on server" });
+    }
+    const keyFingerprint = `${key.slice(0, 6)}…${key.slice(-4)} (len=${key.length})`;
+
+    type Probe = {
+      label: string;
+      method: "GET" | "POST";
+      url: string;
+      body?: any;
+      status?: number;
+      ok?: boolean;
+      snippet?: string;
+      error?: string;
+    };
+
+    const probes: Probe[] = [
+      { label: "list-api-keys", method: "GET", url: "https://api.x.ai/v1/api-key" },
+      { label: "list-models", method: "GET", url: "https://api.x.ai/v1/models" },
+      { label: "list-language-models", method: "GET", url: "https://api.x.ai/v1/language-models" },
+      {
+        label: "chat-completions (grok-4-fast-non-reasoning, 1 token)",
+        method: "POST",
+        url: "https://api.x.ai/v1/chat/completions",
+        body: {
+          model: "grok-4-fast-non-reasoning",
+          messages: [{ role: "user", content: "ping" }],
+          max_tokens: 1,
+        },
+      },
+      {
+        label: "tts (grok-2-tts, 1 word)",
+        method: "POST",
+        url: "https://api.x.ai/v1/audio/speech",
+        body: {
+          model: "grok-2-tts",
+          voice: "eve",
+          input: "test",
+          response_format: "mp3",
+        },
+      },
+    ];
+
+    await Promise.all(
+      probes.map(async (p) => {
+        try {
+          const init: any = {
+            method: p.method,
+            headers: {
+              Authorization: `Bearer ${key}`,
+              ...(p.body ? { "Content-Type": "application/json" } : {}),
+            },
+          };
+          if (p.body) init.body = JSON.stringify(p.body);
+          const r = await fetch(p.url, init);
+          p.status = r.status;
+          p.ok = r.ok;
+          // Read as text so binary (mp3) won't blow up — snippet is first 300 chars.
+          const text = await r.text().catch(() => "");
+          p.snippet = text.slice(0, 300);
+        } catch (e: any) {
+          p.error = e?.message ?? String(e);
+        }
+      }),
+    );
+
+    res.json({
+      keyFingerprint,
+      timestamp: new Date().toISOString(),
+      probes: probes.map(({ label, method, url, status, ok, snippet, error }) => ({
+        label,
+        method,
+        url,
+        status,
+        ok,
+        snippet,
+        error,
+      })),
+    });
+  });
+
   app.get("/api/podcast/episodes/:id/audio", (req, res) => {
     const filepath = getAudioFilePath(req.params.id);
     if (!filepath) {
