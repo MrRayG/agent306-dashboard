@@ -20,6 +20,50 @@ interface PendingCheck {
 
 const pending: PendingCheck[] = [];
 
+/**
+ * Build the engagement object from an X API v2 tweet payload.
+ *
+ * Prefers non_public_metrics for impressions when present (owner-only, authoritative)
+ * and falls back to public_metrics.impression_count for compatibility.
+ *
+ * Exported for testing — see server/__tests__/engagementTracker.test.ts.
+ */
+export function buildEngagementFromTweet(tweet: any): {
+  likes: number;
+  replies: number;
+  retweets: number;
+  bookmarks: number;
+  impressions: number;
+  userProfileClicks?: number;
+  urlLinkClicks?: number;
+} | null {
+  const pm = tweet?.data?.public_metrics;
+  if (!pm) return null;
+
+  const npm = tweet?.data?.non_public_metrics ?? {};
+  // Prefer non_public impression_count when provided (owner-scoped, accurate)
+  const impressions = npm.impression_count ?? pm.impression_count ?? 0;
+
+  const out: any = {
+    likes: pm.like_count ?? 0,
+    replies: pm.reply_count ?? 0,
+    retweets: pm.retweet_count ?? 0,
+    bookmarks: pm.bookmark_count ?? 0,
+    impressions,
+  };
+
+  // Only attach owner-only fields when X actually returned them. Leaving them
+  // undefined keeps older stored lessons unchanged and makes the feature detectable.
+  if (typeof npm.user_profile_clicks === "number") {
+    out.userProfileClicks = npm.user_profile_clicks;
+  }
+  if (typeof npm.url_link_clicks === "number") {
+    out.urlLinkClicks = npm.url_link_clicks;
+  }
+
+  return out;
+}
+
 /** Queue a tweet for engagement check 1h after posting */
 export function queueEngagementCheck(tweetUrl: string): void {
   const tweetId = tweetUrl.split("/").pop() ?? "";
@@ -41,21 +85,30 @@ export async function runPendingChecks(xRead: any): Promise<void> {
 
   for (const check of due) {
     try {
-      const tweet = await xRead.v2.singleTweet(check.tweetId, {
-        "tweet.fields": ["public_metrics"],
-      });
+      // Request both public_metrics and non_public_metrics. non_public_metrics is
+      // owner-scoped — if the authed user doesn't own the tweet, X silently omits
+      // it (or the whole call 403s, which we catch below and retry public-only).
+      let tweet: any;
+      try {
+        tweet = await xRead.v2.singleTweet(check.tweetId, {
+          "tweet.fields": ["public_metrics", "non_public_metrics"],
+        });
+      } catch (innerErr: any) {
+        // Non-public-metrics requires user-context auth + ownership. Fall back to
+        // public_metrics only so we never regress baseline tracking behavior.
+        console.warn(`[Tracker] non_public_metrics unavailable for ${check.tweetId} (${innerErr.message}) — falling back to public_metrics only`);
+        tweet = await xRead.v2.singleTweet(check.tweetId, {
+          "tweet.fields": ["public_metrics"],
+        });
+      }
 
-      if (tweet?.data?.public_metrics) {
-        const m = tweet.data.public_metrics;
-        const engagement = {
-          likes: m.like_count ?? 0,
-          replies: m.reply_count ?? 0,
-          retweets: m.retweet_count ?? 0,
-          bookmarks: m.bookmark_count ?? 0,
-          impressions: m.impression_count ?? 0,
-        };
+      const engagement = buildEngagementFromTweet(tweet);
+      if (engagement) {
         await updateEngagement(check.tweetUrl, engagement);
-        console.log(`[Tracker] EP checked — ${m.like_count} likes, ${m.reply_count} replies`);
+        const clicksMsg = typeof engagement.urlLinkClicks === "number"
+          ? `, ${engagement.urlLinkClicks} link-clicks, ${engagement.userProfileClicks ?? 0} profile-clicks`
+          : "";
+        console.log(`[Tracker] EP checked — ${engagement.likes} likes, ${engagement.replies} replies, ${engagement.impressions} impressions${clicksMsg}`);
 
         // Correlate engagement with competencies exercised in this post
         try {
