@@ -13,7 +13,7 @@
  * ─────────────────────────────────────────────────────────────
  */
 
-import { getModel } from "./modelRouter.js";
+import { postXSearchResponses } from "./llmCall.js";
 import { researchWithPerplexity, researchWithSemanticScholar, researchMultiSource } from "./researchEngine.js";
 import { addKnowledge } from "./memoryEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
@@ -254,8 +254,7 @@ export function routeEvidenceSearch(claimText: string): SearchRoute {
  * structured EvidenceResult.
  */
 export async function searchXPlatform(query: string): Promise<EvidenceResult> {
-  const nativeGrokKey = process.env.GROK_API_KEY ?? "";
-  if (!nativeGrokKey) {
+  if (!process.env.GROK_API_KEY) {
     console.warn("[EvidenceDispatcher] GROK_API_KEY not set — skipping x_search");
     return { content: "", citations: [], source: "grok_x_search", addedToKB: false };
   }
@@ -268,16 +267,13 @@ export async function searchXPlatform(query: string): Promise<EvidenceResult> {
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, 2000);
-    const grokResponsesUrl = process.env.GROK_RESPONSES_URL ?? "https://api.x.ai/v1/responses";
-    const res = await fetch(grokResponsesUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` },
-      body: JSON.stringify({
-        model: getModel("x_search"),
-        stream: false,
-        input: [{ role: "user", content: sanitizedQuery }],
-        tools: [{ type: "x_search" }],
-      }),
+    // Route through postXSearchResponses so the task→tier→provider→model
+    // chain is resolved by the router (live-social → xAI Direct + Grok 4.20
+    // non-reasoning) instead of hardcoded to whatever "x_search" maps to.
+    // The helper hard-fails if the resolved provider is not xAI-direct.
+    const res = await postXSearchResponses({
+      task: "signal-brief",
+      content: sanitizedQuery,
       signal: AbortSignal.timeout(45000),
     });
 

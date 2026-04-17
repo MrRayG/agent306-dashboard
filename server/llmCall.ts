@@ -15,9 +15,18 @@ import {
   resolveMode,
   toXAINativeModel,
 } from "./llmConfig.js";
-import { getModel } from "./modelRouter.js";
+import { getModel, getTier } from "./modelRouter.js";
 import { callResponsesAPI } from "./responsesAdapter.js";
 import { logRoute, inferTier } from "./routeLog.js";
+
+/** Prefer the explicit router tier when a task is known; fall back to model-shape inference. */
+function tierFor(task: string | undefined, model: string): string {
+  if (task) {
+    const t = getTier(task);
+    if (t) return t;
+  }
+  return inferTier(model);
+}
 
 /**
  * postChatCompletions — PR P low-level helper for migrating raw
@@ -71,7 +80,7 @@ export async function postChatCompletions(
   } catch (err: any) {
     logRoute({
       task:      task ?? "post-chat-completions",
-      tier:      inferTier(route.model),
+      tier:      tierFor(task, route.model),
       provider:  route.provider,
       model:     route.model,
       mode:      "chat",
@@ -88,8 +97,80 @@ export async function postChatCompletions(
   // callLLM() instead.
   logRoute({
     task:      task ?? "post-chat-completions",
-    tier:      inferTier(route.model),
+    tier:      tierFor(task, route.model),
     provider:  route.provider,
+    model:     route.model,
+    mode:      "chat",
+    latencyMs: Date.now() - startedAt,
+    status:    res.ok ? "ok" : "error",
+    errorMsg:  res.ok ? undefined : `http ${res.status}`,
+  });
+
+  return res;
+}
+
+/**
+ * postPerplexity — helper for migrating raw Perplexity Sonar call sites.
+ *
+ * Resolves the task via modelRouter, validates the route lands on Perplexity
+ * (hard-fail otherwise), and POSTs OpenAI-compatible chat/completions.
+ *
+ * Hard-fails if `PERPLEXITY_API_KEY` is not set — matches the user's no-silent-
+ * fallback policy for provider-specific routing.
+ */
+export async function postPerplexity(args: {
+  task: string;
+  messages: Array<{ role: string; content: string }>;
+  maxTokens?: number;
+  temperature?: number;
+  signal?: AbortSignal;
+  extra?: Record<string, any>;
+}): Promise<Response> {
+  const { task, messages, maxTokens, temperature, signal, extra } = args;
+  if (!process.env.PERPLEXITY_API_KEY) {
+    throw new Error(
+      `postPerplexity(task="${task}"): PERPLEXITY_API_KEY is not set. live-research tier requires Perplexity credentials — no silent fallback.`,
+    );
+  }
+  const model = getModel(task);
+  const route = resolveChatRoute(model);
+  if (route.provider !== "perplexity") {
+    throw new Error(
+      `postPerplexity(task="${task}"): resolved route provider=${route.provider} model=${route.model} is not Perplexity. Check task→tier mapping.`,
+    );
+  }
+
+  const payload: Record<string, any> = { model: route.model, messages, stream: false, ...(extra ?? {}) };
+  if (typeof maxTokens === "number")   payload.max_tokens  = maxTokens;
+  if (typeof temperature === "number") payload.temperature = temperature;
+
+  const startedAt = Date.now();
+  let res: Response;
+  try {
+    res = await fetch(route.url, {
+      method: "POST",
+      headers: route.headers,
+      body: JSON.stringify(payload),
+      signal,
+    });
+  } catch (err: any) {
+    logRoute({
+      task,
+      tier:      tierFor(task, route.model),
+      provider:  "perplexity",
+      model:     route.model,
+      mode:      "chat",
+      latencyMs: Date.now() - startedAt,
+      status:    "error",
+      errorMsg:  `network: ${err?.message ?? String(err)}`,
+    });
+    throw err;
+  }
+
+  logRoute({
+    task,
+    tier:      tierFor(task, route.model),
+    provider:  "perplexity",
     model:     route.model,
     mode:      "chat",
     latencyMs: Date.now() - startedAt,
@@ -131,6 +212,12 @@ export async function postXSearchResponses(args: {
     );
   }
   const routedModel = getModel(task);
+  const route = resolveChatRoute(routedModel);
+  if (route.provider !== "xai-direct") {
+    throw new Error(
+      `postXSearchResponses requires an xAI-direct tier; task=${task} resolved to provider=${route.provider} model=${routedModel}.`,
+    );
+  }
   const xaiModel = toXAINativeModel(routedModel);
   if (xaiModel === null) {
     throw new Error(
@@ -159,7 +246,7 @@ export async function postXSearchResponses(args: {
   } catch (err: any) {
     logRoute({
       task,
-      tier:      inferTier(xaiModel),
+      tier:      tierFor(task, xaiModel),
       provider:  "xai-direct",
       model:     xaiModel,
       mode:      "responses",
@@ -214,7 +301,7 @@ export async function callChatCompletions(opts: LLMCallOptions, model: string): 
     // Network / timeout failure — still emit an observability entry.
     logRoute({
       task:      opts.task,
-      tier:      inferTier(route.model),
+      tier:      tierFor(opts.task, route.model),
       provider:  route.provider,
       model:     route.model,
       mode:      "chat",
@@ -229,7 +316,7 @@ export async function callChatCompletions(opts: LLMCallOptions, model: string): 
     const errBody = await res.text().catch(() => "");
     logRoute({
       task:      opts.task,
-      tier:      inferTier(route.model),
+      tier:      tierFor(opts.task, route.model),
       provider:  route.provider,
       model:     route.model,
       mode:      "chat",
@@ -249,7 +336,7 @@ export async function callChatCompletions(opts: LLMCallOptions, model: string): 
 
   logRoute({
     task:      opts.task,
-    tier:      inferTier(route.model),
+    tier:      tierFor(opts.task, route.model),
     provider:  route.provider,
     model:     route.model,
     mode:      "chat",

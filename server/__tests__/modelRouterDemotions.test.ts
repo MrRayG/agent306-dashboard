@@ -38,34 +38,50 @@ const DEMOTED_TO_ROUTINE = [
   "x_search",                // Short search-query crafting
 ];
 
+// Tasks that still land on the generic "standard" tier (Grok 4.20 via OpenRouter).
+// Tier-split PR moved public-voice tasks (news-dispatch/reply-generation/episode-generation/
+// intro-post/blog-post/article-draft) to standard-voice (xAI Direct) and the debate
+// engines (self-debate/triad-reasoning) to multi-agent — see the *_VOICE / *_MULTI_AGENT
+// groups below.
 const MUST_STAY_STANDARD = [
-  // Reasoning / debate
-  "self-debate",
   "skeptic-debate",
   "builder-debate",
   "adversarial-evaluation",
-  // Research pipeline reasoning
   "research-phase",
   "research-agenda-advance",
+  "triad-fact-synthesis",
+];
+
+const MUST_BE_STANDARD_VOICE = [
   "exploration",
-  // Public-facing voice
   "news-dispatch",
   "reply-generation",
   "episode-generation",
   "intro-post",
-  "blog-post",
-  // Quality-sensitive tooling — grounded Class-1 synthesis stays on Grok 4.20
-  "triad-fact-synthesis",
+  "article-draft",
+  "article",
+  "reply",
+  "boost",
+  "cyoa",
 ];
 
-// PR E (Apr 2026): hypothesis-evaluation, synthesis-report, triad-reasoning,
-// self-evolution-reflection, aspiration-generation, deep-reasoning moved from
-// premium → frontier (Claude Opus 4.6). They are verified in frontierTier.test.ts.
-const MUST_STAY_PREMIUM = [
+const MUST_BE_MULTI_AGENT = [
+  "self-debate",
+  "triad-reasoning",
+  "triad",
+];
+
+// Tier-split PR: hypothesis-evaluation / fact-verification / red-flag-analysis
+// moved to frontier-factual (Grok 4.20 Reasoning). deep-reasoning /
+// synthesis-report / aspiration-generation / self-evolution-reflection remain
+// on Opus via the frontier-reasoning tier. Verified in frontierTier.test.ts.
+//
+// Long-form public-facing voice stays on premium-voice (Sonnet). blog-post
+// and article-draft re-routed to standard/premium voice respectively.
+const MUST_BE_PREMIUM_VOICE = [
   "hypothesis-resolution",
   "podcast-script",
   "research-brief",
-  "article-draft",
   "triad-grounding-review",
   "analysis-contradictions",
   "analysis-citation-chains",
@@ -74,6 +90,8 @@ const MUST_STAY_PREMIUM = [
   "analysis-synthesis",
   "analysis-knowledge-map",
   "parallel-search-reduce",
+  "blog-post",
+  "manuscript",
 ];
 
 describe("PR D + PR J — P5 task demotions", () => {
@@ -90,11 +108,11 @@ describe("PR D + PR J — P5 task demotions", () => {
     }
   });
 
-  it("keeps reasoning + public-facing tasks on standard", async () => {
-    const { getModel } = await import("../modelRouter.js");
-    const standardModel = getModel("self-debate"); // known standard anchor
-    const routineModel = getModel("reflection");
-    const premiumModel = getModel("podcast-script");
+  it("keeps the reduced standard-tier list on the standard model (Grok 4.20 via OpenRouter)", async () => {
+    const { getModel, getModelConfig } = await import("../modelRouter.js");
+    const { models } = getModelConfig();
+    const standardModel = models.standard;
+    const routineModel  = models.routine;
     for (const task of MUST_STAY_STANDARD) {
       const model = getModel(task);
       assert.equal(
@@ -103,19 +121,39 @@ describe("PR D + PR J — P5 task demotions", () => {
         `expected "${task}" to remain on standard (${standardModel}) but got ${model}`,
       );
       assert.notEqual(model, routineModel, `"${task}" must not be routine`);
-      assert.notEqual(model, premiumModel, `"${task}" must not be premium`);
     }
   });
 
-  it("keeps premium reasoning + long-form tasks on premium", async () => {
-    const { getModel } = await import("../modelRouter.js");
-    const premiumModel = getModel("podcast-script"); // known premium anchor
-    for (const task of MUST_STAY_PREMIUM) {
+  it("routes public-voice tasks to standard-voice (xAI Direct Grok 4.20 non-reasoning)", async () => {
+    const { getModel, getModelConfig } = await import("../modelRouter.js");
+    const standardVoice = (getModelConfig().models as Record<string, string>)["standard-voice"];
+    for (const task of MUST_BE_STANDARD_VOICE) {
       const model = getModel(task);
       assert.equal(
         model,
-        premiumModel,
-        `expected "${task}" to remain on premium (${premiumModel}) but got ${model}`,
+        standardVoice,
+        `expected "${task}" to route to standard-voice (${standardVoice}) but got ${model}`,
+      );
+    }
+  });
+
+  it("routes debate-engine tasks to multi-agent", async () => {
+    const { getModel, getModelConfig } = await import("../modelRouter.js");
+    const multi = (getModelConfig().models as Record<string, string>)["multi-agent"];
+    for (const task of MUST_BE_MULTI_AGENT) {
+      assert.equal(getModel(task), multi, `expected "${task}" → multi-agent (${multi})`);
+    }
+  });
+
+  it("keeps long-form public-voice tasks on premium-voice (Claude Sonnet 4.6)", async () => {
+    const { getModel, getModelConfig } = await import("../modelRouter.js");
+    const premiumVoice = (getModelConfig().models as Record<string, string>)["premium-voice"];
+    for (const task of MUST_BE_PREMIUM_VOICE) {
+      const model = getModel(task);
+      assert.equal(
+        model,
+        premiumVoice,
+        `expected "${task}" on premium-voice (${premiumVoice}) but got ${model}`,
       );
     }
   });
@@ -127,8 +165,8 @@ describe("PR D + PR J — P5 task demotions", () => {
   });
 
   it("unknown tasks still default to standard (regression guard)", async () => {
-    const { getModel } = await import("../modelRouter.js");
-    const standardModel = getModel("self-debate");
+    const { getModel, getModelConfig } = await import("../modelRouter.js");
+    const standardModel = getModelConfig().models.standard;
     assert.equal(getModel("some-new-never-seen-task"), standardModel);
   });
 });

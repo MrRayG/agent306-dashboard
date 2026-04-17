@@ -39,9 +39,10 @@ export function getLLMHeaders(): Record<string, string> {
  * Helper to get auth headers for xAI direct API calls (Responses API, image, TTS, video, x_search).
  */
 export function getXAIDirectHeaders(): Record<string, string> {
+  const key = process.env.GROK_API_KEY ?? XAI_DIRECT_API_KEY;
   return {
     "Content-Type": "application/json",
-    "Authorization": `Bearer ${XAI_DIRECT_API_KEY}`,
+    "Authorization": `Bearer ${key}`,
   };
 }
 
@@ -164,22 +165,52 @@ export interface ChatRoute {
   url: string;
   headers: Record<string, string>;
   model: string;            // model string actually sent to the provider
-  provider: "xai-direct" | "openrouter";
+  provider: "xai-direct" | "openrouter" | "perplexity";
+}
+
+// Perplexity base URL (OpenAI-compatible chat/completions).
+export const PERPLEXITY_BASE_URL = process.env.PERPLEXITY_BASE_URL ?? "https://api.perplexity.ai";
+export const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY ?? "";
+
+/**
+ * Returns true if the model string looks like a Perplexity Sonar model.
+ * Sonar IDs do not carry a `provider/` prefix (e.g. "sonar-pro", "sonar").
+ */
+export function isPerplexityModel(model: string): boolean {
+  return /^sonar(-|$)/.test(model);
+}
+
+export function getPerplexityHeaders(): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${PERPLEXITY_API_KEY}`,
+  };
 }
 
 /**
- * Decides whether a given OpenRouter-format model should be routed to xAI
- * direct or kept on OpenRouter. Returns the concrete URL, headers and
- * provider-native model name the caller should use.
+ * Decides whether a given model should be routed to xAI direct, Perplexity,
+ * or OpenRouter. Returns the concrete URL, headers and provider-native model
+ * name the caller should use.
  */
 export function resolveChatRoute(openrouterModel: string): ChatRoute {
   const xaiNative = toXAINativeModel(openrouterModel);
-  if (xaiNative !== null && isXAIDirectChatEnabled() && XAI_DIRECT_API_KEY) {
+  // Read GROK_API_KEY live so tests / ops env hot-swaps take effect without
+  // a module reload.
+  const hasGrokKey = !!(process.env.GROK_API_KEY ?? XAI_DIRECT_API_KEY);
+  if (xaiNative !== null && isXAIDirectChatEnabled() && hasGrokKey) {
     return {
       url: `${XAI_DIRECT_BASE_URL.replace(/\/$/, "")}/chat/completions`,
       headers: getXAIDirectHeaders(),
       model: xaiNative,
       provider: "xai-direct",
+    };
+  }
+  if (isPerplexityModel(openrouterModel)) {
+    return {
+      url: `${PERPLEXITY_BASE_URL.replace(/\/$/, "")}/chat/completions`,
+      headers: getPerplexityHeaders(),
+      model: openrouterModel,
+      provider: "perplexity",
     };
   }
   return {

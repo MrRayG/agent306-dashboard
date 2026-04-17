@@ -162,6 +162,73 @@ describe("responseChainStore", () => {
   });
 });
 
+describe("postXSearchResponses — provider guard (bug 2 fix)", () => {
+  let originalFetch: typeof globalThis.fetch;
+  const savedGrok  = process.env.GROK_API_KEY;
+  const savedModel = process.env.MODEL_LIVE_SOCIAL;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+    process.env.GROK_API_KEY = "test-grok-key";
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    if (savedGrok === undefined) delete process.env.GROK_API_KEY;
+    else process.env.GROK_API_KEY = savedGrok;
+    if (savedModel === undefined) delete process.env.MODEL_LIVE_SOCIAL;
+    else process.env.MODEL_LIVE_SOCIAL = savedModel;
+  });
+
+  it("throws when the resolved provider is not xai-direct (OpenRouter override)", async () => {
+    // Override live-social to an OpenRouter/Anthropic model so the provider
+    // guard must fire. Without the guard, we'd silently POST an Anthropic
+    // model ID to api.x.ai and get a 400.
+    process.env.MODEL_LIVE_SOCIAL = "anthropic/claude-sonnet-4.6";
+    const { postXSearchResponses } = await import(`../llmCall.js?t=${Date.now()}`);
+    await assert.rejects(
+      () => postXSearchResponses({ task: "signal-brief", content: "hi" }),
+      (err: Error) => /xAI-direct tier/.test(err.message) && /signal-brief/.test(err.message),
+    );
+  });
+
+  it("throws when the resolved provider is Perplexity", async () => {
+    process.env.MODEL_LIVE_SOCIAL = "sonar-pro";
+    const { postXSearchResponses } = await import(`../llmCall.js?t=${Date.now()}`);
+    await assert.rejects(
+      () => postXSearchResponses({ task: "signal-brief", content: "hi" }),
+      /xAI-direct tier/,
+    );
+  });
+
+  it("throws when GROK_API_KEY is missing (no silent fallback)", async () => {
+    delete process.env.GROK_API_KEY;
+    const { postXSearchResponses } = await import(`../llmCall.js?t=${Date.now()}`);
+    await assert.rejects(
+      () => postXSearchResponses({ task: "signal-brief", content: "hi" }),
+      /GROK_API_KEY is not set/,
+    );
+  });
+
+  it("accepts the default live-social route (xai-direct)", async () => {
+    delete process.env.MODEL_LIVE_SOCIAL;
+    const fetchMock = mock.fn(async (_url: any) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ output: [] }),
+      text: async () => "",
+    }) as any);
+    globalThis.fetch = fetchMock as any;
+
+    const { postXSearchResponses } = await import(`../llmCall.js?t=${Date.now()}`);
+    const res = await postXSearchResponses({ task: "signal-brief", content: "hi" });
+    assert.equal(res.ok, true);
+    assert.equal(fetchMock.mock.callCount(), 1);
+    const url = String(fetchMock.mock.calls[0].arguments[0]);
+    assert.ok(url.includes("api.x.ai"), `expected api.x.ai, got ${url}`);
+  });
+});
+
 describe("callLLM routing", () => {
   let originalFetch: typeof globalThis.fetch;
   const savedEnabled = process.env.RESPONSES_API_ENABLED_TASKS;
