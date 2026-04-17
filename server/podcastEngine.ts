@@ -165,6 +165,11 @@ export interface Episode {
   audioGeneratedAt?: string;
   duration?: number;       // in seconds
   producedAt?: string;
+  // TTS provenance (PR L — per-episode provider override)
+  ttsProvider?: "elevenlabs" | "xai";
+  ttsVoice?: string;
+  ttsCharacters?: number;
+  ttsCostUsd?: number;
 
   // Publishing
   publishedAt?: string;

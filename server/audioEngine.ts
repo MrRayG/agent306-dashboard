@@ -16,7 +16,7 @@ import { getEpisode, getPodcastState, saveState as savePodcastState, type Episod
 import { LLM_BASE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { getModel } from "./modelRouter.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
-import { getTtsProvider, callXaiTts, recordTtsCall, estimateXaiTtsCost, DEFAULT_XAI_VOICE, type XaiVoice } from "./xaiTtsEngine.js";
+import { getTtsProvider, callXaiTts, recordTtsCall, estimateXaiTtsCost, DEFAULT_XAI_VOICE, XAI_VOICES, type XaiVoice, type TtsProvider } from "./xaiTtsEngine.js";
 
 // ── ElevenLabs Configuration ────────────────────────────────────────────────
 
@@ -153,39 +153,56 @@ async function callElevenLabsTTS(text: string, apiKey: string): Promise<Buffer> 
 /**
  * Call the active TTS provider for a single chunk.
  *
- * Provider selected by TTS_PROVIDER env var. On xAI failure we log and
- * fall back to ElevenLabs so podcast generation never breaks on a provider
- * swap — this is the same additive/graceful pattern as imageEngine.
+ * Provider resolution (highest precedence first):
+ *   1. opts.providerOverride        — per-episode UI selection (PR L)
+ *   2. TTS_PROVIDER env var         — global default
+ *   3. "elevenlabs"                 — implicit fallback
+ *
+ * Behavior on failure:
+ *   - If providerOverride is set (explicit A/B selection), xAI failures
+ *     are re-thrown — we do NOT silently fall back to ElevenLabs. A hard
+ *     error preserves the integrity of the A/B comparison.
+ *   - If provider was chosen implicitly via env var, xAI failures fall
+ *     back to ElevenLabs so production never breaks on a provider swap.
  */
 async function callTtsForChunk(
   text: string,
   elevenLabsKey: string,
-  opts?: { episodeId?: string },
-): Promise<{ buffer: Buffer; provider: "elevenlabs" | "xai"; voice: string }> {
-  const provider = getTtsProvider();
+  opts?: { episodeId?: string; providerOverride?: TtsProvider; xaiVoice?: XaiVoice },
+): Promise<{ buffer: Buffer; provider: "elevenlabs" | "xai"; voice: string; cost: number }> {
+  const isExplicitOverride = !!opts?.providerOverride;
+  const provider: TtsProvider = opts?.providerOverride ?? getTtsProvider();
 
   if (provider === "xai") {
     try {
-      const voice: XaiVoice = DEFAULT_XAI_VOICE;
+      const voice: XaiVoice = opts?.xaiVoice ?? DEFAULT_XAI_VOICE;
       const buffer = await callXaiTts({ text, voice });
+      const cost = estimateXaiTtsCost(text.length);
       recordTtsCall({
         provider: "xai",
         characters: text.length,
-        cost: estimateXaiTtsCost(text.length),
+        cost,
         episodeId: opts?.episodeId,
         voice,
       });
-      return { buffer, provider: "xai", voice };
+      return { buffer, provider: "xai", voice, cost };
     } catch (e: any) {
+      if (isExplicitOverride) {
+        // Hard-fail on explicit override — do not silently swap to ElevenLabs.
+        console.error(
+          `[AudioEngine] xAI TTS failed (${e.message}) — hard-fail (explicit override, no fallback)`,
+        );
+        throw new Error(`xAI TTS failed: ${e.message}`);
+      }
       console.warn(
         `[AudioEngine] xAI TTS failed (${e.message}) — falling back to ElevenLabs for this chunk`,
       );
-      // fall through to ElevenLabs below
+      // fall through to ElevenLabs below (implicit provider only)
     }
   }
 
   const buffer = await callElevenLabsTTS(text, elevenLabsKey);
-  // ElevenLabs cost is approximate — Creator tier is ~$0.18/1k chars.
+  // ElevenLabs cost is approximate — Creator tier is ~$0.18/1k chars = $18 / 1M.
   const cost = text.length * (18 / 1_000_000);
   recordTtsCall({
     provider: "elevenlabs",
@@ -194,7 +211,7 @@ async function callTtsForChunk(
     episodeId: opts?.episodeId,
     voice: AGENT_306_VOICE_ID,
   });
-  return { buffer, provider: "elevenlabs", voice: AGENT_306_VOICE_ID };
+  return { buffer, provider: "elevenlabs", voice: AGENT_306_VOICE_ID, cost };
 }
 
 // ── Main generation function ────────────────────────────────────────────────
@@ -208,14 +225,37 @@ async function callTtsForChunk(
  * 4. Concatenates MP3 buffers into a single file
  * 5. Updates episode with audio URL and status
  */
-export async function generateAudio(episodeId: string): Promise<boolean> {
+export async function generateAudio(
+  episodeId: string,
+  opts?: { providerOverride?: TtsProvider; xaiVoice?: XaiVoice },
+): Promise<boolean> {
   const apiKey = process.env.ELEVENLABS_API_KEY ?? "";
-  const provider = getTtsProvider();
-  // Need either ElevenLabs key (for default/fallback) or xAI-selected + xAI key present
   const xaiKey = process.env.GROK_API_KEY ?? process.env.XAI_API_KEY ?? "";
-  if (!apiKey && !(provider === "xai" && xaiKey)) {
-    console.error("[AudioEngine] No TTS provider credentials available (ELEVENLABS_API_KEY or GROK_API_KEY required)");
+  const effectiveProvider: TtsProvider = opts?.providerOverride ?? getTtsProvider();
+
+  // Validate xAI voice early — never let bad input hit the provider.
+  if (opts?.xaiVoice && !(XAI_VOICES as readonly string[]).includes(opts.xaiVoice)) {
+    console.error(`[AudioEngine] Invalid xAI voice "${opts.xaiVoice}". Valid: ${XAI_VOICES.join(", ")}`);
     return false;
+  }
+
+  // Credential check per effective provider.
+  // For explicit override we require the chosen provider's key outright — no silent fallback.
+  if (effectiveProvider === "xai") {
+    if (!xaiKey) {
+      console.error("[AudioEngine] xAI provider requested but GROK_API_KEY/XAI_API_KEY is not set");
+      return false;
+    }
+  } else if (!apiKey) {
+    console.error("[AudioEngine] ElevenLabs provider requested but ELEVENLABS_API_KEY is not set");
+    return false;
+  }
+
+  if (opts?.providerOverride) {
+    console.log(
+      `[AudioEngine] Per-episode override active — provider=${effectiveProvider}` +
+        (opts.xaiVoice ? `, voice=${opts.xaiVoice}` : ""),
+    );
   }
 
   // Use podcastEngine's in-memory state to avoid race conditions
@@ -252,15 +292,25 @@ export async function generateAudio(episodeId: string): Promise<boolean> {
     const chunks = chunkText(speechText, MAX_CHUNK_CHARS);
     console.log(`[AudioEngine] Split into ${chunks.length} chunk(s)`);
 
-    // Generate audio for each chunk — provider selected by TTS_PROVIDER flag
+    // Generate audio for each chunk — per-episode override wins over TTS_PROVIDER flag
     const audioBuffers: Buffer[] = [];
     const providersUsed = new Set<string>();
+    const voicesUsed = new Set<string>();
+    let totalCost = 0;
+    let totalChars = 0;
     for (let i = 0; i < chunks.length; i++) {
       console.log(`[AudioEngine] Processing chunk ${i + 1}/${chunks.length} (${chunks[i].length} chars)...`);
-      const { buffer, provider } = await callTtsForChunk(chunks[i], apiKey, { episodeId });
+      const { buffer, provider, voice, cost } = await callTtsForChunk(chunks[i], apiKey, {
+        episodeId,
+        providerOverride: opts?.providerOverride,
+        xaiVoice: opts?.xaiVoice,
+      });
       audioBuffers.push(buffer);
       providersUsed.add(provider);
-      console.log(`[AudioEngine] Chunk ${i + 1} complete — ${buffer.length} bytes (provider=${provider})`);
+      voicesUsed.add(voice);
+      totalCost += cost;
+      totalChars += chunks[i].length;
+      console.log(`[AudioEngine] Chunk ${i + 1} complete — ${buffer.length} bytes (provider=${provider}, voice=${voice})`);
     }
     console.log(`[AudioEngine] Providers used for ${episodeId}: ${Array.from(providersUsed).join(", ")}`);
 
@@ -283,8 +333,15 @@ export async function generateAudio(episodeId: string): Promise<boolean> {
       liveEpisode.audioUrl = `data/audio/${filename}`;
       (liveEpisode as any).audioGeneratedAt = new Date().toISOString();
       liveEpisode.status = "audio_ready" as any;
+      // Stamp TTS provenance so the UI can show what was used (PR L)
+      const primaryProvider = providersUsed.size === 1 ? Array.from(providersUsed)[0] : "mixed";
+      const primaryVoice = voicesUsed.size === 1 ? Array.from(voicesUsed)[0] : "mixed";
+      (liveEpisode as any).ttsProvider = primaryProvider;
+      (liveEpisode as any).ttsVoice = primaryVoice;
+      (liveEpisode as any).ttsCharacters = totalChars;
+      (liveEpisode as any).ttsCostUsd = Math.round(totalCost * 10000) / 10000;
       savePodcastState(podState);
-      console.log(`[AudioEngine] Episode "${liveEpisode.title}" status → audio_ready`);
+      console.log(`[AudioEngine] Episode "${liveEpisode.title}" status → audio_ready (provider=${primaryProvider}, voice=${primaryVoice}, $${totalCost.toFixed(4)})`);
     }
 
     // Auto-stitch intro/outro music if assets exist
