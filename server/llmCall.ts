@@ -64,6 +64,15 @@ export async function callChatCompletions(opts: LLMCallOptions, model: string): 
 export async function callLLM(opts: LLMCallOptions): Promise<LLMResponse> {
   const mode = opts.mode ?? resolveMode(opts.task);
   const model = getModel(opts.task);
+  const xaiModel = mode === "responses" ? toXAINativeModel(model) : null;
+  const branch =
+    mode === "chat" ? "chat" :
+    xaiModel === null ? "responses→downgrade" :
+    "responses→xai";
+
+  console.log(
+    `[callLLM] task="${opts.task}" mode=${mode} model=${model} xaiModel=${xaiModel ?? "-"} branch=${branch}`
+  );
 
   if (mode === "chat") {
     return callChatCompletions(opts, model);
@@ -71,7 +80,6 @@ export async function callLLM(opts: LLMCallOptions): Promise<LLMResponse> {
 
   // mode === "responses" — verify the model can actually use xAI Responses API.
   // Non-xAI models (Anthropic, Google, etc.) silently downgrade to chat/completions.
-  const xaiModel = toXAINativeModel(model);
   if (xaiModel === null) {
     return callChatCompletions(opts, model);
   }
