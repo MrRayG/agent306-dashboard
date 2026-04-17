@@ -1,8 +1,11 @@
 /**
- * Tests for PR D — P5 task tier demotions.
+ * Tests for PR D + PR J — P5 task tier demotions.
  *
- * Verifies 15 tasks now resolve to the routine model (Gemini flash-lite by default)
- * and that no reasoning / public-facing tasks were accidentally demoted.
+ * PR D demoted 15 structured-output tasks to routine.
+ * PR J extends with 3 more (knowledge-gap-scan, goal-evaluation, x_search).
+ *
+ * Verifies demoted tasks resolve to routine model and that no reasoning /
+ * public-facing tasks were accidentally demoted.
  *
  * Run: npx tsx --test server/__tests__/modelRouterDemotions.test.ts
  */
@@ -11,6 +14,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
 const DEMOTED_TO_ROUTINE = [
+  // PR D (15 tasks)
   "social-preview",
   "breakthrough-evaluation",
   "topic-quality-evaluation",
@@ -26,6 +30,10 @@ const DEMOTED_TO_ROUTINE = [
   "ai-roundup",
   "community-boost",
   "prediction-verification",
+  // PR J — P5 routing audit (Session 4)
+  "knowledge-gap-scan",      // Structured gap list
+  "goal-evaluation",         // Rubric-style scoring
+  "x_search",                // Short search-query crafting
 ];
 
 const MUST_STAY_STANDARD = [
@@ -37,8 +45,6 @@ const MUST_STAY_STANDARD = [
   // Research pipeline reasoning
   "research-phase",
   "research-agenda-advance",
-  "knowledge-gap-scan",
-  "goal-evaluation",
   "exploration",
   // Public-facing voice
   "news-dispatch",
@@ -46,8 +52,7 @@ const MUST_STAY_STANDARD = [
   "episode-generation",
   "intro-post",
   "blog-post",
-  // Quality-sensitive tooling
-  "x_search",
+  // Quality-sensitive tooling — grounded Class-1 synthesis stays on Grok 4.20
   "triad-fact-synthesis",
 ];
 
@@ -69,8 +74,8 @@ const MUST_STAY_PREMIUM = [
   "parallel-search-reduce",
 ];
 
-describe("PR D — P5 task demotions", () => {
-  it("demotes all 15 P5 tasks to the routine model", async () => {
+describe("PR D + PR J — P5 task demotions", () => {
+  it("demotes all P5 tasks (PR D + PR J) to the routine model", async () => {
     const { getModel } = await import("../modelRouter.js");
     const routineModel = getModel("reflection"); // known routine anchor
     for (const task of DEMOTED_TO_ROUTINE) {
