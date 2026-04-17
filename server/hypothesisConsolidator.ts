@@ -16,6 +16,13 @@ import { getModel } from "./modelRouter.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { getEmbedding } from "./embeddingEngine.js";
 import type { Hypothesis } from "./researchEngine.js";
+import { waitForBatchComplete } from "./xaiBatchEngine.js";
+import {
+  shouldUseHypothesisBatch,
+  submitConsolidationBatch,
+  collectConsolidationResults,
+  type MergeResult,
+} from "./hypothesisConsolidationBatch.js";
 
 import { postChatCompletions } from "./llmCall.js";
 // ── Cosine similarity (inline to avoid circular dependency) ──────────────────
@@ -209,7 +216,84 @@ export function prioritizeClusters(
 // ── Consolidation ────────────────────────────────────────────────────────────
 
 /**
+ * Apply a single cluster merge result to the research lab.
+ * Pure-ish: reads + writes the lab once, returns counts. Shared by
+ * both the sync (mergeCluster) and batch (submitConsolidationBatch)
+ * code paths so they produce byte-identical lab state.
+ *
+ * Returns { applied, removed } — applied=1 if the lab was mutated,
+ * 0 if the canonical no longer exists (stale between merge + apply).
+ */
+function applyMergeToLab(
+  cluster: HypothesisCluster,
+  result: MergeResult,
+): { applied: number; removed: number } {
+  const lab = getResearchLab();
+  const canonicalId = cluster.representative.id;
+  const canonicalIdx = lab.hypotheses.findIndex(h => h.id === canonicalId);
+  if (canonicalIdx === -1) return { applied: 0, removed: 0 };
+
+  // Merge metadata from all cluster members
+  const allTopicIds = new Set<string>();
+  let bestTrust = 0;
+  let earliestFormed = lab.hypotheses[canonicalIdx].formedAt;
+  let bestRubric: Hypothesis["rubricScores"] | undefined;
+
+  for (const member of cluster.members) {
+    if (member.relatedTopicId) allTopicIds.add(member.relatedTopicId);
+    if ((member.trustScore ?? 0) > bestTrust) bestTrust = member.trustScore ?? 0;
+    if (member.formedAt < earliestFormed) earliestFormed = member.formedAt;
+
+    // Keep best rubric scores (max of each dimension)
+    if (member.rubricScores) {
+      if (!bestRubric) {
+        bestRubric = { ...member.rubricScores };
+      } else {
+        bestRubric.evidenceStrength = Math.max(bestRubric.evidenceStrength, member.rubricScores.evidenceStrength);
+        bestRubric.logicalCoherence = Math.max(bestRubric.logicalCoherence, member.rubricScores.logicalCoherence);
+        bestRubric.falsifiability = Math.max(bestRubric.falsifiability, member.rubricScores.falsifiability);
+        bestRubric.noveltyInsight = Math.max(bestRubric.noveltyInsight, member.rubricScores.noveltyInsight);
+        bestRubric.actionability = Math.max(bestRubric.actionability, member.rubricScores.actionability);
+      }
+    }
+  }
+
+  // Update canonical hypothesis
+  lab.hypotheses[canonicalIdx].claim = result.canonical;
+  lab.hypotheses[canonicalIdx].confidence = bestConfidence(cluster.members);
+  lab.hypotheses[canonicalIdx].formedAt = earliestFormed;
+  if (bestTrust > 0) lab.hypotheses[canonicalIdx].trustScore = bestTrust;
+  if (bestRubric) lab.hypotheses[canonicalIdx].rubricScores = bestRubric;
+  // Keep first relatedTopicId if canonical doesn't have one
+  if (!lab.hypotheses[canonicalIdx].relatedTopicId && allTopicIds.size > 0) {
+    lab.hypotheses[canonicalIdx].relatedTopicId = Array.from(allTopicIds)[0];
+  }
+
+  // Mark other members as expired with mergedInto reference
+  for (const member of cluster.members) {
+    if (member.id === canonicalId) continue;
+    const idx = lab.hypotheses.findIndex(h => h.id === member.id);
+    if (idx !== -1) {
+      lab.hypotheses[idx].status = "expired";
+      lab.hypotheses[idx].resolution = `Merged into ${canonicalId}: ${result.reasoning}`;
+      (lab.hypotheses[idx] as any).mergedInto = canonicalId;
+    }
+  }
+
+  saveResearchLab(lab);
+  return { applied: 1, removed: cluster.members.length - 1 };
+}
+
+/**
  * Run full hypothesis consolidation: find clusters, merge each, update research lab.
+ *
+ * Routing:
+ * - When HYPOTHESIS_CONSOLIDATION_BATCH=true AND BATCH_API_ENABLED=true,
+ *   submits every cluster as a single xAI Batches job (50% cheaper async tier).
+ * - Otherwise, falls back to the sequential sync path (one merge per cluster
+ *   with a 1-second delay between calls).
+ *
+ * Lab mutations are identical between the two paths — both call applyMergeToLab.
  */
 export async function consolidateHypotheses(options?: {
   minClusterSize?: number;
@@ -217,7 +301,7 @@ export async function consolidateHypotheses(options?: {
   similarityThreshold?: number;
   weakestDimension?: string;
   dryRun?: boolean;
-}): Promise<{ clustersFound: number; merged: number; removed: number }> {
+}): Promise<{ clustersFound: number; merged: number; removed: number; batchId?: string }> {
   const minSize = options?.minClusterSize ?? 3;
   const maxClusters = options?.maxClusters ?? 5;
   const simThreshold = options?.similarityThreshold ?? 0.45;
@@ -237,13 +321,28 @@ export async function consolidateHypotheses(options?: {
     clusters = prioritizeClusters(clusters, options.weakestDimension);
   }
 
+  // ── Batch path (async 50%-off tier) ──────────────────────────────────────
+  if (shouldUseHypothesisBatch() && !dryRun) {
+    return await consolidateViaBatch(clusters);
+  }
+
+  // ── Sync path (unchanged; preserves dryRun semantics) ────────────────────
+  return await consolidateViaSync(clusters, dryRun);
+}
+
+/**
+ * Sync consolidation path — sequential merges with 1s inter-call delay.
+ * This is the original code path, preserved verbatim so no behavior
+ * changes until an operator flips the batch flag.
+ */
+async function consolidateViaSync(
+  clusters: HypothesisCluster[],
+  dryRun: boolean,
+): Promise<{ clustersFound: number; merged: number; removed: number }> {
   let merged = 0;
   let removed = 0;
 
-  // Process all clusters (no hard cap — process everything found)
-  const clustersToProcess = clusters;
-
-  for (const cluster of clustersToProcess) {
+  for (const cluster of clusters) {
     console.log(`[HypothesisConsolidator] Merging cluster: "${cluster.representative.claim.slice(0, 60)}..." (${cluster.members.length} variants)`);
 
     const result = await mergeCluster(cluster);
@@ -259,62 +358,10 @@ export async function consolidateHypotheses(options?: {
       continue;
     }
 
-    // Reload lab fresh for each cluster mutation
-    const lab = getResearchLab();
-    const canonicalId = cluster.representative.id;
-    const canonicalIdx = lab.hypotheses.findIndex(h => h.id === canonicalId);
-    if (canonicalIdx === -1) continue;
-
-    // Merge metadata from all cluster members
-    const allTopicIds = new Set<string>();
-    let bestTrust = 0;
-    let earliestFormed = lab.hypotheses[canonicalIdx].formedAt;
-    let bestRubric: Hypothesis["rubricScores"] | undefined;
-
-    for (const member of cluster.members) {
-      if (member.relatedTopicId) allTopicIds.add(member.relatedTopicId);
-      if ((member.trustScore ?? 0) > bestTrust) bestTrust = member.trustScore ?? 0;
-      if (member.formedAt < earliestFormed) earliestFormed = member.formedAt;
-
-      // Keep best rubric scores (max of each dimension)
-      if (member.rubricScores) {
-        if (!bestRubric) {
-          bestRubric = { ...member.rubricScores };
-        } else {
-          bestRubric.evidenceStrength = Math.max(bestRubric.evidenceStrength, member.rubricScores.evidenceStrength);
-          bestRubric.logicalCoherence = Math.max(bestRubric.logicalCoherence, member.rubricScores.logicalCoherence);
-          bestRubric.falsifiability = Math.max(bestRubric.falsifiability, member.rubricScores.falsifiability);
-          bestRubric.noveltyInsight = Math.max(bestRubric.noveltyInsight, member.rubricScores.noveltyInsight);
-          bestRubric.actionability = Math.max(bestRubric.actionability, member.rubricScores.actionability);
-        }
-      }
-    }
-
-    // Update canonical hypothesis
-    lab.hypotheses[canonicalIdx].claim = result.canonical;
-    lab.hypotheses[canonicalIdx].confidence = bestConfidence(cluster.members);
-    lab.hypotheses[canonicalIdx].formedAt = earliestFormed;
-    if (bestTrust > 0) lab.hypotheses[canonicalIdx].trustScore = bestTrust;
-    if (bestRubric) lab.hypotheses[canonicalIdx].rubricScores = bestRubric;
-    // Keep first relatedTopicId if canonical doesn't have one
-    if (!lab.hypotheses[canonicalIdx].relatedTopicId && allTopicIds.size > 0) {
-      lab.hypotheses[canonicalIdx].relatedTopicId = Array.from(allTopicIds)[0];
-    }
-
-    // Mark other members as expired with mergedInto reference
-    for (const member of cluster.members) {
-      if (member.id === canonicalId) continue;
-      const idx = lab.hypotheses.findIndex(h => h.id === member.id);
-      if (idx !== -1) {
-        lab.hypotheses[idx].status = "expired";
-        lab.hypotheses[idx].resolution = `Merged into ${canonicalId}: ${result.reasoning}`;
-        (lab.hypotheses[idx] as any).mergedInto = canonicalId;
-      }
-    }
-
-    saveResearchLab(lab);
+    const { applied, removed: r } = applyMergeToLab(cluster, result);
+    if (!applied) continue;
     merged++;
-    removed += cluster.members.length - 1;
+    removed += r;
     console.log(`[HypothesisConsolidator] Merged ${cluster.members.length} → 1: "${result.canonical.slice(0, 80)}..."`);
 
     // Small delay between clusters for API rate limiting
@@ -323,4 +370,62 @@ export async function consolidateHypotheses(options?: {
 
   console.log(`[HypothesisConsolidator] Complete: ${merged} clusters merged, ${removed} redundant hypotheses removed`);
   return { clustersFound: clusters.length, merged, removed };
+}
+
+/**
+ * Batch consolidation path — submits all cluster merges as one xAI
+ * Batches job (50% cheaper), waits for completion, applies merges.
+ *
+ * Timeout / poll cadence inherit the same env knobs as the KG batch cron:
+ *   HYPOTHESIS_BATCH_POLL_MS    (default 60_000 ms)
+ *   HYPOTHESIS_BATCH_TIMEOUT_MS (default 6 h)
+ */
+async function consolidateViaBatch(
+  clusters: HypothesisCluster[],
+): Promise<{ clustersFound: number; merged: number; removed: number; batchId?: string }> {
+  const pollMs = Number(process.env.HYPOTHESIS_BATCH_POLL_MS ?? 60_000);
+  const timeoutMs = Number(process.env.HYPOTHESIS_BATCH_TIMEOUT_MS ?? 6 * 60 * 60 * 1000);
+
+  console.log(`[HypothesisConsolidator] BATCH path: submitting ${clusters.length} clusters to xAI Batches`);
+
+  let batchId: string;
+  try {
+    const submit = await submitConsolidationBatch(clusters);
+    batchId = submit.batch_id;
+    console.log(`[HypothesisConsolidator] Batch ${batchId} submitted with ${submit.added} requests`);
+  } catch (e: any) {
+    console.warn(`[HypothesisConsolidator] Batch submit failed — falling back to sync: ${e.message ?? e}`);
+    return await consolidateViaSync(clusters, false);
+  }
+
+  try {
+    await waitForBatchComplete(batchId, { pollIntervalMs: pollMs, timeoutMs });
+  } catch (e: any) {
+    console.warn(`[HypothesisConsolidator] Batch ${batchId} wait failed: ${e.message ?? e}`);
+    return { clustersFound: clusters.length, merged: 0, removed: 0, batchId };
+  }
+
+  // Collect results. Validate against current lab state so a canonical that
+  // was archived between submit and collect doesn't get resurrected.
+  const validIds = new Set(getResearchLab().hypotheses.map(h => h.id));
+  const { merges, failures } = await collectConsolidationResults(batchId, validIds);
+
+  console.log(`[HypothesisConsolidator] Batch ${batchId} returned ${merges.size} merges, ${failures.length} failures`);
+
+  // Apply each result. Iterating over clusters (not the map) keeps apply order
+  // deterministic and gives us access to the full cluster object.
+  let merged = 0;
+  let removed = 0;
+  for (const cluster of clusters) {
+    const result = merges.get(cluster.representative.id);
+    if (!result) continue;
+    const { applied, removed: r } = applyMergeToLab(cluster, result);
+    if (!applied) continue;
+    merged++;
+    removed += r;
+    console.log(`[HypothesisConsolidator] Merged ${cluster.members.length} → 1: "${result.canonical.slice(0, 80)}..."`);
+  }
+
+  console.log(`[HypothesisConsolidator] BATCH complete: ${merged} clusters merged, ${removed} redundant hypotheses removed`);
+  return { clustersFound: clusters.length, merged, removed, batchId };
 }
