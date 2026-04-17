@@ -27,6 +27,16 @@ import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./ll
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 import { postChatCompletions } from "./llmCall.js";
+import { waitForBatchComplete } from "./xaiBatchEngine.js";
+import {
+  shouldUseResearchScanBatch,
+  submitGoalScanBatch,
+  collectGoalScanResults,
+  GOAL_SCAN_SYSTEM_PROMPT,
+  buildGoalScanUserPrompt,
+  type GoalSummary,
+  type TopicProposal,
+} from "./researchScannerBatch.js";
 const GROK_CHAT_API  = LLM_BASE_URL;
 const KNOWLEDGE_FILE = dataPath("memory_knowledge.json");
 const SCANNER_FILE   = dataPath("scanner_state.json");
@@ -305,6 +315,41 @@ export interface GoalScanResult {
   skipReason?:    string;
 }
 
+/**
+ * Apply a set of LLM-proposed topics to the research lab for one goal.
+ * Shared by sync and batch paths so both do byte-identical dedup + addTopic.
+ * Mutates `existingTopics` in place so subsequent calls see just-queued titles.
+ */
+function applyTopicsForGoal(
+  goal: { id: string; title: string },
+  topics: TopicProposal[],
+  existingTopics: string[],
+  addTopic: (t: any) => void,
+): { topicsProposed: number; topicsQueued: number } {
+  let topicsQueued = 0;
+  for (const t of topics) {
+    if (!t.topic || !t.description) continue;
+
+    const topicLower = t.topic.toLowerCase();
+    const isDupe = existingTopics.some(e =>
+      e.includes(topicLower.slice(0, 20)) || topicLower.includes(e.slice(0, 20))
+    );
+    if (isDupe) continue;
+
+    addTopic({
+      topic:       t.topic,
+      description: `${t.description}\n\n[Linked to dev goal: ${goal.title}]`,
+      priority:    t.priority ?? "medium",
+      addedBy:     "agent",
+      goalId:      goal.id,
+    });
+
+    existingTopics.push(topicLower);
+    topicsQueued++;
+  }
+  return { topicsProposed: topics.length, topicsQueued };
+}
+
 export async function scanGoalsForResearch(grokKey: string): Promise<GoalScanResult[]> {
   const { getGoals } = await import("./researchEngine.js");
   const { addTopic, getResearchLab } = await import("./researchEngine.js");
@@ -324,7 +369,44 @@ export async function scanGoalsForResearch(grokKey: string): Promise<GoalScanRes
 
   console.log(`[Scanner] Scanning ${activeGoals.length} active goals for research gaps...`);
 
+  // Partition goals: those with ≥2 active linked topics get skipped without any
+  // LLM call (matches sync behavior). Only the remainder actually get scanned.
+  const lab = getResearchLab();
+  const toScan: typeof activeGoals = [];
   for (const goal of activeGoals) {
+    const linkedTopics = lab.topics.filter(
+      t => t.goalId === goal.id && !["declined", "archived", "published"].includes(t.status)
+    );
+    if (linkedTopics.length >= 2) {
+      results.push({
+        goalId:         goal.id,
+        goalTitle:      goal.title,
+        topicsProposed: 0,
+        topicsQueued:   0,
+        skipped:        true,
+        skipReason:     `Already has ${linkedTopics.length} active research topics`,
+      });
+      continue;
+    }
+    toScan.push(goal);
+  }
+
+  if (toScan.length === 0) {
+    console.log("[Scanner] All active goals already have linked topics — nothing to scan");
+    return results;
+  }
+
+  // ── Batch path (async 50%-off tier) ──────────────────────────────────────
+  if (shouldUseResearchScanBatch()) {
+    const batchResults = await scanViaBatch(toScan, existingTopics, addTopic);
+    results.push(...batchResults);
+    const totalQueued = results.reduce((s, r) => s + r.topicsQueued, 0);
+    console.log(`[Scanner] Goal scan complete — ${totalQueued} research topics queued across ${activeGoals.length} goals (batch mode)`);
+    return results;
+  }
+
+  // ── Sync path (unchanged) ───────────────────────────────────────────────
+  for (const goal of toScan) {
     const result: GoalScanResult = {
       goalId:        goal.id,
       goalTitle:     goal.title,
@@ -333,54 +415,13 @@ export async function scanGoalsForResearch(grokKey: string): Promise<GoalScanRes
       skipped:        false,
     };
 
-    // Skip if this goal already has active linked topics
-    const linkedTopics = getResearchLab().topics.filter(
-      t => t.goalId === goal.id && !["declined", "archived", "published"].includes(t.status)
-    );
-    if (linkedTopics.length >= 2) {
-      result.skipped    = true;
-      result.skipReason = `Already has ${linkedTopics.length} active research topics`;
-      results.push(result);
-      continue;
-    }
-
     try {
       const res = await postChatCompletions({
           model:           getModel("research_scan"),
-          messages: [{
-            role:    "system",
-            content: `You are Agent 306 — Sovereign AI Thought Leader in Web3 and AI.
-You have a development goal you've set for yourself. You need to identify
-specific research topics that would directly advance this goal.
-
-Be precise. A vague goal needs specific, researchable questions.
-Each topic must be something you can actually research with web sources and papers.
-Return valid JSON only.`,
-          }, {
-            role:    "user",
-            content: `Your development goal:
-Title: "${goal.title}"
-Category: ${goal.category}
-Description: ${goal.description}
-${goal.milestones && goal.milestones.length > 0 ? `Milestones: ${goal.milestones.join(", ")}` : ""}
-
-Already in your research queue (don't duplicate):
-${existingTopics.length > 0 ? existingTopics.slice(0, 10).map(t => `• ${t}`).join("\n") : "None"}
-
-Propose 1-2 specific research topics that would directly advance this goal.
-Each should be something concrete you can research — not a meta-goal, but an actual question.
-
-Return JSON:
-{
-  "topics": [
-    {
-      "topic": "concise research question (10 words max)",
-      "description": "2-3 sentences: exactly what to research and how it advances the goal",
-      "priority": "high|medium|low"
-    }
-  ]
-}`,
-          }],
+          messages: [
+            { role: "system", content: GOAL_SCAN_SYSTEM_PROMPT },
+            { role: "user",   content: buildGoalScanUserPrompt(goal, existingTopics) },
+          ],
           max_tokens:  800,
           temperature: 0.75,
         }, AbortSignal.timeout(25000));
@@ -402,29 +443,10 @@ Return JSON:
         continue;
       }
 
-      const topics: any[] = (parsed.topics ?? []).slice(0, 2);
-      result.topicsProposed = topics.length;
-
-      for (const t of topics) {
-        if (!t.topic || !t.description) continue;
-
-        const topicLower = t.topic.toLowerCase();
-        const isDupe = existingTopics.some(e =>
-          e.includes(topicLower.slice(0, 20)) || topicLower.includes(e.slice(0, 20))
-        );
-        if (isDupe) continue;
-
-        addTopic({
-          topic:       t.topic,
-          description: `${t.description}\n\n[Linked to dev goal: ${goal.title}]`,
-          priority:    t.priority ?? "medium",
-          addedBy:     "agent",
-          goalId:      goal.id,
-        });
-
-        existingTopics.push(topicLower);
-        result.topicsQueued++;
-      }
+      const topics: TopicProposal[] = (parsed.topics ?? []).slice(0, 2);
+      const applied = applyTopicsForGoal(goal, topics, existingTopics, addTopic);
+      result.topicsProposed = applied.topicsProposed;
+      result.topicsQueued   = applied.topicsQueued;
 
     } catch (e) {
       result.skipped    = true;
@@ -439,6 +461,105 @@ Return JSON:
 
   const totalQueued = results.reduce((s, r) => s + r.topicsQueued, 0);
   console.log(`[Scanner] Goal scan complete — ${totalQueued} research topics queued across ${activeGoals.length} goals`);
+
+  return results;
+}
+
+/**
+ * Batch goal-scan path — submits all goals as one xAI Batches job
+ * (50% cheaper), waits for completion, applies topics per goal.
+ *
+ * Env knobs:
+ *   RESEARCH_SCAN_BATCH_POLL_MS    (default 60_000 ms)
+ *   RESEARCH_SCAN_BATCH_TIMEOUT_MS (default 6 h)
+ *
+ * On submit failure: each goal gets a skip result with the error message.
+ * On wait/collect failure: same — zero topics queued, errors surfaced.
+ * The caller (scanGoalsForResearch) merges these into its result list.
+ */
+async function scanViaBatch(
+  goals: Array<{ id: string; title: string; category: string; description: string; milestones?: string[] }>,
+  existingTopics: string[],
+  addTopic: (t: any) => void,
+): Promise<GoalScanResult[]> {
+  const pollMs    = Number(process.env.RESEARCH_SCAN_BATCH_POLL_MS ?? 60_000);
+  const timeoutMs = Number(process.env.RESEARCH_SCAN_BATCH_TIMEOUT_MS ?? 6 * 60 * 60 * 1000);
+
+  const results: GoalScanResult[] = [];
+
+  console.log(`[Scanner] BATCH path: submitting ${goals.length} goals to xAI Batches`);
+
+  let batchId: string;
+  try {
+    const summaries: GoalSummary[] = goals.map(g => ({
+      id: g.id,
+      title: g.title,
+      category: g.category,
+      description: g.description,
+      milestones: g.milestones,
+    }));
+    const submit = await submitGoalScanBatch(summaries, existingTopics);
+    batchId = submit.batch_id;
+    console.log(`[Scanner] Batch ${batchId} submitted with ${submit.added} requests`);
+  } catch (e: any) {
+    console.warn(`[Scanner] Batch submit failed: ${e.message ?? e}`);
+    for (const goal of goals) {
+      results.push({
+        goalId: goal.id,
+        goalTitle: goal.title,
+        topicsProposed: 0,
+        topicsQueued: 0,
+        skipped: true,
+        skipReason: `Batch submit failed: ${e.message ?? e}`,
+      });
+    }
+    return results;
+  }
+
+  try {
+    await waitForBatchComplete(batchId, { pollIntervalMs: pollMs, timeoutMs });
+  } catch (e: any) {
+    console.warn(`[Scanner] Batch ${batchId} wait failed: ${e.message ?? e}`);
+    for (const goal of goals) {
+      results.push({
+        goalId: goal.id,
+        goalTitle: goal.title,
+        topicsProposed: 0,
+        topicsQueued: 0,
+        skipped: true,
+        skipReason: `Batch wait failed: ${e.message ?? e}`,
+      });
+    }
+    return results;
+  }
+
+  const validGoalIds = new Set(goals.map(g => g.id));
+  const { proposals, failures } = await collectGoalScanResults(batchId, validGoalIds);
+  console.log(`[Scanner] Batch ${batchId} returned proposals for ${proposals.size} goals, ${failures.length} failures`);
+
+  // Apply per goal in deterministic order
+  for (const goal of goals) {
+    const topics = proposals.get(goal.id);
+    if (!topics || topics.length === 0) {
+      results.push({
+        goalId: goal.id,
+        goalTitle: goal.title,
+        topicsProposed: 0,
+        topicsQueued: 0,
+        skipped: true,
+        skipReason: "No proposals returned",
+      });
+      continue;
+    }
+    const applied = applyTopicsForGoal(goal, topics, existingTopics, addTopic);
+    results.push({
+      goalId: goal.id,
+      goalTitle: goal.title,
+      topicsProposed: applied.topicsProposed,
+      topicsQueued: applied.topicsQueued,
+      skipped: false,
+    });
+  }
 
   return results;
 }
