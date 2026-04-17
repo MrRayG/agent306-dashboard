@@ -102,6 +102,33 @@ export function isXAIOnlyFeature(feature: string): boolean {
 }
 
 /**
+ * Maps OpenRouter-format xAI model names to xAI-native names
+ * for use with the Responses API at api.x.ai/v1/responses.
+ *
+ * Returns null if the model is not xAI-hosted (Anthropic, Google, etc.)
+ * — caller should downgrade to chat/completions for those.
+ */
+export function toXAINativeModel(openrouterModel: string): string | null {
+  if (!openrouterModel.startsWith("x-ai/")) return null;
+
+  const mapping: Record<string, string> = {
+    "x-ai/grok-4.20": "grok-4-1-fast-non-reasoning",
+    "x-ai/grok-4.20-non-reasoning": "grok-4-1-fast-non-reasoning",
+    "x-ai/grok-4.20-multi-agent": "grok-4-1-fast-non-reasoning",
+    "x-ai/grok-4": "grok-4",
+    "x-ai/grok-4-0709": "grok-4-0709",
+    "x-ai/grok-4-fast-reasoning": "grok-4-fast-reasoning",
+    "x-ai/grok-4-fast-non-reasoning": "grok-4-fast-non-reasoning",
+    "x-ai/grok-4-1-fast-reasoning": "grok-4-1-fast-reasoning",
+    "x-ai/grok-4-1-fast-non-reasoning": "grok-4-1-fast-non-reasoning",
+  };
+
+  if (mapping[openrouterModel]) return mapping[openrouterModel];
+
+  return openrouterModel.replace(/^x-ai\//, "");
+}
+
+/**
  * Resolves which API mode a task should use, based on the RESPONSES_API_ENABLED_TASKS env var.
  *
  * Empty/unset env means all tasks default to "chat" — zero behavior change.
