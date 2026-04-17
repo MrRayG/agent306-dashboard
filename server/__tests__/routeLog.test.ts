@@ -105,12 +105,12 @@ describe("logRoute — structured log format", () => {
 });
 
 describe("inferTier — best-effort from model ID", () => {
-  it("detects Claude Opus as frontier", () => {
-    assert.equal(inferTier("anthropic/claude-opus-4.6"), "frontier");
+  it("detects Claude Opus as frontier-reasoning", () => {
+    assert.equal(inferTier("anthropic/claude-opus-4.6"), "frontier-reasoning");
   });
 
-  it("detects Claude Sonnet as premium", () => {
-    assert.equal(inferTier("anthropic/claude-sonnet-4.6"), "premium");
+  it("detects Claude Sonnet as premium-voice", () => {
+    assert.equal(inferTier("anthropic/claude-sonnet-4.6"), "premium-voice");
   });
 
   it("detects Grok 4.20 multi-agent", () => {
@@ -121,8 +121,8 @@ describe("inferTier — best-effort from model ID", () => {
     assert.equal(inferTier("grok-4.20-0309-reasoning"), "frontier-factual");
   });
 
-  it("detects Grok 4.20 non-reasoning as standard", () => {
-    assert.equal(inferTier("grok-4.20-0309-non-reasoning"), "standard");
+  it("detects Grok 4.20 non-reasoning as standard-voice", () => {
+    assert.equal(inferTier("grok-4.20-0309-non-reasoning"), "standard-voice");
   });
 
   it("detects Grok Fast as routine (budget tier)", () => {

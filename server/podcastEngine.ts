@@ -38,7 +38,7 @@ import { getFormatVoiceContext } from "./voiceInstructions.js";
 import { SOUL, VOICE } from "./voice.js";
 import { queuePodcastPromo, hasPostedEpisode } from "./xPostScheduler.js";
 
-import { postChatCompletions } from "./llmCall.js";
+import { postChatCompletions, postPerplexity } from "./llmCall.js";
 const GROK_URL = LLM_BASE_URL;
 const PODCAST_FILE = dataPath("podcast_state.json");
 
@@ -458,24 +458,19 @@ The falsification segment is what makes you trustworthy. Anyone can be confident
   if (pplxKey && pplxKey.length > 10) {
     try {
       const today = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-      const pplxRes = await fetch("https://api.perplexity.ai/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${pplxKey}`,
-        },
-        body: JSON.stringify({
-          model: "sonar",
-          messages: [{
-            role: "system",
-            content: "You are a research assistant preparing facts for a podcast episode. Return specific, dated facts with source URLs where possible."
-          }, {
-            role: "user",
-            content: `Today is ${today}. Find the LATEST developments (last 48-72 hours) related to: "${episode.title || episode.drivingQuestion}"\n\nInclude source URLs where available.`
-          }],
-          max_tokens: 800,
-          temperature: 0.1,
-        }),
+      // Route through postPerplexity so live-research lands on sonar-pro
+      // (matrix-locked) with [LLM_ROUTE] observability.
+      const pplxRes = await postPerplexity({
+        task: "news-research",
+        messages: [{
+          role: "system",
+          content: "You are a research assistant preparing facts for a podcast episode. Return specific, dated facts with source URLs where possible."
+        }, {
+          role: "user",
+          content: `Today is ${today}. Find the LATEST developments (last 48-72 hours) related to: "${episode.title || episode.drivingQuestion}"\n\nInclude source URLs where available.`
+        }],
+        maxTokens: 800,
+        temperature: 0.1,
         signal: AbortSignal.timeout(20000),
       });
       if (pplxRes.ok) {
@@ -1353,24 +1348,17 @@ async function generateScriptForEpisode(
   if (pplxKey && pplxKey.length > 10) {
     try {
       const today = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-      const pplxRes = await fetch("https://api.perplexity.ai/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${pplxKey}`,
-        },
-        body: JSON.stringify({
-          model: "sonar",
-          messages: [{
-            role: "system",
-            content: "You are a research assistant preparing facts for a podcast episode. Return specific, dated facts with sources."
-          }, {
-            role: "user",
-            content: `Today is ${today}. I'm producing a podcast episode about: "${pitchText}"\n\nFind the LATEST developments (last 48-72 hours) related to this topic:\n- Breaking news or announcements\n- New data, studies, or benchmarks\n- Expert opinions or industry reactions\n- Real-world examples or case studies\n\nBe specific — names, dates, numbers, quotes. These facts will be incorporated into the episode script.`
-          }],
-          max_tokens: 800,
-          temperature: 0.1,
-        }),
+      const pplxRes = await postPerplexity({
+        task: "news-research",
+        messages: [{
+          role: "system",
+          content: "You are a research assistant preparing facts for a podcast episode. Return specific, dated facts with sources."
+        }, {
+          role: "user",
+          content: `Today is ${today}. I'm producing a podcast episode about: "${pitchText}"\n\nFind the LATEST developments (last 48-72 hours) related to this topic:\n- Breaking news or announcements\n- New data, studies, or benchmarks\n- Expert opinions or industry reactions\n- Real-world examples or case studies\n\nBe specific — names, dates, numbers, quotes. These facts will be incorporated into the episode script.`
+        }],
+        maxTokens: 800,
+        temperature: 0.1,
         signal: AbortSignal.timeout(20000),
       });
       if (pplxRes.ok) {

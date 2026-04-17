@@ -4,16 +4,28 @@ import { getModel, getModelConfig } from "../modelRouter.ts";
 
 const OPUS = "anthropic/claude-opus-4.6";
 const GEMINI_FLASH = "google/gemini-3-flash-preview";
-const GROK = "x-ai/grok-4.20";
+const GROK_STANDARD = "x-ai/grok-4.20-non-reasoning";
+const GROK_FACTUAL  = "x-ai/grok-4.20-reasoning";
 const SONNET = "anthropic/claude-sonnet-4.6";
 
-const FRONTIER_TASKS = [
-  "hypothesis-evaluation",
+// Router-tier-split PR (Apr 2026): hypothesis-evaluation moved off
+// frontier-reasoning (Opus) to frontier-factual (Grok 4.20 Reasoning), the
+// lowest-hallucination model for fact-heavy verdicts. The rest of the list
+// stays on frontier-reasoning / Opus — they are identity/reasoning tasks where
+// factual freshness is less load-bearing.
+const FRONTIER_REASONING_TASKS = [
   "deep-reasoning",
   "synthesis-report",
   "triad-reasoning",
   "aspiration-generation",
   "self-evolution-reflection",
+];
+
+const FRONTIER_FACTUAL_TASKS = [
+  "hypothesis-evaluation",
+  "fact-verification",
+  "red-flag-analysis",
+  "evidence-evaluation",
 ];
 
 const ROUTINE_TASKS_SAMPLE = [
@@ -50,12 +62,22 @@ const PREMIUM_TASKS_SAMPLE = [
   "triad-grounding-review",
 ];
 
-test("PR E: all 6 frontier tasks resolve to Claude Opus 4.6", () => {
-  for (const task of FRONTIER_TASKS) {
+test("router-tier-split: frontier-reasoning tasks resolve to Claude Opus 4.6", () => {
+  for (const task of FRONTIER_REASONING_TASKS) {
     assert.equal(
       getModel(task),
       OPUS,
       `Expected ${task} to resolve to ${OPUS}, got ${getModel(task)}`
+    );
+  }
+});
+
+test("router-tier-split: frontier-factual tasks resolve to Grok 4.20 Reasoning", () => {
+  for (const task of FRONTIER_FACTUAL_TASKS) {
+    assert.equal(
+      getModel(task),
+      GROK_FACTUAL,
+      `Expected ${task} to resolve to ${GROK_FACTUAL}, got ${getModel(task)}`
     );
   }
 });
@@ -70,12 +92,12 @@ test("PR E: routine tasks resolve to Gemini 3 Flash Preview (upgraded from 2.5-f
   }
 });
 
-test("PR E: standard tasks continue to resolve to Grok 4.20 (unchanged)", () => {
+test("router-tier-split: standard-voice tasks resolve to Grok 4.20 non-reasoning", () => {
   for (const task of STANDARD_TASKS_SAMPLE) {
     assert.equal(
       getModel(task),
-      GROK,
-      `Expected ${task} to resolve to ${GROK}, got ${getModel(task)}`
+      GROK_STANDARD,
+      `Expected ${task} to resolve to ${GROK_STANDARD}, got ${getModel(task)}`
     );
   }
 });
@@ -90,20 +112,19 @@ test("PR E: premium tasks continue to resolve to Claude Sonnet 4.6 (unchanged)",
   }
 });
 
-test("PR E: previously-premium reasoning tasks no longer resolve to Sonnet", () => {
-  // Explicit regression check — these 6 tasks used to be premium/Sonnet
-  for (const task of FRONTIER_TASKS) {
+test("router-tier-split: frontier tasks never resolve to Sonnet", () => {
+  for (const task of [...FRONTIER_REASONING_TASKS, ...FRONTIER_FACTUAL_TASKS]) {
     assert.notEqual(
       getModel(task),
       SONNET,
-      `${task} should have moved OFF Sonnet to Opus`
+      `${task} should never resolve to Sonnet (premium-voice tier)`,
     );
   }
 });
 
-test("PR E: underscore normalization still works post-frontier", () => {
-  // Ensure underscore variants of frontier tasks also resolve to Opus
-  assert.equal(getModel("hypothesis_evaluation"), OPUS);
+test("router-tier-split: underscore normalization still works post-split", () => {
+  assert.equal(getModel("hypothesis_evaluation"), GROK_FACTUAL);
+  assert.equal(getModel("fact_verification"), GROK_FACTUAL);
   assert.equal(getModel("deep_reasoning"), OPUS);
   assert.equal(getModel("synthesis_report"), OPUS);
   assert.equal(getModel("triad_reasoning"), OPUS);
@@ -111,26 +132,32 @@ test("PR E: underscore normalization still works post-frontier", () => {
   assert.equal(getModel("self_evolution_reflection"), OPUS);
 });
 
-test("PR E: unknown task falls back to standard (Grok 4.20)", () => {
-  assert.equal(getModel("totally-unknown-task-xyz"), GROK);
+test("router-tier-split: unknown task falls back to standard-voice", () => {
+  assert.equal(getModel("totally-unknown-task-xyz"), GROK_STANDARD);
 });
 
-test("PR E: getModelConfig exposes all 5 tiers including frontier", () => {
+test("router-tier-split: getModelConfig exposes all tiers + backwards-compat aliases", () => {
   const config = getModelConfig();
   assert.equal(config.models.routine, GEMINI_FLASH);
-  assert.equal(config.models.standard, GROK);
-  assert.equal(config.models.premium, SONNET);
-  assert.equal(config.models.frontier, OPUS);
+  assert.equal(config.models["standard-voice"], GROK_STANDARD);
+  assert.equal(config.models["premium-voice"], SONNET);
+  assert.equal(config.models["frontier-reasoning"], OPUS);
+  assert.equal(config.models["frontier-factual"], GROK_FACTUAL);
   assert.equal(config.models["multi-agent"], "x-ai/grok-4.20-multi-agent");
+  assert.equal(config.models["live-social"], "x-ai/grok-4.20-non-reasoning");
+  assert.equal(config.models["live-research"], "sonar-pro");
+  // Backwards-compat alias keys.
+  assert.equal(config.models.frontier, OPUS);
+  assert.equal(config.models.premium, SONNET);
+  assert.equal(config.models.standard, GROK_STANDARD);
 });
 
-test("PR E: getModelConfig.tasks reflects frontier routing for all 6 tasks", () => {
+test("router-tier-split: getModelConfig.tasks reflects split routing", () => {
   const { tasks } = getModelConfig();
-  for (const task of FRONTIER_TASKS) {
-    assert.equal(
-      tasks[task],
-      OPUS,
-      `config.tasks[${task}] should be ${OPUS}`
-    );
+  for (const task of FRONTIER_REASONING_TASKS) {
+    assert.equal(tasks[task], OPUS, `config.tasks[${task}] should be ${OPUS}`);
+  }
+  for (const task of FRONTIER_FACTUAL_TASKS) {
+    assert.equal(tasks[task], GROK_FACTUAL, `config.tasks[${task}] should be ${GROK_FACTUAL}`);
   }
 });

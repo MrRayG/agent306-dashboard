@@ -13,7 +13,7 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { getModel, getModelConfig, normalizeTaskName } from "../modelRouter.js";
+import { getModel, getModelConfig, normalizeTaskName, resolveTask } from "../modelRouter.js";
 
 describe("normalizeTaskName", () => {
   it("replaces underscores with hyphens", () => {
@@ -85,10 +85,9 @@ describe("getModel — new aliases resolve to expected tier", () => {
 });
 
 describe("getModel — live-social tier (Wave 1 follow-up)", () => {
-  it("signal-brief resolves to the live-social tier (Grok 4.20, xAI-hosted for x_search)", () => {
+  it("signal-brief resolves to the live-social tier (Grok 4.20 non-reasoning, xAI-hosted for x_search)", () => {
     const model = getModel("signal-brief");
-    assert.equal(model, "x-ai/grok-4.20");
-    // Must be xAI-hosted so toXAINativeModel() returns non-null in postXSearchResponses.
+    assert.equal(model, "x-ai/grok-4.20-non-reasoning");
     assert.ok(model.startsWith("x-ai/"), `signal-brief must resolve to an xAI model, got ${model}`);
   });
 
@@ -103,41 +102,184 @@ describe("getModel — live-social tier (Wave 1 follow-up)", () => {
 
   it("live-social tier is exposed in getModelConfig().models", () => {
     const { models } = getModelConfig();
-    assert.equal((models as Record<string, string>)["live-social"], "x-ai/grok-4.20");
+    assert.equal((models as Record<string, string>)["live-social"], "x-ai/grok-4.20-non-reasoning");
   });
 });
 
 describe("getModel — explicit sweep entries (Wave 1 follow-up)", () => {
   const { models } = getModelConfig();
 
-  it("exploration-synthesis resolves to standard (explicit, previously default)", () => {
-    assert.equal(getModel("exploration-synthesis"), models.standard);
-    assert.equal(getModel("exploration_synthesis"), models.standard);
+  it("exploration-synthesis resolves to standard-voice (explicit)", () => {
+    assert.equal(getModel("exploration-synthesis"), models["standard-voice"]);
+    assert.equal(getModel("exploration_synthesis"), models["standard-voice"]);
   });
 
-  it("goal-generation resolves to standard (explicit, previously default)", () => {
-    assert.equal(getModel("goal-generation"), models.standard);
+  it("goal-generation resolves to standard-voice (explicit)", () => {
+    assert.equal(getModel("goal-generation"), models["standard-voice"]);
   });
 
-  it("hypothesis-consolidation resolves to standard (explicit, previously default)", () => {
-    assert.equal(getModel("hypothesis-consolidation"), models.standard);
+  it("hypothesis-consolidation resolves to standard-voice (explicit)", () => {
+    assert.equal(getModel("hypothesis-consolidation"), models["standard-voice"]);
   });
 });
 
 describe("getModel — default fallback", () => {
   const { models } = getModelConfig();
 
-  it("unknown tasks fall back to the standard tier", () => {
-    assert.equal(getModel("some-never-seen-task-xyz"), models.standard);
-    assert.equal(getModel("totally_unknown"), models.standard);
-    assert.equal(getModel(""), models.standard);
+  it("unknown tasks fall back to the standard-voice tier", () => {
+    assert.equal(getModel("some-never-seen-task-xyz"), models["standard-voice"]);
+    assert.equal(getModel("totally_unknown"), models["standard-voice"]);
+    assert.equal(getModel(""), models["standard-voice"]);
   });
 
   it("known tasks still resolve to their configured tier (no regression)", () => {
-    // Sanity spot-checks across the tier map.
     assert.equal(getModel("reflection"), models.routine);
-    assert.equal(getModel("self-debate"), models.standard);
-    assert.equal(getModel("research-brief"), models.premium);
-    assert.equal(getModel("hypothesis-evaluation"), models.frontier);
+    assert.equal(getModel("self-debate"), models["standard-voice"]);
+    assert.equal(getModel("research-brief"), models["premium-voice"]);
+    // hypothesis-evaluation moved to frontier-factual (Grok 4.20 Reasoning)
+    // in the router-tier-split PR.
+    assert.equal(getModel("hypothesis-evaluation"), models["frontier-factual"]);
+  });
+});
+
+describe("resolveTask — new router-tier-split matrix", () => {
+  it("frontier-factual tier resolves to {xai-direct, grok-4.20-reasoning}", () => {
+    const r = resolveTask("hypothesis-evaluation");
+    assert.equal(r.tier, "frontier-factual");
+    assert.equal(r.provider, "xai-direct");
+    assert.equal(r.model, "x-ai/grok-4.20-reasoning");
+  });
+
+  it("frontier-reasoning tier resolves to {openrouter, claude-opus-4.6}", () => {
+    const r = resolveTask("deep-reasoning");
+    assert.equal(r.tier, "frontier-reasoning");
+    assert.equal(r.provider, "openrouter");
+    assert.equal(r.model, "anthropic/claude-opus-4.6");
+  });
+
+  it("premium-voice tier resolves to {openrouter, claude-sonnet-4.6}", () => {
+    for (const task of ["podcast", "podcast-script", "manuscript", "blog", "long-form"]) {
+      const r = resolveTask(task);
+      assert.equal(r.tier, "premium-voice", `${task} expected premium-voice`);
+      assert.equal(r.provider, "openrouter");
+      assert.equal(r.model, "anthropic/claude-sonnet-4.6");
+    }
+  });
+
+  it("standard-voice tier resolves to {xai-direct, grok-4.20-non-reasoning}", () => {
+    for (const task of ["article", "exploration", "reply", "boost", "public-voice"]) {
+      const r = resolveTask(task);
+      assert.equal(r.tier, "standard-voice", `${task} expected standard-voice`);
+      assert.equal(r.provider, "xai-direct");
+      assert.equal(r.model, "x-ai/grok-4.20-non-reasoning");
+    }
+  });
+
+  it("multi-agent tier resolves to {xai-direct, grok-4.20-multi-agent}", () => {
+    for (const task of ["triad", "self-debate", "multi-agent"]) {
+      const r = resolveTask(task);
+      // self-debate stays standard-voice; only triad / multi-agent are multi-agent.
+      if (task === "self-debate") {
+        assert.equal(r.tier, "standard-voice");
+      } else {
+        assert.equal(r.tier, "multi-agent");
+        assert.equal(r.provider, "xai-direct");
+        assert.equal(r.model, "x-ai/grok-4.20-multi-agent");
+      }
+    }
+  });
+
+  it("live-social tier resolves to {xai-direct, grok-4.20-non-reasoning}", () => {
+    const r = resolveTask("signal-brief");
+    assert.equal(r.tier, "live-social");
+    assert.equal(r.provider, "xai-direct");
+    assert.equal(r.model, "x-ai/grok-4.20-non-reasoning");
+  });
+
+  it("live-research tier resolves to {perplexity, sonar-pro}", () => {
+    for (const task of ["news-research", "breakthrough-research", "evidence-research"]) {
+      const r = resolveTask(task);
+      assert.equal(r.tier, "live-research", `${task} expected live-research`);
+      assert.equal(r.provider, "perplexity");
+      assert.equal(r.model, "sonar-pro");
+    }
+  });
+
+  it("routine tier resolves to {openrouter, gemini-3-flash-preview}", () => {
+    const r = resolveTask("tier-assignment");
+    assert.equal(r.tier, "routine");
+    assert.equal(r.provider, "openrouter");
+    assert.equal(r.model, "google/gemini-3-flash-preview");
+  });
+
+  it("article task specifically resolves to standard-voice grok-4.20-non-reasoning", () => {
+    const r = resolveTask("article");
+    assert.equal(r.tier, "standard-voice");
+    assert.equal(r.provider, "xai-direct");
+    assert.equal(r.model, "x-ai/grok-4.20-non-reasoning");
+  });
+
+  it("podcast task specifically resolves to premium-voice claude-sonnet-4.6", () => {
+    const r = resolveTask("podcast");
+    assert.equal(r.tier, "premium-voice");
+    assert.equal(r.provider, "openrouter");
+    assert.equal(r.model, "anthropic/claude-sonnet-4.6");
+  });
+});
+
+describe("getModelConfig — backwards-compat aliases", () => {
+  const { models } = getModelConfig();
+
+  it("collapsed `frontier` alias still resolves to Claude Opus", () => {
+    assert.equal(models.frontier, "anthropic/claude-opus-4.6");
+    assert.equal(models.frontier, models["frontier-reasoning"]);
+  });
+
+  it("collapsed `premium` alias still resolves to Claude Sonnet", () => {
+    assert.equal(models.premium, "anthropic/claude-sonnet-4.6");
+    assert.equal(models.premium, models["premium-voice"]);
+  });
+
+  it("collapsed `standard` alias still resolves to Grok 4.20 non-reasoning", () => {
+    assert.equal(models.standard, "x-ai/grok-4.20-non-reasoning");
+    assert.equal(models.standard, models["standard-voice"]);
+  });
+});
+
+describe("env var overrides (MODEL_* per tier)", () => {
+  it("MODEL_FRONTIER_FACTUAL overrides the frontier-factual default", async () => {
+    const saved = process.env.MODEL_FRONTIER_FACTUAL;
+    process.env.MODEL_FRONTIER_FACTUAL = "x-ai/test-override-frontier-factual";
+    try {
+      const mod = await import(`../modelRouter.js?t=${Date.now()}-a`);
+      assert.equal(mod.getModel("hypothesis-evaluation"), "x-ai/test-override-frontier-factual");
+    } finally {
+      if (saved === undefined) delete process.env.MODEL_FRONTIER_FACTUAL;
+      else process.env.MODEL_FRONTIER_FACTUAL = saved;
+    }
+  });
+
+  it("MODEL_PREMIUM_VOICE overrides the premium-voice default", async () => {
+    const saved = process.env.MODEL_PREMIUM_VOICE;
+    process.env.MODEL_PREMIUM_VOICE = "anthropic/test-override-sonnet";
+    try {
+      const mod = await import(`../modelRouter.js?t=${Date.now()}-b`);
+      assert.equal(mod.getModel("podcast"), "anthropic/test-override-sonnet");
+    } finally {
+      if (saved === undefined) delete process.env.MODEL_PREMIUM_VOICE;
+      else process.env.MODEL_PREMIUM_VOICE = saved;
+    }
+  });
+
+  it("MODEL_LIVE_RESEARCH overrides the live-research default", async () => {
+    const saved = process.env.MODEL_LIVE_RESEARCH;
+    process.env.MODEL_LIVE_RESEARCH = "sonar-test-override";
+    try {
+      const mod = await import(`../modelRouter.js?t=${Date.now()}-c`);
+      assert.equal(mod.getModel("news-research"), "sonar-test-override");
+    } finally {
+      if (saved === undefined) delete process.env.MODEL_LIVE_RESEARCH;
+      else process.env.MODEL_LIVE_RESEARCH = saved;
+    }
   });
 });

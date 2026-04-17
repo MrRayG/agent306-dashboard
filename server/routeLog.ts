@@ -69,11 +69,11 @@ export function logRoute(entry: RouteLogEntry): void {
  * Keeps the helper dumb; authoritative tier comes from modelRouter.
  */
 export function inferTier(model: string): string {
-  if (model.includes("opus")) return "frontier";
-  if (model.includes("sonnet")) return "premium";
+  if (model.includes("opus")) return "frontier-reasoning";
+  if (model.includes("sonnet")) return "premium-voice";
   if (model.includes("grok-4.20-multi-agent")) return "multi-agent";
-  if (model.includes("grok-4.20-0309-reasoning")) return "frontier-factual";
-  if (model.includes("grok-4.20")) return "standard";
+  if (model.includes("grok-4.20-0309-reasoning") || model.includes("grok-4.20-reasoning")) return "frontier-factual";
+  if (model.includes("grok-4.20")) return "standard-voice";
   if (model.includes("grok-4-1-fast") || model.includes("grok-4-fast")) return "routine";
   if (model.includes("gemini") && model.includes("flash")) return "routine";
   if (model.includes("sonar")) return "live-research";

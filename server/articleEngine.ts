@@ -150,12 +150,16 @@ async function discoverArticle(apiKey: string): Promise<{
   // Attempt 2: Chat completions API fallback (works with OpenRouter or any provider)
   try {
     console.log("[ArticleEngine] Trying chat completions fallback for discovery...");
+    // Discovery is a news-grounding task — route to live-research (Perplexity
+    // sonar-pro) so the fallback still has real-time web access. Previous
+    // behavior called getModel("x_search") → routine/Gemini, which has no
+    // browsing ability, producing stale article picks.
     const res = await postChatCompletions({
-        model: getModel("x_search"),
+        model: getModel("news-research"),
         messages: [{ role: "user", content: DISCOVERY_PROMPT }],
         max_tokens: 800,
         temperature: 0.3,
-      }, AbortSignal.timeout(45000));
+      }, AbortSignal.timeout(45000), "news-research");
 
     if (!res.ok) {
       const errBody = await res.text().catch(() => "");
@@ -254,8 +258,12 @@ async function generateDeepReadArticle(
 
   const agentCtx = getOptimizedContext("article deep read AI news analysis");
 
+  // Spec matrix: `article` → standard-voice (Grok 4.20 non-reasoning, Class 1
+  // grounded synthesis — the public-voice tier). Previously this call used
+  // `article_draft` which mapped to premium-voice (Sonnet). Per user report,
+  // article output felt stale — we're aligning with the locked routing matrix.
   const res = await postChatCompletions({
-      model: getModel("article_draft"),
+      model: getModel("article"),
       messages: [
         {
           role: "system",
@@ -388,7 +396,7 @@ Return JSON:
       ],
       max_tokens: 6000,
       temperature: 0.82,
-    }, AbortSignal.timeout(120000));
+    }, AbortSignal.timeout(120000), "article");
 
   if (!res.ok) {
     const errBody = await res.text().catch(() => "");
