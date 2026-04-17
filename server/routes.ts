@@ -27,6 +27,11 @@ import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import { enforcePostFormat } from "./postFormatGuard.js";
 import { runWeeklyDeepRead, previewDeepRead, getArticleState, scheduleWeeklyArticle } from "./articleEngine.js";
 import { runExploration, getExplorationState, scheduleExploration } from "./explorationEngine.js";
+import {
+  scheduleKgConnectionScanBatch,
+  runKgConnectionScanBatch,
+  isKgBatchCronEnabled,
+} from "./kgConnectionScanCron.js";
 import { getAgentReachStatus } from "./agentReachEngine.js";
 import { get306EvalResults, get306EvalHistory } from "./evalEngine.js";
 import { getCycleContext, isCycleActive } from "./cycleContext.js";
@@ -600,6 +605,23 @@ setTimeout(() => {
     console.warn("[Scheduler] Exploration engine skipped — no PERPLEXITY_API_KEY");
   }
 }, 60_000);
+
+// ── KG CONNECTION SCAN BATCH — nightly 5am ET (PR Q) ─────────────────────
+// Backfills knowledge-graph connections via xAI Batches API. Cheaper than
+// the synchronous findConnections() path (~50% off) and runs in the
+// background. Triple-gated: requires KG_BATCH_CRON_ENABLED +
+// KG_CONNECTION_SCAN_BATCH + BATCH_API_ENABLED — all default OFF, so
+// scheduling is a no-op until an operator turns it on.
+setTimeout(() => {
+  if (isKgBatchCronEnabled()) {
+    scheduleKgConnectionScanBatch();
+    console.log("[Scheduler] KG connection-scan batch scheduled");
+  } else {
+    console.log(
+      "[Scheduler] KG connection-scan batch skipped — set KG_BATCH_CRON_ENABLED=true to enable",
+    );
+  }
+}, 65_000);
 
 // ── EMBEDDING SYNC — sync KB embeddings on boot (background, non-fatal) ─────
 setTimeout(async () => {
@@ -1847,6 +1869,24 @@ export function registerRoutes(httpServer: Server, app: Express) {
         error,
       })),
     });
+  });
+
+  // ── KG batch — manual run trigger (PR Q) ────────────────────────────
+  // Admin endpoint to fire one nightly cycle on demand. Useful for smoke
+  // testing the batch wiring end-to-end without waiting for 5am ET. Honors
+  // the same triple flag-gate as the scheduled job, so it returns a `skipped`
+  // summary if any flag is off rather than throwing.
+  app.post("/api/admin/kg-batch/run-now", requireDashAuth, async (req, res) => {
+    const maxTargets =
+      typeof req.body?.maxTargets === "number" ? req.body.maxTargets : undefined;
+    const contextK =
+      typeof req.body?.contextK === "number" ? req.body.contextK : undefined;
+    try {
+      const summary = await runKgConnectionScanBatch({ maxTargets, contextK });
+      res.json(summary);
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message ?? String(e) });
+    }
   });
 
   app.get("/api/podcast/episodes/:id/audio", (req, res) => {

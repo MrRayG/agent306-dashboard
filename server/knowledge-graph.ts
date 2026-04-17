@@ -642,6 +642,71 @@ export function getContradictions(): KnowledgeConnection[] {
   return graphState.connections.filter(c => c.relationshipType === "contradicts");
 }
 
+// ── Connection Persistence (used by batch consumer in PR Q) ─────────────────
+
+/**
+ * Append externally-discovered connections (e.g., from the nightly batch
+ * consumer) to the in-memory graph state and persist to disk.
+ *
+ * De-duplicates against existing pairs in BOTH directions: a connection
+ * (A → B) is dropped if (A → B) or (B → A) already exists, matching the
+ * behavior of the synchronous findConnections() ingest path.
+ *
+ * Returns the number of NEW connections actually appended (after de-dupe
+ * and the 500-cap trim) so the caller can log accurate counts.
+ *
+ * @param incoming - candidate connections to append
+ * @param discoveredBy - provenance label for the new connections
+ */
+export function appendConnections(
+  incoming: Array<{
+    fromEntryId: string;
+    toEntryId: string;
+    relationshipType: KnowledgeConnection["relationshipType"];
+    confidence: number;
+    reasoning: string;
+  }>,
+  discoveredBy: KnowledgeConnection["discoveredBy"] = "research",
+): number {
+  if (!Array.isArray(incoming) || incoming.length === 0) return 0;
+
+  const existingPairs = new Set(
+    graphState.connections.map(c => `${c.fromEntryId}:${c.toEntryId}`),
+  );
+
+  const fresh: KnowledgeConnection[] = [];
+  for (const c of incoming) {
+    if (!c?.fromEntryId || !c?.toEntryId) continue;
+    if (c.fromEntryId === c.toEntryId) continue;
+    const fwd = `${c.fromEntryId}:${c.toEntryId}`;
+    const rev = `${c.toEntryId}:${c.fromEntryId}`;
+    if (existingPairs.has(fwd) || existingPairs.has(rev)) continue;
+
+    fresh.push({
+      id: `gconn_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      fromEntryId: c.fromEntryId,
+      toEntryId: c.toEntryId,
+      relationshipType: c.relationshipType,
+      confidence: Math.min(1, Math.max(0, Number(c.confidence) || 0.5)),
+      reasoning: (c.reasoning ?? "").slice(0, 200),
+      createdAt: new Date().toISOString(),
+      discoveredBy,
+    });
+    existingPairs.add(fwd);
+  }
+
+  if (fresh.length === 0) return 0;
+
+  graphState.connections.push(...fresh);
+  // Cap at 500 connections — same policy as findConnections().
+  if (graphState.connections.length > 500) {
+    graphState.connections = graphState.connections.slice(-500);
+  }
+  graphState.lastScanAt = new Date().toISOString();
+  saveConnections(graphState);
+  return fresh.length;
+}
+
 // ── Connection Reinforcement ─────────────────────────────────────────────────
 
 /** Reinforce connections based on content performance or decay stale ones */
