@@ -361,6 +361,77 @@ export async function generateAudio(
 // ── Audio file serving ──────────────────────────────────────────────────────
 
 /**
+ * Clear all generated audio for an episode and roll its status back to "reviewed"
+ * so it can be regenerated (e.g. with a different TTS provider for A/B comparison).
+ *
+ * Deletes:
+ *   - Voice-only MP3 (episode_<id>.mp3)
+ *   - Stitched full episode MP3 with intro/outro (episode_<id>_full.mp3)
+ *   - Social preview MP3 (episode_<id>_preview.mp3)
+ *
+ * Preserves: script, sources, metadata, reviewNotes, episodeNumber.
+ * Clears: audioUrl, audioGeneratedAt, duration, producedAt,
+ *         ttsProvider, ttsVoice, ttsCharacters, ttsCostUsd.
+ *
+ * Only valid when current status is audio_ready, produced, or published.
+ */
+export function clearEpisodeAudio(episodeId: string): {
+  ok: boolean;
+  removedFiles: string[];
+  error?: string;
+} {
+  const podState = getPodcastState();
+  const episode = podState.episodes.find((e) => e.id === episodeId);
+  if (!episode) {
+    return { ok: false, removedFiles: [], error: "Episode not found" };
+  }
+
+  const clearable = ["audio_ready", "produced", "published"];
+  if (!clearable.includes(episode.status)) {
+    return {
+      ok: false,
+      removedFiles: [],
+      error: `Episode status is "${episode.status}" — nothing to clear (expected one of: ${clearable.join(", ")})`,
+    };
+  }
+
+  const candidates = [
+    path.join(AUDIO_DIR, `episode_${episodeId}.mp3`),
+    path.join(AUDIO_DIR, `episode_${episodeId}_full.mp3`),
+    path.join(AUDIO_DIR, `episode_${episodeId}_preview.mp3`),
+  ];
+
+  const removed: string[] = [];
+  for (const fp of candidates) {
+    try {
+      if (fs.existsSync(fp)) {
+        fs.unlinkSync(fp);
+        removed.push(path.basename(fp));
+      }
+    } catch (e: any) {
+      console.warn(`[AudioEngine] Could not delete ${fp}: ${e.message}`);
+    }
+  }
+
+  // Roll episode back to reviewed and clear audio provenance
+  episode.status = "reviewed" as any;
+  delete (episode as any).audioUrl;
+  delete (episode as any).audioGeneratedAt;
+  delete (episode as any).duration;
+  delete (episode as any).producedAt;
+  delete (episode as any).ttsProvider;
+  delete (episode as any).ttsVoice;
+  delete (episode as any).ttsCharacters;
+  delete (episode as any).ttsCostUsd;
+  savePodcastState(podState);
+
+  console.log(
+    `[AudioEngine] Cleared audio for "${episode.title}" — removed ${removed.length} file(s), status → reviewed`,
+  );
+  return { ok: true, removedFiles: removed };
+}
+
+/**
  * Get the file path for an episode's audio file.
  * Returns null if the file doesn't exist.
  */

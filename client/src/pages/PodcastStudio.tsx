@@ -526,6 +526,26 @@ export default function PodcastStudio() {
     setWorking(null);
   }
 
+  async function clearAudio(id: string) {
+    if (!window.confirm("Clear audio and roll this episode back to \"reviewed\"? The audio file(s) will be deleted. This cannot be undone.")) {
+      return;
+    }
+    setWorking(`clear-audio-${id}`);
+    try {
+      const res = await apiRequest("POST", `/api/podcast/episodes/${id}/clear-audio`, {});
+      const data = await res.json().catch(() => ({}));
+      const removed = Array.isArray(data?.removedFiles) ? data.removedFiles.length : 0;
+      toast({
+        title: "Audio cleared",
+        description: `Removed ${removed} file(s) — episode back to reviewed`,
+      });
+      refetchAll();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+    setWorking(null);
+  }
+
   async function exportScript(id: string, title: string) {
     try {
       const res = await apiRequest("GET", `/api/podcast/episodes/${id}/script`);
@@ -746,6 +766,7 @@ export default function PodcastStudio() {
             onReview={reviewEpisode}
             onExportScript={exportScript}
             onGenerateAudio={generateAudio}
+            onClearAudio={clearAudio}
             onMarkProduced={markProduced}
             onPublish={publishEpisode}
             onGeneratePreview={generatePreview}
@@ -895,6 +916,7 @@ function SignalTab({
   onReview,
   onExportScript,
   onGenerateAudio,
+  onClearAudio,
   onMarkProduced,
   onPublish,
   onGeneratePreview,
@@ -915,6 +937,7 @@ function SignalTab({
   onReview: (id: string, decision: "reviewed" | "shelved", notes?: string) => void;
   onExportScript: (id: string, title: string) => void;
   onGenerateAudio: (id: string) => void;
+  onClearAudio: (id: string) => void;
   onMarkProduced: (id: string) => void;
   onPublish: (id: string) => void;
   onGeneratePreview: (id: string) => void;
@@ -1005,6 +1028,7 @@ function SignalTab({
         onReview={onReview}
         onExportScript={onExportScript}
         onGenerateAudio={onGenerateAudio}
+        onClearAudio={onClearAudio}
         onMarkProduced={onMarkProduced}
         onPublish={onPublish}
         onGeneratePreview={onGeneratePreview}
@@ -1249,6 +1273,7 @@ function EpisodePipeline({
   onReview,
   onExportScript,
   onGenerateAudio,
+  onClearAudio,
   onMarkProduced,
   onPublish,
   onGeneratePreview,
@@ -1266,6 +1291,7 @@ function EpisodePipeline({
   onReview: (id: string, decision: "reviewed" | "shelved", notes?: string) => void;
   onExportScript: (id: string, title: string) => void;
   onGenerateAudio: (id: string) => void;
+  onClearAudio: (id: string) => void;
   onMarkProduced: (id: string) => void;
   onPublish: (id: string) => void;
   onGeneratePreview: (id: string) => void;
@@ -1814,17 +1840,33 @@ function EpisodePipeline({
                                 {working === `preview-${ep.id}` ? "GENERATING..." : "GENERATE PREVIEW"}
                               </ActionButton>
                             )}
+                            <ActionButton
+                              onClick={() => onClearAudio(ep.id)}
+                              color={RED}
+                              disabled={working === `clear-audio-${ep.id}`}
+                            >
+                              {working === `clear-audio-${ep.id}` ? "CLEARING..." : "✕ CLEAR AUDIO"}
+                            </ActionButton>
                           </>
                         )}
 
                         {status === "produced" && (
-                          <ActionButton
-                            onClick={() => onPublish(ep.id)}
-                            color={GREEN}
-                            disabled={working === `publish-${ep.id}`}
-                          >
-                            PUBLISH
-                          </ActionButton>
+                          <>
+                            <ActionButton
+                              onClick={() => onPublish(ep.id)}
+                              color={GREEN}
+                              disabled={working === `publish-${ep.id}`}
+                            >
+                              PUBLISH
+                            </ActionButton>
+                            <ActionButton
+                              onClick={() => onClearAudio(ep.id)}
+                              color={RED}
+                              disabled={working === `clear-audio-${ep.id}`}
+                            >
+                              {working === `clear-audio-${ep.id}` ? "CLEARING..." : "✕ CLEAR AUDIO"}
+                            </ActionButton>
+                          </>
                         )}
                       </div>
                     </div>
