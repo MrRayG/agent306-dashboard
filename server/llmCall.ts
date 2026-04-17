@@ -17,6 +17,7 @@ import {
 } from "./llmConfig.js";
 import { getModel } from "./modelRouter.js";
 import { callResponsesAPI } from "./responsesAdapter.js";
+import { logRoute, inferTier } from "./routeLog.js";
 
 /**
  * postChatCompletions — PR P low-level helper for migrating raw
@@ -49,16 +50,54 @@ import { callResponsesAPI } from "./responsesAdapter.js";
 export async function postChatCompletions(
   payload: { model: string; [k: string]: any },
   signal?: AbortSignal,
+  /** Optional task name for [LLM_ROUTE] observability. Pass whenever available. */
+  task?: string,
 ): Promise<Response> {
   const route = resolveChatRoute(payload.model);
   // Substitute the provider-native model name without mutating the caller's object.
   const outgoing = route.model === payload.model ? payload : { ...payload, model: route.model };
-  return fetch(route.url, {
-    method: "POST",
-    headers: route.headers,
-    body: JSON.stringify(outgoing),
-    signal,
+
+  // PR #2: observability at the low-level helper layer so raw-fetch migration
+  // sites (PR #3) get instrumented automatically once they switch to this helper.
+  const startedAt = Date.now();
+  let res: Response;
+  try {
+    res = await fetch(route.url, {
+      method: "POST",
+      headers: route.headers,
+      body: JSON.stringify(outgoing),
+      signal,
+    });
+  } catch (err: any) {
+    logRoute({
+      task:      task ?? "post-chat-completions",
+      tier:      inferTier(route.model),
+      provider:  route.provider,
+      model:     route.model,
+      mode:      "chat",
+      latencyMs: Date.now() - startedAt,
+      status:    "error",
+      errorMsg:  `network: ${err?.message ?? String(err)}`,
+    });
+    throw err;
+  }
+
+  // Log route outcome based on HTTP status. Caller still owns body parsing
+  // and usage extraction, so tokens_in/out are unavailable here — that's fine,
+  // they'll be "-" in the log line. Engines that want token counts can use
+  // callLLM() instead.
+  logRoute({
+    task:      task ?? "post-chat-completions",
+    tier:      inferTier(route.model),
+    provider:  route.provider,
+    model:     route.model,
+    mode:      "chat",
+    latencyMs: Date.now() - startedAt,
+    status:    res.ok ? "ok" : "error",
+    errorMsg:  res.ok ? undefined : `http ${res.status}`,
   });
+
+  return res;
 }
 
 export async function callChatCompletions(opts: LLMCallOptions, model: string): Promise<LLMResponse> {
@@ -76,15 +115,44 @@ export async function callChatCompletions(opts: LLMCallOptions, model: string): 
   if (typeof opts.maxTokens === "number") payload.max_tokens = opts.maxTokens;
   if (typeof opts.temperature === "number") payload.temperature = opts.temperature;
 
-  const res = await fetch(route.url, {
-    method: "POST",
-    headers: route.headers,
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  // PR #2: per-call routing observability.
+  const startedAt = Date.now();
+
+  let res: Response;
+  try {
+    res = await fetch(route.url, {
+      method: "POST",
+      headers: route.headers,
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err: any) {
+    // Network / timeout failure — still emit an observability entry.
+    logRoute({
+      task:      opts.task,
+      tier:      inferTier(route.model),
+      provider:  route.provider,
+      model:     route.model,
+      mode:      "chat",
+      latencyMs: Date.now() - startedAt,
+      status:    "error",
+      errorMsg:  `network: ${err?.message ?? String(err)}`,
+    });
+    throw err;
+  }
 
   if (!res.ok) {
     const errBody = await res.text().catch(() => "");
+    logRoute({
+      task:      opts.task,
+      tier:      inferTier(route.model),
+      provider:  route.provider,
+      model:     route.model,
+      mode:      "chat",
+      latencyMs: Date.now() - startedAt,
+      status:    "error",
+      errorMsg:  `http ${res.status}: ${errBody.slice(0, 80)}`,
+    });
     // Hard-fail: no fallback to OpenRouter on xAI errors — matches the user's
     // explicit "no auto-retry" policy for xAI overrides.
     throw new Error(
@@ -94,6 +162,18 @@ export async function callChatCompletions(opts: LLMCallOptions, model: string): 
 
   const data = await res.json();
   const text = data.choices?.[0]?.message?.content ?? "";
+
+  logRoute({
+    task:      opts.task,
+    tier:      inferTier(route.model),
+    provider:  route.provider,
+    model:     route.model,
+    mode:      "chat",
+    tokensIn:  data.usage?.prompt_tokens,
+    tokensOut: data.usage?.completion_tokens,
+    latencyMs: Date.now() - startedAt,
+    status:    "ok",
+  });
 
   return {
     text,
