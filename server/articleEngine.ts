@@ -32,6 +32,7 @@ import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import { queueXPost } from "./xPostScheduler.js";
 import { enforcePostFormat } from "./postFormatGuard.js";
 
+import { postChatCompletions } from "./llmCall.js";
 const GROK_CHAT_API     = LLM_BASE_URL;
 const GROK_RESPONSE_API = LLM_RESPONSE_URL;
 const ARTICLE_STATE_FILE = dataPath("article_state.json");
@@ -151,17 +152,12 @@ async function discoverArticle(apiKey: string): Promise<{
   // Attempt 2: Chat completions API fallback (works with OpenRouter or any provider)
   try {
     console.log("[ArticleEngine] Trying chat completions fallback for discovery...");
-    const res = await fetch(GROK_CHAT_API, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model: getModel("x_search"),
         messages: [{ role: "user", content: DISCOVERY_PROMPT }],
         max_tokens: 800,
         temperature: 0.3,
-      }),
-      signal: AbortSignal.timeout(45000),
-    });
+      }, AbortSignal.timeout(45000));
 
     if (!res.ok) {
       const errBody = await res.text().catch(() => "");
@@ -260,10 +256,7 @@ async function generateDeepReadArticle(
 
   const agentCtx = getOptimizedContext("article deep read AI news analysis");
 
-  const res = await fetch(GROK_CHAT_API, {
-    method: "POST",
-    headers: getLLMHeaders(),
-    body: JSON.stringify({
+  const res = await postChatCompletions({
       model: getModel("article_draft"),
       messages: [
         {
@@ -397,9 +390,7 @@ Return JSON:
       ],
       max_tokens: 6000,
       temperature: 0.82,
-    }),
-    signal: AbortSignal.timeout(120000),
-  });
+    }, AbortSignal.timeout(120000));
 
   if (!res.ok) {
     const errBody = await res.text().catch(() => "");

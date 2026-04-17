@@ -32,6 +32,7 @@ import { queueXPost, getTodaysPostsSummary } from "./xPostScheduler.js";
 import { buildVoiceBlock } from "./voice.js";
 import { getEvolutionContext } from "./soulEvolution.js";
 
+import { postChatCompletions } from "./llmCall.js";
 const GROK_URL = LLM_BASE_URL;
 const ACADEMY_STATE_FILE = dataPath("academy_state.json");
 const TRACKING_START = new Date("2026-03-08T00:00:00Z");
@@ -263,10 +264,7 @@ Return ONLY valid JSON — no meta-commentary, no separators, no character count
 }`;
 
   try {
-    const res = await fetch(GROK_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model: getModel("academy"),
         messages: [
           { role: "system", content: systemPrompt },
@@ -274,9 +272,7 @@ Return ONLY valid JSON — no meta-commentary, no separators, no character count
         ],
         max_tokens: 1200,
         temperature: 0.82,
-      }),
-      signal: AbortSignal.timeout(45000),
-    });
+      }, AbortSignal.timeout(45000));
 
     if (!res.ok) { console.error("[Academy] Grok failed:", res.status); return null; }
     const data = await res.json() as any;

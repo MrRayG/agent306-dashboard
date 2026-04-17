@@ -22,6 +22,7 @@ import { LLM_BASE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { reflectOnPost } from "./soulEvolution.js";
 
+import { postChatCompletions } from "./llmCall.js";
 // ── File paths (all on Railway /data volume) ──────────────────
 const SOUL_FILE        = dataPath("memory_soul.json");
 const KNOWLEDGE_FILE   = dataPath("memory_knowledge.json");
@@ -1088,10 +1089,7 @@ async function summarizeEvictedEntries(
 
     try {
       const entryList = group.map(e => `- ${e.title}: ${e.summary}`).join("\n");
-      const res = await fetch(LLM_BASE_URL, {
-        method: "POST",
-        headers: getLLMHeaders(),
-        body: JSON.stringify({
+      const res = await postChatCompletions({
           model: getModel("knowledge-categorization"),
           messages: [
             {
@@ -1105,9 +1103,7 @@ async function summarizeEvictedEntries(
           ],
           max_tokens: 300,
           temperature: 0.2,
-        }),
-        signal: AbortSignal.timeout(30000),
-      });
+        }, AbortSignal.timeout(30000));
 
       if (!res.ok) {
         console.warn(`[Memory] Archive summarization LLM failed for ${category}: ${res.status}`);

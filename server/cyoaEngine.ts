@@ -27,6 +27,7 @@ import { queueXPost } from "./xPostScheduler.js";
 import { enforcePostFormat } from "./postFormatGuard.js";
 import { enforceShowTag } from "./contentTypes.js";
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
+import { postChatCompletions } from "./llmCall.js";
 const CYOA_STATE_FILE = dataPath("cyoa_state.json");
 
 export type CYOATrigger =
@@ -189,10 +190,7 @@ YOU MUST RETURN EXACTLY THIS JSON — use these exact field names, nothing else:
 
 
   try {
-    const resp = await fetch(LLM_BASE_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const resp = await postChatCompletions({
         model: getModel("cyoa"),
         messages: [
           { role: "system", content: "You are a JSON generator. You ONLY output valid JSON objects. Never use markdown. Never add explanations. Output ONLY the raw JSON object requested, starting with { and ending with }." },
@@ -200,8 +198,7 @@ YOU MUST RETURN EXACTLY THIS JSON — use these exact field names, nothing else:
         ],
         max_tokens: 800,
         temperature: 0.9,
-      }),
-    });
+      });
 
     if (!resp.ok) throw new Error(`Grok error: ${resp.status}`);
     const data = await resp.json();

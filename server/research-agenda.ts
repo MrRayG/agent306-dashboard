@@ -28,6 +28,7 @@ import { getBriefingState } from "./dailyCycleEngine.js";
 import { analyzeResearchAdvance, getAnalysisContext } from "./analyzerEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
+import { postChatCompletions } from "./llmCall.js";
 const GROK_URL = LLM_BASE_URL;
 const AGENDA_FILE = dataPath("research-agenda.json");
 
@@ -319,10 +320,7 @@ ${analysisCtx ? `LESSONS FROM PAST RESEARCH:\n${analysisCtx}\n` : ""}${liveAINew
     const promptChars = systemPrompt.length + userPrompt.length;
     console.log(`[ResearchAgenda] Sending to LLM: ${promptChars} chars (~${Math.round(promptChars / 4)} tokens)`);
 
-    const res = await fetch(GROK_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model: getModel("research-agenda-generate"),
         messages: [
           { role: "system", content: systemPrompt },
@@ -330,9 +328,7 @@ ${analysisCtx ? `LESSONS FROM PAST RESEARCH:\n${analysisCtx}\n` : ""}${liveAINew
         ],
         temperature: 0.7,
         max_tokens: 4000,
-      }),
-      signal: AbortSignal.timeout(90000),
-    });
+      }, AbortSignal.timeout(90000));
 
     if (!res.ok) {
       console.error(`[ResearchAgenda] LLM API error: ${res.status}`);
@@ -470,10 +466,7 @@ async function generateSubQueries(thread: ResearchThread): Promise<string[]> {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
 
-  const res = await fetch(GROK_URL, {
-    method: "POST",
-    headers: getLLMHeaders(),
-    body: JSON.stringify({
+  const res = await postChatCompletions({
       model: getModel("parallel-search-subqueries"),
       messages: [
         {
@@ -512,9 +505,7 @@ Generate 3-5 diverse search queries to advance this research thread.`
       ],
       temperature: 0.4,
       max_tokens: 500,
-    }),
-    signal: AbortSignal.timeout(20000),
-  });
+    }, AbortSignal.timeout(20000));
 
   if (!res.ok) {
     console.warn(`[ParallelSearch] Sub-query generation LLM error: ${res.status}`);
@@ -635,10 +626,7 @@ async function reduceFindings(
     .map((r, i) => `--- SEARCH ${i + 1}: "${r.query}" ---\n${r.content}`)
     .join("\n\n");
 
-  const res = await fetch(GROK_URL, {
-    method: "POST",
-    headers: getLLMHeaders(),
-    body: JSON.stringify({
+  const res = await postChatCompletions({
       model: getModel("parallel-search-reduce"),
       messages: [
         {
@@ -673,9 +661,7 @@ ${combinedResults}`
       ],
       temperature: 0.2,
       max_tokens: 2000,
-    }),
-    signal: AbortSignal.timeout(60000),
-  });
+    }, AbortSignal.timeout(60000));
 
   if (!res.ok) {
     console.warn(`[ParallelSearch] Reduce LLM error: ${res.status} — falling back to concatenation`);
@@ -847,10 +833,7 @@ export async function advanceThread(threadId: string): Promise<ResearchThread | 
   // ── Deep Reasoning Pass (Step 1) — analyze before advancing ──────────────
   let reasoningContext = "";
   try {
-    const reasoningRes = await fetch(GROK_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const reasoningRes = await postChatCompletions({
         model: getModel("deep-reasoning"),
         messages: [
           {
@@ -896,9 +879,7 @@ Think deeply. What are we missing? What assumptions are we making? What would ch
         ],
         temperature: 0.3,
         max_tokens: 4000,
-      }),
-      signal: AbortSignal.timeout(60000),
-    });
+      }, AbortSignal.timeout(60000));
 
     if (reasoningRes.ok) {
       const reasoningData = await reasoningRes.json() as any;
@@ -971,10 +952,7 @@ ${liveContext ? `\nLIVE DEVELOPMENTS (last 48 hours — from web search today):\
 Research the next gap and advance this thread. Respond with JSON only.`;
 
   try {
-    const res = await fetch(GROK_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model: getModel("research-agenda-advance"),
         messages: [
           { role: "system", content: systemPrompt },
@@ -982,9 +960,7 @@ Research the next gap and advance this thread. Respond with JSON only.`;
         ],
         temperature: 0.5,
         max_tokens: 4000,
-      }),
-      signal: AbortSignal.timeout(60000),
-    });
+      }, AbortSignal.timeout(60000));
 
     if (!res.ok) {
       console.error(`[ResearchAgenda] Advance LLM error: ${res.status}`);
@@ -1133,10 +1109,7 @@ Research the next gap and advance this thread. Respond with JSON only.`;
         const existingHypotheses = lab.hypotheses.filter(h => h.relatedTopicId === thread.id);
         if (existingHypotheses.length >= 2) return; // Already has enough hypotheses
 
-        const hypothesisRes = await fetch(GROK_URL, {
-          method: "POST",
-          headers: getLLMHeaders(),
-          body: JSON.stringify({
+        const hypothesisRes = await postChatCompletions({
             model: getModel("routine"),
             messages: [{
               role: "system",
@@ -1166,9 +1139,7 @@ Extract 0-2 testable hypotheses from these findings.`
             }],
             temperature: 0.2,
             max_tokens: 600,
-          }),
-          signal: AbortSignal.timeout(20000),
-        });
+          }, AbortSignal.timeout(20000));
 
         if (hypothesisRes.ok) {
           const data = await hypothesisRes.json() as any;

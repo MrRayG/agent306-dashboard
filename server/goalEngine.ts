@@ -26,6 +26,7 @@ import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { dataPath } from "./dataPaths.js";
 import fs from "fs";
 
+import { postChatCompletions } from "./llmCall.js";
 // ── Types ──────────────────────────────────────────────────────
 
 export interface MilestoneSpec {
@@ -387,10 +388,7 @@ Return JSON:
 }`;
 
   try {
-    const res = await fetch(LLM_BASE_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model: getModel("goal-generation"),
         messages: [
           { role: "system", content: "You are Agent 306's self-improvement engine. Generate measurable, time-bounded goals that target evaluation weaknesses. Return only valid JSON." },
@@ -398,9 +396,7 @@ Return JSON:
         ],
         temperature: 0.7,
         max_tokens: 2000,
-      }),
-      signal: AbortSignal.timeout(30000),
-    });
+      }, AbortSignal.timeout(30000));
 
     if (!res.ok) {
       console.warn(`[GoalEngine] LLM error: ${res.status}`);

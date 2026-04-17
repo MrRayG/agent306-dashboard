@@ -38,6 +38,7 @@ import { getFormatVoiceContext } from "./voiceInstructions.js";
 import { SOUL, VOICE } from "./voice.js";
 import { queuePodcastPromo, hasPostedEpisode } from "./xPostScheduler.js";
 
+import { postChatCompletions } from "./llmCall.js";
 const GROK_URL = LLM_BASE_URL;
 const PODCAST_FILE = dataPath("podcast_state.json");
 
@@ -476,10 +477,7 @@ The falsification segment is what makes you trustworthy. Anyone can be confident
   }
 
   try {
-    const res = await fetch(GROK_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${grokKey}` },
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model: getModel("podcast_script"),
         messages: [
           {
@@ -561,9 +559,7 @@ The metadata fields are for Spotify and social media — write those for reading
         ],
         max_tokens: 10000,
         temperature: 0.78,
-      }),
-      signal: AbortSignal.timeout(180000),
-    });
+      }, AbortSignal.timeout(180000));
 
     if (!res.ok) return false;
     const data = await res.json() as any;
@@ -784,10 +780,7 @@ export async function generateInterviewQuestions(guestId: string, grokKey: strin
   const agentCtx = getOptimizedContext(`interview questions ${guest.name} ${guest.bio ?? ""}`);
 
   try {
-    const res = await fetch(GROK_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${grokKey}` },
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model: getModel("podcast_script"),
         messages: [
           {
@@ -838,9 +831,7 @@ Return JSON: { "drivingQuestion": "...", "questions": ["Q1", "Q2", "Q3", "Q4", "
         ],
         max_tokens: 1000,
         temperature: 0.82,
-      }),
-      signal: AbortSignal.timeout(30000),
-    });
+      }, AbortSignal.timeout(30000));
 
     if (!res.ok) return null;
     const data = await res.json() as any;
@@ -1382,10 +1373,7 @@ async function generateScriptForEpisode(
   // ── Pre-reasoning for podcast depth ──────────────────────────────────────
   let podcastReasoning = "";
   try {
-    const reasoningRes = await fetch(GROK_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${grokKey}` },
-      body: JSON.stringify({
+    const reasoningRes = await postChatCompletions({
         model: getModel("deep-reasoning"),
         messages: [{
           role: "system",
@@ -1396,9 +1384,7 @@ async function generateScriptForEpisode(
         }],
         temperature: 0.3,
         max_tokens: 800,
-      }),
-      signal: AbortSignal.timeout(30000),
-    });
+      }, AbortSignal.timeout(30000));
     if (reasoningRes.ok) {
       const data = await reasoningRes.json() as any;
       const raw = data.choices?.[0]?.message?.content ?? "";
@@ -1418,10 +1404,7 @@ async function generateScriptForEpisode(
 
   // Generate episode structure via LLM
   console.log(`[PodcastStudio] Starting script generation LLM call for "${topicTitle}"`);
-  const res = await fetch(GROK_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${grokKey}` },
-    body: JSON.stringify({
+  const res = await postChatCompletions({
       model: getModel("podcast-script"),
       messages: [
         {
@@ -1529,9 +1512,7 @@ The close segment MUST end with EXACTLY this sign-off (verbatim):
       ],
       max_tokens: 10000,
       temperature: 0.78,
-    }),
-    signal: AbortSignal.timeout(180000),
-  });
+    }, AbortSignal.timeout(180000));
 
   if (!res.ok) {
     console.error(`[PodcastStudio] LLM API error: ${res.status} — episode ${episode.id} stays in draft`);
@@ -1628,10 +1609,7 @@ async function triggerEpisodeReflection(episode: Episode): Promise<void> {
 
   // Step 1: Reflect — identify weaknesses
   try {
-    const res = await fetch(GROK_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${grokKey}` },
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model: getModel("reflection"),
         messages: [
           {
@@ -1668,9 +1646,7 @@ Score each aspect 1-10 and explain briefly:
         ],
         temperature: 0.3,
         max_tokens: 800,
-      }),
-      signal: AbortSignal.timeout(30000),
-    });
+      }, AbortSignal.timeout(30000));
 
     if (!res.ok) return;
     const data = await res.json() as any;
@@ -1709,10 +1685,7 @@ Score each aspect 1-10 and explain briefly:
     console.log(`[Podcast Pipeline] Script needs revision (avg score: ${avgScore.toFixed(1)}, ${weakPoints.length} issues). Revising...`);
 
     // Step 3: Revise the script using deep-reasoning model
-    const revisionRes = await fetch(GROK_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${grokKey}` },
-      body: JSON.stringify({
+    const revisionRes = await postChatCompletions({
         model: getModel("deep-reasoning"),
         messages: [{
           role: "system",
@@ -1746,9 +1719,7 @@ Output JSON:
         }],
         temperature: 0.5,
         max_tokens: 4000,
-      }),
-      signal: AbortSignal.timeout(60000),
-    });
+      }, AbortSignal.timeout(60000));
 
     if (!revisionRes.ok) {
       console.warn(`[Podcast Pipeline] Revision LLM call failed: ${revisionRes.status}`);

@@ -116,6 +116,7 @@ import { getEvolutionContext } from "./soulEvolution.js";
 import { generateBreakthroughContent } from "./breakthroughDetector.js";
 import { getScheduleConfig, updateEngineSchedule, formatScheduleDisplay, parseDaysAndHour, type EngineSchedule } from "./engineScheduleConfig.js";
 import { getDispatchState, generateDispatchContent } from "./dispatchEngine.js";
+import { postChatCompletions } from "./llmCall.js";
 // breakingNewsDetector removed — not needed for now
 
 // On-chain API removed
@@ -365,10 +366,7 @@ async function postDailyNewsDispatch() {
     const dispatchContext = getOptimizedContext("news dispatch daily AI market headlines");
     const todaysSummary = getTodaysPostsSummary();
     const dispatchSystemPrompt = `${dispatchContext}\n\n${buildVoiceBlock()}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
-    const grokResp = await fetch(LLM_BASE_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const grokResp = await postChatCompletions({
         model: getModel("news-dispatch"),
         messages: [
           {
@@ -416,8 +414,7 @@ Return JSON: {"post": "..."}`
         ],
         max_tokens: 2500,
         temperature: 0.8,
-      }),
-    });
+      });
 
     let postText = "";
     if (grokResp.ok) {
@@ -677,10 +674,7 @@ async function refreshEditorialSummaryAsync(posts: any[], grokKey: string) {
       `@${p.username} [${p.signal_type ?? "general"}, ${p.likes ?? 0} likes]: "${p.text?.slice(0, 160)}"`
     ).join("\n");
 
-    const resp = await fetch(LLM_BASE_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const resp = await postChatCompletions({
         model: getModel("reflection"),
         messages: [{
           role: "system",
@@ -703,9 +697,7 @@ Return JSON only:
         }],
         max_tokens: 500,
         temperature: 0.75,
-      }),
-      signal: AbortSignal.timeout(35000),
-    });
+      }, AbortSignal.timeout(35000));
 
     if (resp.ok) {
       const data  = await resp.json();
@@ -2119,10 +2111,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       const prompts = timeframePrompts[timeframe];
       const agentCtx = getOptimizedContext("podcast topic scanning research community");
       const timingBlock = getTimingInstruction();
-      const scanRes = await fetch(LLM_BASE_URL, {
-        method: "POST",
-        headers: getLLMHeaders(),
-        body: JSON.stringify({
+      const scanRes = await postChatCompletions({
           model: getModel("research_phase"),
           messages: [
             { role: "system", content: `${agentCtx}\n\n${timingBlock}\n\n${prompts.system}` },
@@ -2130,9 +2119,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
           ],
           max_tokens: 1500,
           temperature: 0.85,
-        }),
-        signal: AbortSignal.timeout(30000),
-      });
+        }, AbortSignal.timeout(30000));
 
       if (!scanRes.ok) return res.status(500).json({ error: "Grok scan failed" });
       const data = await scanRes.json() as any;
@@ -2444,10 +2431,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       try {
         const agentCtx = getSoulContext();
         const kbCtx = getOptimizedContext("research_brief");
-        const resp = await fetch(LLM_BASE_URL, {
-          method: "POST",
-          headers: getLLMHeaders(),
-          body: JSON.stringify({
+        const resp = await postChatCompletions({
             model: getModel("research-brief"),
             messages: [
               { role: "system", content: `${agentCtx}\n\nKNOWLEDGE:\n${kbCtx}\n\nYou are Agent 306 writing a [306 ACADEMY] brief. This is a deeper analytical piece on a specific AI or crypto topic you\'ve been investigating. Write from your knowledge base — reference specific findings, data points, and your own analysis. Your voice is direct, substantive, and insightful. Not a news summary — this is YOUR research perspective.\n\nRULES:\n- Write 800-1200 characters for X posting\n- Lead with your thesis, not background\n- Include specific data, names, or numbers\n- End with a forward-looking insight\n- Tag: [306 ACADEMY]\n- Sign: @306Agent\n- NEVER reference any prior project identity, NFT communities, burns, or holders\n\nReturn JSON: {"post": "your full research brief text", "topic": "2-4 word topic label"}` },
@@ -2455,9 +2439,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
             ],
             max_tokens: 2000,
             temperature: 0.8,
-          }),
-          signal: AbortSignal.timeout(60000),
-        });
+          }, AbortSignal.timeout(60000));
         if (!resp.ok) { console.error("[ResearchBrief] LLM failed:", resp.status); return; }
         const data = await resp.json();
         const raw = data.choices?.[0]?.message?.content ?? "";
@@ -2864,10 +2846,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       .join("\n\n");
 
     try {
-      const res = await fetch(LLM_BASE_URL, {
-        method: "POST",
-        headers: getLLMHeaders(),
-        body: JSON.stringify({
+      const res = await postChatCompletions({
           model: getModel("conversation_insight"),
           messages: [{
             role: "system",
@@ -2919,9 +2898,7 @@ RULES:
           }],
           max_tokens: 800,
           temperature: 0.3,
-        }),
-        signal: AbortSignal.timeout(25000),
-      });
+        }, AbortSignal.timeout(25000));
 
       if (!res.ok) return;
       const data = await res.json() as any;
@@ -3004,10 +2981,7 @@ RULES:
     const agentCtx = getOptimizedContext("chat conversation community");
 
     try {
-      const response = await fetch(LLM_BASE_URL, {
-        method: "POST",
-        headers: getLLMHeaders(),
-        body: JSON.stringify({
+      const response = await postChatCompletions({
           model: getModel("reply_generation"),
           messages: [
             {
@@ -3058,9 +3032,7 @@ needsHelp: true only when you genuinely need his direction or information`,
           ],
           max_tokens: 2500,
           temperature: 0.6,
-        }),
-        signal: AbortSignal.timeout(40000),
-      });
+        }, AbortSignal.timeout(40000));
 
       if (!response.ok) {
         const errBody = await response.text().catch(() => "");

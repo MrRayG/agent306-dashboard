@@ -19,6 +19,7 @@ import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
+import { postChatCompletions } from "./llmCall.js";
 const ENTITY_INDEX_FILE = dataPath("entity-index.json");
 const MAX_ENTITIES = 500;
 const LLM_RATE_MS = 5000;
@@ -77,10 +78,7 @@ async function callLLM(
   lastLLMCall = Date.now();
 
   try {
-    const res = await fetch(LLM_BASE_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model: getModel(task),
         messages: [
           { role: "system", content: systemPrompt },
@@ -88,9 +86,7 @@ async function callLLM(
         ],
         max_tokens: maxTokens,
         temperature,
-      }),
-      signal: AbortSignal.timeout(30000),
-    });
+      }, AbortSignal.timeout(30000));
     if (!res.ok) return null;
     const data = await res.json() as any;
     const raw = data.choices?.[0]?.message?.content ?? "{}";

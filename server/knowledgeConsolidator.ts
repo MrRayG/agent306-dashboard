@@ -14,6 +14,7 @@ import { LLM_BASE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { getModel } from "./modelRouter.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
+import { postChatCompletions } from "./llmCall.js";
 interface ConsolidationResult {
   groupsFound: number;
   entriesMerged: number;
@@ -84,10 +85,7 @@ async function consolidateGroup(entries: any[]): Promise<any[]> {
   const entrySummaries = entries.map(e => `[${e.title}] ${e.summary} (weight: ${e.weight})`).join("\n");
 
   try {
-    const res = await fetch(LLM_BASE_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model: getModel("routine"),
         messages: [{
           role: "system",
@@ -121,9 +119,7 @@ Required JSON schema:
         }],
         temperature: 0.2,
         max_tokens: 600,
-      }),
-      signal: AbortSignal.timeout(20000),
-    });
+      }, AbortSignal.timeout(20000));
 
     if (!res.ok) return entries; // fail safe — keep originals
 

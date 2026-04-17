@@ -38,6 +38,7 @@ import { buildVoiceBlock } from "./voice.js";
 import { getEvolutionContext } from "./soulEvolution.js";
 import { getTodaysPostsSummary } from "./xPostScheduler.js";
 
+import { postChatCompletions } from "./llmCall.js";
 const GROK_CHAT_API     = LLM_BASE_URL;
 const GROK_RESPONSE_API = LLM_RESPONSE_URL;
 
@@ -188,10 +189,7 @@ Community tone: ${tweetData.communityMood}`.trim()
   // ── Generate Agent 306's authentic thought-leader response ────────────────
   const agentCtx = getSlimAgentContext();
 
-  const res = await fetch(GROK_CHAT_API, {
-    method: "POST",
-    headers: getLLMHeaders(),
-    body: JSON.stringify({
+  const res = await postChatCompletions({
       model: getModel("boost"),
       messages: [
         {
@@ -282,9 +280,7 @@ Return JSON:
       ],
       max_tokens: 1200,
       temperature: 0.88,
-    }),
-    signal: AbortSignal.timeout(40000),
-  });
+    }, AbortSignal.timeout(40000));
 
   if (!res.ok) throw new Error(`Boost generation failed: ${res.status}`);
 

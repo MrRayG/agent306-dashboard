@@ -19,6 +19,7 @@ import { getSoulContext } from "../memoryEngine.js";
 import { callLLMWithRetry } from "../llmRetry.js";
 import type { ContentBrief, ContentReview } from "./schemas.js";
 
+import { postChatCompletions } from "../llmCall.js";
 /**
  * Enforce grounding: verify that Agent 6's content only contains
  * claims supported by the ContentBrief's evidence chain.
@@ -101,10 +102,7 @@ Rules:
   try {
     const data = await callLLMWithRetry(
       async (signal) => {
-        const res = await fetch(LLM_BASE_URL, {
-          method: "POST",
-          headers: getLLMHeaders(),
-          body: JSON.stringify({
+        const res = await postChatCompletions({
             model: getModel("triad-grounding-review"),
             messages: [
               { role: "system", content: systemPrompt },
@@ -112,9 +110,7 @@ Rules:
             ],
             temperature: 0.1,
             max_tokens: 3000,
-          }),
-          signal,
-        });
+          });
         return await res.json() as any;
       },
       LLM_TIMEOUTS.triad_grounding,

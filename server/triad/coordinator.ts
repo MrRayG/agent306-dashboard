@@ -56,6 +56,7 @@ import {
   validateContentBrief as valCB,
 } from "./schemas.js";
 
+import { postChatCompletions } from "../llmCall.js";
 const MESSAGES_FILE = dataPath("triad-messages.json");
 const LOG_FILE = dataPath("triad-log.json");
 const LLM_API_KEY = process.env.OPENROUTER_API_KEY ?? process.env.GROK_API_KEY ?? "";
@@ -331,10 +332,7 @@ Respond with JSON:
 Include at least 2 evidence items. Be precise about credibility — only "verified" if from a primary source.`;
 
     try {
-      const res = await fetch(LLM_BASE_URL, {
-        method: "POST",
-        headers: getLLMHeaders(),
-        body: JSON.stringify({
+      const res = await postChatCompletions({
           model: getModel("triad-fact-synthesis"),
           messages: [
             { role: "system", content: `You are Agent 3 (Researcher) for Agent 306 — an autonomous AI researcher and thought leader.
@@ -344,9 +342,7 @@ Your role: Package research into structured fact sheets. Use the knowledge above
           ],
           temperature: 0.2,
           max_tokens: 3000,
-        }),
-        signal: AbortSignal.timeout(LLM_TIMEOUTS.triad_fact_sheet),
-      });
+        }, AbortSignal.timeout(LLM_TIMEOUTS.triad_fact_sheet));
 
       const data = await res.json() as any;
       const raw = data.choices?.[0]?.message?.content ?? "";
@@ -489,10 +485,7 @@ Respond with JSON:
     try {
       const data = await callLLMWithRetry(
         async (signal) => {
-          const res = await fetch(LLM_BASE_URL, {
-            method: "POST",
-            headers: getLLMHeaders(),
-            body: JSON.stringify({
+          const res = await postChatCompletions({
               model: getModel("triad-reasoning"),
               messages: [
                 { role: "system", content: `You are Agent 0 (Reasoner) for Agent 306 — evaluating evidence with rigorous logic. Expose hidden assumptions. Never overstate confidence.
@@ -502,9 +495,7 @@ Use the context above to cross-check claims against what Agent 306 already knows
               ],
               temperature: 0.15,
               max_tokens: 6000,
-            }),
-            signal,
-          });
+            });
           return await res.json() as any;
         },
         LLM_TIMEOUTS.triad_logic_map,
@@ -818,10 +809,7 @@ ${brief.maxLength ? `MAX LENGTH: ${brief.maxLength} words` : ""}
 Write the complete ${brief.contentType} content now. Ground every factual claim in the evidence chain above.`;
 
     try {
-      const res = await fetch(LLM_BASE_URL, {
-        method: "POST",
-        headers: getLLMHeaders(),
-        body: JSON.stringify({
+      const res = await postChatCompletions({
           model: getModel(brief.contentType === "podcast" ? "podcast-script" : "blog-post"),
           messages: [
             { role: "system", content: `You are Agent 6 (Writer) for Agent 306 — writing compelling, evidence-based content in Agent 306's authentic voice.
@@ -831,9 +819,7 @@ Transform research and analysis into engaging content that sounds like Agent 306
           ],
           temperature: 0.6,
           max_tokens: 6000,
-        }),
-        signal: AbortSignal.timeout(LLM_TIMEOUTS.triad_generate),
-      });
+        }, AbortSignal.timeout(LLM_TIMEOUTS.triad_generate));
 
       const data = await res.json() as any;
       const content = data.choices?.[0]?.message?.content ?? "";
@@ -922,10 +908,7 @@ ${draft.content.slice(0, 5000)}
 Rewrite the content, fixing ALL grounding violations. Replace unsupported claims with evidence-backed statements. Keep the same structure and tone.`;
 
       try {
-        const res = await fetch(LLM_BASE_URL, {
-          method: "POST",
-          headers: getLLMHeaders(),
-          body: JSON.stringify({
+        const res = await postChatCompletions({
             model: getModel(draft.contentType === "podcast" ? "podcast-script" : "blog-post"),
             messages: [
               { role: "system", content: "You are Agent 6 (Writer). Fix ALL grounding violations flagged by Agent 0. Every claim must be traceable to evidence." },
@@ -933,9 +916,7 @@ Rewrite the content, fixing ALL grounding violations. Replace unsupported claims
             ],
             temperature: 0.4,
             max_tokens: 6000,
-          }),
-          signal: AbortSignal.timeout(LLM_TIMEOUTS.triad_revision),
-        });
+          }, AbortSignal.timeout(LLM_TIMEOUTS.triad_revision));
 
         const data = await res.json() as any;
         const content = data.choices?.[0]?.message?.content ?? "";

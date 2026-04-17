@@ -18,6 +18,7 @@ import { getModel } from "./modelRouter.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { getTtsProvider, callXaiTts, recordTtsCall, estimateXaiTtsCost, DEFAULT_XAI_VOICE, XAI_VOICES, type XaiVoice, type TtsProvider } from "./xaiTtsEngine.js";
 
+import { postChatCompletions } from "./llmCall.js";
 // ── ElevenLabs Configuration ────────────────────────────────────────────────
 
 const ELEVENLABS_API_URL = "https://api.elevenlabs.io/v1/text-to-speech";
@@ -649,10 +650,7 @@ async function selectPreviewPassage(scriptText: string): Promise<string | null> 
 
   const model = getModel("social-preview");
 
-  const response = await fetch(LLM_BASE_URL, {
-    method: "POST",
-    headers: getLLMHeaders(),
-    body: JSON.stringify({
+  const response = await postChatCompletions({
       model,
       messages: [
         {
@@ -677,8 +675,7 @@ ${scriptText}`,
       ],
       temperature: 0.3,
       max_tokens: 500,
-    }),
-  });
+    });
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "Unknown error");

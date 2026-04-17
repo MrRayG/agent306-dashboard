@@ -25,6 +25,7 @@ import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
+import { postChatCompletions } from "./llmCall.js";
 const GROK_CHAT_API      = LLM_BASE_URL;
 const GROK_RESPONSE_API  = LLM_RESPONSE_URL;
 const PERPLEXITY_API     = "https://api.perplexity.ai";
@@ -302,10 +303,7 @@ async function fetchAcademicResearch(grokKey: string, existingKBDigest?: string)
     if (papers.length === 0) return { findings: [], knowledge: [] };
     console.log("[Exploration] arXiv: " + papers.length + " papers fetched");
 
-    const res = await fetch(LLM_BASE_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model: getModel("exploration_synthesis"),
         messages: [{
           role: "system",
@@ -318,9 +316,7 @@ async function fetchAcademicResearch(grokKey: string, existingKBDigest?: string)
         }],
         max_tokens: 700,
         temperature: 0.2,
-      }),
-      signal: AbortSignal.timeout(20000),
-    });
+      }, AbortSignal.timeout(20000));
 
     if (!res.ok) return { findings: [], knowledge: [] };
     const data = await res.json() as any;
@@ -569,10 +565,7 @@ export async function runExploration(grokKey: string, pplxKey?: string): Promise
   // Synthesis: Agent 306's personal take
   if (allFindings.length > 0) {
     try {
-      const synthRes = await fetch(GROK_CHAT_API, {
-        method: "POST",
-        headers: getLLMHeaders(),
-        body: JSON.stringify({
+      const synthRes = await postChatCompletions({
           model: getModel("exploration_synthesis"),
           messages: [{
             role: "system",
@@ -583,9 +576,7 @@ export async function runExploration(grokKey: string, pplxKey?: string): Promise
           }],
           max_tokens: 200,
           temperature: 0.8,
-        }),
-        signal: AbortSignal.timeout(20000),
-      });
+        }, AbortSignal.timeout(20000));
       if (synthRes.ok) {
         const sd = await synthRes.json() as any;
         const synthesis = sd.choices?.[0]?.message?.content?.trim() ?? "";

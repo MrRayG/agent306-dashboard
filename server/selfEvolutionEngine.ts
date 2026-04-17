@@ -22,6 +22,7 @@ import {
   type CompetencyProfile,
 } from "./competencyFramework.js";
 
+import { postChatCompletions } from "./llmCall.js";
 // -- Types ------------------------------------------------------------------
 
 export interface EvolutionInsight {
@@ -351,10 +352,7 @@ Rules:
 - pruningSuggestions: be specific about WHAT to prune
 - overallNarrative: honest assessment of today vs yesterday`;
 
-    const res = await fetch(LLM_BASE_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model: getModel("self-evolution-reflection"),
         messages: [
           { role: "system", content: systemPrompt },
@@ -362,9 +360,7 @@ Rules:
         ],
         max_tokens: 1500,
         temperature: 0.5,
-      }),
-      signal: AbortSignal.timeout(60000),
-    });
+      }, AbortSignal.timeout(60000));
 
     if (!res.ok) {
       console.error(`[SelfEvolution] LLM call failed: ${res.status}`);

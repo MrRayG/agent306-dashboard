@@ -14,6 +14,7 @@ import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
+import { postChatCompletions } from "./llmCall.js";
 const GROK_KEY   = LLM_API_KEY;
 const GROK_URL   = LLM_BASE_URL;
 const STATE_FILE = dataPath("reply_engine.json");
@@ -227,10 +228,7 @@ ${isAITopic ? "For AI topics: share your actual perspective — you have 70 year
 No character limit — use the space to say something worth reading. Be genuine. Thoughtful statement > forced question.`;
 
   try {
-    const res = await fetch(GROK_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model: getModel("reply_generation"),
         messages: [
           { role: "system", content: systemPrompt },
@@ -238,9 +236,7 @@ No character limit — use the space to say something worth reading. Be genuine.
         ],
         max_tokens: 800,
         temperature: 0.88,
-      }),
-      signal: AbortSignal.timeout(25000),
-    });
+      }, AbortSignal.timeout(25000));
 
     if (!res.ok) return null;
     const data = await res.json() as any;
@@ -263,10 +259,7 @@ async function qualityGateReply(reply: string): Promise<{ pass: boolean; rewrite
   if (!GROK_KEY) return { pass: true, rewrite: null };
 
   try {
-    const res = await fetch(GROK_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
+    const res = await postChatCompletions({
         model: getModel("reply_generation"),
         messages: [{
           role: "system",
@@ -293,9 +286,7 @@ Respond as JSON only: { "score": number, "reason": "brief", "rewrite": "improved
         }],
         max_tokens: 150,
         temperature: 0.2,
-      }),
-      signal: AbortSignal.timeout(20000),
-    });
+      }, AbortSignal.timeout(20000));
 
     if (!res.ok) return { pass: true, rewrite: null };
     const data  = await res.json() as any;
