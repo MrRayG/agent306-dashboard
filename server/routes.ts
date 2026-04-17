@@ -19,7 +19,7 @@ import { scheduleMidnightReplies, runMidnightReplies } from "./replyEngine.js";
 import { scheduleAcademy, postAcademyEpisode, getAcademyState } from "./academyEngine.js";
 import { scheduleSignalBrief, postSignalBrief, getSignalBriefState } from "./signalBriefEngine.js";
 import { getPodcastState, EPISODE_META, createEpisode, generateEpisodeScript, regenerateEpisodeScript, reviewEpisode, markProduced, publishEpisode, submitGuestRequest, reviewGuest, generateInterviewQuestions, submitAnswers, createConversationEpisode, getEpisodesByType, getEpisodesByStatus, getGuestsByStatus, getEpisode, getGuest, formatScriptForProduction, formatConversationForProduction, generateEpisodeFromThread, getThreadCandidates, getPipelineStatus, deleteEpisode, clearAllEpisodes, getTimingInstruction } from "./podcastEngine.js";
-import { generateAudio, getAudioFilePath, getAudioAssets, saveAudioAsset, getAudioAssetPath, stitchFullEpisode, getFullAudioFilePath, generateSocialPreview, getPreviewAudioFilePath } from "./audioEngine.js";
+import { generateAudio, clearEpisodeAudio, getAudioFilePath, getAudioAssets, saveAudioAsset, getAudioAssetPath, stitchFullEpisode, getFullAudioFilePath, generateSocialPreview, getPreviewAudioFilePath } from "./audioEngine.js";
 import multer from "multer";
 import { getVideoStats } from "./videoEngine.js";
 import { requestPost, registerPost, releasePost, getCoordinatorState, resetCooldown } from "./postCoordinator.js";
@@ -1755,6 +1755,19 @@ export function registerRoutes(httpServer: Server, app: Express) {
     generateAudio(req.params.id, { providerOverride, xaiVoice }).catch((e) =>
       console.error(`[AudioEngine] Background audio generation failed for ${req.params.id}:`, e.message),
     );
+  });
+
+  // ── Clear episode audio (PR M) ──────────────────────────────────────
+  // Deletes the audio files for an episode and rolls status back to "reviewed"
+  // so it can be regenerated (e.g. to switch TTS provider after bad output).
+  // Only allowed from statuses: audio_ready | produced | published.
+  app.post("/api/podcast/episodes/:id/clear-audio", requireDashAuth, (req, res) => {
+    const result = clearEpisodeAudio(req.params.id);
+    if (!result.ok) {
+      const status = result.error === "Episode not found" ? 404 : 400;
+      return res.status(status).json({ error: result.error });
+    }
+    res.json({ ok: true, removedFiles: result.removedFiles });
   });
 
   app.get("/api/podcast/episodes/:id/audio", (req, res) => {
