@@ -129,6 +129,54 @@ export function toXAINativeModel(openrouterModel: string): string | null {
 }
 
 /**
+ * xAI-direct chat/completions routing (PR O).
+ *
+ * Grok LLM calls land on api.x.ai/v1/chat/completions directly with
+ * XAI_DIRECT_API_KEY — bypassing OpenRouter — so engines exercise the same
+ * entitlement surface our diagnostic probe confirmed works (chat=200).
+ * Non-Grok models (Anthropic, Google, etc.) continue to use OpenRouter.
+ *
+ * Controlled by XAI_DIRECT_CHAT_ENABLED (default "true"). Set to "false" for
+ * emergency rollback without a code revert.
+ *
+ * Hard-fail: no automatic fallback to OpenRouter on xAI errors — matches the
+ * user's explicit policy for xAI overrides.
+ */
+export function isXAIDirectChatEnabled(): boolean {
+  return (process.env.XAI_DIRECT_CHAT_ENABLED ?? "true") !== "false";
+}
+
+export interface ChatRoute {
+  url: string;
+  headers: Record<string, string>;
+  model: string;            // model string actually sent to the provider
+  provider: "xai-direct" | "openrouter";
+}
+
+/**
+ * Decides whether a given OpenRouter-format model should be routed to xAI
+ * direct or kept on OpenRouter. Returns the concrete URL, headers and
+ * provider-native model name the caller should use.
+ */
+export function resolveChatRoute(openrouterModel: string): ChatRoute {
+  const xaiNative = toXAINativeModel(openrouterModel);
+  if (xaiNative !== null && isXAIDirectChatEnabled() && XAI_DIRECT_API_KEY) {
+    return {
+      url: `${XAI_DIRECT_BASE_URL.replace(/\/$/, "")}/chat/completions`,
+      headers: getXAIDirectHeaders(),
+      model: xaiNative,
+      provider: "xai-direct",
+    };
+  }
+  return {
+    url: LLM_BASE_URL,
+    headers: getLLMHeaders(),
+    model: openrouterModel,
+    provider: "openrouter",
+  };
+}
+
+/**
  * Resolves which API mode a task should use, based on the RESPONSES_API_ENABLED_TASKS env var.
  *
  * Empty/unset env means all tasks default to "chat" — zero behavior change.

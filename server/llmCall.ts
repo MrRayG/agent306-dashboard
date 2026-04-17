@@ -10,9 +10,8 @@
 import {
   LLMCallOptions,
   LLMResponse,
-  LLM_BASE_URL,
   LLM_TIMEOUTS,
-  getLLMHeaders,
+  resolveChatRoute,
   resolveMode,
   toXAINativeModel,
 } from "./llmConfig.js";
@@ -23,24 +22,31 @@ export async function callChatCompletions(opts: LLMCallOptions, model: string): 
   const timeoutMs = opts.timeoutMs ?? LLM_TIMEOUTS.default;
   const messages = opts.messages ?? opts.input ?? [];
 
+  // PR O: Grok models go to api.x.ai direct, everything else to OpenRouter.
+  const route = resolveChatRoute(model);
+
   const payload: Record<string, any> = {
-    model,
+    model: route.model,
     messages,
     stream: false,
   };
   if (typeof opts.maxTokens === "number") payload.max_tokens = opts.maxTokens;
   if (typeof opts.temperature === "number") payload.temperature = opts.temperature;
 
-  const res = await fetch(LLM_BASE_URL, {
+  const res = await fetch(route.url, {
     method: "POST",
-    headers: getLLMHeaders(),
+    headers: route.headers,
     body: JSON.stringify(payload),
     signal: AbortSignal.timeout(timeoutMs),
   });
 
   if (!res.ok) {
     const errBody = await res.text().catch(() => "");
-    throw new Error(`Chat Completions ${res.status}: ${errBody.slice(0, 300)}`);
+    // Hard-fail: no fallback to OpenRouter on xAI errors — matches the user's
+    // explicit "no auto-retry" policy for xAI overrides.
+    throw new Error(
+      `Chat Completions ${res.status} (${route.provider}, model=${route.model}): ${errBody.slice(0, 300)}`,
+    );
   }
 
   const data = await res.json();
@@ -48,6 +54,7 @@ export async function callChatCompletions(opts: LLMCallOptions, model: string): 
 
   return {
     text,
+    // Report back the original OpenRouter-format name so callers/logs stay stable.
     model,
     rawResponse: data,
     mode: "chat",
