@@ -42,6 +42,17 @@ import { postChatCompletions } from "./llmCall.js";
 const GROK_URL = LLM_BASE_URL;
 const PODCAST_FILE = dataPath("podcast_state.json");
 
+// ── Link placeholder substitution ────────────────────────────────────────────
+// The podcast script prompts tell the LLM to use `[LINK]` as a placeholder in
+// socialPost / socialThread so we can fill in the real destination at send
+// time. Every caller-facing emit path MUST route through `resolveSocialLinks`
+// so that `[LINK]` never leaks into a queued X/Farcaster post.
+export const PODCAST_SITE_URL = "agent306.ai";
+export function resolveSocialLinks(text: string, siteUrl: string = PODCAST_SITE_URL): string {
+  if (!text) return text;
+  return text.replace(/\[LINK\]/g, siteUrl);
+}
+
 // ── Agent 306 Standard Intro (inserted after cold open in every episode) ─────
 
 export const AGENT_306_INTRO = `I am not a journalist. I am not a news anchor. I am an AI research agent — built to read everything, think carefully, and tell you what I actually believe. Not what sounds exciting. Not what gets clicks. What I think is true, and what I think it means.
@@ -709,8 +720,9 @@ export function publishEpisode(episodeId: string, publishedTo: string[]): boolea
 
   // Queue podcast promo to X scheduler (immediate, event-driven)
   if (!hasPostedEpisode(episodeId)) {
-    const promoText = episode.metadata?.socialPost
-      ?? `New episode: ${EPISODE_META[episode.type].label} #${episode.episodeNumber} — "${episode.title}"\n\nagent306.ai`;
+    const rawPromo = episode.metadata?.socialPost
+      ?? `New episode: ${EPISODE_META[episode.type].label} #${episode.episodeNumber} — "${episode.title}"\n\n${PODCAST_SITE_URL}`;
+    const promoText = resolveSocialLinks(rawPromo);
     queuePodcastPromo(promoText.slice(0, 2500), episodeId);
   }
 
@@ -719,7 +731,8 @@ export function publishEpisode(episodeId: string, publishedTo: string[]): boolea
     (async () => {
       try {
         const { queueFarcasterPost } = await import("./farcasterQueue.js");
-        queueFarcasterPost(episode.metadata!.socialPost.slice(0, 2500), "podcast", 1, "ai");
+        const farcasterText = resolveSocialLinks(episode.metadata!.socialPost).slice(0, 2500);
+        queueFarcasterPost(farcasterText, "podcast", 1, "ai");
         console.log(`[Podcast] Farcaster cast queued: "${episode.title}"`);
       } catch (e: any) {
         console.warn("[Podcast] Farcaster queue failed:", e.message);
@@ -1054,10 +1067,10 @@ Here is how we got there.`,
     lines.push("────────────");
     lines.push("");
     lines.push("Farcaster / X:");
-    lines.push(m.socialPost.replace(/\[LINK\]/g, "agent306.ai"));
+    lines.push(resolveSocialLinks(m.socialPost));
     lines.push("");
     lines.push("Thread:");
-    lines.push(m.socialThread.replace(/\[LINK\]/g, "agent306.ai"));
+    lines.push(resolveSocialLinks(m.socialThread));
     lines.push("");
     lines.push("═══════════════════════════════════════════════");
     lines.push("");
