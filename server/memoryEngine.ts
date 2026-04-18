@@ -1090,7 +1090,7 @@ async function summarizeEvictedEntries(
     try {
       const entryList = group.map(e => `- ${e.title}: ${e.summary}`).join("\n");
       const res = await postChatCompletions({
-          model: getModel("knowledge-categorization"),
+          model: getModel("theme-summary-generation"),
           messages: [
             {
               role: "system",

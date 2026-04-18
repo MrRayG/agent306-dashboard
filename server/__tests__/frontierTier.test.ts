@@ -23,7 +23,9 @@ const FRONTIER_REASONING_TASKS = [
 
 const FRONTIER_FACTUAL_TASKS = [
   "hypothesis-evaluation",
+  "hypothesis-resolution",   // moved from premium-voice (brain-route-to-flagship PR)
   "fact-verification",
+  "contradiction-detection", // added in brain-route-to-flagship PR
   "red-flag-analysis",
   "evidence-evaluation",
 ];
@@ -33,10 +35,14 @@ const ROUTINE_TASKS_SAMPLE = [
   "confidence-decay",
   "tier-assignment",
   "social-preview",          // demoted in PR D
-  "breakthrough-evaluation", // demoted in PR D
+  // breakthrough-evaluation split into breakthrough-composite-scoring
+  // (frontier-reasoning) and breakthrough-voice-rewrite (standard-voice) in
+  // the brain-route-to-flagship PR — no longer a routine anchor.
   // signal-brief promoted to "live-social" tier (Wave 1 follow-up) — verified in modelRouter.test.ts
   "hypothesis-decomposition",
   "trust-scoring",
+  "semantic-dedup",          // added in brain-route-to-flagship PR
+  "entity-extraction",       // added in brain-route-to-flagship PR
 ];
 
 const STANDARD_TASKS_SAMPLE = [
@@ -57,7 +63,8 @@ const PREMIUM_TASKS_SAMPLE = [
   "podcast-script",
   "article-draft",
   "daily-briefing",
-  "hypothesis-resolution",
+  // hypothesis-resolution moved to frontier-factual in the
+  // brain-route-to-flagship PR — verified in FRONTIER_FACTUAL_TASKS above.
   "analysis-synthesis",
   "triad-grounding-review",
 ];

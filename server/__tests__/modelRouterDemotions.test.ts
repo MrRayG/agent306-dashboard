@@ -16,7 +16,9 @@ import assert from "node:assert/strict";
 const DEMOTED_TO_ROUTINE = [
   // PR D (15 tasks)
   "social-preview",
-  "breakthrough-evaluation",
+  // breakthrough-evaluation split in brain-route-to-flagship PR:
+  //   breakthrough-composite-scoring → frontier-reasoning
+  //   breakthrough-voice-rewrite     → standard-voice
   "topic-quality-evaluation",
   "aspiration-evaluation",
   "analysis-so-what",
@@ -64,7 +66,8 @@ const MUST_STAY_STANDARD = [
 // self-evolution-reflection, aspiration-generation, deep-reasoning moved from
 // premium → frontier (Claude Opus 4.6). They are verified in frontierTier.test.ts.
 const MUST_STAY_PREMIUM = [
-  "hypothesis-resolution",
+  // hypothesis-resolution moved to frontier-factual in the
+  // brain-route-to-flagship PR — verified in frontierTier.test.ts.
   "podcast-script",
   "research-brief",
   "article-draft",

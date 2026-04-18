@@ -14,6 +14,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { getModel, getModelConfig, normalizeTaskName, resolveTask } from "../modelRouter.js";
+import { toXAINativeModel } from "../llmConfig.js";
 
 describe("normalizeTaskName", () => {
   it("replaces underscores with hyphens", () => {
@@ -243,6 +244,112 @@ describe("getModelConfig — backwards-compat aliases", () => {
   it("collapsed `standard` alias still resolves to Grok 4.20 non-reasoning", () => {
     assert.equal(models.standard, "x-ai/grok-4.20-non-reasoning");
     assert.equal(models.standard, models["standard-voice"]);
+  });
+});
+
+/**
+ * brain-route-to-flagship PR: explicit routing matrix for every factual-precision
+ * task. Asserts both the router's logical {tier, provider, model} decision AND
+ * the native xAI model name that actually reaches api.x.ai for xai-direct tasks
+ * (via toXAINativeModel). Each xai-direct factual task MUST dispatch
+ * grok-4.20-0309-reasoning — the 17% hallucination flagship — otherwise
+ * hypothesis verdicts silently collapse to Gemini Flash or Opus.
+ */
+describe("brain-route-to-flagship — explicit tier/provider/model matrix", () => {
+  function assertXAIDirect(task: string, nativeModel: string): void {
+    const r = resolveTask(task);
+    assert.equal(r.provider, "xai-direct", `${task} must route to xai-direct`);
+    // The router stores OpenRouter-format strings; toXAINativeModel() is what
+    // api.x.ai actually sees. Both layers of the contract are asserted so a
+    // regression in either map fails loud.
+    const native = toXAINativeModel(r.model);
+    assert.equal(native, nativeModel, `${task} must dispatch ${nativeModel} to xAI (got ${native})`);
+  }
+
+  function assertOpenRouter(task: string, model: string): void {
+    const r = resolveTask(task);
+    assert.equal(r.provider, "openrouter", `${task} must route to openrouter`);
+    assert.equal(r.model, model, `${task} must use ${model}`);
+  }
+
+  it("hypothesis-evaluation → {xai-direct, grok-4.20-0309-reasoning}", () => {
+    assertXAIDirect("hypothesis-evaluation", "grok-4.20-0309-reasoning");
+  });
+
+  it("evidence-evaluation → {xai-direct, grok-4.20-0309-reasoning}", () => {
+    assertXAIDirect("evidence-evaluation", "grok-4.20-0309-reasoning");
+  });
+
+  it("red-flag-analysis → {xai-direct, grok-4.20-0309-reasoning}", () => {
+    assertXAIDirect("red-flag-analysis", "grok-4.20-0309-reasoning");
+  });
+
+  it("fact-verification → {xai-direct, grok-4.20-0309-reasoning}", () => {
+    assertXAIDirect("fact-verification", "grok-4.20-0309-reasoning");
+  });
+
+  it("contradiction-detection → {xai-direct, grok-4.20-0309-reasoning}", () => {
+    assertXAIDirect("contradiction-detection", "grok-4.20-0309-reasoning");
+  });
+
+  it("logic-map-generation → {openrouter, anthropic/claude-opus-4.6}", () => {
+    assertOpenRouter("logic-map-generation", "anthropic/claude-opus-4.6");
+  });
+
+  it("breakthrough-composite-scoring → {openrouter, anthropic/claude-opus-4.6}", () => {
+    assertOpenRouter("breakthrough-composite-scoring", "anthropic/claude-opus-4.6");
+  });
+
+  it("theme-summary-generation → {openrouter, anthropic/claude-opus-4.6}", () => {
+    assertOpenRouter("theme-summary-generation", "anthropic/claude-opus-4.6");
+  });
+
+  it("semantic-dedup → {openrouter, google/gemini-3-flash-preview}", () => {
+    assertOpenRouter("semantic-dedup", "google/gemini-3-flash-preview");
+  });
+
+  it("entity-extraction → {openrouter, google/gemini-3-flash-preview}", () => {
+    assertOpenRouter("entity-extraction", "google/gemini-3-flash-preview");
+  });
+
+  it("article-body → {xai-direct, grok-4.20-0309-non-reasoning}", () => {
+    assertXAIDirect("article-body", "grok-4.20-0309-non-reasoning");
+  });
+
+  it("blog-body → {openrouter, anthropic/claude-sonnet-4.6}", () => {
+    assertOpenRouter("blog-body", "anthropic/claude-sonnet-4.6");
+  });
+
+  it("podcast-script → {openrouter, anthropic/claude-sonnet-4.6}", () => {
+    assertOpenRouter("podcast-script", "anthropic/claude-sonnet-4.6");
+  });
+
+  it("every factual-precision task is explicit (no default fallback)", () => {
+    // frontier-factual must have an entry for every task below — no silent
+    // fallback to standard-voice. This guards against someone deleting a
+    // mapping and letting a hypothesis verdict land on Grok non-reasoning.
+    const factualTasks = [
+      "hypothesis-evaluation",
+      "hypothesis-resolution",
+      "hypothesis-disposition",
+      "fact-verification",
+      "claim-verification",
+      "fact-check",
+      "red-flag-analysis",
+      "red-flag-generation",
+      "red-flag-severity",
+      "evidence-evaluation",
+      "evidence-quality-scoring",
+      "evidence-resolution",
+      "contradiction-detection",
+      "data-availability-assessment",
+    ];
+    for (const task of factualTasks) {
+      const r = resolveTask(task);
+      assert.equal(r.tier, "frontier-factual", `${task} must be frontier-factual`);
+      assert.equal(r.provider, "xai-direct");
+      assert.equal(toXAINativeModel(r.model), "grok-4.20-0309-reasoning");
+    }
   });
 });
 
