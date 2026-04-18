@@ -194,6 +194,12 @@ export interface Hypothesis {
   deadlineAt?:                    string;  // ISO date extracted from claim/timeframe (future-dated)
   deadlineCheckedAt?:             string;  // last time we re-checked a deadline hypothesis
   retiredReason?:                 string;  // why we moved to data-unavailable or stale-retired
+  // Wave 2.3 PR-2 — Pre-insertion consolidation via embedding similarity
+  // (per Agent 306's "Hypothesis Debt Crisis" blog). Cached on canonicals
+  // so subsequent consolidation passes avoid re-embedding.
+  embedding?:      number[];          // cached embedding of the claim text (text-embedding-3-small)
+  aliases?:        string[];          // raw claim strings consolidated into this canonical
+  aliasOf?:        string | null;     // back-reference to canonical id; null/undefined for canonicals
 }
 
 interface ResearchLab {
