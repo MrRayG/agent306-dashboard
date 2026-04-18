@@ -49,6 +49,7 @@ import {
   logCycleSummary,
   type HypothesisState,
 } from "./hypothesisStateMachine.js";
+import { isActiveQueue, sortByTriagePriority } from "./hypothesisTriage.js";
 import { gatherPerplexityEvidence } from "./perplexityEvidence.js";
 import { detectBreakthroughs, checkPredictions, extractPrediction, storePrediction, getBreakthroughs } from "./breakthroughDetector.js";
 import { runSelfEvolutionReflection, capturePreCycleSnapshot, getEvolutionDiffs } from "./selfEvolutionEngine.js";
@@ -833,10 +834,13 @@ async function autoTestHypotheses(): Promise<number> {
   const lab = getResearchLab();
   const fourHoursAgo = Date.now() - 4 * 60 * 60 * 1000; // 4h maturation period before testing
 
-  // Find "forming" hypotheses older than 4 hours that should be evaluated
-  const candidates = lab.hypotheses
-    .filter(h => h.status === "forming" && new Date(h.formedAt).getTime() < fourHoursAgo)
-    .slice(0, 50);
+  // Find "forming" hypotheses older than 4 hours that should be evaluated.
+  // Wave 2.3 PR-4 — only iterate queue='active'; backlog stays visible but
+  // doesn't consume cycle time. High-stake + low-confidence sorts first.
+  const candidates = sortByTriagePriority(
+    lab.hypotheses
+      .filter(h => h.status === "forming" && isActiveQueue(h) && new Date(h.formedAt).getTime() < fourHoursAgo),
+  ).slice(0, 50);
 
   if (candidates.length === 0) return 0;
 
@@ -997,10 +1001,11 @@ async function autoDebateHypotheses(): Promise<number> {
     existingDebates.filter(d => d.topicType === "hypothesis").map(d => d.topicId),
   );
 
-  // Find "testing" hypotheses that haven't been debated yet
-  const candidates = lab.hypotheses
-    .filter(h => h.status === "testing" && !debatedHypIds.has(h.id))
-    .slice(0, 10);
+  // Find "testing" hypotheses that haven't been debated yet.
+  // Wave 2.3 PR-4 — only iterate queue='active'; high-stake + low-confidence first.
+  const candidates = sortByTriagePriority(
+    lab.hypotheses.filter(h => h.status === "testing" && isActiveQueue(h) && !debatedHypIds.has(h.id)),
+  ).slice(0, 10);
 
   let debated = 0;
   for (const hyp of candidates) {

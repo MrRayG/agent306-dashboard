@@ -150,6 +150,11 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   // base. Routes to xai-direct so api.x.ai actually sees Grok 4.20 Reasoning,
   // not a silent collapse to Claude Opus via OpenRouter. Every factual-
   // precision task below is explicit — no fallback for factual work.
+  // Wave 2.3 PR-4 — 2x2 Stake-Weighted Triage: classify stake + confidence at
+  // hypothesis ingestion so low-stake questions never flood the active queue.
+  // Grok 4.20 Reasoning — a misclassification here sends a high-stake
+  // hypothesis to the backlog where it never gets worked.
+  "hypothesis-triage":            "frontier-factual",
   "hypothesis-evaluation":        "frontier-factual",
   "hypothesis-resolution":        "frontier-factual",
   "hypothesis-disposition":       "frontier-factual",

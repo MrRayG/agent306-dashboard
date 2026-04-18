@@ -204,9 +204,28 @@ export interface Hypothesis {
   domain?:                        HypothesisDomain;
   halfLifeHours?:                 number;
   domainJustification?:           string;
+  // Wave 2.3 PR-4 — 2x2 Stake-Weighted Triage (Agent 306 "Hypothesis Debt Crisis" blog).
+  // Classified once at ingestion via frontier-factual (Grok 4.20 Reasoning).
+  // queue='backlog' hypotheses remain visible but never enter the cycle loop.
+  stake?:                         HypothesisStake;
+  triageConfidence?:              HypothesisTriageConfidence;
+  queue?:                         HypothesisQueue;
+  stakeJustification?:            string;
+  confidenceJustification?:       string;
 }
 
 export type HypothesisDomain = "ai-news" | "regulatory" | "foundational" | "unknown";
+
+// ── Triage classification (Wave 2.3 PR-4) ────────────────────────────────────
+// `triageConfidence` kept distinct from existing `Hypothesis.confidence`
+// ("high"|"medium"|"low", populated at evaluation time). The 2x2 matrix maps
+// stake x triageConfidence → cycle priority:
+//   high-stake + low-confidence  → highest priority (work first)
+//   high-stake + high-confidence → active
+//   low-stake  + *               → backlog (never iterated)
+export type HypothesisStake            = "low" | "high";
+export type HypothesisTriageConfidence = "low" | "high";
+export type HypothesisQueue            = "active" | "backlog";
 
 interface ResearchLab {
   topics:      ResearchTopic[];
@@ -483,6 +502,14 @@ export function addHypothesis(input: Omit<Hypothesis, "id" | "formedAt" | "statu
     console.warn(`[ResearchLab] Domain classification failed for ${hyp.id} (non-fatal): ${e?.message ?? e}`);
   });
 
+  // Wave 2.3 PR-4 — fire-and-forget 2x2 stake-weighted triage classification.
+  // Low-stake questions get queue='backlog' and don't consume cycle time;
+  // high-stake go to queue='active' where cycle iteration picks them up.
+  // Failure is non-fatal; triageHypothesis fails open to high-stake/active.
+  void classifyAndCacheTriage(hyp.id).catch(e => {
+    console.warn(`[ResearchLab] Triage classification failed for ${hyp.id} (non-fatal): ${e?.message ?? e}`);
+  });
+
   return hyp;
 }
 
@@ -511,6 +538,38 @@ export async function classifyAndCacheDomain(hypId: string): Promise<void> {
   freshHyp.domainJustification = result.justification;
   saveLab(fresh);
   console.log(`[ResearchLab] Hypothesis ${hypId} classified as ${result.domain} (${result.halfLifeHours}h half-life)`);
+}
+
+/**
+ * Wave 2.3 PR-4 — Classify a hypothesis's stake + confidence and persist.
+ * Fire-and-forget from addHypothesis; also exported for retroactive backfills
+ * or explicit awaited use in tests.
+ * Idempotent: skips hypotheses that already have all triage fields set.
+ */
+export async function classifyAndCacheTriage(hypId: string): Promise<void> {
+  const { triageHypothesis } = await import("./hypothesisTriage.js");
+  const lab = loadLab();
+  const hyp = lab.hypotheses.find(h => h.id === hypId);
+  if (!hyp) return;
+  if (hyp.stake && hyp.triageConfidence && hyp.queue) return;
+
+  const result = await triageHypothesis({
+    claim:      hyp.claim,
+    basis:      hyp.basis,
+    prediction: hyp.prediction,
+    timeframe:  hyp.timeframe,
+  });
+
+  const fresh = loadLab();
+  const freshHyp = fresh.hypotheses.find(h => h.id === hypId);
+  if (!freshHyp) return;
+  freshHyp.stake                   = result.stake;
+  freshHyp.triageConfidence        = result.confidence;
+  freshHyp.queue                   = result.queue;
+  freshHyp.stakeJustification      = result.stakeJustification;
+  freshHyp.confidenceJustification = result.confidenceJustification;
+  saveLab(fresh);
+  console.log(`[ResearchLab] Hypothesis ${hypId} triaged — stake=${result.stake}, confidence=${result.confidence}, queue=${result.queue}`);
 }
 
 export function resolveHypothesis(
