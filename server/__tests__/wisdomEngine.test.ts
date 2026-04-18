@@ -380,6 +380,33 @@ describe("WisdomEngine", () => {
     });
   });
 
+  describe("Bible ID plan guard", () => {
+    // Starter Plan grants CSB / NKJV / NIV. KJV, ESV, and others are NOT owned and return 401.
+    const PLAN_OWNED_BIBLE_IDS = [
+      "a556c5305ee15c3f-01", // CSB
+      "63097d2a0a2f7db3-01", // NKJV
+      "78a9f6124f344018-01", // NIV
+    ];
+
+    it("should use a Bible ID that is in the plan-owned whitelist", async () => {
+      const mod = await import("../wisdomEngine.js");
+      assert.ok(
+        PLAN_OWNED_BIBLE_IDS.includes(mod.BIBLE_ID),
+        `BIBLE_ID (${mod.BIBLE_ID}) must be in plan-owned whitelist (CSB/NKJV/NIV). ` +
+          `KJV (de4e12af7f28f599-02) and ESV are NOT on the Starter Plan and will 401.`,
+      );
+    });
+
+    it("should NOT use the KJV Bible ID (unowned on Starter Plan)", async () => {
+      const mod = await import("../wisdomEngine.js");
+      assert.notEqual(
+        mod.BIBLE_ID,
+        "de4e12af7f28f599-02",
+        "BIBLE_ID must not be KJV — KJV is not on the Starter Plan and returns 401",
+      );
+    });
+  });
+
   describe("getActiveWisdomCount()", () => {
     it("should count only active wisdom entries", () => {
       const before = getActiveWisdomCount();
