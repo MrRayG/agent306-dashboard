@@ -68,6 +68,10 @@ const RATE_LIMITS: Record<string, number> = {
   gutenberg: 20,
 };
 
+// NKJV — owned on Starter Plan (CSB / NKJV / NIV).
+// If the plan changes, update this ID. KJV (de4e12af7f28f599-02) is NOT on Starter Plan.
+export const BIBLE_ID = "63097d2a0a2f7db3-01";
+
 // ── Google Books daily budget & cache ───────────────────────────
 const GOOGLE_BOOKS_BUDGET_FILE = dataPath("google_books_daily.json");
 const GOOGLE_BOOKS_CACHE_FILE = dataPath("google_books_cache.json");
@@ -330,11 +334,10 @@ async function queryBible(topics: string[], usage: WisdomApiUsage): Promise<Wisd
   }
 
   const query = encodeURIComponent(topics[0] ?? "wisdom");
-  const bibleId = "de4e12af7f28f599-02"; // KJV
   try {
     incrementUsage("bible", usage);
     const res = await fetch(
-      `https://api.scripture.api.bible/v1/bibles/${bibleId}/search?query=${query}`,
+      `https://api.scripture.api.bible/v1/bibles/${BIBLE_ID}/search?query=${query}`,
       {
         headers: buildBibleHeaders(apiKey),
         signal: AbortSignal.timeout(10000),
