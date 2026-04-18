@@ -13,6 +13,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { Hypothesis } from "./researchEngine.js";
+import { isPastHalfLife } from "./hypothesisDomainClassifier.js";
 
 export type HypothesisState =
   | "forming"
@@ -186,8 +187,24 @@ export function classifyForStateMachine(
     };
   }
 
-  // 3. stale-retired — very old, still unresolved, no new evidence.
-  if (cycleCount >= STALE_CYCLES_THRESHOLD) {
+  // 3. domain-aware half-life (Wave 2.3 PR-1) — wall-clock decay, only for
+  //    actively-testing hypotheses so newly-formed ones keep their grace.
+  if (
+    hyp.status === "testing"
+    && typeof hyp.halfLifeHours === "number"
+    && hyp.formedAt
+    && isPastHalfLife(hyp.formedAt, hyp.halfLifeHours, now)
+  ) {
+    return {
+      transitionTo: "stale-retired",
+      reason:       `past ${hyp.halfLifeHours}h half-life for domain=${hyp.domain ?? "unknown"}`,
+    };
+  }
+
+  // 4. legacy stale-retired — very old, still unresolved, no new evidence.
+  //    Suppressed when a domain half-life is cached (that clock is authoritative).
+  const hasCachedHalfLife = typeof hyp.halfLifeHours === "number";
+  if (!hasCachedHalfLife && cycleCount >= STALE_CYCLES_THRESHOLD) {
     return {
       transitionTo: "stale-retired",
       reason:       `${cycleCount} cycles elapsed with no resolution`,

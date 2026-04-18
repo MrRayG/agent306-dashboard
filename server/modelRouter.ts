@@ -153,6 +153,11 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "hypothesis-evaluation":        "frontier-factual",
   "hypothesis-resolution":        "frontier-factual",
   "hypothesis-disposition":       "frontier-factual",
+  // Wave 2.3 PR-1 — Domain-Aware Decay: classify domain (ai-news / regulatory /
+  // foundational / unknown) at ingestion so half-life replaces the uniform
+  // 7-cycle retirement. Misclassifying a regulatory claim as ai-news would
+  // retire it 10x too fast, so this belongs on Grok 4.20 Reasoning.
+  "hypothesis-domain-classification": "frontier-factual",
   "fact-verification":            "frontier-factual",
   "claim-verification":           "frontier-factual",
   "fact-check":                   "frontier-factual",
