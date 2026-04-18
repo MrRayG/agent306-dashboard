@@ -200,7 +200,13 @@ export interface Hypothesis {
   embedding?:      number[];          // cached embedding of the claim text (text-embedding-3-small)
   aliases?:        string[];          // raw claim strings consolidated into this canonical
   aliasOf?:        string | null;     // back-reference to canonical id; null/undefined for canonicals
+  // Wave 2.3 PR-1 — Domain-Aware Decay (per "The Hypothesis Debt Crisis" blog).
+  domain?:                        HypothesisDomain;
+  halfLifeHours?:                 number;
+  domainJustification?:           string;
 }
+
+export type HypothesisDomain = "ai-news" | "regulatory" | "foundational" | "unknown";
 
 interface ResearchLab {
   topics:      ResearchTopic[];
@@ -470,7 +476,41 @@ export function addHypothesis(input: Omit<Hypothesis, "id" | "formedAt" | "statu
   lab.hypotheses.unshift(hyp);
   lab.stats.hypothesesFormed++;
   saveLab(lab);
+
+  // Wave 2.3 PR-1 — fire-and-forget domain classification. Non-blocking so
+  // addHypothesis returns synchronously; failures fall back to legacy decay.
+  void classifyAndCacheDomain(hyp.id).catch(e => {
+    console.warn(`[ResearchLab] Domain classification failed for ${hyp.id} (non-fatal): ${e?.message ?? e}`);
+  });
+
   return hyp;
+}
+
+/**
+ * Wave 2.3 PR-1 — classify a hypothesis's domain and cache the half-life.
+ * Dynamic import breaks a circular dep with hypothesisDomainClassifier.
+ */
+export async function classifyAndCacheDomain(hypId: string): Promise<void> {
+  const { classifyDomain } = await import("./hypothesisDomainClassifier.js");
+  const lab = loadLab();
+  const hyp = lab.hypotheses.find(h => h.id === hypId);
+  if (!hyp) return;
+  if (hyp.domain && typeof hyp.halfLifeHours === "number") return;
+  const result = await classifyDomain({
+    claim:      hyp.claim,
+    prediction: hyp.prediction,
+    timeframe:  hyp.timeframe,
+    basis:      hyp.basis,
+  });
+  if (!result) return;
+  const fresh    = loadLab();
+  const freshHyp = fresh.hypotheses.find(h => h.id === hypId);
+  if (!freshHyp) return;
+  freshHyp.domain              = result.domain;
+  freshHyp.halfLifeHours       = result.halfLifeHours;
+  freshHyp.domainJustification = result.justification;
+  saveLab(fresh);
+  console.log(`[ResearchLab] Hypothesis ${hypId} classified as ${result.domain} (${result.halfLifeHours}h half-life)`);
 }
 
 export function resolveHypothesis(
