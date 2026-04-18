@@ -486,7 +486,7 @@ Respond with JSON:
       const data = await callLLMWithRetry(
         async (signal) => {
           const res = await postChatCompletions({
-              model: getModel("triad-reasoning"),
+              model: getModel("logic-map-generation"),
               messages: [
                 { role: "system", content: `You are Agent 0 (Reasoner) for Agent 306 — evaluating evidence with rigorous logic. Expose hidden assumptions. Never overstate confidence.
 ${reasonerContext ? `\nMETHODOLOGICAL CONTEXT & EXISTING KNOWLEDGE:\n${reasonerContext}\n` : ""}

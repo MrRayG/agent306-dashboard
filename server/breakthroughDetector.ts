@@ -443,7 +443,7 @@ Required JSON schema:
     const userPrompt = `The finding to evaluate:\n\n${finding}`;
 
     const res = await postChatCompletions({
-        model: getModel("breakthrough-evaluation"),
+        model: getModel("breakthrough-composite-scoring"),
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -545,7 +545,7 @@ Required JSON schema:
     try {
       const breakthroughSystemPrompt = buildTweetSystemPrompt('signal', breakthrough.title);
       const voiceResp = await postChatCompletions({
-          model: getModel("breakthrough-evaluation"),
+          model: getModel("breakthrough-voice-rewrite"),
           messages: [
             { role: "system", content: breakthroughSystemPrompt },
             {

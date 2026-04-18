@@ -183,7 +183,7 @@ async function callGrok(systemPrompt: string, userPrompt: string): Promise<any |
   let raw = "";
   try {
     const response = await callLLM({
-      task: "self-debate",
+      task: "contradiction-detection",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
@@ -193,7 +193,7 @@ async function callGrok(systemPrompt: string, userPrompt: string): Promise<any |
       timeoutMs: 40000,
     });
     raw = response.text || "{}";
-    return safeParseLLMJson(raw, "Reasoning.debate");
+    return safeParseLLMJson(raw, "Reasoning.contradiction");
   } catch (e: any) {
     console.error(`[ReasoningEngine] LLM JSON parse failed:`, e.message, `— raw response: ${raw?.slice(0, 200)}`);
     return null;
