@@ -249,6 +249,38 @@ function gatherPendingReviews(): number {
   }
 }
 
+// ── Post-Resolution Action Gate helper (Wave 2.3 PR-3) ───────────────────────
+// When the LLM emits a well-formed actionWithin24h, pass it through. When it
+// doesn't (older prompt, truncated output, schema drift), synthesize an
+// explicit-none with a >=40-char justification that points at the root cause.
+function normalizeResolutionAction(
+  raw: unknown,
+  hyp: any,
+  status: string,
+  parsed: any,
+): { type: "blog" | "podcast" | "new-hypothesis" | "source-change" | "explicit-none"; detail: string; committedAt: string } {
+  const validTypes = ["blog", "podcast", "new-hypothesis", "source-change", "explicit-none"] as const;
+  type ActionType = typeof validTypes[number];
+  if (raw && typeof raw === "object") {
+    const r = raw as Record<string, unknown>;
+    const type = typeof r.type === "string" && (validTypes as readonly string[]).includes(r.type)
+      ? (r.type as ActionType)
+      : null;
+    const detail = typeof r.detail === "string" ? r.detail.trim() : "";
+    if (type && detail.length > 0 && (type !== "explicit-none" || detail.length >= 40)) {
+      return { type, detail, committedAt: new Date().toISOString() };
+    }
+  }
+  const claim = String(hyp?.claim ?? "").slice(0, 80);
+  const evidenceQuality = typeof parsed?.evidence_quality === "string" ? parsed.evidence_quality : "unknown";
+  const detail = `LLM verdict "${status}" emitted without a concrete 24h action for hypothesis "${claim}". Evidence quality was ${evidenceQuality}; flag for human review next cycle.`;
+  return {
+    type: "explicit-none",
+    detail,
+    committedAt: new Date().toISOString(),
+  };
+}
+
 // ── Auto-resolve expired hypotheses ───────────────────────────────────────────
 
 function autoResolveExpired(expired: any[]): string[] {
@@ -256,8 +288,14 @@ function autoResolveExpired(expired: any[]): string[] {
   try {
     const { resolveHypothesis } = require("./researchEngine.js");
     for (const h of expired) {
-      resolveHypothesis(h.id, "expired", `Auto-expired: past resolution deadline (${h.timeframe})`);
-      resolved.push(h.claim ?? h.id);
+      // Wave 2.3 PR-3 — auto-expiry commits to a source-change audit: usually
+      // the watched feed produced no signal; next 24h verify source is live.
+      const ok = resolveHypothesis(h.id, "expired", `Auto-expired: past resolution deadline (${h.timeframe})`, {
+        type: "source-change",
+        detail: `Hypothesis deadline passed with no conclusive signal from configured sources (${h.timeframe}). Next 24h: audit source feed for silence vs. genuine null result; re-ingest or retire source.`,
+        committedAt: new Date().toISOString(),
+      });
+      if (ok) resolved.push(h.claim ?? h.id);
     }
   } catch {}
   return resolved;
@@ -676,8 +714,15 @@ CRITICAL RULES:
 
 Consider the evidence strength, logical coherence, and whether the prediction aligns with current knowledge AND the live evidence gathered.
 
+POST-RESOLUTION ACTION GATE (Wave 2.3 PR-3):
+- If your verdict is "confirmed", "rejected", or "expired", you MUST include an "actionWithin24h" object committing to the next concrete move within 24 hours.
+- actionWithin24h.type MUST be one of: "blog" | "podcast" | "new-hypothesis" | "source-change" | "explicit-none"
+- actionWithin24h.detail MUST be a specific, non-empty commitment.
+- If you choose "explicit-none", the detail MUST be at least 40 characters explaining why no action is warranted.
+- Omit actionWithin24h for "insufficient_evidence" (the hypothesis stays active).
+
 Respond with ONLY valid JSON:
-{"status": "confirmed" | "rejected" | "insufficient_evidence" | "expired", "resolution": "brief explanation citing specific evidence", "evidence_quality": "strong" | "moderate" | "weak" | "none"}`,
+{"status": "confirmed" | "rejected" | "insufficient_evidence" | "expired", "resolution": "brief explanation citing specific evidence", "evidence_quality": "strong" | "moderate" | "weak" | "none", "actionWithin24h": {"type": "blog" | "podcast" | "new-hypothesis" | "source-change" | "explicit-none", "detail": "concrete next-24h commitment"}}`,
           },
           {
             role: "user",
@@ -734,7 +779,16 @@ Based on ALL evidence (knowledge base + live search), what is your verdict? Reme
       }
 
       if (status === "confirmed" || status === "rejected" || status === "expired") {
-        resolveHypothesis(hyp.id, status as "confirmed" | "rejected" | "expired", parsed.resolution ?? "Auto-resolved by daily cycle");
+        // Wave 2.3 PR-3 — action gate. If LLM skipped actionWithin24h,
+        // synthesize an explicit-none pointing at the LLM skip; either way
+        // the gate fires with a logged reason.
+        const action = normalizeResolutionAction(parsed.actionWithin24h, hyp, status, parsed);
+        const resolutionText = parsed.resolution ?? "Auto-resolved by daily cycle";
+        const ok = resolveHypothesis(hyp.id, status as "confirmed" | "rejected" | "expired", resolutionText, action);
+        if (!ok) {
+          console.log(`[DailyCycle] Hypothesis ${status} BLOCKED by action gate: "${hyp.claim.slice(0, 50)}"`);
+          continue;
+        }
         recordRejectionEvent(hyp.id, status === "rejected" ? "insufficient_evidence" : status, status === "confirmed");
         resolved++;
         transitions.push({ to: status as HypothesisState });
@@ -960,13 +1014,23 @@ async function autoTestHypotheses(): Promise<number> {
         ) / 5;
 
         if (rubricAvg < 4) {
-          // Too weak — reject directly
-          resolveHypothesis(hyp.id, "rejected", `Auto-rejected: rubric avg ${rubricAvg.toFixed(1)} < 4. ${assessment.reasoningChain.slice(0, 200)}`);
+          // Too weak — reject directly. Wave 2.3 PR-3: explicit-none with
+          // rubric-backed justification; no publishable insight to commit to.
+          resolveHypothesis(hyp.id, "rejected", `Auto-rejected: rubric avg ${rubricAvg.toFixed(1)} < 4. ${assessment.reasoningChain.slice(0, 200)}`, {
+            type: "explicit-none",
+            detail: `Rubric-driven reject (avg ${rubricAvg.toFixed(1)}/10 below 4.0 floor); no publishable insight. Follow-up: tune source mix or retire claim next cycle rather than blog a weak finding.`,
+            committedAt: new Date().toISOString(),
+          });
           recordRejectionEvent(hyp.id, rubricAvg < 3 ? "low_rubric" : "weak_evidence", false);
           console.log(`[DailyCycle] Hypothesis auto-rejected (rubric avg ${rubricAvg.toFixed(1)}): "${hyp.claim.slice(0, 50)}"`);
         } else if (rubricAvg >= 8 && assessment.confidence >= 0.85) {
-          // Exceptionally strong — fast-track confirm
-          resolveHypothesis(hyp.id, "confirmed", `Fast-track confirmed: rubric avg ${rubricAvg.toFixed(1)}, confidence ${assessment.confidence.toFixed(2)}. ${assessment.reasoningChain.slice(0, 200)}`);
+          // Exceptionally strong — fast-track confirm. Wave 2.3 PR-3:
+          // high-rubric confirms earn a follow-up hypothesis to compound.
+          resolveHypothesis(hyp.id, "confirmed", `Fast-track confirmed: rubric avg ${rubricAvg.toFixed(1)}, confidence ${assessment.confidence.toFixed(2)}. ${assessment.reasoningChain.slice(0, 200)}`, {
+            type: "new-hypothesis",
+            detail: `Spawn follow-up hypothesis extending "${(hyp.claim ?? "").slice(0, 80)}" — strong rubric (${rubricAvg.toFixed(1)}) + high confidence (${assessment.confidence.toFixed(2)}) warrants compounding the line of inquiry within 24h.`,
+            committedAt: new Date().toISOString(),
+          });
           recordRejectionEvent(hyp.id, "confirmed", true);
           console.log(`[DailyCycle] Hypothesis fast-track confirmed (rubric avg ${rubricAvg.toFixed(1)}, confidence ${assessment.confidence.toFixed(2)}): "${hyp.claim.slice(0, 50)}"`);
         } else if (assessment.verdict === "testing" || rubricAvg >= 5) {
@@ -1027,7 +1091,13 @@ async function autoDebateHypotheses(): Promise<number> {
             (freshHyp as any).trustScore = trustScore;
 
             if (trustScore >= 75) {
-              resolveHypothesis(hyp.id, "confirmed", `Auto-confirmed: debate "solid", trust score ${trustScore}. ${result.critique.suggestions.join("; ").slice(0, 200)}`);
+              // Wave 2.3 PR-3: "solid"+high-trust confirms are blog-worthy —
+              // the findings met the debate bar, so commit to publishing.
+              resolveHypothesis(hyp.id, "confirmed", `Auto-confirmed: debate "solid", trust score ${trustScore}. ${result.critique.suggestions.join("; ").slice(0, 200)}`, {
+                type: "blog",
+                detail: `Draft blog post on confirmed hypothesis "${(hyp.claim ?? "").slice(0, 80)}" (debate "solid", trust ${trustScore}). Key angles from debate: ${result.critique.suggestions.slice(0, 2).join("; ").slice(0, 160)}`,
+                committedAt: new Date().toISOString(),
+              });
               console.log(`[DailyCycle] Hypothesis auto-confirmed (trust: ${trustScore}): "${hyp.claim.slice(0, 50)}"`);
             }
           } else if (result.critique.overallAssessment === "flawed") {
@@ -1035,7 +1105,13 @@ async function autoDebateHypotheses(): Promise<number> {
             (freshHyp as any).trustScore = trustScore;
 
             if (trustScore <= 20) {
-              resolveHypothesis(hyp.id, "rejected", `Auto-rejected: debate "flawed", trust score ${trustScore}. Weaknesses: ${result.critique.weaknesses.join("; ").slice(0, 200)}`);
+              // Wave 2.3 PR-3: "flawed"+low-trust rejections imply the source
+              // mix is producing noise — commit to source-change this cycle.
+              resolveHypothesis(hyp.id, "rejected", `Auto-rejected: debate "flawed", trust score ${trustScore}. Weaknesses: ${result.critique.weaknesses.join("; ").slice(0, 200)}`, {
+                type: "source-change",
+                detail: `Debate flagged "${(hyp.claim ?? "").slice(0, 60)}" as flawed (trust ${trustScore}). Root cause: ${result.critique.weaknesses.slice(0, 2).join("; ").slice(0, 160)}. Next 24h: audit upstream sources feeding this line of inquiry.`,
+                committedAt: new Date().toISOString(),
+              });
               console.log(`[DailyCycle] Hypothesis auto-rejected (trust: ${trustScore}): "${hyp.claim.slice(0, 50)}"`);
             }
           }

@@ -161,6 +161,56 @@ export interface RubricScores {
   actionability: number;
 }
 
+// ── Post-Resolution Action Gate (Wave 2.3 PR-3) ──────────────────────────────
+// Agent 306 "Hypothesis Debt Crisis" blog: every resolution must commit to a
+// concrete next-24h action, or a >=40-char justification for why none is
+// warranted. Without this, resolved hypotheses accumulate silently and the
+// learning loop degrades to a trivia generator.
+export type ResolutionActionType =
+  | "blog"
+  | "podcast"
+  | "new-hypothesis"
+  | "source-change"
+  | "explicit-none";
+
+export interface ResolutionAction {
+  type:        ResolutionActionType;
+  detail:      string;
+  committedAt: string;
+}
+
+const EXPLICIT_NONE_MIN_DETAIL = 40;
+
+export function validateResolutionAction(
+  action: unknown,
+): { ok: true; action: ResolutionAction } | { ok: false; reason: string } {
+  if (!action || typeof action !== "object") {
+    return { ok: false, reason: "actionWithin24h missing or not an object" };
+  }
+  const a = action as Record<string, unknown>;
+  const validTypes: ResolutionActionType[] = ["blog", "podcast", "new-hypothesis", "source-change", "explicit-none"];
+  if (typeof a.type !== "string" || !validTypes.includes(a.type as ResolutionActionType)) {
+    return { ok: false, reason: `actionWithin24h.type must be one of: ${validTypes.join(", ")}` };
+  }
+  if (typeof a.detail !== "string" || a.detail.trim().length === 0) {
+    return { ok: false, reason: "actionWithin24h.detail must be a non-empty string" };
+  }
+  if (a.type === "explicit-none" && a.detail.trim().length < EXPLICIT_NONE_MIN_DETAIL) {
+    return { ok: false, reason: `explicit-none requires >=${EXPLICIT_NONE_MIN_DETAIL}-char justification (got ${a.detail.trim().length})` };
+  }
+  const committedAt = typeof a.committedAt === "string" && a.committedAt.length > 0
+    ? a.committedAt
+    : new Date().toISOString();
+  return {
+    ok: true,
+    action: {
+      type:        a.type as ResolutionActionType,
+      detail:      a.detail.trim(),
+      committedAt,
+    },
+  };
+}
+
 export interface Hypothesis {
   id:            string;
   claim:         string;
@@ -212,6 +262,9 @@ export interface Hypothesis {
   queue?:                         HypothesisQueue;
   stakeJustification?:            string;
   confidenceJustification?:       string;
+  // Wave 2.3 PR-3 — Post-Resolution Action Gate. Required when transitioning
+  // to any resolved state. Legacy records without this field remain readable.
+  actionWithin24h?:               ResolutionAction;
 }
 
 export type HypothesisDomain = "ai-news" | "regulatory" | "foundational" | "unknown";
@@ -572,19 +625,32 @@ export async function classifyAndCacheTriage(hypId: string): Promise<void> {
   console.log(`[ResearchLab] Hypothesis ${hypId} triaged — stake=${result.stake}, confidence=${result.confidence}, queue=${result.queue}`);
 }
 
+// Wave 2.3 PR-3 — Post-Resolution Action Gate.
+// Any transition to a resolved state requires a validated actionWithin24h. A
+// missing or malformed action rejects the resolution; the hypothesis stays in
+// its pre-call state so the caller can retry with a proper commitment.
 export function resolveHypothesis(
   id: string,
   status: "confirmed" | "rejected" | "expired" | "awaiting-deadline" | "data-unavailable" | "stale-retired",
   resolution: string,
+  actionWithin24h: ResolutionAction,
 ): boolean {
+  const validation = validateResolutionAction(actionWithin24h);
+  if (!validation.ok) {
+    console.log(`[Hypothesis] resolution rejected — missing actionWithin24h (${validation.reason}) id=${id}`);
+    return false;
+  }
   const lab = loadLab();
   const hyp = lab.hypotheses.find(h => h.id === id);
   if (!hyp) return false;
-  hyp.status     = status;
-  hyp.resolvedAt = new Date().toISOString();
-  hyp.resolution = resolution;
+  hyp.status          = status;
+  hyp.resolvedAt      = new Date().toISOString();
+  hyp.resolution      = resolution;
+  hyp.actionWithin24h = validation.action;
   if (status === "confirmed") lab.stats.hypothesesConfirmed++;
   saveLab(lab);
+  const detailSnip = validation.action.detail.slice(0, 120);
+  console.log(`[Hypothesis] resolved ${id} action=${validation.action.type}:${detailSnip}`);
   return true;
 }
 

@@ -41,7 +41,7 @@ import { getAllSessions, getActiveSessionCount, closeExpiredSessions } from "./s
 import { postCast, isFarcasterEnabled, getFarcasterState, setFarcasterEnabled, createSigner, getSignerStatus, fetchMentions, determineChannel, getStoredSignerUuid, storeSignerUuid } from "./farcasterEngine.js";
 import {
   getResearchLab, addTopic, updateTopicStatus, getTopicById,
-  addHypothesis, resolveHypothesis, testHypothesis,
+  addHypothesis, resolveHypothesis, testHypothesis, validateResolutionAction,
   runResearchCycle, approveForPublication, declinePublication,
   markPublished, requestRevisions, provideInput, skipInput,
   // Goals
@@ -3658,9 +3658,15 @@ needsHelp: true only when you genuinely need his direction or information`,
 
   app.post("/api/research/hypothesis/resolve/:id", (req, res) => {
     const { id } = req.params;
-    const { status, resolution } = req.body ?? {};
+    const { status, resolution, actionWithin24h } = req.body ?? {};
     if (!status || !resolution) return res.status(400).json({ error: "status and resolution required" });
-    const ok = resolveHypothesis(id, status, resolution);
+    // Wave 2.3 PR-3 — Post-Resolution Action Gate. Reject before hitting the
+    // resolver so API callers get a clear 400 instead of a silent `ok: false`.
+    const validation = validateResolutionAction(actionWithin24h);
+    if (!validation.ok) {
+      return res.status(400).json({ error: `actionWithin24h invalid: ${validation.reason}` });
+    }
+    const ok = resolveHypothesis(id, status, resolution, validation.action);
     res.json({ ok });
   });
 
