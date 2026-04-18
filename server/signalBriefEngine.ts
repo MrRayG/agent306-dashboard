@@ -121,17 +121,12 @@ Return JSON:
           content: xSearchPrompt,
           signal: AbortSignal.timeout(45000),
         })
-      : await fetch(GROK_SEARCH_URL, {
-          method: "POST",
-          headers: getLLMHeaders(),
-          body: JSON.stringify({
-            model: getModel("x_search"),
-            messages: [{ role: "user", content: `Find the 3 most important tech/AI/crypto developments from the last 48 hours. Return JSON with aiSignal, web3Signal, wildcardSignal fields, each 2-3 sentences.` }],
-            max_tokens: 800,
-            temperature: 0.3,
-          }),
-          signal: AbortSignal.timeout(45000),
-        });
+      : await postChatCompletions({
+          model: getModel("x_search"),
+          messages: [{ role: "user", content: `Find the 3 most important tech/AI/crypto developments from the last 48 hours. Return JSON with aiSignal, web3Signal, wildcardSignal fields, each 2-3 sentences.` }],
+          max_tokens: 800,
+          temperature: 0.3,
+        }, AbortSignal.timeout(45000), "x_search");
 
     if (!res.ok) {
       const errorBody = await res.text().catch(() => "");

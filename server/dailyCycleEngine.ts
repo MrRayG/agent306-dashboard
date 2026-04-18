@@ -377,20 +377,15 @@ PENDING REVIEWS: ${context.pendingReviews}
 Generate the daily briefing. Respond with JSON only.`;
 
   try {
-    const res = await fetch(GROK_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
-        model: getModel("daily_briefing"),
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user",   content: userPrompt },
-        ],
-        temperature: 0.6,
-        max_tokens: 4000,
-      }),
-      signal: AbortSignal.timeout(240000),
-    });
+    const res = await postChatCompletions({
+      model: getModel("daily_briefing"),
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user",   content: userPrompt },
+      ],
+      temperature: 0.6,
+      max_tokens: 4000,
+    }, AbortSignal.timeout(240000), "daily_briefing");
 
     if (!res.ok) {
       console.error(`[DailyCycle] Grok API error: ${res.status}`);
@@ -662,15 +657,12 @@ async function autoResolveHypotheses(): Promise<number> {
         evidenceSection = "\nNote: No live search was performed. Evaluate based on knowledge base only.";
       }
 
-      const res = await fetch(GROK_URL, {
-        method: "POST",
-        headers: getLLMHeaders(),
-        body: JSON.stringify({
-          model: getModel("hypothesis-resolution"),
-          messages: [
-            {
-              role: "system",
-              content: `You evaluate whether a hypothesis should be confirmed, rejected, or kept for further investigation based on ALL available evidence.
+      const res = await postChatCompletions({
+        model: getModel("hypothesis-resolution"),
+        messages: [
+          {
+            role: "system",
+            content: `You evaluate whether a hypothesis should be confirmed, rejected, or kept for further investigation based on ALL available evidence.
 
 Let's evaluate this hypothesis step by step.
 
@@ -685,10 +677,10 @@ Consider the evidence strength, logical coherence, and whether the prediction al
 
 Respond with ONLY valid JSON:
 {"status": "confirmed" | "rejected" | "insufficient_evidence" | "expired", "resolution": "brief explanation citing specific evidence", "evidence_quality": "strong" | "moderate" | "weak" | "none"}`,
-            },
-            {
-              role: "user",
-              content: `HYPOTHESIS:
+          },
+          {
+            role: "user",
+            content: `HYPOTHESIS:
 Claim: ${hyp.claim ?? "unknown"}
 Basis: ${hyp.basis ?? "unknown"}
 Prediction: ${hyp.prediction ?? "unknown"}
@@ -703,13 +695,11 @@ ${kbContext}
 ${evidenceSection}
 
 Based on ALL evidence (knowledge base + live search), what is your verdict? Remember: "no evidence found" is NOT rejection — use "insufficient_evidence" to keep investigating.`,
-            },
-          ],
-          temperature: 0.3,
-          max_tokens: 500,
-        }),
-        signal: AbortSignal.timeout(60000),
-      });
+          },
+        ],
+        temperature: 0.3,
+        max_tokens: 500,
+      }, AbortSignal.timeout(60000), "hypothesis-resolution");
 
       if (!res.ok) {
         const errBody = await res.text().catch(() => "");
@@ -1107,20 +1097,15 @@ Respond with ONLY a JSON array:
   const userPrompt = `KNOWLEDGE BASE CONTEXT:\n${kbContext}\n\nGenerate 5-10 seed hypotheses based on this knowledge and current tech trends. Respond with JSON array only.`;
 
   try {
-    const res = await fetch(GROK_URL, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
-        model: getModel("daily_briefing"),
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user",   content: userPrompt },
-        ],
-        temperature: 0.7,
-        max_tokens: 3000,
-      }),
-      signal: AbortSignal.timeout(120000),
-    });
+    const res = await postChatCompletions({
+      model: getModel("daily_briefing"),
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user",   content: userPrompt },
+      ],
+      temperature: 0.7,
+      max_tokens: 3000,
+    }, AbortSignal.timeout(120000), "daily_briefing");
 
     if (!res.ok) {
       console.error(`[DailyCycle] Seed hypothesis LLM error: ${res.status}`);
