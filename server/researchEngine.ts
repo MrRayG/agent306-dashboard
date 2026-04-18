@@ -168,7 +168,7 @@ export interface Hypothesis {
   metric:        string;       // on-chain or measurable metric being tracked
   prediction:    string;       // specific prediction
   timeframe:     string;       // when it resolves
-  status:        "forming" | "testing" | "confirmed" | "rejected" | "expired";
+  status:        "forming" | "testing" | "confirmed" | "rejected" | "expired" | "awaiting-deadline" | "data-unavailable" | "stale-retired";
   confidence:    "high" | "medium" | "low";
   formedAt:      string;
   resolvedAt?:   string;
@@ -188,6 +188,12 @@ export interface Hypothesis {
     reasoningChain: string;
     gapsIdentified: string[];
   };
+  // State machine tracking (added for hypothesis-state-machine PR)
+  cycleCount?:                    number;  // how many cycles this hypothesis has been evaluated
+  consecutiveInsufficientCycles?: number;  // consecutive cycles ending in "insufficient evidence"
+  deadlineAt?:                    string;  // ISO date extracted from claim/timeframe (future-dated)
+  deadlineCheckedAt?:             string;  // last time we re-checked a deadline hypothesis
+  retiredReason?:                 string;  // why we moved to data-unavailable or stale-retired
 }
 
 interface ResearchLab {
@@ -461,7 +467,11 @@ export function addHypothesis(input: Omit<Hypothesis, "id" | "formedAt" | "statu
   return hyp;
 }
 
-export function resolveHypothesis(id: string, status: "confirmed" | "rejected" | "expired", resolution: string): boolean {
+export function resolveHypothesis(
+  id: string,
+  status: "confirmed" | "rejected" | "expired" | "awaiting-deadline" | "data-unavailable" | "stale-retired",
+  resolution: string,
+): boolean {
   const lab = loadLab();
   const hyp = lab.hypotheses.find(h => h.id === id);
   if (!hyp) return false;

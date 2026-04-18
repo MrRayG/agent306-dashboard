@@ -39,7 +39,17 @@ import { evidenceQueue, routeEvidenceSearch, processEvidenceQueue } from "./evid
 import { runConnectionScan } from "./synthesisEngine.js";
 import { extractInsights } from "./conversationLearningEngine.js";
 import { getMetacognitionState } from "./metacognitionEngine.js";
-import { getResearchLab, resolveHypothesis, addHypothesis, testHypothesis, runResearchPipeline, researchWithPerplexity, researchWithSemanticScholar, autoApproveTopics, generateAspirations, evaluateAspirations, getAspirations } from "./researchEngine.js";
+import { getResearchLab, resolveHypothesis, addHypothesis, testHypothesis, runResearchPipeline, researchWithPerplexity, researchWithSemanticScholar, autoApproveTopics, generateAspirations, evaluateAspirations, getAspirations, saveResearchLab } from "./researchEngine.js";
+import {
+  classifyForStateMachine,
+  logStateTransition,
+  shouldRecheckDeadline,
+  needsLiveGrounding,
+  tallyStates,
+  logCycleSummary,
+  type HypothesisState,
+} from "./hypothesisStateMachine.js";
+import { gatherPerplexityEvidence } from "./perplexityEvidence.js";
 import { detectBreakthroughs, checkPredictions, extractPrediction, storePrediction, getBreakthroughs } from "./breakthroughDetector.js";
 import { runSelfEvolutionReflection, capturePreCycleSnapshot, getEvolutionDiffs } from "./selfEvolutionEngine.js";
 import { clusterKnowledge, detectContradictions as detectGraphContradictions } from "./knowledge-graph.js";
@@ -491,12 +501,60 @@ function pruneStaleFormingHypotheses(): number {
 async function autoResolveHypotheses(): Promise<number> {
   const lab = getResearchLab();
   const fourHoursAgo = Date.now() - 4 * 60 * 60 * 1000;
+  const now = new Date();
 
+  // Include awaiting-deadline hypotheses whose deadline has passed (or whose
+  // daily re-check is due) so they can transition forward when data arrives.
   const mature = lab.hypotheses
-    .filter(h => (h.status === "forming" || h.status === "testing") && new Date(h.formedAt).getTime() < fourHoursAgo)
+    .filter(h => {
+      const isActive = h.status === "forming" || h.status === "testing";
+      const isDue    = h.status === "awaiting-deadline" && shouldRecheckDeadline(h, now);
+      return (isActive || isDue) && new Date(h.formedAt).getTime() < fourHoursAgo;
+    })
     .slice(0, 50);
 
-  if (mature.length === 0) return 0;
+  // Collect transitions to emit a per-cycle summary log.
+  const transitions: Array<{ to: HypothesisState }> = [];
+  let preEvalExits = 0;
+
+  // ── Pre-evaluation state machine pass ────────────────────────────────────
+  // Before spending any LLM tokens, classify each hypothesis for a structural
+  // exit path (awaiting-deadline, data-unavailable, stale-retired).
+  const skipIds = new Set<string>();
+  {
+    const freshLab = getResearchLab();
+    for (const hyp of mature) {
+      const fresh = freshLab.hypotheses.find(h => h.id === hyp.id);
+      if (!fresh) continue;
+      const classification = classifyForStateMachine(fresh, now);
+      if (!classification.transitionTo) continue;
+
+      const oldState = fresh.status as HypothesisState;
+      const target   = classification.transitionTo;
+      const reason   = classification.reason ?? "state machine transition";
+
+      fresh.status         = target;
+      fresh.resolvedAt     = now.toISOString();
+      fresh.resolution     = reason;
+      fresh.retiredReason  = target === "data-unavailable" || target === "stale-retired" ? reason : fresh.retiredReason;
+      if (classification.deadlineAt) fresh.deadlineAt = classification.deadlineAt;
+
+      logStateTransition(fresh.id, oldState, target, reason);
+      transitions.push({ to: target });
+      preEvalExits++;
+      skipIds.add(fresh.id);
+    }
+    saveResearchLab(freshLab);
+  }
+
+  const remaining = mature.filter(h => !skipIds.has(h.id));
+  if (remaining.length === 0) {
+    logCycleSummary(tallyStates(getResearchLab().hypotheses, transitions));
+    if (transitions.length > 0) {
+      console.log(`[DailyCycle] Auto-resolved ${transitions.length} hypotheses via state machine (no LLM calls)`);
+    }
+    return transitions.length;
+  }
 
   // Fallback KB context if semantic search fails
   const { knowledge: kb } = await import("./memoryEngine.js");
@@ -509,7 +567,7 @@ async function autoResolveHypotheses(): Promise<number> {
   const pplxKey = process.env.PERPLEXITY_API_KEY ?? "";
 
   let resolved = 0;
-  for (const hyp of mature) {
+  for (const hyp of remaining) {
     try {
       // ── Semantic KB context: per-hypothesis relevant entries ──
       let kbContext = fallbackKbContext;
@@ -529,14 +587,24 @@ async function autoResolveHypotheses(): Promise<number> {
       // ── Active evidence gathering via Perplexity Sonar + Semantic Scholar ──
       let liveEvidence = "";
       let academicEvidence = "";
+      let groundingCitations: string[] = [];
       const searchQuery = `Evidence for or against: ${hyp.claim}. ${hyp.prediction}. Look for recent data, studies, announcements, or expert analysis.`;
+
+      // For hypotheses about current events (dates, legislation, product
+      // launches, trials), prefer Perplexity sonar-pro grounding. Academic
+      // sources (openalex/arxiv/crossref) cannot resolve these. Falls back to
+      // academic-only when PERPLEXITY_API_KEY is missing or Perplexity errors.
+      const liveGrounding = needsLiveGrounding(`${hyp.claim ?? ""} ${hyp.prediction ?? ""}`, now);
 
       // Run Perplexity + Semantic Scholar + External Sources in parallel
       const { searchAllSources } = await import("./externalDataSources.js");
-      const [pplxSettled, scholarSettled, externalSettled] = await Promise.allSettled([
+      const [pplxSettled, groundingSettled, scholarSettled, externalSettled] = await Promise.allSettled([
         pplxKey && pplxKey.length > 10
           ? researchWithPerplexity(searchQuery, pplxKey)
           : Promise.resolve({ text: "", sources: [] as string[] }),
+        liveGrounding
+          ? gatherPerplexityEvidence(`${hyp.claim} — prediction: ${hyp.prediction}`)
+          : Promise.resolve({ content: "", citations: [], ok: false }),
         researchWithSemanticScholar(hyp.claim),
         searchAllSources(hyp.claim, { limit: 2, sources: ["openalex", "arxiv", "crossref", "news"] }),
       ]);
@@ -547,6 +615,17 @@ async function autoResolveHypotheses(): Promise<number> {
           ? `\nSources: ${pplxSettled.value.sources.slice(0, 5).join(", ")}`
           : "";
         console.log(`[DailyCycle] Live evidence gathered for "${hyp.claim.slice(0, 50)}" — ${liveEvidence.length} chars${sourceList}`);
+      }
+
+      if (groundingSettled.status === "fulfilled" && groundingSettled.value.ok) {
+        const g = groundingSettled.value;
+        groundingCitations = g.citations;
+        // Append to liveEvidence without overwriting richer Perplexity sonar output
+        if (liveEvidence.length === 0) {
+          liveEvidence = g.content.slice(0, 2000);
+        } else {
+          liveEvidence += `\n\n[live-research grounding]\n${g.content.slice(0, 1000)}`;
+        }
       }
 
       if (scholarSettled.status === "fulfilled" && (scholarSettled.value?.papers?.length ?? 0) > 0) {
@@ -644,24 +723,63 @@ Based on ALL evidence (knowledge base + live search), what is your verdict? Reme
       if (!parsed) continue;
 
       const status = parsed.status as string;
+
+      // Bump cycleCount on every evaluation; maintain consecutiveInsufficientCycles.
+      {
+        const freshLab = getResearchLab();
+        const freshHyp = freshLab.hypotheses.find(h => h.id === hyp.id);
+        if (freshHyp) {
+          freshHyp.cycleCount = (freshHyp.cycleCount ?? 0) + 1;
+          if (status === "insufficient_evidence") {
+            freshHyp.consecutiveInsufficientCycles = (freshHyp.consecutiveInsufficientCycles ?? 0) + 1;
+          } else {
+            freshHyp.consecutiveInsufficientCycles = 0;
+          }
+          if (hyp.status === "awaiting-deadline") {
+            freshHyp.deadlineCheckedAt = now.toISOString();
+          }
+          saveResearchLab(freshLab);
+        }
+      }
+
       if (status === "confirmed" || status === "rejected" || status === "expired") {
         resolveHypothesis(hyp.id, status as "confirmed" | "rejected" | "expired", parsed.resolution ?? "Auto-resolved by daily cycle");
         recordRejectionEvent(hyp.id, status === "rejected" ? "insufficient_evidence" : status, status === "confirmed");
         resolved++;
+        transitions.push({ to: status as HypothesisState });
+        logStateTransition(hyp.id, hyp.status as HypothesisState, status as HypothesisState, (parsed.resolution ?? "").slice(0, 120));
         console.log(`[DailyCycle] Hypothesis ${status}: "${hyp.claim.slice(0, 50)}" — evidence quality: ${parsed.evidence_quality ?? "unknown"}`);
       } else if (status === "insufficient_evidence") {
-        // Keep alive — queue targeted search for next cycle
-        console.log(`[DailyCycle] Hypothesis kept alive (insufficient evidence): "${hyp.claim.slice(0, 50)}" — ${(parsed.resolution ?? "").slice(0, 100)}`);
-        try {
-          evidenceQueue.add({
-            source: "hypothesis_resolve",
-            query: `Latest evidence for or against: ${hyp.claim}`,
-            targetId: hyp.id,
-            priority: 10,
-            searchRoute: routeEvidenceSearch(hyp.claim),
-          });
-        } catch (e: any) {
-          console.warn(`[DailyCycle] Failed to queue evidence for insufficient_evidence hypothesis:`, e.message);
+        // After bumping the counter, re-check whether we've crossed the
+        // data-unavailable threshold. If so, retire now rather than waiting
+        // for the next cycle.
+        const freshLab = getResearchLab();
+        const freshHyp = freshLab.hypotheses.find(h => h.id === hyp.id);
+        const followUp = freshHyp ? classifyForStateMachine(freshHyp, now) : {};
+        if (freshHyp && followUp.transitionTo === "data-unavailable") {
+          const oldState = freshHyp.status as HypothesisState;
+          freshHyp.status        = "data-unavailable";
+          freshHyp.resolvedAt    = now.toISOString();
+          freshHyp.resolution    = followUp.reason ?? "data-unavailable";
+          freshHyp.retiredReason = followUp.reason;
+          saveResearchLab(freshLab);
+          logStateTransition(freshHyp.id, oldState, "data-unavailable", followUp.reason ?? "");
+          transitions.push({ to: "data-unavailable" });
+          resolved++;
+          console.log(`[DailyCycle] Hypothesis retired (data-unavailable): "${hyp.claim.slice(0, 50)}"`);
+        } else {
+          console.log(`[DailyCycle] Hypothesis kept alive (insufficient evidence): "${hyp.claim.slice(0, 50)}" — ${(parsed.resolution ?? "").slice(0, 100)}`);
+          try {
+            evidenceQueue.add({
+              source: "hypothesis_resolve",
+              query: `Latest evidence for or against: ${hyp.claim}`,
+              targetId: hyp.id,
+              priority: 10,
+              searchRoute: routeEvidenceSearch(hyp.claim),
+            });
+          } catch (e: any) {
+            console.warn(`[DailyCycle] Failed to queue evidence for insufficient_evidence hypothesis:`, e.message);
+          }
         }
       }
 
@@ -675,7 +793,11 @@ Based on ALL evidence (knowledge base + live search), what is your verdict? Reme
   }
 
   if (resolved > 0) console.log(`[DailyCycle] Auto-resolved ${resolved} hypotheses`);
-  return resolved;
+
+  // Per-cycle state tally log — one line, easy to grep.
+  logCycleSummary(tallyStates(getResearchLab().hypotheses, transitions));
+
+  return resolved + preEvalExits;
 }
 
 // ── Auto-detect contradictions in recent knowledge ──────────────────────────
