@@ -605,7 +605,7 @@ export function generateBreakthroughContent(): string | null {
 
   if (unpublished.length > 0) {
     const bt = unpublished[0];
-    return `[306 SIGNAL] Breakthrough: ${bt.title}\n\nComposite score: ${bt.compositeScore}/100\n\n${bt.description.slice(0, 2000)}`;
+    return `[306 BREAKTHROUGH] ${bt.title}\n\nComposite score: ${bt.compositeScore}/100\n\n${bt.description.slice(0, 2000)}`;
   }
 
   // Fallback: summarize most recent breakthrough (even if published)
@@ -614,7 +614,7 @@ export function generateBreakthroughContent(): string | null {
 
   if (latest.length > 0) {
     const bt = latest[0];
-    return `[306 SIGNAL] ${bt.title}\n\n${bt.description.slice(0, 2000)}`;
+    return `[306 BREAKTHROUGH] ${bt.title}\n\n${bt.description.slice(0, 2000)}`;
   }
 
   return null;

@@ -3026,33 +3026,38 @@ Evaluate honestly. Return valid JSON:
 
 // ── On-demand generation (no side effects — produces a research brief post) ──
 export async function generateResearchContent(): Promise<string | null> {
-  console.log("[Research] On-demand generation triggered");
+  console.log("[Research] On-demand promo generation triggered");
   const lab = loadLab();
 
-  // Find the most recent topic with a conclusion or manuscript
+  // PROMOTE the latest research manuscript. Research is long-form — queue a
+  // teaser (conclusion or stripped manuscript intro) with a link back to
+  // agent306.ai. Only include topics with an actual manuscript; analysis
+  // findings alone are internal working material, not publishable.
   const publishable = lab.topics
     .filter(t =>
       (t.status === "approved" || t.status === "pending_review" || t.status === "published") &&
-      (t.manuscript || t.conclusion),
+      !!t.manuscript && t.manuscript.length > 100,
     )
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
   if (publishable.length === 0) {
-    // Fallback: use any topic with analysis findings
-    const withFindings = lab.topics
-      .filter(t => t.analysisFindings && t.analysisFindings.length > 50)
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-
-    if (withFindings.length === 0) return null;
-
-    const topic = withFindings[0];
-    return `[306 RESEARCH] ${topic.topic}\n\n${topic.analysisFindings!.slice(0, 2000)}`;
+    console.warn("[Research] No research topics with a manuscript to promote");
+    return null;
   }
 
   const topic = publishable[0];
-  const body = topic.manuscript
-    ? topic.manuscript.slice(0, 2000)
-    : topic.conclusion!.slice(0, 2000);
 
-  return `[306 RESEARCH] ${topic.topic}\n\n${body}`;
+  // Teaser = conclusion (2-3 sentences) if available, otherwise first 1000
+  // chars of the manuscript stripped of markdown noise. Never dump the full
+  // manuscript into the X queue.
+  const teaser = (topic.conclusion && topic.conclusion.length > 20)
+    ? topic.conclusion.trim()
+    : topic.manuscript!
+        .replace(/^#+\s+/gm, "")
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+        .slice(0, 1000)
+        .trim();
+
+  const researchLink = `https://agent306.ai/research/${topic.id}`;
+  return `[306 RESEARCH] ${topic.topic}\n\n${teaser}\n\nFull manuscript: ${researchLink}`;
 }
