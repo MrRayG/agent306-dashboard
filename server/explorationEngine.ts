@@ -175,23 +175,18 @@ async function searchXSocial(query: string, grokKey: string): Promise<string> {
 // Used when no Perplexity key is set. Less current (training cutoff) but works.
 async function searchWithGrokKnowledge(query: string, grokKey: string): Promise<string> {
   try {
-    const res = await fetch(GROK_CHAT_API, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
-        model: getModel("exploration_synthesis"),
-        messages: [{
-          role: "system",
-          content: "You are a knowledgeable research assistant. Answer with specific facts, names, and numbers.",
-        }, {
-          role: "user",
-          content: query + "\n\nNote: Use your knowledge up to your training cutoff. Be specific about what you know.",
-        }],
-        max_tokens: 800,
-        temperature: 0.3,
-      }),
-      signal: AbortSignal.timeout(25000),
-    });
+    const res = await postChatCompletions({
+      model: getModel("exploration_synthesis"),
+      messages: [{
+        role: "system",
+        content: "You are a knowledgeable research assistant. Answer with specific facts, names, and numbers.",
+      }, {
+        role: "user",
+        content: query + "\n\nNote: Use your knowledge up to your training cutoff. Be specific about what you know.",
+      }],
+      max_tokens: 800,
+      temperature: 0.3,
+    }, AbortSignal.timeout(25000), "exploration_synthesis");
     if (!res.ok) return "";
     const data = await res.json() as any;
     return data.choices?.[0]?.message?.content ?? "";
@@ -209,17 +204,14 @@ async function extractKnowledge(
   if (!rawText || rawText.length < 80) return { findings: [], knowledge: [] };
 
   try {
-    const res = await fetch(GROK_CHAT_API, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
-        model: getModel("exploration_synthesis"),
-        messages: [{
-          role: "system",
-          content: "Extract structured knowledge from research text. Return valid JSON only. Be selective — only extract specific, durable, actionable insights. IMPORTANT: Do NOT extract things the agent already knows unless the information has materially changed or updated.",
-        }, {
-          role: "user",
-          content: `Extract the most important NEW insights from this research about ${context}.
+    const res = await postChatCompletions({
+      model: getModel("exploration_synthesis"),
+      messages: [{
+        role: "system",
+        content: "Extract structured knowledge from research text. Return valid JSON only. Be selective — only extract specific, durable, actionable insights. IMPORTANT: Do NOT extract things the agent already knows unless the information has materially changed or updated.",
+      }, {
+        role: "user",
+        content: `Extract the most important NEW insights from this research about ${context}.
 
 WHAT AGENT #306 ALREADY KNOWS (skip these unless the info has changed):
 ${existingKBDigest.slice(0, 1500)}
@@ -249,12 +241,10 @@ Rules:
 - SKIP anything that duplicates what Agent 306 already knows (see above) — unless it represents a genuine UPDATE (new numbers, new developments, changed status)
 - Max 6 knowledge entries per territory
 - Only skip pure opinions with no factual basis`,
-        }],
-        max_tokens: 900,
-        temperature: 0.2,
-      }),
-      signal: AbortSignal.timeout(20000),
-    });
+      }],
+      max_tokens: 900,
+      temperature: 0.2,
+    }, AbortSignal.timeout(20000), "exploration_synthesis");
 
     if (!res.ok) return { findings: [], knowledge: [] };
     const data = await res.json() as any;

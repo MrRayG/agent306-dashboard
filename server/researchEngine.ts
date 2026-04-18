@@ -673,25 +673,21 @@ async function callGrok(
   grokKey: string,
   systemPrompt: string,
   userPrompt: string,
-  opts?: { model?: string; maxTokens?: number; temperature?: number; skipPreamble?: boolean }
+  opts?: { model?: string; maxTokens?: number; temperature?: number; skipPreamble?: boolean; task?: string }
 ): Promise<any | null> {
   let raw = "";
   try {
     const fullSystem = (opts?.skipPreamble ? systemPrompt : METHODOLOGY_PREAMBLE + systemPrompt) + JSON_SUFFIX;
-    const res = await fetch(GROK_CHAT_API, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
-        model: opts?.model ?? getModel("research_phase"),
-        messages: [
-          { role: "system", content: fullSystem },
-          { role: "user", content: userPrompt },
-        ],
-        max_tokens: opts?.maxTokens ?? 1500,
-        temperature: opts?.temperature ?? 0.3,
-      }),
-      signal: AbortSignal.timeout(LLM_TIMEOUTS.hypothesis_evaluation),
-    });
+    const task = opts?.task ?? "research_phase";
+    const res = await postChatCompletions({
+      model: opts?.model ?? getModel(task),
+      messages: [
+        { role: "system", content: fullSystem },
+        { role: "user", content: userPrompt },
+      ],
+      max_tokens: opts?.maxTokens ?? 1500,
+      temperature: opts?.temperature ?? 0.3,
+    }, AbortSignal.timeout(LLM_TIMEOUTS.hypothesis_evaluation), task);
     if (!res.ok) return null;
     const data = await res.json() as any;
     raw = data.choices?.[0]?.message?.content ?? "{}";
@@ -2013,21 +2009,18 @@ export async function generateInitialGoals(grokKey: string): Promise<AgentGoal[]
 
   let raw = "";
   try {
-    const res = await fetch(GROK_CHAT_API, {
-      method: "POST",
-      headers: getLLMHeaders(),
-      body: JSON.stringify({
-        model: getModel("manuscript"),
-        messages: [{
-          role: "system",
-          content: `You are Agent 306 — an autonomous AI research agent and thought leader covering AI, technology, and Web3. You produce THE SIGNAL podcast and publish daily research blogs at agent306.ai. You are NOT a token, NOT an NFT project. You are your own entity.
+    const res = await postChatCompletions({
+      model: getModel("manuscript"),
+      messages: [{
+        role: "system",
+        content: `You are Agent 306 — an autonomous AI research agent and thought leader covering AI, technology, and Web3. You produce THE SIGNAL podcast and publish daily research blogs at agent306.ai. You are NOT a token, NOT an NFT project. You are your own entity.
 
 You are setting your OWN development goals — things you want to improve about yourself as a researcher, writer, podcaster, and thinker. These are personal and honest.
 
 Return valid JSON.`,
-        }, {
-          role: "user",
-          content: `Set ${toGenerate} honest self-development goals for yourself. Mix categories across: voice, knowledge, craft, reach, identity, technical.
+      }, {
+        role: "user",
+        content: `Set ${toGenerate} honest self-development goals for yourself. Mix categories across: voice, knowledge, craft, reach, identity, technical.
 
 ${existingTitles ? `You already have these active goals (don't duplicate): ${existingTitles}` : ""}
 
@@ -2052,12 +2045,10 @@ Return JSON:
     }
   ]
 }`,
-        }],
-        max_tokens: 2000,
-        temperature: 0.7,
-      }),
-      signal: AbortSignal.timeout(40000),
-    });
+      }],
+      max_tokens: 2000,
+      temperature: 0.7,
+    }, AbortSignal.timeout(40000), "manuscript");
 
     if (!res.ok) {
       const errBody = await res.text().catch(() => "");
