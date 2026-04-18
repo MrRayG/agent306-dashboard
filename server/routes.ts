@@ -5232,15 +5232,24 @@ needsHelp: true only when you genuinely need his direction or information`,
         }
 
         case "blog": {
-          const result = await generateBlogPost({
-            topic: "On-demand blog post — today's top AI signal",
-            sourceContent: "Generate a blog post about the most significant AI development happening right now.",
-            source: "standalone" as any,
-            autoPublish: false,
-          });
-          if (!result) throw new Error("Blog post generation failed");
-          // Blog posts are long-form — queue the excerpt/teaser
-          content = result.excerpt || result.title || "New blog post generated";
+          // PROMOTE the latest published blog post. Generate Now is NOT a
+          // "write a brand-new blog post" button — the autonomous daily blog
+          // engine owns authoring. We just queue a teaser with the real
+          // agent306.ai/blog/<slug> URL.
+          const { getPublishedPosts } = await import("./blogEngine.js");
+          const published = getPublishedPosts(1);
+          if (!published.length) {
+            throw new Error(
+              "No published blog posts to promote. Run the blog engine or publish a draft first."
+            );
+          }
+          const post = published[0];
+          const blogLink = `https://agent306.ai/blog/${post.slug}`;
+          const blogTitle = (post.title ?? "New post").trim();
+          const blogExcerpt = (post.excerpt ?? "").trim();
+          content = blogExcerpt
+            ? `[306 BLOG] ${blogTitle}\n\n${blogExcerpt}\n\nRead: ${blogLink}`
+            : `[306 BLOG] ${blogTitle}\n\nRead: ${blogLink}`;
           type = "blog";
           break;
         }

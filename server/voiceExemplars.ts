@@ -178,10 +178,19 @@ export function formatExemplarBlock(
   return `${header}\n\n${body}\n\n${close}`;
 }
 
+// Feature flag: the few-shot exemplar loop anchors prompts on Agent 306's last
+// 3 published posts. That's only a quality signal once engagement data is dense
+// enough to filter for her actual top performers — otherwise "most recent"
+// reinforces whatever just shipped, regardless of quality. Default OFF until
+// we have >=3 posts above a defined engagement bar.
+const EXEMPLARS_ENABLED =
+  (process.env.VOICE_EXEMPLARS_ENABLED ?? "false").toLowerCase() === "true";
+
 /** Convenience: fetch + format in one call. Returns "" when no exemplars. */
 export async function buildExemplarBlock(
   opts: GetTopPerformersOpts,
 ): Promise<string> {
+  if (!EXEMPLARS_ENABLED) return "";
   const exemplars = await getTopPerformers(opts);
   return formatExemplarBlock(exemplars, opts.contentType);
 }
