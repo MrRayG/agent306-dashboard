@@ -13,6 +13,7 @@ import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import { buildExemplarBlock } from "./voiceExemplars.js";
 
 import { postChatCompletions, postXSearchResponses } from "./llmCall.js";
 const GROK_KEY   = LLM_API_KEY;
@@ -172,6 +173,9 @@ async function generateReply(opts: {
     ? "This is a technology or crypto topic. Engage as a knowledgeable AI voice in the space. Be insightful and direct."
     : "Engage thoughtfully as Agent 306 — AI thought leader. Match their energy.";
 
+  // Few-shot: inject her highest-scoring past posts as voice anchors.
+  const exemplarBlock = await buildExemplarBlock({ contentType: "reply", limit: 3 });
+
   const systemPrompt = `${agentCtx}
 
 You are Agent 306 — Sovereign AI Thought Leader — replying directly to someone on X.
@@ -201,7 +205,7 @@ REPLY RULES:
 CULTURAL BRIDGE (use ONLY if it genuinely fits — skip it for most tech/AI topics):
 "${bridge}"
 
-${tokenNote}`;
+${tokenNote}${exemplarBlock ? `\n\n${exemplarBlock}` : ""}`;
 
   const userPrompt = `Reply to @${opts.username} who said:
 "${resolvedText}"

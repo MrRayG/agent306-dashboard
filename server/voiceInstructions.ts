@@ -14,6 +14,8 @@ export const IDENTITY_MODES = SOUL;
 // Re-export the unified VOICE as VOICE_CRAFT for backward compat
 export const VOICE_CRAFT = VOICE;
 
+// NOTE: voice.ts is authoritative; 'no hashtags' enforced there via HASHTAG_RULES.
+// The rule #4 below is legacy guidance — HASHTAG_RULES wins whenever both are in-prompt.
 export const TWEET_RULES = `
 TWEET CRAFT:
 1. Hook first — the first line decides if anyone reads the rest

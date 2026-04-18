@@ -21,6 +21,7 @@ import { getOptimizedContextAsync } from "./contextWindow.js";
 import { getFormatVoiceContext } from "./voiceInstructions.js";
 import { getKnowledgeContext } from "./memoryEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import { buildExemplarBlock } from "./voiceExemplars.js";
 
 import { postChatCompletions } from "./llmCall.js";
 const BLOG_FILE = dataPath("blog_state.json");
@@ -353,6 +354,10 @@ export async function generateBlogPost(opts: {
     }
   }
 
+  // Few-shot: inject her own best recent blog work so voice pulls forward, not flatter.
+  // Empty when no history — prompt stays coherent.
+  const exemplarBlock = await buildExemplarBlock({ contentType: "blog", limit: 3 });
+
   try {
     const res = await postChatCompletions({
         model: getModel("blog-post"),
@@ -420,7 +425,7 @@ ${opts.sourceContent.slice(0, 4000)}
 
 CURRENT KNOWLEDGE CONTEXT:
 ${currentKnowledge}
-${freshContext ? `\nLATEST DEVELOPMENTS (from today's research — incorporate these):\n${freshContext}\n` : ""}
+${freshContext ? `\nLATEST DEVELOPMENTS (from today's research — incorporate these):\n${freshContext}\n` : ""}${exemplarBlock ? `\n${exemplarBlock}\n` : ""}
 IMPORTANT: If the source material is from a private chat conversation, extract the TOPIC and INSIGHTS only. Do NOT copy conversational tone, greetings, questions, or planning language. Transform the ideas into a polished public blog post.
 
 Write the full blog post following the blog structure template. Hook the reader immediately. Use real facts, specific numbers, and name real companies/people. Break the body into 3-5 sections with clear subheadings. Include actionable takeaways. Share YOUR honest analysis. Respond with JSON only.`
