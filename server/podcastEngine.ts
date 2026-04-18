@@ -36,6 +36,7 @@ import { getReflectionStats } from "./reflectionEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { getFormatVoiceContext } from "./voiceInstructions.js";
 import { SOUL, VOICE } from "./voice.js";
+import { buildExemplarBlock } from "./voiceExemplars.js";
 import { queuePodcastPromo, hasPostedEpisode } from "./xPostScheduler.js";
 
 import { postChatCompletions, postPerplexity } from "./llmCall.js";
@@ -1403,6 +1404,9 @@ async function generateScriptForEpisode(
     console.warn(`[PodcastStudio] Pre-reasoning failed:`, e.message);
   }
 
+  // Few-shot: inject her own best recent podcasts so voice pulls forward.
+  const exemplarBlock = await buildExemplarBlock({ contentType: "podcast", limit: 3 });
+
   // Generate episode structure via LLM
   console.log(`[PodcastStudio] Starting script generation LLM call for "${topicTitle}"`);
   const res = await postChatCompletions({
@@ -1472,7 +1476,7 @@ ${currentKnowledge}
 
 PODCAST PITCH FROM RESEARCH:
 ${pitchText}
-${freshContext ? `\nLATEST DEVELOPMENTS (from today's research — use these to make the episode current):\n${freshContext}\n` : ""}${podcastReasoning ? `\nEDITORIAL DIRECTION (from your reasoning step — follow this angle):\n${podcastReasoning}\n` : ""}
+${freshContext ? `\nLATEST DEVELOPMENTS (from today's research — use these to make the episode current):\n${freshContext}\n` : ""}${podcastReasoning ? `\nEDITORIAL DIRECTION (from your reasoning step — follow this angle):\n${podcastReasoning}\n` : ""}${exemplarBlock ? `\n${exemplarBlock}\n` : ""}
 SOURCES: Include 3-5 real source URLs you referenced or would reference for this episode. These must be real, existing articles, papers, or announcements. Include the article title and full URL. These will be listed in the Spotify episode description and on agent306.ai.
 
 IMPORTANT: The "hook" is the episode-specific cold open. Immediately after it, include the Agent 306 standard intro VERBATIM in the "agent306Intro" field. Do NOT modify the intro text. Then continue with theStory.

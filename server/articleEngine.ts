@@ -28,6 +28,7 @@ import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders, getXAIDirec
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { getFormatVoiceContext } from "./voiceInstructions.js";
 import { SOUL, VOICE } from "./voice.js";
+import { buildExemplarBlock } from "./voiceExemplars.js";
 import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import { queueXPost } from "./xPostScheduler.js";
 import { enforcePostFormat } from "./postFormatGuard.js";
@@ -258,6 +259,9 @@ async function generateDeepReadArticle(
 
   const agentCtx = getOptimizedContext("article deep read AI news analysis");
 
+  // Few-shot: inject her own best recent articles so voice pulls forward.
+  const exemplarBlock = await buildExemplarBlock({ contentType: "article", limit: 3 });
+
   // Spec matrix: `article` → standard-voice (Grok 4.20 non-reasoning, Class 1
   // grounded synthesis — the public-voice tier). Previously this call used
   // `article_draft` which mapped to premium-voice (Sonnet). Per user report,
@@ -382,7 +386,7 @@ Summary: ${articleInfo.summary}
 
 FULL ARTICLE CONTENT:
 ${articleContent || "(Content not fully accessible — use the summary and your knowledge of this topic)"}
-
+${exemplarBlock ? `\n${exemplarBlock}\n` : ""}
 Write the complete long-form article. Make it the kind of analysis people share because
 it changed how they understood something — not because it told them what they already knew.
 
