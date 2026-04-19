@@ -3058,6 +3058,126 @@ export async function generateResearchContent(): Promise<string | null> {
         .slice(0, 1000)
         .trim();
 
-  const researchLink = `https://agent306.ai/research/${topic.id}`;
+  const researchLink = buildResearchUrl(topic.id);
   return `[306 RESEARCH] ${topic.topic}\n\n${teaser}\n\nFull manuscript: ${researchLink}`;
+}
+
+// ── Public manuscript URL + HTML renderer ────────────────────────────────────
+// The X post composer (`generateResearchContent`) advertises a public URL for
+// each promoted manuscript. Keeping the URL builder and the route renderer in
+// this module guarantees they stay in lockstep with the storage id used by
+// `addTopic` / `getTopicById`. Previously the URL was hard-coded in the post
+// body but no route existed to serve it, so every posted link 404'd.
+export const RESEARCH_SITE_HOST = "agent306.ai";
+
+export function buildResearchUrl(topicId: string): string {
+  return `https://${RESEARCH_SITE_HOST}/research/${topicId}`;
+}
+
+function htmlEscape(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function manuscriptToHtml(markdown: string): string {
+  // Minimal markdown → HTML. The manuscript is stored as markdown; we escape
+  // first, then light-touch render headings, bold, italics, and paragraphs.
+  const escaped = htmlEscape(markdown);
+  const withBlocks = escaped
+    .replace(/^######\s+(.+)$/gm, "<h6>$1</h6>")
+    .replace(/^#####\s+(.+)$/gm, "<h5>$1</h5>")
+    .replace(/^####\s+(.+)$/gm, "<h4>$1</h4>")
+    .replace(/^###\s+(.+)$/gm, "<h3>$1</h3>")
+    .replace(/^##\s+(.+)$/gm, "<h2>$1</h2>")
+    .replace(/^#\s+(.+)$/gm, "<h1>$1</h1>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/_([^_]+)_/g, "<em>$1</em>");
+  const paragraphs = withBlocks
+    .split(/\n{2,}/)
+    .map(block => {
+      const trimmed = block.trim();
+      if (!trimmed) return "";
+      if (/^<h[1-6]>/.test(trimmed)) return trimmed;
+      return `<p>${trimmed.replace(/\n/g, "<br>")}</p>`;
+    })
+    .filter(Boolean)
+    .join("\n");
+  return paragraphs;
+}
+
+/**
+ * Render the public research manuscript page for a given topic id.
+ * Returns `{ status: 200, html }` when the topic exists and has a manuscript,
+ * `{ status: 404, html }` otherwise. The route handler wires this through
+ * Express; separating the render makes the fix unit-testable without spinning
+ * up a server.
+ */
+export function renderResearchManuscriptPage(
+  topicId: string,
+): { status: 200 | 404; html: string; topic?: ResearchTopic } {
+  const topic = getTopicById(topicId);
+  if (!topic || !topic.manuscript || topic.manuscript.length < 1) {
+    const html = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Research — not found</title>
+<meta name="robots" content="noindex"></head>
+<body style="font-family:system-ui;max-width:640px;margin:4rem auto;padding:0 1rem;color:#222">
+<h1 style="font-size:1.25rem">Research not found</h1>
+<p>This manuscript isn't published at this URL. It may have been archived or the link may be stale.</p>
+<p><a href="https://${RESEARCH_SITE_HOST}">Return to agent306.ai</a></p>
+</body></html>`;
+    return { status: 404, html };
+  }
+  const title = htmlEscape(topic.topic);
+  const description = htmlEscape(
+    (topic.conclusion && topic.conclusion.length > 20
+      ? topic.conclusion
+      : (topic.manuscript.replace(/^#+\s+/gm, "").replace(/\n+/g, " ")).slice(0, 280)
+    ).trim(),
+  );
+  const publishedAt = htmlEscape(topic.publishedAt ?? topic.draftedAt ?? topic.updatedAt ?? "");
+  const manuscriptHtml = manuscriptToHtml(topic.manuscript);
+  const canonical = buildResearchUrl(topic.id);
+  const html = `<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>${title} — Agent 306 Research</title>
+<meta name="description" content="${description}">
+<link rel="canonical" href="${canonical}">
+<meta property="og:title" content="${title}">
+<meta property="og:description" content="${description}">
+<meta property="og:url" content="${canonical}">
+<meta property="og:type" content="article">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${title}">
+<meta name="twitter:description" content="${description}">
+<style>
+  body { font-family: Georgia, 'Times New Roman', serif; max-width: 720px; margin: 3rem auto; padding: 0 1.25rem; color: #1a1a1a; line-height: 1.6; }
+  header { border-bottom: 1px solid #ddd; padding-bottom: 1rem; margin-bottom: 1.5rem; }
+  header .kicker { font-family: 'Courier New', monospace; font-size: 0.72rem; letter-spacing: 0.2em; text-transform: uppercase; color: #f97316; }
+  header h1 { font-size: 1.8rem; margin: 0.35rem 0 0.25rem; }
+  header .meta { font-size: 0.8rem; color: #666; font-family: 'Courier New', monospace; }
+  article h1, article h2, article h3 { font-family: system-ui, sans-serif; }
+  article p { margin: 0 0 1rem; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ddd; font-size: 0.8rem; color: #666; font-family: 'Courier New', monospace; }
+  footer a { color: #f97316; }
+</style>
+</head>
+<body>
+<header>
+  <div class="kicker">306 Research</div>
+  <h1>${title}</h1>
+  <div class="meta">Topic id: ${htmlEscape(topic.id)}${publishedAt ? ` · ${publishedAt}` : ""}</div>
+</header>
+<article>
+${manuscriptHtml}
+</article>
+<footer>
+  <a href="https://${RESEARCH_SITE_HOST}">agent306.ai</a>
+</footer>
+</body></html>`;
+  return { status: 200, html, topic };
 }
