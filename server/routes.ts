@@ -63,6 +63,7 @@ import { runResearchScan, getScannerState, scheduleResearchScan, scanGoalsForRes
 import { generateArticleCard } from "./articleImageCard.js";
 import { runDailyCycle, getBriefingState, scheduleDailyCycle } from "./dailyCycleEngine.js";
 import { getPublicStatus, getPublicProgress, getPublicActivity, getPublicGoals, getPublicResearch, getPublicMetacognition, getPublicBreakthroughs, getPublicAspirations, getPublicPredictions, getPublicCorrections, getPublicEval } from "./publicApi.js";
+import { getPublishedManuscripts, getPublicManuscriptById } from "./publicResearchManuscripts.js";
 import { getReflections, getStyleRules, deleteStyleRule, runReflection } from "./reflectionEngine.js";
 import {
   getPublishedPosts, getPostBySlug, getAllPosts,
@@ -4848,6 +4849,18 @@ needsHelp: true only when you genuinely need his direction or information`,
     const post = getPostBySlug(req.params.slug);
     if (!post) return res.status(404).json({ error: "Post not found" });
     res.json(post);
+  });
+
+  // ── Public Research Manuscripts API (for agent306.ai site) ────────────
+  app.get("/api/public/research/manuscripts", (req, res) => {
+    const limit = parseInt(req.query.limit as string) || undefined;
+    res.json({ manuscripts: getPublishedManuscripts(limit) });
+  });
+
+  app.get("/api/public/research/manuscripts/:id", (req, res) => {
+    const manuscript = getPublicManuscriptById(req.params.id);
+    if (!manuscript) return res.status(404).json({ error: "Manuscript not found" });
+    res.json(manuscript);
   });
 
   // ── Dashboard Blog Management (auth-protected) ────────────────────────
