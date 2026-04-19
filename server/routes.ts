@@ -55,6 +55,8 @@ import {
   getStaleGoals, autoResolveStaleGoals,
   autoArchiveCompletedResearch, getStuckResearch,
   autoAdvanceResearch,
+  // Public manuscript page (fixes dead agent306.ai/research/<id> links)
+  renderResearchManuscriptPage,
 } from "./researchEngine.js";
 import { takeSnapshot, getEvolutionHistory, getLatestSnapshot, scheduleEvolutionTracking } from "./evolutionTracker.js";
 import { runResearchScan, getScannerState, scheduleResearchScan, scanGoalsForResearch } from "./researchScanner.js";
@@ -3837,6 +3839,17 @@ needsHelp: true only when you genuinely need his direction or information`,
     const topic = getTopicById(req.params.id);
     if (!topic) return res.status(404).json({ error: "Topic not found" });
     res.json(topic);
+  });
+
+  // Public manuscript page. The X post composer (`generateResearchContent`)
+  // advertises `https://agent306.ai/research/<id>` in every 306 Research post,
+  // but no route served that path — every posted link 404'd. This renders the
+  // manuscript read from the same `research_lab.json` the engine writes to,
+  // using the same id. Registered before `serveStatic` so the SPA catchall
+  // never swallows it.
+  app.get("/research/:id", (req, res) => {
+    const { status, html } = renderResearchManuscriptPage(req.params.id);
+    res.status(status).type("html").send(html);
   });
 
   // ── RESEARCH GAP SCANNER ───────────────────────────────────────────────────
