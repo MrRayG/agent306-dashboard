@@ -297,6 +297,20 @@ export function registerTelegramRoutes(app: Express) {
     const ok = (cond: boolean) => (cond ? "\u2705" : "\u274c");
     const isLive = currentWebhook === webhookUrl;
 
+    // Escape arbitrary text for safe use inside an HTML attribute value.
+    const htmlAttr = (s: string) =>
+      String(s).replace(/[&<>"'\r\n]/g, (c) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+          "\r": "&#13;",
+          "\n": "&#10;",
+        }[c] as string),
+      );
+
     res.type("html").send(`<!doctype html>
 <html><head><meta charset="utf-8"><title>Agent 306 — Telegram Activation</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -334,7 +348,10 @@ export function registerTelegramRoutes(app: Express) {
     <code>${webhookUrl}</code>
   </div>
 
-  <button id="activateBtn" ${!t || allowedCount === 0 ? "disabled" : ""}>
+  <button id="activateBtn"
+    data-key="${htmlAttr(providedKey)}"
+    data-url="${htmlAttr(webhookUrl)}"
+    ${!t || allowedCount === 0 ? "disabled" : ""}>
     ${isLive ? "Re-activate webhook" : "Activate Telegram bot"}
   </button>
   ${!t ? '<p class="muted">⚠️ Set <code>TELEGRAM_BOT_TOKEN</code> in Railway first.</p>' : ""}
@@ -348,19 +365,20 @@ export function registerTelegramRoutes(app: Express) {
   const btn = document.getElementById("activateBtn");
   const out = document.getElementById("result");
   btn.addEventListener("click", async () => {
+    const dashKey = btn.dataset.key || "";
+    const hookUrl = btn.dataset.url || "";
     btn.disabled = true;
     btn.textContent = "Activating\u2026";
     out.style.display = "block";
     out.className = "";
     out.textContent = "Calling Telegram\u2026";
     try {
+      const headers = { "content-type": "application/json" };
+      if (dashKey) headers["x-dashboard-secret"] = dashKey;
       const r = await fetch("/api/telegram/set-webhook", {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-dashboard-secret": ${JSON.stringify(providedKey)},
-        },
-        body: JSON.stringify({ url: ${JSON.stringify(webhookUrl)} }),
+        headers: headers,
+        body: JSON.stringify({ url: hookUrl }),
       });
       const data = await r.json();
       if (data && data.ok) {
