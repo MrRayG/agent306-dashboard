@@ -213,14 +213,21 @@ export function registerTelegramRoutes(app: Express) {
       // Send to the same brain the dashboard uses.
       // Shared sessionId so Telegram + dashboard appear as one conversation.
       const baseUrl = selfBaseUrl(req);
+      console.log(`[Telegram] incoming from ${fromId}: ${text.slice(0, 100)} → POSTing ${baseUrl}/api/chat/send`);
       let reply: string;
       try {
         reply = (await callOwnChatSend(baseUrl, text, "dashboard-main")).trim();
+        console.log(`[Telegram] got reply (${reply.length} chars): ${reply.slice(0, 120)}`);
       } catch (err: any) {
-        console.error("[Telegram] chat/send failed:", err?.message ?? err);
-        reply = "Agent 306 is having a moment — try again in a sec.";
+        const msg = err?.message ?? String(err);
+        console.error("[Telegram] chat/send failed:", msg);
+        // Surface the actual error to the Telegram user so we can debug without Railway logs.
+        reply = `⚠️ Agent 306 hit an error:\n\n\`${msg.slice(0, 400)}\``;
       }
-      await tgSendMessage(chatId, reply || "(no response)", messageId);
+      if (!reply) {
+        reply = "(306 returned an empty reply — check Railway logs for the raw response)";
+      }
+      await tgSendMessage(chatId, reply, messageId);
     } catch (err: any) {
       console.error("[Telegram] webhook handler error:", err?.message ?? err);
     }
