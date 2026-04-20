@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import type { Server } from "http";
+import { registerTelegramRoutes } from "./telegramBot.js";
 import { dataPath } from "./dataPaths.js";
 import { storage } from "./storage";
 import { insertEpisodeSchema, insertRenderJobSchema, insertSignalSchema } from "@shared/schema";
@@ -762,6 +763,11 @@ const audioUpload = multer({
 });
 
 export function registerRoutes(httpServer: Server, app: Express) {
+  // ── Telegram bot: remote chat with Agent 306 ──────────────────────────
+  // Registers /api/telegram/webhook, /api/telegram/set-webhook, /api/telegram/status.
+  // Set TELEGRAM_BOT_TOKEN + TELEGRAM_ALLOWED_USER_IDS to enable.
+  registerTelegramRoutes(app);
+
   // ── Dashboard auth ──────────────────────────────────────────────────────
   // Checks x-dashboard-secret header against DASHBOARD_SECRET env var.
   // If DASHBOARD_SECRET is not set, all requests are allowed (dev mode).
