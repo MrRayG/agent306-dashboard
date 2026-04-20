@@ -112,6 +112,30 @@ export const CONTENT_TYPES: Record<string, ContentType> = {
     queueType: 'roundup',
     slotPreference: ['morning', 'midday'],
   },
+  blog: {
+    id: 'blog',
+    showTag: '[306 BLOG]',
+    name: '306 BLOG',
+    description: 'Auto-published blog post promos — tweet teases the new long-form post on agent306.ai/blog with a deep link.',
+    format: 'Title + excerpt + deep link. Voice-rewritten by the LLM; falls back to title + URL.',
+    schedule: 'Event-driven (on blog publish, via dailyCycle)',
+    category: 'primary',
+    engine: 'dailyCycleEngine',
+    queueType: 'blog',
+    slotPreference: ['midday', 'evening'],
+  },
+  breakthrough: {
+    id: 'breakthrough',
+    showTag: '[306 BREAKTHROUGH]',
+    name: '306 BREAKTHROUGH',
+    description: 'Internally-detected breakthroughs — Agent 306 noticed something important in her KB or hypothesis state machine (high composite score across novelty, impact, credibility, momentum).',
+    format: 'Title + composite score + voice-rewritten analysis. High priority — jumps the queue.',
+    schedule: 'Event-driven (breakthroughDetector)',
+    category: 'new',
+    engine: 'breakthroughDetector',
+    queueType: 'breakthrough',
+    slotPreference: ['any'],
+  },
 };
 
 /** Get show tag by queue type */

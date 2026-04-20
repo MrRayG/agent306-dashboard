@@ -33,11 +33,14 @@
 
 import { getShowTag } from "./contentTypes.js";
 
-// Valid show tag names (without brackets)
+// Valid show tag names (without brackets). Kept in sync with CONTENT_TYPES
+// in contentTypes.ts. Any tag that appears at the start of a post and
+// matches one of these is treated as legitimate and preserved as-is.
 const VALID_SHOW_TAG_NAMES = [
   '306 NEWS', '306 SIGNAL', '306 ACADEMY', '306 ROUND UP', '306 ROUNDUP',
   '306 REFLECTION', '306 UNPLUGGED', '306 PROGRESS', '306 ARCHIVE',
-  '306 THREAD', 'THE DISPATCH',
+  '306 THREAD', '306 ARTICLE', '306 BLOG', '306 BREAKTHROUGH',
+  'THE DISPATCH',
 ];
 
 // Queue type → show tag for types not in contentTypes.ts
