@@ -31,7 +31,7 @@ import { SOUL, VOICE } from "./voice.js";
 import { buildExemplarBlock } from "./voiceExemplars.js";
 import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import { queueXPost } from "./xPostScheduler.js";
-import { enforcePostFormat } from "./postFormatGuard.js";
+import { enforcePostFormat, looksLikeRawJsonPayload } from "./postFormatGuard.js";
 
 import { postChatCompletions, postXSearchResponses } from "./llmCall.js";
 const GROK_CHAT_API     = LLM_BASE_URL;
@@ -430,6 +430,50 @@ Return JSON:
     };
   }
 
+  // Detect JSON-shaped raw content so we never post raw {"headline":..., "teaser":...}
+  // as a tweet body. This was the failure mode behind the broken [306 ACADEMY] post
+  // on 2026-04-20 — a truncated JSON response caused safeParseLLMJson to return {},
+  // and the markdown fallback below dumped the raw JSON string into teaser/body.
+  const looksLikeJson = /^\s*\{/.test(raw) || /"(headline|teaser|body)"\s*:/.test(raw);
+
+  // If the LLM returned JSON-shaped output, try one last tolerant field extraction
+  // before giving up. Truncated JSON often still has a complete headline and teaser.
+  if (looksLikeJson) {
+    const headlineRx = /"headline"\s*:\s*"((?:[^"\\]|\\.)*)"/;
+    const teaserRx   = /"teaser"\s*:\s*"((?:[^"\\]|\\.)*)"/;
+    const bodyRx     = /"body"\s*:\s*"((?:[^"\\]|\\.)*)"/;
+    const unescape = (s: string) => s
+      .replace(/\\n/g, "\n").replace(/\\r/g, "\r").replace(/\\t/g, "\t")
+      .replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+    const hMatch = raw.match(headlineRx);
+    const tMatch = raw.match(teaserRx);
+    const bMatch = raw.match(bodyRx);
+    const recoveredHeadline = hMatch ? unescape(hMatch[1]) : parsed.headline;
+    const recoveredTeaser   = tMatch ? unescape(tMatch[1]) : parsed.teaser;
+    const recoveredBody     = bMatch ? unescape(bMatch[1]) : parsed.body;
+
+    if (recoveredBody && recoveredBody.length > 100) {
+      console.warn("[ArticleEngine] Recovered article fields via tolerant regex (JSON was malformed)");
+      return {
+        headline: recoveredHeadline ?? articleInfo.title,
+        teaser:   recoveredTeaser   ?? "",
+        body:     recoveredBody,
+      };
+    }
+
+    // JSON-shaped but body unrecoverable — refuse to post rather than leak
+    // the raw JSON string as tweet text. Upstream body-length guard will abort.
+    console.error(
+      "[ArticleEngine] Malformed JSON response and body could not be recovered — aborting post. Raw:",
+      raw.slice(0, 300),
+    );
+    return {
+      headline: recoveredHeadline ?? parsed.headline ?? articleInfo.title,
+      teaser:   recoveredTeaser   ?? parsed.teaser   ?? "",
+      body:     "",
+    };
+  }
+
   // Fallback: treat entire response as article body if it's long enough
   // This handles cases where the model outputs markdown directly instead of JSON
   if (raw.length > 200) {
@@ -463,6 +507,15 @@ async function postArticleToX(
   body: string,
   sourceUrl: string
 ): Promise<string | null> {
+  // Regression guard (2026-04-20 Academy incident): if the teaser or body
+  // is itself a raw LLM JSON payload, abort rather than posting it to X.
+  if (looksLikeRawJsonPayload(teaser) || looksLikeRawJsonPayload(body)) {
+    console.error(
+      "[ArticleEngine] Aborting post — teaser or body looks like raw JSON. " +
+      "Upstream field extraction failed. Teaser head:", teaser.slice(0, 200),
+    );
+    return null;
+  }
   try {
     // X Articles (long-form notes) — posted as a note via v2
     // The teaser tweet links to the article

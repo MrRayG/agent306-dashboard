@@ -70,6 +70,27 @@ export function stripMarkdown(text: string): string {
     .replace(/~~(.+?)~~/g, '$1');
 }
 
+// ── Raw-JSON detection (defense in depth) ───────────────────
+
+/**
+ * Detect tweet text that is actually a raw JSON payload leaking through
+ * from an LLM response. Regression guard for the 2026-04-20 [306 ACADEMY]
+ * incident where a truncated JSON response was posted verbatim with
+ * `{ "headline": "...", "teaser": "..."` visible to readers.
+ */
+export function looksLikeRawJsonPayload(text: string): boolean {
+  const stripped = text.replace(/^\[[^\]]+\]\s*/, "").trimStart();
+  if (!stripped.startsWith("{")) return false;
+  // Two or more known LLM schema keys in the first ~400 chars → almost
+  // certainly a raw JSON object, not prose that happens to start with `{`.
+  const head = stripped.slice(0, 400);
+  const schemaKeyHits = [
+    /"headline"\s*:/, /"teaser"\s*:/, /"body"\s*:/,
+    /"post"\s*:/, /"dashboardNarrative"\s*:/, /"concept"\s*:/,
+  ].reduce((n, rx) => n + (rx.test(head) ? 1 : 0), 0);
+  return schemaKeyHits >= 2;
+}
+
 // ── Main format enforcement ─────────────────────────────────
 
 /**

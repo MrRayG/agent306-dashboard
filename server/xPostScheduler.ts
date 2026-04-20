@@ -20,7 +20,7 @@
 import fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { validateXPost, recordXPost } from "./xComplianceGuard.js";
-import { enforcePostFormat } from "./postFormatGuard.js";
+import { enforcePostFormat, looksLikeRawJsonPayload } from "./postFormatGuard.js";
 import { dailyReflection } from "./soulEvolution.js";
 import { getEmbedding } from "./embeddingEngine.js";
 import { generatePostImage } from "./imageEngine.js";
@@ -416,6 +416,15 @@ export function queueXPost(
   priority?: number,
   mediaId?: string,
 ): QueuedPost {
+  // Regression guard (2026-04-20 Academy incident): refuse to queue posts
+  // whose body is a raw LLM JSON payload leaking through. Upstream engines
+  // should have extracted the prose field; if they didn't, fail loudly here
+  // rather than publishing `{ "headline": "...", "teaser": "..."` to X.
+  if (looksLikeRawJsonPayload(content)) {
+    const msg = `[XScheduler] Refusing to queue ${type} post — content looks like a raw JSON payload (upstream field extraction likely failed).`;
+    console.error(msg, content.slice(0, 200));
+    throw new Error(msg);
+  }
   const state = loadQueue();
   const sanitized = sanitizePostContent(content);
   // Default-by-type image policy: engine slots get an image; agent_voice skips.
