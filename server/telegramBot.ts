@@ -250,6 +250,140 @@ export function registerTelegramRoutes(app: Express) {
     }
   });
 
+  // ── One-click activation page (zero terminal required) ────────────────
+  // Visit /telegram/activate?key=<DASHBOARD_SECRET> in a browser, click the button.
+  // Shows status + a single button that wires the webhook with Telegram.
+  app.get("/telegram/activate", async (req: Request, res: Response) => {
+    const DASHBOARD_SECRET = process.env.DASHBOARD_SECRET ?? "";
+    const providedKey = (req.query.key as string) ?? "";
+    if (DASHBOARD_SECRET && providedKey !== DASHBOARD_SECRET) {
+      res.status(401).type("html").send(
+        `<html><body style="font-family:system-ui;background:#0b0b0e;color:#f0f0f0;padding:2rem">
+          <h2>Unauthorized</h2>
+          <p>Append <code>?key=YOUR_DASHBOARD_SECRET</code> to the URL.</p>
+        </body></html>`,
+      );
+      return;
+    }
+
+    const t = token();
+    const base = selfBaseUrl(req);
+    const webhookUrl = `${base}/api/telegram/webhook`;
+    const allowedCount = allowedUserIds().size;
+    const hasSecret = !!process.env.TELEGRAM_WEBHOOK_SECRET;
+
+    // Fetch current webhook info
+    let botUser = "(unknown)";
+    let currentWebhook = "(none)";
+    let pendingUpdates = 0;
+    let lastError = "";
+    if (t) {
+      try {
+        const [meR, whR] = await Promise.all([
+          fetch(`${TG_API}/bot${t}/getMe`),
+          fetch(`${TG_API}/bot${t}/getWebhookInfo`),
+        ]);
+        const me: any = await meR.json();
+        const wh: any = await whR.json();
+        botUser = me?.result?.username ? `@${me.result.username}` : botUser;
+        currentWebhook = wh?.result?.url || "(none)";
+        pendingUpdates = wh?.result?.pending_update_count ?? 0;
+        lastError = wh?.result?.last_error_message || "";
+      } catch (err: any) {
+        lastError = err?.message ?? String(err);
+      }
+    }
+
+    const ok = (cond: boolean) => (cond ? "\u2705" : "\u274c");
+    const isLive = currentWebhook === webhookUrl;
+
+    res.type("html").send(`<!doctype html>
+<html><head><meta charset="utf-8"><title>Agent 306 — Telegram Activation</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  body{font-family:system-ui,-apple-system,sans-serif;background:#0b0b0e;color:#f0f0f0;margin:0;padding:2rem;max-width:720px;margin:0 auto}
+  h1{color:#8ef}
+  .card{background:#17171d;border:1px solid #2a2a33;border-radius:12px;padding:1.25rem;margin:1rem 0}
+  .row{display:flex;justify-content:space-between;padding:.4rem 0;border-bottom:1px solid #222}
+  .row:last-child{border-bottom:none}
+  code{background:#000;padding:.15rem .4rem;border-radius:4px;font-size:.85em;word-break:break-all}
+  button{background:#4fd1c5;color:#000;border:0;padding:.85rem 1.5rem;font-size:1rem;font-weight:600;border-radius:8px;cursor:pointer;width:100%}
+  button:hover{background:#7ee8dc}
+  button:disabled{background:#444;color:#888;cursor:not-allowed}
+  #result{margin-top:1rem;padding:1rem;border-radius:8px;display:none;white-space:pre-wrap;word-break:break-all;font-family:ui-monospace,monospace;font-size:.85em}
+  .ok{background:#0d3320;border:1px solid #1f7a4c}
+  .err{background:#3a1010;border:1px solid #7a1f1f}
+  .muted{color:#888;font-size:.9em}
+</style></head>
+<body>
+  <h1>Agent 306 — Telegram Activation</h1>
+  <p class="muted">Click the button below to connect your Telegram bot. No terminal needed.</p>
+
+  <div class="card">
+    <div class="row"><span>Bot token configured</span><span>${ok(!!t)}</span></div>
+    <div class="row"><span>Allowed user IDs</span><span>${ok(allowedCount > 0)} ${allowedCount} user(s)</span></div>
+    <div class="row"><span>Webhook secret set</span><span>${ok(hasSecret)}</span></div>
+    <div class="row"><span>Bot username</span><span><code>${botUser}</code></span></div>
+    <div class="row"><span>Current webhook</span><span>${isLive ? "\u2705 Live" : "\u26a0\ufe0f Not set"}</span></div>
+    <div class="row"><span>Pending updates</span><span>${pendingUpdates}</span></div>
+    ${lastError ? `<div class="row"><span>Last Telegram error</span><span style="color:#f88">${lastError}</span></div>` : ""}
+  </div>
+
+  <div class="card">
+    <div class="muted" style="margin-bottom:.75rem">This will register the following URL with Telegram:</div>
+    <code>${webhookUrl}</code>
+  </div>
+
+  <button id="activateBtn" ${!t || allowedCount === 0 ? "disabled" : ""}>
+    ${isLive ? "Re-activate webhook" : "Activate Telegram bot"}
+  </button>
+  ${!t ? '<p class="muted">⚠️ Set <code>TELEGRAM_BOT_TOKEN</code> in Railway first.</p>' : ""}
+  ${allowedCount === 0 ? '<p class="muted">⚠️ Set <code>TELEGRAM_ALLOWED_USER_IDS</code> in Railway first.</p>' : ""}
+
+  <div id="result"></div>
+
+  <p class="muted" style="margin-top:2rem">After activating, open your bot in Telegram and send <code>/ping</code>.</p>
+
+<script>
+  const btn = document.getElementById("activateBtn");
+  const out = document.getElementById("result");
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    btn.textContent = "Activating\u2026";
+    out.style.display = "block";
+    out.className = "";
+    out.textContent = "Calling Telegram\u2026";
+    try {
+      const r = await fetch("/api/telegram/set-webhook", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-dashboard-secret": ${JSON.stringify(providedKey)},
+        },
+        body: JSON.stringify({ url: ${JSON.stringify(webhookUrl)} }),
+      });
+      const data = await r.json();
+      if (data && data.ok) {
+        out.className = "ok";
+        out.textContent = "\u2705 Success!\n\n" + JSON.stringify(data, null, 2) + "\n\nNow message your bot on Telegram and send /ping";
+        btn.textContent = "Activated \u2014 reload to see status";
+      } else {
+        out.className = "err";
+        out.textContent = "\u274c Failed\n\n" + JSON.stringify(data, null, 2);
+        btn.disabled = false;
+        btn.textContent = "Try again";
+      }
+    } catch (e) {
+      out.className = "err";
+      out.textContent = "\u274c Error: " + (e.message || e);
+      btn.disabled = false;
+      btn.textContent = "Try again";
+    }
+  });
+</script>
+</body></html>`);
+  });
+
   // ── Status: check current webhook registration ────────────────────────
   app.get("/api/telegram/status", async (_req: Request, res: Response) => {
     const t = token();
