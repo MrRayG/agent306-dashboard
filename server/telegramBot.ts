@@ -114,7 +114,15 @@ async function callOwnChatSend(baseUrl: string, text: string, sessionId?: string
     throw new Error(`chat/send ${r.status}: ${body.slice(0, 200)}`);
   }
   const data: any = await r.json();
-  return (data?.text ?? data?.reply ?? "").toString();
+  // /api/chat/send returns { reply: { role, text, timestamp, mood, needsHelp } }.
+  // Fall back through older/alternate shapes just in case.
+  const replyText =
+    data?.reply?.text ??
+    (typeof data?.reply === "string" ? data.reply : undefined) ??
+    data?.text ??
+    data?.message?.text ??
+    "";
+  return String(replyText);
 }
 
 function selfBaseUrl(req: Request): string {
