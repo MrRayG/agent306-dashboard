@@ -489,7 +489,11 @@ ${body}
       if (!compliance.allowed) {
         console.log(`[Article] Teaser skipped by compliance: ${compliance.reason}`);
       } else {
-        const safeTeaser = enforcePostFormat(compliance.sanitizedContent ?? teaserContent, "research");
+        // Deep Read (The Deep Read) is its own content type with its own show tag.
+        // Passing "article" routes ensureShowTag() to CONTENT_TYPES.article.showTag
+        // (→ [306 ARTICLE]) instead of the legacy FALLBACK_SHOW_TAGS["research"] alias
+        // which incorrectly mapped to [306 ACADEMY].
+        const safeTeaser = enforcePostFormat(compliance.sanitizedContent ?? teaserContent, "article");
         const teaserPost = await xClient.v2.tweet(safeTeaser).catch(() => null);
         if (teaserPost?.data?.id) {
           articleUrl = `https://x.com/i/web/status/${teaserPost.data.id}`;
@@ -502,7 +506,7 @@ ${body}
       const fallbackTeaser = teaser.slice(0, 25000);
       const compliance = validateXPost(fallbackTeaser);
       const safeFallbackTeaser = compliance.allowed
-        ? enforcePostFormat(compliance.sanitizedContent ?? fallbackTeaser, "research")
+        ? enforcePostFormat(compliance.sanitizedContent ?? fallbackTeaser, "article")
         : null;
       const teaserPost = safeFallbackTeaser
         ? await xClient.v2.tweet(safeFallbackTeaser).catch(() => null)
