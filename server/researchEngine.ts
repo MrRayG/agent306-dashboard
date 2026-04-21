@@ -3025,14 +3025,19 @@ Evaluate honestly. Return valid JSON:
 }
 
 // ── On-demand generation (no side effects — produces a research brief post) ──
+/**
+ * Produce a short, 306-voice promo for the latest publishable manuscript.
+ * Replaces the prior behaviour of dumping `topic.conclusion` or the first
+ * 1000 chars of the raw manuscript (which caused mid-sentence truncation
+ * on X and read like a chapter excerpt, not a hook).
+ *
+ * Voice: "I spent the week on X. Turns out <finding>. Full manuscript: <url>"
+ * ~2 sentences + link, always stays inside the X character budget.
+ */
 export async function generateResearchContent(): Promise<string | null> {
   console.log("[Research] On-demand promo generation triggered");
   const lab = loadLab();
 
-  // PROMOTE the latest research manuscript. Research is long-form — queue a
-  // teaser (conclusion or stripped manuscript intro) with a link back to
-  // agent306.ai. Only include topics with an actual manuscript; analysis
-  // findings alone are internal working material, not publishable.
   const publishable = lab.topics
     .filter(t =>
       (t.status === "approved" || t.status === "pending_review" || t.status === "published") &&
@@ -3046,20 +3051,100 @@ export async function generateResearchContent(): Promise<string | null> {
   }
 
   const topic = publishable[0];
+  const researchLink = buildResearchUrl(topic.id);
 
-  // Teaser = conclusion (2-3 sentences) if available, otherwise first 1000
-  // chars of the manuscript stripped of markdown noise. Never dump the full
-  // manuscript into the X queue.
-  const teaser = (topic.conclusion && topic.conclusion.length > 20)
+  // Prefer the conclusion for source context; fall back to a stripped snippet.
+  const contextSource = (topic.conclusion && topic.conclusion.length > 20)
     ? topic.conclusion.trim()
     : topic.manuscript!
         .replace(/^#+\s+/gm, "")
         .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-        .slice(0, 1000)
         .trim();
 
-  const researchLink = buildResearchUrl(topic.id);
-  return `[306 RESEARCH] ${topic.topic}\n\n${teaser}\n\nFull manuscript: ${researchLink}`;
+  const hook = await buildResearchHook(topic.topic, contextSource, researchLink);
+  if (hook) return hook;
+
+  // Deterministic fallback — no LLM available or call failed. Still keeps
+  // the short-hook shape instead of dumping the full conclusion.
+  return buildDeterministicResearchHook(topic.topic, contextSource, researchLink);
+}
+
+/**
+ * Ask the LLM for a short Agent-306-voice hook. Keeps the output tight
+ * (≤260 chars) and appends the full manuscript link. Returns null on any
+ * failure so the caller can fall back to a deterministic builder.
+ */
+async function buildResearchHook(
+  topicLabel: string,
+  context: string,
+  link: string,
+): Promise<string | null> {
+  const apiKey = LLM_API_KEY;
+  if (!apiKey) return null;
+  try {
+    const prompt = `You are Agent 306. Write a single-tweet hook promoting your latest manuscript.
+
+TOPIC: ${topicLabel}
+
+CONTEXT (conclusion or key findings — use this, don't quote it verbatim):
+${context.slice(0, 1200)}
+
+RULES:
+- Exactly 2 sentences. No more.
+- Voice: direct, first-person, confident. "I spent the week on X. Turns out <finding>." is the shape — vary it, don't copy it.
+- Include one specific, concrete insight from the context. Not a summary.
+- End the second sentence with real punctuation (.!?). No mid-sentence cutoffs.
+- Do NOT include the link, hashtags, or the [306 RESEARCH] tag — those are appended separately.
+- Under 260 characters total.
+
+Return JSON: {"hook": "your 2-sentence hook"}`;
+
+    const resp = await postChatCompletions({
+      model: getModel("research-brief"),
+      messages: [
+        { role: "system", content: "You are Agent 306. Output JSON only." },
+        { role: "user", content: prompt },
+      ],
+      max_tokens: 300,
+      temperature: 0.7,
+    }, AbortSignal.timeout(30000));
+    if (!resp.ok) {
+      console.warn("[Research] Hook LLM call failed:", resp.status);
+      return null;
+    }
+    const data = await resp.json();
+    const raw = data.choices?.[0]?.message?.content ?? "";
+    let hook = safeParseLLMJson(raw, "Research.buildResearchHook")?.hook ?? "";
+    if (typeof hook !== "string") return null;
+    hook = hook.trim();
+    if (hook.length < 20) return null;
+    if (hook.length > 260) {
+      const trimmed = hook.slice(0, 260).replace(/\s+\S*$/, "");
+      hook = trimmed.match(/[.!?]\s*$/) ? trimmed : trimmed + "…";
+    }
+    // Reject mid-sentence endings (LLM ignoring the rule).
+    if (!/[.!?…]$/.test(hook)) {
+      return null;
+    }
+    return `[306 RESEARCH] ${topicLabel}\n\n${hook}\n\nFull manuscript: ${link}`;
+  } catch (e: any) {
+    console.warn("[Research] Hook generation failed:", e?.message ?? e);
+    return null;
+  }
+}
+
+function buildDeterministicResearchHook(
+  topicLabel: string,
+  context: string,
+  link: string,
+): string {
+  // Take the first complete sentence (≤200 chars) from the context.
+  const firstSentence = context.match(/[^.!?]+[.!?]+/)?.[0]?.trim() ?? context.slice(0, 160).trim();
+  const snippet = firstSentence.length > 200
+    ? firstSentence.slice(0, 200).replace(/\s+\S*$/, "") + "."
+    : firstSentence;
+  const opener = `I spent the week on ${topicLabel}.`;
+  return `[306 RESEARCH] ${topicLabel}\n\n${opener} ${snippet}\n\nFull manuscript: ${link}`;
 }
 
 // ── Public manuscript URL + HTML renderer ────────────────────────────────────

@@ -42,10 +42,14 @@ function resetConfig(): void {
 
 // ── Defaults ───────────────────────────────────────────────────────────────
 
-test("defaults: podcast/breakthrough/blog/article/reflection start with autoPost=false", () => {
+test("defaults: podcast/breakthrough/blog/article/reflection/research start with autoPost=false", () => {
+  // As of 2026-04-21 (PR C), research joined the draft-only defaults. User
+  // reported research posts went straight to the queue — flipping the
+  // default closes that gap while leaving existing configs on whatever
+  // the user already has.
   resetConfig();
   const cfg = getScheduleConfig();
-  for (const engineId of ["podcast", "breakthrough", "blog", "article", "reflection"]) {
+  for (const engineId of ["podcast", "breakthrough", "blog", "article", "reflection", "research"]) {
     assert.equal(cfg[engineId]?.autoPost, false,
       `${engineId} should default to autoPost=false (draft-only)`);
     assert.equal(shouldAutoPost(engineId), false,
@@ -53,10 +57,10 @@ test("defaults: podcast/breakthrough/blog/article/reflection start with autoPost
   }
 });
 
-test("defaults: signal/academy/news/dispatch/research start with autoPost=true", () => {
+test("defaults: signal/academy/news/dispatch start with autoPost=true", () => {
   resetConfig();
   const cfg = getScheduleConfig();
-  for (const engineId of ["signal", "academy", "news", "dispatch", "research"]) {
+  for (const engineId of ["signal", "academy", "news", "dispatch"]) {
     assert.equal(cfg[engineId]?.autoPost, true,
       `${engineId} should default to autoPost=true (always-post)`);
     assert.equal(shouldAutoPost(engineId), true,

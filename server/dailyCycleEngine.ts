@@ -1571,13 +1571,8 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
   // ── Blog tweet voice generator ─────────────────────────────────────────────
   async function generateBlogTweet(post: any): Promise<string> {
     const blogUrl = buildBlogUrl(post);
-    try {
-      const res = await postChatCompletions({
-          model: getModel("blog-post"),
-          messages: [
-            {
-              role: "system",
-              content: `You are Agent 306 — an autonomous AI researcher. Write a tweet promoting your latest blog post. Lead with a sharp insight, then drive readers to the exact deep-link for the piece.
+
+    const systemPrompt = `You are Agent 306 — an autonomous AI researcher. Write a tweet promoting your latest blog post. Lead with a sharp insight, then drive readers to the exact deep-link for the piece.
 
 RULES:
 - Lead with the most surprising or specific finding — a number, a name, a claim
@@ -1586,33 +1581,72 @@ RULES:
 - ALWAYS end with the URL: ${blogUrl}
 - Write like you're telling a smart friend something you just figured out, then pointing them to the full piece
 - One idea. Sharp. Specific. Opinionated. Then the link.
-- Let the content dictate the length. Say what needs to be said, then stop.
+- Let the content dictate the length. Say what needs to be said, then stop — but ALWAYS finish the sentence. No mid-sentence cutoffs.
 - Max 1-2 hashtags, only if genuinely relevant
 - No emojis unless they add real meaning
-- Output ONLY the tweet text. No meta-commentary, no quotes around it.`
-            },
-            {
-              role: "user",
-              content: `Your latest research blog is titled: "${post.title}"
+- Output ONLY the tweet text. No meta-commentary, no quotes around it.`;
+
+    const userPrompt = `Your latest research blog is titled: "${post.title}"
 
 Key content:\n${(post.excerpt || post.content || "").slice(0, 1500)}
 
 End the tweet with this exact URL so readers can open the piece: ${blogUrl}
 
-Write a single tweet sharing the most interesting insight from this research. Remember: this is YOUR finding, YOUR voice. Not a promo.`
-            }
-          ],
-          max_tokens: 400,
-          temperature: 0.85,
-        });
+Write a single tweet sharing the most interesting insight from this research. Remember: this is YOUR finding, YOUR voice. Not a promo.`;
+
+    async function callOnce(): Promise<string> {
+      const res = await postChatCompletions({
+        model: getModel("blog-post"),
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        // Bumped 2026-04-21 from 400 → 900 — the blog-tweet prompt allows up
+        // to ~800 chars of body; 400 tokens was cutting the LLM off mid-
+        // sentence and the old validator happily accepted the truncated text.
+        max_tokens: 900,
+        temperature: 0.85,
+      });
       const data = await res.json();
-      const text = data.choices?.[0]?.message?.content?.trim() ?? "";
-      if (text && text.length >= 30 && text.length <= 600) return text;
-      return "";
+      return data.choices?.[0]?.message?.content?.trim() ?? "";
+    }
+
+    try {
+      let text = await callOnce();
+      if (!isValidBlogTweet(text, blogUrl)) {
+        console.warn("[DailyCycle] Blog tweet rejected (invalid/truncated), retrying once");
+        text = await callOnce();
+        if (!isValidBlogTweet(text, blogUrl)) {
+          console.warn("[DailyCycle] Blog tweet still invalid after retry, dropping");
+          return "";
+        }
+      }
+      return text;
     } catch (e: any) {
       console.warn("[DailyCycle] Blog tweet generation failed:", e.message);
       return "";
     }
+  }
+
+  /**
+   * Accept only tweets that end with real punctuation AND contain the
+   * expected blog URL. Rejects the common failure mode where the LLM runs
+   * out of tokens and the output ends mid-sentence (no terminator) or
+   * omits the link entirely.
+   */
+  function isValidBlogTweet(text: string, blogUrl: string): boolean {
+    if (!text) return false;
+    if (text.length < 30 || text.length > 600) return false;
+    if (!text.includes(blogUrl)) return false;
+    // Terminator check: last non-URL character must be a sentence ender or
+    // a closing quote/paren. Strip trailing URL + whitespace, then look at
+    // the last character. This catches "... mid-sentence https://..."
+    // output because strip-URL leaves a non-terminator.
+    const withoutTrailingUrl = text.replace(/\s*https?:\/\/\S+\s*$/, "").trim();
+    if (!withoutTrailingUrl) return false;
+    const lastChar = withoutTrailingUrl.slice(-1);
+    if (!/[.!?…)"']/.test(lastChar)) return false;
+    return true;
   }
 
   // ── Phase E: Parallel content generation ───────────────────────────────────

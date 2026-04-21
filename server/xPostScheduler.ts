@@ -788,6 +788,21 @@ export function clearXPostQueue(): number {
 }
 
 /**
+ * Delete a single pending item from the queue. Returns true if an item was
+ * deleted, false if no matching pending post was found. Items that have
+ * already been posted are left alone (the queue preserves posted history).
+ */
+export function deleteXPostQueueItem(postId: string): boolean {
+  const state = loadQueue();
+  const idx = state.queue.findIndex(p => p.id === postId && !p.posted);
+  if (idx === -1) return false;
+  state.queue.splice(idx, 1);
+  saveQueue(state);
+  console.log(`[XScheduler] Deleted queued post ${postId}`);
+  return true;
+}
+
+/**
  * Post a specific queued item immediately (manual trigger from dashboard).
  * Returns the posted item or null on failure.
  */
