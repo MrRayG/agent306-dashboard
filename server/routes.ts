@@ -35,6 +35,7 @@ import {
   markDeepReadDraftPosted,
   deleteDeepReadDraft,
   saveDeepReadDraft,
+  buildArticleTeaserTweet,
 } from "./articleEngine.js";
 import {
   saveTweetDraft,
@@ -113,7 +114,7 @@ import {
   seedDreams,
 } from "./dreamEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
-import { startXPostScheduler, getXPostQueue, queueXPost, getTodaysPostsSummary, clearXPostQueue, postXQueueItem, isXAutoPostEnabled, setXAutoPostEnabled, getXAutoPostState, setQueuedPostImage, defaultIncludeImageForType } from "./xPostScheduler.js";
+import { startXPostScheduler, getXPostQueue, queueXPost, getTodaysPostsSummary, clearXPostQueue, postXQueueItem, deleteXPostQueueItem, isXAutoPostEnabled, setXAutoPostEnabled, getXAutoPostState, setQueuedPostImage, defaultIncludeImageForType } from "./xPostScheduler.js";
 import { generatePostImage, generateImagePrompt, getImageStats } from "./imageEngine.js";
 import {
   callXaiTts,
@@ -133,7 +134,7 @@ import {
   isBatchEnabled,
   type BatchChatRequest,
 } from "./xaiBatchEngine.js";
-import { startFarcasterPostScheduler, getFarcasterPostQueue, queueFarcasterPost, clearFarcasterPostQueue, postFarcasterQueueItem } from "./farcasterQueue.js";
+import { startFarcasterPostScheduler, getFarcasterPostQueue, queueFarcasterPost, clearFarcasterPostQueue, postFarcasterQueueItem, deleteFarcasterQueueItem } from "./farcasterQueue.js";
 import { getVoiceContext } from "./voiceInstructions.js";
 import { enforceShowTag } from "./contentTypes.js";
 import { getCompetencyProfile } from "./competencyFramework.js";
@@ -1066,6 +1067,15 @@ export function registerRoutes(httpServer: Server, app: Express) {
   app.post("/api/x/queue/clear", requireDashAuth, (_req, res) => {
     const cleared = clearXPostQueue();
     res.json({ cleared });
+  });
+
+  // DELETE /api/x/queue/:postId — remove a single pending X post from the queue.
+  // Added 2026-04-21 so the user can cleanly drop stale items without
+  // clearing the whole queue when auto-post is re-enabled.
+  app.delete("/api/x/queue/:postId", requireDashAuth, (req, res) => {
+    const deleted = deleteXPostQueueItem(req.params.postId);
+    if (!deleted) return res.status(404).json({ error: "post not found or already posted" });
+    return res.status(204).end();
   });
 
   // GET /api/x/auto-post — get current X auto-post state
@@ -2516,22 +2526,38 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
         // Enforce [306 ACADEMY] show tag
         postText = enforceShowTag(postText, "research");
+        const trimmed = postText.trim();
+        if (trimmed.length < 10) { console.error("[ResearchBrief] Content too short after enforce"); return; }
+
+        // Respect the research engine's auto-post toggle. Default as of
+        // 2026-04-21 is autoPost=false — route to the tweet drafts inbox
+        // instead of queuing straight to X/FC, matching the main
+        // generate handler's behaviour. The user explicitly reported
+        // that research briefs were bypassing drafts via this path.
+        if (!shouldAutoPost("research", false)) {
+          try {
+            const draft = saveTweetDraft({
+              engine: "research",
+              content: trimmed,
+              platforms: ["x", "farcaster"],
+            });
+            registerPost("cyoa", "drafted", "research_brief");
+            console.log(`[ResearchBrief] autoPost=false — saved as draft ${draft.draftId}`);
+          } catch (e: any) { console.error("[ResearchBrief] Draft save failed:", e.message); }
+          return;
+        }
 
         // Queue for X via scheduler (high priority) instead of direct posting
         try {
-          if (postText.trim().length > 10) {
-            queueXPost(postText.trim(), "research", 2);
-            registerPost("cyoa", "queued", "research_brief");
-            console.log("[ResearchBrief] Queued for X posting via scheduler");
-          }
+          queueXPost(trimmed, "research", 2);
+          registerPost("cyoa", "queued", "research_brief");
+          console.log("[ResearchBrief] Queued for X posting via scheduler");
         } catch (e: any) { console.error("[ResearchBrief] Queue failed:", e.message); }
 
         // Queue for Farcaster (alongside X queue)
         try {
-          if (postText.trim().length > 10) {
-            queueFarcasterPost(postText.trim().slice(0, 2500), "research", undefined, "ai");
-            console.log("[ResearchBrief] Farcaster cast queued");
-          }
+          queueFarcasterPost(trimmed.slice(0, 2500), "research", undefined, "ai");
+          console.log("[ResearchBrief] Farcaster cast queued");
         } catch (e: any) { console.error("[ResearchBrief] Farcaster queue failed:", e.message); }
       } catch (e: any) { console.error("[ResearchBrief] Error:", e.message); }
     })();
@@ -3009,11 +3035,14 @@ export function registerRoutes(httpServer: Server, app: Express) {
       res.json({
         drafts: merged,
         counts: {
-          total:        merged.length,
-          article:      articleDrafts.length,
-          podcast:      tweetDrafts.filter(d => d.engine === "podcast").length,
-          breakthrough: tweetDrafts.filter(d => d.engine === "breakthrough").length,
-          blog:         tweetDrafts.filter(d => d.engine === "blog").length,
+          total:          merged.length,
+          article:        articleDrafts.length,
+          article_tweet:  tweetDrafts.filter(d => d.engine === "article").length,
+          podcast:        tweetDrafts.filter(d => d.engine === "podcast").length,
+          breakthrough:   tweetDrafts.filter(d => d.engine === "breakthrough").length,
+          blog:           tweetDrafts.filter(d => d.engine === "blog").length,
+          research:       tweetDrafts.filter(d => d.engine === "research").length,
+          reflection:     tweetDrafts.filter(d => d.engine === "reflection").length,
         },
       });
     } catch (e: any) {
@@ -5442,19 +5471,48 @@ needsHelp: true only when you genuinely need his direction or information`,
         }
 
         case "podcast": {
+          // Optional `episodeId` body param — when set, promote that
+          // specific published episode; otherwise fall back to the most
+          // recent (legacy behaviour). Added 2026-04-21 after the user
+          // reported podcast drafts went to the inbox with no link.
+          const episodeId = typeof req.body?.episodeId === "string" ? req.body.episodeId : undefined;
           const { generatePodcastContent } = await import("./podcastEngine.js");
-          const result = await generatePodcastContent();
-          if (!result) throw new Error("Podcast generation failed — no research threads ready or no scripted episodes");
+          const result = await generatePodcastContent(episodeId);
+          if (!result) throw new Error(episodeId
+            ? `Podcast generation failed — episodeId=${episodeId} not found or not published`
+            : "Podcast generation failed — no research threads ready or no scripted episodes");
           content = result;
           type = "podcast";
           break;
         }
 
         case "article": {
+          // Article is a 2-output special case. The user's bug report was
+          // that the old path called previewDeepRead (preview only) and
+          // queued just the teaser as an X tweet — the full manuscript
+          // was never saved anywhere and the tweet version was cut off.
+          //
+          // New flow:
+          //   1. runWeeklyDeepRead — generates the full Deep Read and
+          //      saves it to article_state.json drafts (manuscript side,
+          //      manually published via the X Article composer).
+          //   2. buildArticleTeaserTweet — deterministic short tweet
+          //      referencing the same source URL + headline. Saves to
+          //      tweet drafts (autoPost=false) OR queues to X/FC if the
+          //      user has flipped article auto-post on.
           const apiKey = LLM_API_KEY;
           if (!apiKey) throw new Error("LLM API key not configured");
-          const preview = await previewDeepRead(apiKey);
-          content = preview.teaser;
+
+          const result = await runWeeklyDeepRead(null, apiKey);
+          if (!result.success || !result.draftId) {
+            throw new Error(result.error ?? "Article generation failed");
+          }
+          const savedDrafts = listDeepReadDrafts();
+          const draft = savedDrafts.find(d => d.draftId === result.draftId);
+          if (!draft) {
+            throw new Error("Article draft saved but could not be located for teaser generation");
+          }
+          content = buildArticleTeaserTweet(draft);
           type = "article";
           break;
         }
@@ -5516,15 +5574,52 @@ needsHelp: true only when you genuinely need his direction or information`,
       let savedDraftId: string | undefined;
 
       // Determine posting mode:
-      //   * `article` always goes to its own drafts (manual X Article composer)
-      //   * podcast/breakthrough/blog respect the `autoPost` toggle on their
-      //     schedule config. Default as of 2026-04-21 is draft-only.
+      //   * podcast/breakthrough/blog/research/reflection → draft-capable.
+      //     Respect the per-engine `autoPost` toggle. Default as of
+      //     2026-04-21 is draft-only for all of these.
+      //   * `article` → always saves the manuscript to article drafts AND
+      //     emits a teaser tweet. The teaser follows the same autoPost
+      //     toggle (article engine defaults to draft-only).
       //   * everything else auto-posts (backwards compat).
-      const DRAFT_TWEET_ENGINES: TweetDraftEngine[] = ["podcast", "breakthrough", "blog"];
+      const DRAFT_TWEET_ENGINES: TweetDraftEngine[] = [
+        "podcast", "breakthrough", "blog", "research", "reflection",
+      ];
       const isTweetDraftEngine = (DRAFT_TWEET_ENGINES as string[]).includes(engineId);
-      const autoPost = isTweetDraftEngine ? shouldAutoPost(engineId, true) : true;
+      const isArticle = engineId === "article";
+      // Draft-capable engines default to autoPost=false (draft inbox is
+      // the new baseline). Pure auto-post engines default to autoPost=true.
+      const draftCapable = isTweetDraftEngine || isArticle;
+      const autoPost = draftCapable
+        ? shouldAutoPost(engineId, false)
+        : shouldAutoPost(engineId, true);
 
-      if (!autoPost && isTweetDraftEngine) {
+      if (isArticle) {
+        // Always save the teaser tweet as an article-tweet draft so the
+        // operator can review/edit before posting, regardless of toggle.
+        // When autoPost is ON we ALSO queue the teaser to X/FC.
+        const draft = saveTweetDraft({
+          engine: "article" as TweetDraftEngine,
+          content: trimmed,
+          platforms,
+        });
+        savedDraftId = draft.draftId;
+        console.log(`[GenerateNow] Article teaser saved as draft ${draft.draftId} (${trimmed.length} chars); manuscript saved via runWeeklyDeepRead`);
+        if (autoPost) {
+          if (platforms.includes("x")) {
+            queueXPost(trimmed, "article", 3);
+            queuedTo.push("x");
+          }
+          if (platforms.includes("farcaster")) {
+            try {
+              const channel = trimmed.match(/\bai\b|agent|llm|model/i) ? "ai" : undefined;
+              queueFarcasterPost(trimmed, "article", 3, channel);
+              queuedTo.push("farcaster");
+            } catch (fcErr: any) {
+              console.warn(`[GenerateNow] Farcaster queue failed:`, fcErr.message);
+            }
+          }
+        }
+      } else if (!autoPost && isTweetDraftEngine) {
         // Save to tweet drafts instead of posting.
         const draft = saveTweetDraft({
           engine: engineId as TweetDraftEngine,
@@ -5533,6 +5628,11 @@ needsHelp: true only when you genuinely need his direction or information`,
         });
         savedDraftId = draft.draftId;
         console.log(`[GenerateNow] autoPost=false — saved ${engineId} draft ${draft.draftId} (${trimmed.length} chars)`);
+      } else if (!autoPost && !isTweetDraftEngine) {
+        // Non-draftable engine with autoPost off. Rare (the main
+        // always-post engines default to on) but honour the flag —
+        // don't silently queue.
+        console.log(`[GenerateNow] autoPost=false for ${engineId} (non-draftable) — content returned but not queued`);
       } else {
         // Queue to X (only if selected)
         if (platforms.includes("x")) {
@@ -5561,7 +5661,7 @@ needsHelp: true only when you genuinely need his direction or information`,
         type: engineId,
         queuedTo,
         contentLength: trimmed.length,
-        savedAsDraft: !autoPost && isTweetDraftEngine,
+        savedAsDraft: isArticle || (!autoPost && isTweetDraftEngine),
         draftId: savedDraftId,
       });
 
@@ -5617,5 +5717,12 @@ needsHelp: true only when you genuinely need his direction or information`,
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }
+  });
+
+  // DELETE /api/farcaster/queue/:postId — remove a single pending Farcaster cast.
+  app.delete("/api/farcaster/queue/:postId", requireDashAuth, (req, res) => {
+    const deleted = deleteFarcasterQueueItem(req.params.postId);
+    if (!deleted) return res.status(404).json({ error: "cast not found or already posted" });
+    return res.status(204).end();
   });
 }

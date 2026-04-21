@@ -1987,10 +1987,19 @@ export function getPipelineStatus(): {
 }
 
 // ── On-demand generation (no side effects — produces a podcast promo post) ──
-export async function generatePodcastContent(): Promise<string | null> {
-  console.log("[Podcast] On-demand promo generation triggered");
+/**
+ * Build a promo tweet for a published podcast episode.
+ *
+ * When `episodeId` is provided, promote that specific episode. When omitted,
+ * fall back to the most recently-published episode (legacy behaviour). This
+ * lets the dashboard UI offer an episode picker — the user bug report was
+ * that podcast promos always went to drafts with no episode link because
+ * the caller had no way to say *which* episode they wanted promoted.
+ */
+export async function generatePodcastContent(episodeId?: string): Promise<string | null> {
+  console.log("[Podcast] On-demand promo generation triggered", episodeId ? `(episodeId=${episodeId})` : "(latest)");
 
-  // PROMOTE the latest PUBLISHED episode. Generate Now is NOT a "write a new
+  // PROMOTE a PUBLISHED episode. Generate Now is NOT a "write a new
   // episode" button — the autonomous pipeline owns authoring. We return the
   // LLM-written socialPost with [LINK] resolved to the real agent306.ai URL.
   const publishedEpisodes = state.episodes
@@ -2002,7 +2011,16 @@ export async function generatePodcastContent(): Promise<string | null> {
     return null;
   }
 
-  const ep = publishedEpisodes[0];
+  let ep: Episode | undefined;
+  if (episodeId) {
+    ep = publishedEpisodes.find(e => e.id === episodeId);
+    if (!ep) {
+      console.warn(`[Podcast] Requested episodeId=${episodeId} not found in published episodes`);
+      return null;
+    }
+  } else {
+    ep = publishedEpisodes[0];
+  }
   const meta = EPISODE_META[ep.type];
   const epNum = ep.episodeNumber ? ` #${ep.episodeNumber}` : "";
 

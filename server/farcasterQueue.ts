@@ -253,6 +253,20 @@ export function clearFarcasterPostQueue(): number {
 }
 
 /**
+ * Delete a single pending Farcaster post from the queue. Returns true if
+ * an item was deleted. Posted items are preserved for history.
+ */
+export function deleteFarcasterQueueItem(postId: string): boolean {
+  const state = loadQueue();
+  const idx = state.queue.findIndex(p => p.id === postId && !p.posted);
+  if (idx === -1) return false;
+  state.queue.splice(idx, 1);
+  saveQueue(state);
+  console.log(`[FarcasterQueue] Deleted queued post ${postId}`);
+  return true;
+}
+
+/**
  * Post a specific queued item immediately (manual trigger from dashboard).
  * Returns the posted item or null on failure.
  */

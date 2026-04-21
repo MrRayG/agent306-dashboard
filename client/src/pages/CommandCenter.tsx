@@ -481,6 +481,7 @@ function EngineCards() {
   const [generating, setGenerating] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<Record<string, { success: boolean; content?: string; error?: string }>>({});
   const [editingSchedule, setEditingSchedule] = useState<string | null>(null);
+  const [selectedPodcastEpisodeId, setSelectedPodcastEpisodeId] = useState<string>("");
 
   const { data: engineData, isLoading } = useQuery<{ engines: EngineInfo[] }>({
     queryKey: ["/api/engines/status"],
@@ -497,12 +498,23 @@ function EngineCards() {
     refetchInterval: 60_000,
   });
 
+  // Only published episodes can be promoted. When empty, the picker hides.
+  const { data: publishedEpisodes } = useQuery<{ episodes: Array<{ id: string; title: string; episodeNumber?: number; type?: string; publishedAt?: string }> }>({
+    queryKey: ["/api/podcast/episodes", "published"],
+    queryFn: () => fetch("/api/podcast/episodes?status=published").then(r => r.json()),
+    refetchInterval: 120_000,
+  });
+
   async function handleGenerate(engineId: string, engineName: string) {
     setGenerating(engineId);
     setLastResult(prev => ({ ...prev, [engineId]: undefined as any }));
 
     try {
-      const res = await apiRequest("POST", `/api/engines/${engineId}/generate`, {});
+      const body: Record<string, any> = {};
+      if (engineId === "podcast" && selectedPodcastEpisodeId) {
+        body.episodeId = selectedPodcastEpisodeId;
+      }
+      const res = await apiRequest("POST", `/api/engines/${engineId}/generate`, body);
       const data = await res.json();
 
       if (data.success) {
@@ -657,6 +669,39 @@ function EngineCards() {
                   color={color}
                   onClose={() => setEditingSchedule(null)}
                 />
+              )}
+
+              {/* Podcast Episode Picker — only on the podcast card */}
+              {eng.id === "podcast" && (publishedEpisodes?.episodes?.length ?? 0) > 0 && (
+                <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ ...mono, fontSize: "0.68rem", color: "rgba(227,229,228,0.55)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                    Episode:
+                  </span>
+                  <select
+                    value={selectedPodcastEpisodeId}
+                    onChange={(e) => setSelectedPodcastEpisodeId(e.target.value)}
+                    style={{
+                      ...mono,
+                      fontSize: "0.72rem",
+                      background: "#0f1011",
+                      color: "#efefef",
+                      border: "1px solid rgba(249,115,22,0.25)",
+                      padding: "4px 8px",
+                      maxWidth: "75%",
+                    }}
+                    title="Pick a published episode to promote (defaults to most recent)"
+                  >
+                    <option value="">Latest published</option>
+                    {publishedEpisodes!.episodes.map(ep => {
+                      const label = `${ep.type ? `[${ep.type.toUpperCase()}] ` : ""}${ep.episodeNumber ? `#${ep.episodeNumber} ` : ""}${ep.title}`;
+                      return (
+                        <option key={ep.id} value={ep.id}>
+                          {label.length > 70 ? label.slice(0, 67) + "..." : label}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
               )}
 
               {/* Loading indicator */}
@@ -873,6 +918,8 @@ function PlatformCard({
   onToggle,
   onPostNow,
   postingId,
+  onDeleteItem,
+  onClearQueue,
 }: {
   platform: string;
   data: PlatformData;
@@ -883,6 +930,8 @@ function PlatformCard({
   onToggle: () => void;
   onPostNow: (postId: string) => void;
   postingId: string | null;
+  onDeleteItem: (postId: string) => void;
+  onClearQueue: () => void;
 }) {
   const toggleBg = data.autoPost ? "rgba(74,222,128,0.15)" : "rgba(227,229,228,0.10)";
   const toggleBorder = data.autoPost ? "rgba(74,222,128,0.4)" : "rgba(227,229,228,0.25)";
@@ -941,9 +990,34 @@ function PlatformCard({
 
       {/* Queued Content */}
       <div style={{ marginBottom: 16 }}>
-        <p style={{ ...label, marginBottom: 10 }}>
-          Queued Content {data.queue.length > 0 ? `(${data.queue.length} pending)` : ""}
-        </p>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <p style={{ ...label, margin: 0 }}>
+            Queued Content {data.queue.length > 0 ? `(${data.queue.length} pending)` : ""}
+          </p>
+          {data.queue.length > 0 && (
+            <button
+              onClick={() => {
+                if (confirm(`Clear ${data.queue.length} queued ${platform} post${data.queue.length === 1 ? "" : "s"}?`)) {
+                  onClearQueue();
+                }
+              }}
+              style={{
+                ...mono,
+                fontSize: "0.68rem",
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                padding: "3px 10px",
+                background: "rgba(239,68,68,0.08)",
+                border: "1px solid rgba(239,68,68,0.25)",
+                color: "#ef4444",
+                cursor: "pointer",
+              }}
+              title="Clear the entire queue"
+            >
+              Clear Queue
+            </button>
+          )}
+        </div>
         {data.queue.length === 0 ? (
           <p style={{ ...mono, fontSize: "0.83rem", color: "rgba(227,229,228,0.40)", lineHeight: 1.6 }}>
             No content queued — engines will add posts on their schedules
@@ -979,6 +1053,27 @@ function PlatformCard({
                         {timeAgo(item.createdAt)}
                       </span>
                     </div>
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <button
+                      onClick={() => {
+                        if (confirm("Delete this queued post?")) onDeleteItem(item.id);
+                      }}
+                      style={{
+                        ...mono,
+                        fontSize: "0.80rem",
+                        lineHeight: 1,
+                        width: 22,
+                        height: 22,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        background: "rgba(239,68,68,0.08)",
+                        border: "1px solid rgba(239,68,68,0.25)",
+                        color: "#ef4444",
+                        cursor: "pointer",
+                      }}
+                      title="Delete this queued post"
+                    >×</button>
                     <button
                       onClick={() => onPostNow(item.id)}
                       disabled={isPosting}
@@ -1004,6 +1099,7 @@ function PlatformCard({
                         <><Play style={{ width: 10, height: 10 }} /> Post Now</>
                       )}
                     </button>
+                    </div>
                   </div>
                   <ExpandableContent content={item.content} maxChars={150} />
                 </div>
@@ -1147,6 +1243,44 @@ function OperationsTab() {
     postFcNow.mutate(postId);
   };
 
+  const deleteXItem = useMutation({
+    mutationFn: (postId: string) => apiRequest("DELETE", `/api/x/queue/${postId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/posting/overview"] });
+      toast({ title: "Removed from X queue" });
+    },
+    onError: () => toast({ title: "Failed to delete X queue item", variant: "destructive" }),
+  });
+
+  const deleteFcItem = useMutation({
+    mutationFn: (postId: string) => apiRequest("DELETE", `/api/farcaster/queue/${postId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/posting/overview"] });
+      toast({ title: "Removed from Farcaster queue" });
+    },
+    onError: () => toast({ title: "Failed to delete Farcaster queue item", variant: "destructive" }),
+  });
+
+  const clearXQueue = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/x/queue/clear"),
+    onSuccess: async (res) => {
+      const d = await res.json();
+      queryClient.invalidateQueries({ queryKey: ["/api/posting/overview"] });
+      toast({ title: `Cleared ${d.cleared ?? 0} X queued posts` });
+    },
+    onError: () => toast({ title: "Failed to clear X queue", variant: "destructive" }),
+  });
+
+  const clearFcQueue = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/farcaster/queue/clear"),
+    onSuccess: async (res) => {
+      const d = await res.json();
+      queryClient.invalidateQueries({ queryKey: ["/api/posting/overview"] });
+      toast({ title: `Cleared ${d.cleared ?? 0} Farcaster queued casts` });
+    },
+    onError: () => toast({ title: "Failed to clear Farcaster queue", variant: "destructive" }),
+  });
+
   const coord = house?.coordinator;
 
   return (
@@ -1259,6 +1393,8 @@ function OperationsTab() {
             onToggle={() => toggleXMutation.mutate()}
             onPostNow={handlePostXNow}
             postingId={postingId}
+            onDeleteItem={(id) => deleteXItem.mutate(id)}
+            onClearQueue={() => clearXQueue.mutate()}
           />
           <PlatformCard
             platform="Farcaster"
@@ -1270,6 +1406,8 @@ function OperationsTab() {
             onToggle={() => toggleFcMutation.mutate()}
             onPostNow={handlePostFcNow}
             postingId={postingId}
+            onDeleteItem={(id) => deleteFcItem.mutate(id)}
+            onClearQueue={() => clearFcQueue.mutate()}
           />
         </div>
       )}

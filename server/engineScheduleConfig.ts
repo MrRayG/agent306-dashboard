@@ -35,10 +35,9 @@ const DEFAULT_SCHEDULES: ScheduleConfig = {
   academy:      { schedule: "Tue/Thu/Sat", timeET: "10:00", enabled: true, autoPost: true },
   news:         { schedule: "daily",       timeET: "08:00", enabled: true, autoPost: true },
   dispatch:     { schedule: "weekly",      timeET: "18:00", dayET: "Sunday", enabled: true, autoPost: true },
-  research:     { schedule: "daily",       timeET: "14:00", enabled: true, autoPost: true },
-
   // Engines the user wants draft-only by default (2026-04-21 cadence review).
   // Flip autoPost: true in the dashboard to restore auto-posting.
+  research:     { schedule: "daily",       timeET: "14:00", enabled: true, autoPost: false },
   podcast:      { schedule: "Mon/Wed/Fri", timeET: "15:00", enabled: true, autoPost: false },
   breakthrough: { schedule: "on_event",    timeET: "00:00", enabled: true, autoPost: false },
   blog:         { schedule: "daily",       timeET: "06:00", enabled: true, autoPost: false },

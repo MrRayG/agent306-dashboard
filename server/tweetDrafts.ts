@@ -21,7 +21,13 @@ import { dataPath } from "./dataPaths.js";
 const TWEET_DRAFTS_FILE = dataPath("tweet_drafts.json");
 
 /** Engines that can produce short-form tweet drafts via this store. */
-export type TweetDraftEngine = "podcast" | "breakthrough" | "blog";
+export type TweetDraftEngine =
+  | "podcast"
+  | "breakthrough"
+  | "blog"
+  | "research"
+  | "reflection"
+  | "article";
 
 /** A lightweight record of a tweet that was generated but not auto-posted. */
 export interface TweetDraft {

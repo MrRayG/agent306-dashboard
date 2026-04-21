@@ -798,6 +798,64 @@ export function deleteDeepReadDraft(draftId: string): { ok: boolean; error?: str
   return { ok: true };
 }
 
+// ── Teaser tweet for Deep Read drafts ────────────────────────────────────────
+/**
+ * Build a short-form X/Farcaster teaser for a saved Deep Read draft. The
+ * full manuscript is published via the X Article composer; this teaser is
+ * what gets posted (or saved as a tweet draft) alongside it so readers
+ * have a hook + link. Deterministic — no LLM — so it is safe to run in
+ * the generate handler's critical path.
+ *
+ * Format:
+ *   [306 ARTICLE] <headline>
+ *
+ *   <1-2 sentence body, trimmed>
+ *
+ *   I read <sourceLabel>. Here's what matters: <link>
+ *
+ * Budget: 240 chars of leading body + prefix; total tweet stays under the
+ * 280-char X limit once the link is appended.
+ */
+export function buildArticleTeaserTweet(draft: ArticleDraft): string {
+  const headline = (draft.headline ?? "").trim();
+  const teaser = (draft.teaser ?? "").trim();
+  const body = (draft.body ?? "").trim();
+  const sourceTitle = (draft.sourceTitle ?? "").trim();
+  const link = (draft.sourceUrl ?? "").trim();
+
+  // Prefer the teaser (1-liner hook) over the full body; fall back to
+  // extracting the first 1-2 sentences from the body if teaser is missing.
+  let snippet = teaser;
+  if (!snippet) {
+    const sentences = body
+      .replace(/\s+/g, " ")
+      .match(/[^.!?]+[.!?]+/g)
+      ?.slice(0, 2)
+      .join(" ")
+      .trim();
+    snippet = sentences ?? body.slice(0, 200);
+  }
+  // Budget: keep headline + snippet under ~240 chars so the closing line
+  // and link fit under 280.
+  const MAX_SNIPPET = 200;
+  if (snippet.length > MAX_SNIPPET) {
+    snippet = snippet.slice(0, MAX_SNIPPET).replace(/\s+\S*$/, "") + "…";
+  }
+
+  // Shorten the source label so the closing line stays tight.
+  let sourceLabel = sourceTitle;
+  if (sourceLabel.length > 60) {
+    sourceLabel = sourceLabel.slice(0, 60).replace(/\s+\S*$/, "") + "…";
+  }
+
+  const closing = sourceLabel
+    ? `I read ${sourceLabel}. Here's what matters: ${link}`
+    : `Here's what matters: ${link}`;
+
+  const header = headline ? `[306 ARTICLE] ${headline}` : `[306 ARTICLE]`;
+  return `${header}\n\n${snippet}\n\n${closing}`.trim();
+}
+
 // ── Preview: generate without posting (for dashboard preview) ─────────────────
 export async function previewDeepRead(
   apiKey: string,
