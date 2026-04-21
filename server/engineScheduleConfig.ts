@@ -17,21 +17,36 @@ export interface EngineSchedule {
   timeET: string;           // "12:00" — 24h format in ET
   dayET?: string;           // "Sunday" — for weekly schedules
   enabled: boolean;
+  /**
+   * When `true` (default for most engines), generated content is queued
+   * straight to X / Farcaster. When `false`, generated content is saved
+   * to the drafts inbox for the user to post manually. Engines that were
+   * already manual-only (e.g. `article`) ignore this toggle — they always
+   * route to drafts regardless.
+   */
+  autoPost?: boolean;
 }
 
 export type ScheduleConfig = Record<string, EngineSchedule>;
 
 const DEFAULT_SCHEDULES: ScheduleConfig = {
-  signal:       { schedule: "Mon/Wed/Fri", timeET: "12:00", enabled: true },
-  academy:      { schedule: "Tue/Thu/Sat", timeET: "10:00", enabled: true },
-  news:         { schedule: "daily",       timeET: "08:00", enabled: true },
-  dispatch:     { schedule: "weekly",      timeET: "18:00", dayET: "Sunday", enabled: true },
-  research:     { schedule: "daily",       timeET: "14:00", enabled: true },
-  podcast:      { schedule: "Mon/Wed/Fri", timeET: "15:00", enabled: true },
-  article:      { schedule: "weekly",      timeET: "17:00", dayET: "Monday", enabled: true },
-  breakthrough: { schedule: "on_event",    timeET: "00:00", enabled: true },
-  blog:         { schedule: "daily",       timeET: "06:00", enabled: true },
-  reflection:   { schedule: "weekly",      timeET: "17:00", dayET: "Monday", enabled: true },
+  // Engines that auto-post by default (user explicitly did not ask to change these).
+  signal:       { schedule: "Mon/Wed/Fri", timeET: "12:00", enabled: true, autoPost: true },
+  academy:      { schedule: "Tue/Thu/Sat", timeET: "10:00", enabled: true, autoPost: true },
+  news:         { schedule: "daily",       timeET: "08:00", enabled: true, autoPost: true },
+  dispatch:     { schedule: "weekly",      timeET: "18:00", dayET: "Sunday", enabled: true, autoPost: true },
+  research:     { schedule: "daily",       timeET: "14:00", enabled: true, autoPost: true },
+
+  // Engines the user wants draft-only by default (2026-04-21 cadence review).
+  // Flip autoPost: true in the dashboard to restore auto-posting.
+  podcast:      { schedule: "Mon/Wed/Fri", timeET: "15:00", enabled: true, autoPost: false },
+  breakthrough: { schedule: "on_event",    timeET: "00:00", enabled: true, autoPost: false },
+  blog:         { schedule: "daily",       timeET: "06:00", enabled: true, autoPost: false },
+
+  // Manual-only engines — they don't auto-post regardless of toggle. `article`
+  // saves weekly Deep Read drafts; `reflection` is authored on demand.
+  article:      { schedule: "weekly",      timeET: "17:00", dayET: "Monday", enabled: true, autoPost: false },
+  reflection:   { schedule: "weekly",      timeET: "17:00", dayET: "Monday", enabled: true, autoPost: false },
 };
 
 /** Read schedule config from disk; create with defaults if missing. */
@@ -40,10 +55,22 @@ export function getScheduleConfig(): ScheduleConfig {
     if (fs.existsSync(SCHEDULE_FILE)) {
       const raw = fs.readFileSync(SCHEDULE_FILE, "utf8");
       const parsed = JSON.parse(raw) as ScheduleConfig;
-      // Merge in any new engines that may not exist in the saved file
+      let changed = false;
+      // Merge in any new engines that may not exist in the saved file.
       for (const [key, val] of Object.entries(DEFAULT_SCHEDULES)) {
-        if (!(key in parsed)) parsed[key] = val;
+        if (!(key in parsed)) {
+          parsed[key] = val;
+          changed = true;
+        } else if (typeof parsed[key].autoPost !== "boolean") {
+          // Backfill `autoPost` on existing entries that pre-date the toggle.
+          // Keep the historic always-post behaviour for engines not explicitly
+          // draft-only, but honor the 2026-04-21 defaults for podcast/
+          // breakthrough/blog/article/reflection.
+          parsed[key].autoPost = val.autoPost ?? true;
+          changed = true;
+        }
       }
+      if (changed) saveScheduleConfig(parsed);
       return parsed;
     }
   } catch (e) {
@@ -68,12 +95,29 @@ export function updateEngineSchedule(engineId: string, update: Partial<EngineSch
   const config = getScheduleConfig();
   if (!config[engineId]) {
     // Create entry with defaults + overrides
-    config[engineId] = { schedule: "daily", timeET: "12:00", enabled: true, ...update };
+    config[engineId] = { schedule: "daily", timeET: "12:00", enabled: true, autoPost: true, ...update };
   } else {
     Object.assign(config[engineId], update);
   }
   saveScheduleConfig(config);
   return config;
+}
+
+/**
+ * Check whether an engine should auto-post. Returns the engine's autoPost
+ * flag when set; otherwise falls back to `defaultAutoPost` (the legacy
+ * behaviour was always-post, so callers that pre-date this toggle pass
+ * `true` for backwards compat).
+ *
+ * Engines like `article` that have manual-only flows should not consult
+ * this — they should route to drafts directly.
+ */
+export function shouldAutoPost(engineId: string, defaultAutoPost = true): boolean {
+  const config = getScheduleConfig();
+  const entry = config[engineId];
+  if (!entry) return defaultAutoPost;
+  if (typeof entry.autoPost === "boolean") return entry.autoPost;
+  return defaultAutoPost;
 }
 
 /**

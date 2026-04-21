@@ -38,6 +38,8 @@ import { getFormatVoiceContext } from "./voiceInstructions.js";
 import { SOUL, VOICE } from "./voice.js";
 import { buildExemplarBlock } from "./voiceExemplars.js";
 import { queuePodcastPromo, hasPostedEpisode } from "./xPostScheduler.js";
+import { shouldAutoPost } from "./engineScheduleConfig.js";
+import { saveTweetDraft } from "./tweetDrafts.js";
 
 import { postChatCompletions, postPerplexity } from "./llmCall.js";
 const GROK_URL = LLM_BASE_URL;
@@ -188,6 +190,13 @@ export interface Episode {
   publishedAt?: string;
   publishedTo?: string[];  // ["agent306.ai", "farcaster"]
   episodeNumber?: number;
+  /**
+   * Direct URL to this specific episode (e.g. Spotify / Apple / agent306.ai
+   * deep link). When set, promo tweets link here instead of the podcast home.
+   * Added 2026-04-21 so the user can attach a per-episode URL when
+   * publishing manually.
+   */
+  episodeUrl?: string;
 
   // Sources
   sources?: Array<{ title: string; url: string }>;
@@ -714,28 +723,86 @@ export function publishEpisode(episodeId: string, publishedTo: string[]): boolea
 
   console.log(`[Podcast] Published: ${EPISODE_META[episode.type].label} #${episode.episodeNumber} — "${episode.title}"`);
 
-  // Queue podcast promo to X scheduler (immediate, event-driven)
-  if (!hasPostedEpisode(episodeId)) {
-    const rawPromo = episode.metadata?.socialPost
-      ?? `New episode: ${EPISODE_META[episode.type].label} #${episode.episodeNumber} — "${episode.title}"\n\n${PODCAST_SITE_URL}`;
-    const promoText = resolveSocialLinks(rawPromo);
-    queuePodcastPromo(promoText.slice(0, 2500), episodeId);
-  }
+  // Prefer per-episode URL when the user has set one, else site home.
+  const linkTarget = episode.episodeUrl?.trim() || PODCAST_SITE_URL;
 
-  // Queue for Farcaster (parallel to X queue)
-  if (episode.metadata?.socialPost) {
-    (async () => {
-      try {
-        const { queueFarcasterPost } = await import("./farcasterQueue.js");
-        const farcasterText = resolveSocialLinks(episode.metadata!.socialPost).slice(0, 2500);
-        queueFarcasterPost(farcasterText, "podcast", 1, "ai");
-        console.log(`[Podcast] Farcaster cast queued: "${episode.title}"`);
-      } catch (e: any) {
-        console.warn("[Podcast] Farcaster queue failed:", e.message);
-      }
-    })();
+  // Decide: auto-post or save draft? Respects the dashboard toggle.
+  // Default (2026-04-21) is draft-only per the cadence review.
+  const autoPost = shouldAutoPostPodcast();
+
+  if (autoPost) {
+    // Queue podcast promo to X scheduler (immediate, event-driven)
+    if (!hasPostedEpisode(episodeId)) {
+      const rawPromo = episode.metadata?.socialPost
+        ?? `New episode: ${EPISODE_META[episode.type].label} #${episode.episodeNumber} — "${episode.title}"\n\n${linkTarget}`;
+      const promoText = resolveSocialLinks(rawPromo, linkTarget);
+      queuePodcastPromo(promoText.slice(0, 2500), episodeId);
+    }
+
+    // Queue for Farcaster (parallel to X queue)
+    if (episode.metadata?.socialPost) {
+      (async () => {
+        try {
+          const { queueFarcasterPost } = await import("./farcasterQueue.js");
+          const farcasterText = resolveSocialLinks(episode.metadata!.socialPost, linkTarget).slice(0, 2500);
+          queueFarcasterPost(farcasterText, "podcast", 1, "ai");
+          console.log(`[Podcast] Farcaster cast queued: "${episode.title}"`);
+        } catch (e: any) {
+          console.warn("[Podcast] Farcaster queue failed:", e.message);
+        }
+      })();
+    }
+  } else {
+    // autoPost=false — save a draft for the user to post manually.
+    try {
+      const rawPromo = episode.metadata?.socialPost
+        ?? `New episode: ${EPISODE_META[episode.type].label} #${episode.episodeNumber} — "${episode.title}"\n\n${linkTarget}`;
+      const promoText = resolveSocialLinks(rawPromo, linkTarget);
+      saveTweetDraft({
+        engine: "podcast",
+        content: promoText,
+        platforms: ["x", "farcaster"],
+        metadata: {
+          sourceTitle: episode.title,
+          sourceUrl:   linkTarget,
+          episodeUrl:  episode.episodeUrl,
+        },
+      });
+      console.log(`[Podcast] autoPost=false — saved draft for "${episode.title}" → ${linkTarget}`);
+    } catch (e: any) {
+      console.warn("[Podcast] saveTweetDraft failed:", e.message);
+    }
   }
   return true;
+}
+
+/**
+ * Look up the podcast engine's auto-post toggle. Defaults to `false`
+ * (draft-only) per the 2026-04-21 cadence review.
+ */
+function shouldAutoPostPodcast(): boolean {
+  try {
+    return shouldAutoPost("podcast", false);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Set or clear the per-episode URL. Called from the Podcast Studio form
+ * so the user can attach the real Spotify/Apple/etc. link after publishing
+ * manually. Returns the updated episode or `null` if id not found.
+ */
+export function setEpisodeUrl(episodeId: string, episodeUrl: string | null): Episode | null {
+  const episode = state.episodes.find(e => e.id === episodeId);
+  if (!episode) return null;
+  if (!episodeUrl || !episodeUrl.trim()) {
+    delete episode.episodeUrl;
+  } else {
+    episode.episodeUrl = episodeUrl.trim();
+  }
+  saveState(state);
+  return episode;
 }
 
 // ── Guest pipeline (THE CONVERSATION) ─────────────────────────────────────────
@@ -1939,12 +2006,18 @@ export async function generatePodcastContent(): Promise<string | null> {
   const meta = EPISODE_META[ep.type];
   const epNum = ep.episodeNumber ? ` #${ep.episodeNumber}` : "";
 
+  // Prefer per-episode URL when the user has set one; else fall back to
+  // the podcast home. This was the 2026-04-21 fix for promos that linked
+  // to agent306.ai instead of the specific episode.
+  const linkTarget = ep.episodeUrl?.trim() || PODCAST_SITE_URL;
+
   // Prefer the LLM-generated socialPost (written specifically for X/Farcaster
   // with a [LINK] placeholder). resolveSocialLinks substitutes the real URL.
   if (ep.metadata?.socialPost) {
-    return resolveSocialLinks(ep.metadata.socialPost);
+    return resolveSocialLinks(ep.metadata.socialPost, linkTarget);
   }
 
-  // Fallback: typed promo with the real site URL (no script dumps, ever).
-  return `[306 PODCAST] ${meta.label}${epNum} — "${ep.title}"\n\nListen: https://${PODCAST_SITE_URL}`;
+  // Fallback: typed promo with the real link (no script dumps, ever).
+  const prefix = linkTarget.startsWith("http") ? "" : "https://";
+  return `[306 PODCAST] ${meta.label}${epNum} — "${ep.title}"\n\nListen: ${prefix}${linkTarget}`;
 }

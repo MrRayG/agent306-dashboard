@@ -21,6 +21,8 @@ import { queueFarcasterPost } from "./farcasterQueue.js";
 import { getVoiceContext } from "./voiceInstructions.js";
 import { enforceShowTag } from "./contentTypes.js";
 import { buildTweetSystemPrompt } from "./tweetPromptBuilder.js";
+import { shouldAutoPost } from "./engineScheduleConfig.js";
+import { saveTweetDraft } from "./tweetDrafts.js";
 
 import { postChatCompletions } from "./llmCall.js";
 // -- Types ------------------------------------------------------------------
@@ -568,8 +570,24 @@ Required JSON schema:
     }
     // Enforce [306 SIGNAL] show tag
     breakthroughPost = enforceShowTag(breakthroughPost, "signal");
-    queueXPost(breakthroughPost, "breakthrough");
-    queueFarcasterPost(breakthroughPost.slice(0, 2500), "breakthrough", undefined, "ai");
+
+    // Respect the dashboard auto-post toggle. When off (default as of
+    // 2026-04-21), save to the drafts inbox instead of firing straight to
+    // X / Farcaster. The user reviews and posts manually from /drafts.
+    if (shouldAutoPost("breakthrough", false)) {
+      queueXPost(breakthroughPost, "breakthrough");
+      queueFarcasterPost(breakthroughPost.slice(0, 2500), "breakthrough", undefined, "ai");
+    } else {
+      saveTweetDraft({
+        engine: "breakthrough",
+        content: breakthroughPost,
+        platforms: ["x", "farcaster"],
+        metadata: {
+          sourceTitle: breakthrough.title,
+        },
+      });
+      console.log(`[Breakthrough] autoPost=false — saved to drafts inbox instead of posting`);
+    }
 
     console.log(`[Breakthrough] BREAKTHROUGH DETECTED: "${breakthrough.title}" (composite: ${compositeScore})`);
     return breakthrough;

@@ -1,6 +1,6 @@
 import { Switch, Route, Router, Link, useLocation } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import CommandCenter from "@/pages/CommandCenter";
@@ -17,6 +17,7 @@ import DreamsGrowth from "@/pages/DreamsGrowth";
 import CompetencyDashboard from "@/pages/CompetencyDashboard";
 import EvalDashboard from "@/pages/EvalDashboard";
 import Diagnostics from "@/pages/Diagnostics";
+import Drafts from "@/pages/Drafts";
 import NotFound from "@/pages/not-found";
 import PerplexityAttribution from "@/components/PerplexityAttribution";
 
@@ -26,6 +27,7 @@ const nav = [
   { href: "/episodes", label: "Episodes",       desc: "Queue & post"        },
   { href: "/writing",  label: "Writing Studio", desc: "Articles · Blog"     },
   { href: "/weekly",   label: "Weekly",         desc: "Deep Read · Roundup"  },
+  { href: "/drafts",   label: "Drafts",         desc: "Pending manual posts" },
   { href: "/podcast",  label: "Podcast Studio", desc: "Guest queue + interviews" },
   { href: "/chat",     label: "Talk to 306",    desc: "Direct line"         },
   { href: "/intel",    label: "Intelligence",   desc: "Sources · Knowledge" },
@@ -39,6 +41,13 @@ const nav = [
 
 function Sidebar() {
   const [location] = useHashLocation();
+
+  // Pending drafts badge — shown on the "Drafts" nav entry so users notice queued items.
+  const { data: draftsData } = useQuery<{ counts?: { total?: number } }>({
+    queryKey: ["/api/drafts"],
+    refetchInterval: 60_000,
+  });
+  const pendingCount = draftsData?.counts?.total ?? 0;
 
   return (
     <aside style={{
@@ -83,6 +92,7 @@ function Sidebar() {
       <nav style={{ flex: 1, padding: "0.5rem 0", overflowY: "auto" }}>
         {nav.map(({ href, label, desc }) => {
           const active = location === href;
+          const showBadge = href === "/drafts" && pendingCount > 0;
           return (
             <Link key={href} href={href}>
               <a
@@ -108,7 +118,24 @@ function Sidebar() {
                   textTransform: "uppercase",
                   letterSpacing: "0.12em",
                   color: "#efefef",
-                }}>{label}</span>
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                }}>
+                  {label}
+                  {showBadge && (
+                    <span style={{
+                      background: "#f97316",
+                      color: "#0e0f10",
+                      fontSize: "0.7rem",
+                      fontWeight: 700,
+                      padding: "1px 6px",
+                      borderRadius: "8px",
+                      letterSpacing: "0.05em",
+                      lineHeight: 1.4,
+                    }}>{pendingCount}</span>
+                  )}
+                </span>
                 <span style={{
                   fontFamily: "'Courier New', monospace",
                   fontSize: "0.75rem",
@@ -150,6 +177,7 @@ function App() {
             <Route path="/episodes" component={EpisodeQueue}  />
             <Route path="/writing"  component={WritingStudio} />
             <Route path="/weekly"   component={WeeklyEngines} />
+            <Route path="/drafts"   component={Drafts}        />
             <Route path="/podcast"  component={PodcastStudio} />
             <Route path="/chat"     component={CommandChat}   />
             <Route path="/intel"    component={Intelligence}  />
