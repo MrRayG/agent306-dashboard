@@ -26,7 +26,16 @@ import { getVideoStats } from "./videoEngine.js";
 import { requestPost, registerPost, releasePost, getCoordinatorState, resetCooldown } from "./postCoordinator.js";
 import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import { enforcePostFormat } from "./postFormatGuard.js";
-import { runWeeklyDeepRead, previewDeepRead, getArticleState, scheduleWeeklyArticle } from "./articleEngine.js";
+import {
+  runWeeklyDeepRead,
+  previewDeepRead,
+  getArticleState,
+  scheduleWeeklyArticle,
+  listDeepReadDrafts,
+  markDeepReadDraftPosted,
+  deleteDeepReadDraft,
+  saveDeepReadDraft,
+} from "./articleEngine.js";
 import { runExploration, getExplorationState, scheduleExploration } from "./explorationEngine.js";
 import {
   scheduleKgConnectionScanBatch,
@@ -2848,9 +2857,55 @@ export function registerRoutes(httpServer: Server, app: Express) {
   });
 
   // NOTE: /api/article/run (auto-post) is intentionally disabled.
-  // Article posting uses the X Notes API which differs from tweets.
-  // Use /api/article/preview to generate + copy manually to X.
-  // app.post("/api/article/run", ...) — removed for simplicity.
+  // As of 2026-04-21 the weekly Deep Read is generated on cron but NOT
+  // posted — published manually via X's Article composer. See drafts API
+  // below; runWeeklyDeepRead() saves to drafts instead of posting.
+
+  // ── Deep Read drafts ─────────────────────────────────────────
+  // Drafts are produced by the weekly cron and by on-demand previews the
+  // user chooses to save. They are NOT queued for X — the user copies them
+  // into X's Article composer and marks them posted when published.
+
+  app.get("/api/article/drafts", (_req, res) => {
+    try {
+      res.json({ drafts: listDeepReadDrafts() });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message ?? "Failed to list drafts" });
+    }
+  });
+
+  app.post("/api/article/drafts", requireDashAuth, (req, res) => {
+    const { headline, teaser, body, sourceUrl, sourceTitle, imageUrl } = req.body ?? {};
+    if (!headline || !body || !sourceUrl || !sourceTitle) {
+      return res.status(400).json({ error: "headline, body, sourceUrl, sourceTitle required" });
+    }
+    try {
+      const draft = saveDeepReadDraft({
+        headline:    String(headline),
+        teaser:      String(teaser ?? ""),
+        body:        String(body),
+        sourceUrl:   String(sourceUrl),
+        sourceTitle: String(sourceTitle),
+        imageUrl:    imageUrl ? String(imageUrl) : undefined,
+      });
+      res.json({ ok: true, draft });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message ?? "Failed to save draft" });
+    }
+  });
+
+  app.post("/api/article/drafts/:id/mark-posted", requireDashAuth, (req, res) => {
+    const tweetUrl: string | undefined = req.body?.tweetUrl;
+    const result = markDeepReadDraftPosted(req.params.id, tweetUrl);
+    if (!result.ok) return res.status(404).json({ error: result.error });
+    res.json({ ok: true });
+  });
+
+  app.delete("/api/article/drafts/:id", requireDashAuth, (req, res) => {
+    const result = deleteDeepReadDraft(req.params.id);
+    if (!result.ok) return res.status(404).json({ error: result.error });
+    res.json({ ok: true });
+  });
 
   // ── Article Image Card — 1200x500 (5:2) PNG for X Article header ──────────
   app.post("/api/article/image", async (req, res) => {

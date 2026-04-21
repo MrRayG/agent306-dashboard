@@ -52,8 +52,47 @@ function PreviewBox({ content, onPost, posting }: { content: string; onPost: () 
 export default function WeeklyEngines() {
   const { toast } = useToast();
 
-  // Article / Deep Read state
+  // Article / Deep Read state + drafts
   const { data: articleStatus } = useQuery({ queryKey: ["/api/article/state"] });
+  const { data: draftsData, refetch: refetchDrafts } = useQuery({
+    queryKey: ["/api/article/drafts"],
+    refetchInterval: 60_000,
+  });
+  const drafts = ((draftsData as any)?.drafts ?? []) as Array<{
+    draftId: string; generatedAt: string; headline: string; teaser: string;
+    body: string; sourceUrl: string; sourceTitle: string; imageUrl?: string;
+  }>;
+
+  async function copyDraftBody(draftId: string) {
+    const d = drafts.find(x => x.draftId === draftId);
+    if (!d) return;
+    await navigator.clipboard.writeText(`${d.headline}\n\n${d.body}`);
+    toast({ title: "Draft copied — paste into X Article composer" });
+  }
+  async function copyDraftTeaser(draftId: string) {
+    const d = drafts.find(x => x.draftId === draftId);
+    if (!d) return;
+    await navigator.clipboard.writeText(d.teaser);
+    toast({ title: "Teaser copied" });
+  }
+  async function markDraftPosted(draftId: string) {
+    const tweetUrl = window.prompt("X Article URL (optional — press OK to record without URL):") ?? undefined;
+    try {
+      const r = await apiRequest("POST", `/api/article/drafts/${draftId}/mark-posted`, { tweetUrl });
+      const data = await r.json();
+      if (data.ok) { toast({ title: "Marked as posted" }); refetchDrafts(); }
+      else toast({ title: data.error ?? "Failed", variant: "destructive" });
+    } catch { toast({ title: "Server error", variant: "destructive" }); }
+  }
+  async function deleteDraft(draftId: string) {
+    if (!window.confirm("Delete this draft? This cannot be undone.")) return;
+    try {
+      const r = await apiRequest("DELETE", `/api/article/drafts/${draftId}`);
+      const data = await r.json();
+      if (data.ok) { toast({ title: "Draft deleted" }); refetchDrafts(); }
+      else toast({ title: data.error ?? "Failed", variant: "destructive" });
+    } catch { toast({ title: "Server error", variant: "destructive" }); }
+  }
 
   // Roundup state (manual trigger, not auto-scheduled)
   const { data: roundupStatus } = useQuery({ queryKey: ["/api/race/status"] });
@@ -102,21 +141,22 @@ export default function WeeklyEngines() {
           The <span style={{ color: "#2dd4bf" }}>Deep Read</span> + <span style={{ color: "#60a5fa" }}>AI Roundup</span>
         </h1>
         <p style={{ fontSize: "15px", color: "rgba(227,229,228,0.68)", margin: 0, lineHeight: 1.6 }}>
-          Two weekly features. The Deep Read is an auto-generated long-form X Article published every Monday.
+          Two weekly features. The Deep Read is auto-generated every Monday and saved as a draft —
+          you publish it manually via X's Article composer.
           The AI Roundup captures the week's biggest AI developments — manually triggered.
         </p>
       </div>
 
       {/* ── THE DEEP READ (Article Engine) ── */}
-      <Section title="[306 ACADEMY] THE DEEP READ — WEEKLY X ARTICLE" accent="#2dd4bf">
+      <Section title="[306 ARTICLE] THE DEEP READ — WEEKLY X ARTICLE (DRAFT-ONLY)" accent="#2dd4bf">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "16px", marginBottom: "20px" }}>
           <div>
-            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>AUTO-POSTS</div>
+            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>AUTO-GENERATES</div>
             <div style={{ fontSize: "17px", fontWeight: 700, color: "#efefef" }}>Mondays 5pm ET</div>
           </div>
           <div>
-            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>TOTAL ARTICLES</div>
-            <div style={{ fontSize: "17px", fontWeight: 700, color: "#efefef" }}>{as?.totalArticles ?? as?.history?.length ?? 0}</div>
+            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>OPEN DRAFTS</div>
+            <div style={{ fontSize: "17px", fontWeight: 700, color: drafts.length > 0 ? "#f97316" : "#efefef" }}>{drafts.length}</div>
           </div>
           <div>
             <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em" }}>LAST POSTED</div>
@@ -127,9 +167,50 @@ export default function WeeklyEngines() {
         </div>
 
         <div style={{ fontSize: "14px", color: "rgba(227,229,228,0.68)", lineHeight: 1.6, marginBottom: "16px", borderLeft: "2px solid #2dd4bf", paddingLeft: "12px" }}>
-          Agent 306 discovers the week's most important AI story, writes a deep analysis using X Notes,
-          and posts a teaser tweet. Uses premium models for quality.
+          Agent 306 discovers the week's most important AI story and writes a deep analysis. Drafts are
+          saved here — review, copy, and publish manually via X's Article composer. Use Writing Studio
+          to generate a Deep Read on demand.
         </div>
+
+        {/* Open drafts list */}
+        {drafts.length > 0 && (
+          <div style={{ marginBottom: "20px" }}>
+            <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.60)", fontFamily: "monospace", letterSpacing: "0.1em", marginBottom: "8px" }}>
+              OPEN DRAFTS — READY TO PUBLISH
+            </div>
+            {drafts.map(d => (
+              <div key={d.draftId} style={{ background: "#0e0f10", border: "1px solid rgba(45,212,191,0.25)", padding: "14px", marginBottom: "10px" }}>
+                <div style={{ fontSize: "15px", fontWeight: 700, color: "#2dd4bf", marginBottom: "4px" }}>
+                  {d.headline}
+                </div>
+                <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.50)", fontFamily: "monospace", marginBottom: "8px" }}>
+                  Generated {timeAgo(d.generatedAt)} · Source: <a href={d.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#2dd4bf" }}>{d.sourceTitle}</a>
+                </div>
+                <div style={{ fontSize: "14px", color: "rgba(227,229,228,0.75)", lineHeight: 1.5, marginBottom: "10px", maxHeight: "80px", overflow: "hidden", position: "relative" }}>
+                  {d.teaser}
+                </div>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  <button onClick={() => copyDraftBody(d.draftId)}
+                    style={{ background: "#f97316", color: "#0e0f10", border: "none", padding: "6px 14px", fontFamily: "monospace", fontSize: "12px", fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em" }}>
+                    COPY ARTICLE
+                  </button>
+                  <button onClick={() => copyDraftTeaser(d.draftId)}
+                    style={{ background: "transparent", color: "#2dd4bf", border: "1px solid #2dd4bf", padding: "6px 14px", fontFamily: "monospace", fontSize: "12px", fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em" }}>
+                    COPY TEASER
+                  </button>
+                  <button onClick={() => markDraftPosted(d.draftId)}
+                    style={{ background: "transparent", color: "#4ade80", border: "1px solid #4ade80", padding: "6px 14px", fontFamily: "monospace", fontSize: "12px", fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em" }}>
+                    MARK POSTED
+                  </button>
+                  <button onClick={() => deleteDraft(d.draftId)}
+                    style={{ background: "transparent", color: "rgba(248,113,113,0.8)", border: "1px solid rgba(248,113,113,0.3)", padding: "6px 14px", fontFamily: "monospace", fontSize: "12px", cursor: "pointer", letterSpacing: "0.08em" }}>
+                    DELETE
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {as?.history?.length > 0 && (
           <div>
@@ -208,7 +289,7 @@ export default function WeeklyEngines() {
       </Section>
 
       <div style={{ fontSize: "13px", color: "rgba(227,229,228,0.35)", fontFamily: "monospace", textAlign: "center", marginTop: "16px" }}>
-        The Deep Read auto-posts every Monday. Use the Roundup section to preview and queue manually at any time.
+        Deep Reads auto-generate weekly and wait here as drafts. Use the Roundup section to preview and queue manually at any time.
       </div>
     </div>
   );

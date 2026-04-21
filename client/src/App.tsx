@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import CommandCenter from "@/pages/CommandCenter";
 import EpisodeQueue from "@/pages/EpisodeQueue";
 import WritingStudio from "@/pages/WritingStudio";
+import WeeklyEngines from "@/pages/WeeklyEngines";
 import PodcastStudio from "@/pages/PodcastStudio";
 import CommandChat from "@/pages/CommandChat";
 import Intelligence from "@/pages/Intelligence";
@@ -24,6 +25,7 @@ const nav = [
   { href: "/eval",     label: "306Eval",        desc: "Benchmark · Growth"  },
   { href: "/episodes", label: "Episodes",       desc: "Queue & post"        },
   { href: "/writing",  label: "Writing Studio", desc: "Articles · Blog"     },
+  { href: "/weekly",   label: "Weekly",         desc: "Deep Read · Roundup"  },
   { href: "/podcast",  label: "Podcast Studio", desc: "Guest queue + interviews" },
   { href: "/chat",     label: "Talk to 306",    desc: "Direct line"         },
   { href: "/intel",    label: "Intelligence",   desc: "Sources · Knowledge" },
@@ -147,6 +149,7 @@ function App() {
             <Route path="/eval"     component={EvalDashboard} />
             <Route path="/episodes" component={EpisodeQueue}  />
             <Route path="/writing"  component={WritingStudio} />
+            <Route path="/weekly"   component={WeeklyEngines} />
             <Route path="/podcast"  component={PodcastStudio} />
             <Route path="/chat"     component={CommandChat}   />
             <Route path="/intel"    component={Intelligence}  />
