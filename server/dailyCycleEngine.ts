@@ -65,6 +65,8 @@ import { analyzeDailyCycle } from "./analyzerEngine.js";
 import { getExplorationState } from "./explorationEngine.js";
 import { queueXPost } from "./xPostScheduler.js";
 import { queueFarcasterPost } from "./farcasterQueue.js";
+import { shouldAutoPost } from "./engineScheduleConfig.js";
+import { saveTweetDraft } from "./tweetDrafts.js";
 import { runKnowledgeConsolidation } from "./knowledgeConsolidator.js";
 import { consolidateHypotheses } from "./hypothesisConsolidator.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
@@ -1798,17 +1800,32 @@ Write a single tweet sharing the most interesting insight from this research. Re
           if (post.status === "published") {
             const blogUrl = buildBlogUrl(post);
             let tweetText = await generateBlogTweet(post);
+            let finalText: string;
             if (tweetText) {
-              tweetText = ensureBlogDeepLink(tweetText, blogUrl);
-              queueXPost(tweetText, "blog");
-              queueFarcasterPost(tweetText.slice(0, 2500), "blog");
-              console.log(`[DailyCycle] Queued voice tweet for blog (X + Farcaster) [${blogUrl}]: "${tweetText.slice(0, 80)}..."`);
+              finalText = ensureBlogDeepLink(tweetText, blogUrl);
             } else {
-              // Fallback: queue a basic tweet if LLM fails
-              const fallbackText = `${post.title}\n\n${blogUrl}`;
-              queueXPost(fallbackText, "blog");
-              queueFarcasterPost(fallbackText.slice(0, 2500), "blog");
-              console.log(`[DailyCycle] Queued fallback tweet for blog (X + Farcaster) [${blogUrl}]`);
+              // Fallback: basic tweet if LLM fails
+              finalText = `${post.title}\n\n${blogUrl}`;
+            }
+
+            // Respect the dashboard auto-post toggle. When off (default as
+            // of 2026-04-21), save to the drafts inbox instead of posting.
+            if (shouldAutoPost("blog", false)) {
+              queueXPost(finalText, "blog");
+              queueFarcasterPost(finalText.slice(0, 2500), "blog");
+              console.log(`[DailyCycle] Queued blog tweet (X + Farcaster) [${blogUrl}]: "${finalText.slice(0, 80)}..."`);
+            } else {
+              saveTweetDraft({
+                engine: "blog",
+                content: finalText,
+                platforms: ["x", "farcaster"],
+                metadata: {
+                  sourceTitle: post.title,
+                  sourceUrl:   blogUrl,
+                  blogSlug:    post.slug,
+                },
+              });
+              console.log(`[DailyCycle] Blog autoPost=false — saved draft for "${post.title}" [${blogUrl}]`);
             }
           }
         }

@@ -1475,6 +1475,14 @@ function EpisodePipeline({
                         </div>
                       )}
 
+                      {/* Episode URL (Spotify/Apple/agent306.ai link) */}
+                      {status === "published" && (
+                        <EpisodeUrlField
+                          episodeId={ep.id}
+                          initialUrl={ep.episodeUrl ?? null}
+                        />
+                      )}
+
                       {/* Audio players for audio_ready episodes */}
                       {status === "audio_ready" && (
                         <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "8px" }}>
@@ -2357,6 +2365,139 @@ function GuestDetail({
             ↓ EXPORT TRANSCRIPT (NotebookLM)
           </ActionButton>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Episode URL field ───────────────────────────────────────────────────────
+// Inline editor for the per-episode Spotify/Apple/agent306.ai URL used by
+// promo tweets (resolveSocialLinks). Optional — leaving it blank falls back
+// to the site home. Supports nullable (set/clear).
+
+function EpisodeUrlField({ episodeId, initialUrl }: { episodeId: string; initialUrl: string | null }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [value, setValue] = useState(initialUrl ?? "");
+  const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
+
+  async function save(nextUrl: string | null) {
+    setSaving(true);
+    try {
+      const r = await apiRequest("PUT", `/api/podcast/episodes/${episodeId}/episode-url`, { episodeUrl: nextUrl });
+      const out = await r.json();
+      if (out.ok) {
+        toast({ title: nextUrl ? "Episode URL saved" : "Episode URL cleared" });
+        qc.invalidateQueries({ queryKey: ["/api/podcast/episodes"] });
+        setEditing(false);
+      } else {
+        toast({ title: out.error ?? "Failed", variant: "destructive" });
+      }
+    } catch (e: any) {
+      toast({ title: e.message ?? "Server error", variant: "destructive" });
+    }
+    setSaving(false);
+  }
+
+  if (!editing) {
+    return (
+      <div style={{
+        padding: "8px 10px",
+        background: `${BLUE}06`,
+        borderLeft: `2px solid ${BLUE}30`,
+        marginBottom: "8px",
+        display: "flex",
+        alignItems: "center",
+        gap: "10px",
+        flexWrap: "wrap",
+      }}>
+        <span style={{ ...pixel, fontSize: "10px", color: BLUE }}>EPISODE URL</span>
+        {initialUrl ? (
+          <a href={initialUrl} target="_blank" rel="noopener noreferrer"
+             style={{ ...mono, fontSize: "12px", color: BLUE, textDecoration: "none", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {initialUrl}
+          </a>
+        ) : (
+          <span style={{ ...mono, fontSize: "12px", color: TEXT_FAINT, flex: 1 }}>
+            Not set — promo tweets will link to the site home
+          </span>
+        )}
+        <button
+          onClick={() => { setValue(initialUrl ?? ""); setEditing(true); }}
+          style={{
+            ...mono, fontSize: "11px", color: BLUE,
+            background: "transparent", border: `1px solid ${BLUE}55`,
+            padding: "3px 10px", cursor: "pointer", letterSpacing: "0.08em",
+          }}
+        >
+          {initialUrl ? "EDIT" : "SET URL"}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      padding: "10px",
+      background: `${BLUE}08`,
+      borderLeft: `2px solid ${BLUE}50`,
+      marginBottom: "8px",
+    }}>
+      <div style={{ ...pixel, fontSize: "10px", color: BLUE, marginBottom: "6px" }}>EPISODE URL</div>
+      <input
+        type="url"
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        placeholder="https://open.spotify.com/episode/..."
+        style={{
+          ...mono, fontSize: "13px",
+          width: "100%", padding: "6px 10px",
+          background: "rgba(227,229,228,0.06)",
+          border: "1px solid rgba(227,229,228,0.15)",
+          color: TEXT, marginBottom: "8px",
+          boxSizing: "border-box",
+        }}
+      />
+      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+        <button
+          onClick={() => save(value.trim() || null)}
+          disabled={saving}
+          style={{
+            ...mono, fontSize: "11px", fontWeight: 700, color: "#0e0f10",
+            background: saving ? `${BLUE}55` : BLUE, border: "none",
+            padding: "4px 12px", cursor: saving ? "not-allowed" : "pointer",
+            letterSpacing: "0.08em",
+          }}
+        >
+          {saving ? "SAVING…" : "SAVE"}
+        </button>
+        {initialUrl && (
+          <button
+            onClick={() => { setValue(""); save(null); }}
+            disabled={saving}
+            style={{
+              ...mono, fontSize: "11px", color: RED,
+              background: "transparent", border: `1px solid ${RED}55`,
+              padding: "4px 12px", cursor: saving ? "not-allowed" : "pointer",
+              letterSpacing: "0.08em",
+            }}
+          >
+            CLEAR
+          </button>
+        )}
+        <button
+          onClick={() => { setEditing(false); setValue(initialUrl ?? ""); }}
+          disabled={saving}
+          style={{
+            ...mono, fontSize: "11px", color: TEXT_DIM,
+            background: "transparent", border: "1px solid rgba(227,229,228,0.20)",
+            padding: "4px 12px", cursor: saving ? "not-allowed" : "pointer",
+            letterSpacing: "0.08em",
+          }}
+        >
+          CANCEL
+        </button>
       </div>
     </div>
   );

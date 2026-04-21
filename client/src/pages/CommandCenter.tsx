@@ -179,7 +179,13 @@ interface EngineSchedule {
   timeET: string;
   dayET?: string;
   enabled: boolean;
+  autoPost?: boolean;
 }
+
+// Engines whose generated content is tweet-like and can be queued as drafts
+// for manual posting. Others (news, signal, academy, research, dispatch) always
+// auto-post, so we hide the toggle for them.
+const DRAFTABLE_ENGINES = new Set(["podcast", "breakthrough", "blog", "article", "reflection"]);
 
 type ScheduleConfig = Record<string, EngineSchedule>;
 
@@ -216,6 +222,10 @@ function ScheduleEditor({
   const [timeET, setTimeET] = useState(schedule.timeET);
   const [dayET, setDayET] = useState(schedule.dayET ?? "Sunday");
   const [enabled, setEnabled] = useState(schedule.enabled);
+  // autoPost defaults to true for backward-compat with schedules written
+  // before the toggle existed. Server-side backfill keeps this in sync.
+  const [autoPost, setAutoPost] = useState(schedule.autoPost ?? true);
+  const showAutoPostToggle = DRAFTABLE_ENGINES.has(engineId);
   const [saving, setSaving] = useState(false);
 
   function toggleDay(day: string) {
@@ -236,6 +246,9 @@ function ScheduleEditor({
         timeET,
         dayET: schedType === "weekly" ? dayET : undefined,
         enabled,
+        // Only send autoPost for engines where the toggle is meaningful—
+        // sending undefined leaves the server-side value untouched.
+        ...(showAutoPostToggle ? { autoPost } : {}),
       });
       toast({ title: "Schedule saved" });
       qc.invalidateQueries({ queryKey: ["/api/engines/status"] });
@@ -366,6 +379,45 @@ function ScheduleEditor({
               padding: "4px 8px",
             }}
           />
+        </div>
+      )}
+
+      {/* Auto-post toggle (only for draft-capable engines) */}
+      {showAutoPostToggle && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ ...mono, fontSize: "0.66rem", color: "rgba(227,229,228,0.45)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+            Auto-Post
+          </div>
+          <button
+            onClick={() => setAutoPost(!autoPost)}
+            style={{
+              ...mono,
+              fontSize: "0.68rem",
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "4px 10px",
+              background: autoPost ? "rgba(249,115,22,0.14)" : "rgba(227,229,228,0.06)",
+              border: `1px solid ${autoPost ? "rgba(249,115,22,0.45)" : "rgba(227,229,228,0.18)"}`,
+              color: autoPost ? "#f97316" : "rgba(227,229,228,0.60)",
+              cursor: "pointer",
+            }}
+            title={autoPost ? "Generated content is posted automatically" : "Generated content is saved to /drafts for manual posting"}
+          >
+            <span style={{
+              width: 7, height: 7, borderRadius: "50%",
+              background: autoPost ? "#f97316" : "rgba(227,229,228,0.35)",
+              display: "inline-block",
+            }} />
+            {autoPost ? "Auto-post on" : "Draft only"}
+          </button>
+          <div style={{ ...mono, fontSize: "0.62rem", color: "rgba(227,229,228,0.40)", marginTop: 4 }}>
+            {autoPost
+              ? "Posts fire immediately on the schedule above."
+              : "Generated content queues in /drafts for manual review."}
+          </div>
         </div>
       )}
 
