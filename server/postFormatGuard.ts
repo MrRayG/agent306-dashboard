@@ -73,6 +73,72 @@ export function stripMarkdown(text: string): string {
     .replace(/~~(.+?)~~/g, '$1');
 }
 
+// ── Signal POV formatting ────────────────────────────────
+
+// Mathematical Bold lookup — X does not render markdown so we use Unicode
+// mathematical bold characters. Survives copy/paste and renders as bold on
+// iOS/macOS/Android system fonts. Reference: U+1D400–U+1D433 (A–Z, a–z).
+const BOLD_MAP: Record<string, string> = {};
+for (let i = 0; i < 26; i++) {
+  // Uppercase A–Z → 𝐀–𝐙  (U+1D400 + i)
+  BOLD_MAP[String.fromCharCode(65 + i)] = String.fromCodePoint(0x1D400 + i);
+  // Lowercase a–z → 𝐚–𝐳  (U+1D41A + i)
+  BOLD_MAP[String.fromCharCode(97 + i)] = String.fromCodePoint(0x1D41A + i);
+}
+// Digits 0–9 → 𝟎–𝟗 (U+1D7CE)
+for (let i = 0; i < 10; i++) {
+  BOLD_MAP[String.fromCharCode(48 + i)] = String.fromCodePoint(0x1D7CE + i);
+}
+
+/** Convert ASCII letters/digits to Unicode mathematical bold. Non-ASCII chars pass through. */
+export function toUnicodeBold(text: string): string {
+  let out = "";
+  for (const ch of text) {
+    out += BOLD_MAP[ch] ?? ch;
+  }
+  return out;
+}
+
+/**
+ * Format POV label inside a Signal brief tweet:
+ *   • Ensure a blank line precedes every `POV:` label.
+ *   • Render the `POV:` label itself in Unicode mathematical bold
+ *     (𝐏𝐎𝐕:) so it pops visually on X without needing markdown.
+ *
+ * Idempotent — running it twice has the same effect as running it once.
+ * Only touches `POV:` as a label at the start of a line or after prose;
+ * never touches letters `P`, `O`, `V` appearing mid-word.
+ */
+export function formatSignalPOV(text: string): string {
+  const BOLD_POV = toUnicodeBold("POV") + ":"; // 𝐏𝐎𝐕:
+
+  // Already-bold + has blank line: leave it alone (idempotent).
+  // To detect "already bold", we check for the bold P character.
+  const BOLD_P = toUnicodeBold("P");
+
+  // Step 1: Normalise any pre-existing bold-POV back to ASCII so we can
+  // re-apply the blank-line rule consistently.
+  let out = text.split(BOLD_POV).join("POV:");
+
+  // Step 2: Split `POV:` off the end of a preceding sentence so it starts
+  // its own paragraph. We only match `POV:` as a label (colon required,
+  // start-of-word boundary) to avoid touching the middle of words.
+  // Insert \n\n before `POV:` when it is NOT already preceded by \n\n.
+  out = out.replace(/([^\n])\n?POV:/g, (_m, prev) => `${prev}\n\nPOV:`);
+  // Also handle `POV:` that appears at the very start of a line but
+  // without a blank line above it (i.e. \nPOV: instead of \n\nPOV:).
+  out = out.replace(/([^\n])\nPOV:/g, (_m, prev) => `${prev}\n\nPOV:`);
+
+  // Step 3: Bold the label (and only the label — not the POV content).
+  out = out.split("POV:").join(BOLD_POV);
+
+  // Safety: never leave a stray bare `P` that might look like half-applied
+  // bold. Only the full `POV` triad gets bolded.
+  void BOLD_P;
+
+  return out;
+}
+
 // ── Raw-JSON detection (defense in depth) ───────────────────
 
 /**
@@ -112,7 +178,14 @@ export function enforcePostFormat(tweet: string, contentType?: string): string {
   // Step 3: Strip markdown (X renders it as raw characters)
   text = stripMarkdown(text);
 
-  // Step 4: Trim to character limit
+  // Step 4: Content-type–specific polish. For Signal briefs we ensure
+  // every `POV:` label sits on its own line with a blank line above and
+  // is rendered in Unicode mathematical bold.
+  if (contentType === "signal") {
+    text = formatSignalPOV(text);
+  }
+
+  // Step 5: Trim to character limit
   text = trimToLimit(text);
 
   return text;

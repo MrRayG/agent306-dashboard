@@ -31,7 +31,7 @@ const DEFAULT_SCHEDULES: ScheduleConfig = {
   article:      { schedule: "weekly",      timeET: "17:00", dayET: "Monday", enabled: true },
   breakthrough: { schedule: "on_event",    timeET: "00:00", enabled: true },
   blog:         { schedule: "daily",       timeET: "06:00", enabled: true },
-  reflection:   { schedule: "on_event",    timeET: "00:00", enabled: true },
+  reflection:   { schedule: "weekly",      timeET: "17:00", dayET: "Monday", enabled: true },
 };
 
 /** Read schedule config from disk; create with defaults if missing. */
