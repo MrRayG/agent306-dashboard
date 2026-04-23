@@ -456,6 +456,17 @@ export function getCompetencyProfile(): CompetencyProfile {
   return profile;
 }
 
+/**
+ * Returns the current level for a competency by id, or `null` if the id is
+ * not registered. The null return lets callers distinguish "legitimately at
+ * level 0" (which shouldn't happen — levels clamp to [1,10]) from "this key
+ * has never been registered in DEFAULT_COMPETENCIES."
+ */
+export function getCompetencyLevel(id: string): number | null {
+  const competency = profile.competencies.find(c => c.id === id);
+  return competency ? competency.currentLevel : null;
+}
+
 /** Returns the 2-3 competencies she's currently focused on developing */
 export function getGrowthFocus(): Competency[] {
   return profile.competencies.filter(c => profile.growthFocus.includes(c.id));

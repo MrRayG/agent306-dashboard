@@ -17,6 +17,7 @@ import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import {
   getCompetencyProfile,
   getCompetencyContext,
+  getCompetencyLevel,
   updateCompetencyLevel,
   rotateGrowthFocus,
   type CompetencyProfile,
@@ -495,8 +496,17 @@ Rules:
         newInsights.map(i => ({ id: i.id, insight: i.insight, actionItem: i.actionItem })),
       );
       const stats = computeLedgerStats();
+      // self-integrity in this log is the *competency level* (1-10 scale,
+      // seeded at 5 in DEFAULT_COMPETENCIES), NOT the ledger's rolling
+      // verified/(verified+failed) ratio. The ratio is legitimately 0.00
+      // on a fresh install with no closed commitments, which was misleading.
+      // `<missing>` signals the competency key isn't registered at all.
+      const selfIntegrityLevel = getCompetencyLevel("self-integrity");
+      const selfIntegrityStr = selfIntegrityLevel === null
+        ? "<missing>"
+        : selfIntegrityLevel.toFixed(2);
       console.log(
-        `[SelfEvolution] Ledger state: ${tracked.length} new proposed, ${stats.openCount} open, ${stats.verified} verified all-time, ${stats.failed} failed, self-integrity=${stats.selfIntegrityScore.toFixed(2)}`,
+        `[SelfEvolution] Ledger state: ${tracked.length} new proposed, ${stats.openCount} open, ${stats.verified} verified all-time, ${stats.failed} failed, self-integrity=${selfIntegrityStr}`,
       );
     } catch (e: any) {
       console.warn("[SelfEvolution] Ledger update failed (non-fatal):", e.message);
