@@ -5487,8 +5487,15 @@ needsHelp: true only when you genuinely need his direction or information`,
 
         case "academy": {
           const { generateAcademyContent } = await import("./academyEngine.js");
+          // generateAcademyContent now throws AcademyGenerationError with
+          // model / finish_reason / prompt_len context when the LLM path
+          // fails. Let that message propagate — the outer catch returns it
+          // as `error` in the 500 response so the operator sees the real
+          // cause instead of a generic "LLM returned no content".
           const result = await generateAcademyContent();
-          if (!result) throw new Error("Academy episode generation failed — LLM returned no content");
+          if (!result?.post || result.post.trim().length < 10) {
+            throw new Error("Academy episode generation failed — LLM returned no content");
+          }
           content = result.post;
           type = "academy";
           break;
