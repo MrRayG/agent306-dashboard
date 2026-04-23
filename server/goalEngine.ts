@@ -27,6 +27,12 @@ import { dataPath } from "./dataPaths.js";
 import fs from "fs";
 
 import { postChatCompletions } from "./llmCall.js";
+import {
+  getProposedEntries,
+  transitionEntry,
+  type InsightLedgerEntry,
+} from "./insightLedger.js";
+import { translateAction, registerRuleFromInsight } from "./actionTranslator.js";
 // ── Types ──────────────────────────────────────────────────────
 
 export interface MilestoneSpec {
@@ -92,6 +98,12 @@ const SAFETY = {
   MILESTONE_DEADLINE_MAX_DAYS: 14,
   COMPETENCY_DELTA_ON_ACHIEVE: 1,
   COMPETENCY_DELTA_ON_ABANDON: -0.3,
+  // Spec §2.2 — insight-backlog gate. When enabled, proposed Insight Ledger
+  // entries are promoted into goals (with enforcement rules) BEFORE the old
+  // active-goal-count gate runs. Cap per run keeps a single reflection cycle
+  // from flooding the goals queue.
+  INSIGHT_PROMOTION_ENABLED: true,
+  MAX_INSIGHTS_PROMOTED_PER_RUN: 3,
 };
 
 const CATEGORY_COMPETENCY_MAP: Record<GoalCategory, string[]> = {
@@ -555,12 +567,50 @@ export async function runGoalEngine(evalResult?: EvalResult, grokKey?: string): 
     console.warn("[GoalEngine] Step 3 (propagate completions) failed:", e.message);
   }
 
-  // ── STEP 4: Generate new goals if needed ─────────────────────
+  // ── STEP 3.5: Promote proposed Insight Ledger entries into goals ──────
+  //
+  // This is the write-path that was missing. Before this step existed,
+  // SelfEvolution insights were logged and forgotten because GoalEngine gated
+  // on active-goal count. Now proposed insights get promoted into goals with
+  // concrete enforcement rules attached — the reflect→act loop finally closes.
+  let promotedCount = 0;
+  if (SAFETY.INSIGHT_PROMOTION_ENABLED) {
+    try {
+      const proposed = getProposedEntries();
+      if (proposed.length > 0) {
+        console.log(`[GoalEngine] Insight Ledger backlog: ${proposed.length} proposed insight(s) awaiting promotion`);
+      }
+      const toPromote = proposed.slice(0, SAFETY.MAX_INSIGHTS_PROMOTED_PER_RUN);
+      for (const entry of toPromote) {
+        const promoted = await promoteInsightToGoal(entry);
+        if (promoted) {
+          promotedCount++;
+          result.goalsGenerated++;
+          result.brainEvolutionEvents.push(
+            `Promoted insight → goal: "${entry.insight.slice(0, 70)}" [${promoted.primitive}]`,
+          );
+        }
+      }
+      if (promotedCount > 0) {
+        console.log(`[GoalEngine] Promoted ${promotedCount} insight(s) from ledger into goals`);
+      }
+    } catch (e: any) {
+      console.warn("[GoalEngine] Step 3.5 (insight promotion) failed:", e.message);
+    }
+  }
+
+  // ── STEP 4: Generate eval-driven goals (fallback when no insight backlog) ─
   try {
     const store = getGoals();
     const activeCount = store.goals.filter((g: AgentGoal) => g.status === "active").length;
 
-    if (activeCount < SAFETY.MIN_ACTIVE_GOALS) {
+    // INSIGHT-BACKLOG GATE (replaces goal-count-only gate):
+    // If we promoted insights this run, skip eval-driven generation to avoid
+    // overflooding the queue. Insights are the primary driver; eval-driven
+    // goals are the fallback when no reflection backlog exists to translate.
+    if (promotedCount > 0) {
+      console.log(`[GoalEngine] Skipping eval-driven generation — ${promotedCount} insight(s) already promoted this run.`);
+    } else if (activeCount < SAFETY.MIN_ACTIVE_GOALS) {
       const toGenerate = Math.min(
         SAFETY.MAX_GOALS_PER_RUN,
         SAFETY.MAX_ACTIVE_GOALS - activeCount
@@ -625,4 +675,67 @@ export async function runGoalEngine(evalResult?: EvalResult, grokKey?: string): 
 
   console.log(`[GoalEngine] Cycle complete: ${result.goalsGenerated} generated, ${result.goalsResolved} resolved, ${result.milestonesAutoCompleted} milestones auto-completed`);
   return result;
+}
+
+// ── Insight Ledger → Goal Promotion ────────────────────────────
+//
+// Promote one proposed insight into a concrete goal with an enforcement rule.
+// Returns the translated action (primitive + ruleId) on success, null on skip.
+//
+// The insight enters goals with a 14-day deadline. The Action Translator
+// registers a runtime rule that fires on every DailyCycle tick; when the
+// Self-Change Verifier sees enough rule-fires (or the goal hits its milestone),
+// the ledger entry transitions `in_flight → verified`.
+//
+// If the Action Translator can't parse the action into a primitive, the
+// entry stays proposed until the 3-day TTL expires it. That's intentional:
+// vague commitments die unless someone sharpens them.
+export async function promoteInsightToGoal(
+  entry: InsightLedgerEntry,
+): Promise<{ primitive: string; ruleId?: string } | null> {
+  try {
+    const translation = translateAction(entry.proposedAction, entry.insight);
+    if (translation.primitive === "none") {
+      console.log(
+        `[GoalEngine] Insight ${entry.id} action too vague to translate — leaving proposed (will expire per TTL). Reason: ${translation.reason ?? "no primitive matched"}`,
+      );
+      return null;
+    }
+
+    // Register the enforcement rule so it fires on every DailyCycle tick.
+    const ruleId = registerRuleFromInsight(entry.id, translation);
+
+    // Build a goal wrapping this commitment.
+    const category: GoalCategory = translation.suggestedCategory ?? "identity";
+    const deadline = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+    const title = `Self-change: ${entry.insight.slice(0, 50)}`.slice(0, 80);
+    const description = `From SelfEvolution cycle #${entry.cycleNumber}. Insight: ${entry.insight}\n\nCommitment: ${entry.proposedAction}\n\nEnforcement: ${translation.primitive} (rule ${ruleId}). Verified when the rule fires at least ${translation.minFireCount ?? 3} times in 14 days.`;
+
+    const goal = addGoal({
+      title,
+      description,
+      category,
+      priority: "high",
+      milestones: [
+        `Rule fires at least once (primitive: ${translation.primitive})`,
+        `Rule fires ${translation.minFireCount ?? 3} times (self-change in flight)`,
+        `Behavior change verified by Self-Change Verifier`,
+      ],
+    });
+
+    // Mark the ledger entry accepted and store the primitive + ruleId for the
+    // verifier to check.
+    transitionEntry(entry.id, "in_flight", {
+      primitive: translation.primitive,
+      ruleId,
+      ruleParams: translation.params,
+      verificationCriterion: translation.verificationCriterion,
+      goalId: goal.id,
+    });
+
+    return { primitive: translation.primitive, ruleId };
+  } catch (e: any) {
+    console.warn(`[GoalEngine] promoteInsightToGoal(${entry.id}) failed:`, e.message);
+    return null;
+  }
 }

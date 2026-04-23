@@ -18,6 +18,7 @@ import { getLatestSnapshot, getEvolutionHistory } from "./evolutionTracker.js";
 import { getBreakthroughs, getPredictions } from "./breakthroughDetector.js";
 import { getCorrections } from "./reasoningEngine.js";
 import { get306EvalResults } from "./evalEngine.js";
+import { getLedgerSummary, getSelfChangeMetrics } from "./insightLedger.js";
 
 // ── In-memory cache (30-second TTL) ─────────────────────────
 
@@ -465,6 +466,17 @@ export function getPublicMetacognition() {
       ? Math.round(hypothesesConfirmed / hypothesesTested * 100) / 100
       : 0;
 
+    // Insight Ledger surfaces the self-change write-path: how many commitments
+    // are open vs verified, and the rolling Self-Integrity score.
+    let ledger: ReturnType<typeof getLedgerSummary> | null = null;
+    let selfChange: ReturnType<typeof getSelfChangeMetrics> | null = null;
+    try {
+      ledger = getLedgerSummary();
+      selfChange = getSelfChangeMetrics();
+    } catch (e: any) {
+      console.warn("[PublicApi] Ledger summary failed (non-fatal):", e?.message);
+    }
+
     return {
       cognition: {
         knowledgeEntries: meta.knowledgeCoverage.totalActive,
@@ -489,6 +501,8 @@ export function getPublicMetacognition() {
         synthesisReports: meta.synthesisStats.totalReports,
         knowledgeConnections: meta.synthesisStats.totalConnections,
         evolutionDay: history.totalDays,
+        insightLedger: ledger,
+        selfChange,
       },
       generatedAt: new Date().toISOString(),
     };

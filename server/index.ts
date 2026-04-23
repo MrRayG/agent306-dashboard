@@ -10,6 +10,7 @@ import { purgeStaleRelationships, purgeStaleConversationMemory } from "./convers
 import { getResearchLab } from "./researchEngine.js";
 import { getAgenda } from "./research-agenda.js";
 import { runHypothesisQueueReset } from "./archiveHypotheses.js";
+import { maybeBootstrapSelfIntegrity } from "./bootstrapSelfIntegrity.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -150,6 +151,14 @@ app.use((req, res, next) => {
         if (lab.hypotheses.length === 0) console.warn("[Research] WARNING: Zero hypotheses — cold-start seeding will trigger on next daily cycle");
       } catch (e: any) {
         console.warn("[Research] Startup health check failed:", e.message);
+      }
+
+      // Spec §4: one-time meta-prompt journal entry telling 306 about her new
+      // Self-Integrity dimension and the Insight Ledger write-path. Idempotent.
+      try {
+        maybeBootstrapSelfIntegrity();
+      } catch (e: any) {
+        console.warn("[Startup] Self-Integrity bootstrap failed (non-fatal):", e.message);
       }
 
       // ASI-Evolve: sync embeddings on startup (non-blocking)
