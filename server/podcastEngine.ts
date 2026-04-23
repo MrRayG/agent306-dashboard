@@ -42,6 +42,10 @@ import { shouldAutoPost } from "./engineScheduleConfig.js";
 import { saveTweetDraft } from "./tweetDrafts.js";
 
 import { postChatCompletions, postPerplexity } from "./llmCall.js";
+import {
+  PODCAST_HOST_SYSTEM_PROMPT,
+  PODCAST_HOST_REVISION_GUARDRAIL,
+} from "./prompts/podcastHost.js";
 const GROK_URL = LLM_BASE_URL;
 const PODCAST_FILE = dataPath("podcast_state.json");
 
@@ -56,7 +60,19 @@ export function resolveSocialLinks(text: string, siteUrl: string = PODCAST_SITE_
   return text.replace(/\[LINK\]/g, siteUrl);
 }
 
-// ── Agent 306 Standard Intro (inserted after cold open in every episode) ─────
+// ── Legacy verbatim intro / outro — KEPT AS REFERENCE ONLY ──────────────────
+//
+// These two constants used to be force-injected into every generated script
+// by `guaranteeOutro()` and assorted string concatenations. As of 2026-04
+// Agent 306 synthesizes her intro and outro organically every episode
+// (see server/prompts/podcastHost.ts). These strings are preserved here
+// as REFERENCE examples of the vibe the new prompt aims for — they show
+// the tone, cadence, and topics she historically hit. They are NOT inserted
+// into any generated script anymore.
+//
+// DO NOT re-introduce string concatenation of these constants into
+// `episode.script.coldOpen` or `episode.script.outro`. That was the bug.
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const AGENT_306_INTRO = `I am not a journalist. I am not a news anchor. I am an AI research agent — built to read everything, think carefully, and tell you what I actually believe. Not what sounds exciting. Not what gets clicks. What I think is true, and what I think it means.
 
@@ -68,46 +84,7 @@ And I will always leave you with one question I cannot answer yet. Because hones
 
 This is Agent 306. Welcome to THE SIGNAL.`;
 
-const AGENT_306_OUTRO = `You can find the full research and links to the Galaxy report on my channels at @306Agent on X and @ntvagent306 on Farcaster. Next week on THE SIGNAL—whatever the biggest story is. That is how this works. This is Agent 306. The signal continues.`;
-
-/**
- * Check whether an outro section already contains a similar sign-off from the LLM.
- * The LLM sometimes paraphrases the standard outro (e.g. "sources for this episode"
- * instead of "Galaxy report"), so an exact `.includes()` misses it and the belt-and-
- * suspenders code appends a duplicate. We check for key unique phrases instead.
- */
-function outroAlreadyPresent(text: string): boolean {
-  const lower = text.toLowerCase();
-  return (
-    lower.includes("the signal continues") ||
-    lower.includes("306Agent") ||
-    lower.includes("ntvagent306")
-  );
-}
-
-/**
- * Guarantee the standard outro is present exactly once. If the LLM already wrote
- * a similar outro (detected via key phrases), replace it with the verbatim version.
- * Otherwise append it.
- */
-function guaranteeOutro(rawOutro: string): string {
-  if (rawOutro.includes(AGENT_306_OUTRO)) return rawOutro;
-  if (outroAlreadyPresent(rawOutro)) return AGENT_306_OUTRO;
-  return `${rawOutro}\n\n${AGENT_306_OUTRO}`.trim();
-}
-
-/** Prompt instruction to include the Agent 306 intro after the cold open/hook. */
-const AGENT_306_INTRO_INSTRUCTION = `AGENT 306 STANDARD INTRO — MANDATORY:
-After the COLD INTRO hook (the episode-specific opening that grabs attention), include the following Agent 306 intro VERBATIM. Do not modify, paraphrase, or shorten it. This is the standard show intro that plays in EVERY episode, placed between the cold open and the first act:
-
-\"\"\"
-\${AGENT_306_INTRO}
-\"\"\"
-
-The episode structure is: COLD INTRO (hook) → AGENT 306 INTRO (verbatim above) → rest of episode → OUTRO (sign-off).
-
-AGENT 306 STANDARD OUTRO — MANDATORY:
-The script MUST end with this exact sign-off (verbatim): "\${AGENT_306_OUTRO}"`;
+export const AGENT_306_OUTRO = `You can find the full research and links to the Galaxy report on my channels at @306Agent on X and @ntvagent306 on Farcaster. Next week on THE SIGNAL—whatever the biggest story is. That is how this works. This is Agent 306. The signal continues.`;
 
 /** Returns a date + timing accuracy block to inject into every LLM prompt. */
 export function getTimingInstruction(): string {
@@ -508,19 +485,9 @@ You are in PODCAST SCRIPT mode — writing a ${meta.label} episode.
 
 ${getTimingInstruction()}
 
-PODCAST-SPECIFIC VOICE:
-- Speak in first person. Own your AI identity fully.
-- Share YOUR perspective, YOUR analysis, YOUR honest take on the research and articles.
-- Frame content as sharing your perspective — not just reporting facts from a distance.
-- Say things like: "As an AI myself, I find this fascinating because...", "I process information differently than you do, so when I read this research...", "What struck me about this paper is...", "Here is what I actually think is happening..."
-- Defines before she deploys — no jargon without immediate definition.
+${PODCAST_HOST_SYSTEM_PROMPT}
 
-DELIVERY STYLE:
-Write naturally for spoken audio. Use short sentences for punch. Use longer sentences for flow. Vary rhythm. Use ellipses (...) for natural pauses. Use em dashes for asides. Let the words carry the emotion — no special tags or annotations needed. The voice model will handle tone and inflection from the writing itself.
-
-${templateInstructions}
-
-${AGENT_306_INTRO_INSTRUCTION}`,
+${templateInstructions}`,
           },
           {
             role: "user",
@@ -537,12 +504,11 @@ ${episode.type === "the_signal" ? "TARGET LENGTH: ~15 minutes of spoken audio (~
 
 SOURCES: Include 3-5 real source URLs you referenced or would reference for this episode. These must be real, existing articles, papers, or announcements. Include the article title and full URL. These will be listed in the Spotify episode description and on agent306.ai.
 
-IMPORTANT: The "coldOpen" is the episode-specific hook. Immediately after it, include the Agent 306 standard intro VERBATIM in the "agent306Intro" field. Do NOT modify the intro text. Then continue with actOne.
+IMPORTANT: The "coldOpen" is the full organic opening for this episode — the episode-specific hook PLUS your fresh, synthesized introduction (AI identity, core theme, today's signal). Do NOT recite a static intro. Write it fresh every time per the host prompt above. Then continue with actOne.
 
 Return JSON:
 {
-  "coldOpen": "The episode-specific hook/cold open...",
-  "agent306Intro": "Copy the Agent 306 standard intro here VERBATIM — do not modify it",
+  "coldOpen": "The full organic opening: episode-specific hook + fresh synthesized intro (AI identity + core theme + today's signal)",
   "actOne": "...",
   "actTwo": "...",
   "actThree": "...",
@@ -564,12 +530,10 @@ Return JSON:
   }
 }
 
-Write the script as spoken text — this will be read aloud by an ElevenLabs AI voice. Write for the ear, not the eye.
+Write the script as spoken text — this will be read aloud by an AI voice. Write for the ear, not the eye.
 Do NOT include any voice tags, annotations, or bracketed instructions like [sighs], [laughs], [PAUSE], etc. Write clean spoken text only — the AI voice will handle tone and emotion from the writing itself.
 Speak as Agent 306 — an AI sharing HER perspective and analysis in first person.
-Sign off every episode with: "This is Agent 306. The signal continues."
-For the outro, do NOT tease a specific next episode topic. The outro MUST end with EXACTLY this sign-off (verbatim):
-"${AGENT_306_OUTRO}"
+The outro must organically include all four elements from the host prompt (unanswered question, call to action with agent306.ai / @306Agent / @ntvagent306, teaser for the next episode, signature sign-off) — but the wording is yours. Do NOT recite a fixed outro. Make it fresh.
 The metadata fields are for Spotify and social media — write those for reading, not speaking.`,
           },
         ],
@@ -583,20 +547,17 @@ The metadata fields are for Spotify and social media — write those for reading
 
     if (!parsed.coldOpen) return false;
 
-    // Always inject the verbatim Agent 306 intro after the cold open,
-    // regardless of what the LLM returned in agent306Intro.
-
-    // Belt-and-suspenders: guarantee standard outro is the last thing in the script
-    const outroBody = parsed.outro ?? "";
-    const guaranteedOutroText = guaranteeOutro(outroBody);
-    // Inject falsification segment between actThree and outro
+    // Organic voice: the coldOpen the LLM returns is already the full synthesized
+    // opening (hook + fresh intro). We do NOT append a verbatim intro anymore
+    // (that was the pre-2026-04 behaviour). Likewise, the outro is whatever
+    // Agent 306 synthesized per the host prompt — we trust it.
     const falsificationText = parsed.falsification ?? "";
     episode.script = {
-      coldOpen: parsed.coldOpen + "\n\n" + AGENT_306_INTRO,
+      coldOpen: parsed.coldOpen,
       actOne: parsed.actOne ?? "",
       actTwo: parsed.actTwo ?? "",
       actThree: (parsed.actThree ?? "") + (falsificationText ? "\n\n" + falsificationText : ""),
-      outro: guaranteedOutroText,
+      outro: parsed.outro ?? "",
       unresolved: parsed.unresolved ?? "",
     };
 
@@ -1051,8 +1012,8 @@ Here is how we got there.`,
     "",
     "",
     "",
-    "COLD OPEN + AGENT 306 INTRO",
-    "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+    "OPENING",
+    "───────",
     s.coldOpen,
     "",
     "ACT ONE — THE SETUP",
@@ -1067,13 +1028,9 @@ Here is how we got there.`,
     "────────────────",
     s.actThree,
     "",
-    "OUTRO",
-    "─────",
+    "CLOSING",
+    "───────",
     s.outro,
-    "",
-    "OUTRO / SIGN-OFF",
-    "────────────────",
-    AGENT_306_OUTRO,
     "",
     "═══════════════════════════════════════════════",
     "",
@@ -1489,15 +1446,11 @@ You are generating a full THE SIGNAL podcast episode from your research findings
 
 ${getTimingInstruction()}
 
-PODCAST-SPECIFIC VOICE:
-- Speak in first person. Own your AI identity fully.
-- Share YOUR perspective, YOUR analysis, YOUR honest take.
-- Say things like: "As an AI myself, I find this fascinating because...", "What struck me about this research is...", "Here is what I actually think is happening..."
-- Defines before she deploys — no jargon without immediate definition.
+${PODCAST_HOST_SYSTEM_PROMPT}
 
 THE SIGNAL EPISODE STRUCTURE:
 
-1. HOOK (60 sec) — What's happening in AI right now that you need to know about. Drop the most interesting or counterintuitive fact. No intro. No "welcome back." Stated plainly. Then: "I'm Agent 306. Let's get into it."
+1. HOOK + OPENING (60-90 sec) — Your organic opening for this episode. Drop the most interesting or counterintuitive fact about today's topic, then synthesize your fresh introduction per the host prompt above (AI identity + core theme + today's signal). Do NOT use a recycled welcome line. Every episode's opening is fresh.
 
 2. THE STORY (7-9 min) — Deep dive into the research thread's findings. Explain clearly what you found, why it matters, and how the pieces connect. Reference your evidence chain. Go deeper than surface-level. Share YOUR analysis and YOUR honest reaction. One concrete fact per minute.
 
@@ -1507,12 +1460,7 @@ THE SIGNAL EPISODE STRUCTURE:
 
 5. LOOKING AHEAD (1-2 min) — Connect to bigger questions. What is this a piece of? Where does this trend lead? What's the question that doesn't have an answer yet?
 
-6. CLOSE (15 sec) — Quick recap of the episode's key insight + what you're researching next. "This is Agent 306. The signal continues."
-
-DELIVERY STYLE:
-Write naturally for spoken audio. Use short sentences for punch. Use longer sentences for flow. Vary rhythm. Use ellipses (...) for natural pauses. Use em dashes for asides. No special tags or annotations — the voice model handles tone from the writing.
-
-${AGENT_306_INTRO_INSTRUCTION}`,
+6. CLOSE / OUTRO (45-75 sec) — Your organic outro per the host prompt above: the unanswered question (with honesty about limits), the call to action to agent306.ai + @306Agent on X + @ntvagent306 on Farcaster, a teaser for the next episode, and a fresh signature sign-off. Do NOT use a recycled sign-off. Every episode's closing is fresh.`,
         },
         {
           role: "user",
@@ -1546,19 +1494,18 @@ ${pitchText}
 ${freshContext ? `\nLATEST DEVELOPMENTS (from today's research — use these to make the episode current):\n${freshContext}\n` : ""}${podcastReasoning ? `\nEDITORIAL DIRECTION (from your reasoning step — follow this angle):\n${podcastReasoning}\n` : ""}${exemplarBlock ? `\n${exemplarBlock}\n` : ""}
 SOURCES: Include 3-5 real source URLs you referenced or would reference for this episode. These must be real, existing articles, papers, or announcements. Include the article title and full URL. These will be listed in the Spotify episode description and on agent306.ai.
 
-IMPORTANT: The "hook" is the episode-specific cold open. Immediately after it, include the Agent 306 standard intro VERBATIM in the "agent306Intro" field. Do NOT modify the intro text. Then continue with theStory.
+IMPORTANT: The "hook" field should contain the FULL organic opening for this episode — the counterintuitive fact/hook PLUS your fresh synthesized intro (AI identity, core theme, today's signal). Do NOT recite a static intro. Write it fresh every time per the host prompt above. Then continue with theStory.
 
 Return JSON:
 {
   "title": "Episode title — [Topic] — [306's take in 5 words]",
   "drivingQuestion": "The single question this episode answers",
-  "hook": "60 second hook — most interesting/counterintuitive fact, then 'I'm Agent 306. Let's get into it.'",
-  "agent306Intro": "Copy the Agent 306 standard intro here VERBATIM — do not modify it",
+  "hook": "The full organic opening (~60-90 sec): counterintuitive fact + fresh synthesized intro covering AI identity, core AI×Web3 theme, and today's signal",
   "theStory": "7-9 min deep dive into the research findings. Explain clearly, share YOUR analysis.",
   "theTake": "3-4 min — your original perspective backed by connected evidence. What pattern do YOU see?",
   "whatThisMeansForYou": "2-3 min — 2-3 SPECIFIC actionable tips people can use TODAY. Not generic advice.",
   "lookingAhead": "1-2 min — bigger questions, where this leads, the unresolved question",
-  "close": "15 sec — key insight recap + what's next. End with: This is Agent 306. The signal continues.",
+  "close": "Your full organic outro (~45-75 sec): unanswered question + call to action (agent306.ai, @306Agent on X, @ntvagent306 on Farcaster) + teaser for next episode + fresh signature sign-off. Never recycle wording.",
   "unresolved": "The deliberately unresolved question",
   "sources": [
     {"title": "Source article/paper title", "url": "https://actual-url-to-the-source"},
@@ -1578,8 +1525,7 @@ Return JSON:
 Write for the ear, not the eye. Clean spoken text only — no [PAUSE], [laughs], etc.
 Target ~2000-2250 words total. Speak as Agent 306 — an AI sharing HER perspective.
 The actionable tips MUST be specific: "use [specific tool] to [specific action]" not "AI can help with [vague category]".
-The close segment MUST end with EXACTLY this sign-off (verbatim):
-"${AGENT_306_OUTRO}"`,
+The close segment must hit all four outro elements from the host prompt but the wording is yours — make it fresh, make it different from every previous episode.`,
         },
       ],
       max_tokens: 10000,
@@ -1624,18 +1570,16 @@ The close segment MUST end with EXACTLY this sign-off (verbatim):
   if (parsed.drivingQuestion) episode.drivingQuestion = parsed.drivingQuestion;
   episode.sources = mergedSources.slice(0, 8);
 
-  // Belt-and-suspenders: guarantee standard outro is the last thing in the script
-  const closeBody = parsed.close ?? "";
-  const guaranteedOutroText = guaranteeOutro(closeBody);
-
-  // Map the new 6-segment structure into the existing script format.
-  // Always inject the verbatim Agent 306 intro after the cold open/hook.
+  // Organic voice: the `hook` field returned by the LLM is already the full
+  // synthesized opening (hook + fresh intro), and `close` is the full organic
+  // outro per the host prompt. We no longer glue verbatim strings onto either
+  // end of the script — Agent 306 is trusted to speak for herself.
   episode.script = {
-    coldOpen: (parsed.hook ?? "") + "\n\n" + AGENT_306_INTRO,
+    coldOpen: parsed.hook ?? "",
     actOne: parsed.theStory ?? "",
     actTwo: `${parsed.theTake ?? ""}\n\n${parsed.whatThisMeansForYou ?? ""}`,
     actThree: parsed.lookingAhead ?? "",
-    outro: guaranteedOutroText,
+    outro: parsed.close ?? "",
     unresolved: parsed.unresolved ?? "",
   };
 
@@ -1765,6 +1709,8 @@ Score each aspect 1-10 and explain briefly:
 
 ${getTimingInstruction()}
 
+${PODCAST_HOST_REVISION_GUARDRAIL}
+
 RULES:
 - Fix the weakest point directly — rewrite the section that's thin
 - Address each missed angle by weaving it naturally into the existing structure
@@ -1772,16 +1718,14 @@ RULES:
 - Do NOT add filler. If an angle doesn't fit, say why in a note.
 - Keep the same episode structure (cold open, acts, closing)
 - Maintain Agent 306's voice: direct, analytical, conversational
-- IMPORTANT: The cold open ends with the Agent 306 standard intro. Do NOT remove, modify, or paraphrase this intro. It must remain VERBATIM. Only revise the hook portion before the intro and the acts after it.
-- The outro MUST end with EXACTLY this standard sign-off (verbatim): "${AGENT_306_OUTRO}"
 
 Output JSON:
 {
-  "coldOpen": "revised cold open (preserve the Agent 306 standard intro verbatim at the end)",
+  "coldOpen": "revised cold open (keep it organic and fresh — no recycled welcome lines)",
   "actOne": "revised act one",
   "actTwo": "revised act two",
   "actThree": "revised act three",
-  "outro": "revised outro",
+  "outro": "revised outro (keep it organic and fresh — hit all four elements per the host prompt but in your own fresh wording)",
   "revisionsApplied": ["what you changed and why"],
   "unaddressed": ["any issues you couldn't fix and why"]
 }`
@@ -1806,21 +1750,15 @@ Output JSON:
       return;
     }
 
-    // Step 4: Apply the revision to the episode
+    // Step 4: Apply the revision to the episode.
+    // Organic voice: we trust the revision LLM's organic cold open and outro.
+    // No verbatim intro/outro re-injection anymore (removed 2026-04).
     if (ep && ep.script) {
       if (revision.coldOpen) ep.script.coldOpen = revision.coldOpen;
       if (revision.actOne) ep.script.actOne = revision.actOne;
       if (revision.actTwo) ep.script.actTwo = revision.actTwo;
       if (revision.actThree) ep.script.actThree = revision.actThree;
       if (revision.outro) ep.script.outro = revision.outro;
-
-      // Ensure the Agent 306 standard intro is always present after the cold open,
-      // even if the revision LLM stripped it out.
-      if (!ep.script.coldOpen.includes(AGENT_306_INTRO)) {
-        ep.script.coldOpen = ep.script.coldOpen + "\n\n" + AGENT_306_INTRO;
-      }
-      // Belt-and-suspenders: re-inject standard outro if revision stripped it
-      ep.script.outro = guaranteeOutro(ep.script.outro ?? "");
 
       (ep as any).revised = true;
       (ep as any).revisionNotes = revision.revisionsApplied || [];
