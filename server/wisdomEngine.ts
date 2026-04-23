@@ -68,9 +68,9 @@ const RATE_LIMITS: Record<string, number> = {
   gutenberg: 20,
 };
 
-// NKJV — owned on Starter Plan (CSB / NKJV / NIV).
-// If the plan changes, update this ID. KJV (de4e12af7f28f599-02) is NOT on Starter Plan.
-export const BIBLE_ID = "63097d2a0a2f7db3-01";
+// NKJV by default. Override via env var — must be a Bible ID authorized for the API key.
+// Find available IDs at https://scripture.api.bible (your account → Bibles).
+export const BIBLE_ID = process.env.BIBLE_ID ?? "63097d2a0a2f7db3-01";
 
 // ── Google Books daily budget & cache ───────────────────────────
 const GOOGLE_BOOKS_BUDGET_FILE = dataPath("google_books_daily.json");
@@ -350,8 +350,11 @@ async function queryBible(topics: string[], usage: WisdomApiUsage): Promise<Wisd
       if (res.status === 401 || res.status === 403) {
         bibleAuthDisabled = true;
         console.warn(
-          `[WisdomEngine] Bible API ${res.status} (auth failure) — disabling Bible integration for this process. ` +
-          `Verify BIBLE_API_KEY is a valid scripture.api.bible key (header format: 'api-key: <key>'). Body: ${body}`,
+          `[WisdomEngine] Bible API ${res.status} (auth failure) for Bible ID "${BIBLE_ID}" — ` +
+          `disabling Bible integration for this process. Possible causes: ` +
+          `(1) invalid BIBLE_API_KEY, ` +
+          `(2) this Bible ID is not authorized for your key (check https://scripture.api.bible → Bibles), ` +
+          `(3) malformed header. Body: ${body}`,
         );
         return [];
       }
@@ -622,6 +625,12 @@ export { DIMENSION_DOMAIN_MAP, MAX_WISDOM_ENTRIES, RATE_LIMITS };
 // Reset bible auth-disabled flag (test-only helper; harmless in prod since
 // flag only gets set after a 401/403 response)
 export function __resetBibleAuthDisabledForTest(): void {
+  bibleAuthDisabled = false;
+}
+
+// Escape hatch: clear the in-process auth-disable latch after a key rotation
+// without requiring a full restart. Exposed via the admin ping endpoint.
+export function resetBibleAuthDisabled(): void {
   bibleAuthDisabled = false;
 }
 
