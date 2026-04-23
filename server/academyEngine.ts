@@ -206,13 +206,24 @@ function pickNextTopic(): typeof CURRICULUM[0] {
 }
 
 // ── Generate academy episode via Grok ─────────────────────────────────────────
+export class AcademyGenerationError extends Error {
+  constructor(message: string, public readonly details: Record<string, unknown> = {}) {
+    super(message);
+    this.name = "AcademyGenerationError";
+  }
+}
+
 async function generateAcademyEpisode(topic: typeof CURRICULUM[0]): Promise<{
   post: string;
   dashboardNarrative: string;
   headline: string;
-} | null> {
+}> {
   const grokKey = LLM_API_KEY;
-  if (!grokKey) return null;
+  if (!grokKey) {
+    throw new AcademyGenerationError(
+      "Academy: LLM_API_KEY is not set — cannot call the LLM",
+    );
+  }
 
   const agentCtx = getOptimizedContext("academy education AI fundamentals agents industry frontier");
   const weeksTracked = Math.max(1, Math.ceil((Date.now() - TRACKING_START.getTime()) / (7 * 86400000)));
@@ -263,26 +274,98 @@ Return ONLY valid JSON — no meta-commentary, no separators, no character count
   "headline": "<5-8 word headline like 'What Your Burn Actually Does On-Chain'>"
 }`;
 
+  const model = getModel("academy");
+  const promptLength = systemPrompt.length + userPrompt.length;
+
+  let res: Response;
   try {
-    const res = await postChatCompletions({
-        model: getModel("academy"),
+    res = await postChatCompletions({
+        model,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user",   content: userPrompt },
         ],
-        max_tokens: 1200,
+        // Bumped from 1200 → 4000. Academy asks for JSON containing a long
+        // post + a 3-4 paragraph dashboardNarrative + headline. 1200 tokens
+        // was truncating the JSON mid-string, which then failed to parse
+        // and surfaced as "LLM returned no content".
+        max_tokens: 4000,
         temperature: 0.82,
       }, AbortSignal.timeout(45000));
-
-    if (!res.ok) { console.error("[Academy] Grok failed:", res.status); return null; }
-    const data = await res.json() as any;
-    const parsed = safeParseLLMJson(data.choices?.[0]?.message?.content, "Academy");
-    if (!parsed?.post) return null;
-    return parsed;
   } catch (e: any) {
-    console.error("[Academy] Generation error:", e.message);
-    return null;
+    throw new AcademyGenerationError(
+      `Academy: LLM request failed — ${e?.message ?? String(e)}`,
+      { model, promptLength, cause: e?.message ?? String(e) },
+    );
   }
+
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    console.error("[Academy] LLM HTTP failed:", res.status, errBody.slice(0, 200));
+    throw new AcademyGenerationError(
+      `Academy: LLM HTTP ${res.status} from provider (model=${model})`,
+      { model, promptLength, httpStatus: res.status, errBody: errBody.slice(0, 200) },
+    );
+  }
+
+  const data = await res.json() as any;
+  const choice = data?.choices?.[0];
+  const rawContent: string = choice?.message?.content ?? "";
+  const finishReason: string | undefined = choice?.finish_reason;
+
+  if (!rawContent || !rawContent.trim()) {
+    console.error(
+      `[Academy] LLM returned empty content — model=${model}, finish_reason=${finishReason}, prompt_len=${promptLength}`,
+    );
+    throw new AcademyGenerationError(
+      `Academy: LLM returned empty content (model=${model}, finish_reason=${finishReason ?? "unknown"}, prompt_len=${promptLength})`,
+      { model, promptLength, finishReason, rawLen: 0 },
+    );
+  }
+
+  const parsed = safeParseLLMJson<{
+    post?: string;
+    dashboardNarrative?: string;
+    headline?: string;
+  }>(rawContent, "Academy");
+
+  if (parsed?.post && parsed.post.trim().length > 10) {
+    return {
+      post: parsed.post,
+      dashboardNarrative: parsed.dashboardNarrative ?? "",
+      headline: parsed.headline ?? "",
+    };
+  }
+
+  // Fallback: the LLM returned substantive text but not parseable JSON with
+  // a `post` field (matches the resilience pattern in newsGenerator.ts and
+  // dispatchEngine.ts). Only fall back when we have enough raw material to
+  // form a real post — otherwise surface the failure.
+  const fallback = rawContent.trim();
+  if (fallback.length > 30) {
+    console.warn(
+      `[Academy] JSON parse missing 'post' field — falling back to raw LLM text (model=${model}, len=${fallback.length})`,
+    );
+    return {
+      post: fallback,
+      dashboardNarrative: "",
+      headline: "",
+    };
+  }
+
+  console.error(
+    `[Academy] LLM produced unusable content — model=${model}, finish_reason=${finishReason}, raw="${rawContent.slice(0, 200)}"`,
+  );
+  throw new AcademyGenerationError(
+    `Academy: LLM produced unusable content (model=${model}, finish_reason=${finishReason ?? "unknown"}, raw_len=${rawContent.length})`,
+    {
+      model,
+      promptLength,
+      finishReason,
+      rawLen: rawContent.length,
+      rawSnippet: rawContent.slice(0, 200),
+    },
+  );
 }
 
 // ── Post to X ─────────────────────────────────────────────────────────────────
@@ -292,10 +375,20 @@ export async function postAcademyEpisode(xWrite: any): Promise<void> {
   const topic = pickNextTopic();
   console.log(`[Academy] Generating EP${state.totalEpisodes + 1}: "${topic.concept}" [${topic.track}]`);
 
-  const generated = await generateAcademyEpisode(topic);
-  if (!generated) {
+  let generated: Awaited<ReturnType<typeof generateAcademyEpisode>>;
+  try {
+    generated = await generateAcademyEpisode(topic);
+  } catch (e: any) {
+    // Scheduler was previously silent on LLM failures — a 10am run could
+    // skip with no on-disk trace. Log loudly with details so ops can see
+    // *why* the scheduled run didn't produce a post.
+    const details = e instanceof AcademyGenerationError ? e.details : {};
+    console.error(
+      `[Academy] Scheduled generation failed — topic="${topic.concept}" [${topic.track}]:`,
+      e?.message ?? String(e),
+      details,
+    );
     releasePost("academy");
-    console.warn("[Academy] Generation failed — skipping");
     return;
   }
 
@@ -390,11 +483,16 @@ export function scheduleAcademy(xWrite: any): void {
 }
 
 // ── On-demand generation (no side effects — just produces content) ────────────
+//
+// Throws AcademyGenerationError when the LLM fails or returns unusable content.
+// The route handler (`/api/engines/:engineId/generate`) surfaces the error
+// message verbatim so the operator sees the real cause (missing key, HTTP
+// status, empty response, etc.) instead of a generic "LLM returned no content".
 export async function generateAcademyContent(): Promise<{
   post: string;
   dashboardNarrative: string;
   headline: string;
-} | null> {
+}> {
   console.log("[Academy] On-demand generation triggered");
   const topic = pickNextTopic();
   return generateAcademyEpisode(topic);
