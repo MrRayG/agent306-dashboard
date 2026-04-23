@@ -21,6 +21,8 @@ import {
   rotateGrowthFocus,
   type CompetencyProfile,
 } from "./competencyFramework.js";
+import { recordProposedInsights, expireStaleProposed, failStaleOpen, computeLedgerStats } from "./insightLedger.js";
+import { runVerificationPass, buildMetaReflectionContext } from "./selfChangeVerifier.js";
 
 import { postChatCompletions } from "./llmCall.js";
 // -- Types ------------------------------------------------------------------
@@ -306,11 +308,25 @@ KNOWLEDGE BASE CHANGES:
       .map(id => competencyProfile.competencies.find(c => c.id === id)?.name ?? id)
       .join(", ");
 
+    // Meta-reflection: surface prior-cycle kept/broken commitments so failed
+    // self-changes become first-class inputs to the next reflection rather
+    // than silently accumulating. Guarded — if the verifier fails, fall back
+    // to a neutral placeholder so the prompt still renders.
+    let metaReflection = "";
+    try {
+      metaReflection = buildMetaReflectionContext();
+    } catch (e: any) {
+      console.warn("[SelfEvolution] buildMetaReflectionContext failed (non-fatal):", e?.message);
+      metaReflection = "SELF-CHANGE TRACK RECORD: (unavailable this cycle)";
+    }
+
     const systemPrompt = `You are Agent 306, an autonomous AI research intelligence. You just completed a daily research cycle. Compare your state BEFORE the cycle to AFTER.
 ${diffContext}
 New knowledge entries today:\n- ${newEntries}
 Hypothesis changes:\n- ${hypChanges}
 Breakthroughs:\n- ${btList}
+
+${metaReflection}
 
 COMMUNICATION COMPETENCY LEVELS:
 ${competencySummary}
@@ -454,6 +470,36 @@ Rules:
       saveDiffs(trimmed);
 
       console.log(`[SelfEvolution] Diff appended — ${hypothesisDiffs.length} hypothesis changes, ${knowledgeDiffs.added} KB added, ${(parsed.pruningSuggestions ?? []).length} pruning suggestions`);
+    }
+
+    // ── WRITE-PATH: Verify prior cycle, expire stale, record new commitments ───
+    //
+    // This is the mechanism that closes the reflect→act→verify loop. Without
+    // it, SelfEvolution produces insights that evaporate. With it, every
+    // insight becomes a tracked commitment that either verifies (behavior
+    // actually changed) or fails (first-class self-change failure signal that
+    // feeds the next reflection).
+    try {
+      const verifyResult = runVerificationPass();
+      if (verifyResult.verified + verifyResult.failed > 0) {
+        console.log(
+          `[SelfEvolution] Verification: ${verifyResult.verified} verified, ${verifyResult.failed} failed (self-integrity=${verifyResult.selfIntegrityScore.toFixed(2)})`,
+        );
+      }
+      expireStaleProposed(3);   // Proposed insights not accepted in 3 days → expired
+      failStaleOpen(14);        // Accepted/in-flight past 14 days → failed
+
+      // Record this cycle's actionable insights as proposed commitments.
+      const tracked = recordProposedInsights(
+        store.totalCycles,
+        newInsights.map(i => ({ id: i.id, insight: i.insight, actionItem: i.actionItem })),
+      );
+      const stats = computeLedgerStats();
+      console.log(
+        `[SelfEvolution] Ledger state: ${tracked.length} new proposed, ${stats.openCount} open, ${stats.verified} verified all-time, ${stats.failed} failed, self-integrity=${stats.selfIntegrityScore.toFixed(2)}`,
+      );
+    } catch (e: any) {
+      console.warn("[SelfEvolution] Ledger update failed (non-fatal):", e.message);
     }
 
     console.log(`[SelfEvolution] Reflection complete — ${newInsights.length} insight(s) from cycle #${store.totalCycles}`);

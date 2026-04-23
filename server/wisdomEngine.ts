@@ -517,13 +517,23 @@ export async function pullWisdom(evalResult: EvalResult): Promise<WisdomPullResu
     entry.relevance = generateRelevance(entry, weakDim, directive);
   }
 
-  // Dedup and ingest
+  // Dedup and ingest — track skip reasons so we can tell "all 5 already exist"
+  // (dedup stall) from "APIs returned 0 results" (ingestion failure at source).
   let ingested = 0;
-  let skipped = 0;
+  let skippedDup = 0;
+  let skippedError = 0;
+
+  const sourceBreakdown: Record<string, { returned: number; dup: number; added: number }> = {};
+  for (const entry of allEntries) {
+    const key = entry.source;
+    sourceBreakdown[key] = sourceBreakdown[key] ?? { returned: 0, dup: 0, added: 0 };
+    sourceBreakdown[key].returned++;
+  }
 
   for (const entry of allEntries) {
     if (isDuplicateWisdom(entry.title)) {
-      skipped++;
+      skippedDup++;
+      sourceBreakdown[entry.source].dup++;
       continue;
     }
 
@@ -536,9 +546,10 @@ export async function pullWisdom(evalResult: EvalResult): Promise<WisdomPullResu
         weight: DEFAULT_WISDOM_WEIGHT,
       });
       ingested++;
+      sourceBreakdown[entry.source].added++;
     } catch (e) {
       console.warn(`[WisdomEngine] Failed to add wisdom entry "${entry.title}":`, e);
-      skipped++;
+      skippedError++;
     }
   }
 
@@ -549,7 +560,7 @@ export async function pullWisdom(evalResult: EvalResult): Promise<WisdomPullResu
     triggeredBy: weakDim,
     calibrationDirective: directive,
     entriesIngested: ingested,
-    entriesSkipped: skipped,
+    entriesSkipped: skippedDup + skippedError,
     sources: allEntries,
   };
 
@@ -558,7 +569,34 @@ export async function pullWisdom(evalResult: EvalResult): Promise<WisdomPullResu
   history.unshift(result);
   saveHistory(history);
 
-  console.log(`[WisdomEngine] Done: ${ingested} ingested, ${skipped} skipped for ${weakDim}`);
+  // Actionable telemetry — surface WHY we ingested 0 so it's debuggable from logs.
+  // User reported 0/5 ingested each run; this tells us whether that's a dedup
+  // problem (all titles already in KB), an API problem (0 results returned),
+  // or an addKnowledge failure.
+  const breakdownStr = Object.entries(sourceBreakdown)
+    .map(([src, b]) => `${src}:${b.returned}r/${b.added}a/${b.dup}d`)
+    .join(" ");
+  if (ingested === 0) {
+    if (allEntries.length === 0) {
+      console.warn(
+        `[WisdomEngine] 0 ingested — all APIs returned 0 entries. ` +
+        `Check BIBLE_API_KEY (currently ${process.env.BIBLE_API_KEY ? "set" : "MISSING"}), ` +
+        `GOOGLE_BOOKS_API_KEY, and network reachability to scripture.api.bible, books.googleapis.com.`,
+      );
+    } else if (skippedDup === allEntries.length) {
+      console.warn(
+        `[WisdomEngine] 0 ingested — ALL ${allEntries.length} entries were deduped as already-existing. ` +
+        `Dedup uses fuzzy title match (>0.7 overlap) against active wisdom KB; diversify topic rotation or ` +
+        `broaden search terms. Breakdown: ${breakdownStr}`,
+      );
+    } else if (skippedError > 0) {
+      console.warn(
+        `[WisdomEngine] 0 ingested despite ${allEntries.length} candidates — ${skippedError} addKnowledge() errors. ` +
+        `Breakdown: ${breakdownStr}`,
+      );
+    }
+  }
+  console.log(`[WisdomEngine] Done: ${ingested} ingested, ${skippedDup} dup, ${skippedError} error for ${weakDim} — ${breakdownStr}`);
   return result;
 }
 

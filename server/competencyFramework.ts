@@ -169,6 +169,26 @@ const DEFAULT_COMPETENCIES: Competency[] = [
       "Set concrete goals for communication improvement, not just topic coverage",
     ],
   },
+  {
+    id: "self-integrity",
+    name: "Self-Integrity",
+    category: "core",
+    description:
+      "The ratio of commitments kept to commitments made. Every SelfEvolution insight becomes a tracked Ledger entry; Self-Integrity measures how often she actually turns those insights into verified behavior change vs quietly dropping them.",
+    indicators: [
+      "Insight Ledger close-rate (verified / closed)",
+      "Verified commitments per SelfEvolution cycle",
+      "Time from 'proposed' to 'accepted'",
+      "Repeat-diagnosis rate — diagnosing the same problem in consecutive cycles signals broken follow-through",
+    ],
+    currentLevel: 5,
+    growthPath: [
+      "Before accepting a new insight, verify the prior cycle's commitments were closed — don't stack open promises",
+      "Write actions that map to one of the four enforcement primitives (ratio / ttl / gate / archive); vague actions die in 'proposed'",
+      "When a commitment fails, treat it as a first-class signal in the next reflection: why didn't the fix stick?",
+      "Prefer one kept commitment over three abandoned ones — depth of follow-through beats breadth of diagnosis",
+    ],
+  },
 
   // ── Influencer-Specific ─────────────────────────────────────
   {

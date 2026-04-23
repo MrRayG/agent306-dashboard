@@ -310,14 +310,28 @@ export async function postFarcasterQueueItem(postId: string): Promise<FarcasterQ
 // -- Core: drain the queue -----------------------------------------------
 
 async function processQueue(): Promise<void> {
+  const state = loadQueue();
+  const pending = state.queue.filter(p => !p.posted);
   if (!isFarcasterEnabled()) {
-    console.log("[FarcasterQueue] Auto-post disabled — queue preserved");
+    // Spec Tier 4.12: content was queuing without shipping. When auto-post is
+    // off AND there are pending items, surface this as a warning so the
+    // mismatch is visible instead of looking like normal operation. Checks
+    // relevant env vars so Ricardo can see at a glance which one is missing.
+    if (pending.length > 0) {
+      const hasSigner  = !!process.env.FARCASTER_SIGNER_UUID;
+      const hasNeynar  = !!process.env.NEYNAR_API_KEY;
+      console.warn(
+        `[FarcasterQueue] ${pending.length} item(s) queued but auto-post disabled — publication gate off. ` +
+        `NEYNAR_API_KEY=${hasNeynar ? "set" : "MISSING"}, FARCASTER_SIGNER_UUID=${hasSigner ? "set" : "MISSING"}. ` +
+        `Fix env or call postFarcasterQueueItem(id) manually.`,
+      );
+    } else {
+      console.log("[FarcasterQueue] Auto-post disabled — queue preserved");
+    }
     return;
   }
 
-  const state = loadQueue();
-  const post = state.queue
-    .filter(p => !p.posted)
+  const post = pending
     .sort((a, b) => a.priority - b.priority || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())[0] ?? null;
 
   if (!post) {
@@ -366,7 +380,13 @@ async function processQueue(): Promise<void> {
       registerPost(post.type, cast.url, post.type, "farcaster");
       console.log(`[FarcasterQueue] Posted ${post.type}: ${cast.url}`);
     } else {
-      console.warn("[FarcasterQueue] postCast returned null — check Farcaster config");
+      const hasSigner  = !!process.env.FARCASTER_SIGNER_UUID;
+      const hasNeynar  = !!process.env.NEYNAR_API_KEY;
+      console.warn(
+        `[FarcasterQueue] postCast returned null — cast not published. ` +
+        `NEYNAR_API_KEY=${hasNeynar ? "set" : "MISSING"}, FARCASTER_SIGNER_UUID=${hasSigner ? "set" : "MISSING"}. ` +
+        `Leaving post in queue for retry.`,
+      );
     }
   } catch (e: any) {
     console.error("[FarcasterQueue] Post failed:", e.message);

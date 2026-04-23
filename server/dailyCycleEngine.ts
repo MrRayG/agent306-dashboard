@@ -2064,6 +2064,21 @@ Write a single tweet sharing the most interesting insight from this research. Re
     console.warn("[DailyCycle] Knowledge flush failed (non-fatal):", e.message);
   }
 
+  // ── Action Enforcer: fire registered rules from Insight Ledger commitments ──
+  // Each active ratio/ttl/gate/archive rule runs once per cycle. Fire counts
+  // and side effects feed the Self-Change Verifier on the next SelfEvolution.
+  try {
+    const { tickEnforcer } = await import("./actionEnforcer.js");
+    const tick = await tickEnforcer();
+    if (tick.rulesChecked > 0) {
+      console.log(
+        `[DailyCycle] ActionEnforcer tick: ${tick.rulesFired}/${tick.rulesChecked} rules fired, ${tick.sideEffects} side effects`,
+      );
+    }
+  } catch (e: any) {
+    console.warn("[DailyCycle] ActionEnforcer tick failed (non-fatal):", e.message);
+  }
+
   // ── 306Eval Benchmark (read-only, non-blocking) ──────────────────────────
   let evalResult: ReturnType<typeof run306Eval> | null = null;
   try {
@@ -2162,4 +2177,32 @@ export function scheduleDailyCycle(): void {
   }
 
   scheduleNext();
+  scheduleDreamCadence();
+}
+
+// ── Dream cadence — spec §4 / Tier 4.10 ──
+//
+// Log analysis showed DreamEngine fired once in 19 hours (10:47) then went
+// silent. Her generative/creative loop — where new framings come from — was
+// starved. The daily cycle only calls updateDreams() once per 24 h; that's
+// too sparse. Run dreams on a standalone 5-hour interval so framings refresh
+// ~4-5 times per day. Keep the daily-cycle call too: dreams are cheap and
+// some framings need a full-cycle's fresh KB delta to seed from.
+function scheduleDreamCadence(): void {
+  const FIVE_HOURS_MS = 5 * 60 * 60 * 1000;
+  async function runDreamTick() {
+    try {
+      seedDreams();
+      await updateDreams();
+      console.log("[DreamCadence] 5h interval dream update complete");
+    } catch (e: any) {
+      console.warn("[DreamCadence] Dream update failed (non-fatal):", e.message);
+    }
+  }
+  // Fire once on startup so a freshly-booted server doesn't wait 5 h for the
+  // first dream, then every 5 h thereafter.
+  setTimeout(() => {
+    runDreamTick();
+    setInterval(runDreamTick, FIVE_HOURS_MS);
+  }, 60_000); // 1-minute warmup to let other engines settle before dreaming
 }

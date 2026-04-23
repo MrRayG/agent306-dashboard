@@ -18,6 +18,7 @@
 
 import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
+import { gateHypothesisForTesting } from "./hypothesisFeasibilityGate.js";
 import { addKnowledge } from "./memoryEngine.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders, LLM_TIMEOUTS } from "./llmConfig.js";
@@ -662,6 +663,30 @@ export function testHypothesis(id: string): boolean {
   const lab = loadLab();
   const hyp = lab.hypotheses.find(h => h.id === id);
   if (!hyp || hyp.status !== "forming") return false;
+
+  // ── Feasibility pre-gate ──
+  // Spec §2.4 / Tier 2: before a hypothesis enters `testing`, check whether
+  // the evidence it needs is likely to exist in public sources. Unprovable
+  // claims get routed to a `speculative-watchlist` status instead of burning
+  // ~30 LLM calls through three empty test cycles. Conservative: if the gate
+  // is unsure, it returns `testing` so we don't starve the queue.
+  try {
+    const gate = gateHypothesisForTesting(hyp.claim ?? "");
+    if (gate.recommendedRoute !== "testing") {
+      (hyp as any).status = gate.recommendedRoute === "reject" ? "stale-retired" : "speculative-watchlist";
+      (hyp as any).feasibilityReasons = gate.reasons;
+      (hyp as any).feasibilityBlockedAt = new Date().toISOString();
+      saveLab(lab);
+      console.log(
+        `[Research] Hypothesis blocked by feasibility gate (${gate.recommendedRoute}): "${hyp.claim.slice(0, 60)}" — ${gate.reasons[0] ?? ""}`,
+      );
+      return false;
+    }
+  } catch (e: any) {
+    // Gate unavailable → fall through to testing (conservative pass).
+    console.warn("[Research] Feasibility gate unavailable, passing through:", e?.message);
+  }
+
   hyp.status = "testing";
   (hyp as any).testingStartedAt = new Date().toISOString();
   saveLab(lab);
