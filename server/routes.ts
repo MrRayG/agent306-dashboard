@@ -55,7 +55,7 @@ import { getAgentReachStatus } from "./agentReachEngine.js";
 import { get306EvalResults, get306EvalHistory } from "./evalEngine.js";
 import { getCycleContext, isCycleActive } from "./cycleContext.js";
 import { getNoveltyGateLog } from "./noveltyGate.js";
-import { getWisdomPullHistory, getWisdomApiUsage, getActiveWisdomCount } from "./wisdomEngine.js";
+import { getWisdomPullHistory, getWisdomApiUsage, getActiveWisdomCount, BIBLE_ID, resetBibleAuthDisabled, buildBibleHeaders } from "./wisdomEngine.js";
 import { getAllSessions, getActiveSessionCount, closeExpiredSessions } from "./sessionMemory.js";
 import { postCast, isFarcasterEnabled, getFarcasterState, setFarcasterEnabled, createSigner, getSignerStatus, fetchMentions, determineChannel, getStoredSignerUuid, storeSignerUuid } from "./farcasterEngine.js";
 import {
@@ -1922,6 +1922,48 @@ export function registerRoutes(httpServer: Server, app: Express) {
       res.json(summary);
     } catch (e: any) {
       res.status(500).json({ error: e?.message ?? String(e) });
+    }
+  });
+
+  // ── Wisdom — Bible diagnostic ping ─────────────────────────────────
+  // Verifies BIBLE_API_KEY + BIBLE_ID end-to-end without waiting for a
+  // WisdomEngine cycle. Side-effect-free by default. Pass ?reset=true to
+  // clear the in-process bibleAuthDisabled latch after a key rotation.
+  app.get("/api/admin/wisdom/bible/ping", requireDashAuth, async (req, res) => {
+    if (req.query.reset === "true") {
+      resetBibleAuthDisabled();
+    }
+    const apiKey = process.env.BIBLE_API_KEY;
+    if (!apiKey) {
+      return res.json({ ok: false, reason: "BIBLE_API_KEY not set" });
+    }
+    try {
+      const r = await fetch(
+        `https://api.scripture.api.bible/v1/bibles/${BIBLE_ID}`,
+        {
+          headers: buildBibleHeaders(apiKey),
+          signal: AbortSignal.timeout(5000),
+        },
+      );
+      if (r.ok) {
+        const data = (await r.json().catch(() => ({}))) as any;
+        return res.json({
+          ok: true,
+          bibleId: BIBLE_ID,
+          name: data.data?.name,
+          abbreviation: data.data?.abbreviation,
+          status: 200,
+        });
+      }
+      const body = await r.text().catch(() => "");
+      return res.json({
+        ok: false,
+        bibleId: BIBLE_ID,
+        status: r.status,
+        body: body.slice(0, 500),
+      });
+    } catch (e: any) {
+      return res.json({ ok: false, bibleId: BIBLE_ID, error: String(e) });
     }
   });
 
