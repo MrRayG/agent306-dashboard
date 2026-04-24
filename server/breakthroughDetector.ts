@@ -25,6 +25,7 @@ import { shouldAutoPost } from "./engineScheduleConfig.js";
 import { saveTweetDraft } from "./tweetDrafts.js";
 
 import { postChatCompletions } from "./llmCall.js";
+import { proposeRecommendation } from "./selfRecommendationEngine.js";
 // -- Types ------------------------------------------------------------------
 
 export interface BreakthroughScoreV2 {
@@ -590,6 +591,24 @@ Required JSON schema:
     }
 
     console.log(`[Breakthrough] BREAKTHROUGH DETECTED: "${breakthrough.title}" (composite: ${compositeScore})`);
+
+    // Self-evolution hook (spec §1): breakthroughs are candidate data-layer or
+    // engine-layer proposals — flag them for operator review as recommendations
+    // rather than auto-merging any derivative change.
+    try {
+      proposeRecommendation({
+        category: "data",
+        risk: "low",
+        title: `Breakthrough: ${breakthrough.title}`.slice(0, 200),
+        rationale: `breakthroughDetector composite=${compositeScore} (novelty=${noveltyScore}). Finding: ${finding.slice(0, 240)}`,
+        proposedChange: `Review breakthrough ${breakthrough.id}. If accepted, promote to knowledge base + consider downstream publication.`,
+        evidence: [`breakthrough:${breakthrough.id}`, `source:${sourceId}`],
+        sourceInsightId: sourceId,
+      });
+    } catch (e: any) {
+      console.warn("[Breakthrough] self-recommendation hook failed:", e?.message);
+    }
+
     return breakthrough;
   } catch (e: any) {
     console.error(`[Breakthrough] Detection failed:`, e.message);

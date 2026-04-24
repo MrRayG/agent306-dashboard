@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import type { Server } from "http";
 import { registerTelegramRoutes } from "./telegramBot.js";
+import { registerSelfRecommendationRoutes } from "./selfRecommendationRouter.js";
 import { dataPath } from "./dataPaths.js";
 import { storage } from "./storage";
 import { insertEpisodeSchema, insertRenderJobSchema, insertSignalSchema } from "@shared/schema";
@@ -796,6 +797,12 @@ export function registerRoutes(httpServer: Server, app: Express) {
     if (sent === DASHBOARD_SECRET) return next();
     return res.status(401).json({ error: "Unauthorized" });
   }
+
+  // ── Self-Recommendation router (spec §1) ────────────────────────────────
+  // Mounted here so every self-evolution hook becomes operator-visible at
+  // /api/self-recommendations. Propose-only — nothing under this router
+  // auto-applies a change.
+  registerSelfRecommendationRoutes(app, { requireDashAuth });
 
   // OAuth 2.0 routes removed — using OAuth 1.0a only (tokens don't expire).
   // To reauthorize: regenerate tokens in X Developer Portal + update Railway env vars.

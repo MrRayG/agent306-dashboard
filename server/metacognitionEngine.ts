@@ -10,6 +10,11 @@ import { getReflectionStats } from "./reflectionEngine.js";
 import { getReasoningStats } from "./reasoningEngine.js";
 import { getSynthesisStats } from "./synthesisEngine.js";
 import { getConversationLearningStats } from "./conversationLearningEngine.js";
+import { proposeRecommendation } from "./selfRecommendationEngine.js";
+
+// Debounce: only emit one recommendation per 24h from the metacognition read
+// path so reading the dashboard doesn't flood the queue.
+let lastMetacogRecAt = 0;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -91,7 +96,7 @@ export function getMetacognitionState(): MetacognitionState {
     ? Math.round(active.reduce((s, e) => s + e.weight, 0) / active.length * 10) / 10
     : 0;
 
-  return {
+  const state = {
     knowledgeCoverage: {
       totalActive: getActiveKnowledgeCount(),
       categories,
@@ -111,4 +116,28 @@ export function getMetacognitionState(): MetacognitionState {
     synthesisStats: getSynthesisStats(),
     conversationStats: getConversationLearningStats(),
   };
+
+  // Self-evolution hook (spec §1): if learning velocity is slowing AND KB is
+  // well-stocked, that's a candidate data/engine-layer proposal for the
+  // operator. Debounced to once per 24h so dashboard polling doesn't flood.
+  try {
+    const dayMs = 24 * 60 * 60 * 1000;
+    if (Date.now() - lastMetacogRecAt > dayMs) {
+      if (state.learningVelocity.trend === "slowing" && state.knowledgeCoverage.totalActive > 50) {
+        lastMetacogRecAt = Date.now();
+        proposeRecommendation({
+          category: "engine",
+          risk: "low",
+          title: "Learning velocity slowing despite healthy KB",
+          rationale: `7d=${state.learningVelocity.knowledgeAdded7d}, 30d=${state.learningVelocity.knowledgeAdded30d}, KB active=${state.knowledgeCoverage.totalActive}.`,
+          proposedChange: "Review research scanner cadence + intake sources. Consider widening or rotating exploration queries.",
+          evidence: [`metacog:${new Date().toISOString().slice(0, 10)}`],
+        });
+      }
+    }
+  } catch (e: any) {
+    console.warn("[Metacognition] self-recommendation hook failed:", e?.message);
+  }
+
+  return state;
 }

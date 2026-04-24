@@ -48,4 +48,30 @@ sqlite.exec(`
     raw_data TEXT DEFAULT '{}',
     captured_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS self_recommendations (
+    id TEXT PRIMARY KEY,
+    category TEXT NOT NULL,
+    risk TEXT NOT NULL DEFAULT 'low',
+    title TEXT NOT NULL,
+    rationale TEXT NOT NULL,
+    proposed_change TEXT NOT NULL,
+    proposed_diff TEXT,
+    evidence TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'proposed',
+    author TEXT NOT NULL DEFAULT 'agent',
+    source_hypothesis_id TEXT,
+    source_insight_id TEXT,
+    pr_url TEXT,
+    patch_path TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    approved_at TEXT,
+    rejected_at TEXT,
+    applied_at TEXT,
+    reverted_at TEXT,
+    approved_by TEXT,
+    review_note TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_self_rec_status ON self_recommendations(status);
+  CREATE INDEX IF NOT EXISTS idx_self_rec_created_at ON self_recommendations(created_at);
 `);
