@@ -2,6 +2,12 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { registerTelegramRoutes } from "./telegramBot.js";
 import { registerSelfRecommendationRoutes } from "./selfRecommendationRouter.js";
+import { registerDiagnosticsRoutes } from "./routers/diagnosticsRouter.js";
+import { registerAgentRoutes } from "./routers/agentRouter.js";
+import { registerKnowledgeRoutes } from "./routers/knowledgeRouter.js";
+import { registerHypothesisRoutes } from "./routers/hypothesisRouter.js";
+import { registerContentRoutes } from "./routers/contentRouter.js";
+import { registerEpisodeRoutes } from "./routers/episodeRouter.js";
 import { dataPath } from "./dataPaths.js";
 import { storage } from "./storage";
 import { insertEpisodeSchema, insertRenderJobSchema, insertSignalSchema } from "@shared/schema";
@@ -798,11 +804,19 @@ export function registerRoutes(httpServer: Server, app: Express) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  // ── Self-Recommendation router (spec §1) ────────────────────────────────
-  // Mounted here so every self-evolution hook becomes operator-visible at
-  // /api/self-recommendations. Propose-only — nothing under this router
-  // auto-applies a change.
+  // ── Sub-router mounts (spec §2) ──────────────────────────────────────────
+  // Each sub-router is a thin factory: `register(app, deps)`. Seven routers
+  // in total; today the diagnostics + self-recommendation + agent routers
+  // carry migrated routes, and the remaining four are skeletons that future
+  // PRs will populate. URLs + response shapes are preserved for every
+  // migrated route — this is a refactor, not a behavior change.
   registerSelfRecommendationRoutes(app, { requireDashAuth });
+  registerDiagnosticsRoutes(app, { requireDashAuth });
+  registerAgentRoutes(app, { requireDashAuth });
+  registerKnowledgeRoutes(app, { requireDashAuth });
+  registerHypothesisRoutes(app, { requireDashAuth });
+  registerContentRoutes(app, { requireDashAuth });
+  registerEpisodeRoutes(app, { requireDashAuth });
 
   // OAuth 2.0 routes removed — using OAuth 1.0a only (tokens don't expire).
   // To reauthorize: regenerate tokens in X Developer Portal + update Railway env vars.
@@ -4841,10 +4855,7 @@ needsHelp: true only when you genuinely need his direction or information`,
 
   // ── Metacognition (The Mind) ────────────────────────────────────────────
 
-  app.get("/api/metacognition", (_req, res) => {
-    try { res.json(getMetacognitionState()); }
-    catch (e: any) { res.status(500).json({ error: "Failed to fetch metacognition state" }); }
-  });
+  // /api/metacognition extracted to diagnosticsRouter.
 
     // ── Seed demo data ────────────────────────────────────────────────
   // ── Knowledge Tiers ──────────────────────────────────────────────────────
@@ -5210,70 +5221,13 @@ needsHelp: true only when you genuinely need his direction or information`,
     }
   });
 
-  // ── 306Eval Benchmark ─────────────────────────────────────────────────
-  app.get("/api/eval", (_req, res) => {
-    try {
-      const data = get306EvalResults();
-      res.json(data);
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.get("/api/eval/history", (_req, res) => {
-    try {
-      const history = get306EvalHistory();
-      res.json({ history });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+  // ── 306Eval, Cycle Context, Sessions, Novelty Gate, Wisdom ────────────
+  // Extracted to server/routers/diagnosticsRouter.ts (spec §2). Registered
+  // earlier in this function. URLs + response shapes preserved.
 
   // ── Breaking News (disabled) ───────────────────────────────────────────
   app.get("/api/breaking-news", (_req, res) => {
     res.json({ events: [], count: 0, disabled: true });
-  });
-
-  // ── Cycle Context & Session Memory ─────────────────────────────────────
-  app.get("/api/cycle/context", (_req, res) => {
-    try {
-      const context = getCycleContext();
-      res.json({ active: isCycleActive(), context });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.get("/api/sessions", (_req, res) => {
-    try {
-      const sessions = getAllSessions();
-      const expired = closeExpiredSessions();
-      res.json({ activeSessions: getActiveSessionCount(), expiredClosed: expired, sessions });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  // ── Novelty Gate ────────────────────────────────────────────────
-  app.get("/api/novelty-gate", (_req, res) => {
-    try {
-      const log = getNoveltyGateLog(50);
-      res.json({ checks: log, total: log.length });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  // ── Wisdom Engine ───────────────────────────────────────────────
-  app.get("/api/wisdom", (_req, res) => {
-    try {
-      const history = getWisdomPullHistory().slice(0, 10);
-      const usage = getWisdomApiUsage();
-      const activeCount = getActiveWisdomCount();
-      res.json({ recentPulls: history, wisdomEntryCount: activeCount, apiUsage: usage });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
   });
 
   // ── Goal Engine ─────────────────────────────────────────────────
