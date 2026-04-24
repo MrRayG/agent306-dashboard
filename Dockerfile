@@ -29,6 +29,16 @@ ARG VITE_DASHBOARD_SECRET
 ENV VITE_DASHBOARD_SECRET=${VITE_DASHBOARD_SECRET}
 RUN npm run build
 
+# Bundle the one-shot JSON→DB migration into dist/migrate.cjs so it can
+# run under plain `node` after devDeps (including tsx + esbuild) are pruned.
+RUN npx esbuild scripts/migrate_json_to_db.ts \
+      --bundle \
+      --platform=node \
+      --target=node20 \
+      --format=cjs \
+      --external:better-sqlite3 \
+      --outfile=dist/migrate.cjs
+
 # Remove dev dependencies after build
 RUN npm prune --production
 
@@ -41,4 +51,11 @@ EXPOSE 5000
 ENV NODE_ENV=production
 ENV DATA_DIR=/data
 
-CMD ["node", "dist/index.cjs"]
+# Auto-run the JSON→DB migration on every boot. The script is idempotent:
+# on first boot it migrates the 5 high-churn stores and renames the source
+# JSON files to `.bak`; on every subsequent boot it's a ~50ms no-op that
+# prints `already-migrated`. Migration failure is non-fatal — the read-
+# through shim falls back to JSON automatically when USE_DB_STATE=false or
+# a DB read fails, so a bad migration cannot block boot.
+CMD sh -c "USE_DB_STATE=${USE_DB_STATE:-true} node dist/migrate.cjs || echo '[boot] migration reported a non-zero exit; continuing with JSON fallback'; exec node dist/index.cjs"
+
