@@ -1,0 +1,43 @@
+/**
+ * competencyRepository (spec §4) — wraps competencyProfile.
+ */
+
+import { db } from "../db.js";
+import { competencyProfileTable } from "@shared/schema";
+import { eq } from "drizzle-orm";
+import { dataPath } from "../dataPaths.js";
+import { readThrough, readJsonWithBakFallback } from "./jsonFallback.js";
+
+const KEY = "main";
+const JSON_PATH = dataPath("competencyProfile.json");
+
+export function readCompetencyBlob<T = unknown>(): T | null {
+  return readThrough<T>({
+    dbRead: () => {
+      const row = db.select().from(competencyProfileTable).where(eq(competencyProfileTable.id, KEY)).get();
+      if (!row) return null;
+      try { return JSON.parse(row.blob) as T; } catch { return null; }
+    },
+    jsonPath: JSON_PATH,
+  });
+}
+
+export function writeCompetencyBlob(blob: unknown): void {
+  const payload = JSON.stringify(blob);
+  const existing = db.select().from(competencyProfileTable).where(eq(competencyProfileTable.id, KEY)).get();
+  if (existing) {
+    db.update(competencyProfileTable)
+      .set({ blob: payload, updatedAt: new Date().toISOString() })
+      .where(eq(competencyProfileTable.id, KEY))
+      .run();
+  } else {
+    db.insert(competencyProfileTable).values({ id: KEY, blob: payload }).run();
+  }
+}
+
+export function importCompetencyFromJson(): boolean {
+  const body = readJsonWithBakFallback<unknown>(JSON_PATH);
+  if (body == null) return false;
+  writeCompetencyBlob(body);
+  return true;
+}

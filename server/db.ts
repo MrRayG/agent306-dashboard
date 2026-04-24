@@ -89,4 +89,42 @@ sqlite.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_engine_runs_engine ON engine_runs(engine);
   CREATE INDEX IF NOT EXISTS idx_engine_runs_started_at ON engine_runs(started_at);
+
+  CREATE TABLE IF NOT EXISTS memory_knowledge (
+    id TEXT PRIMARY KEY,
+    blob TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS memory_soul (
+    id TEXT PRIMARY KEY,
+    blob TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS memory_soul_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    version INTEGER NOT NULL,
+    blob TEXT NOT NULL,
+    captured_at TEXT NOT NULL DEFAULT (datetime('now')),
+    reason TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS agent_goals (
+    id TEXT PRIMARY KEY,
+    blob TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS competency_profile (
+    id TEXT PRIMARY KEY,
+    blob TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS research_lab (
+    id TEXT PRIMARY KEY,
+    blob TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);

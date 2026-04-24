@@ -143,3 +143,62 @@ export const engineRuns = sqliteTable("engine_runs", {
 export const insertEngineRunSchema = createInsertSchema(engineRuns).omit({ id: true });
 export type InsertEngineRun = z.infer<typeof insertEngineRunSchema>;
 export type EngineRun = typeof engineRuns.$inferSelect;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// JSON → Drizzle migration (spec §4)
+//
+// Five tables covering the highest-churn runtime JSON stores. Each row is a
+// `blob` JSON payload keyed by store id. This preserves the existing shapes
+// exactly while making the data queryable and transactional. Repositories
+// in server/repositories/* wrap these tables.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** memory_knowledge.json — single row (id='main'); blob = KnowledgeMemory */
+export const memoryKnowledge = sqliteTable("memory_knowledge", {
+  id: text("id").primaryKey(),
+  blob: text("blob").notNull(),
+  updatedAt: text("updated_at").notNull().default(new Date().toISOString()),
+});
+export type MemoryKnowledgeRow = typeof memoryKnowledge.$inferSelect;
+
+/** memory_soul.json — single row (id='current'); blob = SoulMemory */
+export const memorySoul = sqliteTable("memory_soul", {
+  id: text("id").primaryKey(),
+  blob: text("blob").notNull(),
+  updatedAt: text("updated_at").notNull().default(new Date().toISOString()),
+});
+export type MemorySoulRow = typeof memorySoul.$inferSelect;
+
+/** memory_soul_history — soul snapshots (id = version); blob = SoulMemory */
+export const memorySoulHistory = sqliteTable("memory_soul_history", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  version: integer("version").notNull(),
+  blob: text("blob").notNull(),
+  capturedAt: text("captured_at").notNull().default(new Date().toISOString()),
+  reason: text("reason"),
+});
+export type MemorySoulHistoryRow = typeof memorySoulHistory.$inferSelect;
+
+/** agent_goals.json — single row (id='main'); blob = { goals: AgentGoal[] } */
+export const agentGoals = sqliteTable("agent_goals", {
+  id: text("id").primaryKey(),
+  blob: text("blob").notNull(),
+  updatedAt: text("updated_at").notNull().default(new Date().toISOString()),
+});
+export type AgentGoalsRow = typeof agentGoals.$inferSelect;
+
+/** competencyProfile.json — single row (id='main'); blob = CompetencyProfile */
+export const competencyProfileTable = sqliteTable("competency_profile", {
+  id: text("id").primaryKey(),
+  blob: text("blob").notNull(),
+  updatedAt: text("updated_at").notNull().default(new Date().toISOString()),
+});
+export type CompetencyProfileRow = typeof competencyProfileTable.$inferSelect;
+
+/** research_lab.json — single row (id='main'); blob = ResearchLab */
+export const researchLab = sqliteTable("research_lab", {
+  id: text("id").primaryKey(),
+  blob: text("blob").notNull(),
+  updatedAt: text("updated_at").notNull().default(new Date().toISOString()),
+});
+export type ResearchLabRow = typeof researchLab.$inferSelect;
