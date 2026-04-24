@@ -1,0 +1,55 @@
+{
+  "name": "hypothesisTriage",
+  "version": 1,
+  "description": "Golden cases for server/hypothesisTriage.ts — pins the queue + priority contract so self-changes that accidentally reclassify existing stakes fail the gate.",
+  "cases": [
+    {
+      "id": "queueFor-high-active",
+      "fn": "hypothesisTriage.queueFor",
+      "args": ["high"],
+      "expect": { "kind": "equals", "value": "active" }
+    },
+    {
+      "id": "queueFor-medium-backlog",
+      "fn": "hypothesisTriage.queueFor",
+      "args": ["medium"],
+      "expect": { "kind": "equals", "value": "backlog" }
+    },
+    {
+      "id": "queueFor-low-backlog",
+      "fn": "hypothesisTriage.queueFor",
+      "args": ["low"],
+      "expect": { "kind": "equals", "value": "backlog" }
+    },
+    {
+      "id": "priority-high-low-confidence-is-0",
+      "fn": "hypothesisTriage.triagePriority",
+      "args": [{ "stake": "high", "triageConfidence": "low" }],
+      "expect": { "kind": "equals", "value": 0 }
+    },
+    {
+      "id": "priority-high-high-confidence-is-1",
+      "fn": "hypothesisTriage.triagePriority",
+      "args": [{ "stake": "high", "triageConfidence": "high" }],
+      "expect": { "kind": "equals", "value": 1 }
+    },
+    {
+      "id": "priority-other-is-2",
+      "fn": "hypothesisTriage.triagePriority",
+      "args": [{ "stake": "low", "triageConfidence": "high" }],
+      "expect": { "kind": "equals", "value": 2 }
+    },
+    {
+      "id": "isActiveQueue-active-true",
+      "fn": "hypothesisTriage.isActiveQueue",
+      "args": [{ "queue": "active" }],
+      "expect": { "kind": "equals", "value": true }
+    },
+    {
+      "id": "isActiveQueue-backlog-false",
+      "fn": "hypothesisTriage.isActiveQueue",
+      "args": [{ "queue": "backlog" }],
+      "expect": { "kind": "equals", "value": false }
+    }
+  ]
+}

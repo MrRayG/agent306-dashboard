@@ -25,6 +25,7 @@ import {
 } from "./hypothesisConsolidationBatch.js";
 
 import { postChatCompletions } from "./llmCall.js";
+import { proposeRecommendation } from "./selfRecommendationEngine.js";
 // ── Cosine similarity (inline to avoid circular dependency) ──────────────────
 function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length || a.length === 0) return 0;
@@ -369,6 +370,25 @@ async function consolidateViaSync(
   }
 
   console.log(`[HypothesisConsolidator] Complete: ${merged} clusters merged, ${removed} redundant hypotheses removed`);
+
+  // Self-evolution hook (spec §1): when consolidation removes a sizable chunk
+  // of redundant hypotheses, propose a data-layer recommendation so an
+  // operator can verify the merge quality.
+  try {
+    if (removed >= 5) {
+      proposeRecommendation({
+        category: "data",
+        risk: "low",
+        title: `Hypothesis consolidation removed ${removed} redundant hypotheses`,
+        rationale: `${clusters.length} clusters detected; ${merged} merged; ${removed} archived as duplicates.`,
+        proposedChange: "Review the canonical hypotheses to confirm merge quality. Adjust similarityThreshold if merges look coarse.",
+        evidence: clusters.slice(0, 10).map(c => `cluster:${c.representative.id}`),
+      });
+    }
+  } catch (e: any) {
+    console.warn("[HypothesisConsolidator] self-recommendation hook failed:", e?.message);
+  }
+
   return { clustersFound: clusters.length, merged, removed };
 }
 

@@ -1,8 +1,10 @@
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import cors from "cors";
-import { registerRoutes } from "./routes";
+import { registerRoutes, getXClients } from "./routes";
 import { serveStatic } from "./static";
+import { startScheduler } from "./scheduler/registry.js";
+import { LLM_API_KEY } from "./llmConfig.js";
 import { createServer } from "http";
 import { syncEmbeddings } from "./embeddingEngine.js";
 import { purgeConversationalPosts } from "./blogEngine.js";
@@ -165,6 +167,16 @@ app.use((req, res, next) => {
       syncEmbeddings()
         .then(r => console.log(`[Embeddings] Synced: ${r.synced} new, ${r.cached} cached`))
         .catch(e => console.warn("[Embeddings] Sync failed:", e.message));
+
+      // Scheduler registry (spec §3): single entrypoint for every scheduled
+      // engine. Called AFTER registerRoutes() so xClient / xWrite are
+      // initialized. Honors the existing per-engine stagger cadence.
+      try {
+        const { xClient, xWrite } = getXClients();
+        startScheduler({ xClient, xWrite, llmApiKey: LLM_API_KEY ?? "" });
+      } catch (e: any) {
+        console.warn("[Scheduler] start failed (non-fatal):", e?.message);
+      }
     },
   );
 })();

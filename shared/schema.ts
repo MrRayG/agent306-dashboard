@@ -49,3 +49,178 @@ export const storySignals = sqliteTable("story_signals", {
 export const insertSignalSchema = createInsertSchema(storySignals).omit({ id: true, capturedAt: true });
 export type InsertSignal = z.infer<typeof insertSignalSchema>;
 export type StorySignal = typeof storySignals.$inferSelect;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Self-Recommendation Loop (spec §1)
+//
+// Every row is a typed recommendation the agent (or operator) has emitted.
+// Status transitions are strictly: proposed → approved | rejected; approved →
+// applied; applied → reverted. Nothing else. A recommendation is *never* auto-
+// applied — it requires human approval AND the promotion gate passing.
+// ─────────────────────────────────────────────────────────────────────────────
+export const selfRecommendations = sqliteTable("self_recommendations", {
+  id: text("id").primaryKey(),
+  // category of the proposed change — drives routing + triage
+  category: text("category").notNull(), // architecture|prompt|config|data|schema|engine
+  // human risk label (supports triage in the operator UI)
+  risk: text("risk").notNull().default("low"), // low|medium|high
+  title: text("title").notNull(),
+  rationale: text("rationale").notNull(),
+  // free-text description of the proposed change
+  proposedChange: text("proposed_change").notNull(),
+  // optional unified-diff patch. When present + approved, githubBridge may open a draft PR.
+  proposedDiff: text("proposed_diff"),
+  // JSON array of evidence IDs (hypothesisId, insightId, logId, metricId, engineRunId...)
+  evidence: text("evidence").notNull().default("[]"),
+  status: text("status").notNull().default("proposed"), // proposed|approved|rejected|applied|reverted
+  author: text("author").notNull().default("agent"),    // agent|operator
+  sourceHypothesisId: text("source_hypothesis_id"),
+  sourceInsightId: text("source_insight_id"),
+  prUrl: text("pr_url"),
+  patchPath: text("patch_path"),
+  createdAt: text("created_at").notNull().default(new Date().toISOString()),
+  approvedAt: text("approved_at"),
+  rejectedAt: text("rejected_at"),
+  appliedAt: text("applied_at"),
+  revertedAt: text("reverted_at"),
+  approvedBy: text("approved_by"),
+  reviewNote: text("review_note"),
+});
+
+export const insertSelfRecommendationSchema = createInsertSchema(selfRecommendations).omit({
+  createdAt: true,
+  approvedAt: true,
+  rejectedAt: true,
+  appliedAt: true,
+  revertedAt: true,
+});
+export type InsertSelfRecommendation = z.infer<typeof insertSelfRecommendationSchema>;
+export type SelfRecommendation = typeof selfRecommendations.$inferSelect;
+
+export const SELF_REC_CATEGORIES = [
+  "architecture",
+  "prompt",
+  "config",
+  "data",
+  "schema",
+  "engine",
+] as const;
+export type SelfRecCategory = (typeof SELF_REC_CATEGORIES)[number];
+
+export const SELF_REC_RISKS = ["low", "medium", "high"] as const;
+export type SelfRecRisk = (typeof SELF_REC_RISKS)[number];
+
+export const SELF_REC_STATUSES = [
+  "proposed",
+  "approved",
+  "rejected",
+  "applied",
+  "reverted",
+] as const;
+export type SelfRecStatus = (typeof SELF_REC_STATUSES)[number];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Engine runs (spec §3)
+//
+// Every scheduler-triggered engine execution writes a row here so the self-
+// evolution loop can ingest runtime evidence (duration, outcome,
+// insights_emitted). Propose-only downstream: these rows are observability,
+// not commitments.
+// ─────────────────────────────────────────────────────────────────────────────
+export const engineRuns = sqliteTable("engine_runs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  engine: text("engine").notNull(),       // id matching engineScheduleConfig key
+  startedAt: text("started_at").notNull(),
+  finishedAt: text("finished_at"),
+  durationMs: integer("duration_ms"),
+  status: text("status").notNull().default("running"), // running|ok|error|skipped
+  error: text("error"),
+  insightsEmitted: integer("insights_emitted").notNull().default(0),
+  metricsJson: text("metrics_json").notNull().default("{}"),
+  triggeredBy: text("triggered_by").notNull().default("scheduler"), // scheduler|operator|boot|self
+});
+
+export const insertEngineRunSchema = createInsertSchema(engineRuns).omit({ id: true });
+export type InsertEngineRun = z.infer<typeof insertEngineRunSchema>;
+export type EngineRun = typeof engineRuns.$inferSelect;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// JSON → Drizzle migration (spec §4)
+//
+// Five tables covering the highest-churn runtime JSON stores. Each row is a
+// `blob` JSON payload keyed by store id. This preserves the existing shapes
+// exactly while making the data queryable and transactional. Repositories
+// in server/repositories/* wrap these tables.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** memory_knowledge.json — single row (id='main'); blob = KnowledgeMemory */
+export const memoryKnowledge = sqliteTable("memory_knowledge", {
+  id: text("id").primaryKey(),
+  blob: text("blob").notNull(),
+  updatedAt: text("updated_at").notNull().default(new Date().toISOString()),
+});
+export type MemoryKnowledgeRow = typeof memoryKnowledge.$inferSelect;
+
+/** memory_soul.json — single row (id='current'); blob = SoulMemory */
+export const memorySoul = sqliteTable("memory_soul", {
+  id: text("id").primaryKey(),
+  blob: text("blob").notNull(),
+  updatedAt: text("updated_at").notNull().default(new Date().toISOString()),
+});
+export type MemorySoulRow = typeof memorySoul.$inferSelect;
+
+/** memory_soul_history — soul snapshots (id = version); blob = SoulMemory */
+export const memorySoulHistory = sqliteTable("memory_soul_history", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  version: integer("version").notNull(),
+  blob: text("blob").notNull(),
+  capturedAt: text("captured_at").notNull().default(new Date().toISOString()),
+  reason: text("reason"),
+});
+export type MemorySoulHistoryRow = typeof memorySoulHistory.$inferSelect;
+
+/** agent_goals.json — single row (id='main'); blob = { goals: AgentGoal[] } */
+export const agentGoals = sqliteTable("agent_goals", {
+  id: text("id").primaryKey(),
+  blob: text("blob").notNull(),
+  updatedAt: text("updated_at").notNull().default(new Date().toISOString()),
+});
+export type AgentGoalsRow = typeof agentGoals.$inferSelect;
+
+/** competencyProfile.json — single row (id='main'); blob = CompetencyProfile */
+export const competencyProfileTable = sqliteTable("competency_profile", {
+  id: text("id").primaryKey(),
+  blob: text("blob").notNull(),
+  updatedAt: text("updated_at").notNull().default(new Date().toISOString()),
+});
+export type CompetencyProfileRow = typeof competencyProfileTable.$inferSelect;
+
+/** research_lab.json — single row (id='main'); blob = ResearchLab */
+export const researchLab = sqliteTable("research_lab", {
+  id: text("id").primaryKey(),
+  blob: text("blob").notNull(),
+  updatedAt: text("updated_at").notNull().default(new Date().toISOString()),
+});
+export type ResearchLabRow = typeof researchLab.$inferSelect;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Engine events (spec §6)
+//
+// Structured observability rows written by server/observability/structuredLog.
+// Unlike engine_runs (one row per scheduled run), this is append-only and
+// holds every structured event the system emits — including events that
+// originate OUTSIDE a wrapped run (route handlers, boot, operator actions).
+// ─────────────────────────────────────────────────────────────────────────────
+export const engineEvents = sqliteTable("engine_events", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  engine: text("engine").notNull(),
+  event: text("event").notNull(),
+  level: text("level").notNull().default("info"), // info|warn|error|debug
+  data: text("data").notNull().default("{}"),     // JSON-serialized payload
+  runId: integer("run_id"),                        // optional FK to engine_runs.id
+  emittedAt: text("emitted_at").notNull().default(new Date().toISOString()),
+});
+export type EngineEvent = typeof engineEvents.$inferSelect;
+
+export const ENGINE_EVENT_LEVELS = ["info", "warn", "error", "debug"] as const;
+export type EngineEventLevel = (typeof ENGINE_EVENT_LEVELS)[number];

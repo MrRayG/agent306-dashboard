@@ -196,7 +196,26 @@ const DEFAULT_PERFORMANCE: PerformanceMemory = {
 };
 
 // ── Load / Save helpers ───────────────────────────────────────
+// The KB + soul stores have DB repositories (spec §4). When USE_DB_STATE is
+// enabled we read-through the DB first and fall back to JSON / defaults on
+// miss. Writes go to BOTH the DB and the JSON file so rollback is possible
+// until an operator deletes the `.bak` files.
+
+import { readMemoryKnowledgeBlob, writeMemoryKnowledgeBlob } from "./repositories/memoryRepository.js";
+import { readSoulBlob, writeSoulBlob } from "./repositories/soulRepository.js";
+import { isDbStateEnabled } from "./repositories/jsonFallback.js";
+
 function load<T>(file: string, defaults: T): T {
+  // Repository read-through for known files
+  if (isDbStateEnabled()) {
+    if (file === KNOWLEDGE_FILE) {
+      const blob = readMemoryKnowledgeBlob<Partial<T>>();
+      if (blob != null) return { ...defaults, ...blob };
+    } else if (file === SOUL_FILE) {
+      const blob = readSoulBlob<Partial<T>>();
+      if (blob != null) return { ...defaults, ...blob };
+    }
+  }
   try {
     if (fs.existsSync(file)) {
       return { ...defaults, ...JSON.parse(fs.readFileSync(file, "utf8")) };
@@ -211,6 +230,18 @@ function save(file: string, data: unknown): void {
     const isCompactTarget = file === KNOWLEDGE_FILE || file.includes("embedding");
     fs.writeFileSync(file, isCompactTarget ? JSON.stringify(data) : JSON.stringify(data, null, 2));
   } catch {}
+  // Dual-write to the DB repository so read-through stays consistent.
+  if (isDbStateEnabled()) {
+    try {
+      if (file === KNOWLEDGE_FILE) {
+        writeMemoryKnowledgeBlob(data);
+      } else if (file === SOUL_FILE) {
+        writeSoulBlob(data as any, "save()");
+      }
+    } catch (e: any) {
+      console.warn("[MemoryEngine] DB dual-write failed:", e?.message);
+    }
+  }
 }
 
 // ── In-memory state ───────────────────────────────────────────

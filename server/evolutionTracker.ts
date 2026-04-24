@@ -20,6 +20,7 @@ import { getMemoryState } from "./memoryEngine.js";
 import { getExplorationState } from "./explorationEngine.js";
 import { getBreakthroughCount } from "./breakthroughDetector.js";
 import { getAspirations } from "./researchEngine.js";
+import { proposeRecommendation } from "./selfRecommendationEngine.js";
 
 const EVOLUTION_FILE = dataPath("evolution_history.json");
 
@@ -247,6 +248,24 @@ export function takeSnapshot(additionalData?: {
   saveHistory(history);
 
   console.log(`[Evolution] Snapshot taken — score: ${overallScore}/100, knowledge: ${knowledgeTotal}, mood: ${mood}`);
+
+  // Self-evolution hook (spec §1): flag significant regressions so operators
+  // can act on them via the SelfRecommendation queue, not via silent state.
+  try {
+    if (previous && snapshot.overallScore < previous.overallScore - 10) {
+      proposeRecommendation({
+        category: "engine",
+        risk: "medium",
+        title: `Overall score regression: ${previous.overallScore} → ${snapshot.overallScore}`,
+        rationale: `evolutionTracker daily snapshot dropped >10 points (mood=${mood}, growthVector=${growthVector}).`,
+        proposedChange: `Investigate recent engine changes and engagement trends. Consider rolling back the most recent applied recommendations if correlated.`,
+        evidence: [`snapshot:${snapshot.date}`, `prev:${previous.date}`],
+      });
+    }
+  } catch (e: any) {
+    console.warn("[Evolution] self-recommendation hook failed:", e?.message);
+  }
+
   return snapshot;
 }
 

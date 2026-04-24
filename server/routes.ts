@@ -1,6 +1,13 @@
 import type { Express } from "express";
 import type { Server } from "http";
 import { registerTelegramRoutes } from "./telegramBot.js";
+import { registerSelfRecommendationRoutes } from "./selfRecommendationRouter.js";
+import { registerDiagnosticsRoutes } from "./routers/diagnosticsRouter.js";
+import { registerAgentRoutes } from "./routers/agentRouter.js";
+import { registerKnowledgeRoutes } from "./routers/knowledgeRouter.js";
+import { registerHypothesisRoutes } from "./routers/hypothesisRouter.js";
+import { registerContentRoutes } from "./routers/contentRouter.js";
+import { registerEpisodeRoutes } from "./routers/episodeRouter.js";
 import { dataPath } from "./dataPaths.js";
 import { storage } from "./storage";
 import { insertEpisodeSchema, insertRenderJobSchema, insertSignalSchema } from "@shared/schema";
@@ -217,6 +224,15 @@ try {
   console.error("[Agent306] TwitterApi init failed:", e.message, "— creating dummy client");
   xClient = new TwitterApi({ appKey: "x", appSecret: "x", accessToken: "x", accessSecret: "x" });
   xWrite = xClient.readWrite;
+}
+
+/**
+ * Expose X clients to the scheduler registry. The registry runs after
+ * routes have registered, so these references are always populated by the
+ * time a scheduled engine asks for them.
+ */
+export function getXClients(): { xClient: TwitterApi; xWrite: any } {
+  return { xClient, xWrite };
 }
 
 // fetchOnChainAPI removed
@@ -518,8 +534,11 @@ function nextETHour(hour: number, minute = 0): Date {
   return target;
 }
 
-// Schedule daily dispatch at 8am ET
-function scheduleDailyNewsDispatch() {
+// Schedule daily dispatch at 8am ET — the scheduler registry (spec §3) now
+// invokes this via `startDailyNewsDispatch` from server/index.ts after
+// routes have registered. Kept as an exported helper so the registry can
+// reference it without duplicating the cadence logic.
+export function startDailyNewsDispatch() {
   const now = new Date();
   const target = nextETHour(8);
   const msUntil = target.getTime() - now.getTime();
@@ -529,7 +548,6 @@ function scheduleDailyNewsDispatch() {
     setInterval(postDailyNewsDispatch, 24 * 60 * 60 * 1000);
   }, msUntil);
 }
-scheduleDailyNewsDispatch();
 
 // ── Burn Receipt Engine removed (removed) ────────────────────────────────────────
 
@@ -542,17 +560,9 @@ scheduleDailyNewsDispatch();
 
 // Weekly Leaderboard Scheduler removed (removed)
 
-// ── Following Sync ────────────────
-// Syncs on boot, then every 6 hours.
-setTimeout(() => {
-  scheduleFollowingSync(xClient);
-}, 10_000);
-
-// ── Engagement Tracker — scores every post 1h after posting ──────────────────
-// Agent 306 reads her own engagement data before every episode. Gets smarter.
-setTimeout(() => {
-  startEngagementTracker(xClient);
-}, 15_000);
+// Scheduled engines moved to server/scheduler/registry.ts (spec §3).
+// startScheduler() is called from server/index.ts after registerRoutes().
+// Following Sync + Engagement Tracker are registered there.
 
 
 // ── PODCAST KNOWLEDGE v2 — Seed on boot ──────────────────────────────
@@ -580,104 +590,11 @@ const podcastKnowledge = [
 for (const k of podcastKnowledge) addKnowledge(k);
 
 
-// -- RESEARCH GAP SCANNER -- Daily 4am ET (1hr after exploration) -----------
-// Agent 306 reads her knowledge base, finds gaps, queues research topics.
-// MrRayG reviews and approves in Agent HQ -> Research Queue.
-{
-  const grokKey = LLM_API_KEY;
-  if (grokKey) scheduleResearchScan(grokKey);
-}
-
-// ── REPLY ENGINE — Hourly ────────────────────────────────────────
-// AUTO-REPLY DISABLED — Agent 306 only posts original content, no replies.
-// All reply functions also check X_REPLIES_ENABLED env var as a safety net.
-// To re-enable: set X_REPLIES_ENABLED=true and uncomment the lines below.
-// initReplyWatcher(xClient);
-// setTimeout(() => {
-//   scheduleMidnightReplies(xWrite);
-// }, 30_000);
-
-// ── ACADEMY — Tue/Thu/Sat 10am ET ──────────────────────────────
-setTimeout(() => {
-  scheduleAcademy(xWrite);
-}, 35_000);
-
-// ── SIGNAL BRIEF — Mon/Wed/Fri 12pm ET ────────────────────────────────────
-setTimeout(() => {
-  scheduleSignalBrief(xWrite, LLM_API_KEY);
-}, 40_000);
-
-// ── AGENT 306 DEEP READ — Every Monday 5:00 PM ET ─────────────────────────
-setTimeout(() => {
-  scheduleWeeklyArticle(xWrite, LLM_API_KEY);
-}, 45_000);
-
-// ── DAILY CYCLE — 6am ET (10:00 UTC) daily ──────────────────────────────────
-setTimeout(() => {
-  scheduleDailyCycle();
-}, 50_000);
-
-// ── EXPLORATION ENGINE — autonomous web scanning ──────────────────────────────
-setTimeout(() => {
-  const pplxKey = process.env.PERPLEXITY_API_KEY;
-  if (pplxKey) {
-    scheduleExploration(LLM_API_KEY, pplxKey);
-    console.log("[Scheduler] Exploration engine scheduled");
-  } else {
-    console.warn("[Scheduler] Exploration engine skipped — no PERPLEXITY_API_KEY");
-  }
-}, 60_000);
-
-// ── KG CONNECTION SCAN BATCH — nightly 5am ET (PR Q) ─────────────────────
-// Backfills knowledge-graph connections via xAI Batches API. Cheaper than
-// the synchronous findConnections() path (~50% off) and runs in the
-// background. Triple-gated: requires KG_BATCH_CRON_ENABLED +
-// KG_CONNECTION_SCAN_BATCH + BATCH_API_ENABLED — all default OFF, so
-// scheduling is a no-op until an operator turns it on.
-setTimeout(() => {
-  if (isKgBatchCronEnabled()) {
-    scheduleKgConnectionScanBatch();
-    console.log("[Scheduler] KG connection-scan batch scheduled");
-  } else {
-    console.log(
-      "[Scheduler] KG connection-scan batch skipped — set KG_BATCH_CRON_ENABLED=true to enable",
-    );
-  }
-}, 65_000);
-
-// ── EMBEDDING SYNC — sync KB embeddings on boot (background, non-fatal) ─────
-setTimeout(async () => {
-  try {
-    const status = getEmbeddingStatus();
-    console.log(`[Embeddings] Boot sync: ${status.embeddedEntries}/${status.totalEntries} entries have embeddings`);
-    if (status.embeddedEntries < status.totalEntries * 0.8) {
-      console.log("[Embeddings] Starting full embedding sync...");
-      const result = await syncEmbeddings();
-      console.log(`[Embeddings] Sync complete: ${result.synced} synced, ${result.cached} cached`);
-    } else {
-      console.log("[Embeddings] Coverage sufficient — skipping full sync");
-    }
-  } catch (e: any) {
-    console.warn("[Embeddings] Boot sync failed (non-fatal):", e.message);
-  }
-}, 30_000);
-
-// ── DREAM ENGINE — seed initial dreams on startup ────────────────────────────
-setTimeout(() => {
-  seedDreams();
-}, 55_000);
-
-// ── X POST SCHEDULER — independent from daily research cycle ────────────────
-// 4 posting slots/day: 8am, 12pm, 5pm, 9pm ET
-// Podcast promos fire immediately (event-driven)
-setTimeout(() => {
-  startXPostScheduler(xWrite);
-}, 65_000);
-
-// ── FARCASTER POST SCHEDULER — parallel to X scheduler ────────────────────────
-setTimeout(() => {
-  startFarcasterPostScheduler();
-}, 70_000);
+// Remaining schedulers (academy, signal brief, deep read, daily cycle,
+// exploration, KG batch, embedding sync, dream seed, X / Farcaster post
+// schedulers, research gap scanner, reply engine) moved to
+// server/scheduler/registry.ts (spec §3). See startScheduler() in
+// server/index.ts.
 
 // ── Editorial Summary Cache ─────────────────────────────────────────────────────
 // Decoupled from signal collection — generated async, served instantly from cache.
@@ -796,6 +713,20 @@ export function registerRoutes(httpServer: Server, app: Express) {
     if (sent === DASHBOARD_SECRET) return next();
     return res.status(401).json({ error: "Unauthorized" });
   }
+
+  // ── Sub-router mounts (spec §2) ──────────────────────────────────────────
+  // Each sub-router is a thin factory: `register(app, deps)`. Seven routers
+  // in total; today the diagnostics + self-recommendation + agent routers
+  // carry migrated routes, and the remaining four are skeletons that future
+  // PRs will populate. URLs + response shapes are preserved for every
+  // migrated route — this is a refactor, not a behavior change.
+  registerSelfRecommendationRoutes(app, { requireDashAuth });
+  registerDiagnosticsRoutes(app, { requireDashAuth });
+  registerAgentRoutes(app, { requireDashAuth });
+  registerKnowledgeRoutes(app, { requireDashAuth });
+  registerHypothesisRoutes(app, { requireDashAuth });
+  registerContentRoutes(app, { requireDashAuth });
+  registerEpisodeRoutes(app, { requireDashAuth });
 
   // OAuth 2.0 routes removed — using OAuth 1.0a only (tokens don't expire).
   // To reauthorize: regenerate tokens in X Developer Portal + update Railway env vars.
@@ -4834,10 +4765,7 @@ needsHelp: true only when you genuinely need his direction or information`,
 
   // ── Metacognition (The Mind) ────────────────────────────────────────────
 
-  app.get("/api/metacognition", (_req, res) => {
-    try { res.json(getMetacognitionState()); }
-    catch (e: any) { res.status(500).json({ error: "Failed to fetch metacognition state" }); }
-  });
+  // /api/metacognition extracted to diagnosticsRouter.
 
     // ── Seed demo data ────────────────────────────────────────────────
   // ── Knowledge Tiers ──────────────────────────────────────────────────────
@@ -5203,70 +5131,13 @@ needsHelp: true only when you genuinely need his direction or information`,
     }
   });
 
-  // ── 306Eval Benchmark ─────────────────────────────────────────────────
-  app.get("/api/eval", (_req, res) => {
-    try {
-      const data = get306EvalResults();
-      res.json(data);
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.get("/api/eval/history", (_req, res) => {
-    try {
-      const history = get306EvalHistory();
-      res.json({ history });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+  // ── 306Eval, Cycle Context, Sessions, Novelty Gate, Wisdom ────────────
+  // Extracted to server/routers/diagnosticsRouter.ts (spec §2). Registered
+  // earlier in this function. URLs + response shapes preserved.
 
   // ── Breaking News (disabled) ───────────────────────────────────────────
   app.get("/api/breaking-news", (_req, res) => {
     res.json({ events: [], count: 0, disabled: true });
-  });
-
-  // ── Cycle Context & Session Memory ─────────────────────────────────────
-  app.get("/api/cycle/context", (_req, res) => {
-    try {
-      const context = getCycleContext();
-      res.json({ active: isCycleActive(), context });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.get("/api/sessions", (_req, res) => {
-    try {
-      const sessions = getAllSessions();
-      const expired = closeExpiredSessions();
-      res.json({ activeSessions: getActiveSessionCount(), expiredClosed: expired, sessions });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  // ── Novelty Gate ────────────────────────────────────────────────
-  app.get("/api/novelty-gate", (_req, res) => {
-    try {
-      const log = getNoveltyGateLog(50);
-      res.json({ checks: log, total: log.length });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  // ── Wisdom Engine ───────────────────────────────────────────────
-  app.get("/api/wisdom", (_req, res) => {
-    try {
-      const history = getWisdomPullHistory().slice(0, 10);
-      const usage = getWisdomApiUsage();
-      const activeCount = getActiveWisdomCount();
-      res.json({ recentPulls: history, wisdomEntryCount: activeCount, apiUsage: usage });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
   });
 
   // ── Goal Engine ─────────────────────────────────────────────────

@@ -15,6 +15,7 @@ import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./ll
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 import { postChatCompletions } from "./llmCall.js";
+import { proposeRecommendation } from "./selfRecommendationEngine.js";
 import { waitForBatchComplete } from "./xaiBatchEngine.js";
 import {
   shouldUseReflectionBatch,
@@ -344,6 +345,22 @@ export function addStyleRule(rule: string, sourceId: string): void {
 
   styleRules.lastUpdated = new Date().toISOString();
   saveStyleRules(styleRules);
+
+  // Self-evolution hook (spec §1): surface the new style rule as a proposed
+  // prompt-layer change. Propose-only — operator decides whether to keep.
+  try {
+    proposeRecommendation({
+      category: "prompt",
+      risk: "low",
+      title: `Style rule: ${rule.slice(0, 80)}`,
+      rationale: `reflectionEngine observed a pattern worth codifying (source=${sourceId}).`,
+      proposedChange: `Keep/discard style rule ${newRule.id}: "${rule}". Runs via getStyleRulesContext() in the next prompt assembly.`,
+      evidence: [`styleRule:${newRule.id}`, `source:${sourceId}`],
+      sourceInsightId: sourceId,
+    });
+  } catch (e: any) {
+    console.warn("[Reflection] self-recommendation hook failed:", e?.message);
+  }
 }
 
 export function deleteStyleRule(ruleId: string): boolean {

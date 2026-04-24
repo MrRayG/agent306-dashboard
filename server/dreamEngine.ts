@@ -23,6 +23,7 @@ import { getResearchLab, addTopic } from "./researchEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 import { postChatCompletions } from "./llmCall.js";
+import { proposeRecommendation } from "./selfRecommendationEngine.js";
 const GROK_URL = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
 
@@ -642,6 +643,23 @@ Rules:
   savePlans(plansState);
 
   console.log(`[DreamEngine] Improvement plan: ${plan.actions.length} actions, ${plan.patternsIdentified.length} patterns`);
+
+  // Self-evolution hook (spec §1): every improvement plan becomes a
+  // recommendation the operator can approve. Propose-only — none of these
+  // actions are automatically applied.
+  try {
+    proposeRecommendation({
+      category: "engine",
+      risk: "low",
+      title: `Improvement plan for week of ${plan.weekOf}`,
+      rationale: `dreamEngine identified patterns: ${plan.patternsIdentified.slice(0, 3).join("; ")}`,
+      proposedChange: plan.actions.map((a, i) => `${i + 1}. [${a.area}] ${a.action}`).join("\n"),
+      evidence: [`plan:${plan.id}`],
+    });
+  } catch (e: any) {
+    console.warn("[DreamEngine] self-recommendation hook failed:", e?.message);
+  }
+
   return plan;
 }
 

@@ -1,0 +1,43 @@
+{
+  "name": "modelRouter",
+  "version": 1,
+  "description": "Golden cases for server/modelRouter.ts — locks the task → tier → provider invariants that the router relies on. A self-change that collapses tiers or demotes frontier-factual into a budget tier fails the gate.",
+  "cases": [
+    {
+      "id": "normalize-underscore-to-hyphen",
+      "fn": "modelRouter.normalizeTaskName",
+      "args": ["conversation_insight"],
+      "expect": { "kind": "equals", "value": "conversation-insight" }
+    },
+    {
+      "id": "normalize-uppercase",
+      "fn": "modelRouter.normalizeTaskName",
+      "args": ["ACADEMY"],
+      "expect": { "kind": "equals", "value": "academy" }
+    },
+    {
+      "id": "reflection-resolves-to-routine-tier",
+      "fn": "modelRouter.resolveTask",
+      "args": ["reflection"],
+      "expect": { "kind": "objectContains", "value": { "tier": "routine" } }
+    },
+    {
+      "id": "hypothesis-eval-frontier-factual",
+      "fn": "modelRouter.resolveTask",
+      "args": ["hypothesis-evaluation"],
+      "expect": { "kind": "objectContains", "value": { "tier": "frontier-factual" } }
+    },
+    {
+      "id": "signal-brief-live-social-xai-direct",
+      "fn": "modelRouter.resolveTask",
+      "args": ["signal-brief"],
+      "expect": { "kind": "objectContains", "value": { "provider": "xai-direct", "tier": "live-social" } }
+    },
+    {
+      "id": "unknown-task-falls-back-to-standard-voice",
+      "fn": "modelRouter.resolveTask",
+      "args": ["_totally_unknown_"],
+      "expect": { "kind": "objectContains", "value": { "tier": "standard-voice" } }
+    }
+  ]
+}

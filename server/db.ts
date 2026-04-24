@@ -48,4 +48,96 @@ sqlite.exec(`
     raw_data TEXT DEFAULT '{}',
     captured_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS self_recommendations (
+    id TEXT PRIMARY KEY,
+    category TEXT NOT NULL,
+    risk TEXT NOT NULL DEFAULT 'low',
+    title TEXT NOT NULL,
+    rationale TEXT NOT NULL,
+    proposed_change TEXT NOT NULL,
+    proposed_diff TEXT,
+    evidence TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'proposed',
+    author TEXT NOT NULL DEFAULT 'agent',
+    source_hypothesis_id TEXT,
+    source_insight_id TEXT,
+    pr_url TEXT,
+    patch_path TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    approved_at TEXT,
+    rejected_at TEXT,
+    applied_at TEXT,
+    reverted_at TEXT,
+    approved_by TEXT,
+    review_note TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_self_rec_status ON self_recommendations(status);
+  CREATE INDEX IF NOT EXISTS idx_self_rec_created_at ON self_recommendations(created_at);
+
+  CREATE TABLE IF NOT EXISTS engine_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    engine TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    duration_ms INTEGER,
+    status TEXT NOT NULL DEFAULT 'running',
+    error TEXT,
+    insights_emitted INTEGER NOT NULL DEFAULT 0,
+    metrics_json TEXT NOT NULL DEFAULT '{}',
+    triggered_by TEXT NOT NULL DEFAULT 'scheduler'
+  );
+  CREATE INDEX IF NOT EXISTS idx_engine_runs_engine ON engine_runs(engine);
+  CREATE INDEX IF NOT EXISTS idx_engine_runs_started_at ON engine_runs(started_at);
+
+  CREATE TABLE IF NOT EXISTS memory_knowledge (
+    id TEXT PRIMARY KEY,
+    blob TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS memory_soul (
+    id TEXT PRIMARY KEY,
+    blob TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS memory_soul_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    version INTEGER NOT NULL,
+    blob TEXT NOT NULL,
+    captured_at TEXT NOT NULL DEFAULT (datetime('now')),
+    reason TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS agent_goals (
+    id TEXT PRIMARY KEY,
+    blob TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS competency_profile (
+    id TEXT PRIMARY KEY,
+    blob TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS research_lab (
+    id TEXT PRIMARY KEY,
+    blob TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS engine_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    engine TEXT NOT NULL,
+    event TEXT NOT NULL,
+    level TEXT NOT NULL DEFAULT 'info',
+    data TEXT NOT NULL DEFAULT '{}',
+    run_id INTEGER,
+    emitted_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_engine_events_engine ON engine_events(engine);
+  CREATE INDEX IF NOT EXISTS idx_engine_events_level  ON engine_events(level);
+  CREATE INDEX IF NOT EXISTS idx_engine_events_run_id ON engine_events(run_id);
 `);
