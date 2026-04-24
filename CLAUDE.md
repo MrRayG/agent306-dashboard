@@ -34,6 +34,17 @@ Follow all instructions and conventions found in these files. They define the pr
 - NEVER approve PRs — you are not authorized to approve pull requests. Only create and comment on PRs.
 - Complete the task autonomously and create the PR(s) when done.
 
+## Self-Evolution Policy
+
+Agent 306 may propose; humans approve. See `docs/SELF_EVOLUTION.md` for the
+full loop (hooks → recommendations → promotion gate → draft PR). Nothing
+on that path auto-applies a change. If you are modifying
+`server/selfRecommendationEngine.ts`, `server/eval/promotionGate.ts`, or
+any of the hooks, preserve the propose-only invariant: `applyRecommendation`
+may transition a row to `status: applied` ONLY when `status === 'approved'`
+AND `canPromote(rec).ok`. There is no bypass path. Grep for the single
+write site before you change anything here.
+
 ## Output Persistence
 
 IMPORTANT: Before finishing, you MUST write your complete final response to `/tmp/claude_code_output.md` using the Write tool. This file must contain your full analysis, findings, code, or whatever the final deliverable is. This is a hard requirement — do not skip it.
