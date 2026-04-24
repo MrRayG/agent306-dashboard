@@ -17,6 +17,7 @@
 
 import type { TwitterApi } from "twitter-api-v2";
 import { runWrapped } from "./engineRunWrapper.js";
+import { logEvent } from "../observability/structuredLog.js";
 import { scheduleFollowingSync } from "../followingSync.js";
 import { startEngagementTracker } from "../engagementTracker.js";
 import { scheduleResearchScan } from "../researchScanner.js";
@@ -186,8 +187,14 @@ export function startScheduler(deps: SchedulerDeps): void {
   const skipped = SCHEDULED_ENGINES.filter(e => !active.includes(e));
 
   console.log(`[Scheduler] starting ${active.length} engines; skipping ${skipped.length} (missing deps)`);
+  logEvent({
+    engine: "scheduler",
+    event: "scheduler_start",
+    data: { active: active.map(e => e.id), skipped: skipped.map(e => e.id) },
+  });
   for (const skip of skipped) {
     console.log(`[Scheduler]   SKIP ${skip.id} (${skip.label}) — dependency check failed`);
+    logEvent({ engine: skip.id, event: "engine_skipped", level: "warn", data: { reason: "dep_check_failed" } });
   }
 
   for (const engine of active) {
@@ -195,8 +202,10 @@ export function startScheduler(deps: SchedulerDeps): void {
       try {
         engine.start(deps);
         console.log(`[Scheduler]   START ${engine.id} (${engine.label})`);
+        logEvent({ engine: engine.id, event: "engine_started", data: { label: engine.label, staggerMs: engine.staggerMs } });
       } catch (e: any) {
         console.warn(`[Scheduler]   FAILED to start ${engine.id}:`, e?.message);
+        logEvent({ engine: engine.id, event: "engine_start_failed", level: "error", data: { error: e?.message ?? String(e) } });
       }
     };
     if (engine.staggerMs <= 0) {

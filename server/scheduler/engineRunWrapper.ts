@@ -17,6 +17,7 @@
 import { db } from "../db.js";
 import { engineRuns, selfRecommendations } from "@shared/schema";
 import { count } from "drizzle-orm";
+import { logEvent } from "../observability/structuredLog.js";
 
 export type EngineOutcome = "ok" | "error" | "skipped";
 
@@ -102,11 +103,16 @@ export async function runWrapped<T>(
     console.warn(`[EngineRunWrapper] failed to finalize row ${runId}:`, e?.message);
   }
 
-  // Structured log (commit 6 will replace this console.log with a proper
-  // structured logger; the semantic payload matches).
-  console.log(
-    `[ENGINE_RUN] engine=${engine} run_id=${runId} status=${outcome} duration_ms=${durationMs} insights_emitted=${insightsEmitted}${errorStr ? ` error=${errorStr.slice(0, 120)}` : ""}`,
-  );
+  // Structured log (commit 6): structured event alongside the existing
+  // console.log for grep compatibility. The DB row on engine_events mirrors
+  // the engine_runs finalization payload, keyed by run_id for correlation.
+  logEvent({
+    engine,
+    event: outcome === "error" ? "engine_run_error" : "engine_run_complete",
+    level: outcome === "error" ? "error" : "info",
+    data: { durationMs, insightsEmitted, error: errorStr, triggeredBy },
+    runId,
+  });
 
   return { runId, outcome, durationMs, insightsEmitted, error: errorStr, data };
 }

@@ -127,4 +127,17 @@ sqlite.exec(`
     blob TEXT NOT NULL,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS engine_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    engine TEXT NOT NULL,
+    event TEXT NOT NULL,
+    level TEXT NOT NULL DEFAULT 'info',
+    data TEXT NOT NULL DEFAULT '{}',
+    run_id INTEGER,
+    emitted_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_engine_events_engine ON engine_events(engine);
+  CREATE INDEX IF NOT EXISTS idx_engine_events_level  ON engine_events(level);
+  CREATE INDEX IF NOT EXISTS idx_engine_events_run_id ON engine_events(run_id);
 `);

@@ -202,3 +202,25 @@ export const researchLab = sqliteTable("research_lab", {
   updatedAt: text("updated_at").notNull().default(new Date().toISOString()),
 });
 export type ResearchLabRow = typeof researchLab.$inferSelect;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Engine events (spec §6)
+//
+// Structured observability rows written by server/observability/structuredLog.
+// Unlike engine_runs (one row per scheduled run), this is append-only and
+// holds every structured event the system emits — including events that
+// originate OUTSIDE a wrapped run (route handlers, boot, operator actions).
+// ─────────────────────────────────────────────────────────────────────────────
+export const engineEvents = sqliteTable("engine_events", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  engine: text("engine").notNull(),
+  event: text("event").notNull(),
+  level: text("level").notNull().default("info"), // info|warn|error|debug
+  data: text("data").notNull().default("{}"),     // JSON-serialized payload
+  runId: integer("run_id"),                        // optional FK to engine_runs.id
+  emittedAt: text("emitted_at").notNull().default(new Date().toISOString()),
+});
+export type EngineEvent = typeof engineEvents.$inferSelect;
+
+export const ENGINE_EVENT_LEVELS = ["info", "warn", "error", "debug"] as const;
+export type EngineEventLevel = (typeof ENGINE_EVENT_LEVELS)[number];
