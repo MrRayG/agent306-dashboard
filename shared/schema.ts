@@ -118,3 +118,28 @@ export const SELF_REC_STATUSES = [
   "reverted",
 ] as const;
 export type SelfRecStatus = (typeof SELF_REC_STATUSES)[number];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Engine runs (spec §3)
+//
+// Every scheduler-triggered engine execution writes a row here so the self-
+// evolution loop can ingest runtime evidence (duration, outcome,
+// insights_emitted). Propose-only downstream: these rows are observability,
+// not commitments.
+// ─────────────────────────────────────────────────────────────────────────────
+export const engineRuns = sqliteTable("engine_runs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  engine: text("engine").notNull(),       // id matching engineScheduleConfig key
+  startedAt: text("started_at").notNull(),
+  finishedAt: text("finished_at"),
+  durationMs: integer("duration_ms"),
+  status: text("status").notNull().default("running"), // running|ok|error|skipped
+  error: text("error"),
+  insightsEmitted: integer("insights_emitted").notNull().default(0),
+  metricsJson: text("metrics_json").notNull().default("{}"),
+  triggeredBy: text("triggered_by").notNull().default("scheduler"), // scheduler|operator|boot|self
+});
+
+export const insertEngineRunSchema = createInsertSchema(engineRuns).omit({ id: true });
+export type InsertEngineRun = z.infer<typeof insertEngineRunSchema>;
+export type EngineRun = typeof engineRuns.$inferSelect;

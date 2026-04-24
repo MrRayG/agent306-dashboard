@@ -74,4 +74,19 @@ sqlite.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_self_rec_status ON self_recommendations(status);
   CREATE INDEX IF NOT EXISTS idx_self_rec_created_at ON self_recommendations(created_at);
+
+  CREATE TABLE IF NOT EXISTS engine_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    engine TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    duration_ms INTEGER,
+    status TEXT NOT NULL DEFAULT 'running',
+    error TEXT,
+    insights_emitted INTEGER NOT NULL DEFAULT 0,
+    metrics_json TEXT NOT NULL DEFAULT '{}',
+    triggered_by TEXT NOT NULL DEFAULT 'scheduler'
+  );
+  CREATE INDEX IF NOT EXISTS idx_engine_runs_engine ON engine_runs(engine);
+  CREATE INDEX IF NOT EXISTS idx_engine_runs_started_at ON engine_runs(started_at);
 `);
