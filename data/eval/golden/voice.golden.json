@@ -1,0 +1,43 @@
+{
+  "name": "voice",
+  "version": 1,
+  "description": "Golden cases for server/voice.ts — ensures the soul/voice/writing-rules blocks stay stable across self-change proposals. These are shape/identity assertions, not exact-content assertions, so voice text can evolve but the structure cannot silently drop a section.",
+  "cases": [
+    {
+      "id": "voice-has-soul",
+      "fn": "voice.buildVoiceBlock",
+      "args": [],
+      "expect": {
+        "kind": "contains",
+        "value": "Agent 306"
+      }
+    },
+    {
+      "id": "voice-block-non-empty",
+      "fn": "voice.buildVoiceBlock",
+      "args": [],
+      "expect": {
+        "kind": "minLength",
+        "value": 200
+      }
+    },
+    {
+      "id": "hashtag-rules-forbid-hashtags",
+      "fn": "voice.HASHTAG_RULES",
+      "args": [],
+      "expect": {
+        "kind": "contains",
+        "value": "No hashtags"
+      }
+    },
+    {
+      "id": "full-voice-context-assembled",
+      "fn": "voice.buildFullVoiceContext",
+      "args": [],
+      "expect": {
+        "kind": "minLength",
+        "value": 500
+      }
+    }
+  ]
+}

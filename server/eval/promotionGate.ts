@@ -2,16 +2,30 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * 306 — PROMOTION GATE (spec §5)
  *
- * Placeholder implementation landed with commit 1 so `selfRecommendationEngine`
- * has something to import. Commit 5 expands this to run golden sets against
- * current engines and compute a pass/fail report.
+ * The ONLY path to `status: applied` on a SelfRecommendation. Called by
+ * selfRecommendationEngine.applyRecommendation before any transition.
  *
- * The contract is: `canPromote(rec)` is the ONLY path to `status: applied`.
- * Every code path that could apply a change calls this function.
+ * Contract:
+ *   canPromote(rec) → { ok, failures, ranSets }
+ *
+ * Policy:
+ *   - rec MUST be in status='approved' (enforced here AND at the engine).
+ *   - For any non-low risk (`medium` or `high`) change, the regression
+ *     runner must pass every golden case. Promotion is blocked on any
+ *     failing case and the failing case ids come back in `failures`.
+ *   - For `low` risk changes, golden sets are still RUN and logged so the
+ *     agent has telemetry, but a non-fatal failure does not block. This
+ *     mirrors the audit's "propose-only" posture: the friction should be
+ *     proportional to the risk.
+ *
+ * Anything fails-closed: if loading golden sets throws, we treat that as
+ * a gate failure rather than passing silently. That way a corrupted
+ * golden file surfaces as a visible block rather than an invisible allow.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import type { SelfRecommendation } from "@shared/schema";
+import { runAllGoldenSets } from "./regressionRunner.js";
 
 export interface PromotionResult {
   ok: boolean;
@@ -19,23 +33,54 @@ export interface PromotionResult {
   ranSets: string[];
 }
 
-/**
- * Default gate: rejects anything `high` risk unless golden sets have been run
- * and passed. Commit 5 wires the actual golden-set runner. Until then, the
- * gate pass criterion is: status === 'approved' (enforced by caller) AND risk
- * is not 'high'.
- */
 export async function canPromote(rec: SelfRecommendation): Promise<PromotionResult> {
   const failures: string[] = [];
   const ranSets: string[] = [];
+
   if (rec.status !== "approved") {
     failures.push(`recommendation not approved (status=${rec.status})`);
+    return { ok: false, failures, ranSets };
   }
-  if (rec.risk === "high") {
-    // High-risk changes require an explicit golden-set pass once commit 5 lands.
-    // Until then, they are gated out to preserve the propose-only policy.
-    failures.push("high-risk changes require golden-set regression sign-off");
+
+  let report: ReturnType<typeof runAllGoldenSets>;
+  try {
+    report = runAllGoldenSets();
+  } catch (e: any) {
+    failures.push(`regression runner threw: ${e?.message ?? e}`);
+    return { ok: false, failures, ranSets };
   }
-  // commit 5 will push regression-runner results onto ranSets/failures.
+
+  for (const s of report.sets) ranSets.push(`${s.name}@v${s.version}`);
+  const failed = report.results.filter(r => !r.ok);
+
+  if (rec.risk === "low") {
+    // low risk: log failures but don't block. Propose-only policy still
+    // applies — only an *approved* rec that passes *its own* operator sign-
+    // off reaches this path in the first place.
+    if (failed.length > 0) {
+      console.warn(
+        `[PromotionGate] ${failed.length} golden-case failures on low-risk rec ${rec.id} — not blocking`,
+      );
+      for (const f of failed.slice(0, 5)) {
+        console.warn(`  ${f.setName}.${f.caseId}: ${f.reason ?? "fail"}`);
+      }
+    }
+    return { ok: true, failures, ranSets };
+  }
+
+  // medium / high: block on any failure.
+  for (const f of failed) {
+    failures.push(`${f.setName}.${f.caseId}: ${f.reason ?? "fail"}`);
+  }
+
+  // High-risk recs additionally require an explicit operator override
+  // (PROMOTION_GATE_ALLOW_HIGH_RISK=true). Even passing golden sets is not
+  // sufficient — schema/architecture changes deserve a second deliberate
+  // signal. This preserves the propose-only posture for the riskiest
+  // category and matches the documented self-change policy.
+  if (rec.risk === "high" && (process.env.PROMOTION_GATE_ALLOW_HIGH_RISK ?? "false").toLowerCase() !== "true") {
+    failures.push("high-risk changes require PROMOTION_GATE_ALLOW_HIGH_RISK=true as an explicit operator override");
+  }
+
   return { ok: failures.length === 0, failures, ranSets };
 }
