@@ -176,3 +176,123 @@ describe("verifyClaims — deterministic checks", () => {
     );
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// TWO-LANE STANDARD TESTS (added 2026-04-25, v2 incident)
+// ─────────────────────────────────────────────────────────────────────────
+
+describe("verifyClaims — Lane A (source-attributed)", () => {
+  it("UNSUPPORTED: attributed sentence with claim not in source → lane='source-attributed'", async () => {
+    const sourceText =
+      "DHS officials walked House lawmakers through a demonstration of AI chatbot jailbreaks. " +
+      "No specific legislative proposal was introduced at the hearing.";
+    // Same 60% attributed-statistic pattern, explicit lane assertion this time.
+    const draftText =
+      "According to Politico, jailbreak success rates have climbed from under 10% in 2023 " +
+      "models to over 60% on certain 2026 releases.";
+
+    const verdict = await verifyClaims({
+      draftText,
+      sourceText,
+      sourceUrl:   "https://www.politico.com/news/",
+      sourceTitle: "House lawmakers get a chilling demo of jailbroken AI",
+      skipLLM:     true,
+    });
+
+    assert.equal(verdict.ok, false);
+    const laneA = verdict.unsupportedClaims.find(c => c.lane === "source-attributed");
+    assert.ok(laneA, `expected a source-attributed flag. Got: ${JSON.stringify(verdict.unsupportedClaims)}`);
+  });
+});
+
+describe("verifyClaims — Lane B (external facts)", () => {
+  it("UNSUPPORTED: external stat without a citation link → lane='external-uncited'", async () => {
+    const sourceText =
+      "DHS officials walked House lawmakers through a demonstration of AI chatbot jailbreaks.";
+    const draftText =
+      "This fits the broader arc of AI adoption. AI has reached 54.6% adoption in the US in " +
+      "just three years.";
+
+    const verdict = await verifyClaims({
+      draftText,
+      sourceText,
+      sourceUrl:   "https://www.politico.com/news/",
+      sourceTitle: "House lawmakers get a chilling demo of jailbroken AI",
+      skipLLM:     true,
+    });
+
+    const laneB = verdict.unsupportedClaims.find(c => c.lane === "external-uncited");
+    assert.ok(laneB, `expected an external-uncited flag. Got: ${JSON.stringify(verdict.unsupportedClaims)}`);
+    // Lane B alone does not flip ok=false — only Lane A / embedded do.
+    assert.equal(verdict.ok, true, "Lane B uncited alone is a warning, not a hard fail");
+  });
+
+  it("SUPPORTED: external stat with a markdown citation link → counted in externalCitedCount", async () => {
+    const sourceText =
+      "DHS officials walked House lawmakers through a demonstration of AI chatbot jailbreaks.";
+    const draftText =
+      "This fits the broader arc of AI adoption. AI has reached 54.6% adoption in the US " +
+      "in just three years, per [Stanford HAI's 2025 AI Index](https://hai.stanford.edu/ai-index/2025-ai-index-report).";
+
+    const verdict = await verifyClaims({
+      draftText,
+      sourceText,
+      sourceUrl:   "https://www.politico.com/news/",
+      sourceTitle: "House lawmakers get a chilling demo of jailbroken AI",
+      skipLLM:     true,
+    });
+
+    assert.equal(verdict.ok, true);
+    assert.ok(
+      verdict.externalCitedCount >= 1,
+      `expected an externalCitedCount >= 1, got ${verdict.externalCitedCount}`,
+    );
+    const laneB = verdict.unsupportedClaims.find(c => c.lane === "external-uncited");
+    assert.equal(laneB, undefined, "cited Lane B fact should not be flagged");
+  });
+});
+
+describe("verifyClaims — NCITE pattern (embedded-external-in-attribution)", () => {
+  it("HARD FAIL: Lane B fact dressed as Lane A reporting → lane='embedded-external-in-attribution'", async () => {
+    // Actual Politico article extract — the source says "research from NCITE"
+    // and does NOT describe it as a DHS Center of Excellence or mention funding.
+    const sourceText = [
+      "Researchers from NCITE presented findings on how bad actors can override ",
+      "safeguards in popular AI tools. The demonstration, run for members of the ",
+      "House counterterrorism subcommittee, showed how jailbreaks could coax a ",
+      "commercial chatbot into returning step-by-step instructions for dangerous ",
+      "activities. Lawmakers from both parties asked follow-up questions. No ",
+      "specific legislative proposal was introduced at the hearing.",
+    ].join("");
+
+    // The literal failing sentence from 2026-04-24. The "Center of Excellence"
+    // + funding detail is factually true about NCITE but is NOT in the article
+    // — so presenting it inside "presented findings" is an embedded external
+    // fact dressed as reporting.
+    const draftText =
+      "researchers from NCITE, a DHS Center of Excellence that receives funding from the " +
+      "Department of Homeland Security, presented findings on how bad actors can override " +
+      "safeguards in popular AI tools.";
+
+    const verdict = await verifyClaims({
+      draftText,
+      sourceText,
+      sourceUrl:   "https://www.politico.com/news/",
+      sourceTitle: "House lawmakers get a chilling demo of jailbroken AI",
+      skipLLM:     true,
+    });
+
+    assert.equal(verdict.ok, false, "NCITE pattern must hard-fail");
+    const embedded = verdict.unsupportedClaims.find(
+      c => c.lane === "embedded-external-in-attribution",
+    );
+    assert.ok(
+      embedded,
+      `expected embedded-external-in-attribution flag. Got: ${JSON.stringify(verdict.unsupportedClaims)}`,
+    );
+    assert.ok(
+      embedded!.sentence.toLowerCase().includes("ncite"),
+      "flagged sentence should be the NCITE appositive sentence",
+    );
+  });
+});
