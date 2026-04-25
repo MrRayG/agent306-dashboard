@@ -13,6 +13,7 @@ import { enforceShowTag } from "./contentTypes.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 import { postChatCompletions } from "./llmCall.js";
+import { verifyClaims } from "./claimVerifier.js";
 export async function generateNewsContent(): Promise<string | null> {
   const grokKey = LLM_API_KEY;
   if (!grokKey) return null;
@@ -98,6 +99,28 @@ Return JSON: {"post": "..."}`
 
     if (!postText) {
       postText = `[306 NEWS] ${dayLabel}\n\nETH ${ethPrice} (${ethChange}) · BTC ${btcPrice} (${btcChange}). AI and Web3 continue to converge.`;
+    }
+
+    // Post-write claim verification. The live market numbers are the only
+    // upstream source here — if the LLM invents outlet attributions or
+    // fabricates quotes, we reject rather than publish.
+    const newsSource = [
+      `Date: ${dayLabel}`,
+      `ETH: ${ethPrice || ""} (${ethChange || ""})`,
+      `BTC: ${btcPrice || ""} (${btcChange || ""})`,
+    ].join("\n");
+    const verdict = await verifyClaims({
+      draftText:   postText,
+      sourceText:  newsSource,
+      sourceUrl:   "",
+      sourceTitle: `306 NEWS ${dayLabel}`,
+    });
+    if (!verdict.ok) {
+      console.error(`[ClaimVerifier] REJECTED 306 NEWS draft: ${verdict.unsupportedClaims.length} unsupported claims`);
+      for (const c of verdict.unsupportedClaims) {
+        console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);
+      }
+      return null;
     }
 
     return enforceShowTag(postText, "news");

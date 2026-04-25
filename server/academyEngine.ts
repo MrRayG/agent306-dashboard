@@ -33,6 +33,7 @@ import { buildVoiceBlock } from "./voice.js";
 import { getEvolutionContext } from "./soulEvolution.js";
 
 import { postChatCompletions } from "./llmCall.js";
+import { verifyClaims } from "./claimVerifier.js";
 const GROK_URL = LLM_BASE_URL;
 const ACADEMY_STATE_FILE = dataPath("academy_state.json");
 const TRACKING_START = new Date("2026-03-08T00:00:00Z");
@@ -396,6 +397,23 @@ export async function postAcademyEpisode(xWrite: any): Promise<void> {
   try {
     const postText = generated.post.trim();
     if (postText.length > 10) {
+      // Academy content is internal-synthesis — no external URL source. The
+      // verifier will pass posts that don't attribute claims (no "according
+      // to X") and reject any that fabricate attributions without a source.
+      const verdict = await verifyClaims({
+        draftText:   postText,
+        sourceText:  "",
+        sourceUrl:   "",
+        sourceTitle: `Academy: ${topic.concept}`,
+      });
+      if (!verdict.ok) {
+        console.error(`[ClaimVerifier] REJECTED academy EP${state.totalEpisodes + 1}: ${verdict.unsupportedClaims.length} unsupported claims`);
+        for (const c of verdict.unsupportedClaims) {
+          console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);
+        }
+        releasePost("academy");
+        return;
+      }
       queueXPost(postText, "academy", 6);
       console.log(`[Academy] EP${state.totalEpisodes + 1} queued for X posting`);
       tweetUrl = "queued"; // placeholder — actual URL assigned when scheduler posts

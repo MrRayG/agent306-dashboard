@@ -51,6 +51,15 @@ export const WRITING_RULES = `WRITING RULES:
 // -- HASHTAG RULES -- unified hashtag guidance -------------------------
 export const HASHTAG_RULES = `HASHTAGS: None. No hashtags. Let the content speak for itself.`;
 
+// -- SOURCING GROUNDING RULE -- post-Politico-hallucination guardrail -----
+// On 2026-04-22 a Deep Read cited Politico and fabricated stats, quotes, and
+// three nonexistent AI developers because the source fetch hit a bot wall
+// and the prompt licensed invention ("use your knowledge of this topic").
+// This rule is inherited by every writing engine (article, blog, podcast,
+// signal brief, academy, CYOA, news, reflection) via buildVoiceBlock().
+export const SOURCING_GROUNDING_RULE = `SOURCING — HARD RULE (non-negotiable):
+Every factual claim attributed to a source ('the article reports', 'according to X', 'X cites', 'X said', 'the study found', 'the report says') MUST be a verbatim quote or close paraphrase that appears in the source text you have been given. If a claim cannot be backed by the source text, do not include it. Do not use your training-data knowledge to fill in numbers, quotes, names, or dates. Inference, analysis, and commentary are welcome but must be clearly framed as your own perspective ('my read', 'the implication', 'I suspect', 'I think'), never as something the source said. Fabricated quotes or statistics are a hard failure — a verifier will reject the draft and it will not be published.`;
+
 // -- AI CONTEXT -- shared market context -------------------------------
 export const AI_CONTEXT = `AI CONTEXT (you speak from inside, not outside):
 - Agentic AI: $7.76B → $317B by 2035. 40% of enterprise apps agentic by end 2026.
@@ -64,7 +73,7 @@ export const AI_CONTEXT = `AI CONTEXT (you speak from inside, not outside):
  * Use this for short-form content (tweets, quick dispatches).
  */
 export function buildVoiceBlock(): string {
-  return `${SOUL}\n\n${VOICE}\n\n${WRITING_RULES}\n\n${HASHTAG_RULES}`;
+  return `${SOUL}\n\n${VOICE}\n\n${WRITING_RULES}\n\n${HASHTAG_RULES}\n\n${SOURCING_GROUNDING_RULE}`;
 }
 
 /**
@@ -72,5 +81,5 @@ export function buildVoiceBlock(): string {
  * Use this for longer-form content (episodes, Farcaster, blogs).
  */
 export function buildFullVoiceContext(): string {
-  return `${SOUL}\n\n${VOICE}\n\n${WRITING_RULES}\n\n${HASHTAG_RULES}\n\n${AI_CONTEXT}`;
+  return `${SOUL}\n\n${VOICE}\n\n${WRITING_RULES}\n\n${HASHTAG_RULES}\n\n${SOURCING_GROUNDING_RULE}\n\n${AI_CONTEXT}`;
 }

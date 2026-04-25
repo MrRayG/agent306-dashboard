@@ -28,6 +28,7 @@ import { enforcePostFormat } from "./postFormatGuard.js";
 import { enforceShowTag } from "./contentTypes.js";
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
 import { postChatCompletions } from "./llmCall.js";
+import { verifyClaims } from "./claimVerifier.js";
 const CYOA_STATE_FILE = dataPath("cyoa_state.json");
 
 export type CYOATrigger =
@@ -51,7 +52,7 @@ export interface CYOAEpisode {
   id: string;
   trigger: CYOATrigger;
   tokenId?: number;
-  status: "draft" | "posted" | "revealed" | "resolved";
+  status: "draft" | "posted" | "revealed" | "resolved" | "quarantined";
 
   // Tweet 1 — The Hook
   hookScene: string;          // 2-3 cinematic lines setting the scene
@@ -207,10 +208,19 @@ YOU MUST RETURN EXACTLY THIS JSON — use these exact field names, nothing else:
     const parsed = safeParseLLMJson(raw, "CYOA.episode");
     if (!parsed) throw new Error(`No JSON object found in response: ${raw.slice(0, 100)}`);
 
+    // Post-write claim verification — upstream `userContext` is the source.
+    const cyoaDraft = `${parsed.hookScene ?? ""}\n\n${parsed.canonVerdict ?? ""}\n\n${parsed.loreHint ?? ""}`;
+    const verdict = await verifyClaims({
+      draftText:   cyoaDraft,
+      sourceText:  userContext ?? "",
+      sourceUrl:   "",
+      sourceTitle: `CYOA:${trigger}`,
+    });
+
     const episode: CYOAEpisode = {
       id: `cyoa_${Date.now()}`,
       trigger,
-      status: "draft",
+      status: verdict.ok ? "draft" : "quarantined",
       hookScene: parsed.hookScene,
       hookQuestion: parsed.hookQuestion ?? "What happens next?",
       options: parsed.options,
@@ -220,6 +230,13 @@ YOU MUST RETURN EXACTLY THIS JSON — use these exact field names, nothing else:
       createdAt: new Date().toISOString(),
       tweetIds: [],
     };
+
+    if (!verdict.ok) {
+      console.error(`[ClaimVerifier] REJECTED CYOA ${episode.id}: ${verdict.unsupportedClaims.length} unsupported claims`);
+      for (const c of verdict.unsupportedClaims) {
+        console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);
+      }
+    }
 
     cyoaState.episodes.unshift(episode);
     if (cyoaState.episodes.length > 50) cyoaState.episodes = cyoaState.episodes.slice(0, 50);
@@ -296,6 +313,11 @@ export async function postCYOAHook(
 ): Promise<string | null> {
   const episode = cyoaState.episodes.find(e => e.id === episodeId);
   if (!episode) { console.error("[CYOA] Episode not found:", episodeId); return null; }
+
+  if (episode.status === "quarantined") {
+    console.error(`[CYOA] Refusing to post quarantined episode ${episodeId} — unsupported claims detected at generation time`);
+    return null;
+  }
 
   if (!requestPost(`cyoa_${episodeId}`)) {
     console.log("[CYOA] Post coordinator rejected — cooldown active");

@@ -25,6 +25,7 @@ import { getModel } from "./modelRouter.js";
 import { buildVoiceBlock } from "./voice.js";
 import { getSoulContext, getSentimentArc, getKnowledgeContext } from "./memoryEngine.js";
 import { enforcePostFormat } from "./postFormatGuard.js";
+import { verifyClaims } from "./claimVerifier.js";
 
 // ── Optional internal-state readers ──────────────────────────────────────────
 // These are imported lazily so the engine still works even if individual
@@ -191,6 +192,24 @@ export async function generateReflectionPostContent(): Promise<ReflectionPostRes
 
   if (!formatted || formatted.length < 40) {
     throw new Error("Reflection post failed format enforcement");
+  }
+
+  // Post-write claim verification. Reflection posts are introspective —
+  // they shouldn't attribute claims to any external source. If they do
+  // without a source, the verifier rejects them. See server/claimVerifier.ts.
+  const internalSource = contextBlocks.join("\n\n");
+  const verdict = await verifyClaims({
+    draftText:   formatted,
+    sourceText:  internalSource,
+    sourceUrl:   "",
+    sourceTitle: "Reflection (internal context)",
+  });
+  if (!verdict.ok) {
+    console.error(`[ClaimVerifier] REJECTED reflection draft: ${verdict.unsupportedClaims.length} unsupported claims`);
+    for (const c of verdict.unsupportedClaims) {
+      console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);
+    }
+    throw new Error(`Reflection quarantined — ${verdict.unsupportedClaims.length} unsupported claims attributed to a source`);
   }
 
   return {
