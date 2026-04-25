@@ -6,7 +6,10 @@
  * This file re-exports those and adds per-content-type / per-format guidance.
  */
 
-import { SOUL, VOICE, WRITING_RULES, HASHTAG_RULES, AI_CONTEXT, buildVoiceBlock } from "./voice.js";
+import { SOUL, VOICE, WRITING_RULES, HASHTAG_RULES, AI_CONTEXT, SOURCING_GROUNDING_RULE, buildVoiceBlock } from "./voice.js";
+
+// Re-export so engines that import from voiceInstructions can pick up the rule.
+export { SOURCING_GROUNDING_RULE } from "./voice.js";
 
 // Re-export the unified SOUL as IDENTITY_MODES for backward compat
 export const IDENTITY_MODES = SOUL;
