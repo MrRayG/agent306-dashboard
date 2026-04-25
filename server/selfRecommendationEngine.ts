@@ -123,6 +123,21 @@ export function getRecommendation(id: string): SelfRecommendation | undefined {
   return db.select().from(selfRecommendations).where(eq(selfRecommendations.id, id)).get();
 }
 
+/**
+ * Lookup helper used by bridges (SelfEvolution → SelfRec, GoalEngine → SelfRec)
+ * to keep proposal emission idempotent. If a recommendation already references
+ * the given insight, callers should skip rather than create a duplicate row.
+ */
+export function findRecommendationBySourceInsightId(
+  insightId: string,
+): SelfRecommendation | undefined {
+  return db
+    .select()
+    .from(selfRecommendations)
+    .where(eq(selfRecommendations.sourceInsightId, insightId))
+    .get();
+}
+
 export function approveRecommendation(id: string, operator: string, note?: string): SelfRecommendation {
   const existing = getRecommendation(id);
   if (!existing) throw new Error(`Recommendation ${id} not found`);

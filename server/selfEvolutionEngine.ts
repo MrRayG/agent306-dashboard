@@ -24,6 +24,8 @@ import {
 } from "./competencyFramework.js";
 import { recordProposedInsights, expireStaleProposed, failStaleOpen, computeLedgerStats } from "./insightLedger.js";
 import { runVerificationPass, buildMetaReflectionContext } from "./selfChangeVerifier.js";
+import { proposeRecommendation, findRecommendationBySourceInsightId } from "./selfRecommendationEngine.js";
+import { logEvent } from "./observability/structuredLog.js";
 
 import { postChatCompletions } from "./llmCall.js";
 // -- Types ------------------------------------------------------------------
@@ -512,6 +514,15 @@ Rules:
       console.warn("[SelfEvolution] Ledger update failed (non-fatal):", e.message);
     }
 
+    // ── BRIDGE: SelfEvolution → SelfRecommendation ────────────────────────────
+    //
+    // Without this, insightLedger fills up but selfRecommendations stays empty,
+    // and the operator review surface (/self-recs) never sees daily learnings.
+    // Each new insight becomes a `proposed` SelfRec (propose-only — the
+    // promotion gate still guards apply()). Idempotent: if a rec already
+    // references this insight id, we skip.
+    bridgeInsightsToSelfRecs(newInsights);
+
     console.log(`[SelfEvolution] Reflection complete — ${newInsights.length} insight(s) from cycle #${store.totalCycles}`);
     return newInsights;
   } catch (e: any) {
@@ -528,4 +539,75 @@ export function getEvolutionInsights(): EvolutionInsightStore {
 
 export function getEvolutionDiffs(): EvolutionDiff[] {
   return loadDiffs();
+}
+
+// -- SelfEvolution → SelfRecommendation bridge -----------------------------
+//
+// Converts each freshly-emitted EvolutionInsight into a `proposed`
+// SelfRecommendation row. Existing rows for the same insight id are
+// skipped, so this is safe to call on every cycle.
+//
+// Note: this does NOT bypass the promotion gate. Rows land in `proposed`
+// status and require operator approval + promotionGate.canPromote() before
+// anything is applied. See docs/SELF_EVOLUTION.md.
+export function bridgeInsightsToSelfRecs(
+  insights: EvolutionInsight[],
+): { created: number; skippedDuplicate: number; errors: number } {
+  let created = 0;
+  let skippedDuplicate = 0;
+  let errors = 0;
+
+  for (const insight of insights) {
+    try {
+      if (findRecommendationBySourceInsightId(insight.id)) {
+        skippedDuplicate++;
+        continue;
+      }
+      const title = `Self-evolution insight: ${insight.insight.slice(0, 60)}`;
+      const proposedChange = insight.actionItem
+        ? insight.actionItem
+        : insight.selfApplication || insight.insight;
+      proposeRecommendation({
+        category: "engine",
+        risk: "low",
+        title,
+        rationale: insight.insight,
+        proposedChange,
+        evidence: [insight.sourceId, insight.id],
+        author: "agent",
+        sourceInsightId: insight.id,
+      });
+      created++;
+    } catch (e: any) {
+      errors++;
+      console.warn(
+        `[SelfEvolution] bridgeInsightsToSelfRecs(${insight.id}) failed:`,
+        e?.message ?? e,
+      );
+    }
+  }
+
+  try {
+    logEvent({
+      engine: "selfEvolution",
+      event: "self-rec-bridge",
+      level: errors > 0 ? "warn" : "info",
+      data: {
+        inputCount: insights.length,
+        created,
+        skippedDuplicate,
+        errors,
+      },
+    });
+  } catch {
+    // observability is best-effort
+  }
+
+  if (insights.length > 0) {
+    console.log(
+      `[SelfEvolution] SelfRec bridge — created=${created}, skipped-duplicate=${skippedDuplicate}, errors=${errors}`,
+    );
+  }
+
+  return { created, skippedDuplicate, errors };
 }
