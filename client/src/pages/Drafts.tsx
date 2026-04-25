@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { VerifierReport, type VerifierReportData } from "@/components/VerifierReport";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -19,6 +20,9 @@ interface ArticleDraft {
   sourceUrl?: string;
   sourceTitle?: string;
   imageUrl?: string;
+  status?: "ok" | "quarantined" | "needs_revision";
+  quarantineReason?: string;
+  verifierReport?: VerifierReportData;
 }
 
 interface TweetDraft {
@@ -295,6 +299,7 @@ function DraftCard({
   const wordCount = isArticleLongForm
     ? (draft.content.trim().split(/\s+/).filter(Boolean).length)
     : null;
+  const articleVerifierReport = draft.source === "article" ? draft.verifierReport : undefined;
 
   return (
     <div style={{
@@ -345,6 +350,14 @@ function DraftCard({
           Episode: <a href={episodeUrl} target="_blank" rel="noopener noreferrer" style={{ color: accent }}>{episodeUrl}</a>
         </div>
       )}
+
+      {draft.source === "article" && draft.status === "needs_revision" && (
+        <div style={{ color: "#f87171", fontFamily: "monospace", fontSize: "12px", marginBottom: "8px" }}>
+          NEEDS REVISION{draft.quarantineReason ? ` — ${draft.quarantineReason}` : ""}
+        </div>
+      )}
+
+      {articleVerifierReport && <VerifierReport report={articleVerifierReport} compact />}
 
       {/* Content preview */}
       <div style={{

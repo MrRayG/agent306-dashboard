@@ -406,7 +406,7 @@ export async function postAcademyEpisode(xWrite: any): Promise<void> {
         sourceUrl:   "",
         sourceTitle: `Academy: ${topic.concept}`,
       });
-      if (!verdict.ok) {
+      if (verdict.severity === "HARD_FAIL") {
         console.error(`[ClaimVerifier] REJECTED academy EP${state.totalEpisodes + 1}: ${verdict.unsupportedClaims.length} unsupported claims`);
         for (const c of verdict.unsupportedClaims) {
           console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);

@@ -24,7 +24,7 @@ import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { buildExemplarBlock } from "./voiceExemplars.js";
 
 import { postChatCompletions } from "./llmCall.js";
-import { verifyClaims } from "./claimVerifier.js";
+import { verifyClaims, type VerifierReport } from "./claimVerifier.js";
 const BLOG_FILE = dataPath("blog_state.json");
 
 // ── Types ─────────────────────────────────────────────────────
@@ -48,6 +48,7 @@ export interface BlogPost {
   updatedAt: string;
   wordCount: number;
   readingTimeMin: number;
+  verifierReport?: VerifierReport;
 }
 
 interface BlogState {
@@ -201,6 +202,7 @@ export function createBlogPost(opts: {
   sourceId?: string;
   tags?: string[];
   status?: BlogStatus;
+  verifierReport?: VerifierReport;
 }): BlogPost {
   const state = loadState();
   const now = new Date().toISOString();
@@ -221,6 +223,7 @@ export function createBlogPost(opts: {
     updatedAt: now,
     wordCount: wc,
     readingTimeMin: Math.max(1, Math.round(wc / 200)),
+    verifierReport: opts.verifierReport,
   };
 
   state.posts.unshift(post);
@@ -470,7 +473,7 @@ Write the full blog post following the blog structure template. Hook the reader 
       sourceTitle: opts.topic,
     });
 
-    if (!verdict.ok) {
+    if (verdict.severity === "HARD_FAIL") {
       const draft = createBlogPost({
         title: parsed.title,
         content: parsed.content,
@@ -478,6 +481,7 @@ Write the full blog post following the blog structure template. Hook the reader 
         sourceId: opts.sourceId,
         tags: [...(parsed.tags ?? []), "claim-verifier-quarantine"],
         status: "quarantined",
+        verifierReport: verdict.verifierReport,
       });
       console.error(`[ClaimVerifier] REJECTED draft ${draft.id}: ${verdict.unsupportedClaims.length} unsupported claims`);
       for (const c of verdict.unsupportedClaims) {

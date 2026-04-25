@@ -304,7 +304,7 @@ Return JSON:
       sourceUrl:   "",
       sourceTitle: `306 SIGNAL Brief #${briefNumber}`,
     });
-    if (!verdict.ok) {
+    if (verdict.severity === "HARD_FAIL") {
       console.error(`[ClaimVerifier] REJECTED signal brief #${briefNumber}: ${verdict.unsupportedClaims.length} unsupported claims`);
       for (const c of verdict.unsupportedClaims) {
         console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);

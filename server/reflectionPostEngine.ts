@@ -204,7 +204,7 @@ export async function generateReflectionPostContent(): Promise<ReflectionPostRes
     sourceUrl:   "",
     sourceTitle: "Reflection (internal context)",
   });
-  if (!verdict.ok) {
+  if (verdict.severity === "HARD_FAIL") {
     console.error(`[ClaimVerifier] REJECTED reflection draft: ${verdict.unsupportedClaims.length} unsupported claims`);
     for (const c of verdict.unsupportedClaims) {
       console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);

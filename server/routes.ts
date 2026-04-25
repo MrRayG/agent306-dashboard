@@ -46,7 +46,7 @@ import {
   buildLongFormArticlePost,
 } from "./articleEngine.js";
 import { fetchSourceContent } from "./sourceFetcher.js";
-import { verifyClaims } from "./claimVerifier.js";
+import { verifyClaims, type VerifierReport } from "./claimVerifier.js";
 import {
   saveTweetDraft,
   listTweetDrafts,
@@ -2897,8 +2897,9 @@ export function registerRoutes(httpServer: Server, app: Express) {
       // cron path's behavior. See server/claimVerifier.ts and the
       // 2026-04-24 v2 Politico incident notes.
       let unsupportedClaims: Array<{ sentence: string; lane: string; reason: string }> | undefined;
+      let verifierReport: VerifierReport | undefined;
       let quarantineReason: string | undefined;
-      let status: "ok" | "quarantined" = "ok";
+      let status: "ok" | "quarantined" | "needs_revision" = "ok";
       try {
         const fetched = await fetchSourceContent(String(sourceUrl));
         if (fetched.ok && fetched.text.length >= 500) {
@@ -2908,9 +2909,10 @@ export function registerRoutes(httpServer: Server, app: Express) {
             sourceUrl:   String(sourceUrl),
             sourceTitle: String(sourceTitle),
           });
-          if (!verdict.ok) {
-            status = "quarantined";
-            unsupportedClaims = verdict.unsupportedClaims;
+          verifierReport = verdict.verifierReport;
+          if (verdict.severity === "HARD_FAIL") {
+            status = "needs_revision";
+            unsupportedClaims = verdict.unsupportedClaims as any;
             quarantineReason = `${verdict.unsupportedClaims.length} unsupported claims`;
             console.warn(
               `[ArticleDrafts] QUARANTINED incoming draft: ${quarantineReason}`,
@@ -2923,14 +2925,14 @@ export function registerRoutes(httpServer: Server, app: Express) {
           console.warn(
             `[ArticleDrafts] Source unavailable for ${sourceUrl} (${fetched.reason ?? "unknown"}); saving draft without verification but marking as quarantined.`,
           );
-          status = "quarantined";
+          status = "needs_revision";
           quarantineReason = `source unavailable: ${fetched.reason ?? "unknown"}`;
         }
       } catch (verifyErr: any) {
         console.warn(
           `[ArticleDrafts] Verification step threw: ${verifyErr?.message ?? verifyErr} — saving as quarantined to be safe`,
         );
-        status = "quarantined";
+        status = "needs_revision";
         quarantineReason = `verifier error: ${verifyErr?.message ?? verifyErr}`;
       }
 
@@ -2944,8 +2946,12 @@ export function registerRoutes(httpServer: Server, app: Express) {
         status,
         quarantineReason,
         unsupportedClaims: unsupportedClaims as any,
+        verifierReport,
       });
-      res.json({ ok: true, draft });
+      if (verifierReport?.severity === "HARD_FAIL") {
+        return res.status(422).json({ ok: false, draft, verifierReport });
+      }
+      res.json({ ok: true, draft, verifierReport });
     } catch (e: any) {
       res.status(500).json({ error: e.message ?? "Failed to save draft" });
     }
@@ -3040,6 +3046,10 @@ export function registerRoutes(httpServer: Server, app: Express) {
         sourceUrl:   d.sourceUrl,
         sourceTitle: d.sourceTitle,
         imageUrl:    d.imageUrl,
+        status:      d.status,
+        quarantineReason: d.quarantineReason,
+        unsupportedClaims: d.unsupportedClaims,
+        verifierReport: d.verifierReport,
       }));
       const tweetDrafts = listTweetDrafts().map(d => ({
         source:      "tweet" as const,

@@ -35,7 +35,7 @@ import { enforcePostFormat, looksLikeRawJsonPayload } from "./postFormatGuard.js
 
 import { postChatCompletions, postXSearchResponses } from "./llmCall.js";
 import { fetchSourceContent } from "./sourceFetcher.js";
-import { verifyClaims } from "./claimVerifier.js";
+import { verifyClaims, type VerifierReport } from "./claimVerifier.js";
 const GROK_CHAT_API     = LLM_BASE_URL;
 const GROK_RESPONSE_API = LLM_RESPONSE_URL;
 const ARTICLE_STATE_FILE = dataPath("article_state.json");
@@ -76,9 +76,10 @@ export interface ArticleDraft {
    * found claims that were NOT supported by the source text. The draft is
    * stored for audit/review but MUST NOT be auto-posted. Human review only.
    */
-  status?:      "ok" | "quarantined";
+  status?:      "ok" | "quarantined" | "needs_revision";
   quarantineReason?: string;
-  unsupportedClaims?: Array<{ sentence: string; reason: string }>;
+  unsupportedClaims?: Array<{ sentence: string; lane?: string; reason: string }>;
+  verifierReport?: VerifierReport;
 }
 
 interface ArticleState {
@@ -716,12 +717,13 @@ export async function runWeeklyDeepRead(
         sourceUrl:   articleInfo.url,
         sourceTitle: articleInfo.title,
         imageUrl,
-        status:      verdict.ok ? "ok" : "quarantined",
-        quarantineReason: verdict.ok ? undefined : `${verdict.unsupportedClaims.length} unsupported claims`,
-        unsupportedClaims: verdict.ok ? undefined : verdict.unsupportedClaims,
+        status:      verdict.severity === "HARD_FAIL" ? "needs_revision" : "ok",
+        quarantineReason: verdict.severity === "HARD_FAIL" ? `${verdict.unsupportedClaims.length} unsupported claims` : undefined,
+        unsupportedClaims: verdict.severity === "HARD_FAIL" ? verdict.unsupportedClaims : undefined,
+        verifierReport: verdict.verifierReport,
       });
 
-      if (!verdict.ok) {
+      if (verdict.severity === "HARD_FAIL") {
         console.error(`[ClaimVerifier] REJECTED draft ${draft.draftId}: ${verdict.unsupportedClaims.length} unsupported claims`);
         for (const c of verdict.unsupportedClaims) {
           console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);
@@ -757,9 +759,10 @@ export function saveDeepReadDraft(input: {
   sourceUrl:   string;
   sourceTitle: string;
   imageUrl?:   string;
-  status?:     "ok" | "quarantined";
+  status?:     "ok" | "quarantined" | "needs_revision";
   quarantineReason?: string;
-  unsupportedClaims?: Array<{ sentence: string; reason: string }>;
+  unsupportedClaims?: Array<{ sentence: string; lane?: string; reason: string }>;
+  verifierReport?: VerifierReport;
 }): ArticleDraft {
   const state = loadState();
   if (!state.drafts) state.drafts = [];
@@ -776,6 +779,7 @@ export function saveDeepReadDraft(input: {
     status:      input.status ?? "ok",
     quarantineReason: input.quarantineReason,
     unsupportedClaims: input.unsupportedClaims,
+    verifierReport: input.verifierReport,
   };
   state.drafts.unshift(draft);
   // Keep a rolling window of 20 drafts so a long-forgotten backlog never
@@ -960,14 +964,17 @@ export interface PreviewDeepReadResult {
   /** Verification metadata — lets the dashboard warn before save. */
   verification: {
     ok:                   boolean;
+    severity:             "PASS" | "SOFT_WARN" | "HARD_FAIL";
     unsupportedClaims:    Array<{
       sentence: string;
-      lane:     "source-attributed" | "external-uncited" | "embedded-external-in-attribution";
+      lane:     "source-attributed" | "external-uncited" | "embedded-external-in-attribution" | "retracted";
       reason:   string;
     }>;
     supportedCount:       number;
     externalCitedCount:   number;
+    verifierReport:       VerifierReport;
   };
+  verifierReport: VerifierReport;
   /** Hints about how the source was fetched — exposed for transparency. */
   sourceMeta: {
     method:             "direct" | "perplexity" | "failed";
@@ -1028,7 +1035,7 @@ export async function previewDeepRead(
     sourceTitle: articleInfo.title,
   });
 
-  if (!verdict.ok) {
+  if (verdict.severity !== "PASS") {
     console.warn(
       `[ArticleEngine] Preview returned a draft with ${verdict.unsupportedClaims.length} unsupported claims (url=${targetUrl}) — operator must review before saving.`,
     );
@@ -1049,7 +1056,10 @@ export async function previewDeepRead(
       unsupportedClaims:  verdict.unsupportedClaims,
       supportedCount:     verdict.supportedCount,
       externalCitedCount: verdict.externalCitedCount,
+      severity:           verdict.severity,
+      verifierReport:     verdict.verifierReport,
     },
+    verifierReport: verdict.verifierReport,
     sourceMeta: {
       method,
       partialFetchReason,

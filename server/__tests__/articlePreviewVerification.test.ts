@@ -68,7 +68,7 @@ async function simulateDraftPostHandler(body: {
   body:        string;
   sourceUrl:   string;
   sourceTitle: string;
-}): Promise<{ status: "ok" | "quarantined"; unsupported: number; quarantineReason?: string }> {
+}): Promise<{ status: "ok" | "quarantined" | "needs_revision"; unsupported: number; quarantineReason?: string }> {
   const fetched = await fetchSourceContent(body.sourceUrl);
   if (!fetched.ok || fetched.text.length < 500) {
     const draft = saveDeepReadDraft({
@@ -77,11 +77,11 @@ async function simulateDraftPostHandler(body: {
       body:        body.body,
       sourceUrl:   body.sourceUrl,
       sourceTitle: body.sourceTitle,
-      status:      "quarantined",
+      status:      "needs_revision",
       quarantineReason: `source unavailable: ${fetched.reason ?? "unknown"}`,
     });
     return {
-      status:           "quarantined",
+      status:           "needs_revision",
       unsupported:      0,
       quarantineReason: draft.quarantineReason,
     };
@@ -92,7 +92,7 @@ async function simulateDraftPostHandler(body: {
     sourceUrl:   body.sourceUrl,
     sourceTitle: body.sourceTitle,
   });
-  const status: "ok" | "quarantined" = verdict.ok ? "ok" : "quarantined";
+  const status: "ok" | "needs_revision" = verdict.severity === "HARD_FAIL" ? "needs_revision" : "ok";
   const draft = saveDeepReadDraft({
     headline:    body.headline,
     teaser:      body.teaser,
@@ -100,8 +100,9 @@ async function simulateDraftPostHandler(body: {
     sourceUrl:   body.sourceUrl,
     sourceTitle: body.sourceTitle,
     status,
-    quarantineReason: verdict.ok ? undefined : `${verdict.unsupportedClaims.length} unsupported claims`,
-    unsupportedClaims: verdict.ok ? undefined : (verdict.unsupportedClaims as any),
+    quarantineReason: verdict.severity === "HARD_FAIL" ? `${verdict.unsupportedClaims.length} unsupported claims` : undefined,
+    unsupportedClaims: verdict.severity === "HARD_FAIL" ? (verdict.unsupportedClaims as any) : undefined,
+    verifierReport: verdict.verifierReport,
   });
   return {
     status:           draft.status ?? "ok",
@@ -152,11 +153,11 @@ describe("POST /api/article/drafts server-side verification", () => {
       sourceTitle: "House lawmakers get a chilling demo of jailbroken AI",
     });
 
-    assert.equal(result.status, "quarantined", `expected quarantined, got '${result.status}'`);
+    assert.equal(result.status, "needs_revision", `expected needs_revision, got '${result.status}'`);
     assert.ok(result.unsupported > 0, "at least one unsupported claim");
   });
 
-  it("quarantines when source is unavailable (bot-wall / paywall)", async () => {
+  it("marks needs_revision when source is unavailable (bot-wall / paywall)", async () => {
     stubFetch("<html><body>Just a moment... Enable JavaScript to continue.</body></html>");
 
     const result = await simulateDraftPostHandler({
@@ -167,7 +168,7 @@ describe("POST /api/article/drafts server-side verification", () => {
       sourceTitle: "Something",
     });
 
-    assert.equal(result.status, "quarantined");
+    assert.equal(result.status, "needs_revision");
     assert.match(
       result.quarantineReason ?? "",
       /source unavailable/i,
@@ -175,16 +176,16 @@ describe("POST /api/article/drafts server-side verification", () => {
     );
   });
 
-  it("persists the quarantined draft so it is listable", async () => {
+  it("persists held-back drafts so they are listable", async () => {
     const drafts = listDeepReadDrafts();
-    const quarantined = drafts.filter(d => d.status === "quarantined");
+    const heldBack = drafts.filter(d => d.status === "quarantined" || d.status === "needs_revision");
     assert.ok(
-      quarantined.length >= 2,
-      `expected at least 2 quarantined drafts on disk, got ${quarantined.length}`,
+      heldBack.length >= 2,
+      `expected at least 2 held-back drafts on disk, got ${heldBack.length}`,
     );
-    // Quarantined drafts MUST carry a reason so the dashboard can show
+    // Held-back drafts MUST carry a reason so the dashboard can show
     // the operator why it was held back.
-    for (const d of quarantined) {
+    for (const d of heldBack) {
       assert.ok(d.quarantineReason, `draft ${d.draftId} missing quarantineReason`);
     }
   });
