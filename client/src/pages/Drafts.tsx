@@ -24,7 +24,10 @@ interface ArticleDraft {
 interface TweetDraft {
   source: "tweet";
   id: string;
-  engine: "podcast" | "breakthrough" | "blog";
+  // engine="article" identifies the long-form [306 ARTICLE] top-card
+  // manuscript draft (no 280-char limit). Other values are short-form
+  // tweet promos.
+  engine: "podcast" | "breakthrough" | "blog" | "article";
   generatedAt: string;
   content: string;
   platforms?: string[];
@@ -267,7 +270,15 @@ function DraftCard({
   onDelete: () => void;
 }) {
   const accent = ENGINE_ACCENT[draft.engine as DraftEngine];
-  const label  = ENGINE_LABEL[draft.engine as DraftEngine];
+  // Both the top long-form card (tweet/engine=article) and the bottom Deep
+  // Read card (article-source) share engine="article", but they need
+  // different badges: the top card is the publish-ready manuscript
+  // ([306 ARTICLE]) and the bottom card is the working summary with
+  // copy-actions ([306 DEEP READ]).
+  const isArticleLongForm = draft.source === "tweet" && draft.engine === "article";
+  const label = isArticleLongForm
+    ? "ARTICLE"
+    : ENGINE_LABEL[draft.engine as DraftEngine];
 
   // Source display: article drafts have sourceTitle/sourceUrl; tweet drafts may have metadata.sourceTitle/URL or episodeUrl.
   const meta = draft.source === "tweet" ? draft.metadata : undefined;
@@ -275,7 +286,15 @@ function DraftCard({
   const sourceUrl   = draft.source === "article" ? draft.sourceUrl   : meta?.sourceUrl;
   const episodeUrl  = draft.source === "tweet" ? meta?.episodeUrl : undefined;
 
-  const charCount = draft.source === "tweet" ? draft.content.length : null;
+  // The [306 ARTICLE] top-card is a tweet draft whose content is the full
+  // long-form manuscript (~600-1500 words). The 280-char tweet counter is
+  // misleading there, so show a word count for that one case.
+  const charCount = draft.source === "tweet" && !isArticleLongForm
+    ? draft.content.length
+    : null;
+  const wordCount = isArticleLongForm
+    ? (draft.content.trim().split(/\s+/).filter(Boolean).length)
+    : null;
 
   return (
     <div style={{
@@ -333,8 +352,8 @@ function DraftCard({
         color:      "rgba(227,229,228,0.85)",
         lineHeight: 1.55,
         whiteSpace: "pre-wrap",
-        maxHeight:  draft.source === "article" ? "110px" : undefined,
-        overflow:   draft.source === "article" ? "hidden" : undefined,
+        maxHeight:  (draft.source === "article" || isArticleLongForm) ? "180px" : undefined,
+        overflow:   (draft.source === "article" || isArticleLongForm) ? "hidden" : undefined,
         marginBottom: "12px",
       }}>
         {draft.source === "article" ? draft.teaser : draft.content}
@@ -343,6 +362,12 @@ function DraftCard({
       {charCount !== null && (
         <div style={{ fontSize: "12px", color: charCount > 240 ? "#f87171" : "rgba(227,229,228,0.48)", fontFamily: "monospace", marginBottom: "10px" }}>
           {charCount} / 240 chars
+        </div>
+      )}
+
+      {wordCount !== null && (
+        <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.48)", fontFamily: "monospace", marginBottom: "10px" }}>
+          {wordCount} words · long-form manuscript
         </div>
       )}
 

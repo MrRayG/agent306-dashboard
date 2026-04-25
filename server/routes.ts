@@ -43,6 +43,7 @@ import {
   deleteDeepReadDraft,
   saveDeepReadDraft,
   buildArticleTeaserTweet,
+  buildLongFormArticlePost,
 } from "./articleEngine.js";
 import {
   saveTweetDraft,
@@ -5407,19 +5408,23 @@ needsHelp: true only when you genuinely need his direction or information`,
         }
 
         case "article": {
-          // Article is a 2-output special case. The user's bug report was
-          // that the old path called previewDeepRead (preview only) and
-          // queued just the teaser as an X tweet — the full manuscript
-          // was never saved anywhere and the tweet version was cut off.
+          // Article is a 2-output special case. Both surfaces in the unified
+          // drafts inbox come from a single runWeeklyDeepRead call:
           //
-          // New flow:
-          //   1. runWeeklyDeepRead — generates the full Deep Read and
-          //      saves it to article_state.json drafts (manuscript side,
-          //      manually published via the X Article composer).
-          //   2. buildArticleTeaserTweet — deterministic short tweet
-          //      referencing the same source URL + headline. Saves to
-          //      tweet drafts (autoPost=false) OR queues to X/FC if the
-          //      user has flipped article auto-post on.
+          //   BOTTOM card "[306 DEEP READ]"
+          //     The article draft saved to article_state.json. Renders with
+          //     headline + teaser preview and Copy Article / Copy Teaser
+          //     actions. Untouched here.
+          //
+          //   TOP card "[306 ARTICLE]"
+          //     A tweet draft (engine="article") whose `content` is the FULL
+          //     long-form manuscript (`buildLongFormArticlePost`) — a
+          //     ~600-1500 word, multi-paragraph Agent 306 post the operator
+          //     copies straight into Substack / blog / X Article composer.
+          //     NOT a 280-char tweet teaser. (Earlier revisions of this
+          //     handler stored the teaser here and the manuscript was only
+          //     reachable via the bottom card; the user wanted the
+          //     manuscript directly visible/copyable on the top card.)
           const apiKey = LLM_API_KEY;
           if (!apiKey) throw new Error("LLM API key not configured");
 
@@ -5430,9 +5435,9 @@ needsHelp: true only when you genuinely need his direction or information`,
           const savedDrafts = listDeepReadDrafts();
           const draft = savedDrafts.find(d => d.draftId === result.draftId);
           if (!draft) {
-            throw new Error("Article draft saved but could not be located for teaser generation");
+            throw new Error("Article draft saved but could not be located for top-card generation");
           }
-          content = buildArticleTeaserTweet(draft);
+          content = buildLongFormArticlePost(draft);
           type = "article";
           break;
         }
@@ -5514,25 +5519,38 @@ needsHelp: true only when you genuinely need his direction or information`,
         : shouldAutoPost(engineId, true);
 
       if (isArticle) {
-        // Always save the teaser tweet as an article-tweet draft so the
-        // operator can review/edit before posting, regardless of toggle.
-        // When autoPost is ON we ALSO queue the teaser to X/FC.
+        // TOP card: the long-form manuscript (`trimmed` already contains
+        // the full ~600-1500 word `buildLongFormArticlePost` output) is
+        // saved as a tweet draft with engine="article" so it lights up the
+        // [306 ARTICLE] card in the unified inbox.
+        //
+        // When autoPost=ON we still queue *something* to X/FC, but the
+        // manuscript itself is too long for a single tweet — fall back to
+        // the deterministic short teaser (`buildArticleTeaserTweet`) for
+        // the X/FC path so we never POST a 1500-word string as a tweet.
         const draft = saveTweetDraft({
           engine: "article" as TweetDraftEngine,
           content: trimmed,
           platforms,
         });
         savedDraftId = draft.draftId;
-        console.log(`[GenerateNow] Article teaser saved as draft ${draft.draftId} (${trimmed.length} chars); manuscript saved via runWeeklyDeepRead`);
+        console.log(`[GenerateNow] Article long-form manuscript saved as draft ${draft.draftId} (${trimmed.length} chars); Deep Read draft also saved via runWeeklyDeepRead`);
         if (autoPost) {
+          // Resolve the just-saved Deep Read draft so we can build a real
+          // short-form teaser tweet for the X/FC queue.
+          const articleDrafts = listDeepReadDrafts();
+          const articleDraft = articleDrafts[0]; // newest first
+          const teaserTweet = articleDraft
+            ? buildArticleTeaserTweet(articleDraft)
+            : trimmed.slice(0, 240);
           if (platforms.includes("x")) {
-            queueXPost(trimmed, "article", 3);
+            queueXPost(teaserTweet, "article", 3);
             queuedTo.push("x");
           }
           if (platforms.includes("farcaster")) {
             try {
-              const channel = trimmed.match(/\bai\b|agent|llm|model/i) ? "ai" : undefined;
-              queueFarcasterPost(trimmed, "article", 3, channel);
+              const channel = teaserTweet.match(/\bai\b|agent|llm|model/i) ? "ai" : undefined;
+              queueFarcasterPost(teaserTweet, "article", 3, channel);
               queuedTo.push("farcaster");
             } catch (fcErr: any) {
               console.warn(`[GenerateNow] Farcaster queue failed:`, fcErr.message);
