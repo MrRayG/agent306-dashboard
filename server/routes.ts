@@ -45,6 +45,8 @@ import {
   buildArticleTeaserTweet,
   buildLongFormArticlePost,
 } from "./articleEngine.js";
+import { fetchSourceContent } from "./sourceFetcher.js";
+import { verifyClaims } from "./claimVerifier.js";
 import {
   saveTweetDraft,
   listTweetDrafts,
@@ -2882,12 +2884,56 @@ export function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
-  app.post("/api/article/drafts", requireDashAuth, (req, res) => {
+  app.post("/api/article/drafts", requireDashAuth, async (req, res) => {
     const { headline, teaser, body, sourceUrl, sourceTitle, imageUrl } = req.body ?? {};
     if (!headline || !body || !sourceUrl || !sourceTitle) {
       return res.status(400).json({ error: "headline, body, sourceUrl, sourceTitle required" });
     }
     try {
+      // Server-side verification: we do not trust any `verification` field
+      // the client might send — the verifier runs here against freshly
+      // fetched source text. On failure the draft is saved with
+      // status='quarantined' rather than silently accepted, matching the
+      // cron path's behavior. See server/claimVerifier.ts and the
+      // 2026-04-24 v2 Politico incident notes.
+      let unsupportedClaims: Array<{ sentence: string; lane: string; reason: string }> | undefined;
+      let quarantineReason: string | undefined;
+      let status: "ok" | "quarantined" = "ok";
+      try {
+        const fetched = await fetchSourceContent(String(sourceUrl));
+        if (fetched.ok && fetched.text.length >= 500) {
+          const verdict = await verifyClaims({
+            draftText:   String(body),
+            sourceText:  fetched.text,
+            sourceUrl:   String(sourceUrl),
+            sourceTitle: String(sourceTitle),
+          });
+          if (!verdict.ok) {
+            status = "quarantined";
+            unsupportedClaims = verdict.unsupportedClaims;
+            quarantineReason = `${verdict.unsupportedClaims.length} unsupported claims`;
+            console.warn(
+              `[ArticleDrafts] QUARANTINED incoming draft: ${quarantineReason}`,
+            );
+            for (const c of verdict.unsupportedClaims) {
+              console.warn(`  - [${c.lane}] ${c.reason}: ${c.sentence.slice(0, 180)}`);
+            }
+          }
+        } else {
+          console.warn(
+            `[ArticleDrafts] Source unavailable for ${sourceUrl} (${fetched.reason ?? "unknown"}); saving draft without verification but marking as quarantined.`,
+          );
+          status = "quarantined";
+          quarantineReason = `source unavailable: ${fetched.reason ?? "unknown"}`;
+        }
+      } catch (verifyErr: any) {
+        console.warn(
+          `[ArticleDrafts] Verification step threw: ${verifyErr?.message ?? verifyErr} — saving as quarantined to be safe`,
+        );
+        status = "quarantined";
+        quarantineReason = `verifier error: ${verifyErr?.message ?? verifyErr}`;
+      }
+
       const draft = saveDeepReadDraft({
         headline:    String(headline),
         teaser:      String(teaser ?? ""),
@@ -2895,6 +2941,9 @@ export function registerRoutes(httpServer: Server, app: Express) {
         sourceUrl:   String(sourceUrl),
         sourceTitle: String(sourceTitle),
         imageUrl:    imageUrl ? String(imageUrl) : undefined,
+        status,
+        quarantineReason,
+        unsupportedClaims: unsupportedClaims as any,
       });
       res.json({ ok: true, draft });
     } catch (e: any) {

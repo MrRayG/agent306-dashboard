@@ -27,7 +27,7 @@ import { TwitterApi } from "twitter-api-v2";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders, getXAIDirectHeaders, XAI_DIRECT_API_KEY } from "./llmConfig.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { getFormatVoiceContext } from "./voiceInstructions.js";
-import { SOUL, VOICE } from "./voice.js";
+import { SOUL, VOICE, SOURCING_GROUNDING_RULE } from "./voice.js";
 import { buildExemplarBlock } from "./voiceExemplars.js";
 import { validateXPost, recordXPost } from "./xComplianceGuard.js";
 import { queueXPost } from "./xPostScheduler.js";
@@ -284,8 +284,7 @@ ${SOUL}
 
 ${VOICE}
 
-HARD RULE — SOURCE GROUNDING:
-Every factual claim attributed to the source ('the article reports', 'according to X', 'X cites', 'X said') MUST be a verbatim quote or close paraphrase that appears in the FULL ARTICLE CONTENT above. If a claim cannot be backed by the source text, do not include it. Do not use your training-data knowledge to fill in numbers, quotes, or names. Inference, analysis, and commentary are welcome but must be clearly framed as your own perspective ('my read', 'the implication', 'I suspect'), never as something the source said.
+${SOURCING_GROUNDING_RULE}
 
 Today you write your weekly long-form X Article — "The Deep Read."
 This is not a news recap. This is not a tweet thread stretched thin.
@@ -938,47 +937,123 @@ export function buildLongFormArticlePost(draft: ArticleDraft): string {
 }
 
 // ── Preview: generate without posting (for dashboard preview) ─────────────────
+//
+// NOTE (2026-04-25 v2 fix): previously this path used the legacy
+// fetchArticleContent loop with no short/empty-content guard and ran
+// zero post-write claim verification. That made it the obvious bypass
+// once PR #220 locked down the cron path. This version uses the same
+// fetchSourceContent + hard-length gate + verifyClaims flow as the
+// cron, and returns the verification result on the response so the
+// dashboard UI can surface unsupported-claim warnings to the operator.
+//
+// The preview is an interactive surface — we do NOT block on verifier
+// failures here. But the unsupportedClaims list MUST travel with the
+// response so /api/article/drafts can re-check on save (and so the UI
+// can refuse to save a draft with hard-fail lanes).
+export interface PreviewDeepReadResult {
+  headline:    string;
+  teaser:      string;
+  body:        string;
+  sourceUrl:   string;
+  sourceTitle: string;
+  imageUrl:    string;
+  /** Verification metadata — lets the dashboard warn before save. */
+  verification: {
+    ok:                   boolean;
+    unsupportedClaims:    Array<{
+      sentence: string;
+      lane:     "source-attributed" | "external-uncited" | "embedded-external-in-attribution";
+      reason:   string;
+    }>;
+    supportedCount:       number;
+    externalCitedCount:   number;
+  };
+  /** Hints about how the source was fetched — exposed for transparency. */
+  sourceMeta: {
+    method:             "direct" | "perplexity" | "failed";
+    partialFetchReason?: string;
+  };
+}
+
 export async function previewDeepRead(
   apiKey: string,
   overrideUrl?: string  // optional: skip discovery, use this URL directly
-): Promise<{ headline: string; teaser: string; body: string; sourceUrl: string; sourceTitle: string; imageUrl: string }> {
+): Promise<PreviewDeepReadResult> {
   let articleInfo: NonNullable<Awaited<ReturnType<typeof discoverArticle>>>;
 
+  let fetched: Awaited<ReturnType<typeof fetchArticleContent>>;
+  let targetUrl: string;
+
   if (overrideUrl) {
-    // Direct URL mode — skip discovery, fetch and analyze the provided URL
     console.log(`[ArticleEngine] Direct URL mode: ${overrideUrl}`);
-    const { text: pageText, title: pageTitle, imageUrl } = await fetchArticleContent(overrideUrl);
-    // Build a minimal articleInfo from the URL and fetched page data
+    fetched = await fetchArticleContent(overrideUrl);
     let hostname = overrideUrl;
     try { hostname = new URL(overrideUrl).hostname.replace("www.", ""); } catch {}
     articleInfo = {
-      title: pageTitle || hostname,
+      title: fetched.title || hostname,
       url: overrideUrl,
-      summary: pageText.slice(0, 500),
+      summary: fetched.text.slice(0, 500),
       source: hostname,
       publishedDate: new Date().toISOString().slice(0, 10),
     };
-    const { headline, teaser, body } = await generateDeepReadArticle(
-      articleInfo, pageText, apiKey
-    );
-    return { headline, teaser, body, sourceUrl: overrideUrl, sourceTitle: articleInfo.title, imageUrl };
+    targetUrl = overrideUrl;
+  } else {
+    articleInfo = await discoverArticle(apiKey) as NonNullable<Awaited<ReturnType<typeof discoverArticle>>>;
+    fetched = await fetchArticleContent(articleInfo.url);
+    targetUrl = articleInfo.url;
   }
 
-  // Auto-discovery mode
-  articleInfo = await discoverArticle(apiKey) as NonNullable<Awaited<ReturnType<typeof discoverArticle>>>;
+  const { text: articleContent, imageUrl, ok: fetchOk, reason: fetchReason, method, partialFetchReason } = fetched as
+    (typeof fetched & { partialFetchReason?: string });
 
-  const { text: articleContent, imageUrl } = await fetchArticleContent(articleInfo.url);
+  // Same hard gate as the cron path: refuse to generate from an empty
+  // or obviously partial source. The preview still returns a 500 via
+  // the route wrapper; the operator can pick a different URL.
+  if (!fetchOk || articleContent.length < 800) {
+    throw new Error(
+      `Source unavailable for ${targetUrl}: ${fetchReason ?? `content too short (${articleContent.length} chars)`}; refusing to fabricate.`,
+    );
+  }
+
   const { headline, teaser, body } = await generateDeepReadArticle(
-    articleInfo, articleContent, apiKey
+    articleInfo, articleContent, apiKey,
   );
+
+  // Post-write verification — same call as the cron path, result
+  // attached to the response instead of blocking generation.
+  const verdict = await verifyClaims({
+    draftText:   body,
+    sourceText:  articleContent,
+    sourceUrl:   targetUrl,
+    sourceTitle: articleInfo.title,
+  });
+
+  if (!verdict.ok) {
+    console.warn(
+      `[ArticleEngine] Preview returned a draft with ${verdict.unsupportedClaims.length} unsupported claims (url=${targetUrl}) — operator must review before saving.`,
+    );
+    for (const c of verdict.unsupportedClaims) {
+      console.warn(`  - [${c.lane}] ${c.reason}: ${c.sentence.slice(0, 180)}`);
+    }
+  }
 
   return {
     headline,
     teaser,
     body,
-    sourceUrl:   articleInfo.url,
+    sourceUrl:   targetUrl,
     sourceTitle: articleInfo.title,
     imageUrl,
+    verification: {
+      ok:                 verdict.ok,
+      unsupportedClaims:  verdict.unsupportedClaims,
+      supportedCount:     verdict.supportedCount,
+      externalCitedCount: verdict.externalCitedCount,
+    },
+    sourceMeta: {
+      method,
+      partialFetchReason,
+    },
   };
 }
 
