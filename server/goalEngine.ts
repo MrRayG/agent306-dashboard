@@ -33,6 +33,11 @@ import {
   type InsightLedgerEntry,
 } from "./insightLedger.js";
 import { translateAction, registerRuleFromInsight } from "./actionTranslator.js";
+import {
+  proposeRecommendation,
+  findRecommendationBySourceInsightId,
+} from "./selfRecommendationEngine.js";
+import { logEvent } from "./observability/structuredLog.js";
 // ── Types ──────────────────────────────────────────────────────
 
 export interface MilestoneSpec {
@@ -696,9 +701,42 @@ export async function promoteInsightToGoal(
   try {
     const translation = translateAction(entry.proposedAction, entry.insight);
     if (translation.primitive === "none") {
+      // Keep the warn log so observability isn't lost — but ALSO emit a
+      // SelfRecommendation so the gap (a missing action primitive) becomes
+      // a tracked, operator-reviewable signal rather than a quiet drop.
+      // Idempotent: skip if a rec already references this insight id.
       console.log(
         `[GoalEngine] Insight ${entry.id} action too vague to translate — leaving proposed (will expire per TTL). Reason: ${translation.reason ?? "no primitive matched"}`,
       );
+      try {
+        if (!findRecommendationBySourceInsightId(entry.id)) {
+          const actionPreview = entry.proposedAction.slice(0, 200);
+          proposeRecommendation({
+            category: "engine",
+            risk: "low",
+            title: `missing-primitive: action translator could not parse insight ${entry.id}`,
+            rationale: `GoalEngine could not translate insight ${entry.id}: '${actionPreview}'`,
+            proposedChange: `Add action primitive supporting: ${entry.insight.slice(0, 240)}`,
+            evidence: [entry.id, entry.sourceId],
+            author: "agent",
+            sourceInsightId: entry.id,
+          });
+          logEvent({
+            engine: "goalEngine",
+            event: "missing-primitive-rec",
+            level: "info",
+            data: {
+              insightId: entry.id,
+              reason: translation.reason ?? "no primitive matched",
+            },
+          });
+        }
+      } catch (e: any) {
+        console.warn(
+          `[GoalEngine] missing-primitive SelfRec emit failed for ${entry.id}:`,
+          e?.message ?? e,
+        );
+      }
       return null;
     }
 
