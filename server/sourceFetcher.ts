@@ -17,6 +17,11 @@
 
 import { gatherPerplexityEvidence } from "./perplexityEvidence.js";
 
+export type PartialFetchReason =
+  | "too_short_for_domain"
+  | "missing_byline_markers"
+  | "missing_close_markers";
+
 export interface SourceFetchResult {
   text:     string;
   title:    string;
@@ -24,9 +29,61 @@ export interface SourceFetchResult {
   ok:       boolean;
   reason?:  string;
   method:   "direct" | "perplexity" | "failed";
+  /**
+   * Present when the direct fetch returned HTTP 200 but the extracted
+   * body failed a partial-fetch heuristic (see LONG_FORM_DOMAINS and
+   * detectPartialFetch below). Downstream callers may surface this to
+   * the operator UI; the main fetch flow treats a partial fetch as a
+   * failure and falls through to Perplexity.
+   */
+  partialFetchReason?: PartialFetchReason;
 }
 
 const MIN_GOOD_LENGTH = 500;
+
+/** Byte threshold below which a long-form domain is treated as a partial fetch. */
+const LONG_FORM_MIN_LENGTH = 1500;
+
+/**
+ * Domains where a <1500-char direct fetch is almost certainly a partial
+ * fetch rather than an actual short page. Exported so other modules or
+ * tests can extend the allowlist as new outlets get picked up. The
+ * heuristic compares `new URL(url).hostname` after stripping leading
+ * "www.", so list entries here should match the bare hostname.
+ *
+ * Motivation (2026-04-24 audit): the parent agent was bitten by a
+ * partial article fetch from politico.com that looked complete but was
+ * missing the byline, several quotes, and the closing paragraphs. The
+ * same thing can happen to her sourceFetcher and produce false-
+ * confidence drafts — so any content under LONG_FORM_MIN_LENGTH from
+ * one of these domains now fails over to Perplexity.
+ */
+export const LONG_FORM_DOMAINS: ReadonlySet<string> = new Set([
+  "politico.com",
+  "nytimes.com",
+  "washingtonpost.com",
+  "wsj.com",
+  "bloomberg.com",
+  "reuters.com",
+  "apnews.com",
+  "theverge.com",
+  "techcrunch.com",
+  "sciencedaily.com",
+  "nature.com",
+  "science.org",
+  "wired.com",
+  "theatlantic.com",
+  "newyorker.com",
+  "economist.com",
+  "ft.com",
+  "arstechnica.com",
+  "axios.com",
+  "semafor.com",
+  "theinformation.com",
+  "technologyreview.com",
+  "nist.gov",
+  "whitehouse.gov",
+]);
 
 const FAILURE_MARKERS = [
   "enable javascript",
@@ -43,6 +100,64 @@ function looksLikeStub(clean: string): boolean {
   const lc = clean.toLowerCase();
   if (clean.length < MIN_GOOD_LENGTH) return true;
   return FAILURE_MARKERS.some(m => lc.includes(m));
+}
+
+function urlDomain(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Detect whether a raw HTTP 200 + cleaned text from a known long-form
+ * domain actually looks like a partial article. Returns the failing
+ * heuristic name, or null if the content looks complete enough.
+ *
+ * Heuristics (any one triggers partial):
+ *   - too_short_for_domain: clean text < LONG_FORM_MIN_LENGTH chars
+ *   - missing_byline_markers: no <meta name="author"> in raw HTML AND no
+ *     "By [Capitalized Name]" pattern in the cleaned body
+ *   - missing_close_markers: none of the typical closing tokens appear
+ *     in the last 600 chars of the cleaned body ("Source Link", "©",
+ *     "Copyright", "All rights reserved", journal-style references)
+ */
+export function detectPartialFetch(
+  url: string,
+  rawHtml: string,
+  cleanText: string,
+): PartialFetchReason | null {
+  const domain = urlDomain(url);
+  if (!LONG_FORM_DOMAINS.has(domain)) return null;
+
+  if (cleanText.length < LONG_FORM_MIN_LENGTH) {
+    return "too_short_for_domain";
+  }
+
+  const hasMetaByline = /<meta[^>]*name=["']author["']/i.test(rawHtml);
+  const hasBodyByline = /\bBy\s+[A-Z][a-zA-Z.'\-]+(?:\s+[A-Z][a-zA-Z.'\-]+)+/.test(cleanText);
+  if (!hasMetaByline && !hasBodyByline) {
+    return "missing_byline_markers";
+  }
+
+  const tail = cleanText.slice(-600).toLowerCase();
+  const closeMarkers = [
+    "source link",
+    "all rights reserved",
+    "copyright",
+    "©",  // ©
+    "read more",
+    "originally published",
+    "journal reference",
+    "this article first appeared",
+  ];
+  const hasCloseMarker = closeMarkers.some(m => tail.includes(m));
+  if (!hasCloseMarker) {
+    return "missing_close_markers";
+  }
+
+  return null;
 }
 
 function extractMeta(html: string): { title: string; imageUrl: string } {
@@ -79,6 +194,7 @@ async function tryDirectFetch(url: string): Promise<{
   title: string;
   imageUrl: string;
   reason?: string;
+  partialFetchReason?: PartialFetchReason;
 }> {
   try {
     const res = await fetch(url, {
@@ -106,17 +222,20 @@ async function tryDirectFetch(url: string): Promise<{
           : "direct fetch returned bot-wall / paywall stub",
       };
     }
+    const partialReason = detectPartialFetch(url, html, clean);
+    if (partialReason) {
+      return {
+        ok: false,
+        text: clean,
+        title,
+        imageUrl,
+        reason: `partial fetch: ${partialReason}`,
+        partialFetchReason: partialReason,
+      };
+    }
     return { ok: true, text: clean, title, imageUrl };
   } catch (e: any) {
     return { ok: false, text: "", title: "", imageUrl: "", reason: `fetch error: ${e?.message ?? e}` };
-  }
-}
-
-function urlDomain(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "").toLowerCase();
-  } catch {
-    return "";
   }
 }
 
@@ -144,6 +263,12 @@ export async function fetchSourceContent(url: string): Promise<SourceFetchResult
     };
   }
 
+  if (direct.partialFetchReason) {
+    console.warn(
+      `[SourceFetcher] Direct fetch returned partial content (${direct.partialFetchReason}); falling back to Perplexity for ${url}`,
+    );
+  }
+
   // Perplexity fallback — only trust the response if its citations point
   // at the same URL (or at least the same domain). Perplexity summaries of
   // the wrong article are worse than no content, because the writer will
@@ -161,6 +286,7 @@ export async function fetchSourceContent(url: string): Promise<SourceFetchResult
         ok:       false,
         reason:   `direct: ${direct.reason}; perplexity: ${ppx.reason ?? "no content"}`,
         method:   "failed",
+        partialFetchReason: direct.partialFetchReason,
       };
     }
 
@@ -178,6 +304,7 @@ export async function fetchSourceContent(url: string): Promise<SourceFetchResult
         ok:       false,
         reason:   `perplexity did not cite ${domain || url} (got ${citations.length} citations for other sources)`,
         method:   "failed",
+        partialFetchReason: direct.partialFetchReason,
       };
     }
 
@@ -187,6 +314,7 @@ export async function fetchSourceContent(url: string): Promise<SourceFetchResult
       imageUrl: direct.imageUrl,
       ok:       true,
       method:   "perplexity",
+      partialFetchReason: direct.partialFetchReason,
     };
   } catch (e: any) {
     return {
@@ -196,6 +324,7 @@ export async function fetchSourceContent(url: string): Promise<SourceFetchResult
       ok:       false,
       reason:   `direct: ${direct.reason}; perplexity: exception ${e?.message ?? e}`,
       method:   "failed",
+      partialFetchReason: direct.partialFetchReason,
     };
   }
 }
