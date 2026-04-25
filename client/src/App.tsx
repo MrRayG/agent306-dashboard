@@ -19,11 +19,13 @@ import EvalDashboard from "@/pages/EvalDashboard";
 import Diagnostics from "@/pages/Diagnostics";
 import Drafts from "@/pages/Drafts";
 import SelfRecommendations from "@/pages/SelfRecommendations";
+import MissionControl from "@/pages/MissionControl";
 import NotFound from "@/pages/not-found";
 import PerplexityAttribution from "@/components/PerplexityAttribution";
 
 const nav = [
-  { href: "/",         label: "Command Center", desc: "Engines · Queues · Post" },
+  { href: "/",         label: "Mission Control", desc: "Single-pane status" },
+  { href: "/command",  label: "Command Center", desc: "Engines · Queues · Post" },
   { href: "/eval",     label: "306Eval",        desc: "Benchmark · Growth"  },
   { href: "/episodes", label: "Episodes",       desc: "Queue & post"        },
   { href: "/writing",  label: "Writing Studio", desc: "Articles · Blog"     },
@@ -174,7 +176,8 @@ function App() {
       <Router hook={useHashLocation}>
         <Layout>
           <Switch>
-            <Route path="/"         component={CommandCenter} />
+            <Route path="/"         component={MissionControl} />
+            <Route path="/command"  component={CommandCenter} />
             <Route path="/eval"     component={EvalDashboard} />
             <Route path="/episodes" component={EpisodeQueue}  />
             <Route path="/writing"  component={WritingStudio} />
