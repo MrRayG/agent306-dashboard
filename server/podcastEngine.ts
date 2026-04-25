@@ -42,6 +42,7 @@ import { shouldAutoPost } from "./engineScheduleConfig.js";
 import { saveTweetDraft } from "./tweetDrafts.js";
 
 import { postChatCompletions, postPerplexity } from "./llmCall.js";
+import { verifyClaims } from "./claimVerifier.js";
 import {
   PODCAST_HOST_SYSTEM_PROMPT,
   PODCAST_HOST_REVISION_GUARDRAIL,
@@ -1562,6 +1563,47 @@ The close segment must hit all four outro elements from the host prompt but the 
     if (!seenUrls.has(s.url)) {
       seenUrls.add(s.url);
       mergedSources.push(s);
+    }
+  }
+
+  // Post-write claim verification against the upstream research findings
+  // + data points + fresh context. Only run when we actually have source
+  // text to check against — a purely internal-synthesis episode with no
+  // external sources skips verification. See server/claimVerifier.ts.
+  const podcastSourceText = [
+    manuscript,
+    rawFindings,
+    conclusion,
+    dataPoints.slice(0, 20).map(dp => `[${dp.source ?? ""}] ${dp.content}`).join("\n"),
+    freshContext,
+  ].filter(Boolean).join("\n\n");
+  const podcastDraftText = [
+    parsed.hook,
+    parsed.theStory,
+    parsed.theTake,
+    parsed.whatThisMeansForYou,
+    parsed.lookingAhead,
+    parsed.close,
+  ].filter(Boolean).join("\n\n");
+
+  if (podcastSourceText.length > 200) {
+    const verdict = await verifyClaims({
+      draftText:   podcastDraftText,
+      sourceText:  podcastSourceText,
+      sourceUrl:   mergedSources[0]?.url ?? "",
+      sourceTitle: topicTitle,
+    });
+    if (!verdict.ok) {
+      console.error(`[ClaimVerifier] REJECTED podcast script ${episode.id}: ${verdict.unsupportedClaims.length} unsupported claims`);
+      for (const c of verdict.unsupportedClaims) {
+        console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);
+      }
+      // Mark episode as quarantined rather than scripted so the production
+      // pipeline won't auto-advance to audio generation. Human review only.
+      episode.status = "quarantined" as any;
+      episode.scriptGeneratedAt = new Date().toISOString();
+      saveState(state);
+      return;
     }
   }
 

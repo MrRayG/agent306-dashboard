@@ -38,6 +38,7 @@ import { buildVoiceBlock } from "./voice.js";
 import { getEvolutionContext } from "./soulEvolution.js";
 
 import { postChatCompletions, postXSearchResponses } from "./llmCall.js";
+import { verifyClaims } from "./claimVerifier.js";
 const GROK_URL          = LLM_BASE_URL;
 const GROK_SEARCH_URL   = LLM_RESPONSE_URL;
 const SIGNAL_STATE_FILE = dataPath("signal_brief_state.json");
@@ -286,6 +287,31 @@ Return JSON:
 
     // Enforce [306 SIGNAL] show tag
     const post = enforceShowTag(parsed.post, "signal");
+
+    // Post-write claim verification against the upstream raw signals.
+    // The signals feed IS the source for this engine — any claim the brief
+    // attributes to "the report", "the article", a specific outlet, or a
+    // named figure must appear in that feed. Unsupported → quarantined
+    // (returned null so nothing posts). See server/claimVerifier.ts.
+    const upstreamSourceText = [
+      `AI Frontier signal:\n${aiSignal}`,
+      `Web3 signal:\n${web3Signal}`,
+      `Wild Card signal:\n${wildcardSignal}`,
+    ].join("\n\n");
+    const verdict = await verifyClaims({
+      draftText:   post,
+      sourceText:  upstreamSourceText,
+      sourceUrl:   "",
+      sourceTitle: `306 SIGNAL Brief #${briefNumber}`,
+    });
+    if (!verdict.ok) {
+      console.error(`[ClaimVerifier] REJECTED signal brief #${briefNumber}: ${verdict.unsupportedClaims.length} unsupported claims`);
+      for (const c of verdict.unsupportedClaims) {
+        console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);
+      }
+      return null;
+    }
+
     return { post, signals, weekLabel };
   } catch (e: any) {
     console.error("[SignalBrief] Generation error:", e.message);

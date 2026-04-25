@@ -24,11 +24,12 @@ import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { buildExemplarBlock } from "./voiceExemplars.js";
 
 import { postChatCompletions } from "./llmCall.js";
+import { verifyClaims } from "./claimVerifier.js";
 const BLOG_FILE = dataPath("blog_state.json");
 
 // ── Types ─────────────────────────────────────────────────────
 
-export type BlogStatus = "draft" | "published" | "archived";
+export type BlogStatus = "draft" | "published" | "archived" | "quarantined";
 export type BlogSource = "research" | "podcast" | "chat" | "exploration" | "standalone";
 export type BlogType = "research" | "external" | "internal" | "synthesis" | "curiosity";
 
@@ -456,6 +457,33 @@ Write the full blog post following the blog structure template. Hook the reader 
         tags: [...(parsed.tags ?? []), "needs-review"],
         status: "draft", // Force draft when safety issues found
       });
+    }
+
+    // Post-write claim verification. A blog post that attributes specific
+    // numbers or quotes to a source must have those claims in the source
+    // text — otherwise it's quarantined rather than silently shipped.
+    // See server/claimVerifier.ts.
+    const verdict = await verifyClaims({
+      draftText:   parsed.content,
+      sourceText:  [opts.sourceContent, freshContext].filter(Boolean).join("\n\n"),
+      sourceUrl:   opts.sourceId ?? "",
+      sourceTitle: opts.topic,
+    });
+
+    if (!verdict.ok) {
+      const draft = createBlogPost({
+        title: parsed.title,
+        content: parsed.content,
+        source: opts.source,
+        sourceId: opts.sourceId,
+        tags: [...(parsed.tags ?? []), "claim-verifier-quarantine"],
+        status: "quarantined",
+      });
+      console.error(`[ClaimVerifier] REJECTED draft ${draft.id}: ${verdict.unsupportedClaims.length} unsupported claims`);
+      for (const c of verdict.unsupportedClaims) {
+        console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);
+      }
+      return draft;
     }
 
     return createBlogPost({
