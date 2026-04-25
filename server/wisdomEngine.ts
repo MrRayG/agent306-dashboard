@@ -16,6 +16,7 @@ import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { addKnowledge, archiveKnowledge, knowledge } from "./memoryEngine.js";
 import type { EvalResult } from "./evalEngine.js";
+import { logEvent } from "./observability/structuredLog.js";
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -314,15 +315,27 @@ async function queryGoogleBooks(searchTerms: string[], usage: WisdomApiUsage): P
 // the key won't become valid without an env change + restart, so retrying
 // every cycle just spams logs and burns quota.
 let bibleAuthDisabled = false;
+// Log the missing-key state at most once per process so daily cycles don't
+// repeatedly emit the same "BIBLE_API_KEY not set" line.
+let bibleMissingKeyLogged = false;
 
 export function buildBibleHeaders(apiKey: string): Record<string, string> {
   return { "api-key": apiKey };
 }
 
+export function __resetBibleMissingKeyLoggedForTest(): void {
+  bibleMissingKeyLogged = false;
+}
+
 async function queryBible(topics: string[], usage: WisdomApiUsage): Promise<WisdomEntry[]> {
   const apiKey = process.env.BIBLE_API_KEY;
   if (!apiKey) {
-    console.log("[WisdomEngine] BIBLE_API_KEY not set — Bible integration disabled (set env var on Railway to enable)");
+    if (!bibleMissingKeyLogged) {
+      console.log(
+        "[WisdomEngine] BIBLE_API_KEY not configured, skipping (sign up at https://scripture.api.bible/ to enable)",
+      );
+      bibleMissingKeyLogged = true;
+    }
     return [];
   }
   if (bibleAuthDisabled) {
@@ -356,6 +369,17 @@ async function queryBible(topics: string[], usage: WisdomApiUsage): Promise<Wisd
           `(2) this Bible ID is not authorized for your key (check https://scripture.api.bible → Bibles), ` +
           `(3) malformed header. Body: ${body}`,
         );
+        // Single structured event so the operator can find this in engine_events
+        // (a "partial" signal — the rest of the wisdom pull continues with the
+        // remaining sources). Best-effort; never throws.
+        try {
+          logEvent({
+            engine: "wisdomEngine",
+            event: "bible-auth-disabled",
+            level: "warn",
+            data: { status: res.status, bibleId: BIBLE_ID, partial: true },
+          });
+        } catch {}
         return [];
       }
       console.warn(`[WisdomEngine] Bible API error: ${res.status} — ${body}`);

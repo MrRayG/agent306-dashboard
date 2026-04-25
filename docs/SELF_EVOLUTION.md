@@ -136,6 +136,10 @@ import { recentEvents } from "./observability/structuredLog";
 recentEvents({ engine: "reflectionEngine", limit: 50 });
 ```
 
+## Optional environment variables
+
+- `BIBLE_API_KEY` — optional. WisdomEngine pulls scripture from https://scripture.api.bible/ when set. If unset or invalid (401), the Bible source is skipped quietly (one log line per process) and the wisdom pull continues with the remaining sources.
+
 ## Rollback
 
 - **JSON fallback**: flip `USE_DB_STATE=false` to force every repository back to JSON.
