@@ -44,6 +44,9 @@ import {
   saveDeepReadDraft,
   buildArticleTeaserTweet,
   buildLongFormArticlePost,
+  getDeepReadDraft,
+  addDraftResources,
+  reviseDraftWithResources,
 } from "./articleEngine.js";
 import { fetchSourceContent } from "./sourceFetcher.js";
 import { verifyClaims, type VerifierReport } from "./claimVerifier.js";
@@ -2854,8 +2857,16 @@ export function registerRoutes(httpServer: Server, app: Express) {
     const apiKey = LLM_API_KEY;
     if (!apiKey) return res.status(500).json({ error: "LLM_API_KEY not set — configure OPENROUTER_API_KEY or GROK_API_KEY" });
     const overrideUrl: string | undefined = req.body?.url?.trim() || undefined;
+    // Optional grounding source URLs (issue 5) — passed to the writer + revise
+    // loop as canonical citation targets to reduce hallucinations.
+    const groundingSourcesIn = Array.isArray(req.body?.groundingSources) ? req.body.groundingSources : [];
+    const groundingSources = groundingSourcesIn
+      .map((u: any) => (typeof u === "string" ? u.trim() : ""))
+      .filter((u: string) => /^https?:\/\//i.test(u))
+      .slice(0, 25);
+    const skipReviseLoop = req.body?.skipReviseLoop === true;
     try {
-      const preview = await previewDeepRead(apiKey, overrideUrl);
+      const preview = await previewDeepRead(apiKey, { overrideUrl, groundingSources, skipReviseLoop });
       if (!preview.body || preview.body.length < 100) {
         return res.status(500).json({ error: "Article generation produced insufficient content — try again or use a different URL" });
       }
@@ -2886,6 +2897,11 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
   app.post("/api/article/drafts", requireDashAuth, async (req, res) => {
     const { headline, teaser, body, sourceUrl, sourceTitle, imageUrl } = req.body ?? {};
+    const incomingRevisionHistory = Array.isArray(req.body?.revisionHistory) ? req.body.revisionHistory : undefined;
+    const incomingGroundingSources = Array.isArray(req.body?.groundingSources)
+      ? req.body.groundingSources.filter((u: any) => typeof u === "string" && /^https?:\/\//i.test(u))
+      : undefined;
+    const incomingSourceText = typeof req.body?.sourceText === "string" ? req.body.sourceText : undefined;
     if (!headline || !body || !sourceUrl || !sourceTitle) {
       return res.status(400).json({ error: "headline, body, sourceUrl, sourceTitle required" });
     }
@@ -2947,6 +2963,9 @@ export function registerRoutes(httpServer: Server, app: Express) {
         quarantineReason,
         unsupportedClaims: unsupportedClaims as any,
         verifierReport,
+        revisionHistory: incomingRevisionHistory,
+        groundingSources: incomingGroundingSources,
+        sourceText: incomingSourceText,
       });
       if (verifierReport?.severity === "HARD_FAIL") {
         return res.status(422).json({ ok: false, draft, verifierReport });
@@ -2968,6 +2987,47 @@ export function registerRoutes(httpServer: Server, app: Express) {
     const result = deleteDeepReadDraft(req.params.id);
     if (!result.ok) return res.status(404).json({ error: result.error });
     res.json({ ok: true });
+  });
+
+  // ── Per-draft resources + auto-revise (issues 2 & 3) ────────────────
+  // Operator workflow:
+  //   1. POST /api/article/drafts/:id/resources  body: { urls: [], note }
+  //   2. POST /api/article/drafts/:id/revise     body: { operatorNote }
+  //
+  // The two endpoints are independent — you can revise without adding new
+  // resources (e.g. retry the loop after env tuning), or add resources
+  // without immediately re-revising (queue them for later).
+
+  app.get("/api/article/drafts/:id", (req, res) => {
+    const draft = getDeepReadDraft(req.params.id);
+    if (!draft) return res.status(404).json({ error: "draft not found" });
+    res.json({ draft });
+  });
+
+  app.post("/api/article/drafts/:id/resources", requireDashAuth, (req, res) => {
+    const urls: unknown = req.body?.urls;
+    if (!Array.isArray(urls) || urls.length === 0) {
+      return res.status(400).json({ error: "urls (array) is required" });
+    }
+    const cleaned = urls
+      .map(u => (typeof u === "string" ? u.trim() : ""))
+      .filter(u => /^https?:\/\//i.test(u))
+      .slice(0, 25);
+    const note = typeof req.body?.note === "string" ? req.body.note.slice(0, 1000) : undefined;
+    const updated = addDraftResources(String(req.params.id), cleaned, note);
+    if (!updated) return res.status(404).json({ error: "draft not found" });
+    res.json({ ok: true, draft: updated, added: cleaned.length });
+  });
+
+  app.post("/api/article/drafts/:id/revise", requireDashAuth, async (req, res) => {
+    const operatorNote = typeof req.body?.operatorNote === "string" ? req.body.operatorNote.slice(0, 2000) : undefined;
+    try {
+      const out = await reviseDraftWithResources(String(req.params.id), { operatorNote });
+      if (!out.ok) return res.status(400).json({ error: out.error });
+      res.json({ ok: true, draft: out.draft, revisionHistory: out.revisionHistory });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message ?? "Revise failed" });
+    }
   });
 
   // ── Tweet drafts (podcast / breakthrough / blog) ─────────────
