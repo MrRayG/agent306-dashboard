@@ -61,17 +61,24 @@ describe("buildVoiceBlock", () => {
     assert.ok(!block.includes("AI CONTEXT"), "Voice block should not include AI_CONTEXT");
   });
 
-  it("is under 4000 chars (focused, no AI_CONTEXT)", () => {
+  it("is under 4500 chars (focused, no AI_CONTEXT)", () => {
     const block = buildVoiceBlock();
-    // Raised from 3000 → 4000 to accommodate SOURCING_GROUNDING_RULE
-    // added 2026-04-25 after the Politico fabrication incident.
-    assert.ok(block.length < 4000, `Voice block should be under 4000 chars, got ${block.length}`);
+    // Raised 3000 → 4000 (PR #220) → 4500 (2026-04-25 v2) to accommodate
+    // the two-lane SOURCING_GROUNDING_RULE after the NCITE incident.
+    assert.ok(block.length < 4500, `Voice block should be under 4500 chars, got ${block.length}`);
   });
 
-  it("includes SOURCING_GROUNDING_RULE", () => {
+  it("includes SOURCING_GROUNDING_RULE (two-lane form)", () => {
     const block = buildVoiceBlock();
     assert.ok(block.includes("SOURCING"), "Voice block must include the sourcing grounding rule");
-    assert.ok(block.includes("verbatim quote"), "Voice block must require verbatim quotes for source attribution");
+    assert.ok(
+      block.includes("TWO-LANE") || block.includes("Two rules"),
+      "Voice block must advertise the two-lane standard",
+    );
+    assert.ok(
+      block.includes("cite them") || block.includes("citation"),
+      "Voice block must tell the writer how to cite external facts",
+    );
   });
 });
 
@@ -85,10 +92,10 @@ describe("buildFullVoiceContext", () => {
     assert.ok(full.includes("ERC-8004"), "Should include ERC-8004 in AI_CONTEXT");
   });
 
-  it("is under 4000 chars", () => {
+  it("is under 4500 chars", () => {
     const full = buildFullVoiceContext();
-    // Raised from 3000 → 4000 — see buildVoiceBlock test above.
-    assert.ok(full.length < 4000, `Full voice context should be under 4000 chars, got ${full.length}`);
+    // Raised 3000 → 4000 → 4500 — see buildVoiceBlock test above.
+    assert.ok(full.length < 4500, `Full voice context should be under 4500 chars, got ${full.length}`);
   });
 });
 
