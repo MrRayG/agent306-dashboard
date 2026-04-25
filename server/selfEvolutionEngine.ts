@@ -25,6 +25,7 @@ import {
 import { recordProposedInsights, expireStaleProposed, failStaleOpen, computeLedgerStats } from "./insightLedger.js";
 import { runVerificationPass, buildMetaReflectionContext } from "./selfChangeVerifier.js";
 import { proposeRecommendation, findRecommendationBySourceInsightId } from "./selfRecommendationEngine.js";
+import { maybeQueueDraftForRec } from "./engineDiffDrafter.js";
 import { logEvent } from "./observability/structuredLog.js";
 
 import { postChatCompletions } from "./llmCall.js";
@@ -567,7 +568,7 @@ export function bridgeInsightsToSelfRecs(
       const proposedChange = insight.actionItem
         ? insight.actionItem
         : insight.selfApplication || insight.insight;
-      proposeRecommendation({
+      const newRec = proposeRecommendation({
         category: "engine",
         risk: "low",
         title,
@@ -577,6 +578,12 @@ export function bridgeInsightsToSelfRecs(
         author: "agent",
         sourceInsightId: insight.id,
       });
+      // Issue 6c: when AUTO_DRAFT_ENGINE_DIFFS=true, queue an async LLM
+      // call to draft a unified diff for engine-category recs. Non-blocking
+      // — the rec is created either way; a missing diff just means the
+      // operator sees no "Draft PR / write patch" button until they fill
+      // one in manually.
+      maybeQueueDraftForRec(newRec);
       created++;
     } catch (e: any) {
       errors++;

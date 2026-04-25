@@ -29,6 +29,7 @@ import {
   parseEvidence,
 } from "./selfRecommendationEngine.js";
 import { openDraftPr } from "./githubBridge.js";
+import { draftDiffForRecommendation, autoDraftEnabled } from "./engineDiffDrafter.js";
 import {
   SELF_REC_CATEGORIES,
   SELF_REC_RISKS,
@@ -133,6 +134,27 @@ export function registerSelfRecommendationRoutes(app: Express, deps: SelfRecomme
       res.json(serialize(rec));
     } catch (e: any) {
       res.status(400).json({ error: e.message });
+    }
+  });
+
+  // Issue 6c: operator-triggered draft of a unified diff for an existing
+  // engine-category rec. Useful when AUTO_DRAFT_ENGINE_DIFFS is off (default)
+  // or when the auto-draft skipped a rec the operator wants to fast-track.
+  app.post("/api/self-recommendations/:id/draft-diff", requireDashAuth, async (req, res) => {
+    const rec = getRecommendation(String(req.params.id));
+    if (!rec) return res.status(404).json({ error: "not_found" });
+    if (rec.category !== "engine") {
+      return res.status(409).json({ error: `draft-diff is only for engine-category recs (got ${rec.category})` });
+    }
+    if (rec.status !== "proposed") {
+      return res.status(409).json({ error: `draft-diff only allowed for proposed recs (status=${rec.status})` });
+    }
+    try {
+      const ok = await draftDiffForRecommendation(rec);
+      const after = getRecommendation(String(req.params.id));
+      res.json({ ok, autoDraftEnabled: autoDraftEnabled(), recommendation: serialize(after) });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message ?? "draft-diff failed" });
     }
   });
 

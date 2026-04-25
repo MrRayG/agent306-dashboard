@@ -36,6 +36,7 @@ import { enforcePostFormat, looksLikeRawJsonPayload } from "./postFormatGuard.js
 import { postChatCompletions, postXSearchResponses } from "./llmCall.js";
 import { fetchSourceContent } from "./sourceFetcher.js";
 import { verifyClaims, type VerifierReport } from "./claimVerifier.js";
+import { reviseUntilClean, type RevisionAttempt } from "./articleReviseLoop.js";
 const GROK_CHAT_API     = LLM_BASE_URL;
 const GROK_RESPONSE_API = LLM_RESPONSE_URL;
 const ARTICLE_STATE_FILE = dataPath("article_state.json");
@@ -80,6 +81,26 @@ export interface ArticleDraft {
   quarantineReason?: string;
   unsupportedClaims?: Array<{ sentence: string; lane?: string; reason: string }>;
   verifierReport?: VerifierReport;
+  /**
+   * Audit trail of auto-revise attempts (issue 2). Newest attempt last.
+   * Empty / undefined when no revision was needed.
+   */
+  revisionHistory?: RevisionAttempt[];
+  /**
+   * Extra source URLs the operator added via /api/article/drafts/:id/resources
+   * (issue 3). Used as citation targets by the revise loop. Includes the
+   * original source URL implicitly — these are EXTRA.
+   */
+  extraSources?: Array<{ url: string; note?: string; addedAt: string }>;
+  /** Cached source text used for verification, kept so we can re-verify on resource add. */
+  sourceText?: string;
+  /**
+   * If non-empty, the operator pinned a Deep Read brief / set of source URLs
+   * as the canonical evidence base for this draft (issue 5). The verifier
+   * still runs against the original source text; these URLs are passed to
+   * the writer + revise loop as citation targets.
+   */
+  groundingSources?: string[];
 }
 
 interface ArticleState {
@@ -691,24 +712,29 @@ export async function runWeeklyDeepRead(
         continue;
       }
 
-      const { headline, teaser, body } = await generateDeepReadArticle(
+      const { headline, teaser, body: rawBody } = await generateDeepReadArticle(
         articleInfo, articleContent, apiKey
       );
 
-      if (!body || body.length < 200) {
+      if (!rawBody || rawBody.length < 200) {
         lastErr = "Article generation produced insufficient content";
         continue;
       }
 
-      // Post-write verification. A verifier-rejected draft is saved with
-      // status="quarantined" rather than silently shipping with stripped
-      // claims — see server/claimVerifier.ts.
-      const verdict = await verifyClaims({
-        draftText:   body,
+      // Auto-revise loop (issue 2). If the verifier flags actionable
+      // failures, ask the writer to fix them before quarantining. Bounded
+      // by MAX_REVISION_ATTEMPTS (env, default 3).
+      const { body, verdict, revisionHistory } = await reviseUntilClean({
+        draftText:   rawBody,
         sourceText:  articleContent,
         sourceUrl:   articleInfo.url,
         sourceTitle: articleInfo.title,
       });
+      if (revisionHistory.length > 0) {
+        console.log(
+          `[ArticleEngine] Cron auto-revise ran ${revisionHistory.length} attempt(s); final severity=${verdict.severity}`,
+        );
+      }
 
       const draft = saveDeepReadDraft({
         headline,
@@ -721,6 +747,8 @@ export async function runWeeklyDeepRead(
         quarantineReason: verdict.severity === "HARD_FAIL" ? `${verdict.unsupportedClaims.length} unsupported claims` : undefined,
         unsupportedClaims: verdict.severity === "HARD_FAIL" ? verdict.unsupportedClaims : undefined,
         verifierReport: verdict.verifierReport,
+        revisionHistory,
+        sourceText: articleContent,
       });
 
       if (verdict.severity === "HARD_FAIL") {
@@ -763,6 +791,10 @@ export function saveDeepReadDraft(input: {
   quarantineReason?: string;
   unsupportedClaims?: Array<{ sentence: string; lane?: string; reason: string }>;
   verifierReport?: VerifierReport;
+  revisionHistory?: RevisionAttempt[];
+  extraSources?: Array<{ url: string; note?: string; addedAt: string }>;
+  sourceText?: string;
+  groundingSources?: string[];
 }): ArticleDraft {
   const state = loadState();
   if (!state.drafts) state.drafts = [];
@@ -780,6 +812,10 @@ export function saveDeepReadDraft(input: {
     quarantineReason: input.quarantineReason,
     unsupportedClaims: input.unsupportedClaims,
     verifierReport: input.verifierReport,
+    revisionHistory: input.revisionHistory,
+    extraSources: input.extraSources,
+    sourceText: input.sourceText,
+    groundingSources: input.groundingSources,
   };
   state.drafts.unshift(draft);
   // Keep a rolling window of 20 drafts so a long-forgotten backlog never
@@ -826,6 +862,63 @@ export function markDeepReadDraftPosted(
   state.drafts = drafts;
   saveState(state);
   return { ok: true };
+}
+
+/**
+ * Look up a single unposted Deep Read draft by id. Returns undefined if the
+ * draft has been marked posted or never existed.
+ */
+export function getDeepReadDraft(draftId: string): ArticleDraft | undefined {
+  const state = loadState();
+  return (state.drafts ?? []).find(d => d.draftId === draftId && !d.markedPostedAt);
+}
+
+/**
+ * Mutate an existing draft in place. Used by the auto-revise loop and the
+ * "add resources" endpoint (issue 3). Returns the updated row, or undefined
+ * if the draft no longer exists.
+ */
+export function updateDeepReadDraft(
+  draftId: string,
+  patch: Partial<ArticleDraft>,
+): ArticleDraft | undefined {
+  const state = loadState();
+  const drafts = state.drafts ?? [];
+  const idx = drafts.findIndex(d => d.draftId === draftId);
+  if (idx === -1) return undefined;
+  const merged: ArticleDraft = { ...drafts[idx], ...patch, draftId, generatedAt: drafts[idx].generatedAt };
+  drafts[idx] = merged;
+  state.drafts = drafts;
+  saveState(state);
+  return merged;
+}
+
+/**
+ * Append extra resource URLs (issue 3) to an existing draft. Dedupes against
+ * the original source URL and any URLs already attached. Returns the updated
+ * draft, or undefined if not found.
+ */
+export function addDraftResources(
+  draftId: string,
+  urls: string[],
+  note?: string,
+): ArticleDraft | undefined {
+  const draft = getDeepReadDraft(draftId);
+  if (!draft) return undefined;
+  const existing = new Set([
+    (draft.sourceUrl ?? "").toLowerCase(),
+    ...((draft.extraSources ?? []).map(s => s.url.toLowerCase())),
+  ]);
+  const cleaned = urls
+    .map(u => u.trim())
+    .filter(u => /^https?:\/\//i.test(u))
+    .filter(u => !existing.has(u.toLowerCase()));
+  if (cleaned.length === 0 && !note) return draft;
+  const now = new Date().toISOString();
+  const newRows = cleaned.map(url => ({ url, note, addedAt: now }));
+  return updateDeepReadDraft(draftId, {
+    extraSources: [...(draft.extraSources ?? []), ...newRows],
+  });
 }
 
 /** Delete an unposted draft without recording it to history. */
@@ -980,12 +1073,33 @@ export interface PreviewDeepReadResult {
     method:             "direct" | "perplexity" | "failed";
     partialFetchReason?: string;
   };
+  /** Auto-revise loop history (issue 2). Empty when no revision was needed. */
+  revisionHistory: RevisionAttempt[];
+  /** The full source text used for verification — kept so /api/article/drafts can re-run verify on save without a second fetch. */
+  sourceText: string;
+  /** Echo of any pinned grounding source URLs the caller provided. */
+  groundingSources: string[];
+}
+
+export interface PreviewDeepReadOpts {
+  /** Optional: skip discovery, use this URL directly. */
+  overrideUrl?: string;
+  /** Pinned source URLs (e.g. from a Deep Read brief, issue 5) treated as canonical citation targets by the writer + revise loop. */
+  groundingSources?: string[];
+  /** Skip the revise loop — useful when the operator just wants a fast preview. Defaults to false (auto-revise on). */
+  skipReviseLoop?: boolean;
 }
 
 export async function previewDeepRead(
   apiKey: string,
-  overrideUrl?: string  // optional: skip discovery, use this URL directly
+  overrideUrlOrOpts?: string | PreviewDeepReadOpts,
 ): Promise<PreviewDeepReadResult> {
+  const opts: PreviewDeepReadOpts =
+    typeof overrideUrlOrOpts === "string"
+      ? { overrideUrl: overrideUrlOrOpts }
+      : (overrideUrlOrOpts ?? {});
+  const overrideUrl = opts.overrideUrl;
+  const groundingSources = (opts.groundingSources ?? []).filter(u => /^https?:\/\//i.test(u));
   let articleInfo: NonNullable<Awaited<ReturnType<typeof discoverArticle>>>;
 
   let fetched: Awaited<ReturnType<typeof fetchArticleContent>>;
@@ -1022,18 +1136,42 @@ export async function previewDeepRead(
     );
   }
 
-  const { headline, teaser, body } = await generateDeepReadArticle(
+  const { headline, teaser, body: rawBody } = await generateDeepReadArticle(
     articleInfo, articleContent, apiKey,
   );
 
-  // Post-write verification — same call as the cron path, result
-  // attached to the response instead of blocking generation.
-  const verdict = await verifyClaims({
-    draftText:   body,
-    sourceText:  articleContent,
-    sourceUrl:   targetUrl,
-    sourceTitle: articleInfo.title,
-  });
+  // Auto-revise loop (issue 2): if the verifier surfaces actionable failures,
+  // ask the writer to fix them before handing the draft to the operator. The
+  // loop is no-op when the first verdict is PASS, so this adds zero cost on a
+  // clean draft. Grounding source URLs (issue 5) are handed in as preferred
+  // citation targets.
+  let body = rawBody;
+  let verdict;
+  let revisionHistory: RevisionAttempt[] = [];
+  if (opts.skipReviseLoop) {
+    verdict = await verifyClaims({
+      draftText:   body,
+      sourceText:  articleContent,
+      sourceUrl:   targetUrl,
+      sourceTitle: articleInfo.title,
+    });
+  } else {
+    const result = await reviseUntilClean({
+      draftText:   body,
+      sourceText:  articleContent,
+      sourceUrl:   targetUrl,
+      sourceTitle: articleInfo.title,
+      extraSourceUrls: groundingSources,
+    });
+    body = result.body;
+    verdict = result.verdict;
+    revisionHistory = result.revisionHistory;
+    if (revisionHistory.length > 0) {
+      console.log(
+        `[ArticleEngine] Auto-revise ran ${revisionHistory.length} attempt(s); final severity=${verdict.severity}`,
+      );
+    }
+  }
 
   if (verdict.severity !== "PASS") {
     console.warn(
@@ -1064,7 +1202,76 @@ export async function previewDeepRead(
       method,
       partialFetchReason,
     },
+    revisionHistory,
+    sourceText: articleContent,
+    groundingSources,
   };
+}
+
+/**
+ * Re-run the auto-revise loop on an existing saved draft (issue 3). Uses the
+ * draft's cached sourceText if present; otherwise fetches the source URL
+ * fresh. Extra source URLs the operator added are passed as citation targets,
+ * and any pinned grounding sources are included.
+ *
+ * Returns the updated draft (mutated in place via updateDeepReadDraft) along
+ * with the revise history for the operator UI.
+ */
+export async function reviseDraftWithResources(
+  draftId: string,
+  opts: { operatorNote?: string } = {},
+): Promise<{ ok: boolean; draft?: ArticleDraft; revisionHistory?: RevisionAttempt[]; error?: string }> {
+  const draft = getDeepReadDraft(draftId);
+  if (!draft) return { ok: false, error: "draft not found" };
+
+  // Prefer cached source text; fall back to a fresh fetch.
+  let sourceText = draft.sourceText ?? "";
+  if (!sourceText || sourceText.length < 300) {
+    try {
+      const fetched = await fetchSourceContent(draft.sourceUrl);
+      if (fetched.ok && fetched.text.length >= 300) sourceText = fetched.text;
+    } catch (e: any) {
+      console.warn(`[ArticleEngine] reviseDraftWithResources: source fetch failed: ${e?.message ?? e}`);
+    }
+  }
+  if (!sourceText) {
+    return { ok: false, error: "source text unavailable; cannot verify or revise" };
+  }
+
+  const extraSourceUrls = [
+    ...(draft.groundingSources ?? []),
+    ...((draft.extraSources ?? []).map(s => s.url)),
+  ];
+
+  const result = await reviseUntilClean({
+    draftText:   draft.body,
+    sourceText,
+    sourceUrl:   draft.sourceUrl,
+    sourceTitle: draft.sourceTitle,
+    extraSourceUrls,
+    operatorNote: opts.operatorNote,
+  });
+
+  const newStatus: ArticleDraft["status"] =
+    result.verdict.severity === "HARD_FAIL" ? "needs_revision" : "ok";
+  const updated = updateDeepReadDraft(draftId, {
+    body: result.body,
+    status: newStatus,
+    quarantineReason:
+      result.verdict.severity === "HARD_FAIL"
+        ? `${result.verdict.unsupportedClaims.length} unsupported claims after revise`
+        : undefined,
+    unsupportedClaims:
+      result.verdict.severity === "HARD_FAIL" ? result.verdict.unsupportedClaims : undefined,
+    verifierReport: result.verdict.verifierReport,
+    revisionHistory: [
+      ...(draft.revisionHistory ?? []),
+      ...result.revisionHistory,
+    ],
+    sourceText,
+  });
+
+  return { ok: true, draft: updated, revisionHistory: result.revisionHistory };
 }
 
 // ── Scheduler: every Monday at 5:00 PM ET (22:00 UTC) ─────────────────────────
