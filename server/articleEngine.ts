@@ -34,6 +34,8 @@ import { queueXPost } from "./xPostScheduler.js";
 import { enforcePostFormat, looksLikeRawJsonPayload } from "./postFormatGuard.js";
 
 import { postChatCompletions, postXSearchResponses } from "./llmCall.js";
+import { fetchSourceContent } from "./sourceFetcher.js";
+import { verifyClaims } from "./claimVerifier.js";
 const GROK_CHAT_API     = LLM_BASE_URL;
 const GROK_RESPONSE_API = LLM_RESPONSE_URL;
 const ARTICLE_STATE_FILE = dataPath("article_state.json");
@@ -69,6 +71,14 @@ export interface ArticleDraft {
   body:        string;
   imageUrl?:   string;
   markedPostedAt?: string | null;
+  /**
+   * When present, this draft was produced but the post-write claim verifier
+   * found claims that were NOT supported by the source text. The draft is
+   * stored for audit/review but MUST NOT be auto-posted. Human review only.
+   */
+  status?:      "ok" | "quarantined";
+  quarantineReason?: string;
+  unsupportedClaims?: Array<{ sentence: string; reason: string }>;
 }
 
 interface ArticleState {
@@ -224,44 +234,15 @@ function parseDiscoveryJSON(rawText: string): {
 }
 
 // ── Step 2: Fetch full article content for deep reading ─────────────────────
-async function fetchArticleContent(url: string): Promise<{ text: string; title: string; imageUrl: string }> {
-  try {
-    const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; Agent306Bot/1.0)", "Accept": "text/html,application/xhtml+xml" },
-      signal: AbortSignal.timeout(15000),
-      redirect: "follow",
-    });
-    if (!res.ok) return { text: "", title: "", imageUrl: "" };
-    const html = await res.text();
-
-    // Extract title from raw HTML BEFORE stripping tags
-    const titleMatch = html.match(/<title[^>]*>([^<]{3,200})<\/title>/i);
-    const ogTitleMatch = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']{3,200})["']/i);
-    const title = (ogTitleMatch?.[1] ?? titleMatch?.[1] ?? "").trim();
-
-    // Extract og:image (try both attribute orderings)
-    const ogImageMatch =
-      html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']{5,500})["']/i) ??
-      html.match(/<meta[^>]*content=["']([^"']{5,500})["'][^>]*property=["']og:image["']/i);
-    const twitterImageMatch =
-      html.match(/<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"']{5,500})["']/i) ??
-      html.match(/<meta[^>]*content=["']([^"']{5,500})["'][^>]*name=["']twitter:image["']/i);
-    const imageUrl = (ogImageMatch?.[1] ?? twitterImageMatch?.[1] ?? "").trim();
-
-    const clean = html
-      .replace(/<script[\s\S]*?<\/script>/gi, "")
-      .replace(/<style[\s\S]*?<\/style>/gi, "")
-      .replace(/<nav[\s\S]*?<\/nav>/gi, "")
-      .replace(/<header[\s\S]*?<\/header>/gi, "")
-      .replace(/<footer[\s\S]*?<\/footer>/gi, "")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 8000); // more content for deep reading
-    return { text: clean, title, imageUrl };
-  } catch {
-    return { text: "", title: "", imageUrl: "" };
-  }
+// Thin wrapper over server/sourceFetcher.ts — see that module for the
+// paywall/bot-wall handling and Perplexity fallback logic. Kept as an
+// internal re-export so the Deep Read caller below can await a single
+// call site and also inspect {ok, reason}.
+async function fetchArticleContent(url: string): Promise<{
+  text: string; title: string; imageUrl: string; ok: boolean; reason?: string; method: "direct"|"perplexity"|"failed";
+}> {
+  const r = await fetchSourceContent(url);
+  return { text: r.text, title: r.title, imageUrl: r.imageUrl, ok: r.ok, reason: r.reason, method: r.method };
 }
 
 // ── Step 3: Deep Read + Article Generation ───────────────────────────────────
@@ -302,6 +283,9 @@ Weekly Long-Form X Article
 ${SOUL}
 
 ${VOICE}
+
+HARD RULE — SOURCE GROUNDING:
+Every factual claim attributed to the source ('the article reports', 'according to X', 'X cites', 'X said') MUST be a verbatim quote or close paraphrase that appears in the FULL ARTICLE CONTENT above. If a claim cannot be backed by the source text, do not include it. Do not use your training-data knowledge to fill in numbers, quotes, or names. Inference, analysis, and commentary are welcome but must be clearly framed as your own perspective ('my read', 'the implication', 'I suspect'), never as something the source said.
 
 Today you write your weekly long-form X Article — "The Deep Read."
 This is not a news recap. This is not a tweet thread stretched thin.
@@ -404,7 +388,7 @@ URL: ${articleInfo.url}
 Summary: ${articleInfo.summary}
 
 FULL ARTICLE CONTENT:
-${articleContent || "(Content not fully accessible — use the summary and your knowledge of this topic)"}
+${articleContent}
 ${exemplarBlock ? `\n${exemplarBlock}\n` : ""}
 Write the complete long-form article. Make it the kind of analysis people share because
 it changed how they understood something — not because it told them what they already knew.
@@ -677,43 +661,91 @@ export async function runWeeklyDeepRead(
 ): Promise<{ success: boolean; draftId?: string; headline?: string; error?: string }> {
   console.log("[ArticleEngine] Starting Weekly Deep Read generation (draft-only mode)...");
 
-  try {
-    // 1. Discover the article
-    const articleInfo = await discoverArticle(apiKey);
-    if (!articleInfo) {
-      return { success: false, error: "Could not discover a suitable article" };
+  // Retry up to 3 times with different candidate articles when the
+  // source cannot be fetched. We refuse to generate from an empty/stub
+  // body — that's what produced the fabricated Politico "Deep Read" on
+  // 2026-04-22. See fetchSourceContent() for the grounding logic.
+  const MAX_ATTEMPTS = 3;
+  const seenUrls = new Set<string>();
+  let lastErr = "";
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const articleInfo = await discoverArticle(apiKey);
+      if (!articleInfo) {
+        lastErr = "Could not discover a suitable article";
+        continue;
+      }
+      if (seenUrls.has(articleInfo.url)) {
+        console.log(`[ArticleEngine] Discovery returned a repeat (${articleInfo.url}); trying again.`);
+        continue;
+      }
+      seenUrls.add(articleInfo.url);
+
+      const { text: articleContent, imageUrl, ok, reason } = await fetchArticleContent(articleInfo.url);
+
+      if (!ok || articleContent.length < 800) {
+        const msg = `Source unavailable (${reason ?? `content too short: ${articleContent.length} chars`}); refusing to fabricate. Will retry with a different article.`;
+        console.warn(`[ArticleEngine] attempt ${attempt}/${MAX_ATTEMPTS}: ${msg} url=${articleInfo.url}`);
+        lastErr = msg;
+        continue;
+      }
+
+      const { headline, teaser, body } = await generateDeepReadArticle(
+        articleInfo, articleContent, apiKey
+      );
+
+      if (!body || body.length < 200) {
+        lastErr = "Article generation produced insufficient content";
+        continue;
+      }
+
+      // Post-write verification. A verifier-rejected draft is saved with
+      // status="quarantined" rather than silently shipping with stripped
+      // claims — see server/claimVerifier.ts.
+      const verdict = await verifyClaims({
+        draftText:   body,
+        sourceText:  articleContent,
+        sourceUrl:   articleInfo.url,
+        sourceTitle: articleInfo.title,
+      });
+
+      const draft = saveDeepReadDraft({
+        headline,
+        teaser,
+        body,
+        sourceUrl:   articleInfo.url,
+        sourceTitle: articleInfo.title,
+        imageUrl,
+        status:      verdict.ok ? "ok" : "quarantined",
+        quarantineReason: verdict.ok ? undefined : `${verdict.unsupportedClaims.length} unsupported claims`,
+        unsupportedClaims: verdict.ok ? undefined : verdict.unsupportedClaims,
+      });
+
+      if (!verdict.ok) {
+        console.error(`[ClaimVerifier] REJECTED draft ${draft.draftId}: ${verdict.unsupportedClaims.length} unsupported claims`);
+        for (const c of verdict.unsupportedClaims) {
+          console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);
+        }
+        return {
+          success: false,
+          draftId: draft.draftId,
+          headline,
+          error:   `Draft quarantined: ${verdict.unsupportedClaims.length} unsupported claims`,
+        };
+      }
+
+      console.log(`[ArticleEngine] Deep Read drafted: "${headline}" (id=${draft.draftId})`);
+      console.log(`[ArticleEngine] Publish manually via X Article composer — visit /writing to review.`);
+      return { success: true, draftId: draft.draftId, headline };
+
+    } catch (e: any) {
+      console.error(`[ArticleEngine] attempt ${attempt}/${MAX_ATTEMPTS} error:`, e.message);
+      lastErr = e.message;
     }
-
-    // 2. Fetch full content
-    const { text: articleContent, imageUrl } = await fetchArticleContent(articleInfo.url);
-
-    // 3. Generate the Deep Read
-    const { headline, teaser, body } = await generateDeepReadArticle(
-      articleInfo, articleContent, apiKey
-    );
-
-    if (!body || body.length < 200) {
-      return { success: false, error: "Article generation produced insufficient content" };
-    }
-
-    // 4. Save as a draft for manual publication. Nothing is posted to X.
-    const draft = saveDeepReadDraft({
-      headline,
-      teaser,
-      body,
-      sourceUrl:   articleInfo.url,
-      sourceTitle: articleInfo.title,
-      imageUrl,
-    });
-
-    console.log(`[ArticleEngine] Deep Read drafted: "${headline}" (id=${draft.draftId})`);
-    console.log(`[ArticleEngine] Publish manually via X Article composer — visit /writing to review.`);
-    return { success: true, draftId: draft.draftId, headline };
-
-  } catch (e: any) {
-    console.error("[ArticleEngine] Error:", e.message);
-    return { success: false, error: e.message };
   }
+
+  return { success: false, error: lastErr || "Deep Read generation failed after retries" };
 }
 
 // ── Draft management ──────────────────────────────────────────
@@ -726,6 +758,9 @@ export function saveDeepReadDraft(input: {
   sourceUrl:   string;
   sourceTitle: string;
   imageUrl?:   string;
+  status?:     "ok" | "quarantined";
+  quarantineReason?: string;
+  unsupportedClaims?: Array<{ sentence: string; reason: string }>;
 }): ArticleDraft {
   const state = loadState();
   if (!state.drafts) state.drafts = [];
@@ -739,6 +774,9 @@ export function saveDeepReadDraft(input: {
     sourceTitle: input.sourceTitle,
     imageUrl:    input.imageUrl,
     markedPostedAt: null,
+    status:      input.status ?? "ok",
+    quarantineReason: input.quarantineReason,
+    unsupportedClaims: input.unsupportedClaims,
   };
   state.drafts.unshift(draft);
   // Keep a rolling window of 20 drafts so a long-forgotten backlog never
