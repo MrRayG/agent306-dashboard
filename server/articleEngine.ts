@@ -856,6 +856,49 @@ export function buildArticleTeaserTweet(draft: ArticleDraft): string {
   return `${header}\n\n${snippet}\n\n${closing}`.trim();
 }
 
+// ── Long-form article post for the [306 ARTICLE] drafts card ─────────────────
+/**
+ * Build the full long-form Agent 306 manuscript for the TOP "[306 ARTICLE]"
+ * drafts inbox card. This is the publish-ready Substack/blog body — NOT a
+ * 280-char tweet teaser. The user copy-pastes it into their long-form
+ * publication surface.
+ *
+ * Format:
+ *   [306 ARTICLE] <headline>
+ *
+ *   <full manuscript body — markdown, multi-paragraph, no truncation>
+ *
+ *   ---
+ *   Source: <sourceTitle> — <sourceUrl>
+ *
+ * The body is the manuscript produced by `generateDeepReadArticle()` and is
+ * left intact. No char limit. Empty/short bodies fall through to the
+ * teaser as a last resort so the card never renders blank.
+ */
+export function buildLongFormArticlePost(draft: ArticleDraft): string {
+  const headline = (draft.headline ?? "").trim();
+  const body = (draft.body ?? "").trim();
+  const teaser = (draft.teaser ?? "").trim();
+  const sourceTitle = (draft.sourceTitle ?? "").trim();
+  const sourceUrl = (draft.sourceUrl ?? "").trim();
+
+  const header = headline ? `[306 ARTICLE] ${headline}` : `[306 ARTICLE]`;
+
+  // Manuscript body wins. If body is missing (rare LLM failure path) we
+  // surface the teaser so the card still has SOMETHING — better than blank.
+  const manuscript = body.length >= 100 ? body : teaser;
+
+  let footer = "";
+  if (sourceUrl || sourceTitle) {
+    const label = sourceTitle && sourceUrl
+      ? `${sourceTitle} — ${sourceUrl}`
+      : (sourceUrl || sourceTitle);
+    footer = `\n\n---\nSource: ${label}`;
+  }
+
+  return `${header}\n\n${manuscript}${footer}`.trim();
+}
+
 // ── Preview: generate without posting (for dashboard preview) ─────────────────
 export async function previewDeepRead(
   apiKey: string,
