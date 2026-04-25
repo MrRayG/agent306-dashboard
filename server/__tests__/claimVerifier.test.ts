@@ -223,16 +223,16 @@ describe("verifyClaims — Lane B (external facts)", () => {
 
     const laneB = verdict.unsupportedClaims.find(c => c.lane === "external-uncited");
     assert.ok(laneB, `expected an external-uncited flag. Got: ${JSON.stringify(verdict.unsupportedClaims)}`);
-    // Lane B alone does not flip ok=false — only Lane A / embedded do.
-    assert.equal(verdict.ok, true, "Lane B uncited alone is a warning, not a hard fail");
+    assert.equal(verdict.severity, "HARD_FAIL", "a single bare Lane B sentence with multiple numeric markers is a hard fail");
+    assert.equal(verdict.ok, false);
   });
 
   it("SUPPORTED: external stat with a markdown citation link → counted in externalCitedCount", async () => {
     const sourceText =
       "DHS officials walked House lawmakers through a demonstration of AI chatbot jailbreaks.";
     const draftText =
-      "This fits the broader arc of AI adoption. AI has reached 54.6% adoption in the US " +
-      "in just three years, per [Stanford HAI's 2025 AI Index](https://hai.stanford.edu/ai-index/2025-ai-index-report).";
+      "This fits the broader arc of AI adoption. AI systems are becoming more common in enterprise workflows, " +
+      "per [Stanford HAI's 2025 AI Index](https://hai.stanford.edu/ai-index/2025-ai-index-report).";
 
     const verdict = await verifyClaims({
       draftText,

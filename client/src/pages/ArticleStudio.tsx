@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { VerifierReport, type VerifierReportData } from "@/components/VerifierReport";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface ArticlePreview {
@@ -11,6 +12,8 @@ interface ArticlePreview {
   sourceUrl:   string;
   sourceTitle: string;
   imageUrl?:   string;
+  verifierReport?: VerifierReportData;
+  verification?: { ok: boolean; severity?: string; verifierReport?: VerifierReportData };
 }
 interface ArticleEntry {
   articleId:    string;
@@ -448,6 +451,9 @@ export default function ArticleStudio() {
                   </button>
                 </div>
               </div>
+
+              {/* Verifier report */}
+              <VerifierReport report={article.verifierReport ?? article.verification?.verifierReport} />
 
               {/* Teaser preview */}
               <div style={{ marginBottom: "1.25rem" }}>

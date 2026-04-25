@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { VerifierReport, type VerifierReportData } from "@/components/VerifierReport";
 
 function timeAgo(iso: string | null): string {
   if (!iso) return "never";
@@ -61,6 +62,7 @@ export default function WeeklyEngines() {
   const drafts = ((draftsData as any)?.drafts ?? []) as Array<{
     draftId: string; generatedAt: string; headline: string; teaser: string;
     body: string; sourceUrl: string; sourceTitle: string; imageUrl?: string;
+    status?: "ok" | "quarantined" | "needs_revision"; quarantineReason?: string; verifierReport?: VerifierReportData;
   }>;
 
   async function copyDraftBody(draftId: string) {
@@ -185,10 +187,12 @@ export default function WeeklyEngines() {
                 </div>
                 <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.50)", fontFamily: "monospace", marginBottom: "8px" }}>
                   Generated {timeAgo(d.generatedAt)} · Source: <a href={d.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#2dd4bf" }}>{d.sourceTitle}</a>
+                  {d.status === "needs_revision" ? <span style={{ color: "#f87171" }}> · NEEDS REVISION</span> : null}
                 </div>
                 <div style={{ fontSize: "14px", color: "rgba(227,229,228,0.75)", lineHeight: 1.5, marginBottom: "10px", maxHeight: "80px", overflow: "hidden", position: "relative" }}>
                   {d.teaser}
                 </div>
+                {d.verifierReport && <VerifierReport report={d.verifierReport} compact />}
                 <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                   <button onClick={() => copyDraftBody(d.draftId)}
                     style={{ background: "#f97316", color: "#0e0f10", border: "none", padding: "6px 14px", fontFamily: "monospace", fontSize: "12px", fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em" }}>

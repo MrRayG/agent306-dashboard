@@ -28,7 +28,7 @@ import { enforcePostFormat } from "./postFormatGuard.js";
 import { enforceShowTag } from "./contentTypes.js";
 import { requestPost, registerPost, releasePost } from "./postCoordinator.js";
 import { postChatCompletions } from "./llmCall.js";
-import { verifyClaims } from "./claimVerifier.js";
+import { verifyClaims, type VerifierReport } from "./claimVerifier.js";
 const CYOA_STATE_FILE = dataPath("cyoa_state.json");
 
 export type CYOATrigger =
@@ -73,6 +73,7 @@ export interface CYOAEpisode {
   canonVerdict?: string;      // Final lore drop
   loreHint?: string;          // Hidden insight / research hint
   visualPrompt?: string;      // Grok Imagine prompt for scene visual
+  verifierReport?: VerifierReport;
 
   // Metadata
   createdAt: string;
@@ -220,7 +221,7 @@ YOU MUST RETURN EXACTLY THIS JSON — use these exact field names, nothing else:
     const episode: CYOAEpisode = {
       id: `cyoa_${Date.now()}`,
       trigger,
-      status: verdict.ok ? "draft" : "quarantined",
+      status: verdict.severity === "HARD_FAIL" ? "quarantined" : "draft",
       hookScene: parsed.hookScene,
       hookQuestion: parsed.hookQuestion ?? "What happens next?",
       options: parsed.options,
@@ -229,9 +230,10 @@ YOU MUST RETURN EXACTLY THIS JSON — use these exact field names, nothing else:
       visualPrompt: parsed.visualPrompt,
       createdAt: new Date().toISOString(),
       tweetIds: [],
+      verifierReport: verdict.verifierReport,
     };
 
-    if (!verdict.ok) {
+    if (verdict.severity === "HARD_FAIL") {
       console.error(`[ClaimVerifier] REJECTED CYOA ${episode.id}: ${verdict.unsupportedClaims.length} unsupported claims`);
       for (const c of verdict.unsupportedClaims) {
         console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);

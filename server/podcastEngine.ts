@@ -42,7 +42,7 @@ import { shouldAutoPost } from "./engineScheduleConfig.js";
 import { saveTweetDraft } from "./tweetDrafts.js";
 
 import { postChatCompletions, postPerplexity } from "./llmCall.js";
-import { verifyClaims } from "./claimVerifier.js";
+import { verifyClaims, type VerifierReport } from "./claimVerifier.js";
 import {
   PODCAST_HOST_SYSTEM_PROMPT,
   PODCAST_HOST_REVISION_GUARDRAIL,
@@ -178,6 +178,7 @@ export interface Episode {
 
   // Sources
   sources?: Array<{ title: string; url: string }>;
+  verifierReport?: VerifierReport;
 
   // Production metadata (generated with script)
   metadata?: {
@@ -361,6 +362,7 @@ export function createEpisode(data: {
   triggerEvent?: string;
   culturalBridge?: string;
   sources?: Array<{ title: string; url: string }>;
+  verifierReport?: VerifierReport;
 }): Episode {
   const episode: Episode = {
     id: `ep_${data.type}_${Date.now()}`,
@@ -373,6 +375,7 @@ export function createEpisode(data: {
     triggerEvent: data.triggerEvent,
     culturalBridge: data.culturalBridge,
     sources: data.sources,
+    verifierReport: data.verifierReport,
   };
 
   state.episodes.push(episode);
@@ -1593,7 +1596,7 @@ The close segment must hit all four outro elements from the host prompt but the 
       sourceUrl:   mergedSources[0]?.url ?? "",
       sourceTitle: topicTitle,
     });
-    if (!verdict.ok) {
+    if (verdict.severity === "HARD_FAIL") {
       console.error(`[ClaimVerifier] REJECTED podcast script ${episode.id}: ${verdict.unsupportedClaims.length} unsupported claims`);
       for (const c of verdict.unsupportedClaims) {
         console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);
@@ -1601,6 +1604,7 @@ The close segment must hit all four outro elements from the host prompt but the 
       // Mark episode as quarantined rather than scripted so the production
       // pipeline won't auto-advance to audio generation. Human review only.
       episode.status = "quarantined" as any;
+      episode.verifierReport = verdict.verifierReport;
       episode.scriptGeneratedAt = new Date().toISOString();
       saveState(state);
       return;

@@ -115,7 +115,7 @@ Return JSON: {"post": "..."}`
       sourceUrl:   "",
       sourceTitle: `306 NEWS ${dayLabel}`,
     });
-    if (!verdict.ok) {
+    if (verdict.severity === "HARD_FAIL") {
       console.error(`[ClaimVerifier] REJECTED 306 NEWS draft: ${verdict.unsupportedClaims.length} unsupported claims`);
       for (const c of verdict.unsupportedClaims) {
         console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);
