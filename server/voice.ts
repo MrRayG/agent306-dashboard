@@ -52,13 +52,41 @@ export const WRITING_RULES = `WRITING RULES:
 export const HASHTAG_RULES = `HASHTAGS: None. No hashtags. Let the content speak for itself.`;
 
 // -- SOURCING GROUNDING RULE -- post-Politico-hallucination guardrail -----
-// On 2026-04-22 a Deep Read cited Politico and fabricated stats, quotes, and
-// three nonexistent AI developers because the source fetch hit a bot wall
-// and the prompt licensed invention ("use your knowledge of this topic").
-// This rule is inherited by every writing engine (article, blog, podcast,
-// signal brief, academy, CYOA, news, reflection) via buildVoiceBlock().
-export const SOURCING_GROUNDING_RULE = `SOURCING — HARD RULE (non-negotiable):
-Every factual claim attributed to a source ('the article reports', 'according to X', 'X cites', 'X said', 'the study found', 'the report says') MUST be a verbatim quote or close paraphrase that appears in the source text you have been given. If a claim cannot be backed by the source text, do not include it. Do not use your training-data knowledge to fill in numbers, quotes, names, or dates. Inference, analysis, and commentary are welcome but must be clearly framed as your own perspective ('my read', 'the implication', 'I suspect', 'I think'), never as something the source said. Fabricated quotes or statistics are a hard failure — a verifier will reject the draft and it will not be published.`;
+// Incident history:
+//   2026-04-22 — Deep Read cited Politico and fabricated stats, quotes,
+//                and three nonexistent AI developers because the source
+//                fetch hit a bot wall and the prompt licensed invention.
+//   2026-04-24 — Follow-up Deep Read embedded a Lane B external fact
+//                (NCITE described as "a DHS Center of Excellence that
+//                receives funding from DHS") inside a sentence framed
+//                as reporting from the cited Politico article — the
+//                article never made that claim.
+// This rule is inherited by every writing engine via buildVoiceBlock().
+export const SOURCING_GROUNDING_RULE = `SOURCING — TWO-LANE HARD RULE (non-negotiable):
+
+Two rules for sourcing — a verifier enforces both:
+
+1. WHEN YOU ATTRIBUTE — when you write "the article reports", "according to X",
+   "X said", "X cited", "the study found", "the report says", "the briefing
+   showed", "the demonstration" — that claim MUST be in the source text.
+   Verbatim or close paraphrase. If it isn't there, cut it or rewrite it in
+   your own voice. Never embed an outside fact inside a "the article said"
+   sentence (e.g. describing a subject with a parenthetical or appositive
+   detail that is NOT in the source is a hard failure — it reads as
+   reporting but isn't).
+
+2. WHEN YOU BRING IN AN OUTSIDE FACT — you may cite statistics, studies,
+   benchmarks, or historical events from your own knowledge IF they connect
+   to your thesis. When you do, cite them with a real URL link, in your own
+   voice (e.g. "per Stanford HAI's 2025 AI Index, [link]") — never as if
+   the cited article reported them. If a fact doesn't connect to your
+   message, drop it. If you can't cite it, drop it. If you're not sure
+   whether it came from the source or your training, treat it as outside
+   and cite it.
+
+Fabricated quotes, invented statistics, or external facts dressed as
+reporting will be rejected by the post-write verifier and the draft will
+NOT be published.`;
 
 // -- AI CONTEXT -- shared market context -------------------------------
 export const AI_CONTEXT = `AI CONTEXT (you speak from inside, not outside):
