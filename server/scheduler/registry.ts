@@ -32,6 +32,7 @@ import { seedDreams } from "../dreamEngine.js";
 import { startXPostScheduler } from "../xPostScheduler.js";
 import { startFarcasterPostScheduler } from "../farcasterQueue.js";
 import { startDailyNewsDispatch } from "../routes.js";
+import { registerPhase1Experiment } from "../experiments/registerPhase1.js";
 
 export interface SchedulerDeps {
   xClient: TwitterApi | undefined;
@@ -180,6 +181,14 @@ export function startScheduler(deps: SchedulerDeps): void {
     return;
   }
   started = true;
+
+  // ── Phase 1 experiment registration (Gap C) ────────────────────────────────
+  // One-shot idempotent call — `experiment_key` is UNIQUE so the second-boot
+  // path returns ok:false with a "duplicate" reason rather than throwing.
+  // Gated by `featureFlags.experimentExploration`; flag-OFF (the default) is a
+  // silent skip. Wrapped in try/catch so a registration failure can never
+  // prevent scheduler boot — the system stays dormantly safe in that case.
+  registerPhase1Experiment();
 
   const active = SCHEDULED_ENGINES.filter(e => {
     try { return e.enabled(deps); } catch { return false; }

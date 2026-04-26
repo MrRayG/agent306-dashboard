@@ -29,6 +29,11 @@ export interface ExperimentAssignment {
   resolvedModel: string;
   /** The provider the dispatch path should route through. */
   resolvedProvider: string;
+  /** Rowid of the `experiment_trials` row written for this assignment.
+   *  Phase 1 metric callers use it to correlate the LLM response back to
+   *  this trial via `recordTrialOutcome`. `null` if the trial-row write
+   *  failed (recordTrial swallows DB errors). */
+  trialId: number | null;
 }
 
 /** Parses an arm config blob. Returns null when the JSON is malformed
@@ -46,26 +51,32 @@ function parseArmConfig(raw: string): { model: string; provider: string } | null
 }
 
 /** Writes one row into `experiment_trials`. Never throws — a write
- *  failure must not break the dispatch path. */
+ *  failure must not break the dispatch path. Returns the inserted rowid
+ *  (or `null` if the write failed) so the caller can later attach an
+ *  outcome metric via `recordTrialOutcome`. */
 export function recordTrial(args: {
   experimentKey: string;
   arm: "baseline" | "treatment";
   taskKey: string;
   resolvedModel: string;
-}): void {
+}): number | null {
   try {
-    db.insert(experimentTrials)
+    const result = db.insert(experimentTrials)
       .values({
         experimentKey: args.experimentKey,
         arm:           args.arm,
         taskKey:       args.taskKey,
         resolvedModel: args.resolvedModel,
-        // contextHash + outcomeMetric are populated by Phase 2 — see
-        // docs/EXPLORATION_POLICY.md §3.2.
+        // contextHash is populated by Phase 2 — see
+        // docs/EXPLORATION_POLICY.md §3.2. outcomeMetric is filled in by
+        // Phase 1's recordTrialOutcome when the response is graded.
       })
       .run();
+    const rowid = result.lastInsertRowid;
+    return typeof rowid === "bigint" ? Number(rowid) : (rowid ?? null);
   } catch (e: any) {
     console.warn("[experiments] recordTrial failed:", e?.message ?? e);
+    return null;
   }
 }
 
@@ -96,7 +107,7 @@ export function runExperiment(taskKey: string): ExperimentAssignment | null {
     return null;
   }
 
-  recordTrial({
+  const trialId = recordTrial({
     experimentKey: exp.experimentKey,
     arm,
     taskKey,
@@ -108,5 +119,6 @@ export function runExperiment(taskKey: string): ExperimentAssignment | null {
     arm,
     resolvedModel:    cfg.model,
     resolvedProvider: cfg.provider,
+    trialId,
   };
 }
