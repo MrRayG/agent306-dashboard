@@ -29,8 +29,12 @@ export const PHASE1_EXPERIMENT = {
     provider: "openrouter",
   },
   treatment: {
-    // PROVISIONAL — finalize before flipping EXPERIMENT_EXPLORATION.
-    model:    "google/gemini-3-flash-preview",
+    // Locked in 2026-04-26 — Pro-tier quality-up experiment.
+    // GPT-5 chosen for strongest server-enforced JSON contract
+    // (OpenAI Structured Outputs) at lowest Pro-tier cost
+    // (2.5× input / 3.3× output vs gemini-3-flash-preview).
+    // Routes via existing OPENROUTER_API_KEY — no new credentials.
+    model:    "openai/gpt-5",
     provider: "openrouter",
   },
   notes: "Phase 1: routine-tier JSON-validity A/B on analysis-intake.",
