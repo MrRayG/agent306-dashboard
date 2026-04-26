@@ -32,6 +32,9 @@ import { seedDreams } from "../dreamEngine.js";
 import { startXPostScheduler } from "../xPostScheduler.js";
 import { startFarcasterPostScheduler } from "../farcasterQueue.js";
 import { startDailyNewsDispatch } from "../routes.js";
+import { featureFlags } from "../featureFlags.js";
+import { registerExperiment } from "../experiments/registerExperiment.js";
+import { PHASE1_EXPERIMENT } from "../experiments/phase1Experiment.js";
 
 export interface SchedulerDeps {
   xClient: TwitterApi | undefined;
@@ -181,6 +184,14 @@ export function startScheduler(deps: SchedulerDeps): void {
   }
   started = true;
 
+  // ── Phase 1 experiment registration (Gap C) ────────────────────────────────
+  // One-shot idempotent call — `experiment_key` is UNIQUE so the second-boot
+  // path returns ok:false with a "duplicate" reason rather than throwing.
+  // Gated by `featureFlags.experimentExploration`; flag-OFF (the default) is a
+  // silent skip. Wrapped in try/catch so a registration failure can never
+  // prevent scheduler boot — the system stays dormantly safe in that case.
+  registerPhase1Experiment();
+
   const active = SCHEDULED_ENGINES.filter(e => {
     try { return e.enabled(deps); } catch { return false; }
   });
@@ -213,6 +224,63 @@ export function startScheduler(deps: SchedulerDeps): void {
     } else {
       setTimeout(run, engine.staggerMs);
     }
+  }
+}
+
+/** Phase 1 experiment registration — idempotent boot-time hook. Failures are
+ *  logged at warn level and swallowed so the scheduler keeps booting. */
+function registerPhase1Experiment(): void {
+  if (!featureFlags.experimentExploration) {
+    console.log("[ExperimentBoot] experimentExploration flag OFF — skipping registration");
+    logEvent({
+      engine: "experiments",
+      event:  "experiment_registration_skipped",
+      data:   { reason: "flag_off", experimentKey: PHASE1_EXPERIMENT.experimentKey },
+    });
+    return;
+  }
+  try {
+    const r = registerExperiment(PHASE1_EXPERIMENT);
+    if (r.ok) {
+      console.log(
+        `[ExperimentBoot] registered experiment_key=${PHASE1_EXPERIMENT.experimentKey} ` +
+        `baseline=${PHASE1_EXPERIMENT.baseline.model} ` +
+        `treatment=${PHASE1_EXPERIMENT.treatment.model} ` +
+        `trafficPct=${PHASE1_EXPERIMENT.trafficPct}`,
+      );
+      logEvent({
+        engine: "experiments",
+        event:  "experiment_registered",
+        data: {
+          experimentKey: PHASE1_EXPERIMENT.experimentKey,
+          taskKey:       PHASE1_EXPERIMENT.taskKey,
+          baseline:      PHASE1_EXPERIMENT.baseline.model,
+          treatment:     PHASE1_EXPERIMENT.treatment.model,
+          trafficPct:    PHASE1_EXPERIMENT.trafficPct,
+        },
+      });
+    } else {
+      // Duplicate-key path is the steady state on every boot after the first
+      // — log at info so it's visible but not noisy.
+      const dup = /duplicate/i.test(r.reason ?? "");
+      console.log(
+        `[ExperimentBoot] registration ${dup ? "no-op (already registered)" : "failed"}: ${r.reason ?? "unknown"}`,
+      );
+      logEvent({
+        engine: "experiments",
+        event:  dup ? "experiment_already_registered" : "experiment_registration_failed",
+        level:  dup ? "info" : "warn",
+        data:   { experimentKey: PHASE1_EXPERIMENT.experimentKey, reason: r.reason },
+      });
+    }
+  } catch (e: any) {
+    console.warn(`[ExperimentBoot] registration threw — continuing scheduler boot: ${e?.message ?? e}`);
+    logEvent({
+      engine: "experiments",
+      event:  "experiment_registration_failed",
+      level:  "warn",
+      data:   { experimentKey: PHASE1_EXPERIMENT.experimentKey, error: e?.message ?? String(e) },
+    });
   }
 }
 
