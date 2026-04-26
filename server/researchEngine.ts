@@ -270,6 +270,8 @@ export interface Hypothesis {
   // Wave 2.3 PR-3 — Post-Resolution Action Gate. Required when transitioning
   // to any resolved state. Legacy records without this field remain readable.
   actionWithin24h?:               ResolutionAction;
+  // Gap A Phase 1 — model that produced evaluationResult.confidence; null for legacy
+  originatingModel?:              string;
 }
 
 export type HypothesisDomain = "ai-news" | "regulatory" | "foundational" | "unknown";

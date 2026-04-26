@@ -193,15 +193,67 @@ The capture hook is wired at exactly one site (`resolveHypothesis`) and is a no-
 
 ---
 
-## 6 · Phase 1 plan — Capture (next PR after Phase 0)
+## 6 · Phase 1 plan — Capture (this PR)
 
-1. Backfill: one-shot script reads `research_lab.blob`, walks resolved hypotheses, writes one row per resolution. Idempotent via `(hypothesisId, resolvedAt)` upsert.
-2. Flip `featureFlags.calibrationCapture` to `true` on staging only via env var.
-3. Watch `engine_events` for any write errors over 24h.
-4. Flip on production.
-5. Open follow-up PR to add `originatingModel` to `Hypothesis` type and propagate it from the model-router site that initiates evaluation.
+Phase 1 is shipped as additive code only. The flag remains OFF in code; the
+operator enables it per-deploy via `CALIBRATION_CAPTURE=true`. The runbook
+below is the rollout sequence after merging.
 
-Exit criteria: 7 days of clean writes; no errors; `recentEvents` (now correctly filtering — PR #227) shows expected volume.
+### 6.1 What Phase 1 ships
+
+- `originatingModel` field on `Hypothesis` (and `HypothesisAssessment`),
+  populated at the canonical `evaluateHypothesis` write site by a new
+  sibling helper `callGrokWithModelMeta` in `reasoningEngine.ts`. The
+  existing `callGrokWithModel` is unchanged; its 7 other callers are
+  unaffected.
+- `recordOutcome` now reads `hyp.originatingModel` instead of always
+  writing `null`.
+- `server/calibration/backfillOutcomes.ts` — idempotent operator script
+  that walks `research_lab.blob` and writes one `hypothesis_outcomes`
+  row per terminally-resolved hypothesis. Skips rows that already exist
+  by `(hypothesisId, resolvedAt)`. Bypasses the capture flag — it's a
+  manual tool, not the on-resolution hook.
+
+### 6.2 Runbook — staging then production
+
+1. Merge this PR.
+2. On the **staging** deployment env: set `CALIBRATION_CAPTURE=true`. Restart.
+3. Run `npm run calibration:backfill` once on staging. Confirm the count
+   summary printed at the end is sane (`scanned` should match the
+   number of resolved hypotheses in `research_lab`).
+4. Watch logs for **24h**. Look for any `[calibration] recordOutcome failed`
+   warnings. None expected.
+5. After a daily cycle has run, query `hypothesis_outcomes` count; it
+   should match the number of new resolutions in that cycle.
+6. If clean: set `CALIBRATION_CAPTURE=true` on **prod**. Restart.
+   Run `npm run calibration:backfill` on prod.
+7. Open the Phase 2 PR (cron + scoring + Mission Control panel).
+
+### 6.3 Rollback
+
+Set `CALIBRATION_CAPTURE=false` and restart. The hook becomes a no-op
+immediately. Existing rows in `hypothesis_outcomes` remain — additive
+data, safe to leave. To purge:
+
+```sql
+DELETE FROM hypothesis_outcomes;
+```
+
+You almost certainly don't want to. Phase 2 will read this data, and
+losing the backfill means re-running it.
+
+### 6.4 Environment variables
+
+| Var | Default | Effect |
+|---|---|---|
+| `CALIBRATION_CAPTURE` | `false` | When `true`, `resolveHypothesis()` writes one row to `hypothesis_outcomes` per terminally-resolved hypothesis. The on-resolution write site is the only consumer of this flag. The backfill script bypasses it. |
+
+### 6.5 Exit criteria for moving to Phase 2
+
+- 7 days of clean writes — no `[calibration] recordOutcome failed` warnings
+- `recentEvents` (correctly filtering after PR #227) shows expected volume
+- `hypothesis_outcomes` row count growth matches `research_lab` resolution
+  cadence over those 7 days
 
 ## 7 · Phase 2 plan — Score (next PR after Phase 1 stable)
 

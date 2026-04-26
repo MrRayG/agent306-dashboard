@@ -993,6 +993,7 @@ async function autoTestHypotheses(): Promise<number> {
           gapsIdentified: assessment.gapsIdentified,
         };
         (freshHyp as any).rubricScores = assessment.rubricScores;
+        (freshHyp as any).originatingModel = assessment.originatingModel ?? null;
 
         // Technique 5: MAD — decompose low-confidence hypotheses
         if (assessment.confidence < 0.7) {

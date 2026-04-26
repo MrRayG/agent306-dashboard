@@ -26,6 +26,10 @@ export interface ResolvableHypothesis extends NormalizableHypothesis {
   status:           string;     // already-resolved status from researchEngine
   resolvedAt?:      string;
   domain?:          string;
+  // Gap A Phase 1 — populated by reasoningEngine.evaluateHypothesis from
+  // the LLMResponse.model that produced evaluationResult.confidence.
+  // Legacy hypotheses lack this; null in the row.
+  originatingModel?: string | null;
 }
 
 interface OutcomeMapping {
@@ -76,10 +80,10 @@ export function recordOutcome(hyp: ResolvableHypothesis): void {
         hypothesisId:        hyp.id,
         predictedConfidence: norm.predictedConfidence,
         predictedTrustScore: norm.predictedTrustScore,
-        // originatingModel deliberately null in Phase 0 — see design §5.4
-        // ("does not modify Hypothesis interface"). Phase 1 backfill +
-        // future PR adds the field at the write site upstream.
-        originatingModel:    null,
+        // Phase 1 (Gap A): the field is now populated upstream from
+        // reasoningEngine.evaluateHypothesis. Legacy resolutions still
+        // lack it and write null — that's expected and documented.
+        originatingModel:    hyp.originatingModel ?? null,
         resolvedAt,
         resolutionStatus:    hyp.status,
         actualOutcome:       mapping.actualOutcome,
