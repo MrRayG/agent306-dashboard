@@ -585,6 +585,9 @@ export interface HypothesisAssessment {
     noveltyInsight: number;
     actionability: number;
   };
+  // Gap A Phase 1 — the model that produced this confidence; propagated
+  // to Hypothesis.originatingModel and consumed by calibration capture.
+  originatingModel?: string | null;
 }
 
 export async function evaluateHypothesis(
@@ -634,23 +637,26 @@ ${relatedKnowledge.slice(0, 3000)}
 
 Assess whether this hypothesis has enough evidence to move from "forming" to active "testing".`;
 
-  // Use premium model for primary evaluation
-  const result = await callGrokWithModel("hypothesis-evaluation", systemPrompt, userPrompt);
+  // Use premium model for primary evaluation. Meta variant returns the
+  // resolved model name so we can attribute calibration to it later.
+  const result = await callGrokWithModelMeta("hypothesis-evaluation", systemPrompt, userPrompt);
   if (!result) return null;
+  const { parsed, model: resolvedModel } = result;
 
   const assessment: HypothesisAssessment = {
-    verdict: result.verdict ?? "needs_more_evidence",
-    confidence: result.confidence ?? 0.5,
-    evidenceQuality: result.evidenceQuality ?? "unknown",
-    reasoningChain: result.reasoningChain ?? "",
-    gapsIdentified: result.gapsIdentified ?? [],
+    verdict: parsed.verdict ?? "needs_more_evidence",
+    confidence: parsed.confidence ?? 0.5,
+    evidenceQuality: parsed.evidenceQuality ?? "unknown",
+    reasoningChain: parsed.reasoningChain ?? "",
+    gapsIdentified: parsed.gapsIdentified ?? [],
     rubricScores: {
-      evidenceStrength: result.rubricScores?.evidenceStrength ?? 5,
-      logicalCoherence: result.rubricScores?.logicalCoherence ?? 5,
-      falsifiability: result.rubricScores?.falsifiability ?? 5,
-      noveltyInsight: result.rubricScores?.noveltyInsight ?? 5,
-      actionability: result.rubricScores?.actionability ?? 5,
+      evidenceStrength: parsed.rubricScores?.evidenceStrength ?? 5,
+      logicalCoherence: parsed.rubricScores?.logicalCoherence ?? 5,
+      falsifiability: parsed.rubricScores?.falsifiability ?? 5,
+      noveltyInsight: parsed.rubricScores?.noveltyInsight ?? 5,
+      actionability: parsed.rubricScores?.actionability ?? 5,
     },
+    originatingModel: resolvedModel,
   };
 
   console.log(`[Reasoning] Hypothesis evaluation — verdict: ${assessment.verdict}, confidence: ${assessment.confidence}, rubric avg: ${(
@@ -1155,6 +1161,44 @@ async function callGrokWithModel(taskName: string, systemPrompt: string, userPro
     });
     raw = response.text || "{}";
     return safeParseLLMJson(raw, "Reasoning.task");
+  } catch (e: any) {
+    console.error(`[ReasoningEngine] LLM call failed (${taskName}):`, e.message, `— raw: ${raw?.slice(0, 200)}`);
+    return null;
+  }
+}
+
+// Variant of callGrokWithModel that also returns the resolved model name
+// for calibration attribution (Gap A Phase 1). Same behavior otherwise —
+// kept as a sibling rather than modifying callGrokWithModel because the
+// existing helper has 7 other callers that don't need the meta payload.
+async function callGrokWithModelMeta(
+  taskName: string,
+  systemPrompt: string,
+  userPrompt: string,
+): Promise<{ parsed: any; model: string | null } | null> {
+  if (!GROK_API_KEY) return null;
+
+  const now = Date.now();
+  const wait = GROK_RATE_MS - (now - lastGrokCall);
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  lastGrokCall = Date.now();
+
+  let raw = "";
+  try {
+    const response = await callLLM({
+      task: taskName,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      maxTokens: 2000,
+      temperature: 0.4,
+      timeoutMs: 40000,
+    });
+    raw = response.text || "{}";
+    const parsed = safeParseLLMJson(raw, "Reasoning.task");
+    if (!parsed) return null;
+    return { parsed, model: response.model ?? null };
   } catch (e: any) {
     console.error(`[ReasoningEngine] LLM call failed (${taskName}):`, e.message, `— raw: ${raw?.slice(0, 200)}`);
     return null;
