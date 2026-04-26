@@ -50,3 +50,13 @@ export function importMemoryKnowledgeFromJson(): boolean {
   writeMemoryKnowledgeBlob(body);
   return true;
 }
+
+/** Migration safety guard — true iff the DB row exists with a non-empty blob. */
+export function memoryKnowledgeRowExists(): boolean {
+  try {
+    const row = db.select().from(memoryKnowledge).where(eq(memoryKnowledge.id, KEY)).get();
+    return !!(row && row.blob && row.blob.length > 2);
+  } catch {
+    return false;
+  }
+}

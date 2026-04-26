@@ -25,6 +25,9 @@ import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders, LLM_TIMEOUT
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 import { postChatCompletions } from "./llmCall.js";
+import { readGoalsBlob, writeGoalsBlob } from "./repositories/goalRepository.js";
+import { readResearchBlob, writeResearchBlob } from "./repositories/researchRepository.js";
+import { isDbStateEnabled } from "./repositories/jsonFallback.js";
 const GROK_CHAT_API    = LLM_BASE_URL;
 const PERPLEXITY_API   = "https://api.perplexity.ai";
 const RESEARCH_FILE    = dataPath("research_lab.json");
@@ -297,16 +300,15 @@ interface ResearchLab {
 // ── State ─────────────────────────────────────────────────────────────────────
 
 function loadLab(): ResearchLab {
-  try {
-    if (fs.existsSync(RESEARCH_FILE)) {
-      const data = JSON.parse(fs.readFileSync(RESEARCH_FILE, "utf8"));
-      // Defensive defaults for missing fields (file may predate stats addition)
-      if (!data.stats) data.stats = { totalResearched: 0, totalPublished: 0, totalDeclined: 0, hypothesesFormed: 0, hypothesesConfirmed: 0 };
-      if (!data.hypotheses) data.hypotheses = [];
-      if (!data.topics) data.topics = [];
-      return data;
-    }
-  } catch {}
+  // Read through the researchRepository (DB → JSON → JSON.bak). Falls back
+  // to in-memory defaults if nothing exists yet.
+  const data = readResearchBlob<any>();
+  if (data) {
+    if (!data.stats) data.stats = { totalResearched: 0, totalPublished: 0, totalDeclined: 0, hypothesesFormed: 0, hypothesesConfirmed: 0 };
+    if (!data.hypotheses) data.hypotheses = [];
+    if (!data.topics) data.topics = [];
+    return data as ResearchLab;
+  }
   return {
     topics: [],
     hypotheses: [],
@@ -318,7 +320,22 @@ function loadLab(): ResearchLab {
 function saveLab(lab: ResearchLab) {
   lab.lastUpdated = new Date().toISOString();
   if (!lab.stats) lab.stats = { totalResearched: 0, totalPublished: 0, totalDeclined: 0, hypothesesFormed: 0, hypothesesConfirmed: 0 };
-  try { fs.writeFileSync(RESEARCH_FILE, JSON.stringify(lab, null, 2)); } catch {}
+  let dbOk = false;
+  if (isDbStateEnabled()) {
+    try {
+      writeResearchBlob(lab);
+      dbOk = true;
+    } catch (e: any) {
+      console.warn("[Research] DB write failed, falling back to JSON:", e?.message);
+    }
+  }
+  // Mirror to JSON if the live file already exists (pre-migration boxes,
+  // tests that pre-seed the file, ops who haven't run the migration yet)
+  // OR if the DB write didn't succeed. Once the migration renames the live
+  // JSON to .bak, the mirror stops happening — DB becomes canonical.
+  if (!dbOk || fs.existsSync(RESEARCH_FILE)) {
+    try { fs.writeFileSync(RESEARCH_FILE, JSON.stringify(lab, null, 2)); } catch {}
+  }
 }
 
 export function getResearchLab(): ResearchLab { return loadLab(); }
@@ -1867,14 +1884,16 @@ interface GoalsStore {
 }
 
 function loadGoals(): GoalsStore {
-  try {
-    if (fs.existsSync(GOALS_FILE)) {
-      const data = JSON.parse(fs.readFileSync(GOALS_FILE, "utf8"));
-      if (!data.stats) data.stats = { total: 0, active: 0, achieved: 0 };
-      if (!data.goals) data.goals = [];
-      return data;
-    }
-  } catch {}
+  // Read through the goalRepository (DB → JSON → JSON.bak). This makes the
+  // engine survive the on-boot JSON→DB migration: when migrate_json_to_db
+  // renames agent_goals.json → .bak, the read-through still finds the
+  // canonical blob.
+  const data = readGoalsBlob<any>();
+  if (data) {
+    if (!data.stats) data.stats = { total: 0, active: 0, achieved: 0 };
+    if (!data.goals) data.goals = [];
+    return data as GoalsStore;
+  }
   return {
     goals: [],
     lastUpdated: new Date().toISOString(),
@@ -1888,12 +1907,26 @@ function saveGoals(store: GoalsStore) {
   store.stats.total    = store.goals.length;
   store.stats.active   = store.goals.filter(g => g.status === "active").length;
   store.stats.achieved = store.goals.filter(g => g.status === "achieved").length;
-  try {
-    fs.writeFileSync(GOALS_FILE, JSON.stringify(store, null, 2));
-    console.log(`[Goals] Saved ${store.goals.length} goals to ${GOALS_FILE}`);
-  } catch (e: any) {
-    console.error(`[Goals] FAILED to save goals: ${e.message} — path: ${GOALS_FILE}`);
+  let dbOk = false;
+  if (isDbStateEnabled()) {
+    try {
+      writeGoalsBlob(store);
+      dbOk = true;
+    } catch (e: any) {
+      console.error(`[Goals] DB write failed, falling back to JSON: ${e?.message}`);
+    }
   }
+  // Mirror to JSON when the live file is still present (pre-migration or
+  // legacy readers); once migrate_json_to_db renames it to .bak, the DB
+  // is canonical and we stop mirroring.
+  if (!dbOk || fs.existsSync(GOALS_FILE)) {
+    try {
+      fs.writeFileSync(GOALS_FILE, JSON.stringify(store, null, 2));
+    } catch (e: any) {
+      console.error(`[Goals] FAILED to save goals: ${e.message} — path: ${GOALS_FILE}`);
+    }
+  }
+  if (dbOk) console.log(`[Goals] Saved ${store.goals.length} goals to DB (agent_goals)`);
 }
 
 export function getGoals(): GoalsStore { return loadGoals(); }

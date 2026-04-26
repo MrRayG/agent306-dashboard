@@ -31,7 +31,7 @@ export interface ReadThroughOpts<T> {
 
 export function readThrough<T>(opts: ReadThroughOpts<T>): T | null {
   if (!isDbStateEnabled()) {
-    return readJson<T>(opts.jsonPath, opts.onFallback);
+    return readJsonOrBak<T>(opts.jsonPath, opts.onFallback);
   }
   try {
     const row = opts.dbRead();
@@ -39,7 +39,27 @@ export function readThrough<T>(opts: ReadThroughOpts<T>): T | null {
   } catch (e: any) {
     console.warn("[Repository] DB read failed, falling back to JSON:", e?.message);
   }
-  return readJson<T>(opts.jsonPath, opts.onFallback);
+  // DB row missing — also try the .bak file. The on-boot migration renames
+  // <name>.json to <name>.bak after a successful import; if a consumer is
+  // still reading via this shim while the DB row hasn't been populated
+  // (e.g., partial migration, manual restore, or a newly-wired engine
+  // recovering from a desync) the .bak is the best-known source of truth.
+  return readJsonOrBak<T>(opts.jsonPath, opts.onFallback);
+}
+
+function readJsonOrBak<T>(
+  path: string,
+  onFallback?: (source: "json" | "missing") => void,
+): T | null {
+  const primary = readJson<T>(path, onFallback);
+  if (primary != null) return primary;
+  // Live JSON missing or corrupt — try the .bak written by the migration.
+  const bak = readJson<T>(`${path}.bak`);
+  if (bak != null) {
+    onFallback?.("json");
+    return bak;
+  }
+  return null;
 }
 
 function readJson<T>(path: string, onFallback?: (source: "json" | "missing") => void): T | null {

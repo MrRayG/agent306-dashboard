@@ -4239,11 +4239,22 @@ needsHelp: true only when you genuinely need his direction or information`,
       }
       seen.add(g.id);
     }
-    // Write back
+    // Write back via the goalRepository so the change lands DB-first
+    // post-migration. Mirror to JSON when the live file is still present
+    // (pre-migration / legacy readers); once renamed to .bak, DB is canonical.
+    const { writeGoalsBlob } = require("./repositories/goalRepository.js");
+    const { isDbStateEnabled } = require("./repositories/jsonFallback.js");
     const fsMod = require("fs");
     const { dataPath: dp } = require("./dataPaths.js");
     store.lastUpdated = new Date().toISOString();
-    fsMod.writeFileSync(dp("agent_goals.json"), JSON.stringify(store, null, 2));
+    let dbOk = false;
+    if (isDbStateEnabled()) {
+      try { writeGoalsBlob(store); dbOk = true; } catch {}
+    }
+    const goalsFile = dp("agent_goals.json");
+    if (!dbOk || fsMod.existsSync(goalsFile)) {
+      fsMod.writeFileSync(goalsFile, JSON.stringify(store, null, 2));
+    }
     res.json({ ok: true, fixed, goals: store.goals.map((g: any) => ({ id: g.id, title: g.title })) });
   });
 
@@ -4301,9 +4312,18 @@ needsHelp: true only when you genuinely need his direction or information`,
     if (!goal) return res.status(404).json({ error: "Goal not found" });
     (goal as any).completedMilestones = [];
     (goal as any).updatedAt = new Date().toISOString();
+    const { writeGoalsBlob } = require("./repositories/goalRepository.js");
+    const { isDbStateEnabled } = require("./repositories/jsonFallback.js");
     const fs = require("fs");
     const { dataPath } = require("./dataPaths.js");
-    fs.writeFileSync(dataPath("agent_goals.json"), JSON.stringify(store, null, 2));
+    let dbOk = false;
+    if (isDbStateEnabled()) {
+      try { writeGoalsBlob(store); dbOk = true; } catch {}
+    }
+    const goalsFile = dataPath("agent_goals.json");
+    if (!dbOk || fs.existsSync(goalsFile)) {
+      fs.writeFileSync(goalsFile, JSON.stringify(store, null, 2));
+    }
     res.json({ ok: true, goal: (goal as any).title });
   });
 

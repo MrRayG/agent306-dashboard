@@ -41,3 +41,13 @@ export function importCompetencyFromJson(): boolean {
   writeCompetencyBlob(body);
   return true;
 }
+
+/** Migration safety guard — true iff the DB row exists with a non-empty blob. */
+export function competencyRowExists(): boolean {
+  try {
+    const row = db.select().from(competencyProfileTable).where(eq(competencyProfileTable.id, KEY)).get();
+    return !!(row && row.blob && row.blob.length > 2);
+  } catch {
+    return false;
+  }
+}

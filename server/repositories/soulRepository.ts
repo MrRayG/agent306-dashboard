@@ -55,3 +55,13 @@ export function importSoulFromJson(): boolean {
   writeSoulBlob(body, "initial JSON import");
   return true;
 }
+
+/** Migration safety guard — true iff the DB row exists with a non-empty blob. */
+export function soulRowExists(): boolean {
+  try {
+    const row = db.select().from(memorySoul).where(eq(memorySoul.id, KEY)).get();
+    return !!(row && row.blob && row.blob.length > 2);
+  } catch {
+    return false;
+  }
+}
