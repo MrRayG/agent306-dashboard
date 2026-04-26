@@ -118,6 +118,20 @@ describe("claimVerifier — fail-closed on LLM judge outage", () => {
     // Every unverifiable sentence appears in unsupportedClaims with lane='unverifiable'.
     const unverifiable = v.unsupportedClaims.filter((c) => c.lane === "unverifiable");
     assert.ok(unverifiable.length >= 1);
+    // The judgeOutage block must carry an accurate `affectedSentences`
+    // counter — articleEngine reads it to compose the operator-facing
+    // quarantine reason ("judge_unreachable: N unverifiable claim(s)").
+    // Pin it to the LANE_A_UNVERIFIABLE summary count so a future refactor
+    // can't drift them apart silently.
+    assert.equal(
+      v.verifierReport.judgeOutage!.affectedSentences,
+      v.verifierReport.summary.laneAUnverifiable,
+      "affectedSentences must equal laneAUnverifiable",
+    );
+    assert.ok(
+      v.verifierReport.judgeOutage!.affectedSentences >= 1,
+      "affectedSentences must be >= 1 when at least one sentence was unverifiable",
+    );
   });
 
   it("judge throws transport error → LANE_A_UNVERIFIABLE + HARD_FAIL", async () => {
