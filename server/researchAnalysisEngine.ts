@@ -29,10 +29,18 @@ import { addKnowledge, knowledge } from "./memoryEngine.js";
 import { findConnections } from "./knowledge-graph.js";
 
 import { postChatCompletions } from "./llmCall.js";
+import { runExperiment } from "./experiments/runExperiment.js";
+import { recordTrialOutcome } from "./experiments/recordTrialOutcome.js";
 const LLM_RATE_MS = 5000;
 let lastLLMCall = 0;
 
 // ── LLM Call Helper ─────────────────────────────────────────────────────────
+
+/** Tasks for which we record `routine_task_json_validity` (1.0 = parsed,
+ *  0.0 = parse failed) when an experiment assigns this dispatch to an arm.
+ *  Phase 1 ships exactly one surface here; additional routine tasks are
+ *  Phase 1.5 follow-ups. */
+const JSON_VALIDITY_METRIC_TASKS = new Set<string>(["analysis-intake"]);
 
 async function callAnalysisLLM(
   systemPrompt: string,
@@ -51,9 +59,23 @@ async function callAnalysisLLM(
   if (wait > 0) await new Promise(r => setTimeout(r, wait));
   lastLLMCall = Date.now();
 
+  // Gap C — pre-resolve the experiment assignment for this dispatch so we
+  // can capture the trial id and record the JSON-validity outcome below.
+  // When the flag is OFF or no experiment is registered for this task,
+  // assignment is null and the dispatch falls back to the tier default
+  // model via `getModel(task)`.
+  //
+  // We must NOT also call `getModel(task)` when an assignment exists —
+  // `getModel` itself calls `runExperiment` (via resolveTask) which would
+  // write a second, duplicate trial row.
+  const assignment = runExperiment(task);
+  const dispatchModel = assignment?.resolvedModel ?? getModel(task);
+  const wantsJsonValidityMetric =
+    !!assignment && JSON_VALIDITY_METRIC_TASKS.has(task) && assignment.trialId !== null;
+
   try {
     const res = await postChatCompletions({
-        model: getModel(task),
+        model: dispatchModel,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -65,14 +87,26 @@ async function callAnalysisLLM(
     if (!res.ok) {
       const errBody = await res.text().catch(() => "");
       console.error(`[ResearchAnalysis] LLM API error (${task}): ${res.status} — ${errBody.slice(0, 300)}`);
+      // HTTP failure: count as a JSON-validity miss (no parsable response).
+      if (wantsJsonValidityMetric) {
+        recordTrialOutcome(assignment!.trialId!, 0.0);
+      }
       return null;
     }
 
     const data = await res.json() as any;
     const raw = data.choices?.[0]?.message?.content ?? "{}";
-    return safeParseLLMJson(raw, `ResearchAnalysis.${task}`);
+    const parsed = safeParseLLMJson(raw, `ResearchAnalysis.${task}`);
+    if (wantsJsonValidityMetric) {
+      recordTrialOutcome(assignment!.trialId!, parsed === null ? 0.0 : 1.0);
+    }
+    return parsed;
   } catch (e: any) {
     console.error(`[ResearchAnalysis] LLM call failed (${task}):`, e.message);
+    // Network / timeout failure: parse never happened — record 0.0.
+    if (wantsJsonValidityMetric) {
+      recordTrialOutcome(assignment!.trialId!, 0.0);
+    }
     return null;
   }
 }
