@@ -21,7 +21,7 @@
 
 import { db } from "../db.js";
 import { engineEvents, ENGINE_EVENT_LEVELS, type EngineEventLevel } from "@shared/schema";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 export interface LogEventInput {
   engine: string;
@@ -83,8 +83,17 @@ export function logEvent(input: LogEventInput): void {
 /** Fetch recent events (for the Diagnostics page / ops). */
 export function recentEvents(opts: { engine?: string; level?: EngineEventLevel; limit?: number } = {}): any[] {
   const limit = Math.max(1, Math.min(500, opts.limit ?? 100));
-  let q = db.select().from(engineEvents).orderBy(desc(engineEvents.id)).limit(limit);
-  if (opts.engine) q = q.where(eq(engineEvents.engine, opts.engine)) as any;
-  if (opts.level) q = q.where(eq(engineEvents.level, opts.level)) as any;
-  return q.all();
+  // Build the predicate first so `.where()` is applied BEFORE `.orderBy()` /
+  // `.limit()`. The previous chain tacked `.where()` on after `.limit()` with
+  // `as any` casts; in Drizzle that does not compose into the same prepared
+  // statement and the engine/level filters silently no-opped.
+  const filters = [];
+  if (opts.engine) filters.push(eq(engineEvents.engine, opts.engine));
+  if (opts.level) filters.push(eq(engineEvents.level, opts.level));
+  const base = db.select().from(engineEvents);
+  const filtered =
+    filters.length === 0 ? base
+    : filters.length === 1 ? base.where(filters[0])
+    : base.where(and(...filters));
+  return filtered.orderBy(desc(engineEvents.id)).limit(limit).all();
 }
