@@ -38,6 +38,8 @@ import {
   findRecommendationBySourceInsightId,
 } from "./selfRecommendationEngine.js";
 import { logEvent } from "./observability/structuredLog.js";
+import { writeGoalsBlob } from "./repositories/goalRepository.js";
+import { isDbStateEnabled } from "./repositories/jsonFallback.js";
 // ── Types ──────────────────────────────────────────────────────
 
 export interface MilestoneSpec {
@@ -637,7 +639,12 @@ export async function runGoalEngine(evalResult?: EvalResult, grokKey?: string): 
           });
 
           // Store extended fields on the goal object
-          // These are the new optional fields we added to AgentGoal
+          // These are the new optional fields we added to AgentGoal.
+          // Route through the goalRepository so the write goes DB-first
+          // post-migration; the legacy direct JSON write was a silent
+          // desync source (agent_goals.json gets renamed to .bak on Docker
+          // boot and the engines that read via the repository never saw
+          // these enrichments).
           try {
             const goalStore = getGoals();
             const stored = goalStore.goals.find((sg: AgentGoal) => sg.id === goal.id);
@@ -646,7 +653,13 @@ export async function runGoalEngine(evalResult?: EvalResult, grokKey?: string): 
               (stored as any).targetDimension = g.targetDimension;
               (stored as any).targetCompetencies = g.targetCompetencies;
               const goalsFile = dataPath("agent_goals.json");
-              fs.writeFileSync(goalsFile, JSON.stringify(goalStore, null, 2));
+              let dbOk = false;
+              if (isDbStateEnabled()) {
+                try { writeGoalsBlob(goalStore); dbOk = true; } catch {}
+              }
+              if (!dbOk || fs.existsSync(goalsFile)) {
+                fs.writeFileSync(goalsFile, JSON.stringify(goalStore, null, 2));
+              }
             }
           } catch (e: any) {
             console.warn(`[GoalEngine] Failed to store milestoneSpecs for "${g.title}":`, e.message);

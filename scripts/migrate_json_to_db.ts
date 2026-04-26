@@ -14,30 +14,36 @@
  * Idempotent — re-running is safe. A .bak file that already exists is NOT
  * overwritten (the live JSON gets `.bak-<timestamp>` instead). The script
  * prints a small report at the end.
+ *
+ * Safety guard (added 2026-04-25): we only rename the source JSON to .bak
+ * AFTER verifying the DB row exists with a non-empty blob via the
+ * repository's `*RowExists()` helper. If the row is missing or empty we
+ * leave the JSON in place so legacy readers still find their data.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import * as fs from "fs";
 import * as path from "path";
 import { dataPath } from "../server/dataPaths.js";
-import { importMemoryKnowledgeFromJson } from "../server/repositories/memoryRepository.js";
-import { importSoulFromJson } from "../server/repositories/soulRepository.js";
-import { importGoalsFromJson } from "../server/repositories/goalRepository.js";
-import { importCompetencyFromJson } from "../server/repositories/competencyRepository.js";
-import { importResearchFromJson } from "../server/repositories/researchRepository.js";
+import { importMemoryKnowledgeFromJson, memoryKnowledgeRowExists } from "../server/repositories/memoryRepository.js";
+import { importSoulFromJson, soulRowExists } from "../server/repositories/soulRepository.js";
+import { importGoalsFromJson, goalsRowExists } from "../server/repositories/goalRepository.js";
+import { importCompetencyFromJson, competencyRowExists } from "../server/repositories/competencyRepository.js";
+import { importResearchFromJson, researchRowExists } from "../server/repositories/researchRepository.js";
 
 interface Target {
   name: string;
   jsonFile: string;
   run: () => boolean;
+  verify: () => boolean;
 }
 
 const TARGETS: Target[] = [
-  { name: "memory_knowledge", jsonFile: dataPath("memory_knowledge.json"), run: importMemoryKnowledgeFromJson },
-  { name: "memory_soul",      jsonFile: dataPath("memory_soul.json"),      run: importSoulFromJson },
-  { name: "agent_goals",      jsonFile: dataPath("agent_goals.json"),      run: importGoalsFromJson },
-  { name: "competency_profile", jsonFile: dataPath("competencyProfile.json"), run: importCompetencyFromJson },
-  { name: "research_lab",     jsonFile: dataPath("research_lab.json"),     run: importResearchFromJson },
+  { name: "memory_knowledge", jsonFile: dataPath("memory_knowledge.json"), run: importMemoryKnowledgeFromJson, verify: memoryKnowledgeRowExists },
+  { name: "memory_soul",      jsonFile: dataPath("memory_soul.json"),      run: importSoulFromJson,            verify: soulRowExists },
+  { name: "agent_goals",      jsonFile: dataPath("agent_goals.json"),      run: importGoalsFromJson,           verify: goalsRowExists },
+  { name: "competency_profile", jsonFile: dataPath("competencyProfile.json"), run: importCompetencyFromJson,   verify: competencyRowExists },
+  { name: "research_lab",     jsonFile: dataPath("research_lab.json"),     run: importResearchFromJson,        verify: researchRowExists },
 ];
 
 function backupJson(jsonPath: string): string | null {
@@ -48,18 +54,47 @@ function backupJson(jsonPath: string): string | null {
   return dest;
 }
 
+interface ReportEntry {
+  name: string;
+  imported: boolean;
+  verified?: boolean;
+  backup?: string;
+  error?: string;
+  guardSkippedRename?: boolean;
+}
+
 function main(): number {
   console.log("[migrate] Starting JSON → DB migration");
-  const report: Array<{ name: string; imported: boolean; backup?: string; error?: string }> = [];
+  const report: ReportEntry[] = [];
 
   for (const t of TARGETS) {
     try {
       const imported = t.run();
       let backup: string | undefined;
-      if (imported) backup = backupJson(t.jsonFile) ?? undefined;
-      report.push({ name: t.name, imported, backup });
+      let verified: boolean | undefined;
+      let guardSkippedRename = false;
+      if (imported) {
+        // Verify the DB row actually landed with a non-empty blob before
+        // we destroy the source JSON. This protects against the edge case
+        // where a future repo refactor leaves the writer broken — we'd
+        // rather have stale JSON than no canonical data anywhere.
+        verified = t.verify();
+        if (verified) {
+          backup = backupJson(t.jsonFile) ?? undefined;
+        } else {
+          guardSkippedRename = true;
+          console.warn(
+            `[migrate]   ${t.name}: import returned true but DB row is empty — leaving ${t.jsonFile} in place`,
+          );
+        }
+      }
+      report.push({ name: t.name, imported, verified, backup, guardSkippedRename });
+      const tail =
+        backup ? `(backup=${path.basename(backup)})` :
+        guardSkippedRename ? "(guard: rename skipped, JSON preserved)" :
+        "";
       console.log(
-        `[migrate]   ${t.name}: ${imported ? "imported" : "skipped (no JSON)"} ${backup ? `(backup=${path.basename(backup)})` : ""}`.trim(),
+        `[migrate]   ${t.name}: ${imported ? "imported" : "skipped (no JSON)"} ${tail}`.trim(),
       );
     } catch (e: any) {
       report.push({ name: t.name, imported: false, error: e?.message });
@@ -67,9 +102,15 @@ function main(): number {
     }
   }
 
-  const ok = report.filter(r => r.imported).length;
+  const ok = report.filter(r => r.imported && r.verified).length;
+  const guardSkipped = report.filter(r => r.guardSkippedRename).length;
   const failed = report.filter(r => r.error).length;
-  console.log(`[migrate] Complete: ${ok} imported, ${failed} failed, ${report.length - ok - failed} skipped`);
+  const skippedNoJson = report.filter(r => !r.imported && !r.error).length;
+  console.log(
+    `[migrate] Complete: ${ok} imported+verified, ${guardSkipped} guard-skipped-rename, ${failed} failed, ${skippedNoJson} skipped`,
+  );
+  // We deliberately do not fail the whole migration when the guard skips a
+  // rename — that's recoverable. We only return non-zero on hard errors.
   return failed > 0 ? 1 : 0;
 }
 

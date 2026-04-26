@@ -12,6 +12,8 @@
 
 import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
+import { readCompetencyBlob, writeCompetencyBlob } from "./repositories/competencyRepository.js";
+import { isDbStateEnabled } from "./repositories/jsonFallback.js";
 
 // -- Types ------------------------------------------------------------------
 
@@ -401,28 +403,26 @@ const DEFAULT_GROWTH_FOCUS = ["storytelling", "audience-engagement", "persuasion
 
 const COMPETENCY_FILE = dataPath("competencyProfile.json");
 
+// Read through the competencyRepository so the engine sees the same canonical
+// blob whether it lives in the DB row, the live JSON, or the post-migration
+// `.bak`. The repository's read-through walks DB → JSON → JSON.bak.
 function loadProfile(): CompetencyProfile {
-  try {
-    if (fs.existsSync(COMPETENCY_FILE)) {
-      const data = JSON.parse(fs.readFileSync(COMPETENCY_FILE, "utf8"));
-      // Merge with defaults to handle new competencies added later
-      const stored = new Map<string, Competency>((data.competencies ?? []).map((c: Competency) => [c.id, c]));
-      const merged = DEFAULT_COMPETENCIES.map(def => {
-        const existing = stored.get(def.id);
-        if (existing) {
-          return { ...def, currentLevel: existing.currentLevel };
-        }
-        return def;
-      });
-      return {
-        competencies: merged,
-        growthFocus: data.growthFocus ?? DEFAULT_GROWTH_FOCUS,
-        lastFocusRotation: data.lastFocusRotation ?? new Date().toISOString(),
-        levelHistory: data.levelHistory ?? [],
-        lastUpdated: data.lastUpdated ?? new Date().toISOString(),
-      };
-    }
-  } catch {}
+  const data = readCompetencyBlob<any>();
+  if (data && (data.competencies || data.growthFocus)) {
+    const stored = new Map<string, Competency>((data.competencies ?? []).map((c: Competency) => [c.id, c]));
+    const merged = DEFAULT_COMPETENCIES.map(def => {
+      const existing = stored.get(def.id);
+      if (existing) return { ...def, currentLevel: existing.currentLevel };
+      return def;
+    });
+    return {
+      competencies: merged,
+      growthFocus: data.growthFocus ?? DEFAULT_GROWTH_FOCUS,
+      lastFocusRotation: data.lastFocusRotation ?? new Date().toISOString(),
+      levelHistory: data.levelHistory ?? [],
+      lastUpdated: data.lastUpdated ?? new Date().toISOString(),
+    };
+  }
   return {
     competencies: DEFAULT_COMPETENCIES,
     growthFocus: DEFAULT_GROWTH_FOCUS,
@@ -434,17 +434,31 @@ function loadProfile(): CompetencyProfile {
 
 function saveProfile(profile: CompetencyProfile): void {
   profile.lastUpdated = new Date().toISOString();
-  try {
-    fs.writeFileSync(COMPETENCY_FILE, JSON.stringify(profile, null, 2));
-  } catch {}
+  // Canonical write goes through the repository (DB-first). Mirror to JSON
+  // when the live file already exists (pre-migration boxes / tests that
+  // pre-seed the file) so legacy readers keep working. Once
+  // migrate_json_to_db renames the live JSON to .bak, the mirror stops —
+  // DB is canonical from then on.
+  let dbOk = false;
+  if (isDbStateEnabled()) {
+    try {
+      writeCompetencyBlob(profile);
+      dbOk = true;
+    } catch (e: any) {
+      console.warn("[Competency] DB write failed, falling back to JSON:", e?.message);
+    }
+  }
+  if (!dbOk || fs.existsSync(COMPETENCY_FILE)) {
+    try { fs.writeFileSync(COMPETENCY_FILE, JSON.stringify(profile, null, 2)); } catch {}
+  }
 }
 
 // -- In-memory state --------------------------------------------------------
 
 let profile = loadProfile();
 
-// Seed on first run
-if (!fs.existsSync(COMPETENCY_FILE)) {
+// Seed on first run — only if neither DB nor JSON has a profile yet.
+if (!fs.existsSync(COMPETENCY_FILE) && readCompetencyBlob<any>() == null) {
   saveProfile(profile);
   console.log(`[Competency] Profile initialized — ${profile.competencies.length} competencies, levels 3-5`);
 }

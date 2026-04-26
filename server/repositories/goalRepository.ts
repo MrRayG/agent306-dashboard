@@ -45,3 +45,13 @@ export function importGoalsFromJson(): boolean {
   writeGoalsBlob(body);
   return true;
 }
+
+/** Migration safety guard — true iff the DB row exists with a non-empty blob. */
+export function goalsRowExists(): boolean {
+  try {
+    const row = db.select().from(agentGoals).where(eq(agentGoals.id, KEY)).get();
+    return !!(row && row.blob && row.blob.length > 2);
+  } catch {
+    return false;
+  }
+}

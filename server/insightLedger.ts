@@ -19,6 +19,7 @@
 
 import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
+import { readCompetencyBlob } from "./repositories/competencyRepository.js";
 
 // -- Types ------------------------------------------------------------------
 
@@ -337,19 +338,18 @@ export function getSelfChangeMetrics(nowMs: number = Date.now()): SelfChangeMetr
     ? Math.round(acceptLatencies.reduce((s, x) => s + x, 0) / acceptLatencies.length)
     : 0;
 
-  // Read Self-Integrity level directly from the competencyProfile.json file
-  // rather than importing competencyFramework — keeps this module a leaf
-  // dependency so test-time boot stays cheap.
+  // Read Self-Integrity level via the competencyRepository so we resolve
+  // through DB → JSON → JSON.bak. This keeps insightLedger a leaf dependency
+  // (no competencyFramework import) while surviving the JSON→DB migration.
   let selfIntegrityLevel = 0;
   try {
-    const profileFile = dataPath("competencyProfile.json");
-    if (fs.existsSync(profileFile)) {
-      const prof = JSON.parse(fs.readFileSync(profileFile, "utf8"));
+    const prof = readCompetencyBlob<any>();
+    if (prof) {
       const comp = (prof.competencies ?? []).find((c: any) => c.id === "self-integrity");
       if (comp) selfIntegrityLevel = comp.currentLevel ?? 0;
     }
   } catch {
-    // Profile file missing or malformed — fall through with 0.
+    // Repository unavailable — fall through with 0.
   }
 
   return {

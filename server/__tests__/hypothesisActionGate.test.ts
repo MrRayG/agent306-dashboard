@@ -36,7 +36,23 @@ function writeLab(hypotheses: any[]): void {
     },
   };
   fs.writeFileSync(labPath, JSON.stringify(lab, null, 2));
+  // researchEngine now reads through researchRepository (DB-first). Mirror
+  // the JSON seed into the DB row so the engine's next read sees this
+  // fixture, not stale state from a prior test in the same process.
+  if (researchRepo) {
+    try { researchRepo.db.delete(researchRepo.researchLab).run(); } catch {}
+    try { researchRepo.writeResearchBlob(lab); } catch {}
+  }
 }
+
+// Lazily-bound after DATA_DIR is set + researchEngine is imported, so the
+// db / researchLab / writeResearchBlob symbols all resolve against the
+// test's tmpDir-rooted SQLite file.
+let researchRepo: {
+  writeResearchBlob: (b: unknown) => void;
+  db: any;
+  researchLab: any;
+} | null = null;
 
 function readLab(): any {
   return JSON.parse(fs.readFileSync(labPath, "utf8"));
@@ -60,6 +76,19 @@ function mkHyp(overrides: Record<string, unknown> = {}): any {
 // Lazy import so DATA_DIR env is in place first.
 const engine = await import("../researchEngine.js");
 const { resolveHypothesis, validateResolutionAction } = engine;
+
+// Lazy-bind researchRepository symbols AFTER DATA_DIR is set so the
+// underlying SQLite handle in db.ts resolves to tmpDir/app.db.
+{
+  const repo = await import("../repositories/researchRepository.js");
+  const dbMod = await import("../db.js");
+  const schemaMod = await import("@shared/schema");
+  researchRepo = {
+    writeResearchBlob: repo.writeResearchBlob,
+    db: dbMod.db,
+    researchLab: schemaMod.researchLab,
+  };
+}
 
 describe("Post-Resolution Action Gate — validateResolutionAction", () => {
   it("rejects null/undefined", () => {

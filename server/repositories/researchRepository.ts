@@ -41,3 +41,13 @@ export function importResearchFromJson(): boolean {
   writeResearchBlob(body);
   return true;
 }
+
+/** Migration safety guard — true iff the DB row exists with a non-empty blob. */
+export function researchRowExists(): boolean {
+  try {
+    const row = db.select().from(researchLab).where(eq(researchLab.id, KEY)).get();
+    return !!(row && row.blob && row.blob.length > 2);
+  } catch {
+    return false;
+  }
+}
