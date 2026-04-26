@@ -6,6 +6,17 @@
 // spans, and specific statistics, then checks them against the source
 // text.
 //
+// FAIL-CLOSED ON JUDGE OUTAGE (added 2026-04-25):
+//   When the LLM judge call fails (network error, non-2xx, malformed
+//   JSON), every still-unresolved Lane A sentence is recorded as
+//   `LANE_A_UNVERIFIABLE` (lane='unverifiable') and severity is forced
+//   to HARD_FAIL. The previous behavior — silently dropping the
+//   unresolved sentences from the report and letting severity collapse
+//   to PASS — is preserved only when the operator explicitly opts in
+//   via `VERIFIER_FAIL_OPEN_ON_JUDGE_OUTAGE=true`. Default is closed.
+//   Each affected sentence emits a single
+//   `[CLAIM_VERIFIER] judge_unreachable` log line with reason + model.
+//
 // TWO-LANE STANDARD (after the v2 Politico incident, 2026-04-24):
 //
 //   LANE A — SOURCE-ATTRIBUTED. Sentences that frame a claim as coming
@@ -45,17 +56,32 @@ export type ClaimLane =
   | "source-attributed"
   | "external-uncited"
   | "embedded-external-in-attribution"
-  | "retracted";
+  | "retracted"
+  | "unverifiable";
 
 export type VerifierSeverity = "PASS" | "SOFT_WARN" | "HARD_FAIL";
 
 export type SentenceClassification =
   | "LANE_A_OK"
   | "LANE_A_FAIL"
+  | "LANE_A_UNVERIFIABLE"
   | "LANE_B_OK"
   | "LANE_B_BARE"
   | "RETRACTED_HIT"
   | "NCITE_PATTERN_HIT";
+
+/** Why a Lane A sentence was marked LANE_A_UNVERIFIABLE — surfaced to ops. */
+export type UnverifiableReason =
+  | "judge_unreachable"
+  | "judge_parse_error"
+  | "judge_timeout";
+
+/** Operators may opt in to the legacy fail-open behavior during a known
+ * judge-model outage by setting VERIFIER_FAIL_OPEN_ON_JUDGE_OUTAGE=true.
+ * Default is fail-closed: every unverifiable sentence is HARD_FAIL. */
+export function failOpenOnJudgeOutageEnabled(): boolean {
+  return (process.env.VERIFIER_FAIL_OPEN_ON_JUDGE_OUTAGE ?? "false").toLowerCase() === "true";
+}
 
 export interface VerifierReportEntry {
   sentenceIndex: number;
@@ -71,10 +97,20 @@ export interface VerifierReport {
   summary: {
     laneAOk: number;
     laneAFail: number;
+    laneAUnverifiable: number;
     laneBOk: number;
     laneBBare: number;
     retractedHits: number;
     ncitePatternHits: number;
+  };
+  /** Set when at least one sentence was marked LANE_A_UNVERIFIABLE.
+   * `failOpenOverride: true` means VERIFIER_FAIL_OPEN_ON_JUDGE_OUTAGE
+   * was set and the verdict was NOT auto-failed despite the outage. */
+  judgeOutage?: {
+    affectedSentences: number;
+    reason: UnverifiableReason;
+    model?: string;
+    failOpenOverride: boolean;
   };
 }
 
@@ -96,6 +132,19 @@ export interface ClaimVerdict {
   severity: VerifierSeverity;
 }
 
+/** Minimal subset of postChatCompletions for tests to inject. Both the
+ *  real module and the test stub conform to this shape. */
+export type LLMJudgeClient = (
+  body: any,
+  signal: AbortSignal,
+  endpoint: string,
+) => Promise<{
+  ok: boolean;
+  status: number;
+  json: () => Promise<any>;
+  text?: () => Promise<string>;
+}>;
+
 export interface VerifyClaimsOpts {
   draftText:   string;
   sourceText:  string;
@@ -103,6 +152,10 @@ export interface VerifyClaimsOpts {
   sourceTitle: string;
   /** Escape hatch for tests: skip the LLM call, use only deterministic checks. */
   skipLLM?:    boolean;
+  /** Test-only: override the LLM judge transport so the outage paths are
+   *  reachable without monkey-patching the module. Production callers
+   *  always omit this and the real `postChatCompletions` is used. */
+  judgeClient?: LLMJudgeClient;
 }
 
 // ── Detection patterns ─────────────────────────────────────────────────────
@@ -240,6 +293,7 @@ function computeSummary(entries: VerifierReportEntry[]): VerifierReport["summary
   return {
     laneAOk: entries.filter(e => e.classification === "LANE_A_OK").length,
     laneAFail: entries.filter(e => e.classification === "LANE_A_FAIL").length,
+    laneAUnverifiable: entries.filter(e => e.classification === "LANE_A_UNVERIFIABLE").length,
     laneBOk: entries.filter(e => e.classification === "LANE_B_OK").length,
     laneBBare: entries.filter(e => e.classification === "LANE_B_BARE").length,
     retractedHits: entries.filter(e => e.classification === "RETRACTED_HIT").length,
@@ -247,15 +301,27 @@ function computeSummary(entries: VerifierReportEntry[]): VerifierReport["summary
   };
 }
 
-function reportSeverity(entries: VerifierReportEntry[]): VerifierSeverity {
+function reportSeverity(
+  entries: VerifierReportEntry[],
+  opts: { unverifiableForcesHardFail?: boolean } = {},
+): VerifierSeverity {
   const hardClass = entries.some(e =>
     e.classification === "RETRACTED_HIT" ||
     e.classification === "LANE_A_FAIL" ||
     e.classification === "NCITE_PATTERN_HIT",
   );
+  if (hardClass) return "HARD_FAIL";
+  // Fail-closed: any LANE_A_UNVERIFIABLE entry escalates the verdict to
+  // HARD_FAIL unless the operator opted into failing-open via
+  // VERIFIER_FAIL_OPEN_ON_JUDGE_OUTAGE=true (then unverifiableForcesHardFail
+  // is false and the entries are merely informational).
+  if (opts.unverifiableForcesHardFail !== false &&
+      entries.some(e => e.classification === "LANE_A_UNVERIFIABLE")) {
+    return "HARD_FAIL";
+  }
   const bareLaneB = entries.filter(e => e.classification === "LANE_B_BARE");
   const laneBNumericHardFail = bareLaneB.some(e => countNumericMarkers(e.snippet) >= 2);
-  if (hardClass || bareLaneB.length >= 3 || laneBNumericHardFail) return "HARD_FAIL";
+  if (bareLaneB.length >= 3 || laneBNumericHardFail) return "HARD_FAIL";
   if (bareLaneB.length > 0) return "SOFT_WARN";
   return "PASS";
 }
@@ -265,9 +331,17 @@ function finalizeVerdict(args: {
   supportedCount: number;
   externalCitedCount: number;
   entries: VerifierReportEntry[];
+  judgeOutage?: VerifierReport["judgeOutage"];
 }): ClaimVerdict {
   const summary = computeSummary(args.entries);
-  const severity = reportSeverity(args.entries);
+  // Operator escape hatch — VERIFIER_FAIL_OPEN_ON_JUDGE_OUTAGE=true makes
+  // unverifiable entries informational instead of blocking.
+  const failOpen = failOpenOnJudgeOutageEnabled();
+  const severity = reportSeverity(args.entries, { unverifiableForcesHardFail: !failOpen });
+  // Stamp the judgeOutage block so consumers can show "judge outage" in
+  // the UI even when failOpen is on.
+  let outage = args.judgeOutage;
+  if (outage && failOpen) outage = { ...outage, failOpenOverride: true };
   return {
     ok: severity !== "HARD_FAIL",
     unsupportedClaims: args.unsupported,
@@ -278,6 +352,7 @@ function finalizeVerdict(args: {
       severity,
       entries: args.entries,
       summary,
+      ...(outage ? { judgeOutage: outage } : {}),
     },
   };
 }
@@ -559,12 +634,21 @@ export async function verifyClaims(opts: VerifyClaimsOpts): Promise<ClaimVerdict
   const llmCandidates = attributed.filter(s => !statSentences.has(s));
   const hasUnresolvedLaneA = llmCandidates.length > 0;
 
+  // Tracks whether the LLM judge failed in a way that left Lane A claims
+  // unjudged. When this is non-null and we have unresolved Lane A
+  // candidates, every still-unjudged sentence becomes LANE_A_UNVERIFIABLE
+  // (fail-closed) — unless VERIFIER_FAIL_OPEN_ON_JUDGE_OUTAGE=true, which
+  // is a per-deploy operator escape hatch (see header).
+  let judgeOutage: { reason: UnverifiableReason; model?: string } | null = null;
+  const judgeModel = getModel("claim-verification");
+
   if (hasUnresolvedLaneA && !opts.skipLLM) {
     const capped = llmCandidates.slice(0, 30);
 
     try {
-      const res = await postChatCompletions({
-        model: getModel("claim-verification"),
+      const judge: LLMJudgeClient = opts.judgeClient ?? (postChatCompletions as unknown as LLMJudgeClient);
+      const res = await judge({
+        model: judgeModel,
         messages: [
           {
             role: "system",
@@ -586,7 +670,10 @@ export async function verifyClaims(opts: VerifyClaimsOpts): Promise<ClaimVerdict
       }, AbortSignal.timeout(45000), "claim-verification");
 
       if (!res.ok) {
-        console.warn(`[ClaimVerifier] LLM call failed (http ${res.status}); falling back to deterministic-only verdict`);
+        // Non-2xx — judge unreachable for this draft. Mark every
+        // unresolved Lane A sentence LANE_A_UNVERIFIABLE downstream.
+        judgeOutage = { reason: "judge_unreachable", model: judgeModel };
+        console.warn(`[ClaimVerifier] LLM call failed (http ${res.status}); marking ${capped.length} Lane A sentence(s) as LANE_A_UNVERIFIABLE`);
       } else {
         const data = await res.json();
         const raw: string = data?.choices?.[0]?.message?.content ?? "";
@@ -620,19 +707,63 @@ export async function verifyClaims(opts: VerifyClaimsOpts): Promise<ClaimVerdict
             }
           }
         } else {
-          console.warn("[ClaimVerifier] LLM verdict JSON malformed; falling back to deterministic-only verdict");
+          // Judge returned 2xx but the JSON was malformed — same blast
+          // radius as a transport failure: we have no verdicts. Treat
+          // remaining sentences as unverifiable rather than silently OK.
+          judgeOutage = { reason: "judge_parse_error", model: judgeModel };
+          console.warn(`[ClaimVerifier] LLM verdict JSON malformed; marking ${capped.length} Lane A sentence(s) as LANE_A_UNVERIFIABLE`);
         }
       }
     } catch (e: any) {
-      console.warn(`[ClaimVerifier] LLM error ${e?.message ?? e}; falling back to deterministic-only verdict`);
+      // Network error, abort timeout, exception inside the call. Mark
+      // unresolved Lane A as unverifiable.
+      const isTimeout = /aborted|timed? ?out/i.test(String(e?.message ?? ""));
+      judgeOutage = {
+        reason: isTimeout ? "judge_timeout" : "judge_unreachable",
+        model: judgeModel,
+      };
+      console.warn(`[ClaimVerifier] LLM error ${e?.message ?? e}; marking ${capped.length} Lane A sentence(s) as LANE_A_UNVERIFIABLE`);
+    }
+  }
+
+  // If the judge outage flagged the run, every unresolved Lane A sentence
+  // becomes LANE_A_UNVERIFIABLE. The deterministic checks above already
+  // marked any failed-deterministically Lane A as LANE_A_FAIL — those win
+  // over unverifiable.
+  let unverifiableCount = 0;
+  if (judgeOutage) {
+    for (const sent of llmCandidates) {
+      const key = normalize(sent);
+      if (failedLaneA.has(key) || failedEmbedded.has(key) || okLaneA.has(key)) continue;
+      addEntry(
+        entries,
+        sentenceIndex.get(key) ?? -1,
+        sent,
+        "LANE_A_UNVERIFIABLE",
+        `judge ${judgeOutage.reason}: model="${judgeOutage.model ?? "(unknown)"}"`,
+        "Cannot verify against source until the judge model is reachable. Re-run the verifier or hold the draft for manual review.",
+      );
+      unsupported.push({
+        sentence: sent,
+        lane: "unverifiable",
+        reason: `judge ${judgeOutage.reason}`,
+      });
+      // One log line per unverifiable sentence so operators can find them
+      // by grepping.
+      console.warn(
+        `[CLAIM_VERIFIER] judge_unreachable reason=${judgeOutage.reason} model=${judgeOutage.model ?? "(unknown)"} snippet=${snippetFor(sent).slice(0, 120)}`,
+      );
+      unverifiableCount += 1;
     }
   }
 
   // Deterministic-only path (tests) or successful LLM: mark remaining Lane A
-  // as OK for operator visibility when no deterministic check already failed.
+  // as OK for operator visibility when no deterministic check already failed
+  // AND the run wasn't a judge outage.
   for (const sent of attributed) {
     const key = normalize(sent);
     if (failedLaneA.has(key) || failedEmbedded.has(key)) continue;
+    if (judgeOutage && llmCandidates.includes(sent) && !okLaneA.has(key)) continue;
     if (okLaneA.has(key) || statSentences.has(sent) || opts.skipLLM || !hasUnresolvedLaneA) {
       addEntry(entries, sentenceIndex.get(key) ?? -1, sent, "LANE_A_OK", "source-attributed claim passed deterministic/available checks");
       okLaneA.add(key);
@@ -644,5 +775,18 @@ export async function verifyClaims(opts: VerifyClaimsOpts): Promise<ClaimVerdict
   void handledLaneB;
   void retractedSentences;
 
-  return finalizeVerdict({ unsupported, supportedCount, externalCitedCount, entries });
+  return finalizeVerdict({
+    unsupported,
+    supportedCount,
+    externalCitedCount,
+    entries,
+    judgeOutage: judgeOutage
+      ? {
+          affectedSentences: unverifiableCount,
+          reason: judgeOutage.reason,
+          model: judgeOutage.model,
+          failOpenOverride: false, // finalizeVerdict flips this when env says so
+        }
+      : undefined,
+  });
 }

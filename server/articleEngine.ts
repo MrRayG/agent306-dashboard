@@ -736,6 +736,18 @@ export async function runWeeklyDeepRead(
         );
       }
 
+      // Compose the quarantine reason. When the judge LLM was unreachable
+      // we want the operator to see "judge_unreachable: N unverifiable
+      // claims" so they can distinguish a real grounding failure from a
+      // transient judge outage. The numeric counter is preserved so the
+      // existing UI doesn't change shape.
+      const judgeOut = verdict.verifierReport.judgeOutage;
+      const quarantineReason =
+        verdict.severity === "HARD_FAIL"
+          ? judgeOut && judgeOut.affectedSentences > 0
+            ? `${judgeOut.reason}: ${judgeOut.affectedSentences} unverifiable claim(s)`
+            : `${verdict.unsupportedClaims.length} unsupported claims`
+          : undefined;
       const draft = saveDeepReadDraft({
         headline,
         teaser,
@@ -744,7 +756,7 @@ export async function runWeeklyDeepRead(
         sourceTitle: articleInfo.title,
         imageUrl,
         status:      verdict.severity === "HARD_FAIL" ? "needs_revision" : "ok",
-        quarantineReason: verdict.severity === "HARD_FAIL" ? `${verdict.unsupportedClaims.length} unsupported claims` : undefined,
+        quarantineReason,
         unsupportedClaims: verdict.severity === "HARD_FAIL" ? verdict.unsupportedClaims : undefined,
         verifierReport: verdict.verifierReport,
         revisionHistory,
@@ -1060,7 +1072,7 @@ export interface PreviewDeepReadResult {
     severity:             "PASS" | "SOFT_WARN" | "HARD_FAIL";
     unsupportedClaims:    Array<{
       sentence: string;
-      lane:     "source-attributed" | "external-uncited" | "embedded-external-in-attribution" | "retracted";
+      lane:     "source-attributed" | "external-uncited" | "embedded-external-in-attribution" | "retracted" | "unverifiable";
       reason:   string;
     }>;
     supportedCount:       number;

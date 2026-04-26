@@ -23,6 +23,7 @@ import {
   type ClaimVerdict,
   type VerifierReport,
   type VerifierReportEntry,
+  type LLMJudgeClient,
 } from "./claimVerifier.js";
 
 const DEFAULT_MAX_ATTEMPTS = 3;
@@ -76,6 +77,9 @@ export interface ReviseOpts {
   rewrite?: (input: RewriteInput) => Promise<RewriteOutput>;
   /** Skip the claim-verifier LLM paraphrase step — used by tests. */
   skipVerifierLLM?: boolean;
+  /** Test-only: forward a custom judge client to verifyClaims so the
+   *  loop's judge-outage handling can be exercised hermetically. */
+  verifierJudgeClient?: LLMJudgeClient;
   /** Optional note from the operator describing what they want. */
   operatorNote?: string;
 }
@@ -230,15 +234,56 @@ export async function reviseUntilClean(opts: ReviseOpts): Promise<ReviseResult> 
     sourceUrl: opts.sourceUrl,
     sourceTitle: opts.sourceTitle,
     skipLLM: opts.skipVerifierLLM,
+    judgeClient: opts.verifierJudgeClient,
   });
 
   let body = opts.draftText;
   const history: RevisionAttempt[] = [];
 
+  // Cap on judge-outage rounds. If the verifier flags
+  // LANE_A_UNVERIFIABLE on consecutive attempts the rewriter has no
+  // signal to act on — re-running just burns LLM calls. Hold the draft
+  // for human review after JUDGE_OUTAGE_RETRY_CAP attempts.
+  const JUDGE_OUTAGE_RETRY_CAP = 2;
+  let consecutiveJudgeOutageAttempts = verdict.verifierReport.judgeOutage ? 1 : 0;
+
   for (let attempt = 1; attempt <= max; attempt += 1) {
     const failing = failingEntries(verdict.verifierReport);
-    if (failing.length === 0) break;
     if (verdict.severity === "PASS") break;
+
+    // Held-for-review on judge outage. When the verdict is HARD_FAIL
+    // because the LLM judge is down, the rewriter has no signal to act
+    // on. The targetable failing entries (LANE_A_FAIL / LANE_B_BARE /
+    // NCITE_PATTERN_HIT / RETRACTED_HIT) won't include the outage's
+    // LANE_A_UNVERIFIABLE entries, so without this branch the loop
+    // would silently exit `failing.length === 0` and articleEngine
+    // would never see a held_for_review history entry. Stop on first
+    // outage if there's nothing actionable, OR after retry cap if
+    // there's a mix of actionable + unverifiable entries.
+    const isOutageNow = !!verdict.verifierReport.judgeOutage && verdict.severity === "HARD_FAIL";
+    const noActionable = failing.length === 0;
+    const shouldHold =
+      (isOutageNow && noActionable) ||
+      (consecutiveJudgeOutageAttempts >= JUDGE_OUTAGE_RETRY_CAP);
+    if (shouldHold) {
+      history.push({
+        attempt,
+        startedAt: new Date().toISOString(),
+        finishedAt: new Date().toISOString(),
+        issuesBefore: failing.length,
+        issuesAfter: failing.length,
+        severityBefore: verdict.verifierReport.severity,
+        severityAfter: verdict.verifierReport.severity,
+        targetedSentences: [],
+        diffPreview: "(no rewrite — held for human review on judge outage)",
+        writerNote: isOutageNow && noActionable
+          ? `held_for_review: judge outage (${verdict.verifierReport.judgeOutage!.reason}) with no actionable entries — re-run when the judge model is reachable`
+          : `held_for_review: ${JUDGE_OUTAGE_RETRY_CAP} consecutive judge-outage verdicts; further rewrites will not help until the judge model is reachable`,
+      });
+      break;
+    }
+    // Non-outage exit condition: nothing left to rewrite.
+    if (noActionable) break;
 
     const startedAt = new Date().toISOString();
     let nextBody = body;
@@ -268,6 +313,7 @@ export async function reviseUntilClean(opts: ReviseOpts): Promise<ReviseResult> 
       sourceUrl: opts.sourceUrl,
       sourceTitle: opts.sourceTitle,
       skipLLM: opts.skipVerifierLLM,
+      judgeClient: opts.verifierJudgeClient,
     });
 
     const issuesBefore = failing.length;
@@ -302,6 +348,15 @@ export async function reviseUntilClean(opts: ReviseOpts): Promise<ReviseResult> 
         (history[history.length - 1].writerNote ?? "") +
         ` — regression detected (${issuesAfter} > ${issuesBefore}), reverted`;
       break;
+    }
+
+    // Track consecutive judge outages so we don't loop forever on a
+    // model that's stuck returning 5xx. A successful (non-outage) verdict
+    // resets the counter; otherwise we increment.
+    if (verdict.verifierReport.judgeOutage) {
+      consecutiveJudgeOutageAttempts += 1;
+    } else {
+      consecutiveJudgeOutageAttempts = 0;
     }
 
     if (verdict.severity === "PASS") break;
