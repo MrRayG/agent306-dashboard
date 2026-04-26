@@ -28,6 +28,7 @@ import { postChatCompletions } from "./llmCall.js";
 import { readGoalsBlob, writeGoalsBlob } from "./repositories/goalRepository.js";
 import { readResearchBlob, writeResearchBlob } from "./repositories/researchRepository.js";
 import { isDbStateEnabled } from "./repositories/jsonFallback.js";
+import { recordOutcome } from "./calibration/hypothesisOutcomes.js";
 const GROK_CHAT_API    = LLM_BASE_URL;
 const PERPLEXITY_API   = "https://api.perplexity.ai";
 const RESEARCH_FILE    = dataPath("research_lab.json");
@@ -669,6 +670,12 @@ export function resolveHypothesis(
   saveLab(lab);
   const detailSnip = validation.action.detail.slice(0, 120);
   console.log(`[Hypothesis] resolved ${id} action=${validation.action.type}:${detailSnip}`);
+  // Calibration capture (Gap A, Phase 0). No-op when the flag is off,
+  // which is the default — see docs/CALIBRATED_CONFIDENCE.md §5.2.
+  // recordOutcome swallows its own errors; the try/catch here is a
+  // belt-and-braces guard so a calibration write failure can never
+  // undo a successful resolution on the hot path.
+  try { recordOutcome(hyp); } catch (e: any) { console.warn("[calibration] recordOutcome failed:", e?.message); }
   return true;
 }
 

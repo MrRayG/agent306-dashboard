@@ -140,4 +140,43 @@ sqlite.exec(`
   CREATE INDEX IF NOT EXISTS idx_engine_events_engine ON engine_events(engine);
   CREATE INDEX IF NOT EXISTS idx_engine_events_level  ON engine_events(level);
   CREATE INDEX IF NOT EXISTS idx_engine_events_run_id ON engine_events(run_id);
+
+  -- Calibrated Confidence (Gap A, Phase 0 scaffolding) — see
+  -- docs/CALIBRATED_CONFIDENCE.md §3. Tables are additive; no consumer
+  -- reads them yet (Phase 0 ships scaffolding only, flag default OFF).
+  CREATE TABLE IF NOT EXISTS hypothesis_outcomes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    hypothesis_id TEXT NOT NULL,
+    predicted_confidence REAL NOT NULL,
+    predicted_trust_score REAL,
+    originating_model TEXT,
+    resolved_at TEXT NOT NULL,
+    resolution_status TEXT NOT NULL,
+    actual_outcome INTEGER NOT NULL,
+    outcome_weight REAL NOT NULL DEFAULT 1.0,
+    outcome_source TEXT NOT NULL,
+    domain TEXT,
+    recorded_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_hypothesis_outcomes_model_resolved
+    ON hypothesis_outcomes(originating_model, resolved_at);
+  CREATE INDEX IF NOT EXISTS idx_hypothesis_outcomes_domain_resolved
+    ON hypothesis_outcomes(domain, resolved_at);
+  CREATE INDEX IF NOT EXISTS idx_hypothesis_outcomes_resolved
+    ON hypothesis_outcomes(resolved_at);
+
+  CREATE TABLE IF NOT EXISTS model_calibration_scores (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    model TEXT NOT NULL,
+    window_days INTEGER NOT NULL,
+    window_end_date TEXT NOT NULL,
+    sample_count INTEGER NOT NULL,
+    brier_score REAL,
+    log_loss REAL,
+    mean_confidence REAL,
+    mean_outcome REAL,
+    computed_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_model_calibration_scores_unique
+    ON model_calibration_scores(model, window_days, window_end_date);
 `);

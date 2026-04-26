@@ -224,3 +224,59 @@ export type EngineEvent = typeof engineEvents.$inferSelect;
 
 export const ENGINE_EVENT_LEVELS = ["info", "warn", "error", "debug"] as const;
 export type EngineEventLevel = (typeof ENGINE_EVENT_LEVELS)[number];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Calibrated Confidence — Phase 0 scaffolding (Gap A)
+//
+// Two additive tables. Both are written by future calibration phases —
+// Phase 0 only ships the schema + helpers. See docs/CALIBRATED_CONFIDENCE.md
+// §3 for the full design and outcome-weighting rationale.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Append-only fact table — one row per resolved hypothesis. Resolution data
+ *  is duplicated from research_lab.blob so calibration aggregates do not need
+ *  to load the entire blob. Phase 1's capture hook writes here; reads land
+ *  in Phase 2. Design doc §3.1. */
+export const hypothesisOutcomes = sqliteTable("hypothesis_outcomes", {
+  id:                  integer("id").primaryKey({ autoIncrement: true }),
+  hypothesisId:        text("hypothesis_id").notNull(),
+  predictedConfidence: real("predicted_confidence").notNull(),
+  predictedTrustScore: real("predicted_trust_score"),
+  originatingModel:    text("originating_model"),
+  resolvedAt:          text("resolved_at").notNull(),
+  resolutionStatus:    text("resolution_status").notNull(),
+  actualOutcome:       integer("actual_outcome", { mode: "boolean" }).notNull(),
+  outcomeWeight:       real("outcome_weight").notNull().default(1.0),
+  outcomeSource:       text("outcome_source").notNull(),
+  domain:              text("domain"),
+  recordedAt:          text("recorded_at").notNull().default(new Date().toISOString()),
+});
+
+export const insertHypothesisOutcomeSchema = createInsertSchema(hypothesisOutcomes).omit({
+  id: true,
+  recordedAt: true,
+});
+export type InsertHypothesisOutcome = z.infer<typeof insertHypothesisOutcomeSchema>;
+export type HypothesisOutcome = typeof hypothesisOutcomes.$inferSelect;
+
+/** Computed by the Phase 2 weekly cron. Idempotent per
+ *  (model, windowDays, windowEndDate). Design doc §3.2. */
+export const modelCalibrationScores = sqliteTable("model_calibration_scores", {
+  id:             integer("id").primaryKey({ autoIncrement: true }),
+  model:          text("model").notNull(),
+  windowDays:     integer("window_days").notNull(),
+  windowEndDate:  text("window_end_date").notNull(),
+  sampleCount:    integer("sample_count").notNull(),
+  brierScore:     real("brier_score"),
+  logLoss:        real("log_loss"),
+  meanConfidence: real("mean_confidence"),
+  meanOutcome:    real("mean_outcome"),
+  computedAt:     text("computed_at").notNull().default(new Date().toISOString()),
+});
+
+export const insertModelCalibrationScoreSchema = createInsertSchema(modelCalibrationScores).omit({
+  id: true,
+  computedAt: true,
+});
+export type InsertModelCalibrationScore = z.infer<typeof insertModelCalibrationScoreSchema>;
+export type ModelCalibrationScore = typeof modelCalibrationScores.$inferSelect;
