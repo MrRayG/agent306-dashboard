@@ -16,4 +16,9 @@ export const featureFlags = {
   /** Enables `recordOutcome()` writes from `resolveHypothesis()` into the
    *  `hypothesis_outcomes` table. Default OFF — Phase 1 flips this on. */
   calibrationCapture: flagOn("CALIBRATION_CAPTURE"),
+  /** Enables Gap C experiment dispatch interception in `modelRouter.resolveTask`.
+   *  Default OFF. When OFF, `runExperiment()` short-circuits to null and
+   *  resolveTask behaves identically to pre-Phase-0. Phase 1 (separate PR)
+   *  registers the first experiment and flips this on staging. */
+  experimentExploration: flagOn("EXPERIMENT_EXPLORATION"),
 };
