@@ -23,6 +23,8 @@
  * Any external caller that still resolves by the old tier name keeps working.
  */
 
+import { runExperiment } from "./experiments/runExperiment.js";
+
 export type TaskComplexity =
   | "routine"
   | "standard-voice"
@@ -275,6 +277,9 @@ export function normalizeTaskName(task: string): string {
  * than the collapsed alias.
  */
 export function resolveTask(task: string): { tier: TaskComplexity; provider: RouteProvider; model: string } {
+  // Gap C Phase 0 — exploration assignment (flag-gated, no-op when flag off)
+  const _expAssign = runExperiment(task);
+  if (_expAssign) return { tier: "routine" as TaskComplexity, provider: _expAssign.resolvedProvider as RouteProvider, model: _expAssign.resolvedModel };
   const normalized = normalizeTaskName(task);
   const tier = TASK_COMPLEXITY[normalized] ?? "standard-voice";
   const cfg = TIER_MAP[tier];

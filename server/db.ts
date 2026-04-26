@@ -179,4 +179,44 @@ sqlite.exec(`
   );
   CREATE UNIQUE INDEX IF NOT EXISTS idx_model_calibration_scores_unique
     ON model_calibration_scores(model, window_days, window_end_date);
+
+  -- Exploration Policy (Gap C, Phase 0 scaffolding) — see
+  -- docs/EXPLORATION_POLICY.md section 3. Tables are additive; the
+  -- runtime A/B harness is a no-op until an experiment is registered
+  -- AND featureFlags.experimentExploration is on (default OFF).
+  CREATE TABLE IF NOT EXISTS experiments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    experiment_key TEXT NOT NULL UNIQUE,
+    surface TEXT NOT NULL,
+    task_key TEXT NOT NULL,
+    baseline TEXT NOT NULL,
+    treatment TEXT NOT NULL,
+    traffic_pct REAL NOT NULL DEFAULT 0.1,
+    metric_key TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    status TEXT NOT NULL DEFAULT 'running',
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_experiments_status_surface
+    ON experiments(status, surface);
+  CREATE INDEX IF NOT EXISTS idx_experiments_task_key
+    ON experiments(task_key);
+
+  CREATE TABLE IF NOT EXISTS experiment_trials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    experiment_key TEXT NOT NULL,
+    arm TEXT NOT NULL,
+    task_key TEXT NOT NULL,
+    resolved_model TEXT NOT NULL,
+    context_hash TEXT,
+    outcome_metric REAL,
+    outcome_recorded_at TEXT,
+    recorded_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_experiment_trials_key_arm
+    ON experiment_trials(experiment_key, arm);
+  CREATE INDEX IF NOT EXISTS idx_experiment_trials_key_recorded
+    ON experiment_trials(experiment_key, recorded_at);
 `);

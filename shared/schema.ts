@@ -280,3 +280,64 @@ export const insertModelCalibrationScoreSchema = createInsertSchema(modelCalibra
 });
 export type InsertModelCalibrationScore = z.infer<typeof insertModelCalibrationScoreSchema>;
 export type ModelCalibrationScore = typeof modelCalibrationScores.$inferSelect;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Exploration Policy — Phase 0 scaffolding (Gap C)
+//
+// Two additive tables. The runtime A/B harness in server/experiments/
+// reads `experiments` and writes one row per dispatch decision into
+// `experiment_trials`. Both are dormant until an experiment is
+// registered AND `featureFlags.experimentExploration` is on. See
+// docs/EXPLORATION_POLICY.md §3.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Configuration table — one row per registered experiment. */
+export const experiments = sqliteTable("experiments", {
+  id:             integer("id").primaryKey({ autoIncrement: true }),
+  experimentKey:  text("experiment_key").notNull().unique(),
+  surface:        text("surface").notNull(),                  // "modelRouter" (Phase 0)
+  taskKey:        text("task_key").notNull(),
+  baseline:       text("baseline").notNull(),                 // JSON: { model, provider }
+  treatment:      text("treatment").notNull(),                // JSON: { model, provider }
+  trafficPct:     real("traffic_pct").notNull().default(0.1),
+  metricKey:      text("metric_key").notNull(),
+  startedAt:      text("started_at").notNull(),
+  endedAt:        text("ended_at"),
+  status:         text("status").notNull().default("running"),// running|ended|promoted|rolled-back
+  notes:          text("notes"),
+  createdAt:      text("created_at").notNull().default(new Date().toISOString()),
+});
+
+export const insertExperimentSchema = createInsertSchema(experiments).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertExperiment = z.infer<typeof insertExperimentSchema>;
+export type Experiment = typeof experiments.$inferSelect;
+
+/** Append-only fact table — one row per arm assignment. Outcome is
+ *  graded by Phase 2; Phase 0 leaves `outcomeMetric` null. */
+export const experimentTrials = sqliteTable("experiment_trials", {
+  id:                integer("id").primaryKey({ autoIncrement: true }),
+  experimentKey:     text("experiment_key").notNull(),
+  arm:               text("arm").notNull(),                   // "baseline"|"treatment"
+  taskKey:           text("task_key").notNull(),
+  resolvedModel:     text("resolved_model").notNull(),
+  contextHash:       text("context_hash"),                    // null in Phase 0
+  outcomeMetric:     real("outcome_metric"),                  // null until Phase 2 grades it
+  outcomeRecordedAt: text("outcome_recorded_at"),
+  recordedAt:        text("recorded_at").notNull().default(new Date().toISOString()),
+});
+
+export const insertExperimentTrialSchema = createInsertSchema(experimentTrials).omit({
+  id: true,
+  recordedAt: true,
+});
+export type InsertExperimentTrial = z.infer<typeof insertExperimentTrialSchema>;
+export type ExperimentTrial = typeof experimentTrials.$inferSelect;
+
+export const EXPERIMENT_STATUSES = ["running", "ended", "promoted", "rolled-back"] as const;
+export type ExperimentStatus = (typeof EXPERIMENT_STATUSES)[number];
+
+export const EXPERIMENT_ARMS = ["baseline", "treatment"] as const;
+export type ExperimentArm = (typeof EXPERIMENT_ARMS)[number];
