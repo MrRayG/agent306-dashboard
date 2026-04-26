@@ -22,7 +22,7 @@ export const PHASE1_EXPERIMENT = {
   surface:       "modelRouter" as const,
   taskKey:       "analysis-intake",
   metricKey:     "routine_task_json_validity",
-  trafficPct:    0.1,
+  trafficPct:    0.05,
   baseline: {
     // Mirrors the current routine-tier default in modelRouter.TIER_MAP.
     model:    "google/gemini-3-flash-preview",
