@@ -86,11 +86,16 @@ async function simulateDraftPostHandler(body: {
       quarantineReason: draft.quarantineReason,
     };
   }
+  // skipLLM matches the test fixture's intent (no API keys, deterministic
+  // path only). After fix/verifier-fail-closed, omitting skipLLM would
+  // trip the new judge_unreachable → LANE_A_UNVERIFIABLE → HARD_FAIL flow
+  // because there's no judge model to call.
   const verdict = await verifyClaims({
     draftText:   body.body,
     sourceText:  fetched.text,
     sourceUrl:   body.sourceUrl,
     sourceTitle: body.sourceTitle,
+    skipLLM:     true,
   });
   const status: "ok" | "needs_revision" = verdict.severity === "HARD_FAIL" ? "needs_revision" : "ok";
   const draft = saveDeepReadDraft({
