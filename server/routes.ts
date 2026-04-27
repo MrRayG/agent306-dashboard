@@ -414,7 +414,7 @@ async function postDailyNewsDispatch() {
     // ── 2. Ask Grok to write today's [306 NEWS] dispatch ───────────────────────────
     const dispatchContext = getOptimizedContext("news dispatch daily AI market headlines");
     const todaysSummary = getTodaysPostsSummary();
-    const dispatchSystemPrompt = `${dispatchContext}\n\n${buildVoiceBlock()}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
+    const dispatchSystemPrompt = `Today is ${new Date().toISOString().slice(0, 10)} (UTC).\n\n${dispatchContext}\n\n${buildVoiceBlock()}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
     const grokResp = await postChatCompletions({
         model: getModel("news-dispatch"),
         messages: [
