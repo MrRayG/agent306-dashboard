@@ -157,7 +157,7 @@ export async function generateDispatchContent(): Promise<string | null> {
     const todaysSummary = getTodaysPostsSummary();
     const episodeContext = buildEpisodeContext(state);
 
-    const systemPrompt = `${dispatchContext}\n\n${buildVoiceBlock()}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
+    const systemPrompt = `Today is ${new Date().toISOString().slice(0, 10)} (UTC).\n\n${dispatchContext}\n\n${buildVoiceBlock()}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
 
     const grokResp = await postChatCompletions({
         model: getModel("news-dispatch"),
