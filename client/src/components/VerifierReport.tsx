@@ -2,9 +2,14 @@ import { useState } from "react";
 
 type VerifierSeverity = "PASS" | "SOFT_WARN" | "HARD_FAIL";
 
+// Mirror of SentenceClassification in server/claimVerifier.ts. LANE_A_UNVERIFIABLE
+// is the fail-closed marker emitted when the LLM judge model is unreachable —
+// added so the dashboard can correctly badge judge-outage entries instead of
+// rendering "?" placeholders.
 type Classification =
   | "LANE_A_OK"
   | "LANE_A_FAIL"
+  | "LANE_A_UNVERIFIABLE"
   | "LANE_B_OK"
   | "LANE_B_BARE"
   | "RETRACTED_HIT"
@@ -24,10 +29,23 @@ export interface VerifierReportData {
   summary?: {
     laneAOk: number;
     laneAFail: number;
+    /** Present on server reports since the fail-closed judge-outage change.
+     *  Optional here so older persisted reports keep rendering. */
+    laneAUnverifiable?: number;
     laneBOk: number;
     laneBBare: number;
     retractedHits: number;
     ncitePatternHits: number;
+  };
+  /** Set by the verifier when one or more sentences were marked
+   *  LANE_A_UNVERIFIABLE because the judge model was unreachable / parse
+   *  errored / timed out. Surfaced so operators can distinguish a real
+   *  grounding failure from a transient judge outage. */
+  judgeOutage?: {
+    affectedSentences: number;
+    reason: "judge_unreachable" | "judge_parse_error" | "judge_timeout";
+    model?: string;
+    failOpenOverride: boolean;
   };
 }
 
@@ -36,6 +54,7 @@ const mono = { fontFamily: "'Courier New', monospace" } as const;
 const CLASS_COLORS: Record<Classification, string> = {
   LANE_A_OK: "#4ade80",
   LANE_A_FAIL: "#f87171",
+  LANE_A_UNVERIFIABLE: "#a78bfa",
   LANE_B_OK: "#2dd4bf",
   LANE_B_BARE: "#facc15",
   RETRACTED_HIT: "#fb7185",
@@ -55,6 +74,8 @@ const CLASS_TOOLTIPS: Record<Classification, string> = {
     "Lane A — source-attributed. Sentence frames a claim as coming from the source (reported, according to, said, the article/study/report, …) or contains a quoted span / the source title / the source domain. Verified: the claim appears in the source text verbatim or as a clear paraphrase.",
   LANE_A_FAIL:
     "Lane A FAIL — sentence is framed as source-attributed but the claim (or an embedded statistic / quote) is NOT in the source text. Verifier hard-fails on these: fix the attribution, the statistic, or drop the sentence.",
+  LANE_A_UNVERIFIABLE:
+    "Lane A UNVERIFIABLE — judge model was unreachable, returned a parse error, or timed out, so this Lane A sentence couldn't be checked. Fail-closed: counts as HARD FAIL unless VERIFIER_FAIL_OPEN_ON_JUDGE_OUTAGE was set. Re-run the verifier when the judge is back, or hold for manual review.",
   LANE_B_OK:
     "Lane B — external fact the agent introduced in her own voice (a year, a percentage / dollar amount, a named study / benchmark / institution). Lane B sentences MUST carry an inline markdown citation; this one does.",
   LANE_B_BARE:
@@ -77,6 +98,7 @@ const SEVERITY_TOOLTIPS: Record<VerifierSeverity, string> = {
 const CLASS_ORDER: Classification[] = [
   "LANE_A_OK",
   "LANE_A_FAIL",
+  "LANE_A_UNVERIFIABLE",
   "LANE_B_OK",
   "LANE_B_BARE",
   "NCITE_PATTERN_HIT",
