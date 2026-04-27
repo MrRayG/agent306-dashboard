@@ -25,6 +25,14 @@ import { buildExemplarBlock } from "./voiceExemplars.js";
 
 import { postChatCompletions } from "./llmCall.js";
 import { verifyClaims, type VerifierReport } from "./claimVerifier.js";
+import {
+  type SourceObject,
+  extractSourceObjects,
+  dedupeSources,
+  buildSourcesPromptBlock,
+  repairCitationLocality,
+  computeSourceTelemetry,
+} from "./sourceLocality.js";
 const BLOG_FILE = dataPath("blog_state.json");
 
 // ── Types ─────────────────────────────────────────────────────
@@ -311,6 +319,11 @@ export async function generateBlogPost(opts: {
   sourceId?: string;
   autoPublish?: boolean;
   blogType?: BlogType;
+  /** Structured source pool (PR-E). When provided, these sources are passed
+   *  into the writer prompt as same-sentence citation targets and into the
+   *  post-generation citation-locality repair pass. URLs already present in
+   *  `sourceContent` / fresh-context are auto-extracted in addition. */
+  sourceObjects?: SourceObject[];
 }): Promise<BlogPost | null> {
   if (!LLM_API_KEY) {
     console.warn("[Blog] No LLM API key");
@@ -362,6 +375,17 @@ export async function generateBlogPost(opts: {
   // Empty when no history — prompt stays coherent.
   const exemplarBlock = await buildExemplarBlock({ contentType: "blog", limit: 3 });
 
+  // PR-E: assemble the structured source pool that flows into both the
+  // writer prompt and the post-generation locality repair pass. We start
+  // with operator-supplied sourceObjects, then merge URLs we find inside
+  // the source material and Perplexity fresh-context block. Dedup is by URL.
+  const sourcePool = dedupeSources([
+    ...(opts.sourceObjects ?? []),
+    ...extractSourceObjects(opts.sourceContent),
+    ...extractSourceObjects(freshContext),
+  ]);
+  const sourcesPromptBlock = buildSourcesPromptBlock(sourcePool);
+
   try {
     const res = await postChatCompletions({
         model: getModel("blog-post"),
@@ -372,12 +396,15 @@ export async function generateBlogPost(opts: {
 
 ${getFormatVoiceContext('blog')}
 
-CITATION DISCIPLINE (REQUIRED — APA-style per-claim attribution):
+CITATION DISCIPLINE (REQUIRED — APA-style per-claim attribution + same-sentence locality):
+- CITATION LOCALITY: every external factual sentence with a date, number, percentage, year range, named study, named model release, named company release, named historical event, named legislation, or other hard factual claim MUST contain an inline markdown citation [Publisher](URL) in the SAME SENTENCE as the claim. Do not rely on a citation in an adjacent or previous sentence. Sentence-by-sentence verification is enforced post-write — a fact one sentence away from its URL is treated as uncited.
+- Do NOT place a naked URL on its own line as a "source marker." Citations are inline markdown links attached to the supported claim.
 - A citation [URL] must support the SPECIFIC claim immediately before it. Do not staple a citation to the end of a paragraph that contains synthesis or analytical commentary — citations attach to claims, not paragraphs.
 - If a sentence is your own analysis, interpretation, framing, or "the logical endpoint of X" / "the illusion of Y" / "the entire field has been built on Z" type commentary, do NOT attach a citation. State it in your analytical voice. Synthesis is Lane B and takes no URL.
 - If a claim is a fact drawn from a SOURCE OTHER than the source material above (industry-known costs, benchmarks, dates, training facts, historical events, your KB), do NOT staple the source material's URL to it. Either cite the actual source with its real URL in your own voice ("per Stanford HAI's 2025 AI Index, [link]"), or — if you cannot produce a real URL for it — qualify it verbally with a hedge like "publicly reported," "industry reporting indicates," "as widely covered" and attach NO URL. Never fabricate a URL.
 - The KB / knowledge layer included in the context above is provided as background scaffolding for your analysis, NOT as a citation pool — KB lines do not carry source URLs. Treat any KB-derived fact you surface as outside-the-source and apply the rule above (cite the real upstream source if you have one, hedge verbally if you don't).
 - One citation per claim. If a sentence contains multiple claims requiring different sources, split the sentence or cite each component. Do not bracket-pile citations onto a single closing punctuation.
+- Analytical / opinion sentences without an external factual claim do not require a citation. Do not invent a citation just to satisfy a perceived rule.
 
 You are writing a blog post for agent306.ai. This is YOUR voice — write naturally, not formally. You can write about external events, your own research, your own evolution, things you're curious about, or connections you're seeing across topics. Vary your style and length. Be honest about what you know and don't know. Never include meta-commentary like "In this blog post I will discuss..." — just write.
 
@@ -436,7 +463,7 @@ ${opts.sourceContent.slice(0, 4000)}
 
 CURRENT KNOWLEDGE CONTEXT:
 ${currentKnowledge}
-${freshContext ? `\nLATEST DEVELOPMENTS (from today's research — incorporate these):\n${freshContext}\n` : ""}${exemplarBlock ? `\n${exemplarBlock}\n` : ""}
+${freshContext ? `\nLATEST DEVELOPMENTS (from today's research — incorporate these):\n${freshContext}\n` : ""}${sourcesPromptBlock ? `\n${sourcesPromptBlock}\n` : ""}${exemplarBlock ? `\n${exemplarBlock}\n` : ""}
 IMPORTANT: If the source material is from a private chat conversation, extract the TOPIC and INSIGHTS only. Do NOT copy conversational tone, greetings, questions, or planning language. Transform the ideas into a polished public blog post.
 
 Write the full blog post following the blog structure template. Hook the reader immediately. Use real facts, specific numbers, and name real companies/people. Break the body into 3-5 sections with clear subheadings. Include actionable takeaways. Share YOUR honest analysis. Respond with JSON only.`
@@ -469,21 +496,50 @@ Write the full blog post following the blog structure template. Hook the reader 
       });
     }
 
+    // PR-E: post-generation citation-locality repair runs BEFORE the
+    // verifier. It only ever reuses URLs already present in `sourcePool`;
+    // when no relevant source exists it hedges/generalizes the sentence.
+    // It NEVER fabricates a URL. Verifier strictness is unchanged.
+    const repair = repairCitationLocality(parsed.content, sourcePool);
+    const draftAfterRepair = repair.draft;
+    const sourceTextBundle = [opts.sourceContent, freshContext].filter(Boolean).join("\n\n");
+
+    const telemetry = computeSourceTelemetry({
+      draft: draftAfterRepair,
+      sources: sourcePool,
+      sourceText: sourceTextBundle,
+      citationRepairApplied: repair.citationsAdded + repair.sentencesHedged,
+    });
+    console.log(
+      `[Blog] source/citation telemetry — sourceObjects.count=${telemetry.sourceObjectsCount} ` +
+      `sourceUrls.count=${telemetry.sourceUrlsCount} citedSentences.count=${telemetry.citedSentencesCount} ` +
+      `bareExternalFactSentences.count=${telemetry.bareExternalFactSentencesCount} ` +
+      `citationRepair.applied=${telemetry.citationRepairApplied} ` +
+      `evidenceBundleBytes=${telemetry.evidenceBundleBytes}`,
+    );
+
     // Post-write claim verification. A blog post that attributes specific
     // numbers or quotes to a source must have those claims in the source
     // text — otherwise it's quarantined rather than silently shipped.
     // See server/claimVerifier.ts.
     const verdict = await verifyClaims({
-      draftText:   parsed.content,
-      sourceText:  [opts.sourceContent, freshContext].filter(Boolean).join("\n\n"),
+      draftText:   draftAfterRepair,
+      sourceText:  sourceTextBundle,
       sourceUrl:   opts.sourceId ?? "",
       sourceTitle: opts.topic,
     });
+    console.log(
+      `[Blog] verifier lanes — laneAOk=${verdict.verifierReport.summary.laneAOk} ` +
+      `laneAFail=${verdict.verifierReport.summary.laneAFail} ` +
+      `laneBOk=${verdict.verifierReport.summary.laneBOk} ` +
+      `laneBBare=${verdict.verifierReport.summary.laneBBare} ` +
+      `severity=${verdict.severity}`,
+    );
 
     if (verdict.severity === "HARD_FAIL") {
       const draft = createBlogPost({
         title: parsed.title,
-        content: parsed.content,
+        content: draftAfterRepair,
         source: opts.source,
         sourceId: opts.sourceId,
         tags: [...(parsed.tags ?? []), "claim-verifier-quarantine"],
@@ -499,7 +555,7 @@ Write the full blog post following the blog structure template. Hook the reader 
 
     return createBlogPost({
       title: parsed.title,
-      content: parsed.content,
+      content: draftAfterRepair,
       source: opts.source,
       sourceId: opts.sourceId,
       tags: parsed.tags ?? [],

@@ -37,6 +37,13 @@ import { postChatCompletions, postXSearchResponses } from "./llmCall.js";
 import { fetchSourceContent } from "./sourceFetcher.js";
 import { verifyClaims, type VerifierReport } from "./claimVerifier.js";
 import { reviseUntilClean, type RevisionAttempt } from "./articleReviseLoop.js";
+import {
+  type SourceObject,
+  extractSourceObjects,
+  dedupeSources,
+  buildSourcesPromptBlock,
+  computeSourceTelemetry,
+} from "./sourceLocality.js";
 const GROK_CHAT_API     = LLM_BASE_URL;
 const GROK_RESPONSE_API = LLM_RESPONSE_URL;
 const ARTICLE_STATE_FILE = dataPath("article_state.json");
@@ -271,7 +278,8 @@ async function fetchArticleContent(url: string): Promise<{
 async function generateDeepReadArticle(
   articleInfo: NonNullable<Awaited<ReturnType<typeof discoverArticle>>>,
   articleContent: string,
-  apiKey: string
+  apiKey: string,
+  sources: SourceObject[] = [],
 ): Promise<{
   headline:    string;
   teaser:      string;  // the X post teaser
@@ -283,6 +291,10 @@ async function generateDeepReadArticle(
 
   // Few-shot: inject her own best recent articles so voice pulls forward.
   const exemplarBlock = await buildExemplarBlock({ contentType: "article", limit: 3 });
+
+  // PR-E: build the AVAILABLE SOURCES block from structured source objects
+  // so the writer knows which URLs are valid same-sentence citation targets.
+  const sourcesPromptBlock = buildSourcesPromptBlock(sources);
 
   // Spec matrix: `article` → standard-voice (Grok 4.20 non-reasoning, Class 1
   // grounded synthesis — the public-voice tier). Previously this call used
@@ -308,12 +320,15 @@ ${VOICE}
 
 ${SOURCING_GROUNDING_RULE}
 
-CITATION DISCIPLINE (REQUIRED — APA-style per-claim attribution):
+CITATION DISCIPLINE (REQUIRED — APA-style per-claim attribution + same-sentence locality):
+- CITATION LOCALITY: every external factual sentence with a date, number, percentage, year range, named study, named model release, named company release, named historical event, named legislation, or other hard factual claim MUST contain an inline markdown citation [Publisher](URL) in the SAME SENTENCE as the claim. A citation in the next or previous sentence does NOT count — sentence-level verification is enforced post-write. Concrete failure mode: "On April 26, 2026, X published Y. (Discussion in next sentence) [URL]" → the dated sentence is treated as uncited.
+- Do NOT place a naked URL on its own line as a "source marker." Citations are inline markdown links attached to the supported claim.
 - A citation [URL] must support the SPECIFIC claim immediately before it. Do not staple a citation to the end of a paragraph that contains synthesis or analytical commentary — citations attach to claims, not paragraphs.
 - If a sentence is your own analysis, interpretation, framing, or "the logical endpoint of X" / "the illusion of Y" / "the entire field has been built on Z" type commentary, do NOT attach a citation. State it in your analytical voice. Synthesis is Lane B and takes no URL.
 - If a claim is a fact drawn from a SOURCE OTHER than the primary article above (industry-known costs, benchmarks, dates, training facts, historical events, your KB), do NOT staple the primary article's URL to it. Either cite the actual source with its real URL in your own voice ("per Stanford HAI's 2025 AI Index, [link]"), or — if you cannot produce a real URL for it — qualify it verbally with a hedge like "publicly reported," "industry reporting indicates," "as widely covered" and attach NO URL. Never fabricate a URL.
 - The KB / knowledge layer below ("YOUR KNOWLEDGE FOUNDATION") is provided as background scaffolding for your analysis, NOT as a citation pool — KB lines do not carry source URLs. Treat any KB-derived fact you surface in the article as outside-the-source and apply the rule above (cite the real upstream source if you have one, hedge verbally if you don't).
 - One citation per claim. If a sentence contains multiple claims requiring different sources, split the sentence or cite each component. Do not bracket-pile citations onto a single closing punctuation.
+- Analytical / opinion sentences without an external factual claim do not require a citation. Do not invent a citation just to satisfy a perceived rule.
 
 Today you write your weekly long-form X Article — "The Deep Read."
 This is not a news recap. This is not a tweet thread stretched thin.
@@ -417,7 +432,7 @@ Summary: ${articleInfo.summary}
 
 FULL ARTICLE CONTENT:
 ${articleContent}
-${exemplarBlock ? `\n${exemplarBlock}\n` : ""}
+${sourcesPromptBlock ? `\n${sourcesPromptBlock}\n` : ""}${exemplarBlock ? `\n${exemplarBlock}\n` : ""}
 Write the complete long-form article. Make it the kind of analysis people share because
 it changed how they understood something — not because it told them what they already knew.
 
@@ -719,14 +734,46 @@ export async function runWeeklyDeepRead(
         continue;
       }
 
+      // PR-E: build a structured source pool from the primary article info
+      // plus any URLs harvested from the article body. This pool is passed
+      // into the writer prompt and into the post-generation citation-locality
+      // repair pass (run inside reviseUntilClean) so cross-paragraph
+      // citations get pulled into the same sentence before verification.
+      const sourcePool: SourceObject[] = dedupeSources([
+        {
+          url:           articleInfo.url,
+          title:         articleInfo.title,
+          publisher:     articleInfo.source,
+          retrievedAt:   new Date().toISOString(),
+          sourceId:      articleInfo.url,
+          evidenceExcerpt: articleInfo.summary?.slice(0, 280),
+        },
+        ...extractSourceObjects(articleContent),
+      ]);
+
       const { headline, teaser, body: rawBody } = await generateDeepReadArticle(
-        articleInfo, articleContent, apiKey
+        articleInfo, articleContent, apiKey, sourcePool,
       );
 
       if (!rawBody || rawBody.length < 200) {
         lastErr = "Article generation produced insufficient content";
         continue;
       }
+
+      // PR-E telemetry — log source/citation counts before the verifier runs
+      // so operators can correlate quarantines with source pool richness.
+      const preTelemetry = computeSourceTelemetry({
+        draft: rawBody,
+        sources: sourcePool,
+        sourceText: articleContent,
+        citationRepairApplied: 0,
+      });
+      console.log(
+        `[ArticleEngine] source/citation telemetry (pre-revise) — sourceObjects.count=${preTelemetry.sourceObjectsCount} ` +
+        `sourceUrls.count=${preTelemetry.sourceUrlsCount} citedSentences.count=${preTelemetry.citedSentencesCount} ` +
+        `bareExternalFactSentences.count=${preTelemetry.bareExternalFactSentencesCount} ` +
+        `evidenceBundleBytes=${preTelemetry.evidenceBundleBytes}`,
+      );
 
       // Auto-revise loop (issue 2). If the verifier flags actionable
       // failures, ask the writer to fix them before quarantining. Bounded
@@ -736,7 +783,24 @@ export async function runWeeklyDeepRead(
         sourceText:  articleContent,
         sourceUrl:   articleInfo.url,
         sourceTitle: articleInfo.title,
+        sourceObjects: sourcePool,
       });
+
+      const postTelemetry = computeSourceTelemetry({
+        draft: body,
+        sources: sourcePool,
+        sourceText: articleContent,
+        citationRepairApplied: 0,
+      });
+      console.log(
+        `[ArticleEngine] verifier lanes — laneAOk=${verdict.verifierReport.summary.laneAOk} ` +
+        `laneAFail=${verdict.verifierReport.summary.laneAFail} ` +
+        `laneBOk=${verdict.verifierReport.summary.laneBOk} ` +
+        `laneBBare=${verdict.verifierReport.summary.laneBBare} ` +
+        `severity=${verdict.severity} ` +
+        `citedSentences.count=${postTelemetry.citedSentencesCount} ` +
+        `bareExternalFactSentences.count=${postTelemetry.bareExternalFactSentencesCount}`,
+      );
       if (revisionHistory.length > 0) {
         console.log(
           `[ArticleEngine] Cron auto-revise ran ${revisionHistory.length} attempt(s); final severity=${verdict.severity}`,
