@@ -326,6 +326,10 @@ export const experimentTrials = sqliteTable("experiment_trials", {
   contextHash:       text("context_hash"),                    // null in Phase 0
   outcomeMetric:     real("outcome_metric"),                  // null until Phase 2 grades it
   outcomeRecordedAt: text("outcome_recorded_at"),
+  // PR-G: marks rows produced by the manual "known-bad probe" diagnostic.
+  // Excluded by default from validity aggregates so the probe can never
+  // pollute the production metric. NULL on every pre-PR-G row.
+  isProbe:           integer("is_probe", { mode: "boolean" }),
   recordedAt:        text("recorded_at").notNull().default(new Date().toISOString()),
 });
 

@@ -53,12 +53,19 @@ function parseArmConfig(raw: string): { model: string; provider: string } | null
 /** Writes one row into `experiment_trials`. Never throws — a write
  *  failure must not break the dispatch path. Returns the inserted rowid
  *  (or `null` if the write failed) so the caller can later attach an
- *  outcome metric via `recordTrialOutcome`. */
+ *  outcome metric via `recordTrialOutcome`.
+ *
+ *  PR-G: optional `isProbe` flag marks rows produced by the manual
+ *  diagnostic probe (server/experiments/runKnownBadProbe.ts). Probe rows
+ *  are excluded from default validity aggregates. Production callers
+ *  omit the flag (defaults to false in storage); only the probe runner
+ *  sets it. */
 export function recordTrial(args: {
   experimentKey: string;
   arm: "baseline" | "treatment";
   taskKey: string;
   resolvedModel: string;
+  isProbe?: boolean;
 }): number | null {
   try {
     const result = db.insert(experimentTrials)
@@ -67,6 +74,7 @@ export function recordTrial(args: {
         arm:           args.arm,
         taskKey:       args.taskKey,
         resolvedModel: args.resolvedModel,
+        isProbe:       args.isProbe ?? false,
         // contextHash is populated by Phase 2 — see
         // docs/EXPLORATION_POLICY.md §3.2. outcomeMetric is filled in by
         // Phase 1's recordTrialOutcome when the response is graded.
