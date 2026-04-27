@@ -414,7 +414,13 @@ async function postDailyNewsDispatch() {
     // ── 2. Ask Grok to write today's [306 NEWS] dispatch ───────────────────────────
     const dispatchContext = getOptimizedContext("news dispatch daily AI market headlines");
     const todaysSummary = getTodaysPostsSummary();
-    const dispatchSystemPrompt = `Today is ${new Date().toISOString().slice(0, 10)} (UTC).\n\n${dispatchContext}\n\n${buildVoiceBlock()}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
+    const citationDiscipline = `CITATION DISCIPLINE (REQUIRED — APA-style per-claim attribution):
+- A citation [URL] must support the SPECIFIC claim immediately before it. Do not staple a citation to the end of a paragraph that contains synthesis or analytical commentary — citations attach to claims, not paragraphs.
+- If a sentence is your own analysis, interpretation, framing, or "the logical endpoint of X" / "the illusion of Y" / "the entire field has been built on Z" type commentary, do NOT attach a citation. State it in your analytical voice. Synthesis is Lane B and takes no URL.
+- If a claim is a fact drawn from a SOURCE OTHER than today's headline pack above (industry-known costs, benchmarks, dates, training facts, historical events, your KB), do NOT staple a headline-pack URL to it. Either cite the actual source with its real URL in your own voice ("per Stanford HAI's 2025 AI Index, [link]"), or — if you cannot produce a real URL for it — qualify it verbally with a hedge like "publicly reported," "industry reporting indicates," "as widely covered" and attach NO URL. Never fabricate a URL.
+- The KB / knowledge layer included in the context above is provided as background scaffolding for your analysis, NOT as a citation pool — KB lines do not carry source URLs. Treat any KB-derived fact you surface as outside-the-source and apply the rule above (cite the real upstream source if you have one, hedge verbally if you don't).
+- One citation per claim. If a sentence contains multiple claims requiring different sources, split the sentence or cite each component. Do not bracket-pile citations onto a single closing punctuation.`;
+    const dispatchSystemPrompt = `Today is ${new Date().toISOString().slice(0, 10)} (UTC).\n\n${dispatchContext}\n\n${buildVoiceBlock()}\n\n${citationDiscipline}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
     const grokResp = await postChatCompletions({
         model: getModel("news-dispatch"),
         messages: [

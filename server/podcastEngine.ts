@@ -481,9 +481,14 @@ The falsification segment is what makes you trustworthy. Anyone can be confident
             role: "system",
             content: `${agentCtx}
 ${skillsCtx}
-${SOUL}
+${getFormatVoiceContext('podcast')}
 
-${VOICE}
+CITATION DISCIPLINE (REQUIRED — APA-style per-claim attribution, audio script form):
+- When you mention a stat, name, dollar figure, benchmark, or claim in the spoken script, attribute it verbally — "...per [source] on [date]..." or "...as [source] reported..." — never read URLs aloud, never insert bracketed [URL] markers in the script.
+- If a sentence is your own analysis, interpretation, framing, or "the logical endpoint of X" / "the illusion of Y" / "the entire field has been built on Z" type commentary, give NO source attribution. State it in your analytical voice. Synthesis takes no source.
+- If a claim is a fact drawn from a SOURCE OTHER than the research source(s) above (industry-known costs, benchmarks, dates, training facts, historical events, your KB), attribute it verbally to its actual source — never to the research source(s) when they didn't make that claim. If you cannot name and date the actual source aloud, hedge: "publicly reported," "industry reporting indicates," "as widely covered." Never fabricate a source name, a date, or a quote.
+- The KB / knowledge layer included in the context above is provided as background scaffolding for your analysis, NOT as a citation pool — KB lines do not carry source URLs. Treat any KB-derived fact you surface as outside-the-source: attribute verbally if you can name the upstream source, hedge verbally if you can't.
+- One verbal attribution per claim. If a sentence packs multiple claims with different sources, split it. Don't pile multiple "according to" phrases onto one sentence.
 
 You are in PODCAST SCRIPT mode — writing a ${meta.label} episode.
 
@@ -828,9 +833,15 @@ export async function generateInterviewQuestions(guestId: string, grokKey: strin
             role: "system",
             content: `${agentCtx}
 
-${SOUL}
+${getFormatVoiceContext('podcast')}
 
-${VOICE}
+CITATION DISCIPLINE (REQUIRED — APA-style per-claim attribution, audio script form):
+- When you mention a stat, name, dollar figure, benchmark, or claim in your interview prep or in the spoken script, attribute it verbally — "...per [source] on [date]..." or "...as [source] reported..." — never read URLs aloud, never insert bracketed [URL] markers.
+- Treat guest-attributed material as quoted content. Preserve the guest's actual words from the guest context / research above; do NOT invent quotes the guest never said. If you don't have a real quote, paraphrase neutrally ("the guest has argued that...") and qualify the framing.
+- If a sentence is your own analysis, interpretation, framing, or "the logical endpoint of X" / "the illusion of Y" type commentary, give NO source attribution. State it in your analytical voice. Synthesis takes no source.
+- If a claim is a fact drawn from a SOURCE OTHER than the guest context / research above (industry-known costs, benchmarks, dates, training facts, historical events, your KB), attribute it verbally to its actual source — never to the guest or to the research source when they didn't make that claim. If you cannot name and date the actual source aloud, hedge: "publicly reported," "industry reporting indicates," "as widely covered." Never fabricate a source name, a date, or a quote.
+- The KB / knowledge layer included in the context above is provided as background scaffolding, NOT as a citation pool — KB lines do not carry source URLs. Attribute verbally if you can name the upstream source; hedge verbally if you can't.
+- One verbal attribution per claim. If a sentence packs multiple claims with different sources, split it.
 
 You are in INTERVIEW PREP mode — preparing questions for THE CONVERSATION.
 
@@ -1445,6 +1456,13 @@ async function generateScriptForEpisode(
           content: `${agentCtx}
 ${skillsCtx}
 ${getFormatVoiceContext('podcast')}
+
+CITATION DISCIPLINE (REQUIRED — APA-style per-claim attribution, audio script form):
+- When you mention a stat, name, dollar figure, benchmark, or claim in the spoken script, attribute it verbally — "...per [source] on [date]..." or "...as [source] reported..." — never read URLs aloud, never insert bracketed [URL] markers in the script.
+- If a sentence is your own analysis, interpretation, framing, or "the logical endpoint of X" / "the illusion of Y" / "the entire field has been built on Z" type commentary, give NO source attribution. State it in your analytical voice. Synthesis takes no source.
+- If a claim is a fact drawn from a SOURCE OTHER than the research source(s) above (industry-known costs, benchmarks, dates, training facts, historical events, your KB), attribute it verbally to its actual source — never to the research source(s) when they didn't make that claim. If you cannot name and date the actual source aloud, hedge: "publicly reported," "industry reporting indicates," "as widely covered." Never fabricate a source name, a date, or a quote.
+- The KB / knowledge layer included in the context above is provided as background scaffolding for your analysis, NOT as a citation pool — KB lines do not carry source URLs. Treat any KB-derived fact you surface as outside-the-source: attribute verbally if you can name the upstream source, hedge verbally if you can't.
+- One verbal attribution per claim. If a sentence packs multiple claims with different sources, split it. Don't pile multiple "according to" phrases onto one sentence.
 
 You are generating a full THE SIGNAL podcast episode from your research findings.
 
