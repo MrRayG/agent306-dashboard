@@ -25,6 +25,12 @@ import {
   type VerifierReportEntry,
   type LLMJudgeClient,
 } from "./claimVerifier.js";
+import {
+  type SourceObject,
+  dedupeSources,
+  repairCitationLocality,
+  computeSourceTelemetry,
+} from "./sourceLocality.js";
 
 const DEFAULT_MAX_ATTEMPTS = 3;
 
@@ -71,6 +77,10 @@ export interface ReviseOpts {
   sourceTitle: string;
   /** Extra source URLs the operator added — usable as citation targets. */
   extraSourceUrls?: string[];
+  /** Structured source pool (PR-E). Used by the citation-locality repair
+   *  pass that runs BEFORE the first verifier call, and folded into
+   *  `extraSourceUrls` for the rewriter prompt. */
+  sourceObjects?: SourceObject[];
   /** Override the max attempts (defaults to env MAX_REVISION_ATTEMPTS or 3). */
   maxAttempts?: number;
   /** Skip LLM rewrite — used by tests to drive the loop deterministically. */
@@ -225,11 +235,48 @@ Return JSON:
 export async function reviseUntilClean(opts: ReviseOpts): Promise<ReviseResult> {
   const max = opts.maxAttempts ?? maxRevisionAttempts();
   const rewrite = opts.rewrite ?? defaultRewrite;
-  const extraSourceUrls = (opts.extraSourceUrls ?? []).filter((u) => /^https?:\/\//i.test(u));
+
+  // PR-E: dedup the structured source pool and merge in operator-added URLs
+  // for the rewriter. The rewriter still receives URLs only (not full
+  // SourceObject metadata) since the rewriter prompt is URL-centric.
+  const sourcePool = dedupeSources(opts.sourceObjects ?? []);
+  const extraSourceUrls = Array.from(new Set([
+    ...(opts.extraSourceUrls ?? []),
+    ...sourcePool.map(s => s.url),
+  ])).filter((u) => /^https?:\/\//i.test(u));
+
+  // PR-E: run the citation-locality repair pass BEFORE the first verifier
+  // call. The repair only ever reuses URLs already present in `sourcePool`
+  // (no fabrication) and hedges Lane B sentences without an available
+  // source so they no longer count as bare external claims.
+  const repair = repairCitationLocality(opts.draftText, sourcePool);
+  const draftStart = repair.draft;
+
+  if (repair.citationsAdded > 0 || repair.sentencesHedged > 0) {
+    console.log(
+      `[Revise] citationRepair.applied=${repair.citationsAdded + repair.sentencesHedged} ` +
+      `(citationsAdded=${repair.citationsAdded}, sentencesHedged=${repair.sentencesHedged}, ` +
+      `bareAfterRepair=${repair.bareAfterRepair}, fabricatedUrls=${repair.fabricatedUrls})`,
+    );
+  }
+
+  const preTelemetry = computeSourceTelemetry({
+    draft: draftStart,
+    sources: sourcePool,
+    sourceText: opts.sourceText,
+    citationRepairApplied: repair.citationsAdded + repair.sentencesHedged,
+  });
+  console.log(
+    `[Revise] source telemetry — sourceObjects.count=${preTelemetry.sourceObjectsCount} ` +
+    `sourceUrls.count=${preTelemetry.sourceUrlsCount} ` +
+    `citedSentences.count=${preTelemetry.citedSentencesCount} ` +
+    `bareExternalFactSentences.count=${preTelemetry.bareExternalFactSentencesCount} ` +
+    `evidenceBundleBytes=${preTelemetry.evidenceBundleBytes}`,
+  );
 
   // Initial verdict — we only loop if the verifier flagged actionable issues.
   let verdict = await verifyClaims({
-    draftText: opts.draftText,
+    draftText: draftStart,
     sourceText: opts.sourceText,
     sourceUrl: opts.sourceUrl,
     sourceTitle: opts.sourceTitle,
@@ -237,7 +284,7 @@ export async function reviseUntilClean(opts: ReviseOpts): Promise<ReviseResult> 
     judgeClient: opts.verifierJudgeClient,
   });
 
-  let body = opts.draftText;
+  let body = draftStart;
   const history: RevisionAttempt[] = [];
 
   // Cap on judge-outage rounds. If the verifier flags
