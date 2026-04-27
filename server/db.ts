@@ -213,6 +213,7 @@ sqlite.exec(`
     context_hash TEXT,
     outcome_metric REAL,
     outcome_recorded_at TEXT,
+    is_probe INTEGER,
     recorded_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
   CREATE INDEX IF NOT EXISTS idx_experiment_trials_key_arm
@@ -220,3 +221,20 @@ sqlite.exec(`
   CREATE INDEX IF NOT EXISTS idx_experiment_trials_key_recorded
     ON experiment_trials(experiment_key, recorded_at);
 `);
+
+// PR-G — additive migration for pre-existing databases. The CREATE TABLE
+// IF NOT EXISTS above only adds `is_probe` for fresh DBs; on Railway and
+// any operator-deployed DB the table already exists without the column.
+// Add it idempotently here by checking PRAGMA table_info first so the
+// ALTER TABLE doesn't error on second boot. NULL on legacy rows = "not a
+// probe" (reads treat NULL as false).
+try {
+  const cols = sqlite.prepare("PRAGMA table_info(experiment_trials)").all() as Array<{ name: string }>;
+  if (!cols.some(c => c.name === "is_probe")) {
+    sqlite.exec("ALTER TABLE experiment_trials ADD COLUMN is_probe INTEGER");
+  }
+} catch (e) {
+  // Don't crash boot if the migration fails on a non-standard DB; the
+  // probe feature will fail loudly at write time instead.
+  console.warn("[db] experiment_trials.is_probe migration check failed:", e);
+}

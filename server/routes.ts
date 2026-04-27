@@ -127,6 +127,9 @@ import {
   seedDreams,
 } from "./dreamEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
+// PR-G — Validity baseline diagnostic panel + manual probe.
+import { getValiditySummary } from "./experiments/validityAggregates.js";
+import { runKnownBadProbe } from "./experiments/runKnownBadProbe.js";
 import { startXPostScheduler, getXPostQueue, queueXPost, getTodaysPostsSummary, clearXPostQueue, postXQueueItem, deleteXPostQueueItem, isXAutoPostEnabled, setXAutoPostEnabled, getXAutoPostState, setQueuedPostImage, defaultIncludeImageForType } from "./xPostScheduler.js";
 import { generatePostImage, generateImagePrompt, getImageStats } from "./imageEngine.js";
 import {
@@ -1871,6 +1874,46 @@ export function registerRoutes(httpServer: Server, app: Express) {
         error,
       })),
     });
+  });
+
+  // ── PR-G: Validity baseline + known-bad probe ───────────────────────
+  // Read-only summary feeds the dashboard panel (server/experiments/
+  // validityAggregates.ts). Probe rows are excluded from the validity
+  // aggregates by default — see the helper for the SQL-level exclusion.
+  app.get("/api/diagnostic/validity/summary", requireDashAuth, (_req, res) => {
+    try {
+      console.log("[diagnostic.validityPanel.viewed] requested");
+      res.json(getValiditySummary());
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message ?? String(e) });
+    }
+  });
+
+  // Manual-only trigger. No cron, no schedule. The button on the
+  // diagnostic panel is the ONLY caller. Runs one deliberately
+  // malformed-JSON trial through the same metric pipeline production
+  // trials use (recordTrial → safeParseLLMJson → recordTrialOutcome).
+  // See server/experiments/runKnownBadProbe.ts for the canonical
+  // malformation choice and rationale.
+  app.post("/api/diagnostic/validity/known-bad-probe", requireDashAuth, (_req, res) => {
+    try {
+      const result = runKnownBadProbe();
+      console.log(
+        `[diagnostic.validityPanel.probeTriggered] outcome=${result.outcome} ` +
+        `probeId=${result.probeId} trialRecordId=${result.trialRecordId}`,
+      );
+      if (result.outcome === "missed") {
+        // Separate event so it's grep-able from logs — the spec calls this
+        // out as the "metric is broken upstream" signal.
+        console.warn(
+          `[diagnostic.validityPanel.probeMissed] probeId=${result.probeId} ` +
+          `trialRecordId=${result.trialRecordId} outcomeMetric=${result.outcomeMetric}`,
+        );
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message ?? String(e) });
+    }
   });
 
   // ── KG batch — manual run trigger (PR Q) ────────────────────────────

@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import {
+  ValidityBaselinePanel,
+  type ValiditySummary as ValiditySummaryT,
+  type ProbeResult as ProbeResultT,
+} from "@/components/ValidityBaselinePanel";
 
 // ─── Typography ──────────────────────────────────────────────────────────────
 const mono = { fontFamily: "'Courier New', monospace" } as const;
@@ -86,6 +91,22 @@ function statusLabel(p: Probe): string {
   if (p.status) return `${p.status} FAIL`;
   return "—";
 }
+
+// PR-G — fetcher pair for the validity baseline panel. Lifted out of the
+// component so the same shape can be reused (and stubbed) by tests. The
+// panel itself is auth-agnostic; we hit the `/api/diagnostic/...` URLs
+// through `apiRequest` which carries the dashboard auth header (same
+// pattern the xAI probe above uses).
+const validityBaselineFetchers = {
+  fetchSummary: async (): Promise<ValiditySummaryT> => {
+    const res = await apiRequest("GET", "/api/diagnostic/validity/summary");
+    return (await res.json()) as ValiditySummaryT;
+  },
+  triggerProbe: async (): Promise<ProbeResultT> => {
+    const res = await apiRequest("POST", "/api/diagnostic/validity/known-bad-probe");
+    return (await res.json()) as ProbeResultT;
+  },
+};
 
 export default function Diagnostics() {
   const { toast } = useToast();
@@ -284,6 +305,10 @@ export default function Diagnostics() {
           </div>
         )}
       </section>
+
+      {/* PR-G: Validity baseline panel — additive, read-only aggregates +
+          manual-only known-bad probe button. */}
+      <ValidityBaselinePanel fetchers={validityBaselineFetchers} />
 
       {/* Legend / guidance */}
       <section
