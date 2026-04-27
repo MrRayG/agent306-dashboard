@@ -1,0 +1,15 @@
+Source URL: https://openai.com/index/our-principles/
+Author: Sam Altman
+Published: April 26, 2026
+
+[Democratization]
+“This means that in addition to giving everyone access to AI, we need to ensure that key decisions about AI are made via democratic processes and with egalitarian principles, and not just made by AI labs.”
+
+[Universal Prosperity]
+“For prosperity to be fully realized and widely shared, we believe that 1) our governments may need to consider new economic models to ensure that everyone can participate in the value creation in front of us...”
+
+[Resilience]
+“No AI lab can ensure a good future alone. For an obvious example, there may be extremely capable models that make it easier to create a new pathogen, and we need a society-wide approach to defend against this with pathogen-agnostic countermeasures.”
+
+[Closing — Adaptability section]
+“It wasn’t that long ago that we were nervous about releasing the weights of GPT‑2 because we weren’t sure what the impacts on society will be. Obviously in retrospect that was a misplaced worry, but it led to us discovering the strategy of iterative deployment, which has been one of the most important things we’ve figured out.”
