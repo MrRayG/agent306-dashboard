@@ -2,21 +2,12 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { PostCard, type BlogPostForCard } from "@/components/BlogPostCard";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
-interface BlogPost {
-  id: string;
-  title: string;
-  slug: string;
-  content: string;
-  source: string;
-  tags: string[];
-  status: "draft" | "published" | "archived";
-  wordCount: number;
-  readingTime: number;
-  createdAt: string;
-  publishedAt?: string;
-}
+// PR-E0: BlogPost shape (incl. optional verifierReport) lives in
+// @/components/BlogPostCard so the card can be exercised in isolation.
+type BlogPost = BlogPostForCard;
 
 interface BlogState {
   totalPublished: number;
@@ -26,81 +17,6 @@ interface BlogState {
 
 const mono  = { fontFamily: "'Courier New', monospace" } as const;
 const pixel = { fontFamily: "'Courier New', monospace", textTransform: "uppercase" as const, letterSpacing: "0.15em" } as const;
-
-// ── Post card ─────────────────────────────────────────────────────────────────
-function PostCard({
-  post,
-  onPublish,
-  onDelete,
-}: {
-  post: BlogPost;
-  onPublish: (id: string) => void;
-  onDelete: (id: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const created = new Date(post.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  const published = post.publishedAt
-    ? new Date(post.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-    : null;
-
-  const statusColor = post.status === "published" ? "#f97316" : post.status === "archived" ? "rgba(227,229,228,0.35)" : "rgba(227,229,228,0.55)";
-  const statusBg = post.status === "published" ? "rgba(249,115,22,0.08)" : post.status === "archived" ? "rgba(227,229,228,0.04)" : "rgba(227,229,228,0.06)";
-
-  return (
-    <div style={{ border: "1px solid rgba(227,229,228,0.14)", background: "rgba(227,229,228,0.04)", marginBottom: "0.6rem", padding: "1rem 1.25rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-            <p style={{ ...mono, fontSize: "0.90rem", color: "#efefef", margin: 0, fontWeight: 700 }}>{post.title}</p>
-            <span style={{
-              ...mono, fontSize: "0.60rem", textTransform: "uppercase" as const, letterSpacing: "0.1em",
-              color: statusColor, background: statusBg, padding: "2px 6px", border: `1px solid ${statusColor}33`,
-            }}>{post.status}</span>
-          </div>
-          <p style={{ ...mono, fontSize: "0.72rem", color: "rgba(227,229,228,0.48)", margin: 0 }}>
-            {created}{published ? ` · Published ${published}` : ""} · {post.source} · {post.wordCount} words · {post.readingTime} min read
-          </p>
-          {post.tags.length > 0 && (
-            <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" as const }}>
-              {post.tags.map(t => (
-                <span key={t} style={{ ...mono, fontSize: "0.58rem", color: "rgba(249,115,22,0.5)", border: "1px solid rgba(249,115,22,0.15)", padding: "1px 5px" }}>{t}</span>
-              ))}
-            </div>
-          )}
-        </div>
-        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-          {post.status === "draft" && (
-            <button onClick={() => onPublish(post.id)} style={{
-              ...mono, fontSize: "0.70rem", background: "#f97316", color: "#1a1b1c", border: "none",
-              padding: "4px 10px", cursor: "pointer", textTransform: "uppercase" as const, fontWeight: 700,
-            }}>Publish</button>
-          )}
-          {post.status === "published" && (
-            <a href={`https://agent306.ai/blog/${post.slug}`} target="_blank" rel="noreferrer"
-              style={{ ...mono, fontSize: "0.70rem", color: "#4ade80", border: "1px solid rgba(74,222,128,0.2)", padding: "4px 10px", textDecoration: "none", textTransform: "uppercase" as const }}>
-              View →
-            </a>
-          )}
-          <button onClick={() => setOpen(v => !v)} style={{
-            ...mono, fontSize: "0.70rem", background: "transparent", border: "1px solid rgba(227,229,228,0.20)",
-            color: "rgba(227,229,228,0.60)", cursor: "pointer", padding: "4px 10px", textTransform: "uppercase" as const,
-          }}>{open ? "Collapse" : "Preview"}</button>
-          <button onClick={() => onDelete(post.id)} style={{
-            ...mono, fontSize: "0.70rem", background: "transparent", border: "1px solid rgba(248,113,113,0.2)",
-            color: "rgba(248,113,113,0.5)", cursor: "pointer", padding: "4px 10px", textTransform: "uppercase" as const,
-          }}>Delete</button>
-        </div>
-      </div>
-      {open && (
-        <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid rgba(227,229,228,0.12)" }}>
-          <div style={{ ...mono, fontSize: "0.74rem", color: "rgba(227,229,228,0.7)", lineHeight: 1.8, whiteSpace: "pre-wrap" as const, maxHeight: "40vh", overflowY: "auto" as const }}>
-            {post.content.slice(0, 3000)}{post.content.length > 3000 ? "\n\n[truncated]" : ""}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ── Main ───────────────────────────────────────────────────────────────────────
 export default function BlogStudio() {
