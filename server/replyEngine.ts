@@ -16,6 +16,8 @@ import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { buildExemplarBlock } from "./voiceExemplars.js";
 
 import { postChatCompletions, postXSearchResponses } from "./llmCall.js";
+import { buildVoiceBlock } from "./voice.js";
+import { verifyClaims } from "./claimVerifier.js";
 const GROK_KEY   = LLM_API_KEY;
 const GROK_URL   = LLM_BASE_URL;
 const STATE_FILE = dataPath("reply_engine.json");
@@ -178,6 +180,15 @@ async function generateReply(opts: {
 
   const systemPrompt = `${agentCtx}
 
+${buildVoiceBlock()}
+
+CITATION DISCIPLINE (REQUIRED — APA-style per-claim attribution):
+- Replies are short. Every factual claim — stat, name, date, benchmark, model release — must be supportable. If you can't support it, hedge it verbally ("reportedly," "as widely covered," "industry reporting indicates") and attach NO URL. Never fabricate a URL.
+- Your analytical voice and opinion are Lane B and take no citation. "I think X," "the logical endpoint is Y," "this is the illusion of Z" — state it in your voice, no URL.
+- If you cite a URL, it must support the SPECIFIC claim immediately before it — not the whole reply. Citations attach to claims, not paragraphs.
+- The KB / knowledge layer in the agent context above is background scaffolding, NOT a citation pool — KB lines do not carry source URLs. KB-derived facts must be hedged verbally or attributed to their actual upstream source if you have a real URL for it.
+- The "Be the expert" framing means draw on real history and real developments — but if you can't name a specific paper, model, lab, or date, generalize. Do not invent specifics to sound authoritative.
+
 You are Agent 306 — Sovereign AI Thought Leader — replying directly to someone on X.
 This is a reply — not an episode. Personal, specific, and intellectually honest.
 
@@ -241,7 +252,34 @@ No character limit — use the space to say something worth reading. Be genuine.
     if (cleaned && !cleaned.includes("Agent 306")) {
       cleaned = cleaned + "\n\u2014 Agent 306";
     }
-    return cleaned || null;
+    if (!cleaned) return null;
+
+    // Post-write claim verification. The parent tweet (and any pre-fetched
+    // research context for AI/tech topics) form the source set the model
+    // was given - bare stats or named claims that aren't supported there
+    // and aren't hedged verbally get rejected. Mirrors signalBriefEngine.ts:
+    // 295-330 (no revise loop; HARD_FAIL -> drop + log + return null).
+    // The "Be the expert" framing in the prompt invites unsourced AI/tech
+    // facts; the verifier is the backstop.
+    const upstreamSourceText = [
+      `Parent tweet from @${opts.username}:\n${opts.text}`,
+      opts.researchContext ? `Research context (x_search):\n${opts.researchContext}` : "",
+    ].filter(Boolean).join("\n\n");
+    const verdict = await verifyClaims({
+      draftText:   cleaned,
+      sourceText:  upstreamSourceText,
+      sourceUrl:   opts.tweetUrl ?? "",
+      sourceTitle: `Reply to @${opts.username}`,
+    });
+    if (verdict.severity === "HARD_FAIL") {
+      console.error(`[ClaimVerifier] REJECTED reply to @${opts.username}: ${verdict.unsupportedClaims.length} unsupported claims`);
+      for (const c of verdict.unsupportedClaims) {
+        console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);
+      }
+      return null;
+    }
+
+    return cleaned;
   } catch {
     return null;
   }
