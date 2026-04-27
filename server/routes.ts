@@ -485,6 +485,29 @@ Return JSON: {"post": "..."}`
     // Enforce [306 NEWS] show tag
     postText = enforceShowTag(postText, "news");
 
+    // Post-write claim verification. The Dispatch is generated from the
+    // headline pack above — any external fact the post asserts in agent
+    // voice without attribution is a Lane B hard-fail. The headline pack
+    // IS the source set; anything outside it that the model invented
+    // (e.g. the 2026-04-26 "internal benchmarks leaked through GitHub
+    // commit patterns" line) gets quarantined. See server/claimVerifier.ts
+    // and server/signalBriefEngine.ts:295-330 for the mirrored pattern.
+    const dispatchSourceText = `AI/Tech headlines:\n${topAIHeadlines}\n\nMarket:\nETH ${ethPrice} (${ethChange}), BTC ${btcPrice} (${btcChange})`;
+    const verdict = await verifyClaims({
+      draftText:   postText,
+      sourceText:  dispatchSourceText,
+      sourceUrl:   "",
+      sourceTitle: `306 NEWS Dispatch ${dayLabel}`,
+    });
+    if (verdict.severity === "HARD_FAIL") {
+      console.error(`[Agent306:News] ClaimVerifier REJECTED dispatch: ${verdict.unsupportedClaims.length} unsupported claims`);
+      for (const c of verdict.unsupportedClaims) {
+        console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);
+      }
+      lastNewsDispatchDate = null; // allow retry on next tick
+      return;
+    }
+
     // ── 3. Queue dispatch via X post scheduler ──────────────────────────
     try {
       if (postText.trim().length > 10) {
