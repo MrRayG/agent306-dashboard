@@ -51,6 +51,11 @@ import { getModel } from "./modelRouter.js";
 import { postChatCompletions } from "./llmCall.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { checkRetractedClaims } from "./retractedClaims.js";
+// PR-H — symmetric typographic / Unicode fold for source comparison. See
+// server/textNormalization.ts for the per-step justification (each fold
+// step is pinned to a regression test in
+// server/__tests__/verifierTextNormalization.test.ts).
+import { normalizeForMatching } from "./textNormalization.js";
 
 export type ClaimLane =
   | "source-attributed"
@@ -249,8 +254,17 @@ function sourceDomain(url: string): string {
 
 function normalizedContains(haystack: string, needle: string): boolean {
   if (needle.length < 3) return true;
-  const H = normalize(haystack);
-  const N = normalize(needle);
+  // PR-H: apply the richer typographic/Unicode fold on both sides before the
+  // substring check. The fold is a strict superset of the previous
+  // lowercase + whitespace-collapse normalization, so anything that matched
+  // before still matches; the new behavior is that curly quotes,
+  // apostrophes, NBHs, en/em dashes, NBSPs, and zero-width characters in
+  // either string no longer cause false-positive "fabricated quote" rejections
+  // on text that appears verbatim in the source modulo typography.
+  // Strictness on real fabrications is unchanged: a string that does not
+  // appear in the source AFTER normalization still produces no match.
+  const H = normalizeForMatching(haystack);
+  const N = normalizeForMatching(needle);
   return H.includes(N);
 }
 
