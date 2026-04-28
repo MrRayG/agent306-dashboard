@@ -38,6 +38,8 @@
 //     the writer's job to fix.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { normalizeForMatching } from "./textNormalization.js";
+
 export type ArtifactMode = "ANALYSIS" | "REPORT" | "MANUSCRIPT";
 
 /** Default mode when the writer doesn't set one. Today's verifier
@@ -447,4 +449,69 @@ export function isContextFrameOfSource(sentence: string, sourceText: string): bo
     if (lowerSource.includes(e.toLowerCase())) return true;
   }
   return false;
+}
+
+// ─── PR-J — Quote-plus-commentary span extraction ──────────────────────────
+//
+// Pulls quoted spans out of an ANALYSIS sentence so the verifier can route
+// quote+commentary sentences through the verbatim-quote check (and exempt
+// the surrounding gloss as author voice when every quoted span verifies).
+//
+// Rules:
+//   - ASCII double quotes "…": always extracted.
+//   - Curly double quotes “…” (U+201C / U+201D): always extracted (the
+//     PR-H normalizer folds these to ASCII " before extraction so we only
+//     need one matcher).
+//   - ASCII single quotes '…' AND curly singles ‘…’ (U+2018 / U+2019):
+//     only extracted when the candidate span is ≥ 4 words. This avoids
+//     matching contractions (`don't`), possessives (`Agent 306's`), and
+//     short emphasis spans that aren't quotes-as-quotation.
+//
+// The input is normalized with `normalizeForMatching` first (PR-H) — but
+// with case folding turned OFF so we don't lose the original casing in the
+// extracted span (the verifier's `normalizedContains` will fold case again
+// on its side). The fold collapses curly quotes/apostrophes, NBSPs,
+// zero-width chars, and the dash family to ASCII before we run the
+// extraction regexes — so a single regex can cover both ASCII and curly
+// delimiters without separate code paths.
+
+const DOUBLE_QUOTE_SPAN_RX = /"([^"\n]{1,500})"/g;
+const SINGLE_QUOTE_SPAN_RX = /(?:^|[^A-Za-z0-9])'([^'\n]{1,500})'(?=$|[^A-Za-z0-9])/g;
+
+export function extractQuotedSpans(sentence: string): string[] {
+  if (!sentence) return [];
+  // Fold curly quotes/apostrophes/dashes/NBSPs to ASCII so we only need
+  // one set of delimiter regexes. Keep case so the original span content
+  // is preserved for downstream display/matching.
+  const normalized = normalizeForMatching(sentence, { caseFold: false });
+
+  const spans: string[] = [];
+  let m: RegExpExecArray | null;
+
+  // Double quotes: always extracted, regardless of word count. Double
+  // quotes around prose are unambiguously quotation marks.
+  DOUBLE_QUOTE_SPAN_RX.lastIndex = 0;
+  while ((m = DOUBLE_QUOTE_SPAN_RX.exec(normalized)) !== null) {
+    const span = m[1].trim();
+    if (span.length >= 1) spans.push(span);
+  }
+
+  // Single quotes: only extracted when the span is ≥ 4 words. The
+  // surrounding boundary check ([^A-Za-z0-9] before the opening `'`,
+  // EOS or [^A-Za-z0-9] after the closing `'`) excludes possessives
+  // (`306's`) and contractions (`don't`) where the apostrophe is
+  // adjacent to a letter on both sides. The ≥ 4 word rule rejects short
+  // emphatic spans where ASCII single quotes are too ambiguous.
+  SINGLE_QUOTE_SPAN_RX.lastIndex = 0;
+  while ((m = SINGLE_QUOTE_SPAN_RX.exec(normalized)) !== null) {
+    const span = m[1].trim();
+    if (!span) continue;
+    const wordCount = span.split(/\s+/).filter(w => w.length > 0).length;
+    if (wordCount >= 4) spans.push(span);
+    // Reset lastIndex one position back so overlapping matches (the
+    // closing-boundary char may be the next opening boundary) aren't
+    // skipped. The regex already advances, but defensive.
+  }
+
+  return spans;
 }

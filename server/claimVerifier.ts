@@ -68,6 +68,7 @@ import {
   isMarkdownHeaderSentence,
   looksLikeAttributionByLink,
   hasAttributionVerbAnalysis as hasAttributionVerbInAnalysisMode,
+  extractQuotedSpans,
 } from "./artifactMode.js";
 
 export type ClaimLane =
@@ -83,6 +84,7 @@ export type SentenceClassification =
   | "LANE_A_OK"
   | "LANE_A_FAIL"
   | "LANE_A_UNVERIFIABLE"
+  | "LANE_A_PASS_QUOTED_COMMENTARY"
   | "LANE_B_OK"
   | "LANE_B_BARE"
   | "RETRACTED_HIT"
@@ -116,6 +118,11 @@ export interface VerifierReport {
     laneAOk: number;
     laneAFail: number;
     laneAUnverifiable: number;
+    /** PR-J — ANALYSIS-mode quote+commentary sentences whose quoted spans
+     *  all verified against source. Surfaced separately from `laneAOk` so
+     *  the dashboard can show "passed via quoted-span verification" — never
+     *  silently masked as a regular pass. */
+    laneAPassQuotedCommentary: number;
     laneBOk: number;
     laneBBare: number;
     retractedHits: number;
@@ -346,6 +353,7 @@ function computeSummary(entries: VerifierReportEntry[]): VerifierReport["summary
     laneAOk: entries.filter(e => e.classification === "LANE_A_OK").length,
     laneAFail: entries.filter(e => e.classification === "LANE_A_FAIL").length,
     laneAUnverifiable: entries.filter(e => e.classification === "LANE_A_UNVERIFIABLE").length,
+    laneAPassQuotedCommentary: entries.filter(e => e.classification === "LANE_A_PASS_QUOTED_COMMENTARY").length,
     laneBOk: entries.filter(e => e.classification === "LANE_B_OK").length,
     laneBBare: entries.filter(e => e.classification === "LANE_B_BARE").length,
     retractedHits: entries.filter(e => e.classification === "RETRACTED_HIT").length,
@@ -646,6 +654,44 @@ export async function verifyClaims(opts: VerifyClaimsOpts): Promise<ClaimVerdict
     }
   }
 
+  // ── PR-J: ANALYSIS quote-plus-commentary recognition ────────────────
+  // In ANALYSIS mode, sentences combining a verbatim source quote with
+  // the agent's gloss should pass when EVERY quoted span verifies — the
+  // surrounding gloss is treated as author voice. Section 1 above is
+  // strict on fabrications (spans ≥ 8 chars not in source = LANE_A_FAIL),
+  // and that strictness is preserved: if any extracted span is fabricated,
+  // the existing path flags it and we do NOT grant the new sub-status.
+  //
+  // The new sub-status `LANE_A_PASS_QUOTED_COMMENTARY` is emitted ONLY
+  // when ALL extracted spans pass `normalizedContains(sourceText, span)`
+  // AND at least one span exists. The sentence is then exempted from
+  // section 2's attribution classification AND the LLM-judge fallback
+  // (the gloss is author voice, not a Lane A claim).
+  //
+  // Hard rule: this branch is ANALYSIS-only. REPORT / MANUSCRIPT / default
+  // are byte-identical to today.
+  const quotedCommentaryPassed = new Set<string>();
+  if (artifactMode === "ANALYSIS") {
+    for (const s of sentences) {
+      const key = normalize(s);
+      if (exemptKeys.has(key)) continue;
+      if (failedLaneA.has(key)) continue; // a fabricated span already flagged this sentence
+      const spans = extractQuotedSpans(s);
+      if (spans.length === 0) continue;
+      const allPass = spans.every(span => normalizedContains(sourceText, span));
+      if (!allPass) continue; // any fabricated span → fall through to existing path
+      quotedCommentaryPassed.add(key);
+      addEntry(
+        entries,
+        sentenceIndex.get(key) ?? -1,
+        s,
+        "LANE_A_PASS_QUOTED_COMMENTARY",
+        `quote+commentary: ${spans.length} quoted span(s) verified against source; surrounding gloss treated as author voice`,
+      );
+      supportedCount += 1;
+    }
+  }
+
   // ── 2. Classify every sentence ─────────────────────────────────────
   // PR-I: in ANALYSIS, the "attribution" gate is narrower — only explicit
   // attribution verbs and direct quotes count. An inline source link
@@ -673,6 +719,10 @@ export async function verifyClaims(opts: VerifyClaimsOpts): Promise<ClaimVerdict
     // ANALYSIS attribution gate (which requires an explicit verb). They
     // get their own flagging path below.
     if (artifactMode === "ANALYSIS" && attributionByLinkSentences.has(key)) continue;
+    // PR-J: ANALYSIS quote+commentary sentences whose quoted spans all
+    // verified are exempt from Lane A / Lane B classification — they
+    // already have their LANE_A_PASS_QUOTED_COMMENTARY entry above.
+    if (artifactMode === "ANALYSIS" && quotedCommentaryPassed.has(key)) continue;
     if (isAttributionForMode(s)) {
       attributed.push(s);
     } else if (isLaneBFactSentence(s)) {
