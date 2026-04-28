@@ -126,8 +126,14 @@ export const FORWARD_PROJECTION_MARKERS = [
 /** Author-voice constructions — sentences containing one of these are
  *  treated as the agent's voice in ANALYSIS. Includes hedging modals
  *  immediately after first-person, framing phrases, and agent
- *  self-reference. */
+ *  self-reference.
+ *
+ *  PR-I.1 additions: forward-projection author-summary framings
+ *  ("the pattern is clear", "the trajectory is clear", …). These are
+ *  appended below the PR-I seed list — additive only, no edits to
+ *  existing entries. */
 export const AUTHOR_VOICE_PATTERNS = [
+  // ── PR-I (seed) ─────────────────────────────────────────────────────
   "what i think",
   "i think",
   "i read this",
@@ -144,6 +150,15 @@ export const AUTHOR_VOICE_PATTERNS = [
   "the headline outcome",
   "the bigger picture",
   "what this means for",
+  // ── PR-I.1 — forward-projection author-summary framings ─────────────
+  "the pattern is clear",
+  "the trajectory is clear",
+  "the throughline is",
+  "what emerges is",
+  "the takeaway is",
+  "the upshot is",
+  "the throughline here",
+  "what this adds up to",
 ];
 
 /** Markdown section-header detector. A line that begins (after any
@@ -205,6 +220,86 @@ export function hasForwardProjection(s: string): boolean {
 export function hasAuthorVoice(s: string): boolean {
   const lower = s.toLowerCase();
   return AUTHOR_VOICE_PATTERNS.some(m => lower.includes(m));
+}
+
+// ── PR-I.1 — closing rhetoric tied to source host ──────────────────────────
+//
+// Agent 306's closing voice sometimes names the source venue:
+//   "These principles sound good on openai.com but lack teeth."
+//   "It reads well on theatlantic.com — less so anywhere else."
+// PR-E plumbed the source URL through verifyClaims; we use the URL's host
+// (NOT a hardcoded list) to recognize this construction. The check:
+//   1. Compute host = URL(sourceUrl).hostname, strip leading "www.".
+//   2. Match `[verb phrase] on <host>` (case-insensitive) where verb phrase
+//      is one of the small explicit list below.
+// If the sentence references a DIFFERENT host, this returns false — the
+// closing rhetoric is tied to the source venue, not generic.
+
+const CLOSING_RHETORIC_VERB_PHRASES = [
+  "sound good on",
+  "sounds good on",
+  "read well on",
+  "reads well on",
+  "play in",
+  "plays in",
+  "land well on",
+  "lands well on",
+  "look good on",
+  "looks good on",
+];
+
+function sourceHostFromUrl(sourceUrl?: string): string {
+  if (!sourceUrl) return "";
+  try {
+    return new URL(sourceUrl).hostname.replace(/^www\./i, "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+// ── PR-I.1 — title + opener composite ──────────────────────────────────────
+//
+// PR-I gated the source-referent exemption on the presence of an inline
+// source link (artifactMode.ts L387: `hasInlineSourceLink(s) && …`). The
+// post-PR-I Deep Read flagged opener sentences that DON'T have an inline
+// link but DO start with a source-referent prefix and continue with
+// author commentary ("The piece opens with a deceptively simple frame: …",
+// "The article opens by laying out three commitments before naming any of
+// them."). PR-I.1 adds a separate path that exempts these as author voice
+// even without an inline link.
+//
+// The detection is conservative: require either
+//   (a) a quoted/italicized span at the very start of the sentence, OR
+//   (b) a source-referent subject prefix from SOURCE_REFERENT_SUBJECT_PREFIXES
+//       followed by author commentary.
+// Today (b) is sufficient on its own — the prefix list is small and
+// curated, so any sentence whose subject starts with one of these prefixes
+// is the agent framing the source rather than asserting an external fact.
+
+const TITLE_OPENER_QUOTE_RX =
+  /^(?:#{1,6}\s+(?:[A-Z][A-Za-z0-9'’\-]*\s+){0,8})?\s*[“"][^”"\n]{2,}["”]/;
+
+/** True when `s` is a title + opener composite — either it opens with a
+ *  quoted title or it begins with a source-referent prefix. PR-I.1
+ *  exemption path. */
+export function isTitleOpenerComposite(s: string): boolean {
+  if (TITLE_OPENER_QUOTE_RX.test(s)) return true;
+  return startsWithSourceReferentSubject(s);
+}
+
+/** True when `s` contains a closing-rhetoric "[verb phrase] on <host>"
+ *  construction tied to the source URL's host. Returns false if the
+ *  sentence's host doesn't match the source host, or if no source URL
+ *  is provided. */
+export function hasClosingRhetoricOnSourceHost(s: string, sourceUrl?: string): boolean {
+  const host = sourceHostFromUrl(sourceUrl);
+  if (!host) return false;
+  const lower = s.toLowerCase();
+  if (!lower.includes(host)) return false;
+  return CLOSING_RHETORIC_VERB_PHRASES.some(p => {
+    const probe = `${p} ${host}`;
+    return lower.includes(probe);
+  });
 }
 
 /** True if `s` contains any of the ANALYSIS-mode attribution verbs. */
@@ -272,7 +367,10 @@ const NUMERIC_RX =
  *  somewhere inside ("the uncertainty the document embraces is real")
  *  are NOT exempted — those still flag as attribution-by-link if they
  *  carry a source link + editorial assertion. */
-const SOURCE_REFERENT_SUBJECT_PREFIXES = [
+// Exported for PR-I.1 audit / regression tests (no list changes — existing
+// shorter prefixes like "the article " already cover the opener/closer
+// variants such as "The article opens by …" via startsWith semantics).
+export const SOURCE_REFERENT_SUBJECT_PREFIXES = [
   "the document ",
   "the article ",
   "the report ",
@@ -353,11 +451,18 @@ export interface ExemptionResult {
  *  ANALYSIS rules. Order of checks matters because some sentences hit
  *  multiple categories (e.g. forward-projection inside a paragraph that
  *  has a citation). We attribute the exemption to the FIRST matching
- *  category for telemetry stability. */
+ *  category for telemetry stability.
+ *
+ *  PR-I.1: optional `sourceUrl` plumbed in so the closing-rhetoric
+ *  exemption ("[verb phrase] on <host>") can tie to the source host
+ *  rather than relying on a hardcoded venue list. Backwards-compatible —
+ *  callers that don't pass sourceUrl simply skip the closing-rhetoric
+ *  branch. */
 export function analysisExemption(
   sentence: string,
   draftText: string,
   sourceText?: string,
+  sourceUrl?: string,
 ): ExemptionResult {
   if (isMarkdownHeaderSentence(sentence)) return { exempt: true, category: "sectionHeader" };
   // attribution-by-link is NOT an exemption — it's a separate flagging
@@ -366,6 +471,32 @@ export function analysisExemption(
   if (looksLikeAttributionByLink(sentence)) return { exempt: false, category: null };
   if (hasForwardProjection(sentence)) return { exempt: true, category: "forwardProjection" };
   if (hasAuthorVoice(sentence))       return { exempt: true, category: "authorVoice" };
+  // PR-I.1 — closing rhetoric tied to source host. Categorized as
+  // authorVoice for telemetry (it's the agent's closing framing language).
+  if (hasClosingRhetoricOnSourceHost(sentence, sourceUrl)) {
+    return { exempt: true, category: "authorVoice" };
+  }
+  // PR-I.1 — title + opener composite. A sentence whose subject is the
+  // article itself ("The piece opens …", "The article opens by …") is the
+  // agent framing the source, not asserting an external fact. Section 1's
+  // verbatim-quote check still runs independently, so fabricated quoted
+  // spans inside such sentences continue to flag LANE_A_FAIL.
+  //
+  // Carve-outs (the exemption is conservative):
+  //   1. If the sentence carries quoted spans, defer to PR-J's
+  //      quote+commentary path (LANE_A_PASS_QUOTED_COMMENTARY when every
+  //      span verifies, LANE_A_FAIL when any span is fabricated).
+  //   2. If the sentence carries an explicit ANALYSIS attribution verb
+  //      ("reports", "claims", "states", …) it's an attributed claim, not
+  //      a framing-of-the-source — leave it to Lane A so the source check
+  //      runs.
+  if (
+    isTitleOpenerComposite(sentence) &&
+    extractQuotedSpans(sentence).length === 0 &&
+    !hasAttributionVerbAnalysis(sentence)
+  ) {
+    return { exempt: true, category: "authorVoice" };
+  }
   if (isOpenerHook(sentence, draftText)) return { exempt: true, category: "openerHook" };
   // Context-frame exemption: a sentence with a year / numeric / named
   // entity that also appears in the cited source is the agent's
