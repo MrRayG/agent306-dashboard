@@ -24,7 +24,8 @@ import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { buildExemplarBlock } from "./voiceExemplars.js";
 
 import { postChatCompletions } from "./llmCall.js";
-import { verifyClaims, type VerifierReport } from "./claimVerifier.js";
+import { type VerifierReport } from "./claimVerifier.js";
+import { reviseBlogUntilClean } from "./blogReviseLoop.js";
 import {
   type SourceObject,
   extractSourceObjects,
@@ -518,15 +519,21 @@ Write the full blog post following the blog structure template. Hook the reader 
       `evidenceBundleBytes=${telemetry.evidenceBundleBytes}`,
     );
 
-    // Post-write claim verification. A blog post that attributes specific
-    // numbers or quotes to a source must have those claims in the source
-    // text — otherwise it's quarantined rather than silently shipped.
-    // See server/claimVerifier.ts.
-    const verdict = await verifyClaims({
-      draftText:   draftAfterRepair,
-      sourceText:  sourceTextBundle,
-      sourceUrl:   opts.sourceId ?? "",
-      sourceTitle: opts.topic,
+    // Post-write claim verification + auto-revise loop. Mirrors the article
+    // engine: if the verifier flags actionable failures (LANE_B_BARE,
+    // LANE_A_FAIL, NCITE_PATTERN_HIT, RETRACTED_HIT), ask the writer to fix
+    // ONLY those sentences before quarantining. Bounded by
+    // MAX_REVISION_ATTEMPTS (env, default 3). The revise loop re-runs
+    // repairCitationLocality + verifyClaims after each rewrite; the
+    // pre-revise repair above is preserved so the existing telemetry log
+    // line stays intact. See server/claimVerifier.ts and
+    // server/blogReviseLoop.ts.
+    const { body: revisedBody, verdict, revisionHistory } = await reviseBlogUntilClean({
+      draftText:     draftAfterRepair,
+      sourceText:    sourceTextBundle,
+      sourceUrl:     opts.sourceId ?? "",
+      sourceTitle:   opts.topic,
+      sourceObjects: sourcePool,
     });
     console.log(
       `[Blog] verifier lanes — laneAOk=${verdict.verifierReport.summary.laneAOk} ` +
@@ -535,11 +542,18 @@ Write the full blog post following the blog structure template. Hook the reader 
       `laneBBare=${verdict.verifierReport.summary.laneBBare} ` +
       `severity=${verdict.severity}`,
     );
+    if (revisionHistory.length > 0) {
+      console.log(
+        `[Blog] auto-revise ran ${revisionHistory.length} attempt(s); final severity=${verdict.severity}`,
+      );
+    }
 
+    // Final fallback: if the revise loop still produced HARD_FAIL after
+    // max attempts, quarantine as before so nothing regresses.
     if (verdict.severity === "HARD_FAIL") {
       const draft = createBlogPost({
         title: parsed.title,
-        content: draftAfterRepair,
+        content: revisedBody,
         source: opts.source,
         sourceId: opts.sourceId,
         tags: [...(parsed.tags ?? []), "claim-verifier-quarantine"],
@@ -555,7 +569,7 @@ Write the full blog post following the blog structure template. Hook the reader 
 
     return createBlogPost({
       title: parsed.title,
-      content: draftAfterRepair,
+      content: revisedBody,
       source: opts.source,
       sourceId: opts.sourceId,
       tags: parsed.tags ?? [],
