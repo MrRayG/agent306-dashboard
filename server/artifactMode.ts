@@ -439,12 +439,131 @@ export function isOpenerHook(sentence: string, draftText: string): boolean {
   return /\[[^\]\n]+\]\(https?:\/\/[^\s)]+\)/.test(firstPara);
 }
 
+// ── PR-K — Critique-by-absence pattern recognition ─────────────────────────
+//
+// In ANALYSIS mode, Agent 306 writes meta-claims about the source's
+// omissions ("The article does not specify …", "It does not address …",
+// "The piece never names …"). Today the verifier treats these as content
+// claims, looks for support in the source, and (by construction) finds
+// none — flagging LANE_A_FAIL.
+//
+// PR-K detects the pattern (source-referent subject + negated discussion
+// verb) and exempts as critique-by-absence. The detection requires BOTH
+// signals — a source-referent subject ALONE or a negated verb ALONE is
+// insufficient. The discussion-verb list is curated; verbs like "work",
+// "improve", "exist", "function", "succeed", "deliver" are NOT discussion
+// verbs and must not be added — they would turn content claims into
+// exemptions.
+//
+// Each curated phrase below is pinned by a regression test in
+// server/__tests__/artifactMode.critiqueByAbsence.test.ts and
+// server/__tests__/claimVerifier.critiqueByAbsence.test.ts.
+
+/** Negated discussion-verb phrases. Lowercase, after PR-H normalization.
+ *  Curated and small. The exemption only fires when one of these phrases
+ *  matches the predicate AND the subject is source-referent. */
+export const CRITIQUE_BY_ABSENCE_VERB_PHRASES = [
+  // does not + discussion verb
+  "does not specify",
+  "does not address",
+  "does not define",
+  "does not mention",
+  "does not discuss",
+  "does not explain",
+  "does not name",
+  "does not list",
+  "does not say",
+  "does not state",
+  "does not clarify",
+  "does not articulate",
+  // fails to + discussion verb
+  "fails to specify",
+  "fails to address",
+  "fails to define",
+  "fails to mention",
+  "fails to discuss",
+  "fails to explain",
+  "fails to name",
+  "fails to list",
+  // never + discussion verb
+  "never specifies",
+  "never addresses",
+  "never defines",
+  "never mentions",
+  "never discusses",
+  "never explains",
+  "never names",
+  "never lists",
+];
+
+/** True if `s` contains any of the negated discussion-verb phrases. */
+function hasNegatedDiscussionVerb(s: string): boolean {
+  const lower = normalizeForMatching(s, { caseFold: true });
+  return CRITIQUE_BY_ABSENCE_VERB_PHRASES.some(p => lower.includes(p));
+}
+
+/** True if `s` opens with a conservative source-referent subject suitable
+ *  for the critique-by-absence path. Two cases:
+ *   (a) `startsWithSourceReferentSubject(s)` — covers "The article ",
+ *       "The document ", "The piece ", "The report ", "The principles ",
+ *       "The post ", "The essay ", "The statement ", etc.
+ *   (b) "It " or "The source " openers — accepted ONLY as part of the
+ *       conjunction with `hasNegatedDiscussionVerb`. The verb requirement
+ *       guards against content-claim "It" sentences ("It does not work").
+ *
+ *  Cross-sentence pronoun resolution (sentence-pair tracking) is OUT of
+ *  scope for this PR — the conservative "It + discussion verb" pattern
+ *  handles the S64 case without it. */
+function hasCritiqueByAbsenceSubject(s: string): boolean {
+  if (startsWithSourceReferentSubject(s)) return true;
+  const { body } = stripLeadingMarkdownHeader(s);
+  const trimmed = body.trim();
+  // "It " opener — conservative; the discussion-verb requirement (checked
+  // by the caller) carries the weight of disambiguation.
+  if (/^It\s+/.test(trimmed)) return true;
+  // "The source " opener — "the source does not specify …".
+  if (/^[Tt]he source\s+/.test(trimmed)) return true;
+  return false;
+}
+
+/** True when `s` is a critique-by-absence sentence — i.e. the source-
+ *  referent subject points out an omission via a negated discussion verb.
+ *  The conjunction is REQUIRED: both subject and verb conditions must hold.
+ *
+ *  Examples (true):
+ *    - "The article does not specify how alignment will be measured."
+ *    - "It does not address the question of accountability."
+ *    - "The piece never names the labs it considers comparable."
+ *    - "The source fails to define what 'serious alignment' means."
+ *
+ *  Examples (false — content claims, must still flag):
+ *    - "The medication does not work for chronic pain patients."  ← "work"
+ *      not in verb list
+ *    - "The model does not improve on prior baselines."           ← "improve"
+ *      not in verb list
+ *    - "It does not exist in the wild."                           ← "exist"
+ *      not in verb list
+ *    - "GPT-4 does not function in low-resource languages."       ← subject
+ *      not source-referent AND "function" not in verb list */
+export function isCritiqueByAbsence(s: string): boolean {
+  if (!s) return false;
+  if (!hasNegatedDiscussionVerb(s)) return false;
+  if (!hasCritiqueByAbsenceSubject(s)) return false;
+  return true;
+}
+
 // ── ANALYSIS exemption decision ─────────────────────────────────────────────
 
 export interface ExemptionResult {
   exempt: boolean;
   /** Reason category. Used for telemetry counters. */
-  category: "authorVoice" | "forwardProjection" | "sectionHeader" | "openerHook" | null;
+  category:
+    | "authorVoice"
+    | "forwardProjection"
+    | "sectionHeader"
+    | "openerHook"
+    | "critiqueByAbsence"
+    | null;
 }
 
 /** Decide whether `s` is exempt from Lane A / Lane B classification under
@@ -490,6 +609,28 @@ export function analysisExemption(
   //      ("reports", "claims", "states", …) it's an attributed claim, not
   //      a framing-of-the-source — leave it to Lane A so the source check
   //      runs.
+  // PR-K — critique-by-absence: sentences pointing out what the source
+  // OMITS or FAILS to address. Meta-claims about source coverage, not
+  // content claims. Checked BEFORE the title-opener composite branch so
+  // sentences whose subject is BOTH source-referent (e.g. "The article ")
+  // AND uses a negated discussion verb get categorized as critique-by-
+  // absence — the more specific category — rather than the generic title-
+  // opener authorVoice bucket.
+  //
+  // Conservative carve-outs (mirror PR-I.1 title-opener):
+  //   1. Quoted spans → defer to PR-J's quote+commentary path so any
+  //      fabricated quote still flags via section 1.
+  //   2. Explicit attribution verb → defer to Lane A as an attributed
+  //      claim ("Politico reports that the article does not specify Y" is
+  //      an attributed claim about another source's reading, not pure
+  //      critique-by-absence).
+  if (
+    isCritiqueByAbsence(sentence) &&
+    extractQuotedSpans(sentence).length === 0 &&
+    !hasAttributionVerbAnalysis(sentence)
+  ) {
+    return { exempt: true, category: "critiqueByAbsence" };
+  }
   if (
     isTitleOpenerComposite(sentence) &&
     extractQuotedSpans(sentence).length === 0 &&
