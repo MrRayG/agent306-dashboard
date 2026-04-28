@@ -541,7 +541,7 @@ export async function verifyClaims(opts: VerifyClaimsOpts): Promise<ClaimVerdict
         attributionByLinkSentences.add(key);
         continue;
       }
-      const result = analysisExemption(s, draftText, sourceText);
+      const result = analysisExemption(s, draftText, sourceText, sourceUrl);
       if (result.exempt && result.category) {
         exemptKeys.add(key);
         exemptionCounters[result.category] += 1;
