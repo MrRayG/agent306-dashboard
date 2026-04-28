@@ -299,7 +299,7 @@ Return ONLY valid JSON — no meta-commentary, no separators, no character count
         // and surfaced as "LLM returned no content".
         max_tokens: 4000,
         temperature: 0.82,
-      }, AbortSignal.timeout(45000));
+      }, AbortSignal.timeout(240000));
   } catch (e: any) {
     throw new AcademyGenerationError(
       `Academy: LLM request failed — ${e?.message ?? String(e)}`,
