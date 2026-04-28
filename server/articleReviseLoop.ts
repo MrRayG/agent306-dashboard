@@ -92,6 +92,10 @@ export interface ReviseOpts {
   verifierJudgeClient?: LLMJudgeClient;
   /** Optional note from the operator describing what they want. */
   operatorNote?: string;
+  /** PR-I: artifact-mode flag forwarded to the verifier on every pass.
+   *  Pass-through only — this loop does not interpret the mode. Deep
+   *  Read sets ANALYSIS at the writer entry point. */
+  artifactMode?: "ANALYSIS" | "REPORT" | "MANUSCRIPT";
 }
 
 export interface RewriteInput {
@@ -282,6 +286,7 @@ export async function reviseUntilClean(opts: ReviseOpts): Promise<ReviseResult> 
     sourceTitle: opts.sourceTitle,
     skipLLM: opts.skipVerifierLLM,
     judgeClient: opts.verifierJudgeClient,
+    artifactMode: opts.artifactMode,
   });
 
   let body = draftStart;
@@ -361,6 +366,7 @@ export async function reviseUntilClean(opts: ReviseOpts): Promise<ReviseResult> 
       sourceTitle: opts.sourceTitle,
       skipLLM: opts.skipVerifierLLM,
       judgeClient: opts.verifierJudgeClient,
+      artifactMode: opts.artifactMode,
     });
 
     const issuesBefore = failing.length;
