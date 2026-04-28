@@ -56,6 +56,19 @@ import { checkRetractedClaims } from "./retractedClaims.js";
 // step is pinned to a regression test in
 // server/__tests__/verifierTextNormalization.test.ts).
 import { normalizeForMatching } from "./textNormalization.js";
+// PR-I — artifact-mode aware exemptions. ANALYSIS mode lets the agent's
+// voice through (forward projections, section headers, author-voice
+// constructions, opener hooks) while preserving fabrication detection,
+// attribution-verb checks, and verbatim-quote enforcement. See
+// server/artifactMode.ts for the per-trigger-list justification.
+import {
+  type ArtifactMode,
+  resolveArtifactMode,
+  analysisExemption,
+  isMarkdownHeaderSentence,
+  looksLikeAttributionByLink,
+  hasAttributionVerbAnalysis as hasAttributionVerbInAnalysisMode,
+} from "./artifactMode.js";
 
 export type ClaimLane =
   | "source-attributed"
@@ -117,6 +130,26 @@ export interface VerifierReport {
     model?: string;
     failOpenOverride: boolean;
   };
+  /** PR-I — the resolved artifact mode for this verification run. */
+  artifactMode?: ArtifactMode;
+  /** PR-I — telemetry counters for ANALYSIS-mode exemptions. Always
+   *  present so the dashboard can render a stable shape regardless of mode;
+   *  every counter is 0 outside ANALYSIS mode.
+   *
+   *  - authorVoice / forwardProjection / sectionHeader / openerHook:
+   *    sentences exempted by the corresponding ANALYSIS rule.
+   *  - preBranchFlagged / postBranchFlagged: count of LANE_A_FAIL +
+   *    LANE_B_BARE + NCITE_PATTERN_HIT + RETRACTED_HIT entries that
+   *    would have fired under REPORT-mode rules vs. what actually fires
+   *    after the mode branch. The delta is the impact the mode created. */
+  modeExemptions?: {
+    authorVoice: number;
+    forwardProjection: number;
+    sectionHeader: number;
+    openerHook: number;
+    preBranchFlagged: number;
+    postBranchFlagged: number;
+  };
 }
 
 export interface UnsupportedClaim {
@@ -161,6 +194,11 @@ export interface VerifyClaimsOpts {
    *  reachable without monkey-patching the module. Production callers
    *  always omit this and the real `postChatCompletions` is used. */
   judgeClient?: LLMJudgeClient;
+  /** PR-I — artifact-mode flag set explicitly by the writer entry point.
+   *  When unset, defaults to REPORT (preserves current behavior). Deep Read
+   *  sets ANALYSIS; other engines stay on default. See server/artifactMode.ts.
+   */
+  artifactMode?: ArtifactMode;
 }
 
 // ── Detection patterns ─────────────────────────────────────────────────────
@@ -346,6 +384,8 @@ function finalizeVerdict(args: {
   externalCitedCount: number;
   entries: VerifierReportEntry[];
   judgeOutage?: VerifierReport["judgeOutage"];
+  artifactMode?: ArtifactMode;
+  modeExemptions?: VerifierReport["modeExemptions"];
 }): ClaimVerdict {
   const summary = computeSummary(args.entries);
   // Operator escape hatch — VERIFIER_FAIL_OPEN_ON_JUDGE_OUTAGE=true makes
@@ -367,6 +407,8 @@ function finalizeVerdict(args: {
       entries: args.entries,
       summary,
       ...(outage ? { judgeOutage: outage } : {}),
+      ...(args.artifactMode ? { artifactMode: args.artifactMode } : {}),
+      ...(args.modeExemptions ? { modeExemptions: args.modeExemptions } : {}),
     },
   };
 }
@@ -438,6 +480,67 @@ export async function verifyClaims(opts: VerifyClaimsOpts): Promise<ClaimVerdict
   const handledLaneB = new Set<string>();
   const retractedSentences = new Set<string>();
 
+  // ── PR-I: artifact-mode resolution + per-mode pre-classification ────
+  // The mode flag is set explicitly by the writer at the entry point.
+  // Default (unset) resolves to REPORT — preserves current behavior. The
+  // ANALYSIS branch exempts author voice / forward projections / section
+  // headers / opener hooks before Lane A and Lane B classification run.
+  // MANUSCRIPT is REPORT + section-header skipping (which is also applied
+  // in REPORT and default since it fixes a separate bug — see audit).
+  const artifactMode = resolveArtifactMode(opts.artifactMode);
+  const exemptKeys = new Set<string>();
+  const exemptionCounters = {
+    authorVoice: 0,
+    forwardProjection: 0,
+    sectionHeader: 0,
+    openerHook: 0,
+    preBranchFlagged: 0,
+    postBranchFlagged: 0,
+  };
+  // PR-I attribution-by-link rule: in ANALYSIS, sentences with an inline
+  // source link AND no attribution verb AND a quantitative-or-editorial
+  // assertion AND no support in source are STILL flagged. This is the
+  // explicit line between "context-link with author projection" (allowed)
+  // and "attribution-by-link with unsupported claim" (flagged).
+  const attributionByLinkSentences = new Set<string>();
+
+  // PR-I scoping note (audit follow-up):
+  //   The spec calls out that section headers are "never classified in any
+  //   mode" as the right end-state. Today's verifier classifies them as
+  //   content because splitSentences flattens newlines — that's a separate
+  //   bug that should NOT be silently fixed under PR-I (per the spec's
+  //   hard constraint: "do not silently fix it under this PR; flag it for
+  //   follow-up"). For PR-I we only skip section headers in ANALYSIS mode,
+  //   keeping REPORT / MANUSCRIPT / default byte-identical to today on
+  //   header sentences. The cross-mode header skip lands as PR-I1.
+
+  if (artifactMode === "ANALYSIS") {
+    for (const s of sentences) {
+      if (isMarkdownHeaderSentence(s)) {
+        exemptKeys.add(normalize(s));
+        exemptionCounters.sectionHeader += 1;
+      }
+    }
+  }
+
+  if (artifactMode === "ANALYSIS") {
+    for (const s of sentences) {
+      const key = normalize(s);
+      if (exemptKeys.has(key)) continue; // already handled (header)
+      // Attribution-by-link is NOT an exemption. It flags later as
+      // LANE_A_FAIL when source check fails. Detect it here.
+      if (looksLikeAttributionByLink(s)) {
+        attributionByLinkSentences.add(key);
+        continue;
+      }
+      const result = analysisExemption(s, draftText, sourceText);
+      if (result.exempt && result.category) {
+        exemptKeys.add(key);
+        exemptionCounters[result.category] += 1;
+      }
+    }
+  }
+
   // 0. Do-not-republish registry — highest severity, checked before publish gates.
   for (const [idx, s] of sentences.entries()) {
     const hits = checkRetractedClaims(s);
@@ -464,6 +567,9 @@ export async function verifyClaims(opts: VerifyClaimsOpts): Promise<ClaimVerdict
   if (!sourceText) {
     for (const [idx, s] of sentences.entries()) {
       const key = normalize(s);
+      // PR-I: skip exempt sentences (section headers in any mode, author
+      // voice / forward projection / opener hook in ANALYSIS).
+      if (exemptKeys.has(key)) continue;
       if (isAttributionSentence(s, title, domain)) {
         unsupported.push({
           sentence: s,
@@ -502,7 +608,10 @@ export async function verifyClaims(opts: VerifyClaimsOpts): Promise<ClaimVerdict
         handledLaneB.add(key);
       }
     }
-    return finalizeVerdict({ unsupported, supportedCount, externalCitedCount, entries });
+    return finalizeVerdict({
+      unsupported, supportedCount, externalCitedCount, entries,
+      artifactMode, modeExemptions: exemptionCounters,
+    });
   }
 
   // ── 1. Quoted spans — must appear verbatim in sourceText ────────────
@@ -538,13 +647,79 @@ export async function verifyClaims(opts: VerifyClaimsOpts): Promise<ClaimVerdict
   }
 
   // ── 2. Classify every sentence ─────────────────────────────────────
+  // PR-I: in ANALYSIS, the "attribution" gate is narrower — only explicit
+  // attribution verbs and direct quotes count. An inline source link
+  // alone is treated as a context pointer (per spec). Sentences that
+  // look like attribution-by-link without a verb are routed to the
+  // attribution-by-link flagging path that runs after this loop.
+  function isAttributionForMode(s: string): boolean {
+    if (artifactMode === "ANALYSIS") {
+      // Quoted spans: handled by section 1 (verbatim quote check) above.
+      // Here we count only sentences whose Lane A signal is an explicit
+      // attribution VERB or a quoted span — NOT a domain or title match.
+      const hasQuotedSpan = /[""][^""\n]{8,500}[""]/.test(s);
+      return hasAttributionVerbInAnalysisMode(s) || hasQuotedSpan;
+    }
+    // REPORT / MANUSCRIPT / default — preserve the existing gate.
+    return isAttributionSentence(s, title, domain);
+  }
+
   const attributed: string[] = [];
   const laneBCandidates: string[] = [];
   for (const s of sentences) {
-    if (isAttributionSentence(s, title, domain)) {
+    const key = normalize(s);
+    if (exemptKeys.has(key)) continue;
+    // PR-I: attribution-by-link sentences are NOT routed through the
+    // ANALYSIS attribution gate (which requires an explicit verb). They
+    // get their own flagging path below.
+    if (artifactMode === "ANALYSIS" && attributionByLinkSentences.has(key)) continue;
+    if (isAttributionForMode(s)) {
       attributed.push(s);
     } else if (isLaneBFactSentence(s)) {
       laneBCandidates.push(s);
+    }
+  }
+
+  // ── PR-I: attribution-by-link rule (ANALYSIS only) ──────────────────
+  // Sentences that aren't classified Lane A by the deterministic gate but
+  // still read as attribution-via-link (inline link + quantitative or
+  // editorial assertion + no attribution verb) are flagged when the
+  // assertion is not in the source. This catches sentences 69 and 75 from
+  // the spec.
+  if (artifactMode === "ANALYSIS") {
+    for (const s of sentences) {
+      const key = normalize(s);
+      if (!attributionByLinkSentences.has(key)) continue;
+      if (exemptKeys.has(key)) continue;
+      // If the deterministic Lane A gate already picked this up, leave it.
+      if (attributed.includes(s)) continue;
+      // Source-text check: take the assertion (sentence minus the link
+      // markdown) and look for any meaningful overlap with the source.
+      const assertion = s.replace(/\[[^\]\n]+\]\(https?:\/\/[^\s)]+\)/g, " ").trim();
+      // Coarse support check — strip the link, take the longest word run
+      // (8+ chars, no inline markdown), and look for it in the source.
+      const tokens = assertion
+        .split(/\s+/)
+        .filter(t => t.length >= 6 && /^[A-Za-z][A-Za-z0-9'-]*$/.test(t))
+        .slice(0, 6)
+        .join(" ");
+      const supportsAssertion = tokens.length >= 8 && normalizedContains(sourceText, tokens);
+      if (!supportsAssertion) {
+        unsupported.push({
+          sentence: s,
+          lane:     "source-attributed",
+          reason:   "attribution-by-link: inline source link + assertion not in source (no attribution verb)",
+        });
+        addEntry(
+          entries,
+          sentenceIndex.get(key) ?? -1,
+          s,
+          "LANE_A_FAIL",
+          "attribution-by-link: inline source link + quantitative/editorial assertion not in source (no attribution verb)",
+          "Rephrase as your own projection (drop the source link) or add a direct attribution verb that the source supports.",
+        );
+        failedLaneA.add(key);
+      }
     }
   }
 
@@ -789,11 +964,48 @@ export async function verifyClaims(opts: VerifyClaimsOpts): Promise<ClaimVerdict
   void handledLaneB;
   void retractedSentences;
 
+  // PR-I: compute pre-/post-branch flagged counts for telemetry. Pre is
+  // "what REPORT-mode rules would have flagged on this same draft + source"
+  // — simulate by counting the deterministic Lane A / Lane B candidates
+  // that would have been picked up if we had not applied the exemptions.
+  // Post is the actual flagged count emitted in `entries`.
+  if (artifactMode === "ANALYSIS") {
+    const FAIL_CLASS = new Set(["LANE_A_FAIL", "LANE_B_BARE", "NCITE_PATTERN_HIT", "RETRACTED_HIT"]);
+    exemptionCounters.postBranchFlagged = entries.filter(e => FAIL_CLASS.has(e.classification)).length;
+    // Pre-branch: would-have-flagged count if no exemptions applied. We
+    // approximate by counting Lane A attribution candidates that would
+    // have failed source check, plus Lane B candidates that would have
+    // been bare (no inline markdown link in sentence/paragraph). The
+    // approximation is fine for telemetry: it captures the directional
+    // delta the mode is creating.
+    let preFlag = 0;
+    for (const s of sentences) {
+      if (isAttributionSentence(s, title, domain)) preFlag += 1;
+      else if (isLaneBFactSentence(s)) {
+        const para = paragraphFor(s, draftText);
+        if (!MD_LINK_RX.test(s) && !MD_LINK_RX.test(para)) preFlag += 1;
+      }
+    }
+    exemptionCounters.preBranchFlagged = preFlag;
+  }
+
+  console.log(
+    `[ClaimVerifier] artifactMode=${artifactMode} laneAFail=${entries.filter(e => e.classification === "LANE_A_FAIL").length} ` +
+    `laneBBare=${entries.filter(e => e.classification === "LANE_B_BARE").length} ` +
+    `analysisExemptions sectionHeader=${exemptionCounters.sectionHeader} ` +
+    `forwardProjection=${exemptionCounters.forwardProjection} ` +
+    `authorVoice=${exemptionCounters.authorVoice} ` +
+    `openerHook=${exemptionCounters.openerHook} ` +
+    `pre=${exemptionCounters.preBranchFlagged} post=${exemptionCounters.postBranchFlagged}`,
+  );
+
   return finalizeVerdict({
     unsupported,
     supportedCount,
     externalCitedCount,
     entries,
+    artifactMode,
+    modeExemptions: exemptionCounters,
     judgeOutage: judgeOutage
       ? {
           affectedSentences: unverifiableCount,

@@ -778,12 +778,20 @@ export async function runWeeklyDeepRead(
       // Auto-revise loop (issue 2). If the verifier flags actionable
       // failures, ask the writer to fix them before quarantining. Bounded
       // by MAX_REVISION_ATTEMPTS (env, default 3).
+      //
+      // PR-I: Deep Read is opinion-piece-shaped — author voice, forward
+      // projections, agent self-reference. We set artifactMode=ANALYSIS
+      // here at the writer entry point so the verifier exempts those
+      // surfaces while preserving fabrication detection, attribution-verb
+      // checks, and verbatim-quote enforcement. Other engines stay on
+      // default (REPORT-equivalent) until explicitly migrated.
       const { body, verdict, revisionHistory } = await reviseUntilClean({
         draftText:   rawBody,
         sourceText:  articleContent,
         sourceUrl:   articleInfo.url,
         sourceTitle: articleInfo.title,
         sourceObjects: sourcePool,
+        artifactMode: "ANALYSIS",
       });
 
       const postTelemetry = computeSourceTelemetry({
