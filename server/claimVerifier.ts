@@ -85,6 +85,7 @@ export type SentenceClassification =
   | "LANE_A_FAIL"
   | "LANE_A_UNVERIFIABLE"
   | "LANE_A_PASS_QUOTED_COMMENTARY"
+  | "LANE_A_PASS_CRITIQUE_BY_ABSENCE"
   | "LANE_B_OK"
   | "LANE_B_BARE"
   | "RETRACTED_HIT"
@@ -123,6 +124,10 @@ export interface VerifierReport {
      *  the dashboard can show "passed via quoted-span verification" — never
      *  silently masked as a regular pass. */
     laneAPassQuotedCommentary: number;
+    /** PR-K — ANALYSIS-mode critique-by-absence sentences (source-referent
+     *  subject + negated discussion verb). Surfaced separately so the
+     *  dashboard shows the exemption explicitly — never silently mask. */
+    laneAPassCritiqueByAbsence: number;
     laneBOk: number;
     laneBBare: number;
     retractedHits: number;
@@ -154,6 +159,10 @@ export interface VerifierReport {
     forwardProjection: number;
     sectionHeader: number;
     openerHook: number;
+    /** PR-K — count of sentences exempted via critique-by-absence pattern
+     *  (source-referent subject + negated discussion verb). 0 outside
+     *  ANALYSIS mode. */
+    critiqueByAbsence: number;
     preBranchFlagged: number;
     postBranchFlagged: number;
   };
@@ -354,6 +363,7 @@ function computeSummary(entries: VerifierReportEntry[]): VerifierReport["summary
     laneAFail: entries.filter(e => e.classification === "LANE_A_FAIL").length,
     laneAUnverifiable: entries.filter(e => e.classification === "LANE_A_UNVERIFIABLE").length,
     laneAPassQuotedCommentary: entries.filter(e => e.classification === "LANE_A_PASS_QUOTED_COMMENTARY").length,
+    laneAPassCritiqueByAbsence: entries.filter(e => e.classification === "LANE_A_PASS_CRITIQUE_BY_ABSENCE").length,
     laneBOk: entries.filter(e => e.classification === "LANE_B_OK").length,
     laneBBare: entries.filter(e => e.classification === "LANE_B_BARE").length,
     retractedHits: entries.filter(e => e.classification === "RETRACTED_HIT").length,
@@ -502,6 +512,7 @@ export async function verifyClaims(opts: VerifyClaimsOpts): Promise<ClaimVerdict
     forwardProjection: 0,
     sectionHeader: 0,
     openerHook: 0,
+    critiqueByAbsence: 0,
     preBranchFlagged: 0,
     postBranchFlagged: 0,
   };
@@ -545,6 +556,24 @@ export async function verifyClaims(opts: VerifyClaimsOpts): Promise<ClaimVerdict
       if (result.exempt && result.category) {
         exemptKeys.add(key);
         exemptionCounters[result.category] += 1;
+        // PR-K — surface critique-by-absence exemptions as an explicit
+        // sub-status entry so the dashboard never silently masks them.
+        // Mirrors the LANE_A_PASS_QUOTED_COMMENTARY surfacing pattern from
+        // PR-J. Other exemption categories (authorVoice, forwardProjection,
+        // sectionHeader, openerHook) remain on the existing telemetry-only
+        // counter; PR-K is the first to also emit a sub-status entry
+        // (alongside PR-J).
+        if (result.category === "critiqueByAbsence") {
+          const idx = sentences.findIndex(x => x === s);
+          addEntry(
+            entries,
+            idx,
+            s,
+            "LANE_A_PASS_CRITIQUE_BY_ABSENCE",
+            "critique-by-absence: source-referent subject + negated discussion verb; meta-claim about source coverage, not a content claim",
+          );
+          supportedCount += 1;
+        }
       }
     }
   }
@@ -1046,6 +1075,7 @@ export async function verifyClaims(opts: VerifyClaimsOpts): Promise<ClaimVerdict
     `forwardProjection=${exemptionCounters.forwardProjection} ` +
     `authorVoice=${exemptionCounters.authorVoice} ` +
     `openerHook=${exemptionCounters.openerHook} ` +
+    `critiqueByAbsence=${exemptionCounters.critiqueByAbsence} ` +
     `pre=${exemptionCounters.preBranchFlagged} post=${exemptionCounters.postBranchFlagged}`,
   );
 
