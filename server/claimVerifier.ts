@@ -935,7 +935,7 @@ export async function verifyClaims(opts: VerifyClaimsOpts): Promise<ClaimVerdict
         ],
         max_tokens: 1200,
         temperature: 0,
-      }, AbortSignal.timeout(45000), "claim-verification");
+      }, AbortSignal.timeout(240000), "claim-verification");
 
       if (!res.ok) {
         // Non-2xx — judge unreachable for this draft. Mark every
