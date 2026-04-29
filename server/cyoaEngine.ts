@@ -222,6 +222,8 @@ YOU MUST RETURN EXACTLY THIS JSON — use these exact field names, nothing else:
       sourceText:  userContext ?? "",
       sourceUrl:   "",
       sourceTitle: `CYOA:${trigger}`,
+      // PR #251 — interactive narrative; Lane B bare soft-warns, Lane A still hard-fails.
+      tier: "cyoa",
     });
 
     const episode: CYOAEpisode = {

@@ -412,6 +412,8 @@ export async function postAcademyEpisode(xWrite: any): Promise<void> {
         sourceText:  "",
         sourceUrl:   "",
         sourceTitle: `Academy: ${topic.concept}`,
+        // PR #251 — short-form pedagogical post; Lane B bare soft-warns, Lane A still hard-fails.
+        tier: "academy",
       });
       if (verdict.severity === "HARD_FAIL") {
         console.error(`[ClaimVerifier] REJECTED academy EP${state.totalEpisodes + 1}: ${verdict.unsupportedClaims.length} unsupported claims`);

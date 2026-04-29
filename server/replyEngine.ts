@@ -270,6 +270,8 @@ No character limit — use the space to say something worth reading. Be genuine.
       sourceText:  upstreamSourceText,
       sourceUrl:   opts.tweetUrl ?? "",
       sourceTitle: `Reply to @${opts.username}`,
+      // PR #251 — conversational reply; Lane B bare soft-warns, Lane A still hard-fails.
+      tier: "reply",
     });
     if (verdict.severity === "HARD_FAIL") {
       console.error(`[ClaimVerifier] REJECTED reply to @${opts.username}: ${verdict.unsupportedClaims.length} unsupported claims`);

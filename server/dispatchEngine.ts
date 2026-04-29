@@ -253,6 +253,8 @@ Return JSON: {"post": "...", "title": "...", "summary": "..."}`
       sourceText:  upstreamSourceText,
       sourceUrl:   "",
       sourceTitle: `THE DISPATCH Episode ${nextEpisode}`,
+      // PR #251 — weekly aggregator dispatch; Lane B bare soft-warns, Lane A still hard-fails.
+      tier: "dispatch",
     });
     if (verdict.severity === "HARD_FAIL") {
       console.error(`[ClaimVerifier] REJECTED dispatch episode ${nextEpisode}: ${verdict.unsupportedClaims.length} unsupported claims`);

@@ -14,6 +14,7 @@ import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 import { postChatCompletions } from "./llmCall.js";
 import { verifyClaims } from "./claimVerifier.js";
+import { recordNewsDraft } from "./newsDraftStore.js";
 export async function generateNewsContent(): Promise<string | null> {
   const grokKey = LLM_API_KEY;
   if (!grokKey) return null;
@@ -120,13 +121,47 @@ Return JSON: {"post": "..."}`
       sourceText:  newsSource,
       sourceUrl:   "",
       sourceTitle: `306 NEWS ${dayLabel}`,
+      // PR #251 — tier-aware verifier. News is short-form aggregator;
+      // Lane B bare soft-warns, Lane A still hard-fails.
+      tier: "news",
     });
     if (verdict.severity === "HARD_FAIL") {
       console.error(`[ClaimVerifier] REJECTED 306 NEWS draft: ${verdict.unsupportedClaims.length} unsupported claims`);
       for (const c of verdict.unsupportedClaims) {
         console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);
       }
+      // PR #251 — quarantine instead of silent drop. Mirrors auto-dispatch.
+      try {
+        const draft = recordNewsDraft({
+          status:             "quarantined",
+          severity:           verdict.severity,
+          text:               postText,
+          unsupportedReasons: verdict.unsupportedClaims.map(c => `${c.reason}: ${c.sentence.slice(0, 200)}`),
+          verifierReport:     verdict.verifierReport,
+          source:             "manual-generator",
+        });
+        console.error(`[NewsGenerator] Quarantined draft ${draft.id}`);
+      } catch (storeErr: any) {
+        console.error(`[NewsGenerator] Failed to write quarantine draft:`, storeErr?.message ?? String(storeErr));
+      }
       return null;
+    }
+    if (verdict.severity === "SOFT_WARN") {
+      console.warn(
+        `[NewsGenerator] SOFT_WARN — ${verdict.unsupportedClaims.length} bare claim(s); returning anyway (tier=news)`,
+      );
+      try {
+        recordNewsDraft({
+          status:             "published_with_warnings",
+          severity:           verdict.severity,
+          text:               postText,
+          unsupportedReasons: verdict.unsupportedClaims.map(c => `${c.reason}: ${c.sentence.slice(0, 200)}`),
+          verifierReport:     verdict.verifierReport,
+          source:             "manual-generator",
+        });
+      } catch (storeErr: any) {
+        console.error(`[NewsGenerator] Failed to write soft-warn audit:`, storeErr?.message ?? String(storeErr));
+      }
     }
 
     return enforceShowTag(postText, "news");

@@ -310,6 +310,8 @@ Return JSON:
       sourceText:  upstreamSourceText,
       sourceUrl:   "",
       sourceTitle: `306 SIGNAL Brief #${briefNumber}`,
+      // PR #251 — short-form commentary; Lane B bare soft-warns, Lane A still hard-fails.
+      tier: "signal",
     });
     if (verdict.severity === "HARD_FAIL") {
       console.error(`[ClaimVerifier] REJECTED signal brief #${briefNumber}: ${verdict.unsupportedClaims.length} unsupported claims`);
