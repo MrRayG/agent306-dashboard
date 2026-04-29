@@ -3570,96 +3570,66 @@ needsHelp: true only when you genuinely need his direction or information`,
       const actions = parsed.actions ?? [];
       const actionResults: string[] = [];
 
-      // ── Auto-detect actions from conversation context ──────────────────────
-      // If the LLM didn't include explicit actions but the conversation implies one,
-      // infer and add them. This catches cases where 306 "talks about" doing something
-      // instead of actually doing it.
+      // ── Explicit-intent action gate (deny-by-default) ──────────────────────
+      // Previous behavior auto-spawned episodes / blogs / research threads when
+      // loose substring matches like "script", "on ", "create", "post" appeared
+      // anywhere in the user message. That fired on governance/meta chat that
+      // *quoted* prior agent output, producing junk artifacts (see incident
+      // 2026-04-28: four ep_the_signal_* episodes spawned from a thread that
+      // never asked for an episode).
+      //
+      // New rule: artifact-creating actions only fire when the user message
+      // contains an UNAMBIGUOUS, slash-prefixed or quoted-imperative request.
+      // Everything else is denied. If 306 wants to create something, she must
+      // emit it via the explicit `actions` array on her response — not via
+      // substring inference here.
       if (actions.length === 0 && parsed.text) {
-        const userMsg = text.toLowerCase();
-        const agentMsg = (parsed.text || "").toLowerCase();
+        const userMsgRaw = text || "";
+        const userMsg = userMsgRaw.toLowerCase();
 
-        // Blog detection: user asked for a blog AND 306 wrote substantial content
-        if (
-          (userMsg.includes("blog") || userMsg.includes("write a post") || userMsg.includes("write a blog") || userMsg.includes("post about") || userMsg.includes("daily blog") || userMsg.includes("publish")) &&
-          parsed.text.length > 300
-        ) {
-          let autoTitle = "";
-          const headingMatch = parsed.text.match(/^#+\s+(.+)$/m) || parsed.text.match(/\*\*(.{10,80})\*\*/);
-          if (headingMatch) {
-            autoTitle = headingMatch[1].trim();
-          } else {
-            // Try to extract topic, not conversational text
-            const titleMatch = parsed.text.match(/titled?\s+['"](.{10,80})['"]/i) ||
-                               parsed.text.match(/(?:about|on|topic[:\s]+)(.{10,80}?)(?:\.|$)/i);
-            autoTitle = titleMatch ? titleMatch[1].trim() : "Agent 306 Blog Post";
+        // Slash commands: /episode <topic>, /blog <topic>, /research <topic>
+        const slashEpisode = userMsgRaw.match(/^\s*\/episode\s+(.{3,200})$/im);
+        const slashBlog = userMsgRaw.match(/^\s*\/blog\s+(.{3,200})$/im);
+        const slashResearch = userMsgRaw.match(/^\s*\/research\s+(.{3,200})$/im);
+
+        // Quoted-imperative form: 'create an episode "<topic>"' / 'write a blog "<topic>"'
+        // Requires the verb-phrase AND a quoted topic on the same line.
+        const imperativeEpisode = userMsg.match(/(?:create|generate|make|record)\s+(?:a |an |the )?(?:new )?(?:episode|podcast|signal)\s+(?:called|titled|named|about)?\s*["'\u201c\u2018](.{3,200}?)["'\u201d\u2019]/i);
+        const imperativeBlog = userMsg.match(/(?:create|generate|write|publish|draft|post)\s+(?:a |an |the )?(?:new )?(?:blog|post|article)\s+(?:called|titled|named|about)?\s*["'\u201c\u2018](.{3,200}?)["'\u201d\u2019]/i);
+        const imperativeResearch = userMsg.match(/(?:start|begin|create|open)\s+(?:a |an |the )?(?:new )?(?:research thread|research|investigation)\s+(?:on|about|into)?\s*["'\u201c\u2018](.{3,200}?)["'\u201d\u2019]/i);
+
+        if (slashEpisode || imperativeEpisode) {
+          const topic = (slashEpisode?.[1] || imperativeEpisode?.[1] || "").trim();
+          if (topic) {
+            actions.push({ type: "generate_episode", topic, drivingQuestion: topic });
+            console.log(`[Chat Actions] Explicit episode request: "${topic}"`);
           }
-
-          actions.push({
-            type: "generate_blog",
-            topic: autoTitle,
-            content: parsed.text,
-          });
-          console.log(`[Chat Actions] Auto-detected blog action: "${autoTitle}"`);
-        }
-
-        // Episode detection: user asked for an episode/podcast
-        if (
-          (userMsg.includes("episode") || userMsg.includes("podcast") || userMsg.includes("generate a signal") || userMsg.includes("record") || userMsg.includes("script")) &&
-          (userMsg.includes("about") || userMsg.includes("on ") || userMsg.includes("topic") || userMsg.includes("generate") || userMsg.includes("create"))
-        ) {
-          const topicMatch = userMsg.match(/(?:about|on|topic[:\s]+)(.{5,100}?)(?:\.|$|\?|!)/i);
-          const topic = topicMatch ? topicMatch[1].trim() : (parsed.text.match(/\*\*(.{10,80})\*\*/)?.[1] || "").trim();
-
+        } else if (slashBlog || imperativeBlog) {
+          const topic = (slashBlog?.[1] || imperativeBlog?.[1] || "").trim();
+          if (topic) {
+            actions.push({ type: "generate_blog", topic, content: parsed.text });
+            console.log(`[Chat Actions] Explicit blog request: "${topic}"`);
+          }
+        } else if (slashResearch || imperativeResearch) {
+          const topic = (slashResearch?.[1] || imperativeResearch?.[1] || "").trim();
           if (topic) {
             actions.push({
-              type: "generate_episode",
-              topic: topic,
-              drivingQuestion: topic,
-            });
-            console.log(`[Chat Actions] Auto-detected episode action: "${topic}"`);
-          }
-        }
-
-        // Research detection: user asked to research/investigate something
-        if (
-          (userMsg.includes("research") || userMsg.includes("investigate") || userMsg.includes("look into") || userMsg.includes("dig into") || userMsg.includes("explore")) &&
-          !userMsg.includes("what research")
-        ) {
-          const topicMatch = userMsg.match(/(?:research|investigate|look into|dig into|explore)\s+(.{5,100}?)(?:\.|$|\?|!)/i);
-          if (topicMatch) {
-            actions.push({
               type: "start_research",
-              topic: topicMatch[1].trim(),
-              description: `Research requested by MrRayG: ${topicMatch[1].trim()}`,
+              topic,
+              description: `Research requested by MrRayG: ${topic}`,
             });
-            console.log(`[Chat Actions] Auto-detected research action: "${topicMatch[1].trim()}"`);
+            console.log(`[Chat Actions] Explicit research request: "${topic}"`);
           }
-        }
-
-        // Long-form content detection: 306 wrote a very long structured response
-        // and user mentioned post/share/publish/blog/write
-        if (
-          actions.length === 0 &&
-          parsed.text &&
-          parsed.text.length > 800 &&
-          (userMsg.includes("post") || userMsg.includes("share") || userMsg.includes("publish") || userMsg.includes("blog") || userMsg.includes("write"))
-        ) {
-          const headingMatch = parsed.text.match(/^#+\s+(.+)$/m) || parsed.text.match(/\*\*(.{10,80})\*\*/);
-          let autoTitle = "";
-          if (headingMatch) {
-            autoTitle = headingMatch[1].trim();
-          } else {
-            const titleMatch = parsed.text.match(/titled?\s+['"](.{10,80})['"]/i) ||
-                               parsed.text.match(/(?:about|on|topic[:\s]+)(.{10,80}?)(?:\.|$)/i);
-            autoTitle = titleMatch ? titleMatch[1].trim() : "Agent 306 Insights";
+        } else {
+          // Deny-by-default: log what would have been inferred under old rules
+          // so we can audit false-negative regressions, but do NOT push an action.
+          const wouldHaveFired =
+            userMsg.includes("episode") || userMsg.includes("podcast") ||
+            userMsg.includes("blog") || userMsg.includes("research") ||
+            userMsg.includes("script") || userMsg.includes("investigate");
+          if (wouldHaveFired) {
+            console.log(`[Chat Actions] Suppressed (no explicit intent): "${userMsgRaw.slice(0, 120)}"`);
           }
-
-          actions.push({
-            type: "generate_blog",
-            topic: autoTitle,
-            content: parsed.text,
-          });
-          console.log(`[Chat Actions] Auto-detected long-form blog content: "${autoTitle}"`);
         }
       }
 
