@@ -26,6 +26,7 @@ import { buildExemplarBlock } from "./voiceExemplars.js";
 import { postChatCompletions } from "./llmCall.js";
 import { type VerifierReport } from "./claimVerifier.js";
 import { reviseBlogUntilClean } from "./blogReviseLoop.js";
+import { checkHardBlocks } from "./blogHardBlocks.js";
 import {
   type SourceObject,
   extractSourceObjects,
@@ -41,6 +42,15 @@ const BLOG_FILE = dataPath("blog_state.json");
 export type BlogStatus = "draft" | "published" | "archived" | "quarantined";
 export type BlogSource = "research" | "podcast" | "chat" | "exploration" | "standalone";
 export type BlogType = "research" | "external" | "internal" | "synthesis" | "curiosity";
+
+/** Optional citation a writer (or 306 herself) wants to ship with a blog
+ *  post. Never required — blogs are voice, not papers. When present and
+ *  non-empty, renderBlogContent() appends a "## Sources" section to the
+ *  end of the post body. */
+export interface BlogSourceLink {
+  url: string;
+  title?: string;
+}
 
 export interface BlogPost {
   id: string;
@@ -58,6 +68,25 @@ export interface BlogPost {
   wordCount: number;
   readingTimeMin: number;
   verifierReport?: VerifierReport;
+  /** Optional citation list. Never gates publishing — purely additive.
+   *  Rendered as a "## Sources" section at the end of `content` when
+   *  the post is fetched via the public blog endpoints. */
+  sources?: BlogSourceLink[];
+}
+
+/** Append a "## Sources" markdown section to `post.content` when the post
+ *  has a non-empty `sources` field. Returns the post body unchanged when
+ *  there are no sources. Used by the public-facing blog endpoints so
+ *  readers see the citation list; admin views keep the raw editable body. */
+export function renderBlogContent(post: Pick<BlogPost, "content" | "sources">): string {
+  const sources = post.sources ?? [];
+  if (sources.length === 0) return post.content;
+  const lines = sources.map(s => {
+    const label = (s.title && s.title.trim()) ? s.title.trim() : s.url;
+    return `- [${label}](${s.url})`;
+  });
+  const trimmed = post.content.replace(/\s+$/, "");
+  return `${trimmed}\n\n## Sources\n\n${lines.join("\n")}\n`;
 }
 
 interface BlogState {
@@ -212,6 +241,7 @@ export function createBlogPost(opts: {
   tags?: string[];
   status?: BlogStatus;
   verifierReport?: VerifierReport;
+  sources?: BlogSourceLink[];
 }): BlogPost {
   const state = loadState();
   const now = new Date().toISOString();
@@ -233,6 +263,7 @@ export function createBlogPost(opts: {
     wordCount: wc,
     readingTimeMin: Math.max(1, Math.round(wc / 200)),
     verifierReport: opts.verifierReport,
+    ...(opts.sources && opts.sources.length > 0 ? { sources: opts.sources } : {}),
   };
 
   state.posts.unshift(post);
@@ -548,22 +579,27 @@ Write the full blog post following the blog structure template. Hook the reader 
       );
     }
 
-    // Final fallback: if the revise loop still produced HARD_FAIL after
-    // max attempts, quarantine as before so nothing regresses.
-    if (verdict.severity === "HARD_FAIL") {
+    // PR #253: blogs are voice tier. The verifier returns an advisory
+    // verdict only — NEVER quarantines a blog post via the verifier. The
+    // post lands in `draft` status with the verifier report attached for
+    // visibility, and Ray publishes from Blog Studio whenever ready.
+    //
+    // The ONLY remaining quarantine path for blogs is the bright-line
+    // hard-block list (medical/legal/financial specifics). Hits there do
+    // override the soft-warn default and force quarantine for human review.
+    const hardBlock = checkHardBlocks(revisedBody);
+    if (hardBlock.blocked) {
       const draft = createBlogPost({
         title: parsed.title,
         content: revisedBody,
         source: opts.source,
         sourceId: opts.sourceId,
-        tags: [...(parsed.tags ?? []), "claim-verifier-quarantine"],
+        tags: [...(parsed.tags ?? []), "blog-hard-block-quarantine"],
         status: "quarantined",
         verifierReport: verdict.verifierReport,
       });
-      console.error(`[ClaimVerifier] REJECTED draft ${draft.id}: ${verdict.unsupportedClaims.length} unsupported claims`);
-      for (const c of verdict.unsupportedClaims) {
-        console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);
-      }
+      console.error(`[Blog] HARD-BLOCK quarantine ${draft.id}: ${hardBlock.reasons.length} pattern(s)`);
+      for (const r of hardBlock.reasons) console.error(`  - ${r}`);
       return draft;
     }
 
@@ -573,7 +609,13 @@ Write the full blog post following the blog structure template. Hook the reader 
       source: opts.source,
       sourceId: opts.sourceId,
       tags: parsed.tags ?? [],
-      status: opts.autoPublish ? "published" : "draft",
+      // Verifier verdict is advisory for blogs. autoPublish still works
+      // when the post passes; otherwise it lands in `draft` so Ray reviews
+      // before publish. autoPost on the blog engine is `false` by default
+      // anyway (see engineScheduleConfig.ts), so this is mostly belt-and-
+      // suspenders for the manual-trigger path.
+      status: opts.autoPublish && verdict.severity === "PASS" ? "published" : "draft",
+      verifierReport: verdict.severity === "PASS" ? undefined : verdict.verifierReport,
     });
   } catch (e: any) {
     console.error("[Blog] Generation failed:", e.message);
@@ -596,7 +638,7 @@ export function publishPost(postId: string): BlogPost | null {
 }
 
 // Update a post
-export function updatePost(postId: string, updates: Partial<Pick<BlogPost, "title" | "content" | "tags" | "status" | "verifierReport">>): BlogPost | null {
+export function updatePost(postId: string, updates: Partial<Pick<BlogPost, "title" | "content" | "tags" | "status" | "verifierReport" | "sources">>): BlogPost | null {
   const state = loadState();
   const post = state.posts.find(p => p.id === postId);
   if (!post) return null;
@@ -620,6 +662,13 @@ export function updatePost(postId: string, updates: Partial<Pick<BlogPost, "titl
   }
   if (updates.verifierReport !== undefined) {
     post.verifierReport = updates.verifierReport;
+  }
+  if (updates.sources !== undefined) {
+    if (updates.sources.length === 0) {
+      delete post.sources;
+    } else {
+      post.sources = updates.sources;
+    }
   }
   post.updatedAt = new Date().toISOString();
   saveState(state);
