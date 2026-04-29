@@ -596,7 +596,7 @@ export function publishPost(postId: string): BlogPost | null {
 }
 
 // Update a post
-export function updatePost(postId: string, updates: Partial<Pick<BlogPost, "title" | "content" | "tags" | "status">>): BlogPost | null {
+export function updatePost(postId: string, updates: Partial<Pick<BlogPost, "title" | "content" | "tags" | "status" | "verifierReport">>): BlogPost | null {
   const state = loadState();
   const post = state.posts.find(p => p.id === postId);
   if (!post) return null;
@@ -617,6 +617,9 @@ export function updatePost(postId: string, updates: Partial<Pick<BlogPost, "titl
     if (updates.status === "published" && !post.publishedAt) {
       post.publishedAt = new Date().toISOString();
     }
+  }
+  if (updates.verifierReport !== undefined) {
+    post.verifierReport = updates.verifierReport;
   }
   post.updatedAt = new Date().toISOString();
   saveState(state);

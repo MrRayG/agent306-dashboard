@@ -52,6 +52,11 @@ import { fetchSourceContent } from "./sourceFetcher.js";
 import { verifyClaims, type VerifierReport } from "./claimVerifier.js";
 import { recordNewsDraft, readNewsDrafts } from "./newsDraftStore.js";
 import {
+  parseUserMessage,
+  checkAgentCoherence,
+  type ActionPlan,
+} from "./chatActionGate.js";
+import {
   saveTweetDraft,
   listTweetDrafts,
   markTweetDraftPosted,
@@ -3610,69 +3615,50 @@ needsHelp: true only when you genuinely need his direction or information`,
       }
 
       // ── Execute any actions 306 requested ──────────────────────────────────
-      const actions = parsed.actions ?? [];
+      // Action plumbing was rewritten in PR #252 to fix two architectural bugs:
+      //   1. Slash-grammar parser treated `/blog revise quarantined` as a
+      //      topic-bearing /blog command, spawning a meta-blog about its own
+      //      quarantine state (incident 2026-04-29: "When the System Blocks
+      //      Itself" auto-spawn). New parser reserves verbs (revise/publish/list)
+      //      and routes them to non-spawn actions.
+      //   2. Agent-emitted actions bypassed all gating. 306 could narrate "I will
+      //      not take any further action" while emitting generate_blog in the
+      //      same response. New coherence check scans the agent's narrative for
+      //      refusal phrases and suppresses agent-emitted actions when found.
+      // The full grammar + refusal phrases live in server/chatActionGate.ts.
+      const agentActions: ActionPlan[] = parsed.actions ?? [];
+      const actions: ActionPlan[] = [];
       const actionResults: string[] = [];
+      const suppressedActions: Array<{ action: ActionPlan; reason: string; matchedPhrase?: string }> = [];
 
-      // ── Explicit-intent action gate (deny-by-default) ──────────────────────
-      // Previous behavior auto-spawned episodes / blogs / research threads when
-      // loose substring matches like "script", "on ", "create", "post" appeared
-      // anywhere in the user message. That fired on governance/meta chat that
-      // *quoted* prior agent output, producing junk artifacts (see incident
-      // 2026-04-28: four ep_the_signal_* episodes spawned from a thread that
-      // never asked for an episode).
-      //
-      // New rule: artifact-creating actions only fire when the user message
-      // contains an UNAMBIGUOUS, slash-prefixed or quoted-imperative request.
-      // Everything else is denied. If 306 wants to create something, she must
-      // emit it via the explicit `actions` array on her response — not via
-      // substring inference here.
-      if (actions.length === 0 && parsed.text) {
-        const userMsgRaw = text || "";
-        const userMsg = userMsgRaw.toLowerCase();
-
-        // Slash commands: /episode <topic>, /blog <topic>, /research <topic>
-        const slashEpisode = userMsgRaw.match(/^\s*\/episode\s+(.{3,200})$/im);
-        const slashBlog = userMsgRaw.match(/^\s*\/blog\s+(.{3,200})$/im);
-        const slashResearch = userMsgRaw.match(/^\s*\/research\s+(.{3,200})$/im);
-
-        // Quoted-imperative form: 'create an episode "<topic>"' / 'write a blog "<topic>"'
-        // Requires the verb-phrase AND a quoted topic on the same line.
-        const imperativeEpisode = userMsg.match(/(?:create|generate|make|record)\s+(?:a |an |the )?(?:new )?(?:episode|podcast|signal)\s+(?:called|titled|named|about)?\s*["'\u201c\u2018](.{3,200}?)["'\u201d\u2019]/i);
-        const imperativeBlog = userMsg.match(/(?:create|generate|write|publish|draft|post)\s+(?:a |an |the )?(?:new )?(?:blog|post|article)\s+(?:called|titled|named|about)?\s*["'\u201c\u2018](.{3,200}?)["'\u201d\u2019]/i);
-        const imperativeResearch = userMsg.match(/(?:start|begin|create|open)\s+(?:a |an |the )?(?:new )?(?:research thread|research|investigation)\s+(?:on|about|into)?\s*["'\u201c\u2018](.{3,200}?)["'\u201d\u2019]/i);
-
-        if (slashEpisode || imperativeEpisode) {
-          const topic = (slashEpisode?.[1] || imperativeEpisode?.[1] || "").trim();
-          if (topic) {
-            actions.push({ type: "generate_episode", topic, drivingQuestion: topic });
-            console.log(`[Chat Actions] Explicit episode request: "${topic}"`);
-          }
-        } else if (slashBlog || imperativeBlog) {
-          const topic = (slashBlog?.[1] || imperativeBlog?.[1] || "").trim();
-          if (topic) {
-            actions.push({ type: "generate_blog", topic, content: parsed.text });
-            console.log(`[Chat Actions] Explicit blog request: "${topic}"`);
-          }
-        } else if (slashResearch || imperativeResearch) {
-          const topic = (slashResearch?.[1] || imperativeResearch?.[1] || "").trim();
-          if (topic) {
-            actions.push({
-              type: "start_research",
-              topic,
-              description: `Research requested by MrRayG: ${topic}`,
+      // (a) Coherence check on agent-emitted actions.
+      if (agentActions.length > 0 && parsed.text) {
+        const coherence = checkAgentCoherence(parsed.text);
+        if (coherence.refusalDetected) {
+          for (const a of agentActions) {
+            suppressedActions.push({
+              action: a,
+              reason: "agent-narrative-refusal",
+              matchedPhrase: coherence.matchedPhrase,
             });
-            console.log(`[Chat Actions] Explicit research request: "${topic}"`);
           }
+          console.warn(
+            `[Chat Actions] Coherence violation — ${agentActions.length} agent action(s) suppressed. ` +
+            `Matched refusal phrase: "${coherence.matchedPhrase}"`,
+          );
         } else {
-          // Deny-by-default: log what would have been inferred under old rules
-          // so we can audit false-negative regressions, but do NOT push an action.
-          const wouldHaveFired =
-            userMsg.includes("episode") || userMsg.includes("podcast") ||
-            userMsg.includes("blog") || userMsg.includes("research") ||
-            userMsg.includes("script") || userMsg.includes("investigate");
-          if (wouldHaveFired) {
-            console.log(`[Chat Actions] Suppressed (no explicit intent): "${userMsgRaw.slice(0, 120)}"`);
-          }
+          actions.push(...agentActions);
+        }
+      }
+
+      // (b) User-side parse: only runs if the agent didn't already enqueue an action.
+      if (actions.length === 0 && parsed.text) {
+        const parseResult = parseUserMessage(text || "", parsed.text);
+        if (parseResult.action) {
+          actions.push(parseResult.action);
+          console.log(`[Chat Actions] Explicit ${parseResult.action.type} request from user message`);
+        } else if (parseResult.rejectedReason && parseResult.rejectedReason !== "no-slash-or-imperative") {
+          console.log(`[Chat Actions] Suppressed (${parseResult.rejectedReason}): "${(text || "").slice(0, 120)}"`);
         }
       }
 
@@ -3732,6 +3718,44 @@ needsHelp: true only when you genuinely need his direction or information`,
               break;
             }
 
+            case "revise_blog": {
+              // PR #252 — chat-initiated revision of a quarantined or draft blog.
+              // Routes to the same backend as POST /api/blog/revise/:id so behavior
+              // stays consistent whether the trigger is a slash command or a button.
+              const { reviseQuarantinedBlogPost } = await import("./blogRevisePipeline.js");
+              const draftId = (action as any).draftId;
+              if (!draftId) {
+                actionResults.push(`Revise failed: no draft id provided.`);
+                break;
+              }
+              const out = await reviseQuarantinedBlogPost(draftId);
+              if (!out.found) {
+                actionResults.push(`Revise failed: no draft found with id "${draftId}".`);
+              } else if (out.outcome === "published") {
+                actionResults.push(`Revised draft "${out.title}" passed verifier and was published.`);
+              } else if (out.outcome === "updated_draft") {
+                actionResults.push(`Revised draft "${out.title}" — still ${out.severity}; saved as updated draft for review (${out.unsupportedCount ?? 0} unsupported claim(s)).`);
+              } else {
+                actionResults.push(`Revise failed for draft "${draftId}": ${out.error ?? "unknown error"}.`);
+              }
+              break;
+            }
+
+            case "publish_blog": {
+              const draftId = (action as any).draftId;
+              if (!draftId) {
+                actionResults.push(`Publish failed: no draft id provided.`);
+                break;
+              }
+              const post = publishPost(draftId);
+              if (post) {
+                actionResults.push(`Published draft "${post.title}".`);
+              } else {
+                actionResults.push(`Publish failed: no draft found with id "${draftId}".`);
+              }
+              break;
+            }
+
             case "add_hypothesis": {
               const { addHypothesis } = await import("./researchEngine.js");
               const hyp = addHypothesis({
@@ -3758,6 +3782,17 @@ needsHelp: true only when you genuinely need his direction or information`,
       let responseText = parsed.text || (raw.length > 20 ? raw.replace(/[{}"]/g, "").slice(0, 500) : "Thinking... try again.");
       if (actionResults.length > 0) {
         responseText += "\n\n---\n" + actionResults.join("\n");
+      }
+      // PR #252 — surface coherence-suppressed actions to MrRayG so a refused
+      // action doesn't disappear silently. The user sees what 306 tried to do
+      // alongside the reason it was blocked.
+      if (suppressedActions.length > 0) {
+        const lines = suppressedActions.map(s => {
+          const t = (s.action as any).type;
+          const topicOrId = (s.action as any).topic || (s.action as any).draftId || "(no topic)";
+          return `⛔ Action suppressed: ${t} — "${topicOrId}". Reason: agent narrative indicated refusal ("${s.matchedPhrase ?? "—"}").`;
+        });
+        responseText += "\n\n---\n" + lines.join("\n");
       }
 
       const agentMsg = {
@@ -5334,6 +5369,24 @@ needsHelp: true only when you genuinely need his direction or information`,
     const post = await generateBlogPost({ topic, sourceContent, source: source ?? "standalone", sourceId, autoPublish });
     if (!post) return res.status(500).json({ error: "Blog generation failed" });
     res.json(post);
+  });
+
+  // PR #252 — manual revise endpoint for quarantined or draft blog posts.
+  // Reads the persisted verifier report off the post, calls the bounded
+  // single-attempt revise loop, and persists the result. Idempotent: calling
+  // this on a published post or one that already passes is a no-op.
+  app.post("/api/blog/posts/:id/revise", requireDashAuth, async (req, res) => {
+    try {
+      const { reviseQuarantinedBlogPost } = await import("./blogRevisePipeline.js");
+      const result = await reviseQuarantinedBlogPost(req.params.id);
+      if (!result.found) {
+        return res.status(404).json({ error: "post not found", id: req.params.id });
+      }
+      res.json(result);
+    } catch (e: any) {
+      console.error("[/api/blog/posts/:id/revise] failed:", e?.message ?? String(e));
+      res.status(500).json({ error: e?.message ?? "unknown error" });
+    }
   });
 
   app.post("/api/blog/posts/:id/publish", requireDashAuth, (req, res) => {
