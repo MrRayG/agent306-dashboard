@@ -1799,36 +1799,40 @@ Write a single tweet sharing the most interesting insight from this research. Re
           }
         }
 
-        // Fallback: Always generate something — curiosity post about the cycle
+        // No "always generate something" fallback. If P1–P5 all came up
+        // empty, the knowledge base produced nothing worth blogging about
+        // today. Silence is the correct output. The previous behavior
+        // auto-published a low-quality "What's on my mind today" post on
+        // sparse days, which polluted the blog with curiosity filler.
         if (!topic) {
-          const explorationState = getExplorationState();
-          const lastRun = explorationState.history
-            .filter(r => r.status === "complete")
-            .sort((a, b) => new Date(b.completedAt ?? b.startedAt).getTime() - new Date(a.completedAt ?? a.startedAt).getTime())[0];
-          topic = lastRun
-            ? `Something I noticed today: ${lastRun.territoriesScanned[0] ?? "the AI landscape"}`
-            : "What's on my mind today";
-          sourceContent = lastRun
-            ? `Today I scanned: ${lastRun.territoriesScanned.join(", ")}\nFindings: ${lastRun.findingsCount}\nTop observations: ${lastRun.topFindings.join("; ")}`
-            : `Current knowledge base: ${knowledge.entries.filter((e: any) => (e.status ?? "active") === "active").length} active entries across multiple categories. Today's cycle ran at ${new Date().toISOString()}.`;
-          blogType = "curiosity";
-          console.log(`[DailyCycle] Blog topic (fallback curiosity): "${topic}"`);
+          console.log(`[DailyCycle] No blog-worthy signal today (P1–P5 all empty). Skipping blog.`);
+          return;
         }
 
-        // Generate and auto-publish
+        // Quality tiering: high-confidence signals (P1–P3) auto-publish;
+        // weaker signals (P4 self-reflection, P5 KB synthesis) land as
+        // drafts so MrRayG can review before they go live.
+        const HIGH_CONFIDENCE_TIERS: BlogType[] = ["research", "external"];
+        const shouldAutoPublish = HIGH_CONFIDENCE_TIERS.includes(blogType);
+        if (!shouldAutoPublish) {
+          console.log(`[DailyCycle] Lower-confidence tier "${blogType}" — saving as draft instead of auto-publishing.`);
+        }
+
+        // Generate post (auto-publish only for high-confidence tiers)
         const post = await generateBlogPost({
           topic,
           sourceContent,
           source: blogType === "external" ? "exploration" : "research",
           sourceId,
-          autoPublish: true,
+          autoPublish: shouldAutoPublish,
           blogType,
         }).catch(e => {
           console.warn("[DailyCycle] Blog generation failed:", e.message);
           return null;
         });
         if (post) {
-          console.log(`[DailyCycle] Auto-published blog [${blogType}]: "${post.title}"`);
+          const verb = post.status === "published" ? "Auto-published" : "Saved draft for";
+          console.log(`[DailyCycle] ${verb} blog [${blogType}]: "${post.title}"`);
           // Queue an X post promoting the new blog — always include the
           // per-post deep link (not just agent306.ai) so readers can tell
           // which blog the promo is for and jump straight to it.
