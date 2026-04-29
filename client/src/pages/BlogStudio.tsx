@@ -99,6 +99,33 @@ export default function BlogStudio() {
     onError: (e: any) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
   });
 
+  // PR #252 — manual revise pipeline. Calls the bounded single-attempt revise
+  // endpoint and shows a toast summarizing what came back (published vs.
+  // updated_draft vs. no_action vs. error).
+  const reviseMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const r = await apiRequest("POST", `/api/blog/posts/${id}/revise`);
+      return await r.json();
+    },
+    onSuccess: (result: any) => {
+      const title = result?.title ? `"${result.title}"` : "draft";
+      if (result?.outcome === "published") {
+        toast({ title: "Revise → published", description: `${title} passed the verifier and was published.` });
+      } else if (result?.outcome === "updated_draft") {
+        const sev = result?.severity ?? "?";
+        const n = result?.unsupportedCount ?? 0;
+        toast({ title: "Revise → updated draft", description: `${title} still ${sev} (${n} unsupported claim${n === 1 ? "" : "s"}). Saved for review.` });
+      } else if (result?.outcome === "no_action") {
+        toast({ title: "Revise — no action", description: result?.error ?? "Post already passes or is published." });
+      } else {
+        toast({ title: "Revise failed", description: result?.error ?? "Unknown error", variant: "destructive" });
+      }
+      qc.invalidateQueries({ queryKey: ["/api/blog/posts"] });
+      qc.invalidateQueries({ queryKey: ["/api/blog/state"] });
+    },
+    onError: (e: any) => toast({ title: "Revise failed", description: e.message, variant: "destructive" }),
+  });
+
   const lastPublished = stats?.lastPublishedAt
     ? new Date(stats.lastPublishedAt).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })
     : "None yet";
@@ -327,6 +354,8 @@ export default function BlogStudio() {
               post={p}
               onPublish={(id) => publishMutation.mutate(id)}
               onDelete={(id) => deleteMutation.mutate(id)}
+              onRevise={(id) => reviseMutation.mutate(id)}
+              reviseLoading={reviseMutation.isPending && reviseMutation.variables === p.id}
             />
           ))
         }

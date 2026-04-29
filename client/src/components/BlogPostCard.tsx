@@ -42,10 +42,18 @@ export function PostCard({
   post,
   onPublish,
   onDelete,
+  onRevise,
+  reviseLoading,
 }: {
   post: BlogPostForCard;
   onPublish: (id: string) => void;
   onDelete: (id: string) => void;
+  // PR #252 — manual "Revise" button. Calls POST /api/blog/posts/:id/revise
+  // which reads the persisted verifier report, runs a single bounded revise
+  // attempt, and either publishes or saves an updated draft. Optional so
+  // existing call sites that haven't been updated still compile.
+  onRevise?: (id: string) => void;
+  reviseLoading?: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -104,6 +112,27 @@ export function PostCard({
               ...mono, fontSize: "0.70rem", background: "#f97316", color: "#1a1b1c", border: "none",
               padding: "4px 10px", cursor: "pointer", textTransform: "uppercase" as const, fontWeight: 700,
             }}>Publish</button>
+          )}
+          {/* PR #252 — "Revise" button: visible on quarantined posts (and on
+              drafts that have a verifier report, so a borderline soft-warn
+              draft can also be sent back through the loop). Hidden on
+              published / archived posts where revise is meaningless. */}
+          {onRevise && (post.status === "quarantined" || (post.status === "draft" && hasVerifierEntries)) && (
+            <button
+              onClick={() => onRevise(post.id)}
+              disabled={!!reviseLoading}
+              style={{
+                ...mono, fontSize: "0.70rem",
+                background: "transparent",
+                color: reviseLoading ? "rgba(248,113,113,0.4)" : "#f87171",
+                border: "1px solid rgba(248,113,113,0.35)",
+                padding: "4px 10px", cursor: reviseLoading ? "wait" : "pointer",
+                textTransform: "uppercase" as const, fontWeight: 700,
+              }}
+              title="Send back to Agent 306 with the verifier report and re-verify"
+            >
+              {reviseLoading ? "Revising…" : "Revise"}
+            </button>
           )}
           {post.status === "published" && (
             <a href={`https://agent306.ai/blog/${post.slug}`} target="_blank" rel="noreferrer"
