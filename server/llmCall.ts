@@ -11,15 +11,63 @@ import {
   LLMCallOptions,
   LLMResponse,
   LLM_TIMEOUTS,
+  LLM_BASE_URL,
   resolveChatRoute,
   resolveMode,
   toXAINativeModel,
+  getLLMHeaders,
 } from "./llmConfig.js";
 import { getModel, resolveTask } from "./modelRouter.js";
 import { callResponsesAPI } from "./responsesAdapter.js";
 import { logRoute, inferTier } from "./routeLog.js";
 
 const PERPLEXITY_CHAT_URL = process.env.PERPLEXITY_CHAT_URL ?? "https://api.perplexity.ai/chat/completions";
+
+// PR #251 — xAI empty-body recovery (gated; default ON).
+// Background: api.x.ai has been observed returning HTTP 200 OK with an
+// empty assistant message (choices[0].message.content === "") on Grok 4.20
+// non-reasoning. The route logs status=ok but the caller gets back a blank
+// string and downstream content engines silently fail to publish.
+//
+// Recovery: when xai-direct returns an empty body on a 200, retry the same
+// payload once. If still empty, fall back to the same model on OpenRouter
+// (which has its own internal retry on the upstream xAI quirks). This
+// trades a small latency hit on degraded windows for actually shipping
+// content. Disable with XAI_EMPTY_BODY_FALLBACK=false to revert to the
+// previous "hard-fail, no fallback" policy.
+export function isXaiEmptyBodyFallbackEnabled(): boolean {
+  return (process.env.XAI_EMPTY_BODY_FALLBACK ?? "true") !== "false";
+}
+
+function extractChatText(data: any): string {
+  return data?.choices?.[0]?.message?.content ?? "";
+}
+
+/** Make a chat/completions POST and parse the body. Returns the parsed JSON
+ *  and the extracted assistant text. Throws on network errors and non-2xx
+ *  responses. Used by both the primary call and the empty-body retry. */
+async function postChatAndParse(
+  url: string,
+  headers: Record<string, string>,
+  payload: Record<string, any>,
+  signal: AbortSignal,
+): Promise<{ data: any; text: string; status: number }> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload),
+    signal,
+  });
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    const err: any = new Error(`http ${res.status}: ${errBody.slice(0, 300)}`);
+    err.status = res.status;
+    err.body = errBody;
+    throw err;
+  }
+  const data = await res.json();
+  return { data, text: extractChatText(data), status: res.status };
+}
 
 /**
  * postChatCompletions — PR P low-level helper for migrating raw
@@ -91,6 +139,143 @@ export async function postChatCompletions(
       errorMsg:  `network: ${err?.message ?? String(err)}`,
     });
     throw err;
+  }
+
+  // ── PR #251: xAI empty-body recovery for the low-level helper. ───────────
+  // The high-level callChatCompletions() has its own recovery; callers that
+  // use postChatCompletions() directly (e.g. server/routes.ts news dispatch,
+  // signalBriefEngine, dispatchEngine, articleEngine) need the same protection.
+  // Strategy: when xai-direct returns 200 but choices[0].message.content is
+  // empty, retry once same provider, then fall back to OpenRouter for the
+  // OpenRouter-format model. We have to consume the response body to detect
+  // the empty case, so on success we rebuild a fresh Response object that the
+  // caller can .json()/.text() exactly as before. On non-2xx we leave the
+  // Response untouched (the existing hard-fail policy still applies).
+  if (
+    res.ok &&
+    route.provider === "xai-direct" &&
+    isXaiEmptyBodyFallbackEnabled()
+  ) {
+    let bodyText = "";
+    let parsed: any = null;
+    try {
+      bodyText = await res.text();
+      parsed = bodyText ? JSON.parse(bodyText) : null;
+    } catch {
+      // Body is not JSON — surface the raw response to the caller. Recovery
+      // can't help here because we don't know if content was empty.
+      logRoute({
+        task:      task ?? "post-chat-completions",
+        tier:      taskTier ?? inferTier(route.model),
+        provider:  route.provider,
+        model:     route.model,
+        mode:      "chat",
+        latencyMs: Date.now() - startedAt,
+        status:    "ok",
+      });
+      return new Response(bodyText, { status: res.status, headers: res.headers });
+    }
+
+    const content = parsed?.choices?.[0]?.message?.content ?? "";
+    if (content) {
+      // Happy path — wrap the body back up and return. No recovery needed.
+      logRoute({
+        task:      task ?? "post-chat-completions",
+        tier:      taskTier ?? inferTier(route.model),
+        provider:  route.provider,
+        model:     route.model,
+        mode:      "chat",
+        latencyMs: Date.now() - startedAt,
+        status:    "ok",
+      });
+      return new Response(bodyText, { status: res.status, headers: res.headers });
+    }
+
+    // Empty content. Retry once same provider.
+    console.warn(
+      `[postChatCompletions] xAI empty body on task="${task ?? "?"}" model=${route.model} — retrying once same provider`,
+    );
+    let recovered: { body: string; provider: "xai-direct" | "openrouter"; model: string } | null = null;
+    try {
+      const retryRes = await fetch(route.url, {
+        method: "POST",
+        headers: route.headers,
+        body: JSON.stringify(outgoing),
+        signal,
+      });
+      if (retryRes.ok) {
+        const retryText = await retryRes.text();
+        const retryJson = retryText ? JSON.parse(retryText) : null;
+        if (retryJson?.choices?.[0]?.message?.content) {
+          recovered = { body: retryText, provider: "xai-direct", model: route.model };
+        }
+      }
+    } catch (retryErr: any) {
+      console.warn(
+        `[postChatCompletions] xAI retry threw — falling through to OpenRouter:`,
+        retryErr?.message ?? String(retryErr),
+      );
+    }
+
+    if (!recovered) {
+      // Fall back to OpenRouter for the original OpenRouter-format model.
+      const orPayload = { ...outgoing, model: payload.model };
+      const orHeaders = getLLMHeaders();
+      console.warn(
+        `[postChatCompletions] xAI empty persisted on task="${task ?? "?"}" — falling back to OpenRouter (model=${payload.model})`,
+      );
+      try {
+        const fbRes = await fetch(LLM_BASE_URL, {
+          method: "POST",
+          headers: orHeaders,
+          body: JSON.stringify(orPayload),
+          signal,
+        });
+        if (fbRes.ok) {
+          const fbText = await fbRes.text();
+          const fbJson = fbText ? JSON.parse(fbText) : null;
+          if (fbJson?.choices?.[0]?.message?.content) {
+            recovered = { body: fbText, provider: "openrouter", model: payload.model };
+          }
+        }
+      } catch (fbErr: any) {
+        console.error(
+          `[postChatCompletions] OpenRouter fallback also failed on task="${task ?? "?"}":`,
+          fbErr?.message ?? String(fbErr),
+        );
+      }
+    }
+
+    if (recovered) {
+      logRoute({
+        task:      task ?? "post-chat-completions",
+        tier:      taskTier ?? inferTier(recovered.model),
+        provider:  recovered.provider,
+        model:     recovered.model,
+        mode:      "chat",
+        latencyMs: Date.now() - startedAt,
+        status:    "ok",
+        errorMsg:  recovered.provider === "openrouter"
+          ? "xai-empty-body recovered via OpenRouter fallback"
+          : "xai-empty-body recovered after 1 retry",
+      });
+      return new Response(recovered.body, { status: 200, headers: { "content-type": "application/json" } });
+    }
+
+    // All recovery paths failed. Log and return the original empty-body response
+    // so the caller's existing empty-content handling (e.g. the news dispatch's
+    // market-data fallback line) still kicks in.
+    logRoute({
+      task:      task ?? "post-chat-completions",
+      tier:      taskTier ?? inferTier(route.model),
+      provider:  route.provider,
+      model:     route.model,
+      mode:      "chat",
+      latencyMs: Date.now() - startedAt,
+      status:    "error",
+      errorMsg:  "xai-empty-body unrecoverable (retry + OpenRouter fallback both failed)",
+    });
+    return new Response(bodyText, { status: res.status, headers: res.headers });
   }
 
   logRoute({
@@ -352,16 +537,16 @@ export async function callChatCompletions(opts: LLMCallOptions, model: string): 
   // PR #2: per-call routing observability.
   const startedAt = Date.now();
 
-  let res: Response;
+  let primaryResult: { data: any; text: string; status: number };
   try {
-    res = await fetch(route.url, {
-      method: "POST",
-      headers: route.headers,
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+    primaryResult = await postChatAndParse(
+      route.url,
+      route.headers,
+      payload,
+      AbortSignal.timeout(timeoutMs),
+    );
   } catch (err: any) {
-    // Network / timeout failure — still emit an observability entry.
+    // Network / timeout / non-2xx failure — emit observability and re-throw.
     logRoute({
       task:      opts.task,
       tier:      resolveTask(opts.task).tier,
@@ -370,43 +555,101 @@ export async function callChatCompletions(opts: LLMCallOptions, model: string): 
       mode:      "chat",
       latencyMs: Date.now() - startedAt,
       status:    "error",
-      errorMsg:  `network: ${err?.message ?? String(err)}`,
+      errorMsg:  err?.status ? `http ${err.status}: ${(err.body ?? "").slice(0, 80)}` : `network: ${err?.message ?? String(err)}`,
     });
+    // Hard-fail on non-2xx: no fallback to OpenRouter on xAI errors — matches
+    // the user's explicit "no auto-retry" policy for xAI HTTP errors. Empty-body
+    // recovery (PR #251) is handled separately below for the 200-OK-but-blank case.
+    if (err?.status) {
+      throw new Error(
+        `Chat Completions ${err.status} (${route.provider}, model=${route.model}): ${(err.body ?? "").slice(0, 300)}`,
+      );
+    }
     throw err;
   }
 
-  if (!res.ok) {
-    const errBody = await res.text().catch(() => "");
-    logRoute({
-      task:      opts.task,
-      tier:      resolveTask(opts.task).tier,
-      provider:  route.provider,
-      model:     route.model,
-      mode:      "chat",
-      latencyMs: Date.now() - startedAt,
-      status:    "error",
-      errorMsg:  `http ${res.status}: ${errBody.slice(0, 80)}`,
-    });
-    // Hard-fail: no fallback to OpenRouter on xAI errors — matches the user's
-    // explicit "no auto-retry" policy for xAI overrides.
-    throw new Error(
-      `Chat Completions ${res.status} (${route.provider}, model=${route.model}): ${errBody.slice(0, 300)}`,
-    );
-  }
+  // ── PR #251: xAI empty-body recovery ────────────────────────────────────
+  // api.x.ai has been observed returning 200 OK with no assistant content.
+  // routeLog shows status=ok but downstream engines silently fail to publish
+  // (see Apr 29 morning incident: manual 12:37 PM Signal/News failures).
+  // Strategy: retry once same provider, then fall back to OpenRouter for the
+  // same model. Only kicks in for xai-direct routes; OpenRouter is left alone.
+  let finalRoute = route;
+  let data = primaryResult.data;
+  let text = primaryResult.text;
+  let recoveryNote: string | undefined;
 
-  const data = await res.json();
-  const text = data.choices?.[0]?.message?.content ?? "";
+  if (
+    !text &&
+    route.provider === "xai-direct" &&
+    isXaiEmptyBodyFallbackEnabled()
+  ) {
+    console.warn(
+      `[callLLM] xAI empty body on task="${opts.task}" model=${route.model} — retrying once same provider`,
+    );
+    try {
+      const retry = await postChatAndParse(
+        route.url,
+        route.headers,
+        payload,
+        AbortSignal.timeout(timeoutMs),
+      );
+      if (retry.text) {
+        data = retry.data;
+        text = retry.text;
+        recoveryNote = "xai-empty-body recovered after 1 retry";
+      }
+    } catch (retryErr: any) {
+      console.warn(
+        `[callLLM] xAI empty-body retry threw — falling through to OpenRouter:`,
+        retryErr?.message ?? String(retryErr),
+      );
+    }
+
+    if (!text) {
+      // Second retry failed (or also empty). Fall back to OpenRouter for the
+      // same OpenRouter-format model. OpenRouter applies its own upstream
+      // retry/route logic for xAI quirks, so this is the highest-uptime path.
+      const orPayload: Record<string, any> = { ...payload, model };
+      const orHeaders = getLLMHeaders();
+      console.warn(
+        `[callLLM] xAI empty body persisted on task="${opts.task}" — falling back to OpenRouter (model=${model})`,
+      );
+      try {
+        const fb = await postChatAndParse(
+          LLM_BASE_URL,
+          orHeaders,
+          orPayload,
+          AbortSignal.timeout(timeoutMs),
+        );
+        if (fb.text) {
+          finalRoute = { url: LLM_BASE_URL, headers: orHeaders, model, provider: "openrouter" };
+          data = fb.data;
+          text = fb.text;
+          recoveryNote = "xai-empty-body recovered via OpenRouter fallback";
+        }
+      } catch (fbErr: any) {
+        // Fallback also failed. Surface the original empty-body condition so
+        // the caller decides what to do (the prior behavior was to return "").
+        console.error(
+          `[callLLM] OpenRouter fallback also failed on task="${opts.task}":`,
+          fbErr?.message ?? String(fbErr),
+        );
+      }
+    }
+  }
 
   logRoute({
     task:      opts.task,
-    tier:      inferTier(route.model),
-    provider:  route.provider,
-    model:     route.model,
+    tier:      inferTier(finalRoute.model),
+    provider:  finalRoute.provider,
+    model:     finalRoute.model,
     mode:      "chat",
-    tokensIn:  data.usage?.prompt_tokens,
-    tokensOut: data.usage?.completion_tokens,
+    tokensIn:  data?.usage?.prompt_tokens,
+    tokensOut: data?.usage?.completion_tokens,
     latencyMs: Date.now() - startedAt,
     status:    "ok",
+    errorMsg:  recoveryNote,
   });
 
   return {
@@ -415,7 +658,7 @@ export async function callChatCompletions(opts: LLMCallOptions, model: string): 
     model,
     rawResponse: data,
     mode: "chat",
-    usage: data.usage
+    usage: data?.usage
       ? {
           prompt_tokens: data.usage.prompt_tokens,
           completion_tokens: data.usage.completion_tokens,

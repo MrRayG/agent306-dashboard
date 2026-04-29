@@ -203,6 +203,8 @@ export async function generateReflectionPostContent(): Promise<ReflectionPostRes
     sourceText:  internalSource,
     sourceUrl:   "",
     sourceTitle: "Reflection (internal context)",
+    // PR #251 — introspective post; Lane B bare soft-warns, Lane A still hard-fails.
+    tier: "reflection",
   });
   if (verdict.severity === "HARD_FAIL") {
     console.error(`[ClaimVerifier] REJECTED reflection draft: ${verdict.unsupportedClaims.length} unsupported claims`);

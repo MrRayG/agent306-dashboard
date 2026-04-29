@@ -50,6 +50,7 @@ import {
 } from "./articleEngine.js";
 import { fetchSourceContent } from "./sourceFetcher.js";
 import { verifyClaims, type VerifierReport } from "./claimVerifier.js";
+import { recordNewsDraft, readNewsDrafts } from "./newsDraftStore.js";
 import {
   saveTweetDraft,
   listTweetDrafts,
@@ -507,14 +508,56 @@ Return JSON: {"post": "..."}`
       sourceText:  dispatchSourceText,
       sourceUrl:   "",
       sourceTitle: `306 NEWS Dispatch ${dayLabel}`,
+      // Tier-aware verifier (PR #251). News is a short-form aggregator; Lane B
+      // bare-citation now SOFT_WARNs instead of HARD_FAILing. Lane A failures
+      // (internal contradiction, hallucinated entity, refuted fact) still
+      // hard-fail and quarantine. Strict gate is preserved for blog/article/research.
+      tier: "news",
     });
     if (verdict.severity === "HARD_FAIL") {
       console.error(`[Agent306:News] ClaimVerifier REJECTED dispatch: ${verdict.unsupportedClaims.length} unsupported claims`);
       for (const c of verdict.unsupportedClaims) {
         console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);
       }
+      // PR #251 — quarantine the rejected draft instead of silently dropping it.
+      // Mirrors the blog engine's quarantine pattern (server/blogEngine.ts:553-567).
+      // The user can list these via the dashboard so a failed dispatch is visible
+      // the next morning, not just buried in Railway logs.
+      try {
+        const draft = recordNewsDraft({
+          status:             "quarantined",
+          severity:           verdict.severity,
+          text:               postText,
+          unsupportedReasons: verdict.unsupportedClaims.map(c => `${c.reason}: ${c.sentence.slice(0, 200)}`),
+          verifierReport:     verdict.verifierReport,
+          source:             "auto-dispatch",
+        });
+        console.error(`[Agent306:News] Quarantined draft ${draft.id} (verifier hard-fail)`);
+      } catch (storeErr: any) {
+        console.error(`[Agent306:News] Failed to write quarantine draft:`, storeErr?.message ?? String(storeErr));
+      }
       lastNewsDispatchDate = null; // allow retry on next tick
       return;
+    }
+    // PR #251 — when soft-warn fires (Lane B bare on news tier), publish anyway
+    // but record the dispatch + warnings to the news-draft store so we have an
+    // audit trail of "these posts went out with N unverified claims".
+    if (verdict.severity === "SOFT_WARN") {
+      console.warn(
+        `[Agent306:News] SOFT_WARN dispatch — ${verdict.unsupportedClaims.length} bare claim(s); publishing anyway (tier=news)`,
+      );
+      try {
+        recordNewsDraft({
+          status:             "published_with_warnings",
+          severity:           verdict.severity,
+          text:               postText,
+          unsupportedReasons: verdict.unsupportedClaims.map(c => `${c.reason}: ${c.sentence.slice(0, 200)}`),
+          verifierReport:     verdict.verifierReport,
+          source:             "auto-dispatch",
+        });
+      } catch (storeErr: any) {
+        console.error(`[Agent306:News] Failed to write soft-warn audit:`, storeErr?.message ?? String(storeErr));
+      }
     }
 
     // ── 3. Queue dispatch via X post scheduler ──────────────────────────
@@ -5259,6 +5302,19 @@ needsHelp: true only when you genuinely need his direction or information`,
   // ── Dashboard Blog Management (auth-protected) ────────────────────────
   app.get("/api/blog/state", requireDashAuth, (_req, res) => {
     res.json(getBlogState());
+  });
+
+  // PR #251 — list quarantined / soft-warn news drafts so the dashboard can
+  // surface dispatches that the verifier flagged. Newest last (append order).
+  // Optional ?limit=N caps the response (default 50, max 500).
+  app.get("/api/news/drafts", requireDashAuth, (req, res) => {
+    const all = readNewsDrafts();
+    const rawLimit = parseInt(String(req.query.limit ?? "50"), 10);
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 500) : 50;
+    res.json({
+      total:    all.length,
+      drafts:   all.slice(-limit),
+    });
   });
 
   app.get("/api/blog/posts", requireDashAuth, (_req, res) => {

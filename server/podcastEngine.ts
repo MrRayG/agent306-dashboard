@@ -1613,6 +1613,8 @@ The close segment must hit all four outro elements from the host prompt but the 
       sourceText:  podcastSourceText,
       sourceUrl:   mergedSources[0]?.url ?? "",
       sourceTitle: topicTitle,
+      // PR #251 — podcast script; Lane B bare soft-warns, Lane A still hard-fails.
+      tier: "podcast",
     });
     if (verdict.severity === "HARD_FAIL") {
       console.error(`[ClaimVerifier] REJECTED podcast script ${episode.id}: ${verdict.unsupportedClaims.length} unsupported claims`);

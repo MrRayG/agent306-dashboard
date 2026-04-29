@@ -80,6 +80,45 @@ export type ClaimLane =
 
 export type VerifierSeverity = "PASS" | "SOFT_WARN" | "HARD_FAIL";
 
+/**
+ * Content tier passed to verifyClaims() so the severity gate can be
+ * relaxed for short-form aggregator/commentary content while staying
+ * strict on long-form evergreen content.
+ *
+ * Tiers in STRICT_TIERS hard-fail on Lane B bare-citation thresholds
+ * exactly as before. Tiers NOT in STRICT_TIERS soft-warn on Lane B
+ * bare instead of hard-failing — they still hard-fail on Lane A
+ * (internal contradiction, hallucinated entity, refuted fact),
+ * RETRACTED, NCITE_PATTERN, and LANE_A_UNVERIFIABLE (subject to the
+ * fail-open env var).
+ *
+ * Rationale: a 5-bullet morning news roundup or a Signal commentary
+ * post that links to 3 sources will always have some bare assertions
+ * — that's the genre. Holding it to footnoted-paper standards means
+ * the dispatch never ships and the user wakes up to nothing.
+ * A 1,200-word essay making 5 unsupported claims is genuinely sloppy,
+ * so blog/article/research stay strict.
+ */
+export type ContentTier =
+  | "news"
+  | "signal"
+  | "academy"
+  | "dispatch"
+  | "reply"
+  | "reflection"
+  | "podcast"
+  | "cyoa"
+  | "blog"
+  | "article"
+  | "research";
+
+/** Tiers that keep the strict (pre-PR) hard-fail behavior on Lane B bare. */
+export const STRICT_TIERS: ReadonlySet<ContentTier> = new Set<ContentTier>([
+  "blog",
+  "article",
+  "research",
+]);
+
 export type SentenceClassification =
   | "LANE_A_OK"
   | "LANE_A_FAIL"
@@ -215,6 +254,13 @@ export interface VerifyClaimsOpts {
    *  sets ANALYSIS; other engines stay on default. See server/artifactMode.ts.
    */
   artifactMode?: ArtifactMode;
+  /** Content tier of the draft being verified. When set to a tier NOT in
+   *  STRICT_TIERS (i.e. anything except blog/article/research), Lane B
+   *  bare-citation hits soft-warn instead of hard-fail. Lane A failures,
+   *  RETRACTED, NCITE_PATTERN, and LANE_A_UNVERIFIABLE remain hard-fail
+   *  for every tier. When unset, the legacy strict behavior applies
+   *  (preserves pre-PR contract for callers that haven't been updated). */
+  tier?: ContentTier;
 }
 
 // ── Detection patterns ─────────────────────────────────────────────────────
@@ -373,7 +419,7 @@ function computeSummary(entries: VerifierReportEntry[]): VerifierReport["summary
 
 function reportSeverity(
   entries: VerifierReportEntry[],
-  opts: { unverifiableForcesHardFail?: boolean } = {},
+  opts: { unverifiableForcesHardFail?: boolean; tier?: ContentTier } = {},
 ): VerifierSeverity {
   const hardClass = entries.some(e =>
     e.classification === "RETRACTED_HIT" ||
@@ -391,7 +437,15 @@ function reportSeverity(
   }
   const bareLaneB = entries.filter(e => e.classification === "LANE_B_BARE");
   const laneBNumericHardFail = bareLaneB.some(e => countNumericMarkers(e.snippet) >= 2);
-  if (bareLaneB.length >= 3 || laneBNumericHardFail) return "HARD_FAIL";
+  // Tier-aware Lane B gate. Strict tiers (blog/article/research) keep the
+  // legacy hard-fail thresholds. Non-strict tiers downgrade Lane B bare to
+  // SOFT_WARN — the engine still sees the warning and can attach an
+  // "unverified-claims" header, but publish proceeds.
+  // Tier defaults to undefined for legacy callers — those keep strict behavior.
+  const isStrict = !opts.tier || STRICT_TIERS.has(opts.tier);
+  if (isStrict) {
+    if (bareLaneB.length >= 3 || laneBNumericHardFail) return "HARD_FAIL";
+  }
   if (bareLaneB.length > 0) return "SOFT_WARN";
   return "PASS";
 }
@@ -404,12 +458,13 @@ function finalizeVerdict(args: {
   judgeOutage?: VerifierReport["judgeOutage"];
   artifactMode?: ArtifactMode;
   modeExemptions?: VerifierReport["modeExemptions"];
+  tier?: ContentTier;
 }): ClaimVerdict {
   const summary = computeSummary(args.entries);
   // Operator escape hatch — VERIFIER_FAIL_OPEN_ON_JUDGE_OUTAGE=true makes
   // unverifiable entries informational instead of blocking.
   const failOpen = failOpenOnJudgeOutageEnabled();
-  const severity = reportSeverity(args.entries, { unverifiableForcesHardFail: !failOpen });
+  const severity = reportSeverity(args.entries, { unverifiableForcesHardFail: !failOpen, tier: args.tier });
   // Stamp the judgeOutage block so consumers can show "judge outage" in
   // the UI even when failOpen is on.
   let outage = args.judgeOutage;
@@ -480,7 +535,7 @@ export async function verifyClaims(opts: VerifyClaimsOpts): Promise<ClaimVerdict
       reason:   "missing draft text",
     });
     addEntry(entries, -1, "(no draft)", "LANE_A_FAIL", "missing draft text");
-    return finalizeVerdict({ unsupported, supportedCount, externalCitedCount, entries });
+    return finalizeVerdict({ unsupported, supportedCount, externalCitedCount, entries, tier: opts.tier });
   }
 
   const domain = sourceDomain(sourceUrl);
@@ -647,7 +702,7 @@ export async function verifyClaims(opts: VerifyClaimsOpts): Promise<ClaimVerdict
     }
     return finalizeVerdict({
       unsupported, supportedCount, externalCitedCount, entries,
-      artifactMode, modeExemptions: exemptionCounters,
+      artifactMode, modeExemptions: exemptionCounters, tier: opts.tier,
     });
   }
 
@@ -1086,6 +1141,7 @@ export async function verifyClaims(opts: VerifyClaimsOpts): Promise<ClaimVerdict
     entries,
     artifactMode,
     modeExemptions: exemptionCounters,
+    tier: opts.tier,
     judgeOutage: judgeOutage
       ? {
           affectedSentences: unverifiableCount,
