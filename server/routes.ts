@@ -106,7 +106,7 @@ import { getReflections, getStyleRules, deleteStyleRule, runReflection } from ".
 import {
   getPublishedPosts, getPostBySlug, getAllPosts,
   createBlogPost, generateBlogPost, publishPost, updatePost, deletePost,
-  getBlogState, purgeConversationalPosts,
+  getBlogState, purgeConversationalPosts, renderBlogContent,
 } from "./blogEngine.js";
 import {
   getDebates, getContradictions, runDebate, resolveContradiction, runConfidenceDecay, getDecayingEntries,
@@ -5311,15 +5311,18 @@ needsHelp: true only when you genuinely need his direction or information`,
   });
 
   // ── Public Blog API (for agent306.ai site) ────────────────────────────
+  // PR #253: public reads return content with the optional Sources section
+  // appended at the end. Admin/dashboard reads keep the raw editable body.
   app.get("/api/public/blog/posts", (req, res) => {
     const limit = parseInt(req.query.limit as string) || 20;
-    res.json({ posts: getPublishedPosts(limit) });
+    const posts = getPublishedPosts(limit).map(p => ({ ...p, content: renderBlogContent(p) }));
+    res.json({ posts });
   });
 
   app.get("/api/public/blog/posts/:slug", (req, res) => {
     const post = getPostBySlug(req.params.slug);
     if (!post) return res.status(404).json({ error: "Post not found" });
-    res.json(post);
+    res.json({ ...post, content: renderBlogContent(post) });
   });
 
   // ── Public Research Manuscripts API (for agent306.ai site) ────────────
@@ -5357,9 +5360,9 @@ needsHelp: true only when you genuinely need his direction or information`,
   });
 
   app.post("/api/blog/posts", requireDashAuth, async (req, res) => {
-    const { title, content, source, sourceId, tags, status } = req.body;
+    const { title, content, source, sourceId, tags, status, sources } = req.body;
     if (!title || !content) return res.status(400).json({ error: "title and content required" });
-    const post = createBlogPost({ title, content, source: source ?? "standalone", sourceId, tags, status });
+    const post = createBlogPost({ title, content, source: source ?? "standalone", sourceId, tags, status, sources });
     res.json(post);
   });
 
