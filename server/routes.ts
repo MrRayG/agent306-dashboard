@@ -57,6 +57,13 @@ import {
   type ActionPlan,
 } from "./chatActionGate.js";
 import {
+  guardedExecute,
+  ActionDeniedError,
+  assertGateLive,
+  type ActionContext,
+  type GuardedActionType,
+} from "./actionGuard.js";
+import {
   saveTweetDraft,
   listTweetDrafts,
   markTweetDraftPosted,
@@ -3627,9 +3634,16 @@ needsHelp: true only when you genuinely need his direction or information`,
       //      refusal phrases and suppresses agent-emitted actions when found.
       // The full grammar + refusal phrases live in server/chatActionGate.ts.
       const agentActions: ActionPlan[] = parsed.actions ?? [];
-      const actions: ActionPlan[] = [];
+      // Each entry tracks the proposed action AND its provenance, so the
+      // sub-action gate (PR #253) can apply the right policy. PR #252 only
+      // tracked the action itself; PR #253 carries (action, origin) all the
+      // way to the engine call.
+      const actions: Array<{ action: ActionPlan; userAuthorized: boolean }> = [];
       const actionResults: string[] = [];
       const suppressedActions: Array<{ action: ActionPlan; reason: string; matchedPhrase?: string }> = [];
+      // PR #253 — chat turn id used by ActionGuard audit log to correlate
+      // gate decisions with the conversation.
+      const turnId = `turn_${Date.now()}`;
 
       // (a) Coherence check on agent-emitted actions.
       if (agentActions.length > 0 && parsed.text) {
@@ -3647,7 +3661,12 @@ needsHelp: true only when you genuinely need his direction or information`,
             `Matched refusal phrase: "${coherence.matchedPhrase}"`,
           );
         } else {
-          actions.push(...agentActions);
+          // Agent-emitted actions that PASS coherence are still NOT user-
+          // authorized — the user did not explicitly ask for them. The
+          // sub-action gate will deny these (chat_agent_emitted is not on
+          // the allowlist). They are queued so the audit log records the
+          // attempt and the user sees a clear suppression notice.
+          for (const a of agentActions) actions.push({ action: a, userAuthorized: false });
         }
       }
 
@@ -3655,126 +3674,155 @@ needsHelp: true only when you genuinely need his direction or information`,
       if (actions.length === 0 && parsed.text) {
         const parseResult = parseUserMessage(text || "", parsed.text);
         if (parseResult.action) {
-          actions.push(parseResult.action);
+          // Slash commands and quoted-imperatives ARE explicit user authorization.
+          actions.push({ action: parseResult.action, userAuthorized: true });
           console.log(`[Chat Actions] Explicit ${parseResult.action.type} request from user message`);
         } else if (parseResult.rejectedReason && parseResult.rejectedReason !== "no-slash-or-imperative") {
           console.log(`[Chat Actions] Suppressed (${parseResult.rejectedReason}): "${(text || "").slice(0, 120)}"`);
         }
       }
 
-      for (const action of actions) {
+      for (const { action, userAuthorized } of actions) {
+        // PR #253 — every action goes through the deny-by-default sub-action
+        // gate. The gate decides allow/deny based on (action.type, ctx);
+        // ctx.origin is chat_user_command for parser-derived actions and
+        // chat_agent_emitted for actions 306 emitted in its response. The
+        // latter is NOT on the allowlist, so even if it cleared the
+        // coherence check it will be denied here — audit-logged and
+        // surfaced to the user.
+        const ctx: ActionContext = {
+          origin: userAuthorized ? "chat_user_command" : "chat_agent_emitted",
+          userAuthorized,
+          turnId,
+        };
+        const guardedActionType = action.type as GuardedActionType;
+        const payloadFingerprint =
+          (action as any).topic ??
+          (action as any).draftId ??
+          (action as any).claim ??
+          undefined;
+
         try {
-          switch (action.type) {
-            case "generate_episode": {
-              const { createEpisode, generateEpisodeScript } = await import("./podcastEngine.js");
-              const episode = createEpisode({
-                type: "the_signal",
-                title: action.topic || "Untitled Episode",
-                drivingQuestion: action.drivingQuestion || action.topic || "",
-              });
-              // Generate script in the background — chat returns immediately
-              generateEpisodeScript(episode.id, apiKey, action.content).catch(e =>
-                console.warn("[Chat Action] Script generation failed:", e.message)
-              );
-              actionResults.push(`Created episode "${episode.title}" in Podcast Studio (${episode.id}). Script is being generated.`);
-              console.log(`[Chat Action] Created episode: ${episode.id} — "${episode.title}"`);
-              break;
-            }
+          await guardedExecute(
+            guardedActionType,
+            ctx,
+            async () => {
+              switch (action.type) {
+                case "generate_episode": {
+                  const { createEpisode, generateEpisodeScript } = await import("./podcastEngine.js");
+                  const episode = createEpisode({
+                    type: "the_signal",
+                    title: action.topic || "Untitled Episode",
+                    drivingQuestion: action.drivingQuestion || action.topic || "",
+                  });
+                  // Generate script in the background — chat returns immediately
+                  generateEpisodeScript(episode.id, apiKey, action.content).catch(e =>
+                    console.warn("[Chat Action] Script generation failed:", e.message)
+                  );
+                  actionResults.push(`Created episode "${episode.title}" in Podcast Studio (${episode.id}). Script is being generated.`);
+                  console.log(`[Chat Action] Created episode: ${episode.id} — "${episode.title}"`);
+                  return;
+                }
 
-            case "generate_blog": {
-              const { generateBlogPost } = await import("./blogEngine.js");
+                case "generate_blog": {
+                  const { generateBlogPost } = await import("./blogEngine.js");
+                  const sourceContent = action.content || parsed.text || "";
+                  const topic = action.topic || action.title || "Agent 306 Blog Post";
+                  const post = await generateBlogPost({
+                    topic,
+                    sourceContent: sourceContent.slice(0, 4000),
+                    source: "chat",
+                    autoPublish: false,
+                  });
+                  if (post) {
+                    actionResults.push(`Generated blog draft "${post.title}" in Blog Studio. Review and publish when ready.`);
+                    console.log(`[Chat Action] Generated blog draft: ${post.id} — "${post.title}"`);
+                  } else {
+                    actionResults.push(`Blog generation failed — try again or create manually in Blog Studio.`);
+                  }
+                  return;
+                }
 
-              // Chat text is NEVER blog-ready — it's conversational, addressed to MrRayG.
-              // Always run through generateBlogPost() which uses the blog LLM to create
-              // a proper public-facing post from the source material.
-              const sourceContent = action.content || parsed.text || "";
-              const topic = action.topic || action.title || "Agent 306 Blog Post";
+                case "start_research": {
+                  const { createThread } = await import("./research-agenda.js");
+                  const thread = createThread({
+                    title: action.topic || "New Research",
+                    thesis: action.description || "",
+                    source: "chat",
+                  });
+                  actionResults.push(`Started research thread: "${thread.title}" (${thread.id})`);
+                  console.log(`[Chat Action] Created research thread: ${thread.id} — "${thread.title}"`);
+                  return;
+                }
 
-              const post = await generateBlogPost({
-                topic,
-                sourceContent: sourceContent.slice(0, 4000),
-                source: "chat",
-                autoPublish: false, // Always draft — MrRayG reviews before publishing
-              });
+                case "revise_blog": {
+                  const { reviseQuarantinedBlogPost } = await import("./blogRevisePipeline.js");
+                  const draftId = (action as any).draftId;
+                  if (!draftId) {
+                    actionResults.push(`Revise failed: no draft id provided.`);
+                    return;
+                  }
+                  const out = await reviseQuarantinedBlogPost(draftId);
+                  if (!out.found) {
+                    actionResults.push(`Revise failed: no draft found with id "${draftId}".`);
+                  } else if (out.outcome === "published") {
+                    actionResults.push(`Revised draft "${out.title}" passed verifier and was published.`);
+                  } else if (out.outcome === "updated_draft") {
+                    actionResults.push(`Revised draft "${out.title}" — still ${out.severity}; saved as updated draft for review (${out.unsupportedCount ?? 0} unsupported claim(s)).`);
+                  } else {
+                    actionResults.push(`Revise failed for draft "${draftId}": ${out.error ?? "unknown error"}.`);
+                  }
+                  return;
+                }
 
-              if (post) {
-                actionResults.push(`Generated blog draft "${post.title}" in Blog Studio. Review and publish when ready.`);
-                console.log(`[Chat Action] Generated blog draft: ${post.id} — "${post.title}"`);
-              } else {
-                actionResults.push(`Blog generation failed — try again or create manually in Blog Studio.`);
+                case "publish_blog": {
+                  const draftId = (action as any).draftId;
+                  if (!draftId) {
+                    actionResults.push(`Publish failed: no draft id provided.`);
+                    return;
+                  }
+                  const post = publishPost(draftId);
+                  if (post) {
+                    actionResults.push(`Published draft "${post.title}".`);
+                  } else {
+                    actionResults.push(`Publish failed: no draft found with id "${draftId}".`);
+                  }
+                  return;
+                }
+
+                case "add_hypothesis": {
+                  const { addHypothesis } = await import("./researchEngine.js");
+                  const hyp = addHypothesis({
+                    claim: action.claim || "",
+                    basis: action.basis || "",
+                    metric: action.metric || "To be determined",
+                    prediction: action.prediction || action.claim || "",
+                    timeframe: action.timeframe || "3 months",
+                    confidence: action.confidence || "medium",
+                    source: "chat",
+                  });
+                  actionResults.push(`Registered hypothesis: "${hyp.claim}" (${hyp.id})`);
+                  console.log(`[Chat Action] Added hypothesis: ${hyp.id} — "${hyp.claim}"`);
+                  return;
+                }
               }
-              break;
-            }
-
-            case "start_research": {
-              const { createThread } = await import("./research-agenda.js");
-              const thread = createThread({
-                title: action.topic || "New Research",
-                thesis: action.description || "",
-                source: "chat",
-              });
-              actionResults.push(`Started research thread: "${thread.title}" (${thread.id})`);
-              console.log(`[Chat Action] Created research thread: ${thread.id} — "${thread.title}"`);
-              break;
-            }
-
-            case "revise_blog": {
-              // PR #252 — chat-initiated revision of a quarantined or draft blog.
-              // Routes to the same backend as POST /api/blog/revise/:id so behavior
-              // stays consistent whether the trigger is a slash command or a button.
-              const { reviseQuarantinedBlogPost } = await import("./blogRevisePipeline.js");
-              const draftId = (action as any).draftId;
-              if (!draftId) {
-                actionResults.push(`Revise failed: no draft id provided.`);
-                break;
-              }
-              const out = await reviseQuarantinedBlogPost(draftId);
-              if (!out.found) {
-                actionResults.push(`Revise failed: no draft found with id "${draftId}".`);
-              } else if (out.outcome === "published") {
-                actionResults.push(`Revised draft "${out.title}" passed verifier and was published.`);
-              } else if (out.outcome === "updated_draft") {
-                actionResults.push(`Revised draft "${out.title}" — still ${out.severity}; saved as updated draft for review (${out.unsupportedCount ?? 0} unsupported claim(s)).`);
-              } else {
-                actionResults.push(`Revise failed for draft "${draftId}": ${out.error ?? "unknown error"}.`);
-              }
-              break;
-            }
-
-            case "publish_blog": {
-              const draftId = (action as any).draftId;
-              if (!draftId) {
-                actionResults.push(`Publish failed: no draft id provided.`);
-                break;
-              }
-              const post = publishPost(draftId);
-              if (post) {
-                actionResults.push(`Published draft "${post.title}".`);
-              } else {
-                actionResults.push(`Publish failed: no draft found with id "${draftId}".`);
-              }
-              break;
-            }
-
-            case "add_hypothesis": {
-              const { addHypothesis } = await import("./researchEngine.js");
-              const hyp = addHypothesis({
-                claim: action.claim || "",
-                basis: action.basis || "",
-                metric: action.metric || "To be determined",
-                prediction: action.prediction || action.claim || "",
-                timeframe: action.timeframe || "3 months",
-                confidence: action.confidence || "medium",
-                source: "chat",
-              });
-              actionResults.push(`Registered hypothesis: "${hyp.claim}" (${hyp.id})`);
-              console.log(`[Chat Action] Added hypothesis: ${hyp.id} — "${hyp.claim}"`);
-              break;
-            }
-          }
+            },
+            payloadFingerprint,
+          );
         } catch (e: any) {
-          console.error(`[Chat Action] Failed to execute ${action.type}:`, e.message);
-          actionResults.push(`Action failed (${action.type}): ${e.message}`);
+          if (e instanceof ActionDeniedError) {
+            // Surface gate denials the same way coherence suppressions are
+            // surfaced — the user sees what was attempted and why it was
+            // blocked. This is the visibility 306 explicitly asked for.
+            suppressedActions.push({
+              action,
+              reason: `gate-deny:${e.decision.reason}`,
+              matchedPhrase: ctx.origin,
+            });
+          } else {
+            console.error(`[Chat Action] Failed to execute ${action.type}:`, e.message);
+            actionResults.push(`Action failed (${action.type}): ${e.message}`);
+          }
         }
       }
 
@@ -3790,6 +3838,12 @@ needsHelp: true only when you genuinely need his direction or information`,
         const lines = suppressedActions.map(s => {
           const t = (s.action as any).type;
           const topicOrId = (s.action as any).topic || (s.action as any).draftId || "(no topic)";
+          // PR #253 — surface gate denials with their specific reason. Coherence
+          // suppressions still display the matched phrase as before.
+          if (s.reason.startsWith("gate-deny:")) {
+            const denyReason = s.reason.slice("gate-deny:".length);
+            return `⛔ Action blocked by sub-action gate: ${t} — "${topicOrId}". Origin: ${s.matchedPhrase ?? "unknown"}. Reason: ${denyReason}.`;
+          }
           return `⛔ Action suppressed: ${t} — "${topicOrId}". Reason: agent narrative indicated refusal ("${s.matchedPhrase ?? "—"}").`;
         });
         responseText += "\n\n---\n" + lines.join("\n");
