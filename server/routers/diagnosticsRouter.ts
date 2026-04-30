@@ -18,6 +18,7 @@ import { getAllSessions, getActiveSessionCount, closeExpiredSessions } from "../
 import { getNoveltyGateLog } from "../noveltyGate.js";
 import { getWisdomPullHistory, getWisdomApiUsage, getActiveWisdomCount } from "../wisdomEngine.js";
 import { getMetacognitionState } from "../metacognitionEngine.js";
+import { assertGateLive } from "../actionGuard.js";
 
 export interface DiagnosticsRouterDeps {
   requireDashAuth: RequestHandler;
@@ -82,5 +83,24 @@ export function registerDiagnosticsRoutes(app: Express, _deps: DiagnosticsRouter
   app.get("/api/metacognition", (_req, res) => {
     try { res.json(getMetacognitionState()); }
     catch (e: any) { res.status(500).json({ error: "Failed to fetch metacognition state" }); }
+  });
+
+  // PR #253 — ActionGuard canary. Fires a known-blocked action through the
+  // gate and asserts denial. If this endpoint ever returns 500, the gate is
+  // not in the call path and the deny-by-default invariant is broken.
+  // Wire this to an external uptime probe (Railway, UptimeRobot, etc.) so
+  // "verified live" is continuously enforced, not just asserted at deploy.
+  app.get("/api/diagnostics/gate-canary", async (_req, res) => {
+    try {
+      const out = await assertGateLive();
+      res.json({ ok: out.ok, gate: "action-guard", checkedAt: new Date().toISOString() });
+    } catch (e: any) {
+      res.status(500).json({
+        ok: false,
+        gate: "action-guard",
+        error: e?.message ?? "canary failed",
+        checkedAt: new Date().toISOString(),
+      });
+    }
   });
 }
