@@ -29,7 +29,6 @@ import {
   type BlogPost,
 } from "./blogEngine.js";
 import { reviseBlogUntilClean } from "./blogReviseLoop.js";
-import { checkHardBlocks } from "./blogHardBlocks.js";
 
 /** Pull every http(s) URL out of a block of markdown/text. Used to seed the
  *  rewriter's citation pool from URLs already embedded in the post. */
@@ -107,12 +106,8 @@ export async function reviseQuarantinedBlogPost(postId: string): Promise<ReviseQ
 
   // Pull URLs already embedded in the body — those are the citation pool the
   // rewriter is allowed to reuse. The repair pass inside reviseBlogUntilClean
-  // will not fabricate new URLs. PR #253: also fold in any persisted
-  // post.sources URLs so the rewriter knows they're approved targets.
-  const embeddedUrls = Array.from(new Set([
-    ...extractUrls(post.content),
-    ...(post.sources ?? []).map(s => s.url),
-  ]));
+  // will not fabricate new URLs.
+  const embeddedUrls = extractUrls(post.content);
 
   try {
     const result = await reviseBlogUntilClean({
@@ -161,18 +156,12 @@ export async function reviseQuarantinedBlogPost(postId: string): Promise<ReviseQ
       };
     }
 
-    // PR #253: blogs are voice tier — verifier verdicts are advisory only.
-    // SOFT_WARN and HARD_FAIL both land the revised body in `draft` status
-    // with the verifier report attached for visibility. The ONLY path that
-    // keeps a blog quarantined post-revise is the bright-line hard-block
-    // list (medical/legal/financial specifics). See server/blogHardBlocks.ts
-    // for the philosophy.
-    const hardBlock = checkHardBlocks(finalBody);
-    const newStatus: BlogPost["status"] = hardBlock.blocked ? "quarantined" : "draft";
-    if (hardBlock.blocked) {
-      console.error(`[BlogRevise] HARD-BLOCK quarantine ${postId}: ${hardBlock.reasons.length} pattern(s)`);
-      for (const r of hardBlock.reasons) console.error(`  - ${r}`);
-    }
+    // SOFT_WARN or HARD_FAIL: persist the (likely improved) body and the new
+    // verdict, leave status appropriate for human review. SOFT_WARN drops to
+    // "draft" so MrRayG can publish manually after eyeballing it; HARD_FAIL
+    // stays "quarantined".
+    const newStatus: BlogPost["status"] =
+      finalSeverity === "SOFT_WARN" ? "draft" : "quarantined";
 
     updatePost(postId, {
       content: finalBody,

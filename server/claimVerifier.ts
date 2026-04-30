@@ -112,17 +112,9 @@ export type ContentTier =
   | "article"
   | "research";
 
-/** Tiers that keep the strict (pre-PR) hard-fail behavior on Lane B bare.
- *
- * Blog removed 2026-04-29 (PR #253): blogs are 306's voice — observation,
- * narrative, opinion. Treating them as citation-heavy strict-tier content
- * was wrong by design. Blogs now soft-warn through the verifier; the only
- * remaining quarantine path for blogs is the bright-line hard-block list
- * in server/blogHardBlocks.ts (medical/legal/financial specifics).
- *
- * Article and research stay strict — those are long-form footnoted
- * artifacts where bare claims are genuinely sloppy. */
+/** Tiers that keep the strict (pre-PR) hard-fail behavior on Lane B bare. */
 export const STRICT_TIERS: ReadonlySet<ContentTier> = new Set<ContentTier>([
+  "blog",
   "article",
   "research",
 ]);
