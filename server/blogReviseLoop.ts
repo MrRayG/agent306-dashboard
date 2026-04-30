@@ -27,7 +27,6 @@ import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import {
   verifyClaims,
   type ClaimVerdict,
-  type ContentTier,
   type VerifierReport,
   type VerifierReportEntry,
   type LLMJudgeClient,
@@ -101,11 +100,6 @@ export interface ReviseOpts {
   operatorNote?: string;
   /** Pass-through artifact-mode flag forwarded to the verifier. */
   artifactMode?: "ANALYSIS" | "REPORT" | "MANUSCRIPT";
-  /** Pass-through content tier forwarded to the verifier. Defaults to
-   *  "blog" when unset since this loop is the blog-specific revise path —
-   *  callers from blogEngine and blogRevisePipeline rely on this default
-   *  to get the new soft-warn treatment introduced in PR #253. */
-  tier?: ContentTier;
 }
 
 export interface RewriteInput {
@@ -291,8 +285,6 @@ export async function reviseBlogUntilClean(opts: ReviseOpts): Promise<ReviseResu
     `evidenceBundleBytes=${preTelemetry.evidenceBundleBytes}`,
   );
 
-  const tier: ContentTier = opts.tier ?? "blog";
-
   // Initial verdict — we only loop if the verifier flagged actionable issues.
   let verdict = await verifyClaims({
     draftText: draftStart,
@@ -302,7 +294,6 @@ export async function reviseBlogUntilClean(opts: ReviseOpts): Promise<ReviseResu
     skipLLM: opts.skipVerifierLLM,
     judgeClient: opts.verifierJudgeClient,
     artifactMode: opts.artifactMode,
-    tier,
   });
 
   let body = draftStart;
@@ -383,7 +374,6 @@ export async function reviseBlogUntilClean(opts: ReviseOpts): Promise<ReviseResu
       skipLLM: opts.skipVerifierLLM,
       judgeClient: opts.verifierJudgeClient,
       artifactMode: opts.artifactMode,
-      tier,
     });
 
     const issuesBefore = failing.length;
