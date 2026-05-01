@@ -31,7 +31,7 @@ export type InsightStatus =
   | "failed"       // acceptance window closed without behavior change
   | "expired";     // never accepted within TTL; self-change declined
 
-export type EnforcementPrimitive = "ratio_rule" | "ttl_rule" | "gate_rule" | "archive_rule" | "none";
+export type EnforcementPrimitive = "ratio_rule" | "ttl_rule" | "gate_rule" | "archive_rule" | "artifact_rule" | "none";
 
 export interface InsightLedgerEntry {
   id: string;

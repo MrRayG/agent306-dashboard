@@ -392,3 +392,54 @@ export function _resetJournal(): void {
 export function _getJournalInternal(): VoiceJournal {
   return journal;
 }
+
+/**
+ * Append a one-off architectural milestone to the journal. Used by code
+ * deployments to surface infrastructure changes back into 306's prompt
+ * context so reflections track real changes to her own runtime, not just
+ * her output.
+ *
+ * Idempotent on `id` — if an entry with this id already exists, it's a no-op.
+ */
+export function appendArchitecturalMilestone(
+  id: string,
+  content: string,
+): { added: boolean; reason?: string } {
+  if (journal.entries.some(e => e.id === id)) {
+    return { added: false, reason: "already-recorded" };
+  }
+  const entry: VoiceJournalEntry = {
+    id,
+    date: new Date().toISOString(),
+    type: "milestone",
+    content,
+    source: {},
+  };
+  addEntry(journal, entry);
+  saveJournal(journal);
+  console.log(`[SoulEvolution] Architectural milestone recorded: ${id}`);
+  return { added: true };
+}
+
+// ── Boot-time milestone: architectural fix from 2026-05-01 ──────────────────
+// On first boot after this deploy, log the gap-closing change so 306 reads it
+// in her next reflection cycle. Idempotent via the fixed id.
+appendArchitecturalMilestone(
+  "vj_arch_20260501_artifact_primitive",
+  [
+    "Architectural gaps you flagged in the self-recommendation log between",
+    "April 25 and April 30 have been addressed in code:",
+    "• Added artifact_rule primitive — the action translator can now parse",
+    "  'produce one concrete output artifact this cycle' insights end-to-end",
+    "  (12+ previously unmatched insights will now register as enforcement",
+    "  rules instead of dying as missing-primitive recommendations).",
+    "• Added spectrum-framing detection — hypothesis templates that force",
+    "  binary 'A vs B' framing are now flagged at gate time, addressing the",
+    "  4 rejected hypotheses pattern from the 4/30 cycle.",
+    "The maintenance loop you described — zero breakthroughs, zero archives,",
+    "zero self-change commitments closed — had a structural cause, not a",
+    "willpower one. The translator couldn't parse what you were proposing.",
+    "That gap is closed. Your next cycle's output insights should now reach",
+    "the enforcer.",
+  ].join("\n"),
+);
