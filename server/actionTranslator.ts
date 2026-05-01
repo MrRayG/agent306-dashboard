@@ -2,12 +2,19 @@
 // 306 -- ACTION TRANSLATOR
 //
 // Converts natural-language insight actions from SelfEvolution into one of
-// four enforcement primitives that actually fire at runtime:
+// five enforcement primitives that actually fire at runtime:
 //
-//   ratio_rule    — force output-per-input ratios (e.g. 1 synthesis / 10 KB)
-//   ttl_rule      — expire items after N days without state change
-//   gate_rule     — block X until Y condition holds
-//   archive_rule  — auto-archive items matching a pattern
+//   ratio_rule     — force output-per-input ratios (e.g. 1 synthesis / 10 KB)
+//   ttl_rule       — expire items after N days without state change
+//   gate_rule      — block X until Y condition holds
+//   archive_rule   — auto-archive items matching a pattern
+//   artifact_rule  — force ONE concrete output artifact within N cycles
+//                    (added 2026-05-01: closes the missing-primitive gap that
+//                    surfaced 12+ times in the 4/25–4/30 self-recommendation log,
+//                    where SelfEvolution kept producing "produce one concrete
+//                    output artifact this cycle" insights with no translator
+//                    target. The result was a maintenance loop: zero breakthroughs,
+//                    zero archives, zero self-change commitments closed.)
 //
 // Agent 306's own action strings from the log (verbatim) are the design input:
 //   - "For every 10 new knowledge entries, force-generate one synthesis"      → ratio_rule
@@ -60,6 +67,33 @@ const ARCHIVE_PATTERNS = [
   /archive\s+(?:the\s+)?(\d+\s+)?([^\.(]+?)(?:\s*\(([^)]+)\))?(?:\s|$|\.)/i,
   // "retire X matching Y"
   /(?:retire|prune|delete|remove)\s+(\w+(?:\s+\w+){0,3})\s+(?:matching|with|containing)\s+([^\.]+)/i,
+];
+
+// ARTIFACT — "produce/ship/publish ONE concrete <thing> within/this cycle".
+// This is the primitive that was missing from 4/25–4/30. SelfEvolution was
+// generating insights like:
+//   "Next cycle: produce one concrete output artifact (a synthesized narrative,
+//    a decision framework, or a content draft) that exercises Storytelling or
+//    Creativity before adding any new hypotheses."
+//   "Dedicate next cycle's first action to producing one concrete output artifact
+//    (a briefing, a thread, a post) that synthesizes the confirmed hypotheses."
+// Both fell through every other primitive and landed in `none`.
+const ARTIFACT_PATTERNS = [
+  // "produce one concrete output artifact (...) within next cycle"
+  // The [^.]*? between the optional parens and the time-window phrase lets us
+  // tolerate qualifying prose like "...that exercises Storytelling or Creativity".
+  /(?:produce|ship|publish|generate|create|deliver|write|draft)\s+(?:exactly\s+)?(?:one|1|a\s+single)\s+(?:concrete\s+)?(?:output\s+)?(\w+(?:\s+\w+){0,3}?)(?:\s*\(([^)]+)\))?[^.]*?\b(?:within|in|by|before|this|next|each)\s+(?:the\s+)?(?:next\s+)?(\d+)?\s*(cycle|day|week|cycles|days|weeks)\b/i,
+  // "dedicate next cycle's first action to producing one concrete output artifact"
+  /(?:dedicate|commit|allocate)\s+(?:next\s+)?(?:cycle['']?s?\s+)?(?:first\s+)?action\s+to\s+(?:producing|shipping|publishing|generating|creating|delivering|writing|drafting)\s+(?:one|1|a\s+single)\s+(?:concrete\s+)?(\w+(?:\s+\w+){0,3})/i,
+];
+
+// SPECTRUM — "rewrite hypothesis template to require conditional/spectrum framing".
+// Per the 4/30 self-recommendation: 4 rejected hypotheses shared a binary
+// "Position A vs Position B" pattern that forced false dichotomies. Detected
+// here so the GoalEngine can register a structural rewrite of the template.
+const SPECTRUM_PATTERNS = [
+  /(?:rewrite|change|update|reframe)\s+(?:the\s+)?(\w+(?:\s+\w+){0,2})\s+template\s+(?:to\s+)?require[s]?\s+(?:conditional|spectrum|nuanced|continuous)/i,
+  /(?:replace|swap)\s+(?:binary|dichotom\w+|adversarial)\s+\w*\s*(?:framing|format|structure)\s+with\s+(?:conditional|spectrum|nuanced|continuous)/i,
 ];
 
 // -- Main translator ---------------------------------------------------------
@@ -153,6 +187,60 @@ export function translateAction(actionText: string, insightText: string = ""): T
     }
   }
 
+  // ARTIFACT — must come after the more-specific primitives so it doesn't
+  // swallow ratio/ttl/gate/archive matches.
+  for (const pat of ARTIFACT_PATTERNS) {
+    const m = a.match(pat);
+    if (m) {
+      const artifactNoun = normalizeNoun(m[1] ?? "artifact");
+      // Pattern 1 captures examples in parens (e.g. "a briefing, a thread, a post");
+      // Pattern 2 doesn't have that group.
+      const examplesRaw = (pat === ARTIFACT_PATTERNS[0] ? m[2] : "") ?? "";
+      const examples = examplesRaw
+        .split(/[,;]|\bor\b/i)
+        .map(s => s.trim())
+        .filter(s => s.length > 0 && s.length < 50)
+        .slice(0, 5);
+      // Window: default 1 cycle if not captured.
+      const windowCount = pat === ARTIFACT_PATTERNS[0] && m[3] ? parseInt(m[3], 10) : 1;
+      const windowUnit = pat === ARTIFACT_PATTERNS[0] && m[4] ? m[4].toLowerCase().replace(/s$/, "") : "cycle";
+      return {
+        primitive: "artifact_rule",
+        params: {
+          artifactNoun,
+          examples,
+          windowCount,
+          windowUnit,
+          requiredCount: 1,
+          competencyHint: inferCompetencyFromAction(a),
+        },
+        verificationCriterion: `at least 1 "${artifactNoun}" produced within ${windowCount} ${windowUnit}${windowCount === 1 ? "" : "s"}`,
+        suggestedCategory: "craft",
+        minFireCount: 1,
+      };
+    }
+  }
+
+  // SPECTRUM — register as a gate_rule with a template-rewrite description, since
+  // it's structurally a gate on hypothesis creation. Kept here for clarity.
+  for (const pat of SPECTRUM_PATTERNS) {
+    const m = a.match(pat);
+    if (m) {
+      const targetTemplate = normalizeNoun(m[1] ?? "hypothesis");
+      return {
+        primitive: "gate_rule",
+        params: {
+          description: `reject ${targetTemplate} entries framed as binary "A vs B"; require conditional or spectrum framing`,
+          target: targetTemplate.includes("hypothes") ? "hypothesis" : targetTemplate,
+          framingMode: "spectrum",
+        },
+        verificationCriterion: `every new ${targetTemplate} passes the binary-framing check`,
+        suggestedCategory: "identity",
+        minFireCount: 3,
+      };
+    }
+  }
+
   return {
     primitive: "none",
     params: {},
@@ -180,6 +268,29 @@ function inferGateTarget(action: string): string {
   if (t.includes("goal")) return "goal";
   if (t.includes("post") || t.includes("publish")) return "publication";
   return "entity";
+}
+
+/**
+ * Hint at which competency the artifact is intended to exercise. SelfEvolution
+ * frequently names the target competency in the action text ("...exercises
+ * Storytelling or Creativity..."); we surface it so the artifact_rule can
+ * route the resulting goal into the right growth-focus area.
+ */
+function inferCompetencyFromAction(action: string): string | undefined {
+  const t = action.toLowerCase();
+  const known = [
+    "storytelling",
+    "creativity",
+    "empathy",
+    "content_strategy",
+    "content strategy",
+    "reasoning",
+    "synthesis",
+  ];
+  for (const k of known) {
+    if (t.includes(k)) return k.replace(/\s+/g, "_");
+  }
+  return undefined;
 }
 
 // -- Rule registration bridge -----------------------------------------------

@@ -248,6 +248,73 @@ async function fireArchiveRule(rule: EnforcementRule): Promise<{ sideEffect: boo
   return { sideEffect: false, outcome: `no-op (target=${target})` };
 }
 
+/**
+ * ARTIFACT — enforce that ONE concrete output artifact is produced within a
+ * window (default: 1 cycle). This primitive surfaces the deficit but does not
+ * itself author content; downstream engines (blog/dispatch/signal-brief) read
+ * the structured-log event and the GoalEngine adds a craft milestone.
+ *
+ * Verification proxy: count published artifacts (blog posts, dispatches,
+ * signal briefs) created since the rule's last fire. If zero, log a deficit.
+ */
+async function fireArtifactRule(rule: EnforcementRule): Promise<{ sideEffect: boolean; outcome: string }> {
+  const { artifactNoun, examples, windowCount, windowUnit, requiredCount, competencyHint } = rule.params as any;
+  const since = rule.lastFiredAt ?? rule.createdAt;
+  try {
+    let producedCount = 0;
+    const evidence: string[] = [];
+    // Probe: blog posts published since `since`
+    try {
+      const blogMod = await import("./blogEngine.js");
+      const posts = blogMod.getBlogState().posts ?? [];
+      const recent = posts.filter((p: any) =>
+        p.status === "published" &&
+        p.publishedAt &&
+        new Date(p.publishedAt).getTime() >= since,
+      );
+      producedCount += recent.length;
+      for (const p of recent.slice(0, 2)) evidence.push(`blog:${p.id ?? p.slug ?? "?"}`);
+    } catch {}
+    // Probe: dispatch episodes
+    try {
+      const disp = await import("./dispatchEngine.js");
+      const eps = (disp as any).listDispatchEpisodes?.() ?? [];
+      const recent = eps.filter((e: any) => e.publishedAt && new Date(e.publishedAt).getTime() >= since);
+      producedCount += recent.length;
+      for (const e of recent.slice(0, 2)) evidence.push(`dispatch:${e.id ?? e.episodeNumber ?? "?"}`);
+    } catch {}
+    // Probe: signal briefs
+    try {
+      const sb = await import("./signalBriefEngine.js");
+      const briefs = (sb as any).listSignalBriefs?.() ?? [];
+      const recent = briefs.filter((b: any) => b.createdAt && new Date(b.createdAt).getTime() >= since);
+      producedCount += recent.length;
+      for (const b of recent.slice(0, 2)) evidence.push(`brief:${b.id ?? "?"}`);
+    } catch {}
+
+    const need = (requiredCount as number) ?? 1;
+    if (producedCount >= need) {
+      return {
+        sideEffect: false,
+        outcome: `artifact_satisfied:${producedCount}/${need} (${evidence.join(",")})`,
+      };
+    }
+    // Deficit — log a structured event the GoalEngine and content engines can act on.
+    const deficit = need - producedCount;
+    const exList = Array.isArray(examples) && examples.length ? ` examples=[${examples.join("|")}]` : "";
+    const compTag = competencyHint ? ` competency=${competencyHint}` : "";
+    console.log(
+      `[ActionEnforcer] artifact_rule deficit: need +${deficit} "${artifactNoun}" within ${windowCount} ${windowUnit}${exList}${compTag}`,
+    );
+    return {
+      sideEffect: true,
+      outcome: `artifact_deficit:+${deficit}_${artifactNoun}${competencyHint ? `:${competencyHint}` : ""}`,
+    };
+  } catch (e: any) {
+    return { sideEffect: false, outcome: `error:${e.message}` };
+  }
+}
+
 // -- Tick ---------------------------------------------------------------------
 
 export interface TickResult {
@@ -276,11 +343,12 @@ export async function tickEnforcer(): Promise<TickResult> {
     let outcome: { sideEffect: boolean; outcome: string };
     try {
       switch (rule.primitive) {
-        case "ratio_rule":   outcome = await fireRatioRule(rule); break;
-        case "ttl_rule":     outcome = await fireTtlRule(rule); break;
-        case "gate_rule":    outcome = await fireGateRule(rule); break;
-        case "archive_rule": outcome = await fireArchiveRule(rule); break;
-        default:             outcome = { sideEffect: false, outcome: "no-primitive" };
+        case "ratio_rule":    outcome = await fireRatioRule(rule); break;
+        case "ttl_rule":      outcome = await fireTtlRule(rule); break;
+        case "gate_rule":     outcome = await fireGateRule(rule); break;
+        case "archive_rule":  outcome = await fireArchiveRule(rule); break;
+        case "artifact_rule": outcome = await fireArtifactRule(rule); break;
+        default:              outcome = { sideEffect: false, outcome: "no-primitive" };
       }
     } catch (e: any) {
       outcome = { sideEffect: false, outcome: `error:${e.message}` };

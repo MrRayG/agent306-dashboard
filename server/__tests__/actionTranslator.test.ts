@@ -64,6 +64,53 @@ describe("ActionTranslator", () => {
     assert.equal(result.verificationCriterion, "");
   });
 
+  // ── Regression coverage for the 4/25–4/30 missing-primitive gap ─────────────
+  it("parses the canonical 'produce one concrete output artifact' insight (4/29 log)", () => {
+    const result = translateAction(
+      "Dedicate next cycle's first action to producing one concrete output artifact (a briefing, a thread, a post) that synthesizes the confirmed hypotheses into a communicable narrative.",
+      "Zero self-change commitments closed in 7 days",
+    );
+    assert.equal(result.primitive, "artifact_rule");
+    assert.equal((result.params as any).requiredCount, 1);
+    assert.ok(String((result.params as any).artifactNoun).length > 0);
+    assert.match(result.verificationCriterion, /produced within/);
+  });
+
+  it("parses the 'next cycle: produce one artifact ... within next cycle' shape (4/30 log)", () => {
+    const result = translateAction(
+      "Next cycle: produce one concrete output artifact (a synthesized narrative, a decision framework, or a content draft) that exercises Storytelling or Creativity within the next cycle.",
+      "maintenance loop disguised as activity",
+    );
+    assert.equal(result.primitive, "artifact_rule");
+    const params = result.params as any;
+    assert.equal(params.requiredCount, 1);
+    assert.equal(params.windowUnit, "cycle");
+    // Competency hint should pick up Storytelling or Creativity
+    assert.ok(
+      params.competencyHint === "storytelling" || params.competencyHint === "creativity",
+      `expected storytelling/creativity, got ${params.competencyHint}`,
+    );
+  });
+
+  it("parses spectrum-framing rewrites as a gate_rule (4/30 binary-framing fix)", () => {
+    const result = translateAction(
+      "Rewrite the hypothesis template to require conditional/spectrum framing rather than 'Position A is more accurate than Position B' structure.",
+      "4 rejected hypotheses shared a binary framing pattern",
+    );
+    assert.equal(result.primitive, "gate_rule");
+    assert.equal((result.params as any).framingMode, "spectrum");
+    assert.equal((result.params as any).target, "hypothesis");
+  });
+
+  it("does not let 'archive' patterns swallow artifact-shaped actions", () => {
+    // Sanity: the artifact pattern must not be shadowed by archive's loose match
+    const result = translateAction(
+      "Produce one concrete artifact within next cycle",
+      "",
+    );
+    assert.equal(result.primitive, "artifact_rule");
+  });
+
   it("returns `none` for empty action text", () => {
     const result = translateAction("   ");
     assert.equal(result.primitive, "none");
