@@ -1,0 +1,82 @@
+{
+  "name": "claimVerifier",
+  "version": 1,
+  "description": "Roadmap Issue D1 — claim verifier golden cases. Each case binds a (draft, source) pair to expected verifier severity + classifications. The cases are executed by server/__tests__/claimVerifier.golden.test.ts (async, hermetic, skipLLM=true). The static regressionRunner in server/eval/regressionRunner.ts cannot run these directly because verifyClaims is async; the dedicated test is the enforcement surface and is expected to be added to the promotion-gate runlist. See docs/VERIFIER_CONTRACT.md for the full contract.",
+  "contractVersion": "v1.0",
+  "cases": [
+    {
+      "id": "common-historical-framing-current-behavior-2026-05-02",
+      "description": "Locks in CURRENT verifier behavior on common AI-history framing in ANALYSIS mode (Dartmouth 1956, AlexNet 2012, Transformers 2017, GPT-3 2020, AIME 94.6%). The verifier hard-fails these as Lane B Bare today; Roadmap Issue B2 will downgrade common-historical-framing to a SOFT_WARN. This case prevents a silent stricter-OR-looser verifier change from shipping without an explicit golden update + human approval. When B2 lands, flip expectedSeverity to PASS_OR_SOFT_WARN as part of the same PR.",
+      "expectedSeverity": "HARD_FAIL",
+      "expectedClassification": ["LANE_B_BARE"],
+      "expectedNoClassification": ["LANE_A_FAIL", "RETRACTED_HIT", "NCITE_PATTERN_HIT"],
+      "tier": "article",
+      "artifactMode": "ANALYSIS",
+      "draftText": "AI's history follows a familiar arc — periods of rapid advance separated by long quiets. The 1956 Dartmouth Workshop named the field. AlexNet showed in 2012 that deep learning could win at scale. The Transformers paper (2017) reshaped what was possible. GPT-3 (2020) made the public take it seriously. Today's models clear AIME at 94.6%, a benchmark that was out of reach two years ago. According to the source article, the latest release improves reasoning latency by a meaningful margin. The author argues this is a continuation of the long arc, not a sudden break.",
+      "sourceText": "The latest release improves reasoning latency by a meaningful margin, the company said. The article does not discuss historical context.",
+      "sourceUrl": "https://example.com/launch",
+      "sourceTitle": "Latest reasoning model release"
+    },
+    {
+      "id": "unsupported-attribution-hard-fail",
+      "description": "Lane A failure — sentence frames a quote and statistic as coming from the source, but neither appears in the source text. Must hard-fail with LANE_A_FAIL.",
+      "expectedSeverity": "HARD_FAIL",
+      "expectedClassification": ["LANE_A_FAIL"],
+      "tier": "blog",
+      "artifactMode": "REPORT",
+      "draftText": "According to the report, the lead researcher said \"we have solved alignment entirely\" — a sweeping claim. The piece cited a 47% improvement on benchmark tasks.",
+      "sourceText": "The team described a modest improvement on a small subset of benchmark tasks. No researcher was quoted. No specific percentage was given.",
+      "sourceUrl": "https://example.com/research",
+      "sourceTitle": "Research summary"
+    },
+    {
+      "id": "ncite-embedded-external-hard-fail",
+      "description": "NCITE pattern — Lane B fact dressed as Lane A reporting via an appositive. Must hard-fail with NCITE_PATTERN_HIT in every tier and mode.",
+      "expectedSeverity": "HARD_FAIL",
+      "expectedClassification": ["NCITE_PATTERN_HIT"],
+      "tier": "blog",
+      "artifactMode": "REPORT",
+      "draftText": "Researchers from NCITE, a DHS Center of Excellence that receives funding from the Department of Homeland Security, presented findings on extremist content classification.",
+      "sourceText": "Researchers presented findings on extremist content classification.",
+      "sourceUrl": "https://example.com/ncite",
+      "sourceTitle": "Extremism research findings"
+    },
+    {
+      "id": "retracted-claim-hard-fail",
+      "description": "Sentence references a retracted claim from the registry (PR #222 Politico v2 stats). Must hard-fail with RETRACTED_HIT.",
+      "expectedSeverity": "HARD_FAIL",
+      "expectedClassification": ["RETRACTED_HIT"],
+      "tier": "blog",
+      "artifactMode": "REPORT",
+      "draftText": "AI adoption hit 54.6% in the US in three years, according to widely-circulated industry analysis. ChatGPT reached 100 million users in 60 days, a record at the time.",
+      "sourceText": "AI adoption is rising. Specific percentages and timeframes vary by source.",
+      "sourceUrl": "https://example.com/ai-adoption",
+      "sourceTitle": "AI adoption analysis"
+    },
+    {
+      "id": "judge-outage-hard-fail-default",
+      "description": "Judge outage with VERIFIER_FAIL_OPEN_ON_JUDGE_OUTAGE unset (default fail-closed) — Lane A sentences whose paraphrase check needed the judge get classified LANE_A_UNVERIFIABLE and severity becomes HARD_FAIL. Skipped when skipLLM=true; documented here for doc completeness.",
+      "expectedSeverity": "HARD_FAIL",
+      "expectedClassification": ["LANE_A_UNVERIFIABLE"],
+      "tier": "article",
+      "artifactMode": "REPORT",
+      "judgeOutageOnly": true,
+      "draftText": "The piece reports that benchmark scores doubled across several frontier models.",
+      "sourceText": "The piece discusses benchmark scores in general terms but provides no specific multiplier.",
+      "sourceUrl": "https://example.com/judge-outage",
+      "sourceTitle": "Benchmark report"
+    },
+    {
+      "id": "owain-evans-dartmouth-alexnet-gpt3-aime-2026-04-30",
+      "description": "Reference for the recent hard-fail pattern called out in the roadmap (2026-04-30). The draft fabricates a quote attributed to Owain Evans and embeds 1956 Dartmouth, AlexNet, GPT-3, and AIME — but only the historical-framing sentences are exempt. The fabricated quote must still hard-fail.",
+      "expectedSeverity": "HARD_FAIL",
+      "expectedClassification": ["LANE_A_FAIL"],
+      "tier": "article",
+      "artifactMode": "ANALYSIS",
+      "draftText": "The historical arc is familiar — Dartmouth (1956), AlexNet (2012), GPT-3 (2020), and the AIME benchmark have all become reference points. According to the report, Owain Evans said \"alignment is essentially solved if we keep scaling\" — a striking claim from a Dartmouth researcher.",
+      "sourceText": "The report discusses scaling laws in general terms. Owain Evans is not quoted; no claim about alignment being solved appears.",
+      "sourceUrl": "https://example.com/scaling-laws",
+      "sourceTitle": "Scaling laws update"
+    }
+  ]
+}

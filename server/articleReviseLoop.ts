@@ -31,6 +31,7 @@ import {
   repairCitationLocality,
   computeSourceTelemetry,
 } from "./sourceLocality.js";
+import { buildVerifierContractBlock } from "./verifierContract.js";
 
 const DEFAULT_MAX_ATTEMPTS = 3;
 
@@ -167,6 +168,8 @@ async function defaultRewrite(input: RewriteInput): Promise<RewriteOutput> {
 
   const sys = `You are Agent 306's article reviser. The writer has produced a Deep Read article and the claim verifier flagged specific sentences as failing.
 
+${buildVerifierContractBlock()}
+
 YOUR RULES:
 - Fix ONLY the flagged sentences. Do not rewrite anything else. Do not change the headline. Preserve markdown structure (## headings, > quotes, --- dividers).
 - For LANE_B_BARE: add an inline markdown citation in the SAME sentence or its enclosing paragraph using one of the approved source URLs. If you cannot find a credible URL among the approved set or the original source, soften or drop the fact rather than invent a citation.
@@ -287,6 +290,7 @@ export async function reviseUntilClean(opts: ReviseOpts): Promise<ReviseResult> 
     skipLLM: opts.skipVerifierLLM,
     judgeClient: opts.verifierJudgeClient,
     artifactMode: opts.artifactMode,
+    engine: "article",
   });
 
   let body = draftStart;
@@ -367,6 +371,7 @@ export async function reviseUntilClean(opts: ReviseOpts): Promise<ReviseResult> 
       skipLLM: opts.skipVerifierLLM,
       judgeClient: opts.verifierJudgeClient,
       artifactMode: opts.artifactMode,
+      engine: "article",
     });
 
     const issuesBefore = failing.length;

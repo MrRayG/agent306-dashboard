@@ -345,3 +345,62 @@ export type ExperimentStatus = (typeof EXPERIMENT_STATUSES)[number];
 
 export const EXPERIMENT_ARMS = ["baseline", "treatment"] as const;
 export type ExperimentArm = (typeof EXPERIMENT_ARMS)[number];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Source Ledger — Evidence Foundation (Roadmap Issue A1, 2026-05-02)
+//
+// Durable record of every source attached to a draft, shared by writer,
+// verifier, reviser, and manual-publish paths. The ledger is the single
+// source of truth for "what sources supported this draft" — the writer's
+// in-prompt source list, the verifier's source-locality checks, and the
+// manual publish-after-edit re-verification all read from it.
+//
+// Engines store one `source_ledger` row per draft (`engine` + `draftId` are
+// jointly unique) and any number of `source_ledger_items` rows for the
+// individual sources. `source_ledger_items.metadata` is JSON-serialized so
+// engines can attach engine-specific extras (qualityTier, sourceId, etc.)
+// without schema churn.
+// ─────────────────────────────────────────────────────────────────────────────
+export const sourceLedger = sqliteTable("source_ledger", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  /** Engine that created the ledger ("blog" | "article" | "academy" | …). */
+  engine: text("engine").notNull(),
+  /** Draft identifier from the engine's own state (e.g. blog post id). */
+  draftId: text("draft_id").notNull(),
+  /** Free-text topic / title — useful for ops queries. */
+  topic: text("topic"),
+  createdAt: text("created_at").notNull().default(new Date().toISOString()),
+  updatedAt: text("updated_at").notNull().default(new Date().toISOString()),
+});
+export const insertSourceLedgerSchema = createInsertSchema(sourceLedger).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertSourceLedger = z.infer<typeof insertSourceLedgerSchema>;
+export type SourceLedger = typeof sourceLedger.$inferSelect;
+
+export const sourceLedgerItems = sqliteTable("source_ledger_items", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ledgerId: integer("ledger_id").notNull(),
+  url: text("url").notNull(),
+  title: text("title"),
+  publisher: text("publisher"),
+  excerpt: text("excerpt"),
+  /** "primary" | "supporting" | "fresh-context" | "kb" — engine-defined. */
+  sourceType: text("source_type"),
+  /** Source quality tier: reputable | acceptable | unverified | low_quality. */
+  trustTier: text("trust_tier"),
+  retrievedAt: text("retrieved_at").notNull().default(new Date().toISOString()),
+  /** JSON-serialized free-form metadata (qualityTier, sourceId, refId, …). */
+  metadata: text("metadata").notNull().default("{}"),
+});
+export const insertSourceLedgerItemSchema = createInsertSchema(sourceLedgerItems).omit({
+  id: true,
+  retrievedAt: true,
+});
+export type InsertSourceLedgerItem = z.infer<typeof insertSourceLedgerItemSchema>;
+export type SourceLedgerItem = typeof sourceLedgerItems.$inferSelect;
+
+export const SOURCE_LEDGER_TYPES = ["primary", "supporting", "fresh-context", "kb"] as const;
+export type SourceLedgerType = (typeof SOURCE_LEDGER_TYPES)[number];

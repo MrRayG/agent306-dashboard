@@ -220,6 +220,35 @@ sqlite.exec(`
     ON experiment_trials(experiment_key, arm);
   CREATE INDEX IF NOT EXISTS idx_experiment_trials_key_recorded
     ON experiment_trials(experiment_key, recorded_at);
+
+  -- Source Ledger (Roadmap Issue A1, 2026-05-02). Durable record of the
+  -- sources attached to a draft. Shared by writer, verifier, reviser, and
+  -- manual publish paths so they all reason about the same evidence base.
+  CREATE TABLE IF NOT EXISTS source_ledger (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    engine TEXT NOT NULL,
+    draft_id TEXT NOT NULL,
+    topic TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_source_ledger_engine_draft
+    ON source_ledger(engine, draft_id);
+
+  CREATE TABLE IF NOT EXISTS source_ledger_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ledger_id INTEGER NOT NULL,
+    url TEXT NOT NULL,
+    title TEXT,
+    publisher TEXT,
+    excerpt TEXT,
+    source_type TEXT,
+    trust_tier TEXT,
+    retrieved_at TEXT NOT NULL DEFAULT (datetime('now')),
+    metadata TEXT NOT NULL DEFAULT '{}'
+  );
+  CREATE INDEX IF NOT EXISTS idx_source_ledger_items_ledger_id
+    ON source_ledger_items(ledger_id);
 `);
 
 // PR-G — additive migration for pre-existing databases. The CREATE TABLE
