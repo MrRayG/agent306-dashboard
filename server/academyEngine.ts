@@ -193,18 +193,49 @@ let state = loadState();
 export function getAcademyState() { return state; }
 
 // ── Topic selection — bump timely topics when relevant ─────────────────
-function pickNextTopic(): typeof CURRICULUM[0] {
-  // Prioritize timely frontier topics not yet covered
-  const coveredConcepts = new Set(state.episodeHistory.map(e => e.concept));
-  const timelyTopic = CURRICULUM.find(
-    t => t.timely && !coveredConcepts.has(t.concept)
-  );
-  if (timelyTopic && state.totalEpisodes % 3 === 0) return timelyTopic; // every 3rd episode, try timely
+//
+// Bug fix (2026-05-02): the previous implementation could repeatedly hand
+// back the same topic across consecutive on-demand `generateAcademyContent`
+// calls because state isn't advanced until the post actually queues. If a
+// topic kept failing the LLM (e.g. the grok-4.20 reasoning timeout
+// repeatedly seen on "What is reasoning in AI models?"), every retry
+// re-picked the same stuck slot — the operator-visible "stuck on Episode 7"
+// symptom. We now (a) skip rotation slots whose concept is already in
+// episodeHistory and (b) skip the timely bump when its concept is covered.
 
-  // Normal rotation
-  const idx = state.currentTopicIndex % CURRICULUM.length;
-  return CURRICULUM[idx];
+/**
+ * Pure topic-selection function. Exported for testing — the production code
+ * path calls it via the closure-bound `pickNextTopic` below.
+ */
+export function selectNextTopic<T extends { track: string; concept: string; timely?: boolean }>(
+  curriculum: T[],
+  args: { currentTopicIndex: number; totalEpisodes: number; episodeHistory: Array<{ concept: string }> },
+): T {
+  const coveredConcepts = new Set(args.episodeHistory.map(e => e.concept));
+
+  const timelyTopic = curriculum.find(
+    t => t.timely && !coveredConcepts.has(t.concept),
+  );
+  if (timelyTopic && args.totalEpisodes % 3 === 0) return timelyTopic;
+
+  for (let i = 0; i < curriculum.length; i += 1) {
+    const idx = (args.currentTopicIndex + i) % curriculum.length;
+    const candidate = curriculum[idx];
+    if (!coveredConcepts.has(candidate.concept)) return candidate;
+  }
+  return curriculum[args.currentTopicIndex % curriculum.length];
 }
+
+function pickNextTopic(): typeof CURRICULUM[0] {
+  return selectNextTopic(CURRICULUM, {
+    currentTopicIndex: state.currentTopicIndex,
+    totalEpisodes:     state.totalEpisodes,
+    episodeHistory:    state.episodeHistory,
+  });
+}
+
+/** Test-only — expose CURRICULUM for the hermetic rotation regression test. */
+export const _CURRICULUM_FOR_TESTS = CURRICULUM;
 
 // ── Generate academy episode via Grok ─────────────────────────────────────────
 export class AcademyGenerationError extends Error {
@@ -396,8 +427,19 @@ export async function postAcademyEpisode(xWrite: any): Promise<void> {
       e?.message ?? String(e),
       details,
     );
+    // Advance the rotation pointer past the failing topic so the next
+    // scheduled run (and any manual retry) picks a different topic.
+    // Without this, a topic that repeatedly times out at the LLM (e.g.
+    // the grok-4.20 reasoning-model timeout signature on "What is
+    // reasoning in AI models?") keeps getting re-picked forever — the
+    // "stuck on Episode 7" symptom. We do NOT advance totalEpisodes
+    // because the public episode counter only counts successful posts.
+    state.currentTopicIndex++;
+    saveState(state);
     releasePost("academy");
-    return;
+    // Re-throw so engineRunWrapper records a non-ok run row instead of
+    // a silent ok. Catch on the wrapper side keeps the schedule loop alive.
+    throw e;
   }
 
   let tweetUrl: string | null = null;
@@ -420,6 +462,12 @@ export async function postAcademyEpisode(xWrite: any): Promise<void> {
         for (const c of verdict.unsupportedClaims) {
           console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);
         }
+        // Advance rotation pointer so a retry doesn't immediately re-pick
+        // the same topic. Without this, every retry on a verifier-rejected
+        // topic gets the same topic back. Same logic as the LLM-failure
+        // branch above — see comment there for the "stuck" rationale.
+        state.currentTopicIndex++;
+        saveState(state);
         releasePost("academy");
         return;
       }
@@ -501,7 +549,22 @@ export function scheduleAcademy(xWrite: any): void {
     const hours = Math.round(ms / 3600000);
     console.log(`[Academy] Next episode in ${hours}h (Tue/Thu/Sat 10am ET)`);
     setTimeout(async () => {
-      await postAcademyEpisode(xWrite).catch(console.error);
+      // Wrap the scheduled fire-time run in `runWrapped` so each run
+      // writes a row to engine_runs (status running → ok | error). The
+      // previous setTimeout(...catch console.error) path could swallow
+      // generation failures with no on-disk trace — a 10am no-post left
+      // ops with nothing to look at. The wrapper additionally ensures
+      // the next-fire-time scheduling still happens whether the run
+      // succeeded or crashed.
+      try {
+        const { runWrapped } = await import("./scheduler/engineRunWrapper.js");
+        await runWrapped("academy", () => postAcademyEpisode(xWrite), { triggeredBy: "scheduler" });
+      } catch (e: any) {
+        // engineRunWrapper has its own try/catch but defensively keep one
+        // here in case the dynamic import itself fails (e.g. db.ts boot
+        // race) — the schedule loop must never die.
+        console.error("[Academy] scheduled run wrapper failed:", e?.message ?? String(e));
+      }
       scheduleNext();
     }, ms);
   }
@@ -519,8 +582,45 @@ export async function generateAcademyContent(): Promise<{
   post: string;
   dashboardNarrative: string;
   headline: string;
+  topic: { track: string; concept: string };
+  episodeNumber: number;
 }> {
   console.log("[Academy] On-demand generation triggered");
   const topic = pickNextTopic();
-  return generateAcademyEpisode(topic);
+  const episodeNumber = state.totalEpisodes + 1;
+  console.log(`[Academy] On-demand picked EP${episodeNumber}: "${topic.concept}" [${topic.track}]`);
+  const result = await generateAcademyEpisode(topic);
+  return { ...result, topic: { track: topic.track, concept: topic.concept }, episodeNumber };
+}
+
+// ── Operator escape hatch: skip a stuck topic ─────────────────────────────────
+//
+// When a topic repeatedly fails generation (model timeout, Lane B verifier
+// rejection of synthetic content, etc.), the operator needs a way to advance
+// past it without ever queuing a post. This records a synthetic
+// "skipped" history entry so pickNextTopic treats the concept as covered.
+// Wired to POST /api/academy/skip — it returns the next topic the next
+// generate call will pick.
+export function skipCurrentTopic(reason: string): { skipped: { track: string; concept: string }; nextTopic: { track: string; concept: string }; totalEpisodes: number; } {
+  const skipped = pickNextTopic();
+  state.episodeHistory.push({
+    episodeNumber: state.totalEpisodes + 1,
+    track: skipped.track,
+    concept: skipped.concept,
+    tweetUrl: null,
+    postedAt: new Date().toISOString(),
+    // NB: we deliberately do NOT increment totalEpisodes — skipped slots
+    // don't count toward the public episode counter, but coveredConcepts
+    // now includes the topic so pickNextTopic moves forward.
+  });
+  state.currentTopicIndex++;
+  if (state.episodeHistory.length > 50) state.episodeHistory = state.episodeHistory.slice(-50);
+  saveState(state);
+  console.warn(`[Academy] SKIPPED topic "${skipped.concept}" [${skipped.track}] — reason: ${reason}`);
+  const next = pickNextTopic();
+  return {
+    skipped: { track: skipped.track, concept: skipped.concept },
+    nextTopic: { track: next.track, concept: next.concept },
+    totalEpisodes: state.totalEpisodes,
+  };
 }

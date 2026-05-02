@@ -29,6 +29,7 @@ import {
   type BlogPost,
 } from "./blogEngine.js";
 import { reviseBlogUntilClean } from "./blogReviseLoop.js";
+import { extractClaimsAndComments } from "./claimExtractor.js";
 
 /** Pull every http(s) URL out of a block of markdown/text. Used to seed the
  *  rewriter's citation pool from URLs already embedded in the post. */
@@ -136,11 +137,24 @@ export async function reviseQuarantinedBlogPost(postId: string): Promise<ReviseQ
     const finalBody = result.body;
     const unsupportedCount = result.verdict.unsupportedClaims.length;
 
+    // Recompute structured claims + editor comments off the post-revision
+    // verdict so the dashboard sees the FRESH list of failing sentences,
+    // not the stale ones from before the rewrite. We don't have the
+    // original sourcePool at this point, so publisher metadata is sparse;
+    // URLs are still recovered from the body.
+    const extraction = extractClaimsAndComments(finalBody, result.verdict.verifierReport, []);
+
     if (finalSeverity === "PASS") {
       // Persist the revised body, then publish.
       updatePost(postId, {
         content: finalBody,
         verifierReport: result.verdict.verifierReport,
+        claims: extraction.claims,
+        references: extraction.references,
+        citationMap: extraction.citationMap,
+        editorComments: extraction.editorComments,
+        manualReviewRequired: extraction.manualReviewRequired,
+        manualPublishAllowed: extraction.manualPublishAllowed,
         status: "draft",
       } as Partial<BlogPost>);
       const published = publishPost(postId);
@@ -166,6 +180,12 @@ export async function reviseQuarantinedBlogPost(postId: string): Promise<ReviseQ
     updatePost(postId, {
       content: finalBody,
       verifierReport: result.verdict.verifierReport,
+      claims: extraction.claims,
+      references: extraction.references,
+      citationMap: extraction.citationMap,
+      editorComments: extraction.editorComments,
+      manualReviewRequired: extraction.manualReviewRequired,
+      manualPublishAllowed: extraction.manualPublishAllowed,
       status: newStatus,
     } as Partial<BlogPost>);
 
