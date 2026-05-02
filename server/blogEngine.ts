@@ -27,6 +27,12 @@ import { postChatCompletions } from "./llmCall.js";
 import { type VerifierReport } from "./claimVerifier.js";
 import { reviseBlogUntilClean } from "./blogReviseLoop.js";
 import {
+  extractClaimsAndComments,
+  type ExtractedClaim,
+  type ExtractedReference,
+  type EditorComment,
+} from "./claimExtractor.js";
+import {
   type SourceObject,
   extractSourceObjects,
   dedupeSources,
@@ -58,6 +64,26 @@ export interface BlogPost {
   wordCount: number;
   readingTimeMin: number;
   verifierReport?: VerifierReport;
+
+  /** Structured claims extracted from the draft (audit follow-up 2026-05-02).
+   *  Optional — only populated when the post went through verifyClaims +
+   *  claimExtractor. Older posts have these fields undefined. */
+  claims?: ExtractedClaim[];
+  /** Deduped reference pool — URL + publisher metadata. */
+  references?: ExtractedReference[];
+  /** sentenceIndex → indexes into `references`. */
+  citationMap?: Record<number, number[]>;
+  /** Per-failing-sentence editor comments. Drives the Revise / Manual Review
+   *  CTAs on the dashboard and informs Agent 306's chat-side fix actions. */
+  editorComments?: EditorComment[];
+  /** True when the verifier flagged anything actionable (SOFT_WARN or
+   *  HARD_FAIL). The dashboard uses this to highlight posts needing eyes. */
+  manualReviewRequired?: boolean;
+  /** True when the operator can publish without further verification.
+   *  False on HARD_FAIL — the post must be revised first or
+   *  POST /api/blog/posts/:id/publish-after-edit must be used to record an
+   *  explicit override. */
+  manualPublishAllowed?: boolean;
 }
 
 interface BlogState {
@@ -212,6 +238,12 @@ export function createBlogPost(opts: {
   tags?: string[];
   status?: BlogStatus;
   verifierReport?: VerifierReport;
+  claims?: ExtractedClaim[];
+  references?: ExtractedReference[];
+  citationMap?: Record<number, number[]>;
+  editorComments?: EditorComment[];
+  manualReviewRequired?: boolean;
+  manualPublishAllowed?: boolean;
 }): BlogPost {
   const state = loadState();
   const now = new Date().toISOString();
@@ -233,6 +265,12 @@ export function createBlogPost(opts: {
     wordCount: wc,
     readingTimeMin: Math.max(1, Math.round(wc / 200)),
     verifierReport: opts.verifierReport,
+    claims: opts.claims,
+    references: opts.references,
+    citationMap: opts.citationMap,
+    editorComments: opts.editorComments,
+    manualReviewRequired: opts.manualReviewRequired,
+    manualPublishAllowed: opts.manualPublishAllowed,
   };
 
   state.posts.unshift(post);
@@ -548,8 +586,27 @@ Write the full blog post following the blog structure template. Hook the reader 
       );
     }
 
+    // Extract structured claims, references, and editor comments from the
+    // final verdict so they persist on the BlogPost for the dashboard +
+    // chat surfaces. Pure / deterministic — no extra LLM calls. See
+    // server/claimExtractor.ts for the contract.
+    const extraction = extractClaimsAndComments(
+      revisedBody,
+      verdict.verifierReport,
+      sourcePool,
+    );
+    console.log(
+      `[Blog] claim extractor — claims=${extraction.claims.length} ` +
+      `references=${extraction.references.length} ` +
+      `editorComments=${extraction.editorComments.length} ` +
+      `manualReviewRequired=${extraction.manualReviewRequired} ` +
+      `manualPublishAllowed=${extraction.manualPublishAllowed}`,
+    );
+
     // Final fallback: if the revise loop still produced HARD_FAIL after
-    // max attempts, quarantine as before so nothing regresses.
+    // max attempts, quarantine as before so nothing regresses. The
+    // editor_comments + claims + references now persist on the post so
+    // the dashboard can show actionable feedback instead of just "rejected".
     if (verdict.severity === "HARD_FAIL") {
       const draft = createBlogPost({
         title: parsed.title,
@@ -559,6 +616,12 @@ Write the full blog post following the blog structure template. Hook the reader 
         tags: [...(parsed.tags ?? []), "claim-verifier-quarantine"],
         status: "quarantined",
         verifierReport: verdict.verifierReport,
+        claims: extraction.claims,
+        references: extraction.references,
+        citationMap: extraction.citationMap,
+        editorComments: extraction.editorComments,
+        manualReviewRequired: extraction.manualReviewRequired,
+        manualPublishAllowed: extraction.manualPublishAllowed,
       });
       console.error(`[ClaimVerifier] REJECTED draft ${draft.id}: ${verdict.unsupportedClaims.length} unsupported claims`);
       for (const c of verdict.unsupportedClaims) {
@@ -574,6 +637,13 @@ Write the full blog post following the blog structure template. Hook the reader 
       sourceId: opts.sourceId,
       tags: parsed.tags ?? [],
       status: opts.autoPublish ? "published" : "draft",
+      verifierReport: verdict.verifierReport,
+      claims: extraction.claims,
+      references: extraction.references,
+      citationMap: extraction.citationMap,
+      editorComments: extraction.editorComments,
+      manualReviewRequired: extraction.manualReviewRequired,
+      manualPublishAllowed: extraction.manualPublishAllowed,
     });
   } catch (e: any) {
     console.error("[Blog] Generation failed:", e.message);
@@ -596,7 +666,15 @@ export function publishPost(postId: string): BlogPost | null {
 }
 
 // Update a post
-export function updatePost(postId: string, updates: Partial<Pick<BlogPost, "title" | "content" | "tags" | "status" | "verifierReport">>): BlogPost | null {
+export function updatePost(
+  postId: string,
+  updates: Partial<Pick<
+    BlogPost,
+    | "title" | "content" | "tags" | "status" | "verifierReport"
+    | "claims" | "references" | "citationMap" | "editorComments"
+    | "manualReviewRequired" | "manualPublishAllowed"
+  >>,
+): BlogPost | null {
   const state = loadState();
   const post = state.posts.find(p => p.id === postId);
   if (!post) return null;
@@ -618,9 +696,13 @@ export function updatePost(postId: string, updates: Partial<Pick<BlogPost, "titl
       post.publishedAt = new Date().toISOString();
     }
   }
-  if (updates.verifierReport !== undefined) {
-    post.verifierReport = updates.verifierReport;
-  }
+  if (updates.verifierReport !== undefined) post.verifierReport = updates.verifierReport;
+  if (updates.claims !== undefined) post.claims = updates.claims;
+  if (updates.references !== undefined) post.references = updates.references;
+  if (updates.citationMap !== undefined) post.citationMap = updates.citationMap;
+  if (updates.editorComments !== undefined) post.editorComments = updates.editorComments;
+  if (updates.manualReviewRequired !== undefined) post.manualReviewRequired = updates.manualReviewRequired;
+  if (updates.manualPublishAllowed !== undefined) post.manualPublishAllowed = updates.manualPublishAllowed;
   post.updatedAt = new Date().toISOString();
   saveState(state);
   return post;

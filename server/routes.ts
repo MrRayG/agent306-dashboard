@@ -24,7 +24,7 @@ import { generateVoiceClip, getVoiceQuota, getClip, getRecentClips } from "./voi
 import { getMemoryState, recordPost, ratePost, performance as perfMemory, decayKnowledge, addKnowledge, archiveKnowledge, searchArchive, getArchiveStats, knowledge as knowledgeState } from "./memoryEngine.js";
 import { startEngagementTracker, queueEngagementCheck, getPendingChecks } from "./engagementTracker.js";
 import { scheduleMidnightReplies, runMidnightReplies } from "./replyEngine.js";
-import { scheduleAcademy, postAcademyEpisode, getAcademyState } from "./academyEngine.js";
+import { scheduleAcademy, postAcademyEpisode, getAcademyState, skipCurrentTopic, recordManualAcademyPost } from "./academyEngine.js";
 import { scheduleSignalBrief, postSignalBrief, getSignalBriefState } from "./signalBriefEngine.js";
 import { getPodcastState, EPISODE_META, createEpisode, generateEpisodeScript, regenerateEpisodeScript, reviewEpisode, markProduced, publishEpisode, submitGuestRequest, reviewGuest, generateInterviewQuestions, submitAnswers, createConversationEpisode, getEpisodesByType, getEpisodesByStatus, getGuestsByStatus, getEpisode, getGuest, formatScriptForProduction, formatConversationForProduction, generateEpisodeFromThread, getThreadCandidates, getPipelineStatus, deleteEpisode, clearAllEpisodes, getTimingInstruction } from "./podcastEngine.js";
 import { generateAudio, clearEpisodeAudio, getAudioFilePath, getAudioAssets, saveAudioAsset, getAudioAssetPath, stitchFullEpisode, getFullAudioFilePath, generateSocialPreview, getPreviewAudioFilePath } from "./audioEngine.js";
@@ -1681,6 +1681,49 @@ export function registerRoutes(httpServer: Server, app: Express) {
     resetCooldown("academy");
     res.json({ ok: true, message: "Academy episode triggered" });
     postAcademyEpisode(xWrite).catch(console.error);
+  });
+
+  // POST /api/academy/skip — operator escape hatch when a topic is stuck
+  // (model timeout, verifier hard-fail, etc.). Records a synthetic skip in
+  // episodeHistory + bumps the rotation pointer so the next generation picks
+  // a different topic. Body: { reason?: string }.
+  app.post("/api/academy/skip", requireDashAuth, (req, res) => {
+    const reason = (req.body?.reason ?? "operator-skip").toString().slice(0, 200);
+    try {
+      const result = skipCurrentTopic(reason);
+      res.json({ ok: true, ...result });
+    } catch (e: any) {
+      res.status(500).json({ ok: false, error: e?.message ?? String(e) });
+    }
+  });
+
+  // POST /api/academy/mark-posted — operator records a manual Academy post.
+  //
+  // Why this exists: when the auto-post path fails (LLM timeout, verifier
+  // hard-fail) the operator may generate the episode by hand and post it
+  // off-platform. Without recording it here, the engine's next manual
+  // `Generate Now` re-picks the same concept (the "stuck on Episode 7"
+  // symptom). This endpoint records the post in episodeHistory, advances
+  // totalEpisodes + the rotation pointer, and is idempotent — calling it
+  // twice for the same concept is safe.
+  //
+  // Body (all optional — omitted concept/track defaults to whatever
+  // pickNextTopic would have returned next):
+  //   { concept?: string, track?: string, postUrl?: string,
+  //     platform?: string, notes?: string }
+  app.post("/api/academy/mark-posted", requireDashAuth, (req, res) => {
+    try {
+      const result = recordManualAcademyPost({
+        concept:  typeof req.body?.concept  === "string" ? req.body.concept  : undefined,
+        track:    typeof req.body?.track    === "string" ? req.body.track    : undefined,
+        postUrl:  typeof req.body?.postUrl  === "string" ? req.body.postUrl  : null,
+        platform: typeof req.body?.platform === "string" ? req.body.platform : undefined,
+        notes:    typeof req.body?.notes    === "string" ? req.body.notes    : undefined,
+      });
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ ok: false, error: e?.message ?? String(e) });
+    }
   });
 
   // ── PODCAST v2 endpoints ─────────────────────────────────────────────────────
@@ -5447,6 +5490,88 @@ needsHelp: true only when you genuinely need his direction or information`,
     const post = publishPost(req.params.id);
     if (!post) return res.status(404).json({ error: "Post not found" });
     res.json(post);
+  });
+
+  // POST /api/blog/posts/:id/publish-after-edit — re-runs the claim verifier
+  // against the CURRENT post body (possibly edited by the operator or Agent
+  // 306 via the chat slash command) and publishes only if the verdict is
+  // PASS or SOFT_WARN. HARD_FAIL refuses publication and returns the
+  // updated editor_comments so the operator can revise again. Sends
+  // `override: true` to publish despite a HARD_FAIL — that path records an
+  // explicit operator override on the post and is logged.
+  //
+  // This closes the gap the audit identified: previously a quarantined post
+  // had no path to publish even after edits, because /publish ignored the
+  // verifier and /revise auto-revised LLM-side rather than re-checking the
+  // operator's manual edits.
+  app.post("/api/blog/posts/:id/publish-after-edit", requireDashAuth, async (req, res) => {
+    try {
+      const { getPostById, updatePost, publishPost } = await import("./blogEngine.js");
+      const { verifyClaims } = await import("./claimVerifier.js");
+      const { extractClaimsAndComments } = await import("./claimExtractor.js");
+
+      const post = getPostById(req.params.id);
+      if (!post) return res.status(404).json({ error: "post not found", id: req.params.id });
+      if (post.status === "published") {
+        return res.json({ ok: true, outcome: "no_action", error: "already-published", post });
+      }
+
+      const override = req.body?.override === true;
+      const overrideReason = (req.body?.overrideReason ?? "").toString().slice(0, 500);
+
+      const verdict = await verifyClaims({
+        draftText:   post.content,
+        sourceText:  "",
+        sourceUrl:   "",
+        sourceTitle: post.title,
+        tier:        "blog",
+      });
+      const extraction = extractClaimsAndComments(post.content, verdict.verifierReport, []);
+
+      // Persist the fresh verdict + claims regardless of whether we publish,
+      // so the dashboard sees current state.
+      updatePost(post.id, {
+        verifierReport: verdict.verifierReport,
+        claims:         extraction.claims,
+        references:     extraction.references,
+        citationMap:    extraction.citationMap,
+        editorComments: extraction.editorComments,
+        manualReviewRequired: extraction.manualReviewRequired,
+        manualPublishAllowed: extraction.manualPublishAllowed,
+      });
+
+      if (verdict.severity === "HARD_FAIL" && !override) {
+        return res.status(422).json({
+          ok: false,
+          outcome: "blocked",
+          severity: verdict.severity,
+          error: "verifier-hard-fail; pass override:true with overrideReason to publish anyway",
+          editorComments: extraction.editorComments,
+          unsupportedClaims: verdict.unsupportedClaims,
+        });
+      }
+
+      if (verdict.severity === "HARD_FAIL" && override) {
+        // Tag with "operator-override" so a future audit can find these.
+        const tags = Array.from(new Set([...(post.tags ?? []), "operator-override"]));
+        updatePost(post.id, { tags });
+        console.warn(
+          `[Blog] OPERATOR OVERRIDE publish on HARD_FAIL post ${post.id} ("${post.title}") — reason: ${overrideReason || "(none)"}`,
+        );
+      }
+
+      const published = publishPost(post.id);
+      return res.json({
+        ok: true,
+        outcome: "published",
+        severity: verdict.severity,
+        post: published,
+        editorComments: extraction.editorComments,
+      });
+    } catch (e: any) {
+      console.error("[/api/blog/posts/:id/publish-after-edit] failed:", e?.message ?? String(e));
+      res.status(500).json({ error: e?.message ?? "unknown error" });
+    }
   });
 
   app.put("/api/blog/posts/:id", requireDashAuth, (req, res) => {
