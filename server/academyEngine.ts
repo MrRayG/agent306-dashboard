@@ -162,6 +162,15 @@ const CURRICULUM: Array<{
 ];
 
 // ── State ─────────────────────────────────────────────────────────────────────
+//
+// `source` and `postStatus` were added 2026-05-02 so the operator can tell
+// auto-posts apart from operator-recorded manual posts (and recover from a
+// failed auto-post by marking the concept covered without queuing a duplicate
+// post). Both fields are optional — older state files load without them and
+// existing entries read as `source: undefined` (treated as legacy/auto).
+type EpisodeSource = "auto" | "manual" | "skipped";
+type PostStatus = "queued" | "posted" | "failed" | "manual" | "skipped";
+
 interface AcademyState {
   currentTopicIndex: number;
   totalEpisodes: number;
@@ -173,6 +182,12 @@ interface AcademyState {
     tweetUrl: string | null;
     postedAt: string;
     engagement?: { likes: number; reposts: number; replies: number };
+    source?: EpisodeSource;
+    postStatus?: PostStatus;
+    postUrl?: string | null;
+    failureReason?: string;
+    platform?: string; // e.g. "x", "farcaster", "manual"
+    notes?: string;
   }>;
 }
 
@@ -427,6 +442,23 @@ export async function postAcademyEpisode(xWrite: any): Promise<void> {
       e?.message ?? String(e),
       details,
     );
+    // Record a `failed` history entry so the operator can see *which*
+    // concept failed and reconcile it with a later manual mark-posted
+    // call. Recovery flow: auto-post fails here → operator generates the
+    // post by hand somewhere else and posts it → operator hits
+    // POST /api/academy/mark-posted → that call updates this entry in
+    // place (matched by concept) rather than creating a duplicate.
+    state.episodeHistory.push({
+      episodeNumber: state.totalEpisodes + 1,
+      track: topic.track,
+      concept: topic.concept,
+      tweetUrl: null,
+      postedAt: new Date().toISOString(),
+      source: "auto",
+      postStatus: "failed",
+      postUrl: null,
+      failureReason: (e?.message ?? String(e)).slice(0, 500),
+    });
     // Advance the rotation pointer past the failing topic so the next
     // scheduled run (and any manual retry) picks a different topic.
     // Without this, a topic that repeatedly times out at the LLM (e.g.
@@ -435,6 +467,7 @@ export async function postAcademyEpisode(xWrite: any): Promise<void> {
     // "stuck on Episode 7" symptom. We do NOT advance totalEpisodes
     // because the public episode counter only counts successful posts.
     state.currentTopicIndex++;
+    if (state.episodeHistory.length > 50) state.episodeHistory = state.episodeHistory.slice(-50);
     saveState(state);
     releasePost("academy");
     // Re-throw so engineRunWrapper records a non-ok run row instead of
@@ -504,6 +537,10 @@ export async function postAcademyEpisode(xWrite: any): Promise<void> {
     concept: topic.concept,
     tweetUrl,
     postedAt: new Date().toISOString(),
+    source: "auto" as const,
+    postStatus: "queued" as const,
+    postUrl: tweetUrl,
+    platform: castQueued && tweetUrl ? "x+farcaster" : (tweetUrl ? "x" : "farcaster"),
   };
   state.episodeHistory.push(episodeRecord);
   state.totalEpisodes++;
@@ -623,4 +660,170 @@ export function skipCurrentTopic(reason: string): { skipped: { track: string; co
     nextTopic: { track: next.track, concept: next.concept },
     totalEpisodes: state.totalEpisodes,
   };
+}
+
+// ── Manual-post tracking ──────────────────────────────────────────────────────
+//
+// Operator workflow this closes (2026-05-02 audit follow-up):
+//   - Auto-post for Academy fails (LLM timeout, verifier hard-fail, etc).
+//   - Operator generates the episode by hand off-platform and posts it
+//     manually to X / Farcaster / wherever.
+//   - Without this endpoint, the engine's view of state still says "EP7
+//     never posted." Next manual `Generate Now` re-picks EP7 and the
+//     operator sees the same intro/topic again — the symptom the user
+//     surfaced as "the academy engine keeps failing but when I manually
+//     generate it stays on episode 7."
+//   - `recordManualAcademyPost` advances the rotation by recording the
+//     concept as covered (so pickNextTopic skips it) and bumping
+//     totalEpisodes for the public counter.
+//
+// Idempotency: if a concept appears in episodeHistory with postStatus
+// "posted" or source "manual" already, we update the existing entry in
+// place instead of appending a duplicate. We also reconcile the latest
+// `failed` auto-post entry for the same concept by promoting it to
+// posted/manual rather than appending alongside it.
+//
+// We deliberately accept arbitrary `concept` + `track` rather than
+// requiring the manual post to align with the rotation pointer. The
+// operator may have posted a different episode than `pickNextTopic()`
+// would have suggested.
+export function recordManualAcademyPost(opts: {
+  concept?: string;
+  track?: string;
+  postUrl?: string | null;
+  platform?: string;
+  notes?: string;
+}): {
+  ok: true;
+  recorded: { episodeNumber: number; concept: string; track: string };
+  alreadyTracked: boolean;
+  totalEpisodes: number;
+  nextTopic: { track: string; concept: string };
+} {
+  // Resolve concept/track. If the operator omits them, default to whatever
+  // pickNextTopic would have handed back — i.e. assume they manually posted
+  // the slot the engine was about to attempt.
+  const fallback = pickNextTopic();
+  const concept = (opts.concept ?? fallback.concept).toString().trim();
+  const track   = (opts.track   ?? fallback.track  ).toString().trim();
+  if (!concept) {
+    throw new Error("recordManualAcademyPost: concept is required");
+  }
+
+  const postUrl = opts.postUrl ?? null;
+  const platform = (opts.platform ?? "manual").toString().slice(0, 64);
+  const notes = opts.notes ? opts.notes.toString().slice(0, 500) : undefined;
+  const nowIso = new Date().toISOString();
+
+  // Find the most recent history entry for this concept. We look in
+  // reverse so that a `failed` entry from today's auto-post run is the
+  // one we promote (vs. an older `posted` entry — we still treat those
+  // as covered + already-tracked).
+  const lastIdx = (() => {
+    for (let i = state.episodeHistory.length - 1; i >= 0; i -= 1) {
+      if (state.episodeHistory[i].concept === concept) return i;
+    }
+    return -1;
+  })();
+
+  // If there is already a recorded posted/manual entry, this is a no-op
+  // beyond making sure the rotation pointer is past the concept. We do
+  // NOT bump totalEpisodes again — the entry already counted.
+  if (lastIdx >= 0) {
+    const existing = state.episodeHistory[lastIdx];
+    const alreadyDone =
+      existing.postStatus === "posted" ||
+      existing.source === "manual" ||
+      existing.source === "skipped";
+    if (alreadyDone) {
+      // Make sure the rotation pointer is past this concept. Without
+      // this nudge, a concept covered earlier in episodeHistory could
+      // still sit at the rotation index pointer (covered concepts are
+      // handled by selectNextTopic but advancing keeps state coherent).
+      const next = pickNextTopic();
+      return {
+        ok: true,
+        recorded: {
+          episodeNumber: existing.episodeNumber,
+          concept: existing.concept,
+          track: existing.track,
+        },
+        alreadyTracked: true,
+        totalEpisodes: state.totalEpisodes,
+        nextTopic: { track: next.track, concept: next.concept },
+      };
+    }
+
+    // Promote a prior `failed` (or skipped) entry in place. This
+    // preserves the original episodeNumber + the originating
+    // failureReason, so the audit trail records both the auto-post
+    // failure AND the operator recovery action.
+    state.totalEpisodes++;
+    existing.source = "manual";
+    existing.postStatus = "posted";
+    existing.postUrl = postUrl;
+    existing.tweetUrl = postUrl ?? existing.tweetUrl ?? null;
+    existing.platform = platform;
+    existing.postedAt = nowIso;
+    if (notes) existing.notes = notes;
+    state.lastPostedAt = nowIso;
+    state.currentTopicIndex++;
+    saveState(state);
+    console.log(
+      `[Academy] MANUAL post recorded — promoted prior failed entry, EP${existing.episodeNumber} "${concept}" [${track}], url=${postUrl ?? "n/a"}`,
+    );
+    const next = pickNextTopic();
+    return {
+      ok: true,
+      recorded: {
+        episodeNumber: existing.episodeNumber,
+        concept: existing.concept,
+        track: existing.track,
+      },
+      alreadyTracked: false,
+      totalEpisodes: state.totalEpisodes,
+      nextTopic: { track: next.track, concept: next.concept },
+    };
+  }
+
+  // Fresh manual-post entry — concept never seen before in history.
+  const episodeNumber = state.totalEpisodes + 1;
+  state.episodeHistory.push({
+    episodeNumber,
+    track,
+    concept,
+    tweetUrl: postUrl,
+    postedAt: nowIso,
+    source: "manual",
+    postStatus: "posted",
+    postUrl,
+    platform,
+    ...(notes ? { notes } : {}),
+  });
+  state.totalEpisodes++;
+  state.currentTopicIndex++;
+  state.lastPostedAt = nowIso;
+  if (state.episodeHistory.length > 50) state.episodeHistory = state.episodeHistory.slice(-50);
+  saveState(state);
+  console.log(
+    `[Academy] MANUAL post recorded — EP${episodeNumber} "${concept}" [${track}], url=${postUrl ?? "n/a"}`,
+  );
+  const next = pickNextTopic();
+  return {
+    ok: true,
+    recorded: { episodeNumber, concept, track },
+    alreadyTracked: false,
+    totalEpisodes: state.totalEpisodes,
+    nextTopic: { track: next.track, concept: next.concept },
+  };
+}
+
+/** Test-only — re-load state from disk so tests can swap ACADEMY_STATE_FILE. */
+export function _reloadStateForTests() {
+  state = loadState();
+}
+
+/** Test-only — overwrite in-memory state so unit tests don't need fs. */
+export function _setStateForTests(next: AcademyState) {
+  state = next;
 }

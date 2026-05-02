@@ -24,7 +24,7 @@ import { generateVoiceClip, getVoiceQuota, getClip, getRecentClips } from "./voi
 import { getMemoryState, recordPost, ratePost, performance as perfMemory, decayKnowledge, addKnowledge, archiveKnowledge, searchArchive, getArchiveStats, knowledge as knowledgeState } from "./memoryEngine.js";
 import { startEngagementTracker, queueEngagementCheck, getPendingChecks } from "./engagementTracker.js";
 import { scheduleMidnightReplies, runMidnightReplies } from "./replyEngine.js";
-import { scheduleAcademy, postAcademyEpisode, getAcademyState, skipCurrentTopic } from "./academyEngine.js";
+import { scheduleAcademy, postAcademyEpisode, getAcademyState, skipCurrentTopic, recordManualAcademyPost } from "./academyEngine.js";
 import { scheduleSignalBrief, postSignalBrief, getSignalBriefState } from "./signalBriefEngine.js";
 import { getPodcastState, EPISODE_META, createEpisode, generateEpisodeScript, regenerateEpisodeScript, reviewEpisode, markProduced, publishEpisode, submitGuestRequest, reviewGuest, generateInterviewQuestions, submitAnswers, createConversationEpisode, getEpisodesByType, getEpisodesByStatus, getGuestsByStatus, getEpisode, getGuest, formatScriptForProduction, formatConversationForProduction, generateEpisodeFromThread, getThreadCandidates, getPipelineStatus, deleteEpisode, clearAllEpisodes, getTimingInstruction } from "./podcastEngine.js";
 import { generateAudio, clearEpisodeAudio, getAudioFilePath, getAudioAssets, saveAudioAsset, getAudioAssetPath, stitchFullEpisode, getFullAudioFilePath, generateSocialPreview, getPreviewAudioFilePath } from "./audioEngine.js";
@@ -1692,6 +1692,35 @@ export function registerRoutes(httpServer: Server, app: Express) {
     try {
       const result = skipCurrentTopic(reason);
       res.json({ ok: true, ...result });
+    } catch (e: any) {
+      res.status(500).json({ ok: false, error: e?.message ?? String(e) });
+    }
+  });
+
+  // POST /api/academy/mark-posted — operator records a manual Academy post.
+  //
+  // Why this exists: when the auto-post path fails (LLM timeout, verifier
+  // hard-fail) the operator may generate the episode by hand and post it
+  // off-platform. Without recording it here, the engine's next manual
+  // `Generate Now` re-picks the same concept (the "stuck on Episode 7"
+  // symptom). This endpoint records the post in episodeHistory, advances
+  // totalEpisodes + the rotation pointer, and is idempotent — calling it
+  // twice for the same concept is safe.
+  //
+  // Body (all optional — omitted concept/track defaults to whatever
+  // pickNextTopic would have returned next):
+  //   { concept?: string, track?: string, postUrl?: string,
+  //     platform?: string, notes?: string }
+  app.post("/api/academy/mark-posted", requireDashAuth, (req, res) => {
+    try {
+      const result = recordManualAcademyPost({
+        concept:  typeof req.body?.concept  === "string" ? req.body.concept  : undefined,
+        track:    typeof req.body?.track    === "string" ? req.body.track    : undefined,
+        postUrl:  typeof req.body?.postUrl  === "string" ? req.body.postUrl  : null,
+        platform: typeof req.body?.platform === "string" ? req.body.platform : undefined,
+        notes:    typeof req.body?.notes    === "string" ? req.body.notes    : undefined,
+      });
+      res.json(result);
     } catch (e: any) {
       res.status(500).json({ ok: false, error: e?.message ?? String(e) });
     }
