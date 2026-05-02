@@ -40,6 +40,7 @@ import {
   repairCitationLocality,
   computeSourceTelemetry,
 } from "./sourceLocality.js";
+import { buildResearchPack, type ResearchPack, type ReferenceMetadata } from "./researchPack.js";
 const BLOG_FILE = dataPath("blog_state.json");
 
 // ── Types ─────────────────────────────────────────────────────
@@ -84,6 +85,14 @@ export interface BlogPost {
    *  POST /api/blog/posts/:id/publish-after-edit must be used to record an
    *  explicit override. */
   manualPublishAllowed?: boolean;
+
+  /** KB-friendly per-source metadata captured at draft time (audit
+   *  follow-up 2026-05-02). Tier (reputable/acceptable/unverified/low_quality)
+   *  is included so cross-engine KB stitching can filter without
+   *  re-classifying. Optional and backwards compatible. */
+  referenceMetadata?: ReferenceMetadata[];
+  /** Pool-level source-quality counts captured at draft time. */
+  sourceQualityCounts?: { reputable: number; acceptable: number; unverified: number; low_quality: number };
 }
 
 interface BlogState {
@@ -244,6 +253,8 @@ export function createBlogPost(opts: {
   editorComments?: EditorComment[];
   manualReviewRequired?: boolean;
   manualPublishAllowed?: boolean;
+  referenceMetadata?: ReferenceMetadata[];
+  sourceQualityCounts?: BlogPost["sourceQualityCounts"];
 }): BlogPost {
   const state = loadState();
   const now = new Date().toISOString();
@@ -271,6 +282,8 @@ export function createBlogPost(opts: {
     editorComments: opts.editorComments,
     manualReviewRequired: opts.manualReviewRequired,
     manualPublishAllowed: opts.manualPublishAllowed,
+    referenceMetadata: opts.referenceMetadata,
+    sourceQualityCounts: opts.sourceQualityCounts,
   };
 
   state.posts.unshift(post);
@@ -423,6 +436,13 @@ export async function generateBlogPost(opts: {
     ...extractSourceObjects(opts.sourceContent),
     ...extractSourceObjects(freshContext),
   ]);
+  // Audit follow-up 2026-05-02: classify the source pool BEFORE drafting so
+  // weak-source drafts can be flagged (or eventually short-circuited to
+  // manual review). We never fail the draft here — the draft still runs
+  // through verifier as before; we just persist the research pack on the
+  // post so the dashboard can show whether the source base was strong.
+  const researchPack = buildResearchPack("blog", sourcePool);
+  console.log(researchPack.summaryLine);
   const sourcesPromptBlock = buildSourcesPromptBlock(sourcePool);
 
   try {
@@ -620,8 +640,10 @@ Write the full blog post following the blog structure template. Hook the reader 
         references: extraction.references,
         citationMap: extraction.citationMap,
         editorComments: extraction.editorComments,
-        manualReviewRequired: extraction.manualReviewRequired,
-        manualPublishAllowed: extraction.manualPublishAllowed,
+        manualReviewRequired: extraction.manualReviewRequired || researchPack.manualReviewRequired,
+        manualPublishAllowed: extraction.manualPublishAllowed && researchPack.manualPublishAllowed,
+        referenceMetadata: researchPack.references,
+        sourceQualityCounts: researchPack.qualityReport.counts,
       });
       console.error(`[ClaimVerifier] REJECTED draft ${draft.id}: ${verdict.unsupportedClaims.length} unsupported claims`);
       for (const c of verdict.unsupportedClaims) {
@@ -642,8 +664,10 @@ Write the full blog post following the blog structure template. Hook the reader 
       references: extraction.references,
       citationMap: extraction.citationMap,
       editorComments: extraction.editorComments,
-      manualReviewRequired: extraction.manualReviewRequired,
-      manualPublishAllowed: extraction.manualPublishAllowed,
+      manualReviewRequired: extraction.manualReviewRequired || researchPack.manualReviewRequired,
+      manualPublishAllowed: extraction.manualPublishAllowed && researchPack.manualPublishAllowed,
+      referenceMetadata: researchPack.references,
+      sourceQualityCounts: researchPack.qualityReport.counts,
     });
   } catch (e: any) {
     console.error("[Blog] Generation failed:", e.message);

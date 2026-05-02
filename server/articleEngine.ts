@@ -44,6 +44,8 @@ import {
   buildSourcesPromptBlock,
   computeSourceTelemetry,
 } from "./sourceLocality.js";
+import { buildResearchPack, type ReferenceMetadata } from "./researchPack.js";
+import { extractClaimsAndComments, type ExtractedClaim, type ExtractedReference, type EditorComment } from "./claimExtractor.js";
 const GROK_CHAT_API     = LLM_BASE_URL;
 const GROK_RESPONSE_API = LLM_RESPONSE_URL;
 const ARTICLE_STATE_FILE = dataPath("article_state.json");
@@ -108,6 +110,22 @@ export interface ArticleDraft {
    * the writer + revise loop as citation targets.
    */
   groundingSources?: string[];
+
+  /**
+   * Audit follow-up 2026-05-02 — structured claims / references / editor
+   * comments extracted from the verifier report. Mirrors the BlogPost
+   * fields added in PR #257 so the dashboard can render Deep Read drafts
+   * with the same actionable feedback. All optional, backwards compatible.
+   */
+  claims?: ExtractedClaim[];
+  references?: ExtractedReference[];
+  citationMap?: Record<number, number[]>;
+  editorComments?: EditorComment[];
+  manualReviewRequired?: boolean;
+  manualPublishAllowed?: boolean;
+  /** Per-source KB metadata + tier. */
+  referenceMetadata?: ReferenceMetadata[];
+  sourceQualityCounts?: { reputable: number; acceptable: number; unverified: number; low_quality: number };
 }
 
 interface ArticleState {
@@ -750,6 +768,9 @@ export async function runWeeklyDeepRead(
         },
         ...extractSourceObjects(articleContent),
       ]);
+      // Audit follow-up 2026-05-02 — research-pack pre-draft gate.
+      const researchPack = buildResearchPack("deep_read", sourcePool);
+      console.log(researchPack.summaryLine);
 
       const { headline, teaser, body: rawBody } = await generateDeepReadArticle(
         articleInfo, articleContent, apiKey, sourcePool,
@@ -827,6 +848,23 @@ export async function runWeeklyDeepRead(
             ? `${judgeOut.reason}: ${judgeOut.affectedSentences} unverifiable claim(s)`
             : `${verdict.unsupportedClaims.length} unsupported claims`
           : undefined;
+      // Audit follow-up 2026-05-02 — extract structured claims, references,
+      // editor comments out of the verifier report so the dashboard can
+      // render Deep Read drafts with the same actionable feedback PR #257
+      // gave Blog. Pure / deterministic — no extra LLM calls.
+      const extraction = extractClaimsAndComments(
+        body,
+        verdict.verifierReport,
+        sourcePool,
+      );
+      console.log(
+        `[ArticleEngine] claim extractor — claims=${extraction.claims.length} ` +
+        `references=${extraction.references.length} ` +
+        `editorComments=${extraction.editorComments.length} ` +
+        `manualReviewRequired=${extraction.manualReviewRequired} ` +
+        `manualPublishAllowed=${extraction.manualPublishAllowed}`,
+      );
+
       const draft = saveDeepReadDraft({
         headline,
         teaser,
@@ -840,6 +878,14 @@ export async function runWeeklyDeepRead(
         verifierReport: verdict.verifierReport,
         revisionHistory,
         sourceText: articleContent,
+        claims: extraction.claims,
+        references: extraction.references,
+        citationMap: extraction.citationMap,
+        editorComments: extraction.editorComments,
+        manualReviewRequired: extraction.manualReviewRequired || researchPack.manualReviewRequired,
+        manualPublishAllowed: extraction.manualPublishAllowed && researchPack.manualPublishAllowed,
+        referenceMetadata: researchPack.references,
+        sourceQualityCounts: researchPack.qualityReport.counts,
       });
 
       if (verdict.severity === "HARD_FAIL") {
@@ -886,6 +932,14 @@ export function saveDeepReadDraft(input: {
   extraSources?: Array<{ url: string; note?: string; addedAt: string }>;
   sourceText?: string;
   groundingSources?: string[];
+  claims?: ExtractedClaim[];
+  references?: ExtractedReference[];
+  citationMap?: Record<number, number[]>;
+  editorComments?: EditorComment[];
+  manualReviewRequired?: boolean;
+  manualPublishAllowed?: boolean;
+  referenceMetadata?: ReferenceMetadata[];
+  sourceQualityCounts?: ArticleDraft["sourceQualityCounts"];
 }): ArticleDraft {
   const state = loadState();
   if (!state.drafts) state.drafts = [];
@@ -907,6 +961,14 @@ export function saveDeepReadDraft(input: {
     extraSources: input.extraSources,
     sourceText: input.sourceText,
     groundingSources: input.groundingSources,
+    claims: input.claims,
+    references: input.references,
+    citationMap: input.citationMap,
+    editorComments: input.editorComments,
+    manualReviewRequired: input.manualReviewRequired,
+    manualPublishAllowed: input.manualPublishAllowed,
+    referenceMetadata: input.referenceMetadata,
+    sourceQualityCounts: input.sourceQualityCounts,
   };
   state.drafts.unshift(draft);
   // Keep a rolling window of 20 drafts so a long-forgotten backlog never
