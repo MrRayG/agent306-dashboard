@@ -845,10 +845,11 @@ export async function runWeeklyDeepRead(
       const researchPack = buildResearchPack("deep_read", sourcePool);
       console.log(researchPack.summaryLine);
 
-      // Roadmap Issue A2 — pre-draft claim map. Items are persisted under
-      // the real draftId after saveDeepReadDraft below. The prompt-time
-      // block uses temporary "article:N" itemKeys that match what we
-      // persist (createOrReplaceClaimMap honors hand-supplied itemKeys).
+      // Roadmap Issue A2 — pre-draft claim map. itemKeys are draft-local
+      // (e.g. "article:1", "article:2") and persisted verbatim under the
+      // real draftId after saveDeepReadDraft below. Uniqueness is scoped
+      // by (engine, draftId) via the parent claim_map row, so the draftId
+      // does not need to appear in the itemKey.
       const claimMapDraft = buildClaimMap({
         engine: "article",
         draftId: "pending",

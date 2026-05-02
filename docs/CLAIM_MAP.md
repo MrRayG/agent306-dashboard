@@ -25,7 +25,9 @@ to.
 - `claim_map_items(id, claim_map_id, item_key, claim_text, claim_type,
   citation_requirement, source_support, confidence, risk, approved, note,
   created_at)` — N rows per claim map. `item_key` is the stable identifier
-  the writer prompt + verifier mapping use (e.g. `blog_blog_1729000000:1`).
+  the writer prompt + verifier mapping use. itemKeys are draft-local
+  (e.g. `blog:1`, `article:1`) and interpreted within the parent
+  `claim_map` row's `(engine, draft_id)` scope.
 
 `source_support` is a JSON array of source URLs (or other stable
 identifiers). Empty for voice / analysis claims.

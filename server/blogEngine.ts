@@ -523,9 +523,9 @@ export async function generateBlogPost(opts: {
     // share the same identifiers (claim_map_items uses these verbatim).
     itemKey: it.itemKey ?? `blog:${i + 1}`,
   }));
-  // Note: the persisted itemKey will be re-namespaced with the real postId
-  // in persistBlogClaimMap below. The writer prompt uses these "blog:N"
-  // labels because the postId isn't known yet.
+  // Note: itemKeys are draft-local (e.g. "blog:1", "blog:2") and persisted
+  // verbatim. Uniqueness is scoped by (engine, draftId) via the parent
+  // claim_map row, so the postId does not need to appear in the itemKey.
   const claimMapPromptBlock = buildClaimMapPromptBlock(
     claimMapPromptItems.map((it, i) => ({
       id: i,
