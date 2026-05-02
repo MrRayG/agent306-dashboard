@@ -404,3 +404,99 @@ export type SourceLedgerItem = typeof sourceLedgerItems.$inferSelect;
 
 export const SOURCE_LEDGER_TYPES = ["primary", "supporting", "fresh-context", "kb"] as const;
 export type SourceLedgerType = (typeof SOURCE_LEDGER_TYPES)[number];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Claim Map — Pre-draft claim plan (Roadmap Issue A2, 2026-05-02)
+//
+// A claim_map is the structured plan that the writer is allowed to assert in a
+// draft. It is created BEFORE the draft text is compiled, derived from the
+// source ledger plus the topic, and persists every approved claim with stable
+// IDs the verifier can map failures back to.
+//
+// One `claim_map` row exists per (engine, draftId). It owns N `claim_map_items`
+// rows — each one a single claim the writer may surface. Item IDs are stable
+// strings (`<ledgerKey>:<n>`) so verifier output can reference them without
+// touching the draft text.
+//
+// Shape rules:
+//   - claimType ∈ CLAIM_MAP_TYPES (factual_external, factual_attributed,
+//     analysis, synthesis, voice). The writer prompt and verifier use this to
+//     decide whether a citation is required.
+//   - citationRequirement ∈ CLAIM_CITATION_REQUIREMENTS
+//     (required, optional, forbidden) — drives the same citation-locality
+//     rules the verifier already enforces.
+//   - sourceSupport: JSON array of source URLs (or ledger metadata refIds)
+//     that back this claim. Empty array means "voice / analysis claim".
+//   - approved: boolean. False rows are deferred candidates; the draft
+//     compiler MUST only see `approved=true` rows.
+// ─────────────────────────────────────────────────────────────────────────────
+export const claimMap = sqliteTable("claim_map", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  /** Engine that owns this claim map ("blog" | "article" | …). */
+  engine: text("engine").notNull(),
+  /** Draft identifier from the engine's own state. Jointly unique with engine. */
+  draftId: text("draft_id").notNull(),
+  /** Free-text topic/title — informational, used by the writer prompt. */
+  topic: text("topic"),
+  /** Optional pointer back to the source_ledger row this claim map was
+   *  generated from. NULL when the engine had no ledger (legacy paths). */
+  sourceLedgerId: integer("source_ledger_id"),
+  createdAt: text("created_at").notNull().default(new Date().toISOString()),
+  updatedAt: text("updated_at").notNull().default(new Date().toISOString()),
+});
+export const insertClaimMapSchema = createInsertSchema(claimMap).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertClaimMap = z.infer<typeof insertClaimMapSchema>;
+export type ClaimMap = typeof claimMap.$inferSelect;
+
+export const claimMapItems = sqliteTable("claim_map_items", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  claimMapId: integer("claim_map_id").notNull(),
+  /** Stable, human-readable identifier (e.g. "blog_1:1"). The writer prompt
+   *  and verifier-failure mapping both reference this string. */
+  itemKey: text("item_key").notNull(),
+  /** The claim text — short, declarative, single-claim-per-row. */
+  claimText: text("claim_text").notNull(),
+  /** See CLAIM_MAP_TYPES. */
+  claimType: text("claim_type").notNull(),
+  /** See CLAIM_CITATION_REQUIREMENTS. */
+  citationRequirement: text("citation_requirement").notNull(),
+  /** JSON array of strings — usually source URLs. Empty array = voice claim. */
+  sourceSupport: text("source_support").notNull().default("[]"),
+  /** 0..1 confidence the writer/researcher assigned to the claim. */
+  confidence: real("confidence").notNull().default(0.5),
+  /** "low"|"medium"|"high" — risk if the claim is wrong (downstream
+   *  verifier severity). */
+  risk: text("risk").notNull().default("low"),
+  /** Has this claim been approved into the draft compiler's input set? Only
+   *  approved rows are passed to the writer prompt. Default true so a
+   *  default-generated map is usable without an explicit approve step. */
+  approved: integer("approved", { mode: "boolean" }).notNull().default(true),
+  /** Free-text rationale or note. Optional. */
+  note: text("note"),
+  createdAt: text("created_at").notNull().default(new Date().toISOString()),
+});
+export const insertClaimMapItemSchema = createInsertSchema(claimMapItems).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertClaimMapItem = z.infer<typeof insertClaimMapItemSchema>;
+export type ClaimMapItem = typeof claimMapItems.$inferSelect;
+
+export const CLAIM_MAP_TYPES = [
+  "factual_external",
+  "factual_attributed",
+  "analysis",
+  "synthesis",
+  "voice",
+] as const;
+export type ClaimMapType = (typeof CLAIM_MAP_TYPES)[number];
+
+export const CLAIM_CITATION_REQUIREMENTS = ["required", "optional", "forbidden"] as const;
+export type ClaimCitationRequirement = (typeof CLAIM_CITATION_REQUIREMENTS)[number];
+
+export const CLAIM_RISK_LEVELS = ["low", "medium", "high"] as const;
+export type ClaimRisk = (typeof CLAIM_RISK_LEVELS)[number];

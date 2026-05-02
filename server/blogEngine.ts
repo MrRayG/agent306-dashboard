@@ -42,6 +42,12 @@ import {
 } from "./sourceLocality.js";
 import { buildResearchPack, type ResearchPack, type ReferenceMetadata } from "./researchPack.js";
 import { createOrReplaceLedger } from "./repositories/sourceLedgerRepository.js";
+import {
+  createOrReplaceClaimMap,
+  buildClaimMapPromptBlock,
+  type ClaimMapItemInput,
+} from "./repositories/claimMapRepository.js";
+import { buildClaimMap } from "./claimMapBuilder.js";
 import { buildVerifierContractBlock } from "./verifierContract.js";
 const BLOG_FILE = dataPath("blog_state.json");
 
@@ -51,6 +57,25 @@ const BLOG_FILE = dataPath("blog_state.json");
  * inside the repository so the blog hot path is never broken by ledger IO.
  * Roadmap Issue A1.
  */
+/**
+ * Persist a ClaimMap row for a blog draft. Called after the post id exists
+ * so the (engine='blog', draftId=postId) row can be looked up by the
+ * verifier-failure mapping. Failures are swallowed inside the repository.
+ * Roadmap Issue A2.
+ */
+export function persistBlogClaimMap(input: {
+  postId: string;
+  topic: string;
+  items: ClaimMapItemInput[];
+}): void {
+  createOrReplaceClaimMap({
+    engine: "blog",
+    draftId: input.postId,
+    topic: input.topic,
+    items: input.items,
+  });
+}
+
 export function persistBlogSourceLedger(input: {
   postId: string;
   topic: string;
@@ -479,6 +504,48 @@ export async function generateBlogPost(opts: {
   console.log(researchPack.summaryLine);
   const sourcesPromptBlock = buildSourcesPromptBlock(sourcePool);
 
+  // Roadmap Issue A2 — pre-draft claim map. Built deterministically from the
+  // source pool + topic so the writer prompt only sees the approved set of
+  // claims, and so the verifier can map a failing sentence back to the
+  // claim_map_items.itemKey that produced it. Items are persisted AFTER
+  // createBlogPost runs (we need the real postId for the (engine, draftId)
+  // unique key); the prompt-time block uses the same items in-memory.
+  const claimMapDraft = buildClaimMap({
+    engine: "blog",
+    draftId: "pending",
+    topic: opts.topic,
+    references: researchPack.references,
+    sourcePool,
+  });
+  const claimMapPromptItems = claimMapDraft.items.map((it, i) => ({
+    ...it,
+    // Pre-assign deterministic itemKeys so the prompt block + persisted rows
+    // share the same identifiers (claim_map_items uses these verbatim).
+    itemKey: it.itemKey ?? `blog:${i + 1}`,
+  }));
+  // Note: the persisted itemKey will be re-namespaced with the real postId
+  // in persistBlogClaimMap below. The writer prompt uses these "blog:N"
+  // labels because the postId isn't known yet.
+  const claimMapPromptBlock = buildClaimMapPromptBlock(
+    claimMapPromptItems.map((it, i) => ({
+      id: i,
+      claimMapId: 0,
+      itemKey: it.itemKey!,
+      claimText: it.claimText,
+      claimType: it.claimType,
+      citationRequirement: it.citationRequirement,
+      sourceSupport: JSON.stringify(it.sourceSupport ?? []),
+      confidence: it.confidence ?? 0.5,
+      risk: it.risk ?? "low",
+      approved: it.approved !== false,
+      note: it.note ?? null,
+      createdAt: "",
+    })),
+  );
+  console.log(
+    `[Blog] claim map (pre-draft) — items=${claimMapPromptItems.length} approved=${claimMapPromptItems.filter(i => i.approved !== false).length}`,
+  );
+
   try {
     const res = await postChatCompletions({
         model: getModel("blog-post"),
@@ -558,7 +625,7 @@ ${opts.sourceContent.slice(0, 4000)}
 
 CURRENT KNOWLEDGE CONTEXT:
 ${currentKnowledge}
-${freshContext ? `\nLATEST DEVELOPMENTS (from today's research — incorporate these):\n${freshContext}\n` : ""}${sourcesPromptBlock ? `\n${sourcesPromptBlock}\n` : ""}${exemplarBlock ? `\n${exemplarBlock}\n` : ""}
+${freshContext ? `\nLATEST DEVELOPMENTS (from today's research — incorporate these):\n${freshContext}\n` : ""}${sourcesPromptBlock ? `\n${sourcesPromptBlock}\n` : ""}${claimMapPromptBlock ? `\n${claimMapPromptBlock}\n` : ""}${exemplarBlock ? `\n${exemplarBlock}\n` : ""}
 IMPORTANT: If the source material is from a private chat conversation, extract the TOPIC and INSIGHTS only. Do NOT copy conversational tone, greetings, questions, or planning language. Transform the ideas into a polished public blog post.
 
 Write the full blog post following the blog structure template. Hook the reader immediately. Use real facts, specific numbers, and name real companies/people. Break the body into 3-5 sections with clear subheadings. Include actionable takeaways. Share YOUR honest analysis. Respond with JSON only.`
@@ -691,6 +758,11 @@ Write the full blog post following the blog structure template. Hook the reader 
         sourceObjects: sourcePool,
         references: researchPack.references,
       });
+      persistBlogClaimMap({
+        postId: draft.id,
+        topic: opts.topic,
+        items: claimMapPromptItems,
+      });
       return draft;
     }
 
@@ -716,6 +788,11 @@ Write the full blog post following the blog structure template. Hook the reader 
       topic: opts.topic,
       sourceObjects: sourcePool,
       references: researchPack.references,
+    });
+    persistBlogClaimMap({
+      postId: finalPost.id,
+      topic: opts.topic,
+      items: claimMapPromptItems,
     });
     return finalPost;
   } catch (e: any) {
