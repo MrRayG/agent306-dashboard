@@ -15,6 +15,8 @@ import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { postChatCompletions } from "./llmCall.js";
 import { verifyClaims } from "./claimVerifier.js";
 import { recordNewsDraft } from "./newsDraftStore.js";
+import { extractClaimsAndComments } from "./claimExtractor.js";
+import { buildResearchPack } from "./researchPack.js";
 export async function generateNewsContent(): Promise<string | null> {
   const grokKey = LLM_API_KEY;
   if (!grokKey) return null;
@@ -125,6 +127,15 @@ Return JSON: {"post": "..."}`
       // Lane B bare soft-warns, Lane A still hard-fails.
       tier: "news",
     });
+    // Audit follow-up 2026-05-02 — generalize the PR #257 claim-extractor +
+    // research pack to news. News is internal-synthesis (live market feeds,
+    // empty source pool). Research pack runs anyway so the engine summary
+    // line is comparable across engines, and editor_comments now persist on
+    // the quarantined draft for dashboard display.
+    const newsResearchPack = buildResearchPack("news", []);
+    console.log(newsResearchPack.summaryLine);
+    const newsExtraction = extractClaimsAndComments(postText, verdict.verifierReport, []);
+
     if (verdict.severity === "HARD_FAIL") {
       console.error(`[ClaimVerifier] REJECTED 306 NEWS draft: ${verdict.unsupportedClaims.length} unsupported claims`);
       for (const c of verdict.unsupportedClaims) {
@@ -139,6 +150,12 @@ Return JSON: {"post": "..."}`
           unsupportedReasons: verdict.unsupportedClaims.map(c => `${c.reason}: ${c.sentence.slice(0, 200)}`),
           verifierReport:     verdict.verifierReport,
           source:             "manual-generator",
+          editorComments:     newsExtraction.editorComments,
+          claims:             newsExtraction.claims,
+          references:         newsExtraction.references,
+          manualReviewRequired: newsExtraction.manualReviewRequired,
+          manualPublishAllowed: false,
+          referenceMetadata:  newsResearchPack.references,
         });
         console.error(`[NewsGenerator] Quarantined draft ${draft.id}`);
       } catch (storeErr: any) {
@@ -158,6 +175,12 @@ Return JSON: {"post": "..."}`
           unsupportedReasons: verdict.unsupportedClaims.map(c => `${c.reason}: ${c.sentence.slice(0, 200)}`),
           verifierReport:     verdict.verifierReport,
           source:             "manual-generator",
+          editorComments:     newsExtraction.editorComments,
+          claims:             newsExtraction.claims,
+          references:         newsExtraction.references,
+          manualReviewRequired: newsExtraction.manualReviewRequired,
+          manualPublishAllowed: newsExtraction.manualPublishAllowed,
+          referenceMetadata:  newsResearchPack.references,
         });
       } catch (storeErr: any) {
         console.error(`[NewsGenerator] Failed to write soft-warn audit:`, storeErr?.message ?? String(storeErr));

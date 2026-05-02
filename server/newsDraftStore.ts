@@ -24,6 +24,8 @@
 import fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import type { VerifierReport, VerifierSeverity } from "./claimVerifier.js";
+import type { EditorComment, ExtractedClaim, ExtractedReference } from "./claimExtractor.js";
+import type { ReferenceMetadata } from "./researchPack.js";
 
 /** One record per news dispatch attempt that hit a non-PASS verifier verdict
  *  (or, for SOFT_WARN, that published anyway). */
@@ -40,6 +42,17 @@ export interface NewsDraftRecord {
   verifierReport?: VerifierReport;
   /** Tag identifying the engine that produced this draft (auto / manual). */
   source: "auto-dispatch" | "manual-generator";
+
+  /** Audit follow-up 2026-05-02 — structured editor comments / claims /
+   *  references extracted from the verifier report. Optional, backwards
+   *  compatible. Mirrors the BlogPost / ArticleDraft fields so the
+   *  dashboard can render quarantined news with the same actionable view. */
+  editorComments?: EditorComment[];
+  claims?: ExtractedClaim[];
+  references?: ExtractedReference[];
+  manualReviewRequired?: boolean;
+  manualPublishAllowed?: boolean;
+  referenceMetadata?: ReferenceMetadata[];
 }
 
 const NEWS_DRAFTS_FILE = "news-drafts.jsonl";
@@ -92,6 +105,12 @@ export function recordNewsDraft(args: {
   unsupportedReasons: string[];
   verifierReport?: VerifierReport;
   source: "auto-dispatch" | "manual-generator";
+  editorComments?: EditorComment[];
+  claims?: ExtractedClaim[];
+  references?: ExtractedReference[];
+  manualReviewRequired?: boolean;
+  manualPublishAllowed?: boolean;
+  referenceMetadata?: ReferenceMetadata[];
 }): NewsDraftRecord {
   const now = new Date();
   const record: NewsDraftRecord = {
@@ -104,6 +123,12 @@ export function recordNewsDraft(args: {
     unsupportedReasons: args.unsupportedReasons.slice(0, 20),
     verifierReport: args.verifierReport,
     source: args.source,
+    editorComments: args.editorComments,
+    claims: args.claims,
+    references: args.references,
+    manualReviewRequired: args.manualReviewRequired,
+    manualPublishAllowed: args.manualPublishAllowed,
+    referenceMetadata: args.referenceMetadata,
   };
   appendNewsDraft(record);
   return record;

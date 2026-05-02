@@ -20,6 +20,8 @@ import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 import { postChatCompletions } from "./llmCall.js";
 import { verifyClaims } from "./claimVerifier.js";
+import { extractClaimsAndComments } from "./claimExtractor.js";
+import { buildResearchPack } from "./researchPack.js";
 // ── Types ───────────────────────────────────────────────────────────────
 
 interface DispatchEpisode {
@@ -248,6 +250,12 @@ Return JSON: {"post": "...", "title": "...", "summary": "..."}`
       `BTC: ${btcPrice} (${btcChange})`,
       episodeContext,
     ].join("\n\n");
+    // Audit follow-up 2026-05-02 — research pack + claim-extractor parity
+    // with Blog/Article. Dispatch is internal-synthesis (empty source pool
+    // by design); the pack still runs so the [dispatch] summary line is
+    // comparable across engines.
+    const dispatchResearchPack = buildResearchPack("dispatch", []);
+    console.log(dispatchResearchPack.summaryLine);
     const verdict = await verifyClaims({
       draftText:   enforced,
       sourceText:  upstreamSourceText,
@@ -260,6 +268,12 @@ Return JSON: {"post": "...", "title": "...", "summary": "..."}`
       console.error(`[ClaimVerifier] REJECTED dispatch episode ${nextEpisode}: ${verdict.unsupportedClaims.length} unsupported claims`);
       for (const c of verdict.unsupportedClaims) {
         console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);
+      }
+      // Surface editor comments alongside the hard-fail log so operators
+      // see *which* sentences need a fix and *what kind* of fix is required.
+      const dispatchExtraction = extractClaimsAndComments(enforced, verdict.verifierReport, []);
+      for (const ec of dispatchExtraction.editorComments) {
+        console.error(`  editor: [${ec.action}] sentence#${ec.sentenceIndex} ${ec.reason}`);
       }
       return null;
     }

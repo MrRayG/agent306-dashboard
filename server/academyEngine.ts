@@ -34,6 +34,8 @@ import { getEvolutionContext } from "./soulEvolution.js";
 
 import { postChatCompletions } from "./llmCall.js";
 import { verifyClaims } from "./claimVerifier.js";
+import { extractClaimsAndComments } from "./claimExtractor.js";
+import { buildResearchPack } from "./researchPack.js";
 const GROK_URL = LLM_BASE_URL;
 const ACADEMY_STATE_FILE = dataPath("academy_state.json");
 const TRACKING_START = new Date("2026-03-08T00:00:00Z");
@@ -482,6 +484,12 @@ export async function postAcademyEpisode(xWrite: any): Promise<void> {
       // Academy content is internal-synthesis — no external URL source. The
       // verifier will pass posts that don't attribute claims (no "according
       // to X") and reject any that fabricate attributions without a source.
+      // Audit follow-up 2026-05-02 — research pack parity. Academy is
+      // internal-synthesis (no external URLs); the empty-pool case is
+      // explicitly allowed by DEFAULT_POLICY.academy so this is purely
+      // observational. Editor comments still surface on rejection.
+      const academyResearchPack = buildResearchPack("academy", []);
+      console.log(academyResearchPack.summaryLine);
       const verdict = await verifyClaims({
         draftText:   postText,
         sourceText:  "",
@@ -494,6 +502,10 @@ export async function postAcademyEpisode(xWrite: any): Promise<void> {
         console.error(`[ClaimVerifier] REJECTED academy EP${state.totalEpisodes + 1}: ${verdict.unsupportedClaims.length} unsupported claims`);
         for (const c of verdict.unsupportedClaims) {
           console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);
+        }
+        const academyExtraction = extractClaimsAndComments(postText, verdict.verifierReport, []);
+        for (const ec of academyExtraction.editorComments) {
+          console.error(`  editor: [${ec.action}] sentence#${ec.sentenceIndex} ${ec.reason}`);
         }
         // Advance rotation pointer so a retry doesn't immediately re-pick
         // the same topic. Without this, every retry on a verifier-rejected

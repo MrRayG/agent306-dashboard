@@ -39,6 +39,8 @@ import { getEvolutionContext } from "./soulEvolution.js";
 
 import { postChatCompletions, postXSearchResponses } from "./llmCall.js";
 import { verifyClaims } from "./claimVerifier.js";
+import { extractClaimsAndComments } from "./claimExtractor.js";
+import { buildResearchPack } from "./researchPack.js";
 const GROK_URL          = LLM_BASE_URL;
 const GROK_SEARCH_URL   = LLM_RESPONSE_URL;
 const SIGNAL_STATE_FILE = dataPath("signal_brief_state.json");
@@ -305,6 +307,9 @@ Return JSON:
       `Web3 signal:\n${web3Signal}`,
       `Wild Card signal:\n${wildcardSignal}`,
     ].join("\n\n");
+    // Audit follow-up 2026-05-02 — research pack parity with other engines.
+    const signalResearchPack = buildResearchPack("signal", []);
+    console.log(signalResearchPack.summaryLine);
     const verdict = await verifyClaims({
       draftText:   post,
       sourceText:  upstreamSourceText,
@@ -317,6 +322,10 @@ Return JSON:
       console.error(`[ClaimVerifier] REJECTED signal brief #${briefNumber}: ${verdict.unsupportedClaims.length} unsupported claims`);
       for (const c of verdict.unsupportedClaims) {
         console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);
+      }
+      const signalExtraction = extractClaimsAndComments(post, verdict.verifierReport, []);
+      for (const ec of signalExtraction.editorComments) {
+        console.error(`  editor: [${ec.action}] sentence#${ec.sentenceIndex} ${ec.reason}`);
       }
       return null;
     }
