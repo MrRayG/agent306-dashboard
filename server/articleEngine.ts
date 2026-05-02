@@ -46,6 +46,54 @@ import {
 } from "./sourceLocality.js";
 import { buildResearchPack, type ReferenceMetadata } from "./researchPack.js";
 import { extractClaimsAndComments, type ExtractedClaim, type ExtractedReference, type EditorComment } from "./claimExtractor.js";
+import { createOrReplaceLedger } from "./repositories/sourceLedgerRepository.js";
+import { buildVerifierContractBlock } from "./verifierContract.js";
+
+/**
+ * Persist a SourceLedger row for a Deep Read draft. The article engine's
+ * primary source is the article being deep-read; supporting sources come
+ * from the deduped source pool. Roadmap Issue A1.
+ */
+function persistArticleSourceLedger(input: {
+  draftId: string;
+  topic: string;
+  primaryUrl: string;
+  primaryTitle: string;
+  sourceObjects: SourceObject[];
+  references: ReferenceMetadata[];
+}): void {
+  const items = [
+    {
+      url: input.primaryUrl,
+      title: input.primaryTitle,
+      publisher: null as string | null,
+      excerpt: null as string | null,
+      sourceType: "primary",
+      trustTier: null as string | null,
+      metadata: { role: "deep_read_primary" },
+    },
+    ...input.sourceObjects
+      .filter(s => s.url !== input.primaryUrl)
+      .map(s => {
+        const ref = input.references.find(r => r.url === s.url);
+        return {
+          url: s.url,
+          title: s.title ?? ref?.title ?? null,
+          publisher: s.publisher ?? ref?.publisher ?? null,
+          excerpt: s.evidenceExcerpt ?? ref?.evidenceExcerpt ?? null,
+          sourceType: "supporting",
+          trustTier: ref?.qualityTier ?? null,
+          metadata: { sourceId: s.sourceId, refId: ref?.refId },
+        };
+      }),
+  ];
+  createOrReplaceLedger({
+    engine: "article",
+    draftId: input.draftId,
+    topic: input.topic,
+    items,
+  });
+}
 const GROK_CHAT_API     = LLM_BASE_URL;
 const GROK_RESPONSE_API = LLM_RESPONSE_URL;
 const ARTICLE_STATE_FILE = dataPath("article_state.json");
@@ -326,6 +374,8 @@ async function generateDeepReadArticle(
           content: `${agentCtx}
 
 ${getFormatVoiceContext('article')}
+
+${buildVerifierContractBlock()}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 AGENT 306 — THE DEEP READ
@@ -887,6 +937,14 @@ export async function runWeeklyDeepRead(
         referenceMetadata: researchPack.references,
         sourceQualityCounts: researchPack.qualityReport.counts,
       });
+      persistArticleSourceLedger({
+        draftId: draft.draftId,
+        topic: articleInfo.title,
+        primaryUrl: articleInfo.url,
+        primaryTitle: articleInfo.title,
+        sourceObjects: sourcePool,
+        references: researchPack.references,
+      });
 
       if (verdict.severity === "HARD_FAIL") {
         console.error(`[ClaimVerifier] REJECTED draft ${draft.draftId}: ${verdict.unsupportedClaims.length} unsupported claims`);
@@ -1307,6 +1365,7 @@ export async function previewDeepRead(
       sourceText:  articleContent,
       sourceUrl:   targetUrl,
       sourceTitle: articleInfo.title,
+      engine: "article",
     });
   } else {
     const result = await reviseUntilClean({

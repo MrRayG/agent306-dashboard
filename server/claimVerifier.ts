@@ -70,6 +70,8 @@ import {
   hasAttributionVerbAnalysis as hasAttributionVerbInAnalysisMode,
   extractQuotedSpans,
 } from "./artifactMode.js";
+import { logEvent } from "./observability/structuredLog.js";
+import { VERIFIER_CONTRACT_ID, VERIFIER_CONTRACT_VERSION } from "./verifierContract.js";
 
 export type ClaimLane =
   | "source-attributed"
@@ -261,6 +263,15 @@ export interface VerifyClaimsOpts {
    *  for every tier. When unset, the legacy strict behavior applies
    *  (preserves pre-PR contract for callers that haven't been updated). */
   tier?: ContentTier;
+  /** Engine that triggered the verifier. When set, a structured
+   *  `verifier_result` event is emitted to engine_events on every
+   *  verify call (Roadmap Issue E1). When unset, no event is emitted —
+   *  preserves the pre-PR contract for callers that haven't migrated. */
+  engine?: string;
+  /** Optional draft identifier — included on the verifier_result event
+   *  so the dashboard can link a verifier result back to the draft it
+   *  came from. */
+  draftId?: string;
 }
 
 // ── Detection patterns ─────────────────────────────────────────────────────
@@ -520,8 +531,76 @@ function paragraphFor(sentence: string, draftText: string): string {
  * backed by the source text, and that external facts the draft brings in
  * from the agent's own knowledge are cited with a real URL. See the
  * module header comment for the two-lane standard.
+ *
+ * Roadmap Issue E1 (2026-05-02): emits a structured `verifier_result`
+ * event into engine_events when `opts.engine` is set, so the verifier
+ * health panel and the promotion gate's golden suite can query verifier
+ * outcomes by time window. Engines that haven't migrated yet pass no
+ * `engine` and skip the emit — preserves the pre-PR contract for tests
+ * and any caller still on the old signature.
  */
 export async function verifyClaims(opts: VerifyClaimsOpts): Promise<ClaimVerdict> {
+  const verdict = await verifyClaimsImpl(opts);
+  if (opts.engine) {
+    try {
+      const { summary, severity, judgeOutage, artifactMode } = verdict.verifierReport;
+      logEvent({
+        engine: opts.engine,
+        event: "verifier_result",
+        level: severity === "HARD_FAIL" ? "error" : severity === "SOFT_WARN" ? "warn" : "info",
+        data: {
+          tier: opts.tier ?? null,
+          mode: artifactMode ?? null,
+          severity,
+          contractVersion: VERIFIER_CONTRACT_VERSION,
+          contractId: VERIFIER_CONTRACT_ID,
+          draftId: opts.draftId ?? null,
+          sourceUrl: opts.sourceUrl ?? null,
+          sourceTitle: opts.sourceTitle ?? null,
+          unsupportedClaimsCount: verdict.unsupportedClaims.length,
+          summary: {
+            laneAOk: summary.laneAOk,
+            laneAFail: summary.laneAFail,
+            laneAUnverifiable: summary.laneAUnverifiable,
+            laneAPassQuotedCommentary: summary.laneAPassQuotedCommentary,
+            laneAPassCritiqueByAbsence: summary.laneAPassCritiqueByAbsence,
+            laneBOk: summary.laneBOk,
+            laneBBare: summary.laneBBare,
+            retractedHits: summary.retractedHits,
+            ncitePatternHits: summary.ncitePatternHits,
+          },
+          judgeOutage: judgeOutage
+            ? {
+                affected: judgeOutage.affectedSentences,
+                reason: judgeOutage.reason,
+                model: judgeOutage.model ?? null,
+                failOpenOverride: judgeOutage.failOpenOverride,
+              }
+            : null,
+          // Sample up to 3 failing snippets so the dashboard has actionable
+          // text to render — but stay well under the 8 KiB event payload cap.
+          sampleFailures: verdict.verifierReport.entries
+            .filter(e =>
+              ["LANE_A_FAIL", "LANE_B_BARE", "NCITE_PATTERN_HIT", "RETRACTED_HIT", "LANE_A_UNVERIFIABLE"].includes(
+                e.classification,
+              ),
+            )
+            .slice(0, 3)
+            .map(e => ({
+              classification: e.classification,
+              snippet: e.snippet.slice(0, 220),
+            })),
+        },
+      });
+    } catch (e: any) {
+      // Telemetry must never break the verifier hot path.
+      console.warn("[ClaimVerifier] verifier_result emit failed:", e?.message ?? String(e));
+    }
+  }
+  return verdict;
+}
+
+async function verifyClaimsImpl(opts: VerifyClaimsOpts): Promise<ClaimVerdict> {
   const { draftText, sourceText, sourceUrl, sourceTitle } = opts;
   const unsupported: UnsupportedClaim[] = [];
   const entries: VerifierReportEntry[] = [];

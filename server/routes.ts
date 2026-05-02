@@ -5509,6 +5509,9 @@ needsHelp: true only when you genuinely need his direction or information`,
       const { getPostById, updatePost, publishPost } = await import("./blogEngine.js");
       const { verifyClaims } = await import("./claimVerifier.js");
       const { extractClaimsAndComments } = await import("./claimExtractor.js");
+      const { getLedgerByDraft, buildSourceContextForVerifier } = await import(
+        "./repositories/sourceLedgerRepository.js"
+      );
 
       const post = getPostById(req.params.id);
       if (!post) return res.status(404).json({ error: "post not found", id: req.params.id });
@@ -5519,14 +5522,30 @@ needsHelp: true only when you genuinely need his direction or information`,
       const override = req.body?.override === true;
       const overrideReason = (req.body?.overrideReason ?? "").toString().slice(0, 500);
 
+      // Roadmap A1: read the source ledger persisted at draft creation so the
+      // re-verifier sees the same source text the original draft was checked
+      // against, instead of an empty string. Falls back to empty when no
+      // ledger exists (older posts, non-research drafts).
+      const ledger = getLedgerByDraft("blog", post.id);
+      const ledgerSourceText = ledger ? buildSourceContextForVerifier(ledger.items) : "";
+      const ledgerPrimary = ledger?.items.find(i => i.sourceType === "primary") ?? ledger?.items[0];
+      const sourceObjectsFromLedger = (ledger?.items ?? []).map(i => ({
+        url: i.url,
+        title: i.title ?? undefined,
+        publisher: i.publisher ?? undefined,
+        evidenceExcerpt: i.excerpt ?? undefined,
+      }));
+
       const verdict = await verifyClaims({
         draftText:   post.content,
-        sourceText:  "",
-        sourceUrl:   "",
-        sourceTitle: post.title,
+        sourceText:  ledgerSourceText,
+        sourceUrl:   ledgerPrimary?.url ?? "",
+        sourceTitle: ledgerPrimary?.title ?? post.title,
         tier:        "blog",
+        engine:      "blog_publish_after_edit",
+        draftId:     post.id,
       });
-      const extraction = extractClaimsAndComments(post.content, verdict.verifierReport, []);
+      const extraction = extractClaimsAndComments(post.content, verdict.verifierReport, sourceObjectsFromLedger);
 
       // Persist the fresh verdict + claims regardless of whether we publish,
       // so the dashboard sees current state.

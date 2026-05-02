@@ -37,6 +37,7 @@ import {
   repairCitationLocality,
   computeSourceTelemetry,
 } from "./sourceLocality.js";
+import { buildVerifierContractBlock } from "./verifierContract.js";
 
 const DEFAULT_MAX_ATTEMPTS = 3;
 
@@ -170,6 +171,8 @@ async function defaultRewrite(input: RewriteInput): Promise<RewriteOutput> {
 
   const sys = `You are Agent 306's blog reviser. The writer has produced a blog post for agent306.ai and the claim verifier flagged specific sentences as failing.
 
+${buildVerifierContractBlock()}
+
 YOUR RULES:
 - Fix ONLY the flagged sentences. Do not rewrite anything else. Do not change the headline. Preserve markdown structure (## headings, bullet lists, **bold**, em dashes, paragraph breaks).
 - Preserve the blog's voice — first-person AI perspective, conversational but substantive, "I think" framing, honest uncertainty. Do not flatten the analytical sentences.
@@ -294,6 +297,7 @@ export async function reviseBlogUntilClean(opts: ReviseOpts): Promise<ReviseResu
     skipLLM: opts.skipVerifierLLM,
     judgeClient: opts.verifierJudgeClient,
     artifactMode: opts.artifactMode,
+    engine: "blog",
   });
 
   let body = draftStart;
@@ -374,6 +378,7 @@ export async function reviseBlogUntilClean(opts: ReviseOpts): Promise<ReviseResu
       skipLLM: opts.skipVerifierLLM,
       judgeClient: opts.verifierJudgeClient,
       artifactMode: opts.artifactMode,
+      engine: "blog",
     });
 
     const issuesBefore = failing.length;

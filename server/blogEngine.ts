@@ -41,7 +41,41 @@ import {
   computeSourceTelemetry,
 } from "./sourceLocality.js";
 import { buildResearchPack, type ResearchPack, type ReferenceMetadata } from "./researchPack.js";
+import { createOrReplaceLedger } from "./repositories/sourceLedgerRepository.js";
+import { buildVerifierContractBlock } from "./verifierContract.js";
 const BLOG_FILE = dataPath("blog_state.json");
+
+/**
+ * Build a SourceLedger row for a blog draft. Idempotent — overwrites the
+ * existing row for (engine='blog', draftId=postId). Failures are swallowed
+ * inside the repository so the blog hot path is never broken by ledger IO.
+ * Roadmap Issue A1.
+ */
+export function persistBlogSourceLedger(input: {
+  postId: string;
+  topic: string;
+  sourceObjects: SourceObject[];
+  references: ReferenceMetadata[];
+}): void {
+  const items = input.sourceObjects.map((s, i) => {
+    const ref = input.references.find(r => r.url === s.url);
+    return {
+      url: s.url,
+      title: s.title ?? ref?.title ?? null,
+      publisher: s.publisher ?? ref?.publisher ?? null,
+      excerpt: s.evidenceExcerpt ?? ref?.evidenceExcerpt ?? null,
+      sourceType: i === 0 ? "primary" : "supporting",
+      trustTier: ref?.qualityTier ?? null,
+      metadata: { sourceId: s.sourceId, refId: ref?.refId },
+    };
+  });
+  createOrReplaceLedger({
+    engine: "blog",
+    draftId: input.postId,
+    topic: input.topic,
+    items,
+  });
+}
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -455,6 +489,8 @@ export async function generateBlogPost(opts: {
 
 ${getFormatVoiceContext('blog')}
 
+${buildVerifierContractBlock()}
+
 CITATION DISCIPLINE (REQUIRED — APA-style per-claim attribution + same-sentence locality):
 - CITATION LOCALITY: every external factual sentence with a date, number, percentage, year range, named study, named model release, named company release, named historical event, named legislation, or other hard factual claim MUST contain an inline markdown citation [Publisher](URL) in the SAME SENTENCE as the claim. Do not rely on a citation in an adjacent or previous sentence. Sentence-by-sentence verification is enforced post-write — a fact one sentence away from its URL is treated as uncited.
 - Do NOT place a naked URL on its own line as a "source marker." Citations are inline markdown links attached to the supported claim.
@@ -649,10 +685,16 @@ Write the full blog post following the blog structure template. Hook the reader 
       for (const c of verdict.unsupportedClaims) {
         console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);
       }
+      persistBlogSourceLedger({
+        postId: draft.id,
+        topic: opts.topic,
+        sourceObjects: sourcePool,
+        references: researchPack.references,
+      });
       return draft;
     }
 
-    return createBlogPost({
+    const finalPost = createBlogPost({
       title: parsed.title,
       content: revisedBody,
       source: opts.source,
@@ -669,6 +711,13 @@ Write the full blog post following the blog structure template. Hook the reader 
       referenceMetadata: researchPack.references,
       sourceQualityCounts: researchPack.qualityReport.counts,
     });
+    persistBlogSourceLedger({
+      postId: finalPost.id,
+      topic: opts.topic,
+      sourceObjects: sourcePool,
+      references: researchPack.references,
+    });
+    return finalPost;
   } catch (e: any) {
     console.error("[Blog] Generation failed:", e.message);
     return null;
