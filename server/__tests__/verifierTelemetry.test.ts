@@ -6,6 +6,16 @@
 
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
+import * as fs from "fs";
+import * as path from "path";
+
+// Isolate from the real DB: this test wipes engine_events, which would
+// blow away production rows on a dev machine. Set DB_PATH to a temp
+// SQLite file BEFORE importing ../db.js so db.ts opens the temp file.
+const TMP_DIR = fs.mkdtempSync(path.join(process.cwd(), "tmp-verifierTelemetry-"));
+process.env.DB_PATH = path.join(TMP_DIR, "test.db");
+process.env.DATA_DIR = TMP_DIR;
+process.env.NODE_ENV = "test";
 
 // Hermetic — no LLM judge call.
 delete process.env.GROK_API_KEY;
