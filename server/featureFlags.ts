@@ -21,4 +21,23 @@ export const featureFlags = {
    *  resolveTask behaves identically to pre-Phase-0. Phase 1 (separate PR)
    *  registers the first experiment and flips this on staging. */
   experimentExploration: flagOn("EXPERIMENT_EXPLORATION"),
+  /** Roadmap B1 — routes blog generation through the shared
+   *  `draftProductionPipeline` so structured pipeline.* events land in
+   *  engine_events. Default OFF; behavior under the flag is intentionally
+   *  equivalent to the existing blog hot path (same writer prompt, same
+   *  verifier gate, same publish decision). When OFF, blog generation
+   *  uses `generateBlogPost` directly as it did before. See
+   *  server/pipeline/draftProductionPipeline.ts and
+   *  server/pipeline/blogAdapter.ts. */
+  blogPipelineEnabled: flagOn("BLOG_PIPELINE_ENABLED"),
 };
+
+/** Read a feature flag at call time instead of at module load. Some flags
+ *  (notably `blogPipelineEnabled`) are flipped per-request in tests; the
+ *  static `featureFlags` snapshot captures process-startup state, which
+ *  is fine for production but brittle for tests that toggle env vars
+ *  between cases. Production callers can use either; tests should prefer
+ *  this helper. */
+export function readFlag(envVar: string): boolean {
+  return flagOn(envVar);
+}
