@@ -121,6 +121,21 @@ export const STRICT_TIERS: ReadonlySet<ContentTier> = new Set<ContentTier>([
   "research",
 ]);
 
+/** Engines that have been migrated to emit `verifier_result` telemetry
+ *  (Roadmap Issue E1). Adding a new engine to this union makes typos in
+ *  the `engine` field of `verifyClaims()` calls fail at compile time.
+ *
+ *  The trailing `(string & {})` preserves extensibility for engines that
+ *  have not been formally migrated yet — TS still accepts arbitrary
+ *  strings but loses autocomplete on them, signalling "this is not a
+ *  recognized migrated engine, double-check the spelling." */
+export type MigratedVerifierEngine =
+  | "blog"
+  | "article"
+  | "blog_publish_after_edit";
+
+export type VerifierEngine = MigratedVerifierEngine | (string & {});
+
 export type SentenceClassification =
   | "LANE_A_OK"
   | "LANE_A_FAIL"
@@ -266,8 +281,15 @@ export interface VerifyClaimsOpts {
   /** Engine that triggered the verifier. When set, a structured
    *  `verifier_result` event is emitted to engine_events on every
    *  verify call (Roadmap Issue E1). When unset, no event is emitted —
-   *  preserves the pre-PR contract for callers that haven't migrated. */
-  engine?: string;
+   *  preserves the pre-PR contract for callers that haven't migrated.
+   *
+   *  Typed as a union of known migrated engines so typos like
+   *  `"blogs"` or `"blog_publish_after_eidt"` fail at compile time.
+   *  The trailing `(string & {})` keeps the field extensible for
+   *  future engines without forcing a contract bump on every new
+   *  caller — but new engines should be added to {@link VerifierEngine}
+   *  as part of their migration so they show up in IDE autocomplete. */
+  engine?: VerifierEngine;
   /** Optional draft identifier — included on the verifier_result event
    *  so the dashboard can link a verifier result back to the draft it
    *  came from. */

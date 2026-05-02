@@ -178,6 +178,34 @@ Every verifier call emits one `verifier_result` event into
 This data drives the verifier health panel and the promotion gate's
 golden suite.
 
+### Cardinality (one event per `verifyClaims()` call)
+
+`verifier_result` is emitted **once per `verifyClaims()` invocation**,
+not once per draft. A single draft that goes through revise loops
+(`server/blogReviseLoop.ts`, `server/articleReviseLoop.ts`) will
+therefore produce multiple `verifier_result` rows for the same
+`draftId`: one for the initial verification and one for each
+revise/re-verify attempt. The same applies to the publish-after-edit
+path (`engine: "blog_publish_after_edit"`), which re-verifies on each
+publish attempt.
+
+Implications for the future E2 dashboard / aggregation jobs:
+
+- **Final per-draft status** is the LAST `verifier_result` for a given
+  `(engine, draftId)` pair, ordered by `engine_events.id` (or
+  `created_at`). It is NOT a `MAX(severity)` or a count.
+- **Pass-rate metrics** must group/dedupe by `(engine, draftId)` and
+  pick the latest row per draft before aggregating, otherwise drafts
+  that took more revise attempts will be over-counted relative to
+  drafts that passed on the first try.
+- **Revise-loop cost** can be measured directly as
+  `COUNT(verifier_result) - COUNT(DISTINCT draftId)` per engine.
+
+The event schema does not currently include an explicit `attempt`
+counter or a `final` boolean. If a future dashboard needs those, add
+them to `VerifyClaimsOpts` and bump this contract — do not infer
+attempt order from row timing alone, since async paths can interleave.
+
 ---
 
 ## Versioning
