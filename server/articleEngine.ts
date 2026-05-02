@@ -47,6 +47,12 @@ import {
 import { buildResearchPack, type ReferenceMetadata } from "./researchPack.js";
 import { extractClaimsAndComments, type ExtractedClaim, type ExtractedReference, type EditorComment } from "./claimExtractor.js";
 import { createOrReplaceLedger } from "./repositories/sourceLedgerRepository.js";
+import {
+  createOrReplaceClaimMap,
+  buildClaimMapPromptBlock,
+  type ClaimMapItemInput,
+} from "./repositories/claimMapRepository.js";
+import { buildClaimMap } from "./claimMapBuilder.js";
 import { buildVerifierContractBlock } from "./verifierContract.js";
 
 /**
@@ -92,6 +98,22 @@ function persistArticleSourceLedger(input: {
     draftId: input.draftId,
     topic: input.topic,
     items,
+  });
+}
+
+/**
+ * Persist a ClaimMap row for a Deep Read draft. Roadmap Issue A2.
+ */
+function persistArticleClaimMap(input: {
+  draftId: string;
+  topic: string;
+  items: ClaimMapItemInput[];
+}): void {
+  createOrReplaceClaimMap({
+    engine: "article",
+    draftId: input.draftId,
+    topic: input.topic,
+    items: input.items,
   });
 }
 const GROK_CHAT_API     = LLM_BASE_URL;
@@ -346,6 +368,7 @@ async function generateDeepReadArticle(
   articleContent: string,
   apiKey: string,
   sources: SourceObject[] = [],
+  claimMapBlock: string = "",
 ): Promise<{
   headline:    string;
   teaser:      string;  // the X post teaser
@@ -500,7 +523,7 @@ Summary: ${articleInfo.summary}
 
 FULL ARTICLE CONTENT:
 ${articleContent}
-${sourcesPromptBlock ? `\n${sourcesPromptBlock}\n` : ""}${exemplarBlock ? `\n${exemplarBlock}\n` : ""}
+${sourcesPromptBlock ? `\n${sourcesPromptBlock}\n` : ""}${claimMapBlock ? `\n${claimMapBlock}\n` : ""}${exemplarBlock ? `\n${exemplarBlock}\n` : ""}
 Write the complete long-form article. Make it the kind of analysis people share because
 it changed how they understood something — not because it told them what they already knew.
 
@@ -822,8 +845,44 @@ export async function runWeeklyDeepRead(
       const researchPack = buildResearchPack("deep_read", sourcePool);
       console.log(researchPack.summaryLine);
 
+      // Roadmap Issue A2 — pre-draft claim map. itemKeys are draft-local
+      // (e.g. "article:1", "article:2") and persisted verbatim under the
+      // real draftId after saveDeepReadDraft below. Uniqueness is scoped
+      // by (engine, draftId) via the parent claim_map row, so the draftId
+      // does not need to appear in the itemKey.
+      const claimMapDraft = buildClaimMap({
+        engine: "article",
+        draftId: "pending",
+        topic: articleInfo.title,
+        references: researchPack.references,
+        sourcePool,
+      });
+      const claimMapItems: ClaimMapItemInput[] = claimMapDraft.items.map((it, i) => ({
+        ...it,
+        itemKey: it.itemKey ?? `article:${i + 1}`,
+      }));
+      const claimMapBlock = buildClaimMapPromptBlock(
+        claimMapItems.map((it, i) => ({
+          id: i,
+          claimMapId: 0,
+          itemKey: it.itemKey!,
+          claimText: it.claimText,
+          claimType: it.claimType,
+          citationRequirement: it.citationRequirement,
+          sourceSupport: JSON.stringify(it.sourceSupport ?? []),
+          confidence: it.confidence ?? 0.5,
+          risk: it.risk ?? "low",
+          approved: it.approved !== false,
+          note: it.note ?? null,
+          createdAt: "",
+        })),
+      );
+      console.log(
+        `[ArticleEngine] claim map (pre-draft) — items=${claimMapItems.length} approved=${claimMapItems.filter(i => i.approved !== false).length}`,
+      );
+
       const { headline, teaser, body: rawBody } = await generateDeepReadArticle(
-        articleInfo, articleContent, apiKey, sourcePool,
+        articleInfo, articleContent, apiKey, sourcePool, claimMapBlock,
       );
 
       if (!rawBody || rawBody.length < 200) {
@@ -944,6 +1003,11 @@ export async function runWeeklyDeepRead(
         primaryTitle: articleInfo.title,
         sourceObjects: sourcePool,
         references: researchPack.references,
+      });
+      persistArticleClaimMap({
+        draftId: draft.draftId,
+        topic: articleInfo.title,
+        items: claimMapItems,
       });
 
       if (verdict.severity === "HARD_FAIL") {

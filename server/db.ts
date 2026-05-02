@@ -249,6 +249,40 @@ sqlite.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_source_ledger_items_ledger_id
     ON source_ledger_items(ledger_id);
+
+  -- Claim Map (Roadmap Issue A2, 2026-05-02). Pre-draft claim plan that the
+  -- writer is allowed to assert; verifier failures reference claim_map_items
+  -- by stable item_key. See server/repositories/claimMapRepository.ts.
+  CREATE TABLE IF NOT EXISTS claim_map (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    engine TEXT NOT NULL,
+    draft_id TEXT NOT NULL,
+    topic TEXT,
+    source_ledger_id INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_claim_map_engine_draft
+    ON claim_map(engine, draft_id);
+
+  CREATE TABLE IF NOT EXISTS claim_map_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    claim_map_id INTEGER NOT NULL,
+    item_key TEXT NOT NULL,
+    claim_text TEXT NOT NULL,
+    claim_type TEXT NOT NULL,
+    citation_requirement TEXT NOT NULL,
+    source_support TEXT NOT NULL DEFAULT '[]',
+    confidence REAL NOT NULL DEFAULT 0.5,
+    risk TEXT NOT NULL DEFAULT 'low',
+    approved INTEGER NOT NULL DEFAULT 1,
+    note TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_claim_map_items_map_id
+    ON claim_map_items(claim_map_id);
+  CREATE INDEX IF NOT EXISTS idx_claim_map_items_key
+    ON claim_map_items(claim_map_id, item_key);
 `);
 
 // PR-G — additive migration for pre-existing databases. The CREATE TABLE
