@@ -76,6 +76,12 @@ export const selfRecommendations = sqliteTable("self_recommendations", {
   author: text("author").notNull().default("agent"),    // agent|operator
   sourceHypothesisId: text("source_hypothesis_id"),
   sourceInsightId: text("source_insight_id"),
+  // Stable content fingerprint used to suppress near-duplicate proposals
+  // across cycles. Engines whose insight IDs change every run (e.g. SelfEvolution
+  // emits `evo_${Date.now()}_${rand}`) cannot dedupe via sourceInsightId alone,
+  // so the propose path hashes (category + normalized title/proposedChange) and
+  // skips when an existing non-terminal row carries the same key.
+  dedupeKey: text("dedupe_key"),
   prUrl: text("pr_url"),
   patchPath: text("patch_path"),
   createdAt: text("created_at").notNull().default(new Date().toISOString()),

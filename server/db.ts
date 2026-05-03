@@ -62,6 +62,7 @@ sqlite.exec(`
     author TEXT NOT NULL DEFAULT 'agent',
     source_hypothesis_id TEXT,
     source_insight_id TEXT,
+    dedupe_key TEXT,
     pr_url TEXT,
     patch_path TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -300,4 +301,19 @@ try {
   // Don't crash boot if the migration fails on a non-standard DB; the
   // probe feature will fail loudly at write time instead.
   console.warn("[db] experiment_trials.is_probe migration check failed:", e);
+}
+
+// Additive migration: dedupe_key on self_recommendations. Same shape as
+// experiment_trials.is_probe above — fresh DBs already get the column from
+// the CREATE TABLE block; existing DBs need the ALTER. NULL on legacy rows
+// means "not fingerprinted yet"; the dedupe check treats NULL as no-match,
+// so legacy rows are unaffected.
+try {
+  const cols = sqlite.prepare("PRAGMA table_info(self_recommendations)").all() as Array<{ name: string }>;
+  if (!cols.some(c => c.name === "dedupe_key")) {
+    sqlite.exec("ALTER TABLE self_recommendations ADD COLUMN dedupe_key TEXT");
+  }
+  sqlite.exec("CREATE INDEX IF NOT EXISTS idx_self_rec_dedupe_key ON self_recommendations(dedupe_key)");
+} catch (e) {
+  console.warn("[db] self_recommendations.dedupe_key migration check failed:", e);
 }

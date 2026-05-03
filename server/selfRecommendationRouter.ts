@@ -89,6 +89,10 @@ export function registerSelfRecommendationRoutes(app: Express, deps: SelfRecomme
       author: "operator",
       sourceHypothesisId: body.sourceHypothesisId,
       sourceInsightId: body.sourceInsightId,
+      // Operator-drafted recs opt out of content-fingerprint dedupe: if a
+      // human is filing a "duplicate", they have a reason. The agent-side
+      // dedupe is to suppress LLM repetition, not to second-guess operators.
+      dedupeKey: null,
     });
     res.status(201).json(serialize(rec));
   });

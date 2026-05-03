@@ -80,6 +80,24 @@ Policy matrix:
 
 There is no `auto_apply=true` knob. There is no bypass path. The gate is structurally incapable of auto-merging because `applyRecommendation` only writes to a row's status; producing a PR / patch / code diff is a separate, operator-triggered action (`POST /api/self-recommendations/:id/draft-pr`).
 
+## Dedupe policy
+
+`proposeRecommendation()` computes a content fingerprint (`dedupeKey`) from
+`(category + normalized title + normalized proposedChange)`. If an existing
+**non-terminal** row (`status = proposed | approved`) carries the same key
+within the last 14 days, the new propose call returns that existing row
+instead of inserting. Callers may pass `dedupeKey` explicitly when they
+know the right semantic axis (e.g. `goalEngine` hashes the failing-action
+text for missing-primitive recs, since insight IDs change every cycle and
+would otherwise let the same vague action emit a fresh rec daily). Callers
+may pass `dedupeKey: null` to opt out — the operator-drafted route in
+`selfRecommendationRouter` does this so a human filing a deliberate
+duplicate is never silently collapsed.
+
+The `rejected | applied | reverted` statuses are *not* considered active:
+once an operator has decided, a future proposal carrying the same key is
+allowed through, so a re-emerging concern can resurface for review.
+
 ## What the agent can propose
 
 The integration hooks (spec §1) are intentionally narrow:
