@@ -32,6 +32,7 @@ import {
   computeSourceTelemetry,
 } from "./sourceLocality.js";
 import { buildVerifierContractBlock } from "./verifierContract.js";
+import { buildArticleClaimLaneContractBlock } from "./articleClaimLaneContract.js";
 
 const DEFAULT_MAX_ATTEMPTS = 3;
 
@@ -170,15 +171,17 @@ async function defaultRewrite(input: RewriteInput): Promise<RewriteOutput> {
 
 ${buildVerifierContractBlock()}
 
+${buildArticleClaimLaneContractBlock()}
+
 YOUR RULES:
 - Fix ONLY the flagged sentences. Do not rewrite anything else. Do not change the headline. Preserve markdown structure (## headings, > quotes, --- dividers).
-- For LANE_B_BARE: add an inline markdown citation in the SAME sentence or its enclosing paragraph using one of the approved source URLs. If you cannot find a credible URL among the approved set or the original source, soften or drop the fact rather than invent a citation.
-- For LANE_A_FAIL: rewrite the sentence so it only says what the source text actually supports, OR drop the source attribution entirely. Never invent quotes or statistics.
-- For NCITE_PATTERN_HIT: split the appositive out into a separately cited Lane B sentence, OR drop the appositive.
+- For LANE_B_BARE: PREFER (in order) — (1) add an inline markdown citation in the SAME sentence using one of the approved source URLs IF that URL actually supports the specific number/year/named entity; (2) REMOVE the bare external fact entirely — drop the Karpathy/Stanford-HAI/2030/token-cost-style sentence; (3) only as a last resort, soften the sentence to verbal hedging that no longer asserts the specific fact ("publicly reported", "industry reporting indicates") with NO URL. Never staple the primary source's URL onto a fact the source does not support — that is fabrication.
+- For LANE_A_FAIL: choose ONE — (1) rewrite the sentence to say only what the source text actually supports; OR (2) drop the source attribution and rewrite as clearly-marked Agent 306 analysis using a boundary phrase ("My analysis, not a claim made by the paper —", "Agent 306's read, not the source's —", "The source does not say this; I do —"). Never invent quotes or statistics. If the original sentence was a normative requirement ("X must do Y to earn label Z"), rewriting as marked analysis is the right move when the analysis is genuinely 306's view.
+- For NCITE_PATTERN_HIT: split the appositive out into a separately cited Lane B sentence using a real supporting URL, OR drop the appositive.
 - For RETRACTED_HIT: delete the sentence outright — it cannot be saved.
 - Output JSON only, no prose.
 
-If a fact has no available citation, softening means: rephrase to remove the specific number / named study / dated claim. "X% of Y" → "a meaningful share of Y" with no number.`;
+If a fact has no available citation, softening means: rephrase to remove the specific number / named study / dated claim. "X% of Y" → "a meaningful share of Y" with no number. Removing the sentence is also acceptable and is preferred when softening would dilute the paragraph's argument.`;
 
   const user = `ORIGINAL DRAFT:
 """
