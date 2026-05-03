@@ -29,6 +29,7 @@ import { readGoalsBlob, writeGoalsBlob } from "./repositories/goalRepository.js"
 import { readResearchBlob, writeResearchBlob } from "./repositories/researchRepository.js";
 import { isDbStateEnabled } from "./repositories/jsonFallback.js";
 import { recordOutcome } from "./calibration/hypothesisOutcomes.js";
+import { persistManuscriptSourceLedger } from "./manuscriptSourceLedger.js";
 const GROK_CHAT_API    = LLM_BASE_URL;
 const PERPLEXITY_API   = "https://api.perplexity.ai";
 const RESEARCH_FILE    = dataPath("research_lab.json");
@@ -1353,6 +1354,23 @@ export async function runPhase7_Interpretation(
     topic.agentRecommendation = parsed.agentRecommendation;
     topic.draftedAt = new Date().toISOString();
     topic.reviewRequestedAt = new Date().toISOString();
+
+    // Roadmap PR #269 — bring the manuscript path onto the same source-ledger
+    // architecture Article / Deep Read uses. Persistence is best-effort:
+    // never fail Phase 7 if the DB write misfires (the helper itself
+    // already swallows + warns; this try/catch is belt-and-suspenders).
+    try {
+      persistManuscriptSourceLedger({
+        topicId:    topic.id,
+        topic:      topic.topic,
+        manuscript: topic.manuscript ?? "",
+        dataPointSourceUrls: (topic.dataPoints ?? [])
+          .filter(dp => !!dp.sourceUrl)
+          .map(dp => ({ url: dp.sourceUrl as string, title: dp.source, source: dp.source })),
+      });
+    } catch (e: any) {
+      console.warn("[Research] Manuscript source-ledger persistence failed:", e?.message ?? e);
+    }
 
     // Store unresolved gaps
     const gaps = parsed.unresolvedGaps ?? [];
