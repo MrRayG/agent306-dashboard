@@ -965,41 +965,55 @@ export async function generateBlogPost(opts: {
     });
   }
 
-  const verifyOut = await verifyAndRepairBlogDraft({
-    topic: opts.topic,
-    sourceId: opts.sourceId,
-    draftContent: draftResult.content,
-    sourceContent: opts.sourceContent,
-    freshContext,
-    sourcePool,
-  });
+  // Legacy parity: pre-refactor, the entire LLM-call → verify → publish
+  // sequence was wrapped in one outer try/catch that logged
+  // "[Blog] Generation failed: ..." and returned null. The compileDraft
+  // helper already handles its own LLM/JSON failures by returning null.
+  // The verify+publish stages can still throw (revise-loop failure,
+  // verifier-repair failure, persistence errors), so wrap them here to
+  // restore the pre-refactor contract for the legacy (flag-OFF) path.
+  // The pipeline path uses its own per-stage failure handling and does
+  // not call generateBlogPost.
+  try {
+    const verifyOut = await verifyAndRepairBlogDraft({
+      topic: opts.topic,
+      sourceId: opts.sourceId,
+      draftContent: draftResult.content,
+      sourceContent: opts.sourceContent,
+      freshContext,
+      sourcePool,
+    });
 
-  if (opts.onMetrics) {
-    try {
-      opts.onMetrics({
-        citationsAdded: verifyOut.citationsAdded,
-        sentencesHedged: verifyOut.sentencesHedged,
-        revisionAttempts: verifyOut.revisionAttempts,
-      });
-    } catch (e: any) {
-      console.warn("[Blog] onMetrics callback threw:", e?.message ?? String(e));
+    if (opts.onMetrics) {
+      try {
+        opts.onMetrics({
+          citationsAdded: verifyOut.citationsAdded,
+          sentencesHedged: verifyOut.sentencesHedged,
+          revisionAttempts: verifyOut.revisionAttempts,
+        });
+      } catch (e: any) {
+        console.warn("[Blog] onMetrics callback threw:", e?.message ?? String(e));
+      }
     }
-  }
 
-  return publishBlogDraft({
-    topic: opts.topic,
-    source: opts.source,
-    sourceId: opts.sourceId,
-    autoPublish: opts.autoPublish,
-    title: draftResult.title,
-    revisedBody: verifyOut.revisedBody,
-    tags: draftResult.tags,
-    verdict: verifyOut.verdict,
-    extraction: verifyOut.extraction,
-    researchPack,
-    sourcePool,
-    claimMapPromptItems,
-  });
+    return publishBlogDraft({
+      topic: opts.topic,
+      source: opts.source,
+      sourceId: opts.sourceId,
+      autoPublish: opts.autoPublish,
+      title: draftResult.title,
+      revisedBody: verifyOut.revisedBody,
+      tags: draftResult.tags,
+      verdict: verifyOut.verdict,
+      extraction: verifyOut.extraction,
+      researchPack,
+      sourcePool,
+      claimMapPromptItems,
+    });
+  } catch (e: any) {
+    console.error("[Blog] Generation failed:", e?.message ?? String(e));
+    return null;
+  }
 }
 
 // Publish a draft post
