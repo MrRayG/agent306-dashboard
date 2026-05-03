@@ -52,6 +52,7 @@ import {
 } from "./repositories/claimMapRepository.js";
 import { buildClaimMap } from "./claimMapBuilder.js";
 import { buildVerifierContractBlock } from "./verifierContract.js";
+import { buildSharedClaimLaneContractBlock } from "./claimLaneContract.js";
 const BLOG_FILE = dataPath("blog_state.json");
 
 /**
@@ -767,6 +768,8 @@ export async function compileBlogDraft(opts: {
 ${getFormatVoiceContext('blog')}
 
 ${buildVerifierContractBlock()}
+
+${buildSharedClaimLaneContractBlock("blog")}
 
 CITATION DISCIPLINE (REQUIRED — APA-style per-claim attribution + same-sentence locality):
 - CITATION LOCALITY: every external factual sentence with a date, number, percentage, year range, named study, named model release, named company release, named historical event, named legislation, or other hard factual claim MUST contain an inline markdown citation [Publisher](URL) in the SAME SENTENCE as the claim. Do not rely on a citation in an adjacent or previous sentence. Sentence-by-sentence verification is enforced post-write — a fact one sentence away from its URL is treated as uncited.

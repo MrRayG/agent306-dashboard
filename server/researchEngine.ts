@@ -32,6 +32,8 @@ import { recordOutcome } from "./calibration/hypothesisOutcomes.js";
 import { persistManuscriptSourceLedger } from "./manuscriptSourceLedger.js";
 import { persistManuscriptClaimMap } from "./manuscriptClaimMap.js";
 import { maybeRunManuscriptVerifier } from "./manuscriptVerifier.js";
+import { buildSharedClaimLaneContractBlock } from "./claimLaneContract.js";
+import { buildVerifierContractBlock } from "./verifierContract.js";
 const GROK_CHAT_API    = LLM_BASE_URL;
 const PERPLEXITY_API   = "https://api.perplexity.ai";
 const RESEARCH_FILE    = dataPath("research_lab.json");
@@ -1360,9 +1362,15 @@ export async function runPhase7_Interpretation(
     .map((dp, i) => `[${i + 1}] ${dp.credibility?.toUpperCase()}: ${dp.credibilityNote ?? ""}`)
     .join("\n");
 
+  const manuscriptSystemPrompt = `You are Agent 306 writing the final interpretation and manuscript. Write a thorough, well-cited piece. Be transparent about source credibility. Return valid JSON only.
+
+${buildVerifierContractBlock()}
+
+${buildSharedClaimLaneContractBlock("manuscript")}`;
+
   const parsed = await callGrok(
     grokKey,
-    "You are Agent 306 writing the final interpretation and manuscript. Write a thorough, well-cited piece. Be transparent about source credibility. Return valid JSON only.",
+    manuscriptSystemPrompt,
     `Research question: ${topic.researchQuestion}\nHypothesis: ${topic.hypothesis}\nAnalysis findings: ${(topic.analysisFindings ?? "").slice(0, 1500)}\n\nDATA POINTS WITH SOURCES:\n${dataPointsSummary.slice(0, 3000)}\n\nSOURCE URLS:\n${sourceList || "No source URLs available — attribute to Grok analysis or on-chain data."}\n\nSOURCE CREDIBILITY ASSESSMENTS:\n${credibilitySummary || "No credibility assessments available."}\n\nWrite the final manuscript:\n1. Answer the original research question definitively\n2. Include inline [source](url) citations throughout — reference specific data points\n3. NOTE source credibility transparently — if a claim relies on unverified/disputed sources, say so\n4. Form a clear conclusion\n5. Recommend whether to publish and why\n6. Identify any UNRESOLVED knowledge gaps — questions this research could NOT answer despite best efforts\n\nReturn JSON:\n{\n  "manuscript": "full article in markdown, 600-1000 words, with inline [source](url) citations and a Sources section at the end",\n  "manuscriptType": "thesis|report|deep_read|hypothesis",\n  "conclusion": "2-3 sentence definitive conclusion",\n  "agentRecommendation": "why Agent 306 recommends publishing — 2-3 sentences",\n  "unresolvedGaps": ["gap 1 that could not be answered", "gap 2"],\n  "followUpTopics": [\n    { "topic": "specific follow-up research title to close a gap", "description": "why this matters and what it would answer", "priority": "high|medium|low" }\n  ]\n}`,
     { model: getModel("manuscript"), maxTokens: 4000, temperature: 0.75 },
   );

@@ -103,6 +103,62 @@ language are present in the writer and reviser. The verifier itself is
 unchanged — this PR is contract enforcement only, no schema change, no
 threshold change, no publish gate change.
 
+## Cross-engine lane contract (PR #273, 2026-05-03)
+
+PR #273 generalizes the per-engine Article contract into a shared module
+`server/claimLaneContract.ts` and wires it into Article + Blog +
+Manuscript writer/reviser prompts. The Article module
+(`server/articleClaimLaneContract.ts`) is preserved as the entry point
+for the Article engine and now delegates to the shared block, so the
+legacy `ARTICLE_CLAIM_LANE_CONTRACT@v1` marker continues to ship
+alongside the cross-engine `CLAIM_LANE_CONTRACT@v1` marker.
+
+Three lanes (cross-engine vocabulary):
+
+- LANE A — SOURCE CLAIMS (`factual_attributed`, citation required). "The
+  source says X." MUST be directly source-supported, inline
+  `[Publisher](URL)` in the SAME sentence. HARD FAIL if the assertion
+  drifts past what the source says.
+- LANE B — AGENT ANALYSIS (`analysis`, citation forbidden). "Agent 306's
+  read is X" / forward projection / synthesis. Allowed and encouraged,
+  but MUST be marked as agent voice (boundary phrases like "My read —",
+  "Agent 306's analysis:", "The open question is —").
+- LANE C — EXTERNAL CONTEXT (`factual_external`, citation required).
+  "Karpathy says X" / "Stanford HAI reports X%". REQUIRES its own
+  ledger-backed source URL. Otherwise: hold or remove. Never staple the
+  primary source URL onto an external fact it doesn't support.
+
+Source-absence commentary rule: phrasings like "the paper does not
+answer X" / "the source does not say Y" / "the study fails to prove Z"
+read as Lane A negative-attribution but the source itself does not say
+it omitted that — the verifier flags them as Lane A drift. Preferred
+rewrites stay inside Lane B / Lane C: "The open question is X.", "A
+future study would need to show Y.", "Agent 306's analysis is Z." If
+the source ITSELF acknowledges the limitation, it is a legitimate
+Lane A claim with a real source-supported quote/paraphrase.
+
+This is the residual failure mode the Bloom/arXiv Deep Read live test
+surfaced after #272: the Article reviser produced "Agent 306's analysis:
+the paper does not answer whether these mindset shifts persist after the
+novelty fades..." — Lane A drift even though it was prefixed with an
+agent-voice boundary phrase. The shared contract names the pattern and
+gives the rewriter `buildSourceAbsenceRewriteRulesBlock()` to apply.
+
+Wiring matrix:
+
+| Engine | Writer prompt | Reviser prompt |
+| --- | --- | --- |
+| Article | `articleEngine.ts → generateDeepReadArticle` (via `buildArticleClaimLaneContractBlock`) | `articleReviseLoop.ts → defaultRewrite` (lane block + source-absence repair rules) |
+| Blog | `blogEngine.ts → composeBlogPost` (`buildSharedClaimLaneContractBlock("blog")`) | `blogReviseLoop.ts → defaultRewrite` (lane block + source-absence repair rules) |
+| Manuscript | `researchEngine.ts → runPhase7_Interpretation` (`buildSharedClaimLaneContractBlock("manuscript")`) | n/a — manuscript currently has no writer-side reviser loop; verifier gating runs in `manuscriptVerifier.ts`. Reviser-side wiring is the documented next follow-up if a manuscript reviser loop ships. |
+
+Tests: `server/__tests__/claimLaneContract.test.ts` static-greps the
+shared block content (three lanes, source-absence rules, engine framing)
+and asserts the wiring is in place for Article / Blog / Manuscript
+prompt sources. The Article-specific
+`server/__tests__/articleClaimLaneContract.test.ts` is preserved
+unchanged so the @v1 marker test continues to pass.
+
 ## Limitations / deferred
 
 - Token-overlap matching is intentionally simple. Two claims that share
@@ -117,6 +173,10 @@ threshold change, no publish gate change.
   enforces source-locality; "outside the plan" detection is deferred
   to Cluster B.
 - Academy / dispatch / news / signal pipelines are not migrated.
+- Manuscript reviser-side wiring is deferred — the manuscript writer
+  receives the shared contract but there is no manuscript reviser loop
+  yet; if one ships it should import `buildSharedClaimLaneContractBlock("manuscript")`
+  + `buildSourceAbsenceRewriteRulesBlock()` (PR #273 follow-up).
 
 ## Migration notes
 

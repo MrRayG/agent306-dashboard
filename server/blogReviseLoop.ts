@@ -38,6 +38,10 @@ import {
   computeSourceTelemetry,
 } from "./sourceLocality.js";
 import { buildVerifierContractBlock } from "./verifierContract.js";
+import {
+  buildSharedClaimLaneContractBlock,
+  buildSourceAbsenceRewriteRulesBlock,
+} from "./claimLaneContract.js";
 
 const DEFAULT_MAX_ATTEMPTS = 3;
 
@@ -172,6 +176,10 @@ async function defaultRewrite(input: RewriteInput): Promise<RewriteOutput> {
   const sys = `You are Agent 306's blog reviser. The writer has produced a blog post for agent306.ai and the claim verifier flagged specific sentences as failing.
 
 ${buildVerifierContractBlock()}
+
+${buildSharedClaimLaneContractBlock("blog")}
+
+${buildSourceAbsenceRewriteRulesBlock()}
 
 YOUR RULES:
 - Fix ONLY the flagged sentences. Do not rewrite anything else. Do not change the headline. Preserve markdown structure (## headings, bullet lists, **bold**, em dashes, paragraph breaks).
