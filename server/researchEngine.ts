@@ -30,6 +30,8 @@ import { readResearchBlob, writeResearchBlob } from "./repositories/researchRepo
 import { isDbStateEnabled } from "./repositories/jsonFallback.js";
 import { recordOutcome } from "./calibration/hypothesisOutcomes.js";
 import { persistManuscriptSourceLedger } from "./manuscriptSourceLedger.js";
+import { persistManuscriptClaimMap } from "./manuscriptClaimMap.js";
+import { maybeRunManuscriptVerifier } from "./manuscriptVerifier.js";
 const GROK_CHAT_API    = LLM_BASE_URL;
 const PERPLEXITY_API   = "https://api.perplexity.ai";
 const RESEARCH_FILE    = dataPath("research_lab.json");
@@ -114,6 +116,24 @@ export interface ResearchTopic {
   manuscript?:     string;   // full draft text (markdown)
   manuscriptType?: "thesis" | "report" | "deep_read" | "hypothesis";
   draftedAt?:      string;
+  /**
+   * Verifier-gate status for the manuscript. Set only when
+   * MANUSCRIPT_VERIFIER_ENABLED=true (PR #270). When the gate is off the
+   * field is undefined and Phase 7 behavior is unchanged from PR #269.
+   *
+   *   ok              — verifier PASS / SOFT_WARN; safe for public surfacing.
+   *   needs_revision  — verifier HARD_FAIL with recoverable unsupported claims.
+   *                     The future manuscript revise-loop seam consumes this.
+   *   quarantined     — verifier HARD_FAIL via judge-unreachable or
+   *                     NCITE_PATTERN — operator review only, no auto-revise.
+   *
+   * `publicResearchManuscripts` filters out any manuscript not explicitly
+   * 'ok' when the gate is on.
+   */
+  manuscriptStatus?: "ok" | "needs_revision" | "quarantined";
+  /** Operator-facing reason string when manuscriptStatus is needs_revision
+   *  or quarantined. */
+  manuscriptStatusReason?: string;
 
   // Review phase
   agentRecommendation?: string;  // why Agent 306 thinks this should be published
@@ -1359,17 +1379,57 @@ export async function runPhase7_Interpretation(
     // architecture Article / Deep Read uses. Persistence is best-effort:
     // never fail Phase 7 if the DB write misfires (the helper itself
     // already swallows + warns; this try/catch is belt-and-suspenders).
+    const dataPointSourceUrls = (topic.dataPoints ?? [])
+      .filter(dp => !!dp.sourceUrl)
+      .map(dp => ({ url: dp.sourceUrl as string, title: dp.source, source: dp.source }));
     try {
       persistManuscriptSourceLedger({
         topicId:    topic.id,
         topic:      topic.topic,
         manuscript: topic.manuscript ?? "",
-        dataPointSourceUrls: (topic.dataPoints ?? [])
-          .filter(dp => !!dp.sourceUrl)
-          .map(dp => ({ url: dp.sourceUrl as string, title: dp.source, source: dp.source })),
+        dataPointSourceUrls,
       });
     } catch (e: any) {
       console.warn("[Research] Manuscript source-ledger persistence failed:", e?.message ?? e);
+    }
+
+    // Roadmap PR #270 — persist a deterministic claim map alongside the
+    // source ledger. Same engine='manuscript', same draftId=topicId so
+    // verifier→claim-map mapping is consistent. Best-effort.
+    try {
+      persistManuscriptClaimMap({
+        topicId:    topic.id,
+        topic:      topic.topic,
+        manuscript: topic.manuscript ?? "",
+        dataPointSourceUrls,
+      });
+    } catch (e: any) {
+      console.warn("[Research] Manuscript claim-map persistence failed:", e?.message ?? e);
+    }
+
+    // Roadmap PR #270 — manuscript verifier gate. Off by default
+    // (MANUSCRIPT_VERIFIER_ENABLED=false). When enabled, runs the shared
+    // claim verifier over the manuscript using the source ledger as the
+    // sourceText bundle and records `manuscriptStatus` on the topic.
+    // `publicResearchManuscripts` filters out non-'ok' statuses when the
+    // gate is on.
+    try {
+      const verifyResult = await maybeRunManuscriptVerifier({
+        topicId:    topic.id,
+        topic:      topic.topic,
+        manuscript: topic.manuscript ?? "",
+      });
+      if (verifyResult) {
+        topic.manuscriptStatus = verifyResult.status;
+        topic.manuscriptStatusReason = verifyResult.reason || undefined;
+        console.log(
+          `[Research] Manuscript verifier — severity=${verifyResult.severity} ` +
+          `status=${verifyResult.status} unsupported=${verifyResult.unsupportedCount} ` +
+          `topicId=${topic.id}`,
+        );
+      }
+    } catch (e: any) {
+      console.warn("[Research] Manuscript verifier gate failed:", e?.message ?? e);
     }
 
     // Store unresolved gaps
