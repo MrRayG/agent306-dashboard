@@ -14,11 +14,30 @@
  */
 
 import { getResearchLab, type ResearchTopic } from "./researchEngine.js";
+import { manuscriptVerifierEnabled } from "./manuscriptVerifier.js";
 
 // "Has a non-empty manuscript" is the back-catalog published filter.
 // Declined / archived topics are explicitly excluded even if they somehow
 // carry a manuscript (they shouldn't in practice, but belt-and-suspenders).
 const UNPUBLISHABLE_STATUSES = new Set(["declined", "archived"]);
+
+// Roadmap PR #270 — verifier gate on the public surface. When the gate is
+// on (MANUSCRIPT_VERIFIER_ENABLED=true), only manuscripts whose verifier
+// status is 'ok' OR is unset (back-catalog manuscripts written before the
+// gate existed) are publicly visible. needs_revision / quarantined are
+// hidden so unsafe drafts don't leak. When the gate is off, manuscriptStatus
+// is ignored entirely — preserves PR #269 behavior exactly.
+//
+// Back-catalog handling: a manuscript with `manuscriptStatus === undefined`
+// pre-dates the verifier gate. We do NOT auto-quarantine those — they were
+// already public under PR #269 semantics and silently hiding them on
+// flag-flip would be a regression. The gate only filters explicit
+// non-'ok' statuses written by Phase 7 after the flag was enabled.
+function isManuscriptVerifierBlocked(t: ResearchTopic): boolean {
+  if (!manuscriptVerifierEnabled()) return false;
+  return t.manuscriptStatus === "needs_revision"
+      || t.manuscriptStatus === "quarantined";
+}
 
 export interface ResearchManuscriptListItem {
   id:             string;
@@ -43,6 +62,7 @@ function manuscriptTimestamp(t: ResearchTopic): string {
 function isPublishable(t: ResearchTopic): boolean {
   if (!t.manuscript || t.manuscript.trim().length === 0) return false;
   if (UNPUBLISHABLE_STATUSES.has(t.status)) return false;
+  if (isManuscriptVerifierBlocked(t)) return false;
   return true;
 }
 
