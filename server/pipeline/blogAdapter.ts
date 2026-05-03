@@ -308,6 +308,7 @@ export class BlogPipelineAdapter implements EnginePipelineAdapter {
       researchPack: source.researchPack,
       sourcePool: source.sourcePool,
       claimMapPromptItems: this.claimAssembly.claimMapPromptItems,
+      sourceContent: source.sourceText,
     });
 
     const status = post.status;
