@@ -30,10 +30,21 @@ export const featureFlags = {
    *  server/pipeline/draftProductionPipeline.ts and
    *  server/pipeline/blogAdapter.ts. */
   blogPipelineEnabled: flagOn("BLOG_PIPELINE_ENABLED"),
+  /** Roadmap B3 (article structural migration) — routes Article / Deep
+   *  Read generation through the shared `draftProductionPipeline` so
+   *  structured pipeline.* events land in engine_events. Default OFF.
+   *  When OFF, the cron / preview / manual-save paths use the legacy
+   *  Article codepaths verbatim — same discovery, same writer, same
+   *  verifier gate (HARD_FAIL → needs_revision), same source-ledger /
+   *  claim-map persistence. When ON, the pipeline orchestrator drives
+   *  per-stage helpers via the Article adapter; behavior remains
+   *  equivalent. See server/pipeline/articleAdapter.ts and
+   *  server/pipeline/articlePipelineEntry.ts. */
+  articlePipelineEnabled: flagOn("ARTICLE_PIPELINE_ENABLED"),
 };
 
 /** Read a feature flag at call time instead of at module load. Some flags
- *  (notably `blogPipelineEnabled`) are flipped per-request in tests; the
+ *  (notably `blogPipelineEnabled` / `articlePipelineEnabled`) are flipped per-request in tests; the
  *  static `featureFlags` snapshot captures process-startup state, which
  *  is fine for production but brittle for tests that toggle env vars
  *  between cases. Production callers can use either; tests should prefer
