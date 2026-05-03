@@ -48,6 +48,7 @@ import {
   addDraftResources,
   reviseDraftWithResources,
   persistArticleSourceLedger,
+  persistArticleManualSaveClaimMap,
 } from "./articleEngine.js";
 import { fetchSourceContent } from "./sourceFetcher.js";
 import { verifyClaims, type VerifierReport } from "./claimVerifier.js";
@@ -3159,6 +3160,23 @@ export function registerRoutes(httpServer: Server, app: Express) {
         });
       } catch (e: any) {
         console.warn(`[ArticleDrafts] ledger persist failed: ${e?.message ?? e}`);
+      }
+      // Persist a claim_map row alongside the source_ledger so the
+      // verifier-failure mapping and dashboard can cross-reference claims
+      // with the operator-supplied source. Mirrors the cron path's
+      // `publishArticleDraft`, which persists both. Failures are swallowed
+      // inside the repository so this never breaks the save.
+      try {
+        persistArticleManualSaveClaimMap({
+          draftId: draft.draftId,
+          topic: String(sourceTitle),
+          primaryUrl: String(sourceUrl),
+          primaryTitle: String(sourceTitle),
+          primaryExcerpt: incomingSourceText ?? null,
+          extraSourceUrls: incomingGroundingSources,
+        });
+      } catch (e: any) {
+        console.warn(`[ArticleDrafts] claim_map persist failed: ${e?.message ?? e}`);
       }
       if (verifierReport?.severity === "HARD_FAIL") {
         return res.status(422).json({ ok: false, draft, verifierReport });
