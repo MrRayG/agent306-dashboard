@@ -60,6 +60,49 @@ This is the deterministic baseline. Cluster B can replace the
 implementation with a verifier-internal mapping without changing the
 persisted shape.
 
+## Writer/reviser claim-lane contract (PR #272, 2026-05-03)
+
+Persistence of the claim map fixed the structural gap. PR #272 closes the
+behavioral gap: writers and revisers now ALSO have to obey the lanes the
+map emits.
+
+The `server/articleClaimLaneContract.ts` module is the single source of
+truth for the article-side rules. It is injected into both the article
+writer system prompt (`server/articleEngine.ts → generateDeepReadArticle`)
+and the article reviser system prompt
+(`server/articleReviseLoop.ts → defaultRewrite`).
+
+Rule summary (full text in the module):
+
+- `claim_type=analysis` / `citation_requirement=forbidden` items: agent
+  voice, no citation, must be CLEARLY MARKED as analysis when adjacent
+  to source-supported sentences. Boundary phrases like "My analysis,
+  not a claim made by the paper —" are required.
+- `claim_type=factual_attributed` / `citation_requirement=required` items:
+  inline `[Publisher](URL)` in the SAME sentence using the URL listed
+  under `support=`. No claim extension beyond what the source supports.
+- Out-of-plan external facts (named studies, dated events, percentages,
+  multipliers, dollar amounts not covered by any claim_map item) are a
+  HARD BLOCK — even if they feel like common knowledge. Specific
+  failure templates we keep seeing and reject by name include the
+  Karpathy/Dec-2025, Stanford-HAI/54.6%, 2008-ambient-display,
+  2030-projection, and token-cost-drop patterns.
+
+The reviser repair contract is now lane-aware: for `LANE_B_BARE`, REMOVE
+the bare external fact is the FIRST repair option when no supporting URL
+exists — softening with a verbal hedge is a fallback, and stapling the
+primary article URL onto an unsupported fact is FORBIDDEN. For
+`LANE_A_FAIL`, converting to clearly-marked Agent 306 analysis with a
+boundary phrase is acceptable when the assertion is genuinely 306's view
+(particularly normative-requirement-shaped failures like "X must do Y to
+earn label coach").
+
+Tests: `server/__tests__/articleClaimLaneContract.test.ts` is a
+static-source grep that asserts the contract block + reviser repair
+language are present in the writer and reviser. The verifier itself is
+unchanged — this PR is contract enforcement only, no schema change, no
+threshold change, no publish gate change.
+
 ## Limitations / deferred
 
 - Token-overlap matching is intentionally simple. Two claims that share

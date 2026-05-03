@@ -59,6 +59,7 @@ import {
 } from "./repositories/claimMapRepository.js";
 import { buildClaimMap } from "./claimMapBuilder.js";
 import { buildVerifierContractBlock } from "./verifierContract.js";
+import { buildArticleClaimLaneContractBlock } from "./articleClaimLaneContract.js";
 import { readFlag } from "./featureFlags.js";
 
 /** Roadmap B3 — Article pipeline gate. Read at call time so per-request
@@ -582,6 +583,8 @@ async function generateDeepReadArticle(
 ${getFormatVoiceContext('article')}
 
 ${buildVerifierContractBlock()}
+
+${buildArticleClaimLaneContractBlock()}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 AGENT 306 — THE DEEP READ
