@@ -58,7 +58,8 @@ import { runResearchAgendaCycle } from "./research-agenda.js";
 import { runResearchAnalysisCycle } from "./researchAnalysisEngine.js";
 import { updateDreams, takeGrowthSnapshot, generateSelfImprovementPlan, executeImprovementActions, seedDreams } from "./dreamEngine.js";
 import { runAutoPodcastPipeline } from "./podcastEngine.js";
-import { generateBlogPost, getBlogState, type BlogType } from "./blogEngine.js";
+import { getBlogState, type BlogType } from "./blogEngine.js";
+import { generateBlogPostMaybeViaPipeline } from "./pipeline/blogPipelineEntry.js";
 import { buildBlogUrl, ensureBlogDeepLink } from "./blogPromoLinks.js";
 import { getAgenda } from "./research-agenda.js";
 import { analyzeDailyCycle } from "./analyzerEngine.js";
@@ -1818,15 +1819,18 @@ Write a single tweet sharing the most interesting insight from this research. Re
           console.log(`[DailyCycle] Lower-confidence tier "${blogType}" — saving as draft instead of auto-publishing.`);
         }
 
-        // Generate post (auto-publish only for high-confidence tiers)
-        const post = await generateBlogPost({
+        // Generate post (auto-publish only for high-confidence tiers).
+        // Routes through `generateBlogPostMaybeViaPipeline` so when
+        // `BLOG_PIPELINE_ENABLED=true` the shared pipeline owns stage
+        // events. Default (flag OFF) preserves the legacy code path.
+        const post = await generateBlogPostMaybeViaPipeline({
           topic,
           sourceContent,
           source: blogType === "external" ? "exploration" : "research",
           sourceId,
           autoPublish: shouldAutoPublish,
           blogType,
-        }).catch(e => {
+        }).then(r => r.post).catch(e => {
           console.warn("[DailyCycle] Blog generation failed:", e.message);
           return null;
         });
