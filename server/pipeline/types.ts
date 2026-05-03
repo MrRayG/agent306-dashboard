@@ -142,6 +142,11 @@ export interface PublishDecision {
     draftId?: string;
     sourceLedgerId?: number;
     claimMapId?: number;
+    /** True when the publish stage skipped persistence because the
+     *  caller asked for a preview-only run (Article Studio preview path).
+     *  Distinct from `skippedForDryRun` — preview runs DID generate a
+     *  draft + verify it, they just did not persist. */
+    previewMode?: boolean;
   };
 }
 
