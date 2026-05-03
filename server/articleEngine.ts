@@ -59,6 +59,13 @@ import {
 } from "./repositories/claimMapRepository.js";
 import { buildClaimMap } from "./claimMapBuilder.js";
 import { buildVerifierContractBlock } from "./verifierContract.js";
+import { readFlag } from "./featureFlags.js";
+
+/** Roadmap B3 — Article pipeline gate. Read at call time so per-request
+ *  toggling works in tests, mirroring the Blog pipeline pattern. */
+function readArticlePipelineFlag(): boolean {
+  return readFlag("ARTICLE_PIPELINE_ENABLED");
+}
 
 /**
  * Maximum characters of primary article body kept on the ledger's primary
@@ -355,7 +362,7 @@ Return JSON ONLY — no extra text:
 // ── Step 1: Discover the week's most important AI article ────────────────────
 // Strategy: Try Grok x_search (Responses API) first for real-time search,
 // then fall back to chat completions API if Grok native key is unavailable.
-async function discoverArticle(apiKey: string): Promise<{
+export async function discoverArticle(apiKey: string): Promise<{
   title:   string;
   url:     string;
   summary: string;
@@ -461,7 +468,7 @@ function parseDiscoveryJSON(rawText: string): {
 // paywall/bot-wall handling and Perplexity fallback logic. Kept as an
 // internal re-export so the Deep Read caller below can await a single
 // call site and also inspect {ok, reason}.
-async function fetchArticleContent(url: string): Promise<{
+export async function fetchArticleContent(url: string): Promise<{
   text: string; title: string; imageUrl: string; ok: boolean; reason?: string; method: "direct"|"perplexity"|"failed";
 }> {
   const r = await fetchSourceContent(url);
@@ -885,6 +892,327 @@ function splitIntoThread(text: string, maxLen = 270): string[] {
   return chunks.filter(c => c.length > 0);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Per-stage helpers (Roadmap B3 — Article structural migration)
+//
+// These mirror the per-stage helpers Blog grew in PR #264 (assemble /
+// claim / compile / verify-repair / publish). They intentionally wrap the
+// SAME logic the legacy `runWeeklyDeepRead` and `previewDeepRead` paths
+// already use — there is no second writer prompt, no second verifier
+// configuration, no second persistence path. The Article pipeline adapter
+// (server/pipeline/articleAdapter.ts) plugs these helpers into the
+// shared draft-production pipeline behind ARTICLE_PIPELINE_ENABLED.
+//
+// All helpers are pure modulo their stated IO. Each returns a strongly
+// typed bundle so the orchestrator + adapter never need to peek at any
+// intermediate state.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The minimum article-info shape every Article stage helper needs. The
+ *  cron `discoverArticle()` and the `previewDeepRead` override path both
+ *  produce this shape. */
+export interface ArticleInfo {
+  title:         string;
+  url:           string;
+  summary:       string;
+  source:        string;
+  publishedDate: string;
+}
+
+/** Output of `assembleArticleSourcePack`. */
+export interface ArticleSourceAssembly {
+  sourcePool: SourceObject[];
+  researchPack: ReturnType<typeof buildResearchPack>;
+  /** Operator-fetched article body — used as verifier `sourceText` and as
+   *  the primary excerpt persisted on the source ledger. */
+  articleContent: string;
+  sourcesPromptBlock: string;
+}
+
+/** Output of `buildArticleClaimMapAssembly`. */
+export interface ArticleClaimAssembly {
+  claimMapPromptItems: ClaimMapItemInput[];
+  claimMapPromptBlock: string;
+}
+
+/** Output of `compileArticleDraft`. */
+export interface ArticleDraftResult {
+  headline: string;
+  teaser:   string;
+  body:     string;
+}
+
+/** Output of `verifyAndRepairArticleDraft`. */
+export interface ArticleVerifyAndRepair {
+  /** Body after the revise loop's citation-locality repair + verifier. */
+  revisedBody: string;
+  /** Verifier verdict against the final body. */
+  verdict: import("./claimVerifier.js").ClaimVerdict;
+  /** Bounded auto-revise loop attempts. */
+  revisionHistory: RevisionAttempt[];
+  /** Structured claims/references/editor-comments lifted off the verdict. */
+  extraction: ReturnType<typeof extractClaimsAndComments>;
+}
+
+/**
+ * Source stage. Produces the deduped source pool, research pack, and
+ * sources prompt block for a Deep Read draft. The primary article info
+ * always anchors the pool; URLs harvested from the article body are
+ * appended.
+ */
+export function assembleArticleSourcePack(opts: {
+  articleInfo: ArticleInfo;
+  articleContent: string;
+}): ArticleSourceAssembly {
+  const sourcePool: SourceObject[] = dedupeSources([
+    {
+      url:           opts.articleInfo.url,
+      title:         opts.articleInfo.title,
+      publisher:     opts.articleInfo.source,
+      retrievedAt:   new Date().toISOString(),
+      sourceId:      opts.articleInfo.url,
+      evidenceExcerpt: opts.articleInfo.summary?.slice(0, 280),
+    },
+    ...extractSourceObjects(opts.articleContent),
+  ]);
+  const researchPack = buildResearchPack("deep_read", sourcePool);
+  console.log(researchPack.summaryLine);
+  const sourcesPromptBlock = buildSourcesPromptBlock(sourcePool);
+  return {
+    sourcePool,
+    researchPack,
+    articleContent: opts.articleContent,
+    sourcesPromptBlock,
+  };
+}
+
+/**
+ * Claim stage. Builds the pre-draft claim map deterministically and
+ * returns BOTH the persistable items and the prompt-block string the
+ * writer prompt embeds. Pure / no IO. Mirrors `buildBlogClaimMap`.
+ */
+export function buildArticleClaimMapAssembly(opts: {
+  topic: string;
+  researchPack: ReturnType<typeof buildResearchPack>;
+  sourcePool: SourceObject[];
+}): ArticleClaimAssembly {
+  const claimMapDraft = buildClaimMap({
+    engine: "article",
+    draftId: "pending",
+    topic: opts.topic,
+    references: opts.researchPack.references,
+    sourcePool: opts.sourcePool,
+  });
+  const claimMapPromptItems: ClaimMapItemInput[] = claimMapDraft.items.map((it, i) => ({
+    ...it,
+    itemKey: it.itemKey ?? `article:${i + 1}`,
+  }));
+  const claimMapPromptBlock = buildClaimMapPromptBlock(
+    claimMapPromptItems.map((it, i) => ({
+      id: i,
+      claimMapId: 0,
+      itemKey: it.itemKey!,
+      claimText: it.claimText,
+      claimType: it.claimType,
+      citationRequirement: it.citationRequirement,
+      sourceSupport: JSON.stringify(it.sourceSupport ?? []),
+      confidence: it.confidence ?? 0.5,
+      risk: it.risk ?? "low",
+      approved: it.approved !== false,
+      note: it.note ?? null,
+      createdAt: "",
+    })),
+  );
+  console.log(
+    `[ArticleEngine] claim map (pre-draft) — items=${claimMapPromptItems.length} approved=${claimMapPromptItems.filter(i => i.approved !== false).length}`,
+  );
+  return { claimMapPromptItems, claimMapPromptBlock };
+}
+
+/**
+ * Draft stage. Calls the writer LLM and parses the JSON response. Returns
+ * `null` when the LLM call fails or the response is unrecoverable —
+ * mirrors the legacy generator's failure mode so the adapter can surface
+ * a clean draft-stage error.
+ */
+export async function compileArticleDraft(opts: {
+  articleInfo: ArticleInfo;
+  articleContent: string;
+  apiKey: string;
+  sourcePool: SourceObject[];
+  claimMapPromptBlock: string;
+}): Promise<ArticleDraftResult | null> {
+  if (!LLM_API_KEY) {
+    console.warn("[ArticleEngine] No LLM API key");
+    return null;
+  }
+  try {
+    const out = await generateDeepReadArticle(
+      opts.articleInfo,
+      opts.articleContent,
+      opts.apiKey,
+      opts.sourcePool,
+      opts.claimMapPromptBlock,
+    );
+    if (!out.body || out.body.length < 200) {
+      console.warn("[ArticleEngine] compileArticleDraft produced insufficient content");
+      return null;
+    }
+    return out;
+  } catch (e: any) {
+    console.error("[ArticleEngine] compileArticleDraft failed:", e?.message ?? String(e));
+    return null;
+  }
+}
+
+/**
+ * Verify + repair stage. Runs the auto-revise loop, computes the
+ * pre/post telemetry, and returns the final body + verdict + structured
+ * extraction. NO persistence — the publish stage owns that.
+ */
+export async function verifyAndRepairArticleDraft(opts: {
+  articleInfo: ArticleInfo;
+  draftBody: string;
+  articleContent: string;
+  sourcePool: SourceObject[];
+}): Promise<ArticleVerifyAndRepair> {
+  const preTelemetry = computeSourceTelemetry({
+    draft: opts.draftBody,
+    sources: opts.sourcePool,
+    sourceText: opts.articleContent,
+    citationRepairApplied: 0,
+  });
+  console.log(
+    `[ArticleEngine] source/citation telemetry (pre-revise) — sourceObjects.count=${preTelemetry.sourceObjectsCount} ` +
+    `sourceUrls.count=${preTelemetry.sourceUrlsCount} citedSentences.count=${preTelemetry.citedSentencesCount} ` +
+    `bareExternalFactSentences.count=${preTelemetry.bareExternalFactSentencesCount} ` +
+    `evidenceBundleBytes=${preTelemetry.evidenceBundleBytes}`,
+  );
+
+  const { body, verdict, revisionHistory } = await reviseUntilClean({
+    draftText:   opts.draftBody,
+    sourceText:  opts.articleContent,
+    sourceUrl:   opts.articleInfo.url,
+    sourceTitle: opts.articleInfo.title,
+    sourceObjects: opts.sourcePool,
+    artifactMode: "ANALYSIS",
+  });
+
+  const postTelemetry = computeSourceTelemetry({
+    draft: body,
+    sources: opts.sourcePool,
+    sourceText: opts.articleContent,
+    citationRepairApplied: 0,
+  });
+  console.log(
+    `[ArticleEngine] verifier lanes — laneAOk=${verdict.verifierReport.summary.laneAOk} ` +
+    `laneAFail=${verdict.verifierReport.summary.laneAFail} ` +
+    `laneBOk=${verdict.verifierReport.summary.laneBOk} ` +
+    `laneBBare=${verdict.verifierReport.summary.laneBBare} ` +
+    `severity=${verdict.severity} ` +
+    `citedSentences.count=${postTelemetry.citedSentencesCount} ` +
+    `bareExternalFactSentences.count=${postTelemetry.bareExternalFactSentencesCount}`,
+  );
+  if (revisionHistory.length > 0) {
+    console.log(
+      `[ArticleEngine] auto-revise ran ${revisionHistory.length} attempt(s); final severity=${verdict.severity}`,
+    );
+  }
+
+  const extraction = extractClaimsAndComments(body, verdict.verifierReport, opts.sourcePool);
+  console.log(
+    `[ArticleEngine] claim extractor — claims=${extraction.claims.length} ` +
+    `references=${extraction.references.length} ` +
+    `editorComments=${extraction.editorComments.length} ` +
+    `manualReviewRequired=${extraction.manualReviewRequired} ` +
+    `manualPublishAllowed=${extraction.manualPublishAllowed}`,
+  );
+
+  return { revisedBody: body, verdict, revisionHistory, extraction };
+}
+
+/**
+ * Publish stage. Single source of truth for the Article publish gate:
+ *
+ *   - HARD_FAIL → draft saved with status='needs_revision' (Article's
+ *     quarantine equivalent — Article never auto-publishes; the operator
+ *     manually posts via X's Article composer). Source ledger and claim
+ *     map are persisted in either case so manual revise can hydrate.
+ *   - PASS / SOFT_WARN → draft saved with status='ok'.
+ *
+ * Returns the persisted draft. Mirrors `publishBlogDraft` in shape;
+ * Article's `quarantined` status is `needs_revision` because Article
+ * drafts are operator-published, not auto-published.
+ */
+export function publishArticleDraft(opts: {
+  articleInfo: ArticleInfo;
+  articleContent: string;
+  imageUrl?: string;
+  draft: ArticleDraftResult;
+  verifyOut: ArticleVerifyAndRepair;
+  researchPack: ReturnType<typeof buildResearchPack>;
+  sourcePool: SourceObject[];
+  claimMapPromptItems: ClaimMapItemInput[];
+}): ArticleDraft {
+  const { verdict, revisionHistory, extraction } = opts.verifyOut;
+  // Compose the quarantine reason. When the judge LLM was unreachable
+  // we want the operator to see "judge_unreachable: N unverifiable
+  // claims" so they can distinguish a real grounding failure from a
+  // transient judge outage.
+  const judgeOut = verdict.verifierReport.judgeOutage;
+  const quarantineReason =
+    verdict.severity === "HARD_FAIL"
+      ? judgeOut && judgeOut.affectedSentences > 0
+        ? `${judgeOut.reason}: ${judgeOut.affectedSentences} unverifiable claim(s)`
+        : `${verdict.unsupportedClaims.length} unsupported claims`
+      : undefined;
+
+  const saved = saveDeepReadDraft({
+    headline:    opts.draft.headline,
+    teaser:      opts.draft.teaser,
+    body:        opts.verifyOut.revisedBody,
+    sourceUrl:   opts.articleInfo.url,
+    sourceTitle: opts.articleInfo.title,
+    imageUrl:    opts.imageUrl,
+    status:      verdict.severity === "HARD_FAIL" ? "needs_revision" : "ok",
+    quarantineReason,
+    unsupportedClaims: verdict.severity === "HARD_FAIL" ? verdict.unsupportedClaims : undefined,
+    verifierReport: verdict.verifierReport,
+    revisionHistory,
+    sourceText: opts.articleContent,
+    claims: extraction.claims,
+    references: extraction.references,
+    citationMap: extraction.citationMap,
+    editorComments: extraction.editorComments,
+    manualReviewRequired: extraction.manualReviewRequired || opts.researchPack.manualReviewRequired,
+    manualPublishAllowed: extraction.manualPublishAllowed && opts.researchPack.manualPublishAllowed,
+    referenceMetadata: opts.researchPack.references,
+    sourceQualityCounts: opts.researchPack.qualityReport.counts,
+  });
+  persistArticleSourceLedger({
+    draftId: saved.draftId,
+    topic: opts.articleInfo.title,
+    primaryUrl: opts.articleInfo.url,
+    primaryTitle: opts.articleInfo.title,
+    primaryExcerpt: opts.articleContent,
+    sourceObjects: opts.sourcePool,
+    references: opts.researchPack.references,
+  });
+  persistArticleClaimMap({
+    draftId: saved.draftId,
+    topic: opts.articleInfo.title,
+    items: opts.claimMapPromptItems,
+  });
+
+  if (verdict.severity === "HARD_FAIL") {
+    console.error(`[ClaimVerifier] REJECTED draft ${saved.draftId}: ${verdict.unsupportedClaims.length} unsupported claims`);
+    for (const c of verdict.unsupportedClaims) {
+      console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);
+    }
+  }
+  return saved;
+}
+
 // ── Main: full pipeline ───────────────────────────────────────────────────────
 /**
  * Weekly Deep Read generation. As of the 2026-04-21 cadence update this
@@ -929,6 +1257,41 @@ export async function runWeeklyDeepRead(
         console.warn(`[ArticleEngine] attempt ${attempt}/${MAX_ATTEMPTS}: ${msg} url=${articleInfo.url}`);
         lastErr = msg;
         continue;
+      }
+
+      // Roadmap B3 — Article structural migration. When
+      // ARTICLE_PIPELINE_ENABLED=true, route through the shared
+      // draft-production pipeline so structured pipeline.* events land in
+      // engine_events. The pipeline calls the SAME per-stage helpers as
+      // the legacy block below — same writer prompt, same verifier gate,
+      // same source-ledger / claim-map persistence. The cron's discover +
+      // fetch + retry loop stays in this wrapper; the pipeline takes over
+      // once we have a non-empty articleContent.
+      if (readArticlePipelineFlag()) {
+        const { generateArticleMaybeViaPipeline } = await import("./pipeline/articlePipelineEntry.js");
+        const out = await generateArticleMaybeViaPipeline({
+          apiKey,
+          articleInfo,
+          articleContent,
+          imageUrl,
+        });
+        if (out.draft) {
+          if (out.draft.status === "needs_revision") {
+            return {
+              success: false,
+              draftId: out.draft.draftId,
+              headline: out.draft.headline,
+              error: `Draft quarantined: ${out.draft.unsupportedClaims?.length ?? "?"} unsupported claims`,
+            };
+          }
+          console.log(`[ArticleEngine] Deep Read drafted via pipeline: "${out.draft.headline}" (id=${out.draft.draftId})`);
+          return { success: true, draftId: out.draft.draftId, headline: out.draft.headline };
+        }
+        // Pipeline path failed without persisting a draft (e.g. LLM
+        // unreachable). Fall through to the legacy path so the cron's
+        // retry budget still gets to try other candidate articles.
+        const reason = out.pipeline?.publish?.reason ?? "pipeline produced no draft";
+        console.warn(`[ArticleEngine] pipeline path produced no draft: ${reason}; falling back to legacy path for this attempt.`);
       }
 
       // PR-E: build a structured source pool from the primary article info
