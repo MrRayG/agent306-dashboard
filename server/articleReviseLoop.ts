@@ -33,6 +33,7 @@ import {
 } from "./sourceLocality.js";
 import { buildVerifierContractBlock } from "./verifierContract.js";
 import { buildArticleClaimLaneContractBlock } from "./articleClaimLaneContract.js";
+import { buildSourceAbsenceRewriteRulesBlock } from "./claimLaneContract.js";
 
 const DEFAULT_MAX_ATTEMPTS = 3;
 
@@ -172,6 +173,8 @@ async function defaultRewrite(input: RewriteInput): Promise<RewriteOutput> {
 ${buildVerifierContractBlock()}
 
 ${buildArticleClaimLaneContractBlock()}
+
+${buildSourceAbsenceRewriteRulesBlock()}
 
 YOUR RULES:
 - Fix ONLY the flagged sentences. Do not rewrite anything else. Do not change the headline. Preserve markdown structure (## headings, > quotes, --- dividers).
