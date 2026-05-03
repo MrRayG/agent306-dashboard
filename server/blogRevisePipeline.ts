@@ -15,11 +15,15 @@
 //   2. /blog revise <draftId> chat slash command
 //   3. Auto-revise hook in the auto-publish gate (bounded retry on quarantine)
 //
-// Why "without sources": at quarantine time the original sources used to draft
-// the post are not persisted on the BlogPost. The pipeline operates on what IS
-// available — the body, the verdict, any URLs already embedded in the body —
-// and instructs the rewriter to either soften bare claims or drop them entirely.
-// This is the same posture as the existing repairCitationLocality pass.
+// Source hydration (PR #266): when a `source_ledger` row exists for the post,
+// the pipeline composes the ledger's title/publisher/excerpt blocks into the
+// verifier's `sourceText` argument and forwards the http(s) URLs as the
+// reviser's citation pool. This closes a gap where manual revise hard-failed
+// with `no source text provided to verify attribution` even though the
+// original draft was generated against a real ledger. Falls back to the
+// legacy empty-source posture when no ledger exists (older posts) — Lane B
+// bare claims are still softened or dropped rather than citation-injected
+// from a missing source. Verifier strictness and publish gate are unchanged.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import {
@@ -30,6 +34,12 @@ import {
 } from "./blogEngine.js";
 import { reviseBlogUntilClean } from "./blogReviseLoop.js";
 import { extractClaimsAndComments } from "./claimExtractor.js";
+import {
+  getLedgerByDraft,
+  buildSourceContextForVerifier,
+  listLedgerSourceUrls,
+} from "./repositories/sourceLedgerRepository.js";
+import type { SourceObject } from "./sourceLocality.js";
 
 /** Pull every http(s) URL out of a block of markdown/text. Used to seed the
  *  rewriter's citation pool from URLs already embedded in the post. */
@@ -42,6 +52,74 @@ function extractUrls(text: string): string[] {
     out.add(m[0].replace(/[.,;:!?]+$/, ""));
   }
   return Array.from(out);
+}
+
+/**
+ * Hydrated source context the manual revise path forwards to
+ * `reviseBlogUntilClean`. PR #266 — exported so tests can exercise the
+ * ledger-hydration logic without standing up the verifier or rewriter
+ * LLM. Pre-#266 callers always saw `sourceText: ""` / `sourceObjects: []`;
+ * now this helper reads the persisted ledger and produces a populated
+ * bundle when available, falling back to the legacy empty-source posture
+ * otherwise.
+ */
+export interface ReviseSourceContext {
+  /** Composed `title — publisher\nexcerpt` bundle for the verifier. Empty
+   *  string when no ledger / no items exist. */
+  sourceText: string;
+  /** Primary source URL (http(s) only). Empty string for synthetic-only
+   *  ledgers or no ledger. */
+  sourceUrl: string;
+  /** Title to surface to the rewriter. Falls back to the post title. */
+  sourceTitle: string;
+  /** http(s)-only structured source objects from the ledger. Synthetic
+   *  internal:// items are filtered so the rewriter never tries to use
+   *  them as a citation target. */
+  sourceObjects: SourceObject[];
+  /** Union of body-embedded URLs and ledger http(s) URLs. Synthetic
+   *  internal:// items are excluded by `listLedgerSourceUrls`. */
+  extraSourceUrls: string[];
+}
+
+/**
+ * Build the revise loop's source context from the persisted source ledger
+ * row (engine='blog', draftId=postId) plus URLs already embedded in the
+ * post body. Pure modulo the ledger DB read. Exported for tests. Falls
+ * back to the legacy empty-source posture when no ledger exists.
+ */
+export function buildReviseSourceContext(opts: {
+  postId: string;
+  postContent: string;
+  postTitle: string;
+}): ReviseSourceContext {
+  const embeddedUrls = extractUrls(opts.postContent);
+  const ledger = getLedgerByDraft("blog", opts.postId);
+  const ledgerItems = ledger?.items ?? [];
+  const ledgerSourceText = ledgerItems.length > 0
+    ? buildSourceContextForVerifier(ledgerItems)
+    : "";
+  const ledgerSourceUrls = listLedgerSourceUrls(ledgerItems);
+  const ledgerSourceObjects: SourceObject[] = ledgerItems
+    .filter(i => /^https?:\/\//i.test(i.url ?? ""))
+    .map(i => ({
+      url: i.url,
+      title: i.title ?? undefined,
+      publisher: i.publisher ?? undefined,
+      evidenceExcerpt: i.excerpt ?? undefined,
+    }));
+  const ledgerPrimary = ledgerItems.find(i => i.sourceType === "primary") ?? ledgerItems[0];
+  const sourceUrl =
+    ledgerPrimary && /^https?:\/\//i.test(ledgerPrimary.url ?? "")
+      ? ledgerPrimary.url
+      : "";
+  const sourceTitle = ledgerPrimary?.title ?? opts.postTitle;
+  return {
+    sourceText: ledgerSourceText,
+    sourceUrl,
+    sourceTitle,
+    sourceObjects: ledgerSourceObjects,
+    extraSourceUrls: Array.from(new Set([...embeddedUrls, ...ledgerSourceUrls])),
+  };
 }
 
 export type ReviseOutcome =
@@ -105,22 +183,32 @@ export async function reviseQuarantinedBlogPost(postId: string): Promise<ReviseQ
     };
   }
 
-  // Pull URLs already embedded in the body — those are the citation pool the
-  // rewriter is allowed to reuse. The repair pass inside reviseBlogUntilClean
-  // will not fabricate new URLs.
-  const embeddedUrls = extractUrls(post.content);
+  // PR #266 — hydrate verifier/reviser source context from the persisted
+  // source ledger. Pre-#266 this path passed `sourceText: ""` and
+  // `sourceObjects: []`, which produced the
+  // `no source text provided to verify attribution` Lane A failure even
+  // when the original draft was generated against a real ledger row.
+  // `buildReviseSourceContext` reads the ledger and falls back to the
+  // legacy empty-source posture when none exists.
+  const ctx = buildReviseSourceContext({
+    postId,
+    postContent: post.content,
+    postTitle: post.title,
+  });
+  const ledgerSourceObjects = ctx.sourceObjects;
 
   try {
     const result = await reviseBlogUntilClean({
       draftText:    post.content,
-      // We don't have the original source text at quarantine time. Pass the
-      // empty string; the verifier still runs, the rewriter still operates
-      // on the verdict + the embedded URL pool. Lane B bare claims will be
-      // softened or dropped rather than citation-injected from a missing source.
-      sourceText:   "",
-      sourceUrl:    "",
-      sourceTitle:  post.title,
-      extraSourceUrls: embeddedUrls,
+      // Hydrate from ledger when available; legacy empty-source posture
+      // otherwise. Lane B bare claims are still softened/dropped when no
+      // citation target is available — the verifier strictness and
+      // publish gate are unchanged.
+      sourceText:    ctx.sourceText,
+      sourceUrl:     ctx.sourceUrl,
+      sourceTitle:   ctx.sourceTitle,
+      sourceObjects: ctx.sourceObjects,
+      extraSourceUrls: ctx.extraSourceUrls,
       // Single bounded attempt for the revise pipeline so this stays cheap.
       // The original 3-attempt loop already ran during generation; if that
       // loop couldn't fix it then either the verdict has stale info (the
@@ -139,10 +227,15 @@ export async function reviseQuarantinedBlogPost(postId: string): Promise<ReviseQ
 
     // Recompute structured claims + editor comments off the post-revision
     // verdict so the dashboard sees the FRESH list of failing sentences,
-    // not the stale ones from before the rewrite. We don't have the
-    // original sourcePool at this point, so publisher metadata is sparse;
-    // URLs are still recovered from the body.
-    const extraction = extractClaimsAndComments(finalBody, result.verdict.verifierReport, []);
+    // not the stale ones from before the rewrite. PR #266: pass the
+    // ledger source objects through so publisher metadata is populated
+    // when available. Falls back to URL-only recovery from the body for
+    // older posts with no ledger.
+    const extraction = extractClaimsAndComments(
+      finalBody,
+      result.verdict.verifierReport,
+      ledgerSourceObjects,
+    );
 
     if (finalSeverity === "PASS") {
       // Persist the revised body, then publish.

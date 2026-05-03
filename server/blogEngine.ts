@@ -80,6 +80,38 @@ export function persistBlogClaimMap(input: {
 }
 
 /**
+ * Return the bare hostname for an http(s) URL ("https://arxiv.org/x" →
+ * "arxiv.org"), or "" for non-http/invalid input. Used to populate
+ * `publisher` on URL-extracted SourceObjects so the source ledger row has
+ * an honest publisher label instead of `null`. Best-effort — never
+ * throws.
+ */
+function urlHostOrEmpty(url: string): string {
+  if (!url || typeof url !== "string") return "";
+  if (!/^https?:\/\//i.test(url)) return "";
+  try {
+    const u = new URL(url);
+    return u.host.replace(/^www\./i, "");
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Strip URLs out of `sourceContent` and return up to ~600 chars of any
+ * remaining operator free-text — used as an `evidenceExcerpt` on
+ * URL-extracted SourceObjects so the verifier/reviser bundle isn't
+ * literally just the URL. Returns `null` when nothing useful remains.
+ */
+function buildOperatorContextExcerpt(sourceContent: string | undefined): string | null {
+  const raw = (sourceContent ?? "").trim();
+  if (!raw) return null;
+  const stripped = raw.replace(/https?:\/\/[^\s)<\]]+/g, "").replace(/\s+/g, " ").trim();
+  if (stripped.length < 20) return null;
+  return stripped.length > 600 ? `${stripped.slice(0, 600)}…` : stripped;
+}
+
+/**
  * Maximum chars of operator-provided standalone source text we keep in the
  * synthetic ledger item excerpt. Long enough to give the verifier real
  * context on a re-verify, short enough that we don't bloat the ledger row
@@ -620,9 +652,33 @@ export async function assembleBlogSourcePack(opts: {
     }
   }
 
+  // PR #266: extract URLs from BOTH `topic` AND `sourceContent`. The Blog
+  // Studio "Generate from Topic" form has a free-form Topic input and an
+  // optional Source Content textarea — operators sometimes paste a URL
+  // into Topic when the URL IS the source they want grounded. Pre-#266
+  // those URLs were only recovered from the body (after the writer LLM
+  // surfaced them), which meant the source ledger fell back to the
+  // synthetic `internal://blog/standalone/<postId>` item even when a real
+  // URL was present in the operator's input. Lifting URLs out of `topic`
+  // closes that gap without changing publish-gate or verifier behavior.
+  // For URL-only sources we also enrich the SourceObject with `publisher`
+  // (the URL host) and an `evidenceExcerpt` derived from any operator
+  // free-text in `sourceContent`, so the verifier/reviser bundle has more
+  // than just the bare URL to reason against.
+  const operatorContextExcerpt = buildOperatorContextExcerpt(opts.sourceContent);
+  const enrichSource = (s: SourceObject): SourceObject => {
+    const host = urlHostOrEmpty(s.url);
+    return {
+      ...s,
+      publisher: s.publisher ?? (host || undefined),
+      title: s.title ?? (host ? `Source at ${host}` : undefined),
+      evidenceExcerpt: s.evidenceExcerpt ?? operatorContextExcerpt ?? undefined,
+    };
+  };
   const sourcePool = dedupeSources([
     ...(opts.sourceObjects ?? []),
-    ...extractSourceObjects(opts.sourceContent),
+    ...extractSourceObjects(opts.sourceContent).map(enrichSource),
+    ...extractSourceObjects(opts.topic).map(enrichSource),
     ...extractSourceObjects(freshContext),
   ]);
   const researchPack = buildResearchPack("blog", sourcePool);
