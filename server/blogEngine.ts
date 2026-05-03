@@ -423,39 +423,90 @@ Keep it short and honest. Not every post needs to be a definitive take. Curiosit
 }
 
 // Generate a blog post from a topic/content using LLM
-export async function generateBlogPost(opts: {
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * BLOG STAGE HELPERS (Roadmap B2 follow-up, 2026-05-03)
+ *
+ * The end-to-end `generateBlogPost` flow has been factored into per-stage
+ * helpers so the pipeline adapter (server/pipeline/blogAdapter.ts) can own
+ * meaningful per-stage events instead of calling generateBlogPost in one
+ * shot inside compileDraft. Both the legacy `generateBlogPost` path and
+ * the pipeline path call the SAME helpers — there is no behavioral fork.
+ *
+ * Helpers (in stage order):
+ *   - assembleBlogSourcePack: fresh-context fetch + dedup + research pack
+ *   - buildBlogClaimMap:      pre-draft claim map + prompt block
+ *   - compileBlogDraft:       LLM writer call → parsed draft (no verify, no persist)
+ *   - verifyAndRepairBlogDraft: citation-locality repair, verifier + revise loop,
+ *                              claim/comment extraction. No persistence.
+ *   - publishBlogDraft:       createBlogPost + persist source ledger + claim map
+ *
+ * The verifier thresholds, publish gate semantics (HARD_FAIL → quarantine),
+ * source ledger / claim map persistence, and safety-scan branch are all
+ * preserved verbatim from the pre-refactor function — only the lexical
+ * grouping changed.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+/** Output of `assembleBlogSourcePack`. */
+export interface BlogSourceAssembly {
+  sourcePool: SourceObject[];
+  researchPack: ResearchPack;
+  freshContext: string;
+  sourcesPromptBlock: string;
+}
+
+/** Output of `buildBlogClaimMap`. */
+export interface BlogClaimAssembly {
+  claimMapPromptItems: ClaimMapItemInput[];
+  claimMapPromptBlock: string;
+}
+
+/** Successful output of `compileBlogDraft`. The shape is a discriminated
+ *  union so the safety-redacted branch can short-circuit to a draft post
+ *  exactly the way the legacy function did. */
+export type BlogDraftResult =
+  | {
+      kind: "ok";
+      title: string;
+      content: string;
+      tags: string[];
+    }
+  | {
+      kind: "safety_redacted";
+      /** Caller must persist this as a draft (status=draft) with the
+       *  needs-review tag — same behavior as the legacy path. */
+      title: string;
+      redactedContent: string;
+      tags: string[];
+    };
+
+/** Output of `verifyAndRepairBlogDraft`. */
+export interface BlogVerifyAndRepair {
+  /** Body after citation-locality repair + revise loop. */
+  revisedBody: string;
+  /** Verifier verdict against the final body. */
+  verdict: import("./claimVerifier.js").ClaimVerdict;
+  /** Number of revise-loop attempts the engine actually ran. */
+  revisionAttempts: number;
+  /** Counters from the pre-revise citation-locality repair pass. */
+  citationsAdded: number;
+  sentencesHedged: number;
+  /** Structured claims/references/editor-comments lifted off the verdict. */
+  extraction: ReturnType<typeof extractClaimsAndComments>;
+}
+
+/**
+ * Source stage. Runs the Perplexity fresh-context fetch (when available),
+ * merges operator-supplied sourceObjects with URLs lifted from
+ * `sourceContent` and the fresh context, then builds a research pack +
+ * sources prompt block. Pure modulo the network call.
+ */
+export async function assembleBlogSourcePack(opts: {
   topic: string;
   sourceContent: string;
-  source: BlogSource;
-  sourceId?: string;
-  autoPublish?: boolean;
-  blogType?: BlogType;
-  /** Structured source pool (PR-E). When provided, these sources are passed
-   *  into the writer prompt as same-sentence citation targets and into the
-   *  post-generation citation-locality repair pass. URLs already present in
-   *  `sourceContent` / fresh-context are auto-extracted in addition. */
   sourceObjects?: SourceObject[];
-  /** Optional sink for per-stage metrics that aren't visible from the
-   *  returned BlogPost. Used by the pipeline adapter (Roadmap B2) to emit
-   *  truthful repair / verify event payloads. Best-effort: thrown errors
-   *  inside the callback are swallowed so blog generation never fails on
-   *  telemetry. Default callers (legacy path) pass nothing and behavior is
-   *  unchanged. */
-  onMetrics?: (m: {
-    citationsAdded: number;
-    sentencesHedged: number;
-    revisionAttempts: number;
-  }) => void;
-}): Promise<BlogPost | null> {
-  if (!LLM_API_KEY) {
-    console.warn("[Blog] No LLM API key");
-    return null;
-  }
-
-  const agentCtx = await getOptimizedContextAsync(`blog post ${opts.topic}`);
-  const currentKnowledge = getKnowledgeContext(8);
-
-  // Get fresh context for blog topic
+}): Promise<BlogSourceAssembly> {
   let freshContext = "";
   const pplxKey = process.env.PERPLEXITY_API_KEY ?? "";
   if (pplxKey && pplxKey.length > 10) {
@@ -493,50 +544,38 @@ export async function generateBlogPost(opts: {
     }
   }
 
-  // Few-shot: inject her own best recent blog work so voice pulls forward, not flatter.
-  // Empty when no history — prompt stays coherent.
-  const exemplarBlock = await buildExemplarBlock({ contentType: "blog", limit: 3 });
-
-  // PR-E: assemble the structured source pool that flows into both the
-  // writer prompt and the post-generation locality repair pass. We start
-  // with operator-supplied sourceObjects, then merge URLs we find inside
-  // the source material and Perplexity fresh-context block. Dedup is by URL.
   const sourcePool = dedupeSources([
     ...(opts.sourceObjects ?? []),
     ...extractSourceObjects(opts.sourceContent),
     ...extractSourceObjects(freshContext),
   ]);
-  // Audit follow-up 2026-05-02: classify the source pool BEFORE drafting so
-  // weak-source drafts can be flagged (or eventually short-circuited to
-  // manual review). We never fail the draft here — the draft still runs
-  // through verifier as before; we just persist the research pack on the
-  // post so the dashboard can show whether the source base was strong.
   const researchPack = buildResearchPack("blog", sourcePool);
   console.log(researchPack.summaryLine);
   const sourcesPromptBlock = buildSourcesPromptBlock(sourcePool);
+  return { sourcePool, researchPack, freshContext, sourcesPromptBlock };
+}
 
-  // Roadmap Issue A2 — pre-draft claim map. Built deterministically from the
-  // source pool + topic so the writer prompt only sees the approved set of
-  // claims, and so the verifier can map a failing sentence back to the
-  // claim_map_items.itemKey that produced it. Items are persisted AFTER
-  // createBlogPost runs (we need the real postId for the (engine, draftId)
-  // unique key); the prompt-time block uses the same items in-memory.
+/**
+ * Claim stage. Builds the pre-draft claim map deterministically and
+ * returns BOTH the persistable items and the prompt-block string the
+ * writer prompt embeds. Pure / no IO.
+ */
+export function buildBlogClaimMap(opts: {
+  topic: string;
+  researchPack: ResearchPack;
+  sourcePool: SourceObject[];
+}): BlogClaimAssembly {
   const claimMapDraft = buildClaimMap({
     engine: "blog",
     draftId: "pending",
     topic: opts.topic,
-    references: researchPack.references,
-    sourcePool,
+    references: opts.researchPack.references,
+    sourcePool: opts.sourcePool,
   });
   const claimMapPromptItems = claimMapDraft.items.map((it, i) => ({
     ...it,
-    // Pre-assign deterministic itemKeys so the prompt block + persisted rows
-    // share the same identifiers (claim_map_items uses these verbatim).
     itemKey: it.itemKey ?? `blog:${i + 1}`,
   }));
-  // Note: itemKeys are draft-local (e.g. "blog:1", "blog:2") and persisted
-  // verbatim. Uniqueness is scoped by (engine, draftId) via the parent
-  // claim_map row, so the postId does not need to appear in the itemKey.
   const claimMapPromptBlock = buildClaimMapPromptBlock(
     claimMapPromptItems.map((it, i) => ({
       id: i,
@@ -556,6 +595,34 @@ export async function generateBlogPost(opts: {
   console.log(
     `[Blog] claim map (pre-draft) — items=${claimMapPromptItems.length} approved=${claimMapPromptItems.filter(i => i.approved !== false).length}`,
   );
+  return { claimMapPromptItems, claimMapPromptBlock };
+}
+
+/**
+ * Draft stage. Calls the writer LLM, parses the JSON response, and runs
+ * the safety scan. Returns either a normal draft or a `safety_redacted`
+ * result that callers MUST persist as a draft with the needs-review tag.
+ *
+ * Returns `null` when the LLM call fails (network error, bad JSON, etc.) —
+ * mirrors the pre-refactor `return null` paths so callers don't need to
+ * distinguish failure modes.
+ */
+export async function compileBlogDraft(opts: {
+  topic: string;
+  sourceContent: string;
+  blogType?: BlogType;
+  sourcePool: SourceObject[];
+  sourcesPromptBlock: string;
+  claimMapPromptBlock: string;
+  freshContext: string;
+}): Promise<BlogDraftResult | null> {
+  if (!LLM_API_KEY) {
+    console.warn("[Blog] No LLM API key");
+    return null;
+  }
+  const agentCtx = await getOptimizedContextAsync(`blog post ${opts.topic}`);
+  const currentKnowledge = getKnowledgeContext(8);
+  const exemplarBlock = await buildExemplarBlock({ contentType: "blog", limit: 3 });
 
   try {
     const res = await postChatCompletions({
@@ -636,7 +703,7 @@ ${opts.sourceContent.slice(0, 4000)}
 
 CURRENT KNOWLEDGE CONTEXT:
 ${currentKnowledge}
-${freshContext ? `\nLATEST DEVELOPMENTS (from today's research — incorporate these):\n${freshContext}\n` : ""}${sourcesPromptBlock ? `\n${sourcesPromptBlock}\n` : ""}${claimMapPromptBlock ? `\n${claimMapPromptBlock}\n` : ""}${exemplarBlock ? `\n${exemplarBlock}\n` : ""}
+${opts.freshContext ? `\nLATEST DEVELOPMENTS (from today's research — incorporate these):\n${opts.freshContext}\n` : ""}${opts.sourcesPromptBlock ? `\n${opts.sourcesPromptBlock}\n` : ""}${opts.claimMapPromptBlock ? `\n${opts.claimMapPromptBlock}\n` : ""}${exemplarBlock ? `\n${exemplarBlock}\n` : ""}
 IMPORTANT: If the source material is from a private chat conversation, extract the TOPIC and INSIGHTS only. Do NOT copy conversational tone, greetings, questions, or planning language. Transform the ideas into a polished public blog post.
 
 Write the full blog post following the blog structure template. Hook the reader immediately. Use real facts, specific numbers, and name real companies/people. Break the body into 3-5 sections with clear subheadings. Include actionable takeaways. Share YOUR honest analysis. Respond with JSON only.`
@@ -654,152 +721,128 @@ Write the full blog post following the blog structure template. Hook the reader 
     const data = await res.json() as any;
     const content = data.choices?.[0]?.message?.content ?? "";
     const parsed = safeParseLLMJson(content, "Blog.post");
-
-    // Run content safety scan before publishing
     const safety = await scanBlogForSensitiveContent(parsed.content);
     if (!safety.safe) {
       console.warn(`[Blog] Safety issues detected: ${safety.issues.join(", ")}`);
-      return createBlogPost({
+      return {
+        kind: "safety_redacted",
         title: parsed.title,
-        content: safety.redacted,
-        source: opts.source,
-        sourceId: opts.sourceId,
-        tags: [...(parsed.tags ?? []), "needs-review"],
-        status: "draft", // Force draft when safety issues found
-      });
+        redactedContent: safety.redacted,
+        tags: parsed.tags ?? [],
+      };
     }
-
-    // PR-E: post-generation citation-locality repair runs BEFORE the
-    // verifier. It only ever reuses URLs already present in `sourcePool`;
-    // when no relevant source exists it hedges/generalizes the sentence.
-    // It NEVER fabricates a URL. Verifier strictness is unchanged.
-    const repair = repairCitationLocality(parsed.content, sourcePool);
-    const draftAfterRepair = repair.draft;
-    const sourceTextBundle = [opts.sourceContent, freshContext].filter(Boolean).join("\n\n");
-
-    const telemetry = computeSourceTelemetry({
-      draft: draftAfterRepair,
-      sources: sourcePool,
-      sourceText: sourceTextBundle,
-      citationRepairApplied: repair.citationsAdded + repair.sentencesHedged,
-    });
-    console.log(
-      `[Blog] source/citation telemetry — sourceObjects.count=${telemetry.sourceObjectsCount} ` +
-      `sourceUrls.count=${telemetry.sourceUrlsCount} citedSentences.count=${telemetry.citedSentencesCount} ` +
-      `bareExternalFactSentences.count=${telemetry.bareExternalFactSentencesCount} ` +
-      `citationRepair.applied=${telemetry.citationRepairApplied} ` +
-      `evidenceBundleBytes=${telemetry.evidenceBundleBytes}`,
-    );
-
-    // Post-write claim verification + auto-revise loop. Mirrors the article
-    // engine: if the verifier flags actionable failures (LANE_B_BARE,
-    // LANE_A_FAIL, NCITE_PATTERN_HIT, RETRACTED_HIT), ask the writer to fix
-    // ONLY those sentences before quarantining. Bounded by
-    // MAX_REVISION_ATTEMPTS (env, default 3). The revise loop re-runs
-    // repairCitationLocality + verifyClaims after each rewrite; the
-    // pre-revise repair above is preserved so the existing telemetry log
-    // line stays intact. See server/claimVerifier.ts and
-    // server/blogReviseLoop.ts.
-    const { body: revisedBody, verdict, revisionHistory } = await reviseBlogUntilClean({
-      draftText:     draftAfterRepair,
-      sourceText:    sourceTextBundle,
-      sourceUrl:     opts.sourceId ?? "",
-      sourceTitle:   opts.topic,
-      sourceObjects: sourcePool,
-    });
-    console.log(
-      `[Blog] verifier lanes — laneAOk=${verdict.verifierReport.summary.laneAOk} ` +
-      `laneAFail=${verdict.verifierReport.summary.laneAFail} ` +
-      `laneBOk=${verdict.verifierReport.summary.laneBOk} ` +
-      `laneBBare=${verdict.verifierReport.summary.laneBBare} ` +
-      `severity=${verdict.severity}`,
-    );
-    if (revisionHistory.length > 0) {
-      console.log(
-        `[Blog] auto-revise ran ${revisionHistory.length} attempt(s); final severity=${verdict.severity}`,
-      );
-    }
-
-    // Best-effort metrics sink for the pipeline adapter (B2). Pre-revise
-    // repair counters + revision attempts are not visible from the
-    // returned BlogPost; the adapter needs them for truthful pipeline
-    // events. Swallow errors so telemetry never breaks generation.
-    if (opts.onMetrics) {
-      try {
-        opts.onMetrics({
-          citationsAdded: repair.citationsAdded ?? 0,
-          sentencesHedged: repair.sentencesHedged ?? 0,
-          revisionAttempts: revisionHistory.length,
-        });
-      } catch (e: any) {
-        console.warn("[Blog] onMetrics callback threw:", e?.message ?? String(e));
-      }
-    }
-
-    // Extract structured claims, references, and editor comments from the
-    // final verdict so they persist on the BlogPost for the dashboard +
-    // chat surfaces. Pure / deterministic — no extra LLM calls. See
-    // server/claimExtractor.ts for the contract.
-    const extraction = extractClaimsAndComments(
-      revisedBody,
-      verdict.verifierReport,
-      sourcePool,
-    );
-    console.log(
-      `[Blog] claim extractor — claims=${extraction.claims.length} ` +
-      `references=${extraction.references.length} ` +
-      `editorComments=${extraction.editorComments.length} ` +
-      `manualReviewRequired=${extraction.manualReviewRequired} ` +
-      `manualPublishAllowed=${extraction.manualPublishAllowed}`,
-    );
-
-    // Final fallback: if the revise loop still produced HARD_FAIL after
-    // max attempts, quarantine as before so nothing regresses. The
-    // editor_comments + claims + references now persist on the post so
-    // the dashboard can show actionable feedback instead of just "rejected".
-    if (verdict.severity === "HARD_FAIL") {
-      const draft = createBlogPost({
-        title: parsed.title,
-        content: revisedBody,
-        source: opts.source,
-        sourceId: opts.sourceId,
-        tags: [...(parsed.tags ?? []), "claim-verifier-quarantine"],
-        status: "quarantined",
-        verifierReport: verdict.verifierReport,
-        claims: extraction.claims,
-        references: extraction.references,
-        citationMap: extraction.citationMap,
-        editorComments: extraction.editorComments,
-        manualReviewRequired: extraction.manualReviewRequired || researchPack.manualReviewRequired,
-        manualPublishAllowed: extraction.manualPublishAllowed && researchPack.manualPublishAllowed,
-        referenceMetadata: researchPack.references,
-        sourceQualityCounts: researchPack.qualityReport.counts,
-      });
-      console.error(`[ClaimVerifier] REJECTED draft ${draft.id}: ${verdict.unsupportedClaims.length} unsupported claims`);
-      for (const c of verdict.unsupportedClaims) {
-        console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);
-      }
-      persistBlogSourceLedger({
-        postId: draft.id,
-        topic: opts.topic,
-        sourceObjects: sourcePool,
-        references: researchPack.references,
-      });
-      persistBlogClaimMap({
-        postId: draft.id,
-        topic: opts.topic,
-        items: claimMapPromptItems,
-      });
-      return draft;
-    }
-
-    const finalPost = createBlogPost({
+    return {
+      kind: "ok",
       title: parsed.title,
-      content: revisedBody,
+      content: parsed.content,
+      tags: parsed.tags ?? [],
+    };
+  } catch (e: any) {
+    console.error("[Blog] Generation failed:", e.message);
+    return null;
+  }
+}
+
+/**
+ * Verify + repair stage. Runs the pre-revise citation-locality repair,
+ * the verifier + revise loop (`reviseBlogUntilClean`), and the structured
+ * claim/comment extraction. NO persistence — caller decides whether to
+ * `createBlogPost`/quarantine based on the returned verdict.
+ */
+export async function verifyAndRepairBlogDraft(opts: {
+  topic: string;
+  sourceId?: string;
+  draftContent: string;
+  sourceContent: string;
+  freshContext: string;
+  sourcePool: SourceObject[];
+}): Promise<BlogVerifyAndRepair> {
+  const repair = repairCitationLocality(opts.draftContent, opts.sourcePool);
+  const draftAfterRepair = repair.draft;
+  const sourceTextBundle = [opts.sourceContent, opts.freshContext].filter(Boolean).join("\n\n");
+
+  const telemetry = computeSourceTelemetry({
+    draft: draftAfterRepair,
+    sources: opts.sourcePool,
+    sourceText: sourceTextBundle,
+    citationRepairApplied: repair.citationsAdded + repair.sentencesHedged,
+  });
+  console.log(
+    `[Blog] source/citation telemetry — sourceObjects.count=${telemetry.sourceObjectsCount} ` +
+    `sourceUrls.count=${telemetry.sourceUrlsCount} citedSentences.count=${telemetry.citedSentencesCount} ` +
+    `bareExternalFactSentences.count=${telemetry.bareExternalFactSentencesCount} ` +
+    `citationRepair.applied=${telemetry.citationRepairApplied} ` +
+    `evidenceBundleBytes=${telemetry.evidenceBundleBytes}`,
+  );
+
+  const { body: revisedBody, verdict, revisionHistory } = await reviseBlogUntilClean({
+    draftText:     draftAfterRepair,
+    sourceText:    sourceTextBundle,
+    sourceUrl:     opts.sourceId ?? "",
+    sourceTitle:   opts.topic,
+    sourceObjects: opts.sourcePool,
+  });
+  console.log(
+    `[Blog] verifier lanes — laneAOk=${verdict.verifierReport.summary.laneAOk} ` +
+    `laneAFail=${verdict.verifierReport.summary.laneAFail} ` +
+    `laneBOk=${verdict.verifierReport.summary.laneBOk} ` +
+    `laneBBare=${verdict.verifierReport.summary.laneBBare} ` +
+    `severity=${verdict.severity}`,
+  );
+  if (revisionHistory.length > 0) {
+    console.log(
+      `[Blog] auto-revise ran ${revisionHistory.length} attempt(s); final severity=${verdict.severity}`,
+    );
+  }
+
+  const extraction = extractClaimsAndComments(revisedBody, verdict.verifierReport, opts.sourcePool);
+  console.log(
+    `[Blog] claim extractor — claims=${extraction.claims.length} ` +
+    `references=${extraction.references.length} ` +
+    `editorComments=${extraction.editorComments.length} ` +
+    `manualReviewRequired=${extraction.manualReviewRequired} ` +
+    `manualPublishAllowed=${extraction.manualPublishAllowed}`,
+  );
+
+  return {
+    revisedBody,
+    verdict,
+    revisionAttempts: revisionHistory.length,
+    citationsAdded: repair.citationsAdded ?? 0,
+    sentencesHedged: repair.sentencesHedged ?? 0,
+    extraction,
+  };
+}
+
+/**
+ * Publish stage. Single source of truth for HARD_FAIL → quarantine vs.
+ * autoPublish → published / draft. Persists the source ledger and the
+ * pre-draft claim map (with the real post id) AFTER createBlogPost runs
+ * so the (engine, draftId) unique key is satisfied.
+ */
+export function publishBlogDraft(opts: {
+  topic: string;
+  source: BlogSource;
+  sourceId?: string;
+  autoPublish?: boolean;
+  title: string;
+  revisedBody: string;
+  tags: string[];
+  verdict: import("./claimVerifier.js").ClaimVerdict;
+  extraction: ReturnType<typeof extractClaimsAndComments>;
+  researchPack: ResearchPack;
+  sourcePool: SourceObject[];
+  claimMapPromptItems: ClaimMapItemInput[];
+}): BlogPost {
+  const { verdict, extraction, researchPack } = opts;
+  if (verdict.severity === "HARD_FAIL") {
+    const draft = createBlogPost({
+      title: opts.title,
+      content: opts.revisedBody,
       source: opts.source,
       sourceId: opts.sourceId,
-      tags: parsed.tags ?? [],
-      status: opts.autoPublish ? "published" : "draft",
+      tags: [...opts.tags, "claim-verifier-quarantine"],
+      status: "quarantined",
       verifierReport: verdict.verifierReport,
       claims: extraction.claims,
       references: extraction.references,
@@ -810,22 +853,153 @@ Write the full blog post following the blog structure template. Hook the reader 
       referenceMetadata: researchPack.references,
       sourceQualityCounts: researchPack.qualityReport.counts,
     });
+    console.error(`[ClaimVerifier] REJECTED draft ${draft.id}: ${verdict.unsupportedClaims.length} unsupported claims`);
+    for (const c of verdict.unsupportedClaims) {
+      console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);
+    }
     persistBlogSourceLedger({
-      postId: finalPost.id,
+      postId: draft.id,
       topic: opts.topic,
-      sourceObjects: sourcePool,
+      sourceObjects: opts.sourcePool,
       references: researchPack.references,
     });
     persistBlogClaimMap({
-      postId: finalPost.id,
+      postId: draft.id,
       topic: opts.topic,
-      items: claimMapPromptItems,
+      items: opts.claimMapPromptItems,
     });
-    return finalPost;
-  } catch (e: any) {
-    console.error("[Blog] Generation failed:", e.message);
+    return draft;
+  }
+
+  const finalPost = createBlogPost({
+    title: opts.title,
+    content: opts.revisedBody,
+    source: opts.source,
+    sourceId: opts.sourceId,
+    tags: opts.tags,
+    status: opts.autoPublish ? "published" : "draft",
+    verifierReport: verdict.verifierReport,
+    claims: extraction.claims,
+    references: extraction.references,
+    citationMap: extraction.citationMap,
+    editorComments: extraction.editorComments,
+    manualReviewRequired: extraction.manualReviewRequired || researchPack.manualReviewRequired,
+    manualPublishAllowed: extraction.manualPublishAllowed && researchPack.manualPublishAllowed,
+    referenceMetadata: researchPack.references,
+    sourceQualityCounts: researchPack.qualityReport.counts,
+  });
+  persistBlogSourceLedger({
+    postId: finalPost.id,
+    topic: opts.topic,
+    sourceObjects: opts.sourcePool,
+    references: researchPack.references,
+  });
+  persistBlogClaimMap({
+    postId: finalPost.id,
+    topic: opts.topic,
+    items: opts.claimMapPromptItems,
+  });
+  return finalPost;
+}
+
+export async function generateBlogPost(opts: {
+  topic: string;
+  sourceContent: string;
+  source: BlogSource;
+  sourceId?: string;
+  autoPublish?: boolean;
+  blogType?: BlogType;
+  /** Structured source pool (PR-E). When provided, these sources are passed
+   *  into the writer prompt as same-sentence citation targets and into the
+   *  post-generation citation-locality repair pass. URLs already present in
+   *  `sourceContent` / fresh-context are auto-extracted in addition. */
+  sourceObjects?: SourceObject[];
+  /** Optional sink for per-stage metrics that aren't visible from the
+   *  returned BlogPost. Used by the pipeline adapter (Roadmap B2) to emit
+   *  truthful repair / verify event payloads. Best-effort: thrown errors
+   *  inside the callback are swallowed so blog generation never fails on
+   *  telemetry. Default callers (legacy path) pass nothing and behavior is
+   *  unchanged. */
+  onMetrics?: (m: {
+    citationsAdded: number;
+    sentencesHedged: number;
+    revisionAttempts: number;
+  }) => void;
+}): Promise<BlogPost | null> {
+  if (!LLM_API_KEY) {
+    console.warn("[Blog] No LLM API key");
     return null;
   }
+
+  const { sourcePool, researchPack, freshContext, sourcesPromptBlock } =
+    await assembleBlogSourcePack({
+      topic: opts.topic,
+      sourceContent: opts.sourceContent,
+      sourceObjects: opts.sourceObjects,
+    });
+
+  const { claimMapPromptItems, claimMapPromptBlock } = buildBlogClaimMap({
+    topic: opts.topic,
+    researchPack,
+    sourcePool,
+  });
+
+  const draftResult = await compileBlogDraft({
+    topic: opts.topic,
+    sourceContent: opts.sourceContent,
+    blogType: opts.blogType,
+    sourcePool,
+    sourcesPromptBlock,
+    claimMapPromptBlock,
+    freshContext,
+  });
+  if (!draftResult) return null;
+  if (draftResult.kind === "safety_redacted") {
+    return createBlogPost({
+      title: draftResult.title,
+      content: draftResult.redactedContent,
+      source: opts.source,
+      sourceId: opts.sourceId,
+      tags: [...draftResult.tags, "needs-review"],
+      status: "draft",
+    });
+  }
+
+  const verifyOut = await verifyAndRepairBlogDraft({
+    topic: opts.topic,
+    sourceId: opts.sourceId,
+    draftContent: draftResult.content,
+    sourceContent: opts.sourceContent,
+    freshContext,
+    sourcePool,
+  });
+
+  if (opts.onMetrics) {
+    try {
+      opts.onMetrics({
+        citationsAdded: verifyOut.citationsAdded,
+        sentencesHedged: verifyOut.sentencesHedged,
+        revisionAttempts: verifyOut.revisionAttempts,
+      });
+    } catch (e: any) {
+      console.warn("[Blog] onMetrics callback threw:", e?.message ?? String(e));
+    }
+  }
+
+  return publishBlogDraft({
+    topic: opts.topic,
+    source: opts.source,
+    sourceId: opts.sourceId,
+    autoPublish: opts.autoPublish,
+    title: draftResult.title,
+    revisedBody: verifyOut.revisedBody,
+    tags: draftResult.tags,
+    verdict: verifyOut.verdict,
+    extraction: verifyOut.extraction,
+    researchPack,
+    sourcePool,
+    claimMapPromptItems,
+  });
 }
 
 // Publish a draft post
