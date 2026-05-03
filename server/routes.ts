@@ -47,6 +47,7 @@ import {
   getDeepReadDraft,
   addDraftResources,
   reviseDraftWithResources,
+  persistArticleSourceLedger,
 } from "./articleEngine.js";
 import { fetchSourceContent } from "./sourceFetcher.js";
 import { verifyClaims, type VerifierReport } from "./claimVerifier.js";
@@ -3138,6 +3139,27 @@ export function registerRoutes(httpServer: Server, app: Express) {
         groundingSources: incomingGroundingSources,
         sourceText: incomingSourceText,
       });
+      // Persist a source ledger row so subsequent manual revise can hydrate
+      // verifier/reviser context from the same evidence the draft was saved
+      // against. Mirrors the Blog ledger persistence (PR #259/#266). Stores
+      // the primary URL/title plus the leading slice of the cached source
+      // text on the primary item's excerpt; manual revise reads this back via
+      // `buildArticleReviseSourceContext`. Defensive — failures inside
+      // `persistArticleSourceLedger` are swallowed by the repo, never breaking
+      // the save.
+      try {
+        persistArticleSourceLedger({
+          draftId: draft.draftId,
+          topic: String(sourceTitle),
+          primaryUrl: String(sourceUrl),
+          primaryTitle: String(sourceTitle),
+          primaryExcerpt: incomingSourceText ?? null,
+          sourceObjects: [],
+          references: [],
+        });
+      } catch (e: any) {
+        console.warn(`[ArticleDrafts] ledger persist failed: ${e?.message ?? e}`);
+      }
       if (verifierReport?.severity === "HARD_FAIL") {
         return res.status(422).json({ ok: false, draft, verifierReport });
       }

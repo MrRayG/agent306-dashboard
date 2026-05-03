@@ -46,7 +46,12 @@ import {
 } from "./sourceLocality.js";
 import { buildResearchPack, type ReferenceMetadata } from "./researchPack.js";
 import { extractClaimsAndComments, type ExtractedClaim, type ExtractedReference, type EditorComment } from "./claimExtractor.js";
-import { createOrReplaceLedger } from "./repositories/sourceLedgerRepository.js";
+import {
+  createOrReplaceLedger,
+  getLedgerByDraft,
+  buildSourceContextForVerifier,
+  listLedgerSourceUrls,
+} from "./repositories/sourceLedgerRepository.js";
 import {
   createOrReplaceClaimMap,
   buildClaimMapPromptBlock,
@@ -56,24 +61,46 @@ import { buildClaimMap } from "./claimMapBuilder.js";
 import { buildVerifierContractBlock } from "./verifierContract.js";
 
 /**
+ * Maximum characters of primary article body kept on the ledger's primary
+ * item excerpt. Long enough to give the manual-revise verifier real context
+ * on a re-verify, short enough that we don't bloat the ledger row with the
+ * entire article body. Mirrors the standalone-excerpt cap in blogEngine.
+ */
+const ARTICLE_PRIMARY_EXCERPT_MAX = 4000;
+
+/**
  * Persist a SourceLedger row for a Deep Read draft. The article engine's
  * primary source is the article being deep-read; supporting sources come
  * from the deduped source pool. Roadmap Issue A1.
+ *
+ * `primaryExcerpt` (optional) is the leading slice of the original article
+ * body. Storing it on the primary ledger item lets the manual-revise path
+ * (`reviseDraftWithResources`) hydrate the verifier's `sourceText` from
+ * the ledger when the in-memory `draft.sourceText` is missing — closing
+ * the same gap PR #266 fixed for Blog manual revise.
  */
-function persistArticleSourceLedger(input: {
+export function persistArticleSourceLedger(input: {
   draftId: string;
   topic: string;
   primaryUrl: string;
   primaryTitle: string;
+  primaryExcerpt?: string | null;
   sourceObjects: SourceObject[];
   references: ReferenceMetadata[];
 }): void {
+  const trimmedExcerpt = (input.primaryExcerpt ?? "").trim();
+  const primaryExcerpt = trimmedExcerpt.length > 0
+    ? (trimmedExcerpt.length > ARTICLE_PRIMARY_EXCERPT_MAX
+        ? `${trimmedExcerpt.slice(0, ARTICLE_PRIMARY_EXCERPT_MAX)}…`
+        : trimmedExcerpt)
+    : null;
+
   const items = [
     {
       url: input.primaryUrl,
       title: input.primaryTitle,
       publisher: null as string | null,
-      excerpt: null as string | null,
+      excerpt: primaryExcerpt,
       sourceType: "primary",
       trustTier: null as string | null,
       metadata: { role: "deep_read_primary" },
@@ -99,6 +126,85 @@ function persistArticleSourceLedger(input: {
     topic: input.topic,
     items,
   });
+}
+
+/**
+ * Hydrated source context the manual-revise path forwards to
+ * `reviseUntilClean`. Mirrors `buildReviseSourceContext` in the blog
+ * pipeline (PR #266). Pre-this-change `reviseDraftWithResources` always
+ * passed `sourceObjects: []` and used only the in-memory `draft.sourceText`
+ * (or a fresh refetch) for the verifier — so the citation-locality repair
+ * pass had no source pool, and a draft with a stale-or-missing cached
+ * sourceText would hard-fail with `no source text provided`.
+ *
+ * `buildArticleReviseSourceContext` reads the persisted ledger and produces
+ * a populated bundle when available, falling back to the legacy posture
+ * (in-memory sourceText / draft.sourceUrl) otherwise.
+ */
+export interface ArticleReviseSourceContext {
+  /** Composed `title — publisher\nexcerpt` bundle for the verifier. Falls
+   *  back to the supplied `fallbackSourceText` when the ledger has no usable
+   *  content, and finally to "" when nothing is available. */
+  sourceText: string;
+  /** Primary source URL. Falls back to `fallbackSourceUrl`. */
+  sourceUrl: string;
+  /** Title forwarded to the rewriter. Falls back to `fallbackSourceTitle`. */
+  sourceTitle: string;
+  /** http(s)-only structured source objects from the ledger. Synthetic
+   *  internal:// items are filtered so the rewriter never tries to use
+   *  them as a citation target. */
+  sourceObjects: SourceObject[];
+  /** Union of `extra` URLs supplied by the caller (operator additions /
+   *  grounding sources) and ledger http(s) URLs. */
+  extraSourceUrls: string[];
+}
+
+/**
+ * Build the article revise loop's source context from the persisted source
+ * ledger row (engine='article', draftId) plus operator-added URLs and the
+ * cached sourceText on the draft. Pure modulo the ledger DB read.
+ *
+ * - When the ledger has http(s) items, those win as `sourceObjects` and the
+ *   ledger's primary item supplies `sourceUrl` / `sourceTitle`.
+ * - When the ledger's primary item has a stored excerpt, that becomes the
+ *   verifier `sourceText` bundle — closing the manual-revise hydration gap.
+ * - Synthetic `internal://` items (defensive: Article doesn't currently
+ *   create them, but be safe) are filtered out of the http(s) URL lists.
+ */
+export function buildArticleReviseSourceContext(opts: {
+  draftId: string;
+  fallbackSourceText: string;
+  fallbackSourceUrl: string;
+  fallbackSourceTitle: string;
+  extraSourceUrls?: string[];
+}): ArticleReviseSourceContext {
+  const ledger = getLedgerByDraft("article", opts.draftId);
+  const ledgerItems = ledger?.items ?? [];
+  const ledgerSourceText = ledgerItems.length > 0
+    ? buildSourceContextForVerifier(ledgerItems)
+    : "";
+  const ledgerSourceUrls = listLedgerSourceUrls(ledgerItems);
+  const ledgerSourceObjects: SourceObject[] = ledgerItems
+    .filter(i => /^https?:\/\//i.test(i.url ?? ""))
+    .map(i => ({
+      url: i.url,
+      title: i.title ?? undefined,
+      publisher: i.publisher ?? undefined,
+      evidenceExcerpt: i.excerpt ?? undefined,
+    }));
+  const ledgerPrimary = ledgerItems.find(i => i.sourceType === "primary") ?? ledgerItems[0];
+  const primaryIsHttp = ledgerPrimary && /^https?:\/\//i.test(ledgerPrimary.url ?? "");
+  const sourceUrl = primaryIsHttp ? ledgerPrimary!.url : opts.fallbackSourceUrl;
+  const sourceTitle = ledgerPrimary?.title || opts.fallbackSourceTitle;
+  const sourceText = ledgerSourceText.length > 0 ? ledgerSourceText : opts.fallbackSourceText;
+  const extraIn = (opts.extraSourceUrls ?? []).filter(u => /^https?:\/\//i.test(u));
+  return {
+    sourceText,
+    sourceUrl,
+    sourceTitle,
+    sourceObjects: ledgerSourceObjects,
+    extraSourceUrls: Array.from(new Set([...extraIn, ...ledgerSourceUrls])),
+  };
 }
 
 /**
@@ -1001,6 +1107,7 @@ export async function runWeeklyDeepRead(
         topic: articleInfo.title,
         primaryUrl: articleInfo.url,
         primaryTitle: articleInfo.title,
+        primaryExcerpt: articleContent,
         sourceObjects: sourcePool,
         references: researchPack.references,
       });
@@ -1415,6 +1522,22 @@ export async function previewDeepRead(
     articleInfo, articleContent, apiKey,
   );
 
+  // Build a structured source pool from the primary article info plus any
+  // URLs harvested from the article body — parity with the cron path. The
+  // pool feeds the revise loop's citation-locality repair so cross-paragraph
+  // citations get pulled into the same sentence before verification.
+  const sourcePool: SourceObject[] = dedupeSources([
+    {
+      url:           targetUrl,
+      title:         articleInfo.title,
+      publisher:     articleInfo.source,
+      retrievedAt:   new Date().toISOString(),
+      sourceId:      targetUrl,
+      evidenceExcerpt: articleInfo.summary?.slice(0, 280),
+    },
+    ...extractSourceObjects(articleContent),
+  ]);
+
   // Auto-revise loop (issue 2): if the verifier surfaces actionable failures,
   // ask the writer to fix them before handing the draft to the operator. The
   // loop is no-op when the first verdict is PASS, so this adds zero cost on a
@@ -1437,6 +1560,7 @@ export async function previewDeepRead(
       sourceText:  articleContent,
       sourceUrl:   targetUrl,
       sourceTitle: articleInfo.title,
+      sourceObjects: sourcePool,
       extraSourceUrls: groundingSources,
     });
     body = result.body;
@@ -1510,21 +1634,40 @@ export async function reviseDraftWithResources(
       console.warn(`[ArticleEngine] reviseDraftWithResources: source fetch failed: ${e?.message ?? e}`);
     }
   }
-  if (!sourceText) {
-    return { ok: false, error: "source text unavailable; cannot verify or revise" };
-  }
 
-  const extraSourceUrls = [
+  // Hydrate verifier/reviser source context from the persisted source
+  // ledger when available — mirrors the Blog manual-revise hydration fix
+  // (PR #266). When the in-memory `draft.sourceText` is missing AND the
+  // refetch failed, the ledger's primary excerpt becomes the verifier
+  // source bundle so we don't hand the verifier an empty string and
+  // hard-fail with `no source text provided to verify attribution`.
+  // When a ledger row exists, its http(s) source objects also reach the
+  // revise loop's citation-locality repair pass — Lane B bare claims that
+  // already have a citation target in the pool get repaired in-place
+  // instead of being softened or dropped.
+  const operatorExtra = [
     ...(draft.groundingSources ?? []),
     ...((draft.extraSources ?? []).map(s => s.url)),
   ];
+  const ctx = buildArticleReviseSourceContext({
+    draftId,
+    fallbackSourceText: sourceText,
+    fallbackSourceUrl: draft.sourceUrl,
+    fallbackSourceTitle: draft.sourceTitle,
+    extraSourceUrls: operatorExtra,
+  });
+
+  if (!ctx.sourceText) {
+    return { ok: false, error: "source text unavailable; cannot verify or revise" };
+  }
 
   const result = await reviseUntilClean({
     draftText:   draft.body,
-    sourceText,
-    sourceUrl:   draft.sourceUrl,
-    sourceTitle: draft.sourceTitle,
-    extraSourceUrls,
+    sourceText:  ctx.sourceText,
+    sourceUrl:   ctx.sourceUrl,
+    sourceTitle: ctx.sourceTitle,
+    sourceObjects: ctx.sourceObjects,
+    extraSourceUrls: ctx.extraSourceUrls,
     operatorNote: opts.operatorNote,
   });
 
