@@ -216,17 +216,87 @@ export function buildArticleReviseSourceContext(opts: {
 
 /**
  * Persist a ClaimMap row for a Deep Read draft. Roadmap Issue A2.
+ *
+ * `sourceLedgerId` (optional) links the claim_map row back to the
+ * source_ledger row built from the same evidence — it lets the dashboard
+ * and verifier-failure mapping cross-reference claims and supporting
+ * sources. Manual-save callers resolve it via `getLedgerByDraft`.
  */
-function persistArticleClaimMap(input: {
+export function persistArticleClaimMap(input: {
   draftId: string;
   topic: string;
   items: ClaimMapItemInput[];
+  sourceLedgerId?: number | null;
 }): void {
   createOrReplaceClaimMap({
     engine: "article",
     draftId: input.draftId,
     topic: input.topic,
+    sourceLedgerId: input.sourceLedgerId ?? null,
     items: input.items,
+  });
+}
+
+/**
+ * Manual-save claim-map persistence.
+ *
+ * The cron / preview path persists a claim_map inside `publishArticleDraft`
+ * because it has the full sourceAssembly + researchPack handy. The manual
+ * save path (POST /api/article/drafts, used by Article Studio Deep Read
+ * URL-backed save) does NOT run the pipeline — it accepts an operator-
+ * authored body + sourceUrl and saves the draft directly. Pre-this helper,
+ * that path persisted only a source_ledger row (PR #267) and skipped
+ * claim_map, which left manually-saved Deep Read drafts without the
+ * evidence-link the verifier-failure mapping and dashboard expect.
+ *
+ * This helper builds a deterministic claim map from the primary article
+ * URL/title/excerpt the operator supplied, links it to the source_ledger
+ * row via `sourceLedgerId` when available, and persists it. Pure modulo
+ * the DB lookups + claim_map write — failures are swallowed inside the
+ * repository so the manual save endpoint never breaks if the claim_map
+ * tables aren't reachable.
+ */
+export function persistArticleManualSaveClaimMap(input: {
+  draftId: string;
+  topic: string;
+  primaryUrl: string;
+  primaryTitle: string;
+  primaryExcerpt?: string | null;
+  extraSourceUrls?: string[];
+}): void {
+  const trimmedExcerpt = (input.primaryExcerpt ?? "").trim();
+  const primaryHttp = /^https?:\/\//i.test(input.primaryUrl);
+  const sourcePool: SourceObject[] = [];
+  if (primaryHttp) {
+    sourcePool.push({
+      url: input.primaryUrl,
+      title: input.primaryTitle,
+      sourceId: input.primaryUrl,
+      retrievedAt: new Date().toISOString(),
+      evidenceExcerpt: trimmedExcerpt.length > 0 ? trimmedExcerpt.slice(0, 280) : undefined,
+    });
+  }
+  for (const u of input.extraSourceUrls ?? []) {
+    if (!/^https?:\/\//i.test(u)) continue;
+    if (sourcePool.find(s => s.url === u)) continue;
+    sourcePool.push({ url: u, sourceId: u, retrievedAt: new Date().toISOString() });
+  }
+  const built = buildClaimMap({
+    engine: "article",
+    draftId: input.draftId,
+    topic: input.topic,
+    sourcePool,
+  });
+  const items: ClaimMapItemInput[] = built.items.map((it, i) => ({
+    ...it,
+    itemKey: it.itemKey ?? `article:${i + 1}`,
+  }));
+  const ledger = getLedgerByDraft("article", input.draftId);
+  persistArticleClaimMap({
+    draftId: input.draftId,
+    topic: input.topic,
+    items,
+    sourceLedgerId: ledger?.ledger.id ?? null,
   });
 }
 const GROK_CHAT_API     = LLM_BASE_URL;
@@ -1198,10 +1268,16 @@ export function publishArticleDraft(opts: {
     sourceObjects: opts.sourcePool,
     references: opts.researchPack.references,
   });
+  // Resolve the just-written ledger id so the claim_map row links back to
+  // the same evidence row. Falls back to null when the ledger write was
+  // swallowed by the repo (defensive — the read returns null and we still
+  // persist the claim map without the link, matching pre-existing behavior).
+  const ledgerForLink = getLedgerByDraft("article", saved.draftId);
   persistArticleClaimMap({
     draftId: saved.draftId,
     topic: opts.articleInfo.title,
     items: opts.claimMapPromptItems,
+    sourceLedgerId: ledgerForLink?.ledger.id ?? null,
   });
 
   if (verdict.severity === "HARD_FAIL") {
@@ -1474,10 +1550,12 @@ export async function runWeeklyDeepRead(
         sourceObjects: sourcePool,
         references: researchPack.references,
       });
+      const legacyLedgerForLink = getLedgerByDraft("article", draft.draftId);
       persistArticleClaimMap({
         draftId: draft.draftId,
         topic: articleInfo.title,
         items: claimMapItems,
+        sourceLedgerId: legacyLedgerForLink?.ledger.id ?? null,
       });
 
       if (verdict.severity === "HARD_FAIL") {
