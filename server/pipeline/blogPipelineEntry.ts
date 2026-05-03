@@ -103,10 +103,15 @@ export async function generateBlogPostMaybeViaPipeline(
       sourceObjects: opts.sourceObjects,
     },
   });
-  // Resolve the BlogPost via the draft id the adapter recorded. We avoid
-  // storing the post on the pipeline result type itself — that contract
-  // is engine-agnostic; the BlogPost lookup belongs to this entry point.
-  const draftId = pipeline.draft?.draftId;
+  // Resolve the BlogPost via the publish stage's evidence. Post-Roadmap
+  // B2 stage extraction the createBlogPost call happens inside the
+  // adapter's publish stage, so the real id is on `publish.evidence.draftId`
+  // (the `draft` stage reports a synthetic pre-publish id that does NOT
+  // exist in blog_state.json). Falling back to `draft.draftId` keeps
+  // older fixtures working when the stage layout changes again.
+  const idFromPublish = pipeline.publish?.evidence?.draftId;
+  const idFromDraft = pipeline.draft?.draftId;
+  const draftId = idFromPublish ?? idFromDraft;
   const post = draftId ? getPostById(draftId) : null;
   return { post, pipeline };
 }

@@ -1,56 +1,62 @@
 /**
  * ─────────────────────────────────────────────────────────────────────────────
- * 306 — BLOG ENGINE PIPELINE ADAPTER (Roadmap B1, 2026-05-02)
+ * 306 — BLOG ENGINE PIPELINE ADAPTER (Roadmap B2 follow-up, 2026-05-03)
  *
- * Plugs the blog engine into the shared draft-production pipeline. The
- * heavy lifting (writer prompt, fresh-context fetch, source repair,
- * verifier + revise loop, post persistence) still lives in
- * `generateBlogPost` — this adapter only:
+ * Plugs the blog engine into the shared draft-production pipeline. Earlier
+ * iterations of this adapter (B1, PR #262) delegated compileDraft +
+ * verifyAndRepair + publish to a single `generateBlogPost` end-to-end call
+ * and split the result across the three stage methods. This file flips
+ * that around: each stage now owns its own piece of work via the
+ * per-stage helpers exported from `blogEngine.ts`. The legacy
+ * `generateBlogPost` path calls the SAME helpers so both paths stay
+ * behavior-equivalent — there is no second writer prompt, no second
+ * verifier configuration, no second persistence path.
  *
- *   1. Runs the planning / source / claim stages purely (no LLM, no IO)
- *      so the dry-run path can reach those stages without invoking the
- *      blog hot path. Reuses `extractSourceObjects` / `dedupeSources` /
- *      `buildResearchPack` / `buildClaimMap` exactly as `generateBlogPost`
- *      does, so dry-run output matches what would feed the real writer.
+ * Stage mapping:
+ *   - plan:           topic + blogType passthrough.
+ *   - source:         assembleBlogSourcePack (fresh-context fetch + dedup +
+ *                     research pack + sources prompt block).
+ *   - claim:          buildBlogClaimMap (pre-draft claim map items +
+ *                     deterministic itemKeys + prompt block).
+ *   - compileDraft:   compileBlogDraft (writer LLM call + safety scan).
+ *   - verifyAndRepair: verifyAndRepairBlogDraft (citation-locality repair,
+ *                     verifier + revise loop, claim/comment extraction).
+ *   - publish:        publishBlogDraft (createBlogPost + persistBlogSourceLedger
+ *                     + persistBlogClaimMap, with HARD_FAIL → quarantine
+ *                     handling preserved verbatim).
  *
- *   2. Delegates compileDraft + verifyAndRepair + publish to the existing
- *      `generateBlogPost` end-to-end function. The adapter splits its
- *      single result across the three stages so the orchestrator emits
- *      events with the right granularity. Importantly: behavior is
- *      preserved — the same writer prompt, the same revise loop, the
- *      same publish gate, the same source-ledger / claim-map writes.
+ * Behavior preserved:
+ *   - Verifier thresholds, severity/lane summaries, HARD_FAIL semantics.
+ *   - Publish gate: HARD_FAIL → quarantined; otherwise autoPublish chooses
+ *     between published / draft.
+ *   - Source ledger + claim map persistence happen exactly once per run, on
+ *     the same code path as the legacy function.
+ *   - Safety-redacted draft branch routes to a `status: draft` post with
+ *     the `needs-review` tag.
  *
- * Per Roadmap B1, full migration of the blog hot path into per-stage
- * adapter methods is deferred to B2. This adapter exists so a
- * feature-flagged blog path can run THROUGH the pipeline today without
- * splitting `generateBlogPost` into pieces.
- *
- * Behavior preserved when the feature flag is on:
- *   - The blog post is created via `createBlogPost` exactly as before.
- *   - Verifier thresholds, source-quality gate, manual-review flags are
- *     unchanged — the adapter does not re-run any of them.
- *   - Source ledger + claim map persistence happen inside `generateBlogPost`
- *     as they do today.
- *
- * Net effect when the flag is on: the same blog post lands, plus structured
- * pipeline.* events show up in engine_events.
+ * Adapter instance state holds the source pool / research pack / claim map
+ * items between stages so a single run threads through one adapter instance.
+ * NOT a singleton — the entry point creates a fresh adapter per call.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import {
-  generateBlogPost,
+  assembleBlogSourcePack,
+  buildBlogClaimMap,
+  compileBlogDraft,
+  createBlogPost,
+  verifyAndRepairBlogDraft,
+  publishBlogDraft,
   getPostById,
   type BlogPost,
   type BlogSource,
   type BlogType,
+  type BlogSourceAssembly,
+  type BlogClaimAssembly,
+  type BlogDraftResult,
+  type BlogVerifyAndRepair,
 } from "../blogEngine.js";
-import {
-  dedupeSources,
-  extractSourceObjects,
-  type SourceObject,
-} from "../sourceLocality.js";
-import { buildResearchPack } from "../researchPack.js";
-import { buildClaimMap } from "../claimMapBuilder.js";
+import type { SourceObject } from "../sourceLocality.js";
 import type {
   ClaimResult,
   DraftResult,
@@ -62,7 +68,6 @@ import type {
   SourceResult,
   VerifyResult,
 } from "./types.js";
-import type { ClaimVerdict, VerifierReport } from "../claimVerifier.js";
 
 /** Engine-specific options the blog adapter recognizes on `PipelineInput`. */
 export interface BlogPipelineOpts {
@@ -85,71 +90,27 @@ function readBlogOpts(input: PipelineInput): BlogPipelineOpts {
 }
 
 /**
- * Synthesize a verifier report shape from a finalized BlogPost. The post
- * already carries a `verifierReport` after generateBlogPost runs; we
- * surface it under the pipeline's typed contract. Returns a benign
- * "unknown-no-llm" shape when the post is null (LLM key missing) so the
- * pipeline can still emit a publish event with a reason.
- */
-function reportFromPost(post: BlogPost | null): {
-  verdict: ClaimVerdict;
-  report: VerifierReport;
-} {
-  if (!post || !post.verifierReport) {
-    const empty: VerifierReport = {
-      severity: "PASS",
-      entries: [],
-      summary: {
-        laneAOk: 0,
-        laneAFail: 0,
-        laneAUnverifiable: 0,
-        laneAPassQuotedCommentary: 0,
-        laneAPassCritiqueByAbsence: 0,
-        laneBOk: 0,
-        laneBBare: 0,
-        retractedHits: 0,
-        ncitePatternHits: 0,
-      },
-    };
-    const verdict: ClaimVerdict = {
-      ok: true,
-      unsupportedClaims: [],
-      supportedCount: 0,
-      externalCitedCount: 0,
-      verifierReport: empty,
-      severity: "PASS",
-    };
-    return { verdict, report: empty };
-  }
-  const report = post.verifierReport;
-  const verdict: ClaimVerdict = {
-    ok: report.severity === "PASS",
-    unsupportedClaims: [],
-    supportedCount: report.summary.laneAOk + report.summary.laneBOk,
-    externalCitedCount: report.summary.laneBOk,
-    verifierReport: report,
-    severity: report.severity,
-  };
-  return { verdict, report };
-}
-
-/**
- * Stateful blog adapter. We hold the BlogPost produced inside
- * `compileDraft` so `verifyAndRepair` and `publish` can see the same
- * post without invoking generateBlogPost a second time. Each pipeline
- * run uses a fresh adapter instance — this is NOT a singleton.
+ * Stateful blog adapter. Each stage method captures the artifacts the
+ * later stages need (sourcePool, researchPack, claimMapPromptItems,
+ * draftResult, verifyOut). One adapter instance per pipeline run; the
+ * entry point in blogPipelineEntry constructs a fresh one each call.
  */
 export class BlogPipelineAdapter implements EnginePipelineAdapter {
   readonly engine = "blog" as const;
 
-  /** Set inside `compileDraft`; consumed by verify/publish. */
-  private generatedPost: BlogPost | null = null;
-  /** Counters threaded out of `generateBlogPost` via its optional
-   *  `onMetrics` callback (Roadmap B2). When the callback fires we have
-   *  truthful repair + revision-attempt numbers; otherwise the defaults
-   *  below are reported. */
-  private repairCounters = { citationsAdded: 0, sentencesHedged: 0 };
-  private revisionAttempts = -1;
+  /** Captured inside `assembleSourcePack` so later stages can reach the
+   *  research pack / fresh context without rebuilding them. */
+  private sourceAssembly: BlogSourceAssembly | null = null;
+  /** Captured inside `buildClaimMap`; consumed by publish for persistence. */
+  private claimAssembly: BlogClaimAssembly | null = null;
+  /** Captured inside `compileDraft`; consumed by verify/publish. */
+  private draftResult: BlogDraftResult | null = null;
+  /** Captured inside `verifyAndRepair`; consumed by publish. */
+  private verifyOut: BlogVerifyAndRepair | null = null;
+  /** Set when the safety scan fired on the draft. We persist it as a
+   *  draft post the moment compileDraft returns and short-circuit
+   *  verify/publish — same behavior as the legacy generator. */
+  private safetyPost: BlogPost | null = null;
 
   plan(input: PipelineInput): PlanResult {
     const opts = readBlogOpts(input);
@@ -161,42 +122,34 @@ export class BlogPipelineAdapter implements EnginePipelineAdapter {
 
   async assembleSourcePack(_plan: PlanResult, input: PipelineInput): Promise<SourceResult> {
     const opts = readBlogOpts(input);
-    // Mirrors the pool assembly inside generateBlogPost. We intentionally
-    // skip the Perplexity fresh-context fetch — that is an LLM/network
-    // call and the dry-run path must not make it. When the pipeline
-    // continues into the real generateBlogPost call (non-dry-run), the
-    // hot path re-does the fresh-context fetch as it always has, so
-    // behavior is unchanged.
-    const sourcePool = dedupeSources([
-      ...(opts.sourceObjects ?? []),
-      ...extractSourceObjects(input.sourceContent ?? ""),
-    ]);
-    const researchPack = buildResearchPack("blog", sourcePool);
-    const sourceText = input.sourceContent ?? "";
+    // Pipeline path uses the SAME source assembly as the legacy function:
+    // fresh-context fetch → operator sourceObjects + extracted URLs →
+    // dedupe → research pack. The dry-run branch skips the writer; the
+    // assembly itself is light enough (one optional perplexity call) that
+    // running it for both modes keeps the pre-writer evidence consistent
+    // with what would feed the real writer.
+    const assembly = await assembleBlogSourcePack({
+      topic: input.topic,
+      sourceContent: input.sourceContent ?? "",
+      sourceObjects: opts.sourceObjects,
+    });
+    this.sourceAssembly = assembly;
     return {
-      sourcePool,
-      researchPack,
-      sourceText,
-      references: researchPack.references,
+      sourcePool: assembly.sourcePool,
+      researchPack: assembly.researchPack,
+      sourceText: input.sourceContent ?? "",
+      references: assembly.researchPack.references,
     };
   }
 
   buildClaimMap(plan: PlanResult, source: SourceResult, _input: PipelineInput): ClaimResult {
-    // Same deterministic builder generateBlogPost uses, with the same
-    // pre-assigned itemKeys ("blog:1", "blog:2", ...) so the dry-run
-    // output is byte-identical to what the writer prompt sees.
-    const draft = buildClaimMap({
-      engine: "blog",
-      draftId: "pending",
+    const claim = buildBlogClaimMap({
       topic: plan.topic,
-      references: source.references,
+      researchPack: source.researchPack,
       sourcePool: source.sourcePool,
     });
-    const items = draft.items.map((it, i) => ({
-      ...it,
-      itemKey: it.itemKey ?? `blog:${i + 1}`,
-    }));
-    return { items };
+    this.claimAssembly = claim;
+    return { items: claim.claimMapPromptItems };
   }
 
   async compileDraft(
@@ -206,59 +159,105 @@ export class BlogPipelineAdapter implements EnginePipelineAdapter {
     input: PipelineInput,
   ): Promise<DraftResult> {
     const opts = readBlogOpts(input);
-    // Behavior preservation: delegate to the existing end-to-end blog
-    // generator. It runs writer prompt → repair → verifier → revise loop
-    // → createBlogPost / persistence in one shot. The adapter splits the
-    // single result across compileDraft / verifyAndRepair / publish so
-    // the pipeline can still emit per-stage events.
-    const post = await generateBlogPost({
+    if (!this.sourceAssembly || !this.claimAssembly) {
+      throw new Error("compileDraft: source/claim stage state missing");
+    }
+    // Writer LLM call only — no verifier, no createBlogPost. The safety-
+    // scan branch is preserved here: when the scan fails the legacy code
+    // immediately created a `status: draft` post and returned it. We do
+    // the same so the BlogPipelineEntry can still surface the post via
+    // getPostById; we then short-circuit verify/publish.
+    const draft = await compileBlogDraft({
       topic: plan.topic,
       sourceContent: source.sourceText,
-      source: opts.source,
-      sourceId: opts.sourceId,
-      autoPublish: opts.autoPublish,
       blogType: opts.blogType,
-      sourceObjects: source.sourcePool,
-      onMetrics: m => {
-        this.repairCounters = {
-          citationsAdded: m.citationsAdded,
-          sentencesHedged: m.sentencesHedged,
-        };
-        this.revisionAttempts = m.revisionAttempts;
-      },
+      sourcePool: source.sourcePool,
+      sourcesPromptBlock: this.sourceAssembly.sourcesPromptBlock,
+      claimMapPromptBlock: this.claimAssembly.claimMapPromptBlock,
+      freshContext: this.sourceAssembly.freshContext,
     });
-    this.generatedPost = post;
-    if (!post) {
-      throw new Error("generateBlogPost returned null (LLM unavailable or generation failed)");
+    if (!draft) {
+      throw new Error("compileBlogDraft returned null (LLM unavailable or generation failed)");
     }
+    this.draftResult = draft;
+
+    if (draft.kind === "safety_redacted") {
+      // Preserve legacy behavior: persist the safety-redacted draft right
+      // here so a partial run still leaves a reviewable post. The
+      // verifyAndRepair / publish stages then run as observational no-ops.
+      this.safetyPost = createBlogPost({
+        title: draft.title,
+        content: draft.redactedContent,
+        source: opts.source,
+        sourceId: opts.sourceId,
+        tags: [...draft.tags, "needs-review"],
+        status: "draft",
+      });
+      return {
+        draftId: this.safetyPost.id,
+        title: this.safetyPost.title,
+        content: this.safetyPost.content,
+        tags: this.safetyPost.tags,
+      };
+    }
+
+    // The "ok" branch produces an id only AFTER publishBlogDraft runs in
+    // the publish stage (createBlogPost mints it). The pipeline contract
+    // requires a stable draftId before verify — synthesize a deterministic
+    // pre-publish id here so verify/repair events can pin against it. We
+    // still emit the real post id on the publish event via evidence.draftId.
+    const prePublishId = `blog_pending_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     return {
-      draftId: post.id,
-      title: post.title,
-      content: post.content,
-      tags: post.tags,
+      draftId: prePublishId,
+      title: draft.title,
+      content: draft.content,
+      tags: draft.tags,
     };
   }
 
   async verifyAndRepair(
     draft: DraftResult,
-    _source: SourceResult,
+    source: SourceResult,
     _claim: ClaimResult,
-    _input: PipelineInput,
+    input: PipelineInput,
   ): Promise<{ verify: VerifyResult; repair: RepairResult }> {
-    // The verifier already ran inside compileDraft (generateBlogPost
-    // internally calls verifyClaims via reviseBlogUntilClean). We surface
-    // its verdict here so the orchestrator can emit verify + repair
-    // events. revisionAttempts is unknown at this layer — generateBlogPost
-    // logs it but does not return it. Reporting -1 signals "unknown" and
-    // keeps the dashboard from displaying a misleading 0.
-    const post = this.generatedPost ?? getPostById(draft.draftId);
-    const { verdict, report } = reportFromPost(post);
+    const opts = readBlogOpts(input);
+
+    // Safety-redaction branch: verify/publish are observational. Surface a
+    // benign PASS verdict so the orchestrator emits non-failure events.
+    if (this.draftResult?.kind === "safety_redacted" && this.safetyPost) {
+      const { reportFromPost } = makeReportShim();
+      const { verdict, report } = reportFromPost(this.safetyPost);
+      return {
+        verify: { verdict, report, revisionAttempts: 0 },
+        repair: { body: draft.content, citationsAdded: 0, sentencesHedged: 0 },
+      };
+    }
+
+    if (!this.sourceAssembly) {
+      throw new Error("verifyAndRepair: source assembly missing");
+    }
+    // Run citation-locality repair, verifier, revise loop, and claim
+    // extraction. No persistence — publish stage owns that.
+    const out = await verifyAndRepairBlogDraft({
+      topic: input.topic,
+      sourceId: opts.sourceId,
+      draftContent: draft.content,
+      sourceContent: source.sourceText,
+      freshContext: this.sourceAssembly.freshContext,
+      sourcePool: source.sourcePool,
+    });
+    this.verifyOut = out;
     return {
-      verify: { verdict, report, revisionAttempts: this.revisionAttempts },
+      verify: {
+        verdict: out.verdict,
+        report: out.verdict.verifierReport,
+        revisionAttempts: out.revisionAttempts,
+      },
       repair: {
-        body: draft.content,
-        citationsAdded: this.repairCounters.citationsAdded,
-        sentencesHedged: this.repairCounters.sentencesHedged,
+        body: out.revisedBody,
+        citationsAdded: out.citationsAdded,
+        sentencesHedged: out.sentencesHedged,
       },
     };
   }
@@ -268,22 +267,55 @@ export class BlogPipelineAdapter implements EnginePipelineAdapter {
     _repair: RepairResult,
     verify: VerifyResult,
     _plan: PlanResult,
-    _source: SourceResult,
+    source: SourceResult,
     _claim: ClaimResult,
     input: PipelineInput,
   ): Promise<PublishDecision> {
     const opts = readBlogOpts(input);
-    const post = this.generatedPost ?? getPostById(draft.draftId);
-    // generateBlogPost's createBlogPost already set the final status
-    // (published / draft / quarantined). The pipeline publish stage is
-    // observational here: we surface what the engine decided, not a
-    // second decision. This keeps the verifier gate single-source.
-    const status = post?.status ?? "draft";
+
+    // Safety-redacted: post already exists from compileDraft; surface its
+    // status as the publish decision.
+    if (this.draftResult?.kind === "safety_redacted" && this.safetyPost) {
+      return {
+        published: false,
+        skippedForDryRun: false,
+        reason: "kept as draft (safety redaction triggered needs-review)",
+        severity: verify.report.severity,
+        evidence: { draftId: this.safetyPost.id },
+      };
+    }
+
+    if (!this.draftResult || !this.verifyOut || !this.claimAssembly) {
+      throw new Error("publish: required stage state missing");
+    }
+    if (this.draftResult.kind !== "ok") {
+      throw new Error("publish: unexpected draft state");
+    }
+
+    // Single source of truth for createBlogPost + ledger + claim-map
+    // persistence. Same helper the legacy path uses, so the publish gate
+    // (HARD_FAIL → quarantine) is enforced once and only once.
+    const post = publishBlogDraft({
+      topic: input.topic,
+      source: opts.source,
+      sourceId: opts.sourceId,
+      autoPublish: opts.autoPublish,
+      title: this.draftResult.title,
+      revisedBody: this.verifyOut.revisedBody,
+      tags: this.draftResult.tags,
+      verdict: this.verifyOut.verdict,
+      extraction: this.verifyOut.extraction,
+      researchPack: source.researchPack,
+      sourcePool: source.sourcePool,
+      claimMapPromptItems: this.claimAssembly.claimMapPromptItems,
+    });
+
+    const status = post.status;
     const published = status === "published";
     let reason: string;
     if (status === "quarantined") {
       reason = `quarantined by verifier (severity=${verify.report.severity})`;
-    } else if (status === "published") {
+    } else if (published) {
       reason = "published by engine";
     } else if (opts.autoPublish === false) {
       reason = "kept as draft (autoPublish=false)";
@@ -295,9 +327,7 @@ export class BlogPipelineAdapter implements EnginePipelineAdapter {
       skippedForDryRun: false,
       reason,
       severity: verify.report.severity,
-      evidence: {
-        draftId: draft.draftId,
-      },
+      evidence: { draftId: post.id },
     };
   }
 }
@@ -306,3 +336,56 @@ export class BlogPipelineAdapter implements EnginePipelineAdapter {
 export function makeBlogPipelineAdapter(): BlogPipelineAdapter {
   return new BlogPipelineAdapter();
 }
+
+/**
+ * Tiny shim that mirrors the report-from-post utility used by the prior
+ * adapter. Kept inline because it is only needed for the safety-redacted
+ * branch's benign verdict — the normal path sources its verdict directly
+ * from `verifyAndRepairBlogDraft`.
+ */
+function makeReportShim() {
+  return {
+    reportFromPost(post: BlogPost | null) {
+      if (!post || !post.verifierReport) {
+        const empty = {
+          severity: "PASS" as const,
+          entries: [],
+          summary: {
+            laneAOk: 0,
+            laneAFail: 0,
+            laneAUnverifiable: 0,
+            laneAPassQuotedCommentary: 0,
+            laneAPassCritiqueByAbsence: 0,
+            laneBOk: 0,
+            laneBBare: 0,
+            retractedHits: 0,
+            ncitePatternHits: 0,
+          },
+        };
+        const verdict = {
+          ok: true,
+          unsupportedClaims: [] as never[],
+          supportedCount: 0,
+          externalCitedCount: 0,
+          verifierReport: empty,
+          severity: "PASS" as const,
+        };
+        return { verdict, report: empty };
+      }
+      const report = post.verifierReport;
+      const verdict = {
+        ok: report.severity === "PASS",
+        unsupportedClaims: [] as never[],
+        supportedCount: report.summary.laneAOk + report.summary.laneBOk,
+        externalCitedCount: report.summary.laneBOk,
+        verifierReport: report,
+        severity: report.severity,
+      };
+      return { verdict, report };
+    },
+  };
+}
+
+// Note: `getPostById` is re-exported here for tests that import it from
+// the adapter module rather than reaching into blogEngine.
+export { getPostById };
