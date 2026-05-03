@@ -1962,6 +1962,69 @@ export async function previewDeepRead(
     );
   }
 
+  // PR #275 — Article Studio pipeline wiring. When ARTICLE_PIPELINE_ENABLED
+  // is on, route the manual preview through the shared draft-production
+  // pipeline in previewMode so plan/source/claim/draft/verify/publish
+  // events emit on every Article Studio preview run. The publish stage
+  // SKIPS persistence — preview is non-persistent. The legacy revise loop
+  // and verifier inside `verifyAndRepairArticleDraft` produce the same
+  // body + verdict + revisionHistory the legacy block below would, so
+  // we adapt the snapshot back to PreviewDeepReadResult and return early.
+  // Falls through to the legacy path on any pipeline failure so the
+  // operator still gets a draft.
+  //
+  // We deliberately stay on the legacy path when `skipReviseLoop=true`
+  // (operator opted into a fast verify-only preview) and when grounding
+  // sources are pinned — the pipeline adapter does not surface those
+  // knobs yet, so legacy preserves existing behavior. Pipeline coverage
+  // for those cases is a follow-up.
+  if (readArticlePipelineFlag() && !opts.skipReviseLoop && groundingSources.length === 0) {
+    try {
+      const { generateArticleMaybeViaPipeline } = await import("./pipeline/articlePipelineEntry.js");
+      const out = await generateArticleMaybeViaPipeline({
+        apiKey,
+        articleInfo,
+        articleContent,
+        imageUrl,
+        previewMode: true,
+      });
+      const snap = out.previewSnapshot;
+      if (snap?.draft && snap.verify && snap.articleInfo) {
+        const verdict = snap.verify.verdict;
+        if (verdict.severity !== "PASS") {
+          console.warn(
+            `[ArticleEngine] (pipeline preview) ${verdict.unsupportedClaims.length} unsupported claims (url=${targetUrl}) — operator must review before saving.`,
+          );
+        }
+        return {
+          headline:    snap.draft.headline,
+          teaser:      snap.draft.teaser,
+          body:        snap.verify.revisedBody,
+          sourceUrl:   targetUrl,
+          sourceTitle: snap.articleInfo.title,
+          imageUrl:    snap.imageUrl ?? imageUrl,
+          verification: {
+            ok:                 verdict.ok,
+            unsupportedClaims:  verdict.unsupportedClaims,
+            supportedCount:     verdict.supportedCount,
+            externalCitedCount: verdict.externalCitedCount,
+            severity:           verdict.severity,
+            verifierReport:     verdict.verifierReport,
+          },
+          verifierReport: verdict.verifierReport,
+          sourceMeta: { method, partialFetchReason },
+          revisionHistory: snap.verify.revisionHistory,
+          sourceText: articleContent,
+          groundingSources,
+        };
+      }
+      const reason = out.pipeline?.publish?.reason ?? "pipeline preview produced no draft";
+      console.warn(`[ArticleEngine] preview pipeline path produced no draft: ${reason}; falling back to legacy preview path.`);
+    } catch (e: any) {
+      console.warn(`[ArticleEngine] preview pipeline path threw: ${e?.message ?? e}; falling back to legacy preview path.`);
+    }
+  }
+
   const { headline, teaser, body: rawBody } = await generateDeepReadArticle(
     articleInfo, articleContent, apiKey,
   );

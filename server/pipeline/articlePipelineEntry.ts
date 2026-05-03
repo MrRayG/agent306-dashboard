@@ -35,7 +35,7 @@ import {
 } from "../articleEngine.js";
 import { readFlag } from "../featureFlags.js";
 import { runDraftProductionPipeline } from "./draftProductionPipeline.js";
-import { makeArticlePipelineAdapter } from "./articleAdapter.js";
+import { makeArticlePipelineAdapter, type ArticlePipelineAdapter } from "./articleAdapter.js";
 import type { PipelineResult } from "./types.js";
 
 export interface ArticlePipelineEntryOpts {
@@ -55,6 +55,12 @@ export interface ArticlePipelineEntryOpts {
    *
    *  Ignored when the flag is OFF (the legacy path has no dry-run). */
   dryRun?: boolean;
+  /** When true the pipeline runs all stages (plan/source/claim/draft/
+   *  verify) and emits pipeline.* events but the publish stage skips
+   *  persistence. Used by the Article Studio preview path so the operator
+   *  sees full stage telemetry while preview remains non-persistent.
+   *  Mutually exclusive with `dryRun` — `dryRun` wins when both are set. */
+  previewMode?: boolean;
   /** Stable pipeline run id forwarded onto every stage event. Optional —
    *  the orchestrator generates one when omitted. */
   pipelineRunId?: string;
@@ -63,7 +69,7 @@ export interface ArticlePipelineEntryOpts {
 export interface ArticlePipelineEntryResult {
   /** The persisted Deep Read draft on the published / quarantined path.
    *  Null when the pipeline path was not taken (flag OFF) OR when
-   *  dryRun=true OR when an earlier stage failed. */
+   *  dryRun=true OR previewMode=true OR an earlier stage failed. */
   draft: ArticleDraft | null;
   /** Populated only when the pipeline path ran. Null on the legacy path
    *  so callers can detect which path served them. */
@@ -71,6 +77,11 @@ export interface ArticlePipelineEntryResult {
   /** True iff the flag was OFF and the entry refused to run. Lets call
    *  sites cleanly fall back to their existing legacy code path. */
   flagDisabled: boolean;
+  /** Populated only when `previewMode=true` and the pipeline reached the
+   *  verify stage. Carries the unpersisted draft + verify state the
+   *  preview wrapper needs to assemble PreviewDeepReadResult without
+   *  saving anything. Null on cron / save / dryRun paths. */
+  previewSnapshot: ReturnType<ArticlePipelineAdapter["getPreviewSnapshot"]> | null;
 }
 
 /**
@@ -88,7 +99,12 @@ export async function generateArticleMaybeViaPipeline(
   const flagOn = readFlag("ARTICLE_PIPELINE_ENABLED");
 
   if (!flagOn) {
-    return { draft: null, pipeline: null, flagDisabled: true };
+    return {
+      draft: null,
+      pipeline: null,
+      flagDisabled: true,
+      previewSnapshot: null,
+    };
   }
 
   const adapter = makeArticlePipelineAdapter();
@@ -103,11 +119,16 @@ export async function generateArticleMaybeViaPipeline(
       articleInfo:    opts.articleInfo,
       articleContent: opts.articleContent,
       imageUrl:       opts.imageUrl,
+      previewMode:    opts.previewMode === true && opts.dryRun !== true,
     },
   });
   return {
     draft: adapter.getPersistedDraft(),
     pipeline,
     flagDisabled: false,
+    previewSnapshot:
+      opts.previewMode === true && opts.dryRun !== true
+        ? adapter.getPreviewSnapshot()
+        : null,
   };
 }

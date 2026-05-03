@@ -83,6 +83,14 @@ export interface ArticlePipelineOpts {
   articleContent?: string;
   /** Pre-fetched cover image url. */
   imageUrl?: string;
+  /** When true the publish stage runs full plan/source/claim/draft/verify
+   *  but SKIPS persistence (saveDeepReadDraft / persistArticleSourceLedger /
+   *  persistArticleClaimMap). Used by the Article Studio preview path so
+   *  pipeline.* stage events land in engine_events for the manual preview
+   *  run while keeping the preview surface non-persistent. The entry point
+   *  reads the captured draft + verifyOut off the adapter to assemble the
+   *  legacy PreviewDeepReadResult shape. */
+  previewMode?: boolean;
 }
 
 function readArticleOpts(input: PipelineInput): ArticlePipelineOpts {
@@ -93,6 +101,7 @@ function readArticleOpts(input: PipelineInput): ArticlePipelineOpts {
     articleInfo:    o.articleInfo,
     articleContent: o.articleContent,
     imageUrl:       o.imageUrl,
+    previewMode:    o.previewMode === true,
   };
 }
 
@@ -131,6 +140,28 @@ export class ArticlePipelineAdapter implements EnginePipelineAdapter {
    */
   getPersistedDraft(): ArticleDraft | null {
     return this.persistedDraft;
+  }
+
+  /**
+   * Read access to the post-verify state captured by the adapter. Used by
+   * the entry point's previewMode branch to assemble the legacy
+   * PreviewDeepReadResult shape without persisting a draft. Returns null
+   * for any stage not yet reached.
+   */
+  getPreviewSnapshot(): {
+    articleInfo: ArticleInfo | null;
+    articleContent: string;
+    imageUrl: string | undefined;
+    draft: ArticleDraftResult | null;
+    verify: ArticleVerifyAndRepair | null;
+  } {
+    return {
+      articleInfo:    this.articleInfo,
+      articleContent: this.articleContent,
+      imageUrl:       this.imageUrl,
+      draft:          this.draftResult,
+      verify:         this.verifyOut,
+    };
   }
 
   async plan(input: PipelineInput): Promise<PlanResult> {
@@ -299,10 +330,27 @@ export class ArticlePipelineAdapter implements EnginePipelineAdapter {
     _plan: PlanResult,
     _source: SourceResult,
     _claim: ClaimResult,
-    _input: PipelineInput,
+    input: PipelineInput,
   ): Promise<PublishDecision> {
     if (!this.articleInfo || !this.sourceAssembly || !this.claimAssembly || !this.draftResult || !this.verifyOut) {
       throw new Error("publish: required stage state missing");
+    }
+    const opts = readArticleOpts(input);
+    if (opts.previewMode) {
+      // Article Studio preview path. Run full plan/source/claim/draft/verify
+      // so pipeline.* stage events emit, but DO NOT persist — preview is
+      // intentionally non-persistent. The entry point reads the captured
+      // draft + verifier state off the adapter and adapts to the legacy
+      // PreviewDeepReadResult shape. Source ledger / claim_map are only
+      // written on the manual save path (POST /api/article/drafts).
+      const reason = `preview-only run: skipped saveDeepReadDraft / ledger / claim_map (severity=${verify.report.severity})`;
+      return {
+        published: false,
+        skippedForDryRun: false,
+        reason,
+        severity: verify.report.severity,
+        evidence: { previewMode: true },
+      };
     }
     const saved = publishArticleDraft({
       articleInfo:         this.articleInfo,
