@@ -112,9 +112,10 @@ import { getPublishedManuscripts, getPublicManuscriptById } from "./publicResear
 import { getReflections, getStyleRules, deleteStyleRule, runReflection } from "./reflectionEngine.js";
 import {
   getPublishedPosts, getPostBySlug, getAllPosts,
-  createBlogPost, generateBlogPost, publishPost, updatePost, deletePost,
+  createBlogPost, publishPost, updatePost, deletePost,
   getBlogState, purgeConversationalPosts,
 } from "./blogEngine.js";
+import { generateBlogPostMaybeViaPipeline } from "./pipeline/blogPipelineEntry.js";
 import {
   getDebates, getContradictions, runDebate, resolveContradiction, runConfidenceDecay, getDecayingEntries,
   evaluateHypothesis, getAllTrustScores,
@@ -3768,10 +3769,10 @@ needsHelp: true only when you genuinely need his direction or information`,
                 }
 
                 case "generate_blog": {
-                  const { generateBlogPost } = await import("./blogEngine.js");
+                  const { generateBlogPostMaybeViaPipeline } = await import("./pipeline/blogPipelineEntry.js");
                   const sourceContent = action.content || parsed.text || "";
                   const topic = action.topic || action.title || "Agent 306 Blog Post";
-                  const post = await generateBlogPost({
+                  const { post } = await generateBlogPostMaybeViaPipeline({
                     topic,
                     sourceContent: sourceContent.slice(0, 4000),
                     source: "chat",
@@ -5463,7 +5464,9 @@ needsHelp: true only when you genuinely need his direction or information`,
   app.post("/api/blog/generate", requireDashAuth, async (req, res) => {
     const { topic, sourceContent, source, sourceId, autoPublish } = req.body;
     if (!topic || !sourceContent) return res.status(400).json({ error: "topic and sourceContent required" });
-    const post = await generateBlogPost({ topic, sourceContent, source: source ?? "standalone", sourceId, autoPublish });
+    const { post } = await generateBlogPostMaybeViaPipeline({
+      topic, sourceContent, source: source ?? "standalone", sourceId, autoPublish,
+    });
     if (!post) return res.status(500).json({ error: "Blog generation failed" });
     res.json(post);
   });

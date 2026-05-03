@@ -144,10 +144,12 @@ export class BlogPipelineAdapter implements EnginePipelineAdapter {
 
   /** Set inside `compileDraft`; consumed by verify/publish. */
   private generatedPost: BlogPost | null = null;
-  /** Engine-internal counters surfaced through the repair stage. We do
-   *  not own the repair pass, so these stay 0 — generateBlogPost owns
-   *  them but does not return them. B2 follow-up: thread them out. */
+  /** Counters threaded out of `generateBlogPost` via its optional
+   *  `onMetrics` callback (Roadmap B2). When the callback fires we have
+   *  truthful repair + revision-attempt numbers; otherwise the defaults
+   *  below are reported. */
   private repairCounters = { citationsAdded: 0, sentencesHedged: 0 };
+  private revisionAttempts = -1;
 
   plan(input: PipelineInput): PlanResult {
     const opts = readBlogOpts(input);
@@ -217,6 +219,13 @@ export class BlogPipelineAdapter implements EnginePipelineAdapter {
       autoPublish: opts.autoPublish,
       blogType: opts.blogType,
       sourceObjects: source.sourcePool,
+      onMetrics: m => {
+        this.repairCounters = {
+          citationsAdded: m.citationsAdded,
+          sentencesHedged: m.sentencesHedged,
+        };
+        this.revisionAttempts = m.revisionAttempts;
+      },
     });
     this.generatedPost = post;
     if (!post) {
@@ -245,7 +254,7 @@ export class BlogPipelineAdapter implements EnginePipelineAdapter {
     const post = this.generatedPost ?? getPostById(draft.draftId);
     const { verdict, report } = reportFromPost(post);
     return {
-      verify: { verdict, report, revisionAttempts: -1 },
+      verify: { verdict, report, revisionAttempts: this.revisionAttempts },
       repair: {
         body: draft.content,
         citationsAdded: this.repairCounters.citationsAdded,

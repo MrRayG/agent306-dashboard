@@ -435,6 +435,17 @@ export async function generateBlogPost(opts: {
    *  post-generation citation-locality repair pass. URLs already present in
    *  `sourceContent` / fresh-context are auto-extracted in addition. */
   sourceObjects?: SourceObject[];
+  /** Optional sink for per-stage metrics that aren't visible from the
+   *  returned BlogPost. Used by the pipeline adapter (Roadmap B2) to emit
+   *  truthful repair / verify event payloads. Best-effort: thrown errors
+   *  inside the callback are swallowed so blog generation never fails on
+   *  telemetry. Default callers (legacy path) pass nothing and behavior is
+   *  unchanged. */
+  onMetrics?: (m: {
+    citationsAdded: number;
+    sentencesHedged: number;
+    revisionAttempts: number;
+  }) => void;
 }): Promise<BlogPost | null> {
   if (!LLM_API_KEY) {
     console.warn("[Blog] No LLM API key");
@@ -707,6 +718,22 @@ Write the full blog post following the blog structure template. Hook the reader 
       console.log(
         `[Blog] auto-revise ran ${revisionHistory.length} attempt(s); final severity=${verdict.severity}`,
       );
+    }
+
+    // Best-effort metrics sink for the pipeline adapter (B2). Pre-revise
+    // repair counters + revision attempts are not visible from the
+    // returned BlogPost; the adapter needs them for truthful pipeline
+    // events. Swallow errors so telemetry never breaks generation.
+    if (opts.onMetrics) {
+      try {
+        opts.onMetrics({
+          citationsAdded: repair.citationsAdded ?? 0,
+          sentencesHedged: repair.sentencesHedged ?? 0,
+          revisionAttempts: revisionHistory.length,
+        });
+      } catch (e: any) {
+        console.warn("[Blog] onMetrics callback threw:", e?.message ?? String(e));
+      }
     }
 
     // Extract structured claims, references, and editor comments from the
