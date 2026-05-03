@@ -17,6 +17,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
+import { createHash } from "crypto";
 import { db } from "./db";
 import {
   selfRecommendations,
@@ -28,7 +29,7 @@ import {
   SELF_REC_CATEGORIES,
   SELF_REC_RISKS,
 } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc, gte, inArray } from "drizzle-orm";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,18 @@ export interface ProposeRecommendationInput {
   author?: "agent" | "operator";
   sourceHypothesisId?: string;
   sourceInsightId?: string;
+  /**
+   * Optional caller-supplied dedupe fingerprint. When provided, propose() will
+   * suppress new inserts that share this key with an existing non-terminal row
+   * (status = proposed | approved) created within the dedupe window. Callers
+   * whose insight IDs change every cycle (SelfEvolution, missing-primitive)
+   * should pass a content-derived key so semantically-equivalent proposals
+   * collapse instead of accumulating.
+   *
+   * If omitted, a default key is computed from (category + normalized title +
+   * normalized proposedChange). Pass dedupeKey: null to opt out entirely.
+   */
+  dedupeKey?: string | null;
 }
 
 export interface ApplyResult {
@@ -74,6 +87,61 @@ function assertRisk(risk: string): SelfRecRisk {
   return risk as SelfRecRisk;
 }
 
+// Statuses that count as "still active" — a duplicate proposal collapses into
+// these. Once a rec is rejected/applied/reverted the operator has acted on it,
+// so a fresh proposal is allowed (lets re-emerging concerns resurface).
+const ACTIVE_STATUSES: SelfRecStatus[] = ["proposed", "approved"];
+
+// 14 days. After this window the same dedupe key is permitted to re-enter the
+// queue — long enough that we don't pile up duplicates inside the typical
+// review SLA, short enough that a stale concern can return if it's still real.
+const DEDUPE_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+
+/**
+ * Build a stable content fingerprint for dedupe. Lowercases, collapses
+ * whitespace, strips punctuation, then truncates and hashes. The first ~240
+ * chars of (title + proposedChange) capture enough semantic content that two
+ * cycles producing the same governance-debt suggestion collapse to one row,
+ * while genuinely-different proposals still differ.
+ *
+ * Exported so callers (SelfEvolution bridge, GoalEngine missing-primitive
+ * emit) can normalize the same way before passing dedupeKey explicitly.
+ */
+export function computeDedupeKey(
+  category: SelfRecCategory,
+  title: string,
+  proposedChange: string,
+): string {
+  const norm = (s: string) =>
+    s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+  const corpus = `${category}|${norm(title).slice(0, 240)}|${norm(proposedChange).slice(0, 240)}`;
+  return createHash("sha1").update(corpus).digest("hex").slice(0, 24);
+}
+
+/**
+ * Look up the most recent non-terminal recommendation that shares this
+ * dedupe key, within the dedupe window. Used by proposeRecommendation()
+ * to short-circuit duplicate inserts.
+ */
+export function findActiveRecommendationByDedupeKey(
+  dedupeKey: string,
+  windowMs: number = DEDUPE_WINDOW_MS,
+): SelfRecommendation | undefined {
+  const cutoff = new Date(Date.now() - windowMs).toISOString();
+  return db
+    .select()
+    .from(selfRecommendations)
+    .where(
+      and(
+        eq(selfRecommendations.dedupeKey, dedupeKey),
+        inArray(selfRecommendations.status, ACTIVE_STATUSES as unknown as string[]),
+        gte(selfRecommendations.createdAt, cutoff),
+      ),
+    )
+    .orderBy(desc(selfRecommendations.createdAt))
+    .get();
+}
+
 // ── Core API — proposals come from engines ───────────────────────────────────
 
 /**
@@ -85,12 +153,36 @@ function assertRisk(risk: string): SelfRecRisk {
  * operator via the router.
  */
 export function proposeRecommendation(input: ProposeRecommendationInput): SelfRecommendation {
+  const category = assertCategory(input.category);
+  const risk = assertRisk(input.risk ?? "low");
+  const title = input.title.slice(0, 300);
+
+  // Dedupe: callers may pass dedupeKey explicitly (preferred — they know the
+  // semantic axis). Otherwise compute a default fingerprint from the content.
+  // Pass dedupeKey: null to opt out (rare; e.g. operator-drafted recs where
+  // the operator has already accepted that they want a duplicate row).
+  const dedupeKey =
+    input.dedupeKey === null
+      ? null
+      : input.dedupeKey ?? computeDedupeKey(category, title, input.proposedChange);
+
+  if (dedupeKey) {
+    const existing = findActiveRecommendationByDedupeKey(dedupeKey);
+    if (existing) {
+      // Return the live row instead of inserting. Callers treat the returned
+      // row as authoritative; they never branch on "did we just insert or
+      // collapse?" — that mirrors the existing
+      // findRecommendationBySourceInsightId pattern in the bridges.
+      return existing;
+    }
+  }
+
   const id = newId();
   const row: InsertSelfRecommendation = {
     id,
-    category: assertCategory(input.category),
-    risk: assertRisk(input.risk ?? "low"),
-    title: input.title.slice(0, 300),
+    category,
+    risk,
+    title,
     rationale: input.rationale,
     proposedChange: input.proposedChange,
     proposedDiff: input.proposedDiff,
@@ -99,6 +191,7 @@ export function proposeRecommendation(input: ProposeRecommendationInput): SelfRe
     author: input.author ?? "agent",
     sourceHypothesisId: input.sourceHypothesisId,
     sourceInsightId: input.sourceInsightId,
+    dedupeKey,
   };
   db.insert(selfRecommendations).values(row).run();
   const inserted = db

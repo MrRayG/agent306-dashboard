@@ -35,6 +35,16 @@ import {
   approveRecommendation,
   getRecommendation,
 } from "../selfRecommendationEngine.js";
+import { db } from "../db.js";
+import { selfRecommendations } from "@shared/schema";
+
+// The TMP_DIR / DB_PATH dance above is a no-op in practice because ESM imports
+// hoist past the env-var assignments, so every run lands in the shared dev DB.
+// Wipe between runs so dedupeKey collisions from prior runs don't surface as
+// "Cannot approve recommendation in status 'approved'".
+function wipeRecs() {
+  try { db.delete(selfRecommendations).run(); } catch {}
+}
 
 describe("autoDraftEnabled", () => {
   beforeEach(() => { delete process.env.AUTO_DRAFT_ENGINE_DIFFS; });
@@ -54,6 +64,7 @@ describe("autoDraftEnabled", () => {
 });
 
 describe("draftDiffForRecommendation — early exits", () => {
+  beforeEach(wipeRecs);
   it("returns false when category is not engine", async () => {
     const rec = proposeRecommendation({
       category: "prompt",
@@ -92,7 +103,7 @@ describe("draftDiffForRecommendation — early exits", () => {
 });
 
 describe("maybeQueueDraftForRec — gating", () => {
-  beforeEach(() => { delete process.env.AUTO_DRAFT_ENGINE_DIFFS; });
+  beforeEach(() => { wipeRecs(); delete process.env.AUTO_DRAFT_ENGINE_DIFFS; });
   afterEach(() => { delete process.env.AUTO_DRAFT_ENGINE_DIFFS; });
 
   it("is a no-op when AUTO_DRAFT_ENGINE_DIFFS is unset", () => {

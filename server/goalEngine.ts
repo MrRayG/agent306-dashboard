@@ -36,6 +36,7 @@ import { translateAction, registerRuleFromInsight } from "./actionTranslator.js"
 import {
   proposeRecommendation,
   findRecommendationBySourceInsightId,
+  computeDedupeKey,
 } from "./selfRecommendationEngine.js";
 import { logEvent } from "./observability/structuredLog.js";
 import { writeGoalsBlob } from "./repositories/goalRepository.js";
@@ -724,15 +725,27 @@ export async function promoteInsightToGoal(
       try {
         if (!findRecommendationBySourceInsightId(entry.id)) {
           const actionPreview = entry.proposedAction.slice(0, 200);
+          // Stable, content-derived dedupe key. Insight IDs change every cycle
+          // (`il_${Date.now()}_${rand}`), so without an explicit key the same
+          // unparseable action text would emit a fresh missing-primitive rec
+          // each time. Hash the (action + insight) text instead. Title is
+          // intentionally generic — no insight id — so callers and the operator
+          // see one canonical row per missing primitive instead of one per cycle.
+          const dedupeKey = computeDedupeKey(
+            "engine",
+            "missing-primitive: action translator gap",
+            `${entry.proposedAction}\n${entry.insight}`,
+          );
           proposeRecommendation({
             category: "engine",
             risk: "low",
-            title: `missing-primitive: action translator could not parse insight ${entry.id}`,
+            title: `missing-primitive: action translator could not parse insight`,
             rationale: `GoalEngine could not translate insight ${entry.id}: '${actionPreview}'`,
             proposedChange: `Add action primitive supporting: ${entry.insight.slice(0, 240)}`,
             evidence: [entry.id, entry.sourceId],
             author: "agent",
             sourceInsightId: entry.id,
+            dedupeKey,
           });
           logEvent({
             engine: "goalEngine",

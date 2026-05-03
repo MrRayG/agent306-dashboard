@@ -24,7 +24,12 @@ import {
 } from "./competencyFramework.js";
 import { recordProposedInsights, expireStaleProposed, failStaleOpen, computeLedgerStats } from "./insightLedger.js";
 import { runVerificationPass, buildMetaReflectionContext } from "./selfChangeVerifier.js";
-import { proposeRecommendation, findRecommendationBySourceInsightId } from "./selfRecommendationEngine.js";
+import {
+  proposeRecommendation,
+  findRecommendationBySourceInsightId,
+  findActiveRecommendationByDedupeKey,
+  computeDedupeKey,
+} from "./selfRecommendationEngine.js";
 import { maybeQueueDraftForRec } from "./engineDiffDrafter.js";
 import { logEvent } from "./observability/structuredLog.js";
 
@@ -568,6 +573,18 @@ export function bridgeInsightsToSelfRecs(
       const proposedChange = insight.actionItem
         ? insight.actionItem
         : insight.selfApplication || insight.insight;
+      // Content-derived dedupe key. Insight IDs are minted fresh every cycle
+      // (`evo_${Date.now()}_${rand}`), so the LLM emitting the same governance-
+      // debt suggestion ("hard cap active hypotheses", "1-in-1-out", etc.) on
+      // consecutive days previously produced N identical proposals. Hash the
+      // insight text + proposed change so semantic duplicates collapse to one
+      // active row per ~14d window. Skip-as-dupe is reported the same way as
+      // the existing source-insight-id collision path.
+      const dedupeKey = computeDedupeKey("engine", title, `${insight.insight}\n${proposedChange}`);
+      if (findActiveRecommendationByDedupeKey(dedupeKey)) {
+        skippedDuplicate++;
+        continue;
+      }
       const newRec = proposeRecommendation({
         category: "engine",
         risk: "low",
@@ -577,6 +594,7 @@ export function bridgeInsightsToSelfRecs(
         evidence: [insight.sourceId, insight.id],
         author: "agent",
         sourceInsightId: insight.id,
+        dedupeKey,
       });
       // Issue 6c: when AUTO_DRAFT_ENGINE_DIFFS=true, queue an async LLM
       // call to draft a unified diff for engine-category recs. Non-blocking
