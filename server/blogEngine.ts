@@ -41,7 +41,10 @@ import {
   computeSourceTelemetry,
 } from "./sourceLocality.js";
 import { buildResearchPack, type ResearchPack, type ReferenceMetadata } from "./researchPack.js";
-import { createOrReplaceLedger } from "./repositories/sourceLedgerRepository.js";
+import {
+  createOrReplaceLedger,
+  type SourceLedgerItemInput,
+} from "./repositories/sourceLedgerRepository.js";
 import {
   createOrReplaceClaimMap,
   buildClaimMapPromptBlock,
@@ -76,13 +79,78 @@ export function persistBlogClaimMap(input: {
   });
 }
 
+/**
+ * Maximum chars of operator-provided standalone source text we keep in the
+ * synthetic ledger item excerpt. Long enough to give the verifier real
+ * context on a re-verify, short enough that we don't bloat the ledger row
+ * with a full essay. Roadmap: blog standalone source-ledger items.
+ */
+const STANDALONE_EXCERPT_MAX = 2000;
+
+/** Minimum length of trimmed `sourceContent` before we'll synthesize a
+ *  standalone ledger item. Whitespace-only / empty operator input doesn't
+ *  count as evidence and should not produce a ledger item. */
+const STANDALONE_MIN_LEN = 20;
+
+/**
+ * Build a synthetic ledger item representing operator-provided standalone
+ * (free-text, no URL) source content. Only emitted when the real source
+ * pool is empty AND the trimmed `sourceContent` has at least
+ * `STANDALONE_MIN_LEN` characters of non-URL text. Marked clearly so the
+ * verifier / reviser / dashboard understands this is operator input rather
+ * than an external URL:
+ *   - `url` uses the non-http `internal://` scheme so
+ *     `listLedgerSourceUrls` (URL-only, http(s)) filters it out and the
+ *     verifier never sees it as an external citation target.
+ *   - `sourceType: "primary"` — standalone free-text IS the primary evidence
+ *     for the post.
+ *   - `trustTier: "unverified"` — operator-provided, not externally
+ *     validated.
+ *   - `excerpt` carries the leading 2000 chars so the publish-after-edit
+ *     verifier can do its work against the same text the original draft
+ *     was checked against, instead of an empty string.
+ */
+function buildStandaloneSourceLedgerItem(opts: {
+  postId: string;
+  topic: string;
+  sourceContent: string;
+}): SourceLedgerItemInput | null {
+  const trimmed = (opts.sourceContent ?? "").trim();
+  if (trimmed.length < STANDALONE_MIN_LEN) return null;
+  const excerpt =
+    trimmed.length > STANDALONE_EXCERPT_MAX
+      ? `${trimmed.slice(0, STANDALONE_EXCERPT_MAX)}…`
+      : trimmed;
+  const topicLabel = (opts.topic ?? "").trim().slice(0, 120) || "untitled";
+  return {
+    url: `internal://blog/standalone/${opts.postId}`,
+    title: `Operator-provided standalone source: ${topicLabel}`,
+    publisher: "operator",
+    excerpt,
+    sourceType: "primary",
+    trustTier: "unverified",
+    metadata: {
+      origin: "standalone_freetext",
+      postId: opts.postId,
+      sourceContentLength: trimmed.length,
+    },
+  };
+}
+
 export function persistBlogSourceLedger(input: {
   postId: string;
   topic: string;
   sourceObjects: SourceObject[];
   references: ReferenceMetadata[];
+  /** Original operator-provided source content. Used to synthesize a
+   *  standalone ledger item when no URLs / source objects were extracted,
+   *  so the ledger always reflects the evidence the draft was built on
+   *  instead of an items-zero parent row. Optional for backwards
+   *  compatibility — older callers (and call sites we have not yet
+   *  threaded through) get the legacy behavior. */
+  sourceContent?: string;
 }): void {
-  const items = input.sourceObjects.map((s, i) => {
+  const items: SourceLedgerItemInput[] = input.sourceObjects.map((s, i) => {
     const ref = input.references.find(r => r.url === s.url);
     return {
       url: s.url,
@@ -94,6 +162,14 @@ export function persistBlogSourceLedger(input: {
       metadata: { sourceId: s.sourceId, refId: ref?.refId },
     };
   });
+  if (items.length === 0) {
+    const synthetic = buildStandaloneSourceLedgerItem({
+      postId: input.postId,
+      topic: input.topic,
+      sourceContent: input.sourceContent ?? "",
+    });
+    if (synthetic) items.push(synthetic);
+  }
   createOrReplaceLedger({
     engine: "blog",
     draftId: input.postId,
@@ -833,6 +909,10 @@ export function publishBlogDraft(opts: {
   researchPack: ResearchPack;
   sourcePool: SourceObject[];
   claimMapPromptItems: ClaimMapItemInput[];
+  /** Original operator-provided source content. Forwarded to
+   *  `persistBlogSourceLedger` so a synthetic standalone item can be
+   *  emitted when the source pool is empty (free-text input, no URLs). */
+  sourceContent?: string;
 }): BlogPost {
   const { verdict, extraction, researchPack } = opts;
   if (verdict.severity === "HARD_FAIL") {
@@ -862,6 +942,7 @@ export function publishBlogDraft(opts: {
       topic: opts.topic,
       sourceObjects: opts.sourcePool,
       references: researchPack.references,
+      sourceContent: opts.sourceContent,
     });
     persistBlogClaimMap({
       postId: draft.id,
@@ -893,6 +974,7 @@ export function publishBlogDraft(opts: {
     topic: opts.topic,
     sourceObjects: opts.sourcePool,
     references: researchPack.references,
+    sourceContent: opts.sourceContent,
   });
   persistBlogClaimMap({
     postId: finalPost.id,
@@ -1009,6 +1091,7 @@ export async function generateBlogPost(opts: {
       researchPack,
       sourcePool,
       claimMapPromptItems,
+      sourceContent: opts.sourceContent,
     });
   } catch (e: any) {
     console.error("[Blog] Generation failed:", e?.message ?? String(e));
