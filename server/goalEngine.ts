@@ -32,7 +32,12 @@ import {
   transitionEntry,
   type InsightLedgerEntry,
 } from "./insightLedger.js";
-import { translateAction, registerRuleFromInsight } from "./actionTranslator.js";
+import {
+  translateAction,
+  registerRuleFromInsight,
+  classifyMissingPrimitiveFamily,
+  describeMissingPrimitiveFamily,
+} from "./actionTranslator.js";
 import {
   proposeRecommendation,
   findRecommendationBySourceInsightId,
@@ -725,24 +730,33 @@ export async function promoteInsightToGoal(
       try {
         if (!findRecommendationBySourceInsightId(entry.id)) {
           const actionPreview = entry.proposedAction.slice(0, 200);
-          // Stable, content-derived dedupe key. Insight IDs change every cycle
-          // (`il_${Date.now()}_${rand}`), so without an explicit key the same
-          // unparseable action text would emit a fresh missing-primitive rec
-          // each time. Hash the (action + insight) text instead. Title is
-          // intentionally generic — no insight id — so callers and the operator
-          // see one canonical row per missing primitive instead of one per cycle.
+          // Canonical family-level dedupe key. PR #274 hashed the verbatim
+          // action+insight text, but LLM-generated insights drift in wording
+          // every cycle ("produce one concrete artifact" vs "ship one
+          // synthesized artifact next cycle") — semantically the same gap,
+          // but the hashes diverged and proposals piled up again.
+          //
+          // Switch to a coarse family classifier (artifact / ratio / ttl /
+          // gate / archive / spectrum / synthesis / rewrite / verification /
+          // other). Two cycles failing on the same family collapse to ONE
+          // active row; genuinely-different families still get separate rows.
+          const family = classifyMissingPrimitiveFamily(entry.proposedAction);
           const dedupeKey = computeDedupeKey(
             "engine",
-            "missing-primitive: action translator gap",
-            `${entry.proposedAction}\n${entry.insight}`,
+            `missing-primitive: ${family}`,
+            `family:${family}`,
           );
           proposeRecommendation({
             category: "engine",
             risk: "low",
-            title: `missing-primitive: action translator could not parse insight`,
+            title: `missing-primitive: ${family} family — action translator could not parse insight`,
             rationale: `GoalEngine could not translate insight ${entry.id}: '${actionPreview}'`,
-            proposedChange: `Add action primitive supporting: ${entry.insight.slice(0, 240)}`,
-            evidence: [entry.id, entry.sourceId],
+            // Keep the proposedChange short and family-focused. Previous
+            // version embedded up to 240 chars of insight text, which made
+            // the visible row read like a malformed dump and broke dedupe
+            // because the insight wording shifted each cycle.
+            proposedChange: describeMissingPrimitiveFamily(family),
+            evidence: [entry.id, entry.sourceId, `family:${family}`],
             author: "agent",
             sourceInsightId: entry.id,
             dedupeKey,

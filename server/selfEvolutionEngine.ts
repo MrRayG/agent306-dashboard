@@ -547,6 +547,74 @@ export function getEvolutionDiffs(): EvolutionDiff[] {
   return loadDiffs();
 }
 
+// -- Governance-debt clustering --------------------------------------------
+
+export type GovernanceCluster =
+  | "hypothesis-cap"     // hard cap, 1-in-1-out, archive N, hypothesis budget
+  | "output-conversion"  // convert hypotheses to artifacts, ship synthesis
+  | "data-source-gate"   // pre-formation data-source / feasibility gate
+  | "kb-accumulation"    // KB growth without conversion / size cap
+  | "behavioral-rule"    // promote/codify a behavioral rule
+  | "framing-debt"       // binary vs spectrum, template rewrite
+  | "kb-quality"         // dedupe / merge / clean KB entries
+  | "archive-debt"       // stale items needing archive/expire
+  | "other";
+
+/**
+ * Classify a SelfEvolution insight (insight text + proposed change) into a
+ * coarse governance-debt cluster.
+ *
+ * Pure: no LLM, no DB. Used as the canonical dedupe axis so the operator
+ * sees ONE active row per concern (e.g. "hypothesis-cap concern") instead
+ * of N near-duplicate rows that share the same intent but drift in wording.
+ *
+ * Order matters — most-specific cues first. Returns "other" for anything
+ * unrecognized, which still collapses to a single catch-all row per window.
+ */
+export function classifyGovernanceCluster(text: string): GovernanceCluster {
+  const t = (text || "").toLowerCase();
+  if (!t.trim()) return "other";
+
+  // hypothesis-cap (most specific signatures)
+  if (
+    /\b(hard\s+cap|cap\s+(?:on|active)|limit\s+active|1[-\s]?in[-\s]?1[-\s]?out|archive\s+\d+\s*[-–]\s*\d+|hypothesis\s+budget)\b/.test(t) &&
+    /\bhypothes\w*\b/.test(t)
+  ) {
+    return "hypothesis-cap";
+  }
+  // data-source-gate
+  if (/\b(pre[-\s]?formation|pre[-\s]?testing|pre[-\s]?registration|data[-\s]?(?:access|source|availability))\s+gate\b|\bfeasibility\s+gate\b|\bdata[-\s]?source\s+(?:gate|check)/.test(t)) {
+    return "data-source-gate";
+  }
+  // output-conversion / artifact
+  if (/\b(convert|ship|publish|produce|synthesi[sz]e)\b.*\b(hypothes\w*|kb|knowledge)\b.*\b(artifact|post|thread|briefing|content|synthesis|narrative|draft)\b/.test(t)
+    || /\b(output[-\s]?conversion|content\s+conversion|hypothesis[-\s]?to[-\s]?content)\b/.test(t)) {
+    return "output-conversion";
+  }
+  // kb-accumulation
+  if (/\b(kb|knowledge)\s+(?:accumulation|growth|bloat|cap|size|count)\b|\b(cap|limit)\s+(?:kb|knowledge)\b/.test(t)) {
+    return "kb-accumulation";
+  }
+  // behavioral-rule promotion
+  if (/\b(promote|codify|add|enforce|adopt|graduate)\b.*\b(behavioral|behaviour\w*|behavior\w*)\s+rule\b|\b(behavioral|behaviour|behavior)\s+rule\s+promotion\b/.test(t)) {
+    return "behavioral-rule";
+  }
+  // framing-debt
+  if (/\b(binary|dichotom\w+|adversarial|spectrum|conditional|nuanced)\s+(?:framing|format|hypothes|template)\b|\bspectrum\s+rewrite\b|\btemplate\s+rewrite\b/.test(t)) {
+    return "framing-debt";
+  }
+  // kb-quality (dedupe / merge / clean)
+  if (/\b(dedupe|deduplicat\w+|merge|consolidate|clean(?:up)?)\b.*\b(kb|knowledge|entries|items)\b/.test(t)) {
+    return "kb-quality";
+  }
+  // archive-debt
+  if (/\barchive\b.*\b(stale|old|inactive|untouched|dormant)\b|\b(stale|inactive|dormant)\b.*\barchive\b|\bttl\b/.test(t)) {
+    return "archive-debt";
+  }
+
+  return "other";
+}
+
 // -- SelfEvolution → SelfRecommendation bridge -----------------------------
 //
 // Converts each freshly-emitted EvolutionInsight into a `proposed`
@@ -569,18 +637,24 @@ export function bridgeInsightsToSelfRecs(
         skippedDuplicate++;
         continue;
       }
-      const title = `Self-evolution insight: ${insight.insight.slice(0, 60)}`;
       const proposedChange = insight.actionItem
         ? insight.actionItem
         : insight.selfApplication || insight.insight;
-      // Content-derived dedupe key. Insight IDs are minted fresh every cycle
-      // (`evo_${Date.now()}_${rand}`), so the LLM emitting the same governance-
-      // debt suggestion ("hard cap active hypotheses", "1-in-1-out", etc.) on
-      // consecutive days previously produced N identical proposals. Hash the
-      // insight text + proposed change so semantic duplicates collapse to one
-      // active row per ~14d window. Skip-as-dupe is reported the same way as
-      // the existing source-insight-id collision path.
-      const dedupeKey = computeDedupeKey("engine", title, `${insight.insight}\n${proposedChange}`);
+      // Cluster-level dedupe (post PR #274). The earlier hash of the verbatim
+      // (insight + change) text still let near-duplicates through whenever
+      // the LLM rephrased — "hard cap at 12 hypotheses" vs "limit active
+      // hypotheses to 12" produced different fingerprints. We now classify
+      // each insight into a coarse governance-debt cluster
+      // (hypothesis-cap / output-conversion / data-source-gate /
+      //  kb-accumulation / behavioral-rule / framing-debt / kb-quality /
+      //  archive / other) and key dedupe on (cluster + week-bucket). Two
+      // proposals in the same cluster collapse into the existing active row,
+      // letting the operator drive ONE conversation per concern.
+      const cluster = classifyGovernanceCluster(`${insight.insight}\n${proposedChange}`);
+      // Coarsen the title so the operator-visible row reads as one canonical
+      // concern instead of a verbatim insight slice that shifts each cycle.
+      const title = `Self-evolution: ${cluster} concern`;
+      const dedupeKey = computeDedupeKey("engine", `governance-cluster:${cluster}`, cluster);
       if (findActiveRecommendationByDedupeKey(dedupeKey)) {
         skippedDuplicate++;
         continue;

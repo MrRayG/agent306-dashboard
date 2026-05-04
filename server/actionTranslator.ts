@@ -293,6 +293,92 @@ function inferCompetencyFromAction(action: string): string | undefined {
   return undefined;
 }
 
+// -- Missing-primitive classification ----------------------------------------
+
+export type MissingPrimitiveFamily =
+  | "artifact"      // produce/ship/publish ONE thing
+  | "ratio"         // for every N input, force one output
+  | "ttl"           // expire/retire after N days
+  | "gate"          // pre-X gate / require Y before Z
+  | "archive"       // archive/retire matching items
+  | "spectrum"      // rewrite binary framing to spectrum
+  | "synthesis"     // synthesize/aggregate/cluster
+  | "rewrite"       // rewrite template / structural change
+  | "verification"  // measure/track/observe — not yet a primitive
+  | "other";
+
+/**
+ * Classify an unparseable action into a coarse "missing primitive family".
+ *
+ * Used to compute a stable canonical dedupe key for missing-primitive
+ * self-recommendations. Two cycles failing on related actions
+ * ("produce one concrete artifact this cycle" vs "ship one synthesized
+ * artifact next cycle") collapse into ONE row keyed by the artifact family,
+ * instead of N rows keyed by the verbatim insight text.
+ *
+ * Pure: no DB, no LLM. Lowercases the action, scans for verb/keyword cues
+ * in priority order, and picks the most-specific family. Returns "other"
+ * when nothing is recognized — those still dedupe by family ("other"), so
+ * a stream of unrelated unparseable actions collapses to ONE catch-all row
+ * rather than an unbounded queue.
+ */
+export function classifyMissingPrimitiveFamily(actionText: string): MissingPrimitiveFamily {
+  const a = (actionText || "").toLowerCase();
+  if (!a.trim()) return "other";
+
+  // Most-specific cues first. Ratio is checked BEFORE artifact because
+  // "for every N new entries, generate one synthesis" matches both — the
+  // ratio framing is the more informative classification.
+  if (/\b(for\s+every|per|every)\s+\d+/.test(a) && /\b(produce|generate|ship|publish|create|force[-\s]?generate)\b/.test(a)) {
+    return "ratio";
+  }
+  if (/\b(produce|ship|publish|deliver|write|draft|generate|create)\b.*\b(artifact|briefing|thread|post|synthes(?:is|ized?)|narrative|framework|draft)\b/.test(a)) {
+    return "artifact";
+  }
+  if (/\bttl\b|\bexpir(?:e|y)\b|\bretire\b.*\bafter\b|\bcutoff\b/.test(a)) {
+    return "ttl";
+  }
+  if (/\b(pre[-\s]?registration|pre[-\s]?check|gate|block)\b|\brequire[s]?\b.*\bbefore\b/.test(a)) {
+    return "gate";
+  }
+  if (/\barchive\b|\bprune\b|\bdelete\b.*\b(stale|old|matching)\b/.test(a)) {
+    return "archive";
+  }
+  if (/\b(binary|dichotom\w+|adversarial)\b|\b(spectrum|conditional|nuanced)\s+framing\b/.test(a)) {
+    return "spectrum";
+  }
+  if (/\bsynthes(?:ize|is|ized?)\b|\bcluster\b|\baggregate\b|\bcompose\b/.test(a)) {
+    return "synthesis";
+  }
+  if (/\brewrite\b|\breframe\b|\btemplate\b|\bstructure\b/.test(a)) {
+    return "rewrite";
+  }
+  if (/\bmeasure\b|\btrack\b|\bobserv\w+\b|\bmonitor\b|\bquantif\w+\b/.test(a)) {
+    return "verification";
+  }
+  return "other";
+}
+
+/**
+ * Operator-readable description of what a missing-primitive family means.
+ * Used in the proposedChange text so the rec doesn't dump verbatim insight
+ * content into the field.
+ */
+export function describeMissingPrimitiveFamily(family: MissingPrimitiveFamily): string {
+  switch (family) {
+    case "artifact":     return "Add an `artifact` enforcement primitive (force ONE concrete output within N cycles).";
+    case "ratio":        return "Add a `ratio` enforcement primitive (force one output per N inputs).";
+    case "ttl":          return "Add a `ttl` enforcement primitive (expire items after N days without state change).";
+    case "gate":         return "Add a `gate` enforcement primitive (block X until Y holds).";
+    case "archive":      return "Add an `archive` enforcement primitive (retire items matching a pattern).";
+    case "spectrum":     return "Add a `spectrum` rewrite primitive (reject binary framing in templates).";
+    case "synthesis":    return "Add a `synthesis` enforcement primitive (force aggregation / cluster output).";
+    case "rewrite":      return "Add a `rewrite` enforcement primitive (structural template change).";
+    case "verification": return "Add a `verification` primitive (track/measure a state without a forcing rule).";
+    case "other":        return "Action did not match any known primitive family — classify and add or sharpen the action.";
+  }
+}
+
 // -- Rule registration bridge -----------------------------------------------
 
 /**
