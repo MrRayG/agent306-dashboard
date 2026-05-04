@@ -36,6 +36,7 @@ import { postChatCompletions } from "./llmCall.js";
 import { verifyClaims } from "./claimVerifier.js";
 import { extractClaimsAndComments } from "./claimExtractor.js";
 import { buildResearchPack } from "./researchPack.js";
+import { buildSharedClaimLaneContractBlock } from "./claimLaneContract.js";
 const GROK_URL = LLM_BASE_URL;
 const ACADEMY_STATE_FILE = dataPath("academy_state.json");
 const TRACKING_START = new Date("2026-03-08T00:00:00Z");
@@ -278,10 +279,22 @@ async function generateAcademyEpisode(topic: typeof CURRICULUM[0]): Promise<{
   const weeksTracked = Math.max(1, Math.ceil((Date.now() - TRACKING_START.getTime()) / (7 * 86400000)));
   const episodeNum = state.totalEpisodes + 1;
 
+  // Shared cross-engine claim-lane contract (PR #273). Academy is
+  // internal-synthesis: there is no external sourceText, so any
+  // attribution-shaped sentence ("the research shows", "the study
+  // finds") would trip Lane A under REPORT-mode. The contract pushes
+  // the writer to keep teaching in clearly-marked Lane B agent voice
+  // and to never fabricate Lane C citations. Same posture News uses
+  // (server/newsGenerator.ts:59) — verifier runs in ANALYSIS mode
+  // below.
+  const academyLaneContract = buildSharedClaimLaneContractBlock("academy");
+
   const systemPrompt = `${agentCtx}
 
 ${buildVoiceBlock()}
 ${getEvolutionContext()}
+
+${academyLaneContract}
 
 CITATION DISCIPLINE (REQUIRED — APA-style per-claim attribution):
 - A citation [URL] must support the SPECIFIC claim immediately before it. Do not staple a citation to the end of a paragraph that contains synthesis or analytical commentary — citations attach to claims, not paragraphs.
@@ -497,6 +510,15 @@ export async function postAcademyEpisode(xWrite: any): Promise<void> {
         sourceTitle: `Academy: ${topic.concept}`,
         // PR #251 — short-form pedagogical post; Lane B bare soft-warns, Lane A still hard-fails.
         tier: "academy",
+        // 2026-05-04 fix(signal-academy-claim-lane-contract): Academy is
+        // internal-synthesis (sourceText is "") so REPORT-mode attribution
+        // detection over-flags pedagogical sentences that READ as if they
+        // attribute claims to "the research" / "the paper" / "the study"
+        // even when Agent 306 is teaching from her KB. ANALYSIS mode
+        // exempts clearly-marked Lane B agent voice and forward
+        // projection. Lane A hard-fail is unchanged — fabricated outlet
+        // attributions (Lane C drift) still hard-fail.
+        artifactMode: "ANALYSIS",
       });
       if (verdict.severity === "HARD_FAIL") {
         console.error(`[ClaimVerifier] REJECTED academy EP${state.totalEpisodes + 1}: ${verdict.unsupportedClaims.length} unsupported claims`);

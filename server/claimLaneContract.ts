@@ -59,7 +59,13 @@
 
 export const SHARED_CLAIM_LANE_CONTRACT_MARKER = "CLAIM_LANE_CONTRACT@v1";
 
-export type ClaimLaneEngine = "article" | "blog" | "manuscript" | "news";
+export type ClaimLaneEngine =
+  | "article"
+  | "blog"
+  | "manuscript"
+  | "news"
+  | "signal"
+  | "academy";
 
 const ENGINE_FRAMING: Record<
   ClaimLaneEngine,
@@ -97,6 +103,35 @@ const ENGINE_FRAMING: Record<
     surface:
       "short-form X dispatch — one chosen signal plus Agent 306's analytical commentary, not a roundup",
     primaryUrlLabel: "headline-pack URL",
+  },
+  signal: {
+    // 306 SIGNAL — Mon/Wed/Fri intelligence brief. Source pool is the
+    // upstream signals feed (aiSignal / web3Signal / wildcardSignal — 2-3
+    // sentences each). Lane A is whatever those snippets state; the rest
+    // of the prose is Agent 306's POV per signal, the closing thesis,
+    // and forward-projection commentary. Same failure-mode risk as News:
+    // analytical sentences using attribution-shaped verbs ("claims",
+    // "argues", "shows") get over-flagged by REPORT-mode. The contract
+    // pushes the writer to mark Lane B explicitly so the verifier can
+    // recognize commentary as author voice instead of source drift.
+    name: "306 SIGNAL (intelligence brief)",
+    surface:
+      "short-form X intelligence brief — 3 signals (AI / Web3 / wildcard), each with a punchy headline, 2-3 sentences of context, and Agent 306's POV; closes with a one-sentence thesis tying the three together",
+    primaryUrlLabel: "upstream signals-feed URL",
+  },
+  academy: {
+    // 306 ACADEMY — Tue/Thu/Sat pedagogical post. Internal-synthesis: no
+    // external sourceText, so any attribution-shaped sentence ("the
+    // research shows", "the paper finds") would trip Lane A under
+    // REPORT-mode. The contract asks the writer to keep the teaching in
+    // clearly-marked Lane B agent voice and to NEVER fabricate Lane C
+    // citations — no Stanford HAI lines, no dated benchmarks, no named
+    // people without a ledger-backed source. Lane A is effectively empty
+    // here; Lane B / Lane C discipline is what actually matters.
+    name: "306 ACADEMY (teaching post)",
+    surface:
+      "short-form X teaching post — one concept per episode, opens with an analogy, applies to the AI landscape, lands one new insight; internal-synthesis (no external source pool)",
+    primaryUrlLabel: "(no primary URL — internal synthesis)",
   },
 };
 

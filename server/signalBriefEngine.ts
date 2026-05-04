@@ -41,6 +41,7 @@ import { postChatCompletions, postXSearchResponses } from "./llmCall.js";
 import { verifyClaims } from "./claimVerifier.js";
 import { extractClaimsAndComments } from "./claimExtractor.js";
 import { buildResearchPack } from "./researchPack.js";
+import { buildSharedClaimLaneContractBlock } from "./claimLaneContract.js";
 const GROK_URL          = LLM_BASE_URL;
 const GROK_SEARCH_URL   = LLM_RESPONSE_URL;
 const SIGNAL_STATE_FILE = dataPath("signal_brief_state.json");
@@ -183,6 +184,15 @@ async function generateSignalBrief(grokKey: string): Promise<{
   // Fetch live signals first
   const { aiSignal, web3Signal, wildcardSignal } = await fetchFreshSignals(grokKey);
 
+  // Shared cross-engine claim-lane contract (PR #273) — wired into Signal
+  // for parity with News/Article/Blog. The signal feed is the small
+  // source pool; everything else (POV per signal, closing thesis,
+  // forward-projection) is Agent 306's analysis and must be marked as
+  // such so the verifier in ANALYSIS mode can recognize it as author
+  // voice instead of Lane A source drift. Same posture News uses
+  // (server/newsGenerator.ts:59).
+  const signalLaneContract = buildSharedClaimLaneContractBlock("signal");
+
   try {
     const res = await postChatCompletions({
         model: getModel("signal-collection"),
@@ -193,6 +203,8 @@ async function generateSignalBrief(grokKey: string): Promise<{
 
 ${buildVoiceBlock()}
 ${getEvolutionContext()}
+
+${signalLaneContract}
 
 CITATION DISCIPLINE (REQUIRED — APA-style per-claim attribution):
 - A citation [URL] must support the SPECIFIC claim immediately before it. Do not staple a citation to the end of a paragraph that contains synthesis or analytical commentary — citations attach to claims, not paragraphs.
@@ -317,6 +329,14 @@ Return JSON:
       sourceTitle: `306 SIGNAL Brief #${briefNumber}`,
       // PR #251 — short-form commentary; Lane B bare soft-warns, Lane A still hard-fails.
       tier: "signal",
+      // 2026-05-04 fix(signal-academy-claim-lane-contract): mirror the News /
+      // Article posture. Signal is opinion-shaped on three chosen signals;
+      // strict REPORT-mode attribution detection over-flags Agent 306
+      // commentary that uses ordinary attribution-shaped verbs ("claims",
+      // "argues", "shows") even when the sentence is clearly Lane B agent
+      // analysis. Quarantine + Lane A hard-fail behavior unchanged — only
+      // the analytical-commentary exemption set widens.
+      artifactMode: "ANALYSIS",
     });
     if (verdict.severity === "HARD_FAIL") {
       console.error(`[ClaimVerifier] REJECTED signal brief #${briefNumber}: ${verdict.unsupportedClaims.length} unsupported claims`);
