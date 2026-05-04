@@ -23,7 +23,7 @@ import { getResearchLab, addTopic } from "./researchEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 import { postChatCompletions } from "./llmCall.js";
-import { proposeRecommendation } from "./selfRecommendationEngine.js";
+import { proposeRecommendation, computeDedupeKey } from "./selfRecommendationEngine.js";
 const GROK_URL = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
 
@@ -96,6 +96,31 @@ export interface ImprovementPlan {
   actions: ImprovementAction[];
   patternsIdentified: string[];
   createdAt: string;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * ISO-8601 week key in `YYYY-Www` format (e.g. `2026-W18`). Used as the
+ * canonical dedupe axis for the weekly improvement-plan recommendation: the
+ * operator should see one active row per week, not one per generator run.
+ */
+export function isoWeekKey(d: Date): string {
+  // Copy to UTC midnight to avoid TZ drift around week boundaries.
+  const tmp = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  // Shift to nearest Thursday — ISO weeks pivot on Thursday.
+  const dayNum = (tmp.getUTCDay() + 6) % 7; // Mon=0..Sun=6
+  tmp.setUTCDate(tmp.getUTCDate() - dayNum + 3);
+  const firstThursday = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 4));
+  const week =
+    1 +
+    Math.round(
+      ((tmp.getTime() - firstThursday.getTime()) / 86400000 -
+        3 +
+        ((firstThursday.getUTCDay() + 6) % 7)) /
+        7,
+    );
+  return `${tmp.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -647,14 +672,30 @@ Rules:
   // Self-evolution hook (spec §1): every improvement plan becomes a
   // recommendation the operator can approve. Propose-only — none of these
   // actions are automatically applied.
+  //
+  // Canonical weekly dedupe: bucket by ISO week so that re-running the
+  // generator within the same week (or daily) collapses into one active row.
+  // Without this, the default fingerprint is computed from (title|change),
+  // and both shift each run because `weekOf` is today's date and
+  // `proposedChange` is fresh LLM text — so duplicates piled up.
   try {
+    const weekKey = isoWeekKey(new Date());
     proposeRecommendation({
       category: "engine",
       risk: "low",
-      title: `Improvement plan for week of ${plan.weekOf}`,
+      title: `Improvement plan for week of ${weekKey}`,
       rationale: `dreamEngine identified patterns: ${plan.patternsIdentified.slice(0, 3).join("; ")}`,
       proposedChange: plan.actions.map((a, i) => `${i + 1}. [${a.area}] ${a.action}`).join("\n"),
-      evidence: [`plan:${plan.id}`],
+      evidence: [`plan:${plan.id}`, `week:${weekKey}`],
+      // Lock the dedupe axis to the ISO week. Daily re-runs and rephrasings
+      // of the same week's plan collapse into the same active row; new
+      // proposals only appear once the week rolls over (or the operator
+      // rejects/applies the active one, per the standard rule).
+      dedupeKey: computeDedupeKey(
+        "engine",
+        "improvement-plan-weekly",
+        weekKey,
+      ),
     });
   } catch (e: any) {
     console.warn("[DreamEngine] self-recommendation hook failed:", e?.message);

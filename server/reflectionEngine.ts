@@ -15,7 +15,7 @@ import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./ll
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 import { postChatCompletions } from "./llmCall.js";
-import { proposeRecommendation } from "./selfRecommendationEngine.js";
+import { proposeRecommendation, computeDedupeKey, findActiveRecommendationByDedupeKey } from "./selfRecommendationEngine.js";
 import { waitForBatchComplete } from "./xaiBatchEngine.js";
 import {
   shouldUseReflectionBatch,
@@ -32,6 +32,12 @@ const REFLECTIONS_FILE = dataPath("reflections.json");
 const STYLE_RULES_FILE = dataPath("style-rules.json");
 
 const MAX_STYLE_RULES = 50;
+// Style rules longer than this are saved internally but NOT surfaced as
+// individual self-recommendations. This protects the operator queue from
+// being flooded with multi-paragraph verbatim "rules" that the LLM
+// occasionally emits via the improvement-plan path; the rule still ships
+// into context via getStyleRulesContext(), so behavior is preserved.
+const STYLE_RULE_MAX_REC_CHARS = 600;
 const GROK_RATE_MS = 5000; // 1 call per 5 seconds
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -348,16 +354,61 @@ export function addStyleRule(rule: string, sourceId: string): void {
 
   // Self-evolution hook (spec §1): surface the new style rule as a proposed
   // prompt-layer change. Propose-only — operator decides whether to keep.
+  //
+  // Hardening (post PR #274): improvement_plan-sourced rules sometimes arrive
+  // as multi-paragraph LLM blobs — the operator queue would otherwise fill
+  // with giant verbatim "Style rule: …" rows that vary every cycle. We:
+  //
+  //   1. Skip the rec entirely for rules longer than STYLE_RULE_MAX_REC_CHARS
+  //      — the StyleRule itself is still saved (it ships into context via
+  //      getStyleRulesContext()), so behavior is unchanged; only the operator
+  //      proposal is suppressed for unreviewable text.
+  //   2. Cap the embedded rule text in title/proposedChange to short previews
+  //      so the dedupe fingerprint isn't dominated by a unique tail.
+  //   3. Per-(source, day) dedupe key: a single improvement-plan run that
+  //      calls addStyleRule N times collapses into ONE parent rec for that
+  //      plan, instead of N near-duplicate giant rows. (For non-plan sources
+  //      we fall through to the default content fingerprint.)
   try {
-    proposeRecommendation({
-      category: "prompt",
-      risk: "low",
-      title: `Style rule: ${rule.slice(0, 80)}`,
-      rationale: `reflectionEngine observed a pattern worth codifying (source=${sourceId}).`,
-      proposedChange: `Keep/discard style rule ${newRule.id}: "${rule}". Runs via getStyleRulesContext() in the next prompt assembly.`,
-      evidence: [`styleRule:${newRule.id}`, `source:${sourceId}`],
-      sourceInsightId: sourceId,
-    });
+    if (rule.length <= STYLE_RULE_MAX_REC_CHARS) {
+      const preview = rule.slice(0, 120);
+      const isPlanSource = sourceId === "improvement_plan";
+      const dedupeKey = isPlanSource
+        ? computeDedupeKey(
+            "prompt",
+            "style-rule-batch:improvement_plan",
+            new Date().toISOString().split("T")[0], // YYYY-MM-DD
+          )
+        : undefined;
+      // For plan-sourced rules, collapse follow-up rules from the same daily
+      // run into the existing parent rec instead of inserting another one.
+      if (isPlanSource && dedupeKey) {
+        const existing = findActiveRecommendationByDedupeKey(dedupeKey);
+        if (existing) {
+          // Already a row for today's plan-batch; don't pile on. The internal
+          // styleRules state still holds every rule the agent emitted.
+          return;
+        }
+      }
+      proposeRecommendation({
+        category: "prompt",
+        risk: "low",
+        title: isPlanSource
+          ? `Style rules from improvement plan (${new Date().toISOString().split("T")[0]})`
+          : `Style rule: ${preview}`,
+        rationale: `reflectionEngine observed a pattern worth codifying (source=${sourceId}).`,
+        proposedChange: isPlanSource
+          ? `Keep/discard style rules emitted by today's improvement plan. First: "${preview}". Inspect /style-rules to review the full set.`
+          : `Keep/discard style rule ${newRule.id}: "${preview}". Runs via getStyleRulesContext() in the next prompt assembly.`,
+        evidence: [`styleRule:${newRule.id}`, `source:${sourceId}`],
+        sourceInsightId: sourceId,
+        ...(dedupeKey !== undefined ? { dedupeKey } : {}),
+      });
+    } else {
+      console.log(
+        `[Reflection] Style rule too long for self-rec proposal (${rule.length} chars > ${STYLE_RULE_MAX_REC_CHARS}); rule still saved internally`,
+      );
+    }
   } catch (e: any) {
     console.warn("[Reflection] self-recommendation hook failed:", e?.message);
   }
