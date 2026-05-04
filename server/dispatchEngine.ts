@@ -20,6 +20,7 @@ import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 import { postChatCompletions } from "./llmCall.js";
 import { verifyClaims } from "./claimVerifier.js";
+import { buildSharedClaimLaneContractBlock } from "./claimLaneContract.js";
 import { extractClaimsAndComments } from "./claimExtractor.js";
 import { buildResearchPack } from "./researchPack.js";
 // ── Types ───────────────────────────────────────────────────────────────
@@ -166,7 +167,13 @@ export async function generateDispatchContent(): Promise<string | null> {
 - If a claim is a fact drawn from a SOURCE OTHER than this week's research material above (industry-known costs, benchmarks, dates, training facts, historical events, your KB), do NOT staple a research-material URL to it. Either cite the actual source with its real URL in your own voice ("per Stanford HAI's 2025 AI Index, [link]"), or — if you cannot produce a real URL for it — qualify it verbally with a hedge like "publicly reported," "industry reporting indicates," "as widely covered" and attach NO URL. Never fabricate a URL.
 - The KB / knowledge layer included in the context above is provided as background scaffolding for your analysis, NOT as a citation pool — KB lines do not carry source URLs. Treat any KB-derived fact you surface as outside-the-source and apply the rule above (cite the real upstream source if you have one, hedge verbally if you don't).
 - One citation per claim. If a sentence contains multiple claims requiring different sources, split the sentence or cite each component. Do not bracket-pile citations onto a single closing punctuation.`;
-    const systemPrompt = `Today is ${new Date().toISOString().slice(0, 10)} (UTC).\n\n${dispatchContext}\n\n${buildVoiceBlock()}\n\n${citationDiscipline}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
+    // Shared cross-engine claim-lane contract (PR #273) — wired into The
+    // Dispatch 2026-05-04. Same rationale as Routes.grokPost: dispatch is
+    // serialized opinion-shaped commentary on a chosen signal; the writer
+    // must mark its analytical voice with explicit Lane B boundary phrases
+    // so the verifier doesn't confuse it for unsupported source attribution.
+    const dispatchLaneContract = buildSharedClaimLaneContractBlock("news");
+    const systemPrompt = `Today is ${new Date().toISOString().slice(0, 10)} (UTC).\n\n${dispatchContext}\n\n${buildVoiceBlock()}\n\n${dispatchLaneContract}\n\n${citationDiscipline}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
 
     const grokResp = await postChatCompletions({
         model: getModel("news-dispatch"),
@@ -263,6 +270,11 @@ Return JSON: {"post": "...", "title": "...", "summary": "..."}`
       sourceTitle: `THE DISPATCH Episode ${nextEpisode}`,
       // PR #251 — weekly aggregator dispatch; Lane B bare soft-warns, Lane A still hard-fails.
       tier: "dispatch",
+      // ANALYSIS mode — see server/routes.ts auto-dispatch path. The Dispatch
+      // is opinion-shaped on a single chosen signal, not a faithful summary;
+      // forward projections / author voice / section headers should not be
+      // treated as Lane A drift.
+      artifactMode: "ANALYSIS",
     });
     if (verdict.severity === "HARD_FAIL") {
       console.error(`[ClaimVerifier] REJECTED dispatch episode ${nextEpisode}: ${verdict.unsupportedClaims.length} unsupported claims`);

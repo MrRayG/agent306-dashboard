@@ -14,6 +14,7 @@ import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 import { postChatCompletions } from "./llmCall.js";
 import { verifyClaims } from "./claimVerifier.js";
+import { buildSharedClaimLaneContractBlock } from "./claimLaneContract.js";
 import { recordNewsDraft } from "./newsDraftStore.js";
 import { extractClaimsAndComments } from "./claimExtractor.js";
 import { buildResearchPack } from "./researchPack.js";
@@ -51,7 +52,12 @@ export async function generateNewsContent(): Promise<string | null> {
 - If a claim is a fact drawn from a SOURCE OTHER than today's headline pack above (industry-known costs, benchmarks, dates, training facts, historical events, your KB), do NOT staple a headline-pack URL to it. Either cite the actual source with its real URL in your own voice ("per Stanford HAI's 2025 AI Index, [link]"), or — if you cannot produce a real URL for it — qualify it verbally with a hedge like "publicly reported," "industry reporting indicates," "as widely covered" and attach NO URL. Never fabricate a URL.
 - The KB / knowledge layer included in the context above is provided as background scaffolding for your analysis, NOT as a citation pool — KB lines do not carry source URLs. Treat any KB-derived fact you surface as outside-the-source and apply the rule above (cite the real upstream source if you have one, hedge verbally if you don't).
 - One citation per claim. If a sentence contains multiple claims requiring different sources, split the sentence or cite each component. Do not bracket-pile citations onto a single closing punctuation.`;
-    const dispatchSystemPrompt = `${dispatchContext}\n\n${buildVoiceBlock()}\n\n${citationDiscipline}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
+    // Shared cross-engine claim-lane contract (PR #273) — see Routes.grokPost
+    // for the failure-mode rationale. Wiring it into the manual generator
+    // path keeps on-demand news drafts on the same lane discipline as the
+    // auto-dispatch.
+    const newsLaneContract = buildSharedClaimLaneContractBlock("news");
+    const dispatchSystemPrompt = `${dispatchContext}\n\n${buildVoiceBlock()}\n\n${newsLaneContract}\n\n${citationDiscipline}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
 
     const grokResp = await postChatCompletions({
         model: getModel("news-dispatch"),
@@ -126,6 +132,11 @@ Return JSON: {"post": "..."}`
       // PR #251 — tier-aware verifier. News is short-form aggregator;
       // Lane B bare soft-warns, Lane A still hard-fails.
       tier: "news",
+      // ANALYSIS mode — see server/routes.ts auto-dispatch path for the
+      // 2026-05-04 rationale. News is opinion-shaped on a chosen signal;
+      // strict REPORT-mode attribution detection over-flags Agent 306
+      // commentary that uses ordinary verbs like "claim/claims" as a noun.
+      artifactMode: "ANALYSIS",
     });
     // Audit follow-up 2026-05-02 — generalize the PR #257 claim-extractor +
     // research pack to news. News is internal-synthesis (live market feeds,

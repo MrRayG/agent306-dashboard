@@ -59,7 +59,7 @@
 
 export const SHARED_CLAIM_LANE_CONTRACT_MARKER = "CLAIM_LANE_CONTRACT@v1";
 
-export type ClaimLaneEngine = "article" | "blog" | "manuscript";
+export type ClaimLaneEngine = "article" | "blog" | "manuscript" | "news";
 
 const ENGINE_FRAMING: Record<
   ClaimLaneEngine,
@@ -80,6 +80,23 @@ const ENGINE_FRAMING: Record<
     surface:
       "research manuscript that answers a hypothesis from collected data points and named sources",
     primaryUrlLabel: "primary source URL",
+  },
+  news: {
+    // 306 NEWS / The Dispatch — short-form aggregator commentary. Source
+    // pool is intentionally tiny (live market feed + headline pack) and
+    // most of the prose IS Agent 306's analysis on a chosen signal.
+    // Lane B / Lane C discipline matters more than Lane A here because
+    // Lane A is rarely available — the writer should choose ONE source-
+    // backed signal and frame the rest as clearly-marked Lane B agent
+    // commentary instead of letting analytical sentences read as if a
+    // source asserted them. Live retest 2026-05-04 (Arbitrum DAO frozen-
+    // ETH dispatch) failed when forward-projection commentary like
+    // "Once you open the door to reallocating user funds…" tripped the
+    // verifier as Lane A drift via the "claims" attribution verb.
+    name: "306 News / The Dispatch",
+    surface:
+      "short-form X dispatch — one chosen signal plus Agent 306's analytical commentary, not a roundup",
+    primaryUrlLabel: "headline-pack URL",
   },
 };
 
