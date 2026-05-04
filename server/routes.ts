@@ -52,6 +52,7 @@ import {
 } from "./articleEngine.js";
 import { fetchSourceContent } from "./sourceFetcher.js";
 import { verifyClaims, type VerifierReport } from "./claimVerifier.js";
+import { buildSharedClaimLaneContractBlock } from "./claimLaneContract.js";
 import { recordNewsDraft, readNewsDrafts } from "./newsDraftStore.js";
 import {
   parseUserMessage,
@@ -439,7 +440,16 @@ async function postDailyNewsDispatch() {
 - If a claim is a fact drawn from a SOURCE OTHER than today's headline pack above (industry-known costs, benchmarks, dates, training facts, historical events, your KB), do NOT staple a headline-pack URL to it. Either cite the actual source with its real URL in your own voice ("per Stanford HAI's 2025 AI Index, [link]"), or — if you cannot produce a real URL for it — qualify it verbally with a hedge like "publicly reported," "industry reporting indicates," "as widely covered" and attach NO URL. Never fabricate a URL.
 - The KB / knowledge layer included in the context above is provided as background scaffolding for your analysis, NOT as a citation pool — KB lines do not carry source URLs. Treat any KB-derived fact you surface as outside-the-source and apply the rule above (cite the real upstream source if you have one, hedge verbally if you don't).
 - One citation per claim. If a sentence contains multiple claims requiring different sources, split the sentence or cite each component. Do not bracket-pile citations onto a single closing punctuation.`;
-    const dispatchSystemPrompt = `Today is ${new Date().toISOString().slice(0, 10)} (UTC).\n\n${dispatchContext}\n\n${buildVoiceBlock()}\n\n${citationDiscipline}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
+    // Shared cross-engine claim-lane contract (PR #273) — wired into News
+    // 2026-05-04 after the Arbitrum DAO frozen-ETH dispatch hard-failed two
+    // days running on analytical commentary getting tagged as Lane A drift
+    // ("If the DAO chooses to recognize these claims, it creates
+    // precedent…"). The contract names the failure pattern and pushes the
+    // writer toward explicit Lane B boundary phrases ("My read —", "The
+    // open question is —", "Agent 306's analysis:") so analytical voice is
+    // recognized rather than confused for source attribution.
+    const newsLaneContract = buildSharedClaimLaneContractBlock("news");
+    const dispatchSystemPrompt = `Today is ${new Date().toISOString().slice(0, 10)} (UTC).\n\n${dispatchContext}\n\n${buildVoiceBlock()}\n\n${newsLaneContract}\n\n${citationDiscipline}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
     const grokResp = await postChatCompletions({
         model: getModel("news-dispatch"),
         messages: [
@@ -528,6 +538,15 @@ Return JSON: {"post": "..."}`
       // (internal contradiction, hallucinated entity, refuted fact) still
       // hard-fail and quarantine. Strict gate is preserved for blog/article/research.
       tier: "news",
+      // News is opinion-piece-shaped on a chosen signal — Agent 306 voice +
+      // forward projections + author-voice analysis + section headers should
+      // not be treated as Lane A source attribution. ANALYSIS narrows the
+      // Lane A gate to explicit attribution VERBS only (no domain/title
+      // matches) and exempts AUTHOR_VOICE / FORWARD_PROJECTION sentences
+      // before classification — same posture Article Deep Read uses
+      // (server/articleEngine.ts:1171). Strict fabrication detection,
+      // verbatim quote checks, and the LLM judge path are unchanged.
+      artifactMode: "ANALYSIS",
     });
     if (verdict.severity === "HARD_FAIL") {
       console.error(`[Agent306:News] ClaimVerifier REJECTED dispatch: ${verdict.unsupportedClaims.length} unsupported claims`);

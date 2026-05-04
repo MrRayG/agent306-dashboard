@@ -159,6 +159,23 @@ export const AUTHOR_VOICE_PATTERNS = [
   "the upshot is",
   "the throughline here",
   "what this adds up to",
+  // ── 2026-05-04 — lane-contract boundary phrases ─────────────────────
+  // The shared claim-lane contract (server/claimLaneContract.ts) pushes
+  // the writer to mark Lane B agent commentary with explicit boundary
+  // phrases so a reader (and the verifier) cannot mistake analysis for
+  // source attribution. These phrases are recognized as author voice in
+  // ANALYSIS mode so when the writer obeys the contract on engines like
+  // News / The Dispatch, the analytical sentences get exempted before
+  // the Lane A gate fires. Additive only — every PR-I / PR-I.1 entry
+  // above is preserved.
+  "my read —",
+  "my read,",
+  "my read:",
+  "agent 306's read",
+  "agent 306's analysis",
+  "agent 306's caveat",
+  "agent 306's take",
+  "the open question is",
 ];
 
 /** Markdown section-header detector. A line that begins (after any
