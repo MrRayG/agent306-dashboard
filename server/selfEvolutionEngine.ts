@@ -583,7 +583,21 @@ export function classifyGovernanceCluster(text: string): GovernanceCluster {
     return "hypothesis-cap";
   }
   // data-source-gate
-  if (/\b(pre[-\s]?formation|pre[-\s]?testing|pre[-\s]?registration|data[-\s]?(?:access|source|availability))\s+gate\b|\bfeasibility\s+gate\b|\bdata[-\s]?source\s+(?:gate|check)/.test(t)) {
+  // Catches both "pre-X gate" / "feasibility gate" wording and the broader
+  // "measurement path / accessible source / classify as research question"
+  // shape that surfaces when SelfEvolution describes the gate in plain prose
+  // without using the literal word "gate". The 5/5 recommendation
+  //   "before forming any new hypothesis, require a measurement path field;
+  //    if no path exists, classify as research question not active hypothesis"
+  // landed in `other` under the original regex; it now lands here.
+  if (
+    /\b(pre[-\s]?formation|pre[-\s]?testing|pre[-\s]?registration|data[-\s]?(?:access|source|availability))\s+gate\b|\bfeasibility\s+gate\b|\bdata[-\s]?source\s+(?:gate|check)/.test(t) ||
+    /\bmeasurement\s+path\b/.test(t) ||
+    /\b(accessible|available)\s+(?:data\s+)?(?:source|evidence)\b/.test(t) ||
+    /\bclassify\s+as\s+research\s+question\b/.test(t) ||
+    (/\brequire\b.*\b(data\s+source|evidence\s+source|measurement\s+path)\b/.test(t) && /\bhypothes/.test(t)) ||
+    /\bbefore\s+(?:any\s+)?(?:new\s+)?hypothes\w*\b.*\brequire\b.*\b(data|source|evidence|measurement)\b/.test(t)
+  ) {
     return "data-source-gate";
   }
   // output-conversion / artifact

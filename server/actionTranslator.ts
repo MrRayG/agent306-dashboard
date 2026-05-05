@@ -2,25 +2,38 @@
 // 306 -- ACTION TRANSLATOR
 //
 // Converts natural-language insight actions from SelfEvolution into one of
-// five enforcement primitives that actually fire at runtime:
+// six enforcement primitives that actually fire at runtime:
 //
-//   ratio_rule     — force output-per-input ratios (e.g. 1 synthesis / 10 KB)
-//   ttl_rule       — expire items after N days without state change
-//   gate_rule      — block X until Y condition holds
-//   archive_rule   — auto-archive items matching a pattern
-//   artifact_rule  — force ONE concrete output artifact within N cycles
-//                    (added 2026-05-01: closes the missing-primitive gap that
-//                    surfaced 12+ times in the 4/25–4/30 self-recommendation log,
-//                    where SelfEvolution kept producing "produce one concrete
-//                    output artifact this cycle" insights with no translator
-//                    target. The result was a maintenance loop: zero breakthroughs,
-//                    zero archives, zero self-change commitments closed.)
+//   ratio_rule        — force output-per-input ratios (e.g. 1 synthesis / 10 KB)
+//   ttl_rule          — expire items after N days without state change
+//   gate_rule         — block X until Y condition holds
+//   archive_rule      — auto-archive items matching a pattern
+//   artifact_rule     — force ONE concrete output artifact within N cycles
+//                       (added 2026-05-01: closes the missing-primitive gap that
+//                       surfaced 12+ times in the 4/25–4/30 self-recommendation log,
+//                       where SelfEvolution kept producing "produce one concrete
+//                       output artifact this cycle" insights with no translator
+//                       target. The result was a maintenance loop: zero breakthroughs,
+//                       zero archives, zero self-change commitments closed.)
+//   verification_rule — track/measure a state without forcing a rule.
+//                       (added 2026-05-05: SelfEvolution kept emitting "track
+//                       firing rate next cycle" / "measure adoption of behavioral
+//                       rule X" actions that the translator dropped because none
+//                       of the five forcing primitives applied. Verification is
+//                       observation-only — no transition is blocked, no artifact
+//                       is forced — but the rule still fires each tick so the
+//                       Self-Change Verifier can credit observed adoption
+//                       instead of letting the commitment quietly expire.)
 //
 // Agent 306's own action strings from the log (verbatim) are the design input:
 //   - "For every 10 new knowledge entries, force-generate one synthesis"      → ratio_rule
 //   - "Implement a strict 14-day TTL on testing hypotheses..."                → ttl_rule
 //   - "Implement a pre-registration gate: before any hypothesis enters..."    → gate_rule
 //   - "Archive the 2 dream insight entries (speculative, no evidence)..."     → archive_rule
+//   - "Promote 1 additional behavioral rule ... track firing rate next cycle" → verification_rule
+//   - "Implement a mandatory pre-testing gate: before any hypothesis moves    → gate_rule
+//      from forming to testing, require explicit identification of the
+//      specific data source that could confirm/reject it..."
 //
 // If none match, returns { primitive: "none", reason } and the insight stays
 // in `proposed` status until its TTL expires. Vague commitments should die.
@@ -60,6 +73,13 @@ const GATE_PATTERNS = [
   /(?:pre[-\s]?registration|feasibility|pre[-\s]?check|gate|block)\s+(?:gate\s+)?(?::|before|on|for)\s+([^\.]+)/i,
   // "require X before Y"
   /require[s]?\s+([^\.]+?)\s+before\s+([^\.]+)/i,
+  // "implement a mandatory pre-testing gate" / "implement a pre-formation gate"
+  // Captures the gate descriptor without needing a colon.
+  /(?:implement|introduce|add|install)\s+(?:a\s+)?(?:mandatory\s+)?(pre[-\s]?(?:testing|formation|registration|check|flight|merge|publish)[-\s\w]*\s+gate)/i,
+  // "before X moves from A to B, require Y" — measurement-path / data-source gate
+  /before\s+(?:any\s+)?([^\.]+?)\s+(?:moves?|transitions?)\s+from\s+\w+\s+to\s+\w+\s*,?\s*require\s+([^\.]+)/i,
+  // "before forming any new hypothesis, require a measurement path field"
+  /before\s+forming\s+(?:any\s+)?(?:new\s+)?([^\.,]+?)\s*,?\s*require\s+(?:a\s+|an\s+|the\s+)?([^\.]+)/i,
 ];
 
 const ARCHIVE_PATTERNS = [
@@ -85,6 +105,23 @@ const ARTIFACT_PATTERNS = [
   /(?:produce|ship|publish|generate|create|deliver|write|draft)\s+(?:exactly\s+)?(?:one|1|a\s+single)\s+(?:concrete\s+)?(?:output\s+)?(\w+(?:\s+\w+){0,3}?)(?:\s*\(([^)]+)\))?[^.]*?\b(?:within|in|by|before|this|next|each)\s+(?:the\s+)?(?:next\s+)?(\d+)?\s*(cycle|day|week|cycles|days|weeks)\b/i,
   // "dedicate next cycle's first action to producing one concrete output artifact"
   /(?:dedicate|commit|allocate)\s+(?:next\s+)?(?:cycle['']?s?\s+)?(?:first\s+)?action\s+to\s+(?:producing|shipping|publishing|generating|creating|delivering|writing|drafting)\s+(?:one|1|a\s+single)\s+(?:concrete\s+)?(\w+(?:\s+\w+){0,3})/i,
+];
+
+// VERIFICATION — observation-only primitive. Surfaces patterns like
+//   "track firing rate next cycle"
+//   "measure adoption of behavioral rule X"
+//   "monitor how often the new gate triggers"
+// where the action is to OBSERVE a state, not to force a transition or
+// produce an artifact. Without this, SelfEvolution emitted these as untyped
+// actions and they fell through to `none`, which caused a stream of
+// "missing-primitive: verification family" recommendations. The rule
+// itself is non-blocking — it ticks every cycle, reports the metric, and
+// lets the Self-Change Verifier credit observed adoption.
+const VERIFICATION_PATTERNS = [
+  // "track firing rate ... next cycle" / "track adoption of X over N cycles"
+  /(?:track|monitor|measure|observe|quantify)\s+(?:the\s+)?([^\.,]+?)(?:\s+(?:over|across|for|next|each|this|every)\s+(?:the\s+)?(?:next\s+)?(\d+)?\s*(cycle|day|week|cycles|days|weeks))?\b/i,
+  // "verify firing rate" / "verify adoption"
+  /verify\s+(?:the\s+)?(\w+(?:[-\s]\w+){0,3}?\s+rate)\b/i,
 ];
 
 // SPECTRUM — "rewrite hypothesis template to require conditional/spectrum framing".
@@ -221,6 +258,36 @@ export function translateAction(actionText: string, insightText: string = ""): T
     }
   }
 
+  // VERIFICATION — observation-only. Must come AFTER the forcing primitives
+  // so an action like "produce one artifact" isn't reclassified as a generic
+  // "track artifact" measurement.
+  for (const pat of VERIFICATION_PATTERNS) {
+    const m = a.match(pat);
+    if (m) {
+      const subjectRaw = (m[1] ?? "").trim();
+      // Skip uselessly-short subjects ("rate", "X") so we don't fire on noise.
+      if (!subjectRaw || subjectRaw.length < 3) continue;
+      const subject = normalizeNoun(subjectRaw);
+      const windowCount = m[2] ? parseInt(m[2], 10) : 1;
+      const windowUnit = (m[3] ?? "cycle").toLowerCase().replace(/s$/, "");
+      const target = inferVerificationTarget(a, insightText);
+      return {
+        primitive: "verification_rule",
+        params: {
+          subject,
+          target,
+          windowCount,
+          windowUnit,
+        },
+        verificationCriterion: `observation-only: track "${subject}" on ${target} over ${windowCount} ${windowUnit}${windowCount === 1 ? "" : "s"}`,
+        suggestedCategory: "identity",
+        // Non-forcing rule — credit the commitment as soon as the metric is
+        // observed at all, not after several deficits.
+        minFireCount: 1,
+      };
+    }
+  }
+
   // SPECTRUM — register as a gate_rule with a template-rewrite description, since
   // it's structurally a gate on hypothesis creation. Kept here for clarity.
   for (const pat of SPECTRUM_PATTERNS) {
@@ -267,6 +334,23 @@ function inferGateTarget(action: string): string {
   if (t.includes("hypothes")) return "hypothesis";
   if (t.includes("goal")) return "goal";
   if (t.includes("post") || t.includes("publish")) return "publication";
+  return "entity";
+}
+
+/**
+ * Hint at which subsystem a verification rule should observe. Used for
+ * non-forcing observation rules (e.g. "track firing rate of behavioral
+ * rule X next cycle" → target = "behavioral_rule"). Falls back to "entity"
+ * so a verification_rule never escapes the translator without a target.
+ */
+function inferVerificationTarget(action: string, insight: string): string {
+  const t = `${action} ${insight}`.toLowerCase();
+  if (/\bbehavioral?\s+rule\b/.test(t)) return "behavioral_rule";
+  if (/\bhypothes/.test(t)) return "hypothesis";
+  if (/\bgate\b/.test(t)) return "gate";
+  if (/\bartifact|briefing|thread|post|synthes/.test(t)) return "artifact";
+  if (/\bkb|knowledge\b/.test(t)) return "kb_entry";
+  if (/\bgoal\b/.test(t)) return "goal";
   return "entity";
 }
 

@@ -168,6 +168,21 @@ describe("classifyMissingPrimitiveFamily", () => {
     assert.equal(classifyMissingPrimitiveFamily(""), "other");
   });
 
+  it("classifies 'track firing rate'/'measure adoption' wording as verification (not 'other')", () => {
+    assert.equal(
+      classifyMissingPrimitiveFamily("track firing rate next cycle"),
+      "verification",
+    );
+    assert.equal(
+      classifyMissingPrimitiveFamily("measure adoption of the new behavioral rule over three cycles"),
+      "verification",
+    );
+    assert.equal(
+      classifyMissingPrimitiveFamily("observe rule adoption over three cycles"),
+      "verification",
+    );
+  });
+
   it("describeMissingPrimitiveFamily returns short, family-focused text (no embedded insight)", () => {
     const txt = describeMissingPrimitiveFamily("artifact");
     assert.match(txt, /artifact/i);
@@ -221,6 +236,48 @@ describe("missing-primitive recs — collapse by family across rephrasings", () 
     });
 
     assert.equal(first.id, second.id, "same family → one rec");
+    assert.equal(listRecommendations({}).length, 1);
+  });
+
+  it("two cycles failing on verification-family rephrasings collapse to ONE rec", () => {
+    // Same family ("verification"), different verbs / subjects.
+    const famA = classifyMissingPrimitiveFamily(
+      "track firing rate next cycle",
+    );
+    const famB = classifyMissingPrimitiveFamily(
+      "measure adoption of the new behavioral rule over the next two cycles",
+    );
+    assert.equal(famA, "verification");
+    assert.equal(famB, "verification");
+
+    const dedupeKey = computeDedupeKey(
+      "engine",
+      `missing-primitive: ${famA}`,
+      `family:${famA}`,
+    );
+
+    const first = proposeRecommendation({
+      category: "engine",
+      title: `missing-primitive: ${famA} family — action translator could not parse insight`,
+      rationale: "GoalEngine could not translate insight il_v1",
+      proposedChange: describeMissingPrimitiveFamily(famA),
+      sourceInsightId: "il_v1_aaa",
+      dedupeKey,
+    });
+    const second = proposeRecommendation({
+      category: "engine",
+      title: `missing-primitive: ${famB} family — action translator could not parse insight`,
+      rationale: "GoalEngine could not translate insight il_v2",
+      proposedChange: describeMissingPrimitiveFamily(famB),
+      sourceInsightId: "il_v2_bbb",
+      dedupeKey: computeDedupeKey(
+        "engine",
+        `missing-primitive: ${famB}`,
+        `family:${famB}`,
+      ),
+    });
+
+    assert.equal(first.id, second.id, "verification family → one rec");
     assert.equal(listRecommendations({}).length, 1);
   });
 
@@ -285,6 +342,29 @@ describe("classifyGovernanceCluster", () => {
     );
     assert.equal(
       classifyGovernanceCluster("introduce a pre-testing data-access gate"),
+      "data-source-gate",
+    );
+  });
+
+  // Coverage for the 5/5 self-recommendation that landed in `other`:
+  // "before forming any new hypothesis, require a measurement path field;
+  //  if no path exists, classify as research question not active hypothesis"
+  // The wording omits the literal "gate" so the original regex missed it.
+  it("classifies measurement-path / accessible-source / research-question wording as data-source-gate", () => {
+    assert.equal(
+      classifyGovernanceCluster(
+        "before forming any new hypothesis, require a measurement path field; if no path exists, classify as research question not active hypothesis",
+      ),
+      "data-source-gate",
+    );
+    assert.equal(
+      classifyGovernanceCluster("require an accessible data source for every hypothesis"),
+      "data-source-gate",
+    );
+    assert.equal(
+      classifyGovernanceCluster(
+        "before any hypothesis enters testing, require evidence of an accessible source",
+      ),
       "data-source-gate",
     );
   });
