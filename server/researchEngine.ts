@@ -19,6 +19,7 @@
 import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { gateHypothesisForTesting } from "./hypothesisFeasibilityGate.js";
+import { gateHypothesisDataSource, type DataSourceGateOutcome } from "./hypothesisDataSourceGate.js";
 import { addKnowledge } from "./memoryEngine.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders, LLM_TIMEOUTS } from "./llmConfig.js";
@@ -295,6 +296,22 @@ export interface Hypothesis {
   actionWithin24h?:               ResolutionAction;
   // Gap A Phase 1 — model that produced evaluationResult.confidence; null for legacy
   originatingModel?:              string;
+  // PR #280 — Data-source gate at forming→testing boundary.
+  // measurementPath: free-text description of the evidence stream that could
+  //   confirm/reject this hypothesis (e.g. "OpenAlex citation count for paper X",
+  //   "SEC 10-Q filings", "github commit log of repo Y"). Optional at creation
+  //   time, but required (or inferable from `metric`/`basis`) before testing.
+  // measurementPathAccessible: operator-set hint that the measurement path is
+  //   actually accessible — public dataset, API we can call, dashboard we
+  //   monitor, or a reasonable proxy. When null/undefined, the gate uses
+  //   heuristics over measurementPath/metric/basis.
+  // dataSourceGateBlockedAt: ISO timestamp last time the gate refused this
+  //   hypothesis; cleared once it transitions to testing.
+  // dataSourceGateReason: human-readable reason for the most recent block.
+  measurementPath?:               string;
+  measurementPathAccessible?:     boolean;
+  dataSourceGateBlockedAt?:       string;
+  dataSourceGateReason?:          string;
 }
 
 export type HypothesisDomain = "ai-news" | "regulatory" | "foundational" | "unknown";
@@ -705,15 +722,85 @@ export function resolveHypothesis(
 }
 
 /**
+ * Result of an attempted forming→testing transition. Backwards-compatible
+ * with the previous boolean return: callers that only need pass/fail can
+ * read `.ok`. UI/API surfaces use the rest to render a clear error.
+ */
+export interface TestHypothesisResult {
+  ok: boolean;
+  status: Hypothesis["status"];
+  reason?: string;
+  blockedBy?: "not_found" | "wrong_state" | "data_source_gate" | "feasibility_gate";
+  gateCode?: "missing_measurement_path" | "inaccessible_source";
+}
+
+/**
  * Transition a hypothesis from "forming" to "testing".
- * This is the missing state transition that blocked the entire reasoning pipeline.
+ *
+ * Two pre-gates fire here, in order:
+ *   1. PR #280 — data-source gate. Confirms the hypothesis names a specific
+ *      measurement path / evidence stream that could falsify it AND that
+ *      stream is plausibly accessible. Blocks if not. State is left as
+ *      `forming` so the operator can edit and retry; the block reason is
+ *      stamped on `dataSourceGateBlockedAt` / `dataSourceGateReason`.
+ *   2. Existing feasibility gate — routes obviously-unprovable claims to
+ *      `speculative-watchlist` / `stale-retired`.
  */
 export function testHypothesis(id: string): boolean {
+  return testHypothesisDetailed(id).ok;
+}
+
+export function testHypothesisDetailed(id: string): TestHypothesisResult {
   const lab = loadLab();
   const hyp = lab.hypotheses.find(h => h.id === id);
-  if (!hyp || hyp.status !== "forming") return false;
+  if (!hyp) {
+    return { ok: false, status: "forming", blockedBy: "not_found", reason: "hypothesis not found" };
+  }
+  if (hyp.status !== "forming") {
+    return {
+      ok:        false,
+      status:    hyp.status,
+      blockedBy: "wrong_state",
+      reason:    `hypothesis is in '${hyp.status}', not 'forming' — transition refused`,
+    };
+  }
 
-  // ── Feasibility pre-gate ──
+  // ── PR #280: Data-source gate ──
+  // No measurement path → block, leave hypothesis in `forming` so the
+  // operator can edit it. Inaccessible source → block, recommend
+  // speculative-watchlist (operator decides; we do NOT auto-park).
+  try {
+    const dsGate: DataSourceGateOutcome = gateHypothesisDataSource({
+      claim:                     hyp.claim,
+      metric:                    hyp.metric,
+      basis:                     hyp.basis,
+      prediction:                hyp.prediction,
+      measurementPath:           hyp.measurementPath,
+      measurementPathAccessible: hyp.measurementPathAccessible,
+    });
+    if (!dsGate.ok) {
+      hyp.dataSourceGateBlockedAt = new Date().toISOString();
+      hyp.dataSourceGateReason    = dsGate.reason;
+      saveLab(lab);
+      console.log(
+        `[Research] Data-source gate blocked hypothesis ${hyp.id} (${dsGate.code}): ` +
+        `"${hyp.claim.slice(0, 60)}" — ${dsGate.reason.slice(0, 200)}`,
+      );
+      return {
+        ok:        false,
+        status:    hyp.status,
+        blockedBy: "data_source_gate",
+        gateCode:  dsGate.code,
+        reason:    dsGate.reason,
+      };
+    }
+  } catch (e: any) {
+    // Gate unavailable → fall through (conservative pass). The feasibility
+    // gate below still runs, and the operator-facing log records the lapse.
+    console.warn("[Research] Data-source gate failed, passing through:", e?.message);
+  }
+
+  // ── Feasibility pre-gate (existing) ──
   // Spec §2.4 / Tier 2: before a hypothesis enters `testing`, check whether
   // the evidence it needs is likely to exist in public sources. Unprovable
   // claims get routed to a `speculative-watchlist` status instead of burning
@@ -729,7 +816,12 @@ export function testHypothesis(id: string): boolean {
       console.log(
         `[Research] Hypothesis blocked by feasibility gate (${gate.recommendedRoute}): "${hyp.claim.slice(0, 60)}" — ${gate.reasons[0] ?? ""}`,
       );
-      return false;
+      return {
+        ok:        false,
+        status:    (hyp as any).status,
+        blockedBy: "feasibility_gate",
+        reason:    gate.reasons[0] ?? "feasibility gate refused",
+      };
     }
   } catch (e: any) {
     // Gate unavailable → fall through to testing (conservative pass).
@@ -738,9 +830,12 @@ export function testHypothesis(id: string): boolean {
 
   hyp.status = "testing";
   (hyp as any).testingStartedAt = new Date().toISOString();
+  // Clear any stale block stamps now that we've passed.
+  hyp.dataSourceGateBlockedAt = undefined;
+  hyp.dataSourceGateReason    = undefined;
   saveLab(lab);
   console.log(`[Research] Hypothesis transitioned to testing: "${hyp.claim.slice(0, 60)}"`);
-  return true;
+  return { ok: true, status: "testing" };
 }
 
 // ── Research execution ────────────────────────────────────────────────────────
@@ -1307,9 +1402,33 @@ export async function runPhase6_Analysis(
       const linkedHyp = lab.hypotheses.find(h => h.relatedTopicId === topic.id && h.status === "forming");
       if (linkedHyp) {
         if (parsed.hypothesisVerdict === "supported") {
-          linkedHyp.status = "testing";
-          (linkedHyp as any).testingStartedAt = new Date().toISOString();
-          console.log(`[Research] Phase 6 verdict "supported" → hypothesis "${linkedHyp.claim.slice(0, 50)}" transitioned to testing`);
+          // PR #280 — even on a "supported" verdict, the data-source gate must
+          // hold before we move forming→testing. If the hypothesis still has
+          // no measurement path, leave it in `forming` and stamp the reason;
+          // an operator will see the block in the UI and can edit before
+          // re-triggering the transition.
+          const dsGate = gateHypothesisDataSource({
+            claim:                     linkedHyp.claim,
+            metric:                    linkedHyp.metric,
+            basis:                     linkedHyp.basis,
+            prediction:                linkedHyp.prediction,
+            measurementPath:           linkedHyp.measurementPath,
+            measurementPathAccessible: linkedHyp.measurementPathAccessible,
+          });
+          if (!dsGate.ok) {
+            linkedHyp.dataSourceGateBlockedAt = new Date().toISOString();
+            linkedHyp.dataSourceGateReason    = dsGate.reason;
+            console.log(
+              `[Research] Phase 6 verdict "supported" but data-source gate blocked ` +
+              `hypothesis "${linkedHyp.claim.slice(0, 50)}" (${dsGate.code}): ${dsGate.reason.slice(0, 160)}`,
+            );
+          } else {
+            linkedHyp.status = "testing";
+            (linkedHyp as any).testingStartedAt = new Date().toISOString();
+            linkedHyp.dataSourceGateBlockedAt = undefined;
+            linkedHyp.dataSourceGateReason    = undefined;
+            console.log(`[Research] Phase 6 verdict "supported" → hypothesis "${linkedHyp.claim.slice(0, 50)}" transitioned to testing`);
+          }
         } else if (parsed.hypothesisVerdict === "contradicted") {
           if (!linkedHyp.redFlags) linkedHyp.redFlags = [];
           linkedHyp.redFlags.push({
