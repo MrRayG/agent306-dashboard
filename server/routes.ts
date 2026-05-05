@@ -89,7 +89,7 @@ import { getAllSessions, getActiveSessionCount, closeExpiredSessions } from "./s
 import { postCast, isFarcasterEnabled, getFarcasterState, setFarcasterEnabled, createSigner, getSignerStatus, fetchMentions, determineChannel, getStoredSignerUuid, storeSignerUuid } from "./farcasterEngine.js";
 import {
   getResearchLab, addTopic, updateTopicStatus, getTopicById,
-  addHypothesis, resolveHypothesis, testHypothesis, validateResolutionAction,
+  addHypothesis, resolveHypothesis, testHypothesis, testHypothesisDetailed, validateResolutionAction,
   runResearchCycle, approveForPublication, declinePublication,
   markPublished, requestRevisions, provideInput, skipInput,
   // Goals
@@ -4284,11 +4284,23 @@ needsHelp: true only when you genuinely need his direction or information`,
     res.json({ ok });
   });
 
-  // POST /api/research/hypothesis/test/:id — manual transition to "testing"
+  // POST /api/research/hypothesis/test/:id — manual transition to "testing".
+  // PR #280: surface structured gate failures so the operator UI can show
+  // *why* the transition was refused (missing measurement path, inaccessible
+  // source, feasibility-gate block) instead of a generic 400.
   app.post("/api/research/hypothesis/test/:id", requireDashAuth, (req, res) => {
-    const ok = testHypothesis(req.params.id);
-    if (!ok) return res.status(400).json({ error: "Hypothesis not found or not in 'forming' status" });
-    res.json({ ok, status: "testing" });
+    const result = testHypothesisDetailed(req.params.id);
+    if (result.ok) return res.json({ ok: true, status: "testing" });
+    if (result.blockedBy === "not_found") {
+      return res.status(404).json({ ok: false, error: result.reason ?? "hypothesis not found" });
+    }
+    return res.status(400).json({
+      ok:        false,
+      status:    result.status,
+      blockedBy: result.blockedBy,
+      gateCode:  result.gateCode,
+      error:     result.reason,
+    });
   });
 
   // POST /api/research/hypothesis/evaluate/:id — run full evaluation pipeline
