@@ -116,4 +116,73 @@ describe("ActionTranslator", () => {
     assert.equal(result.primitive, "none");
     assert.match(result.reason ?? "", /empty/i);
   });
+
+  // ── 5/5 missing-primitive coverage: gate + verification ─────────────────────
+  // The three visible self-recs after PR #278 mapped to two new primitives:
+  // (1) "implement a mandatory pre-testing gate: before any hypothesis moves
+  //      from forming to testing, require explicit identification of the data
+  //      source that could confirm/reject it"
+  // (2) "promote 1 additional behavioral rule from this cycle … Track firing
+  //      rate next cycle"
+  // Both must now translate cleanly, not fall through to `none`.
+
+  it("parses a 'mandatory pre-testing gate' insight as gate_rule (5/5 data-source case)", () => {
+    const result = translateAction(
+      "Implement a mandatory pre-testing gate: before any hypothesis moves from 'forming' to 'testing', require explicit identification of (1) the specific data source that could confirm/reject it, and (2) whether that source is accessible.",
+      "20 hypotheses resolved with mostly rejected/stale/data-unavailable outcomes",
+    );
+    assert.equal(result.primitive, "gate_rule");
+    assert.equal((result.params as any).target, "hypothesis");
+    assert.ok(
+      String((result.params as any).description).length > 0,
+      "gate description must not be empty",
+    );
+  });
+
+  it("parses 'before forming any new hypothesis, require a measurement path field' as gate_rule", () => {
+    const result = translateAction(
+      "Before forming any new hypothesis, require a measurement path field; if no path exists, classify as research question not active hypothesis.",
+      "governance debt confirmed",
+    );
+    assert.equal(result.primitive, "gate_rule");
+    assert.equal((result.params as any).target, "hypothesis");
+  });
+
+  it("parses 'track firing rate next cycle' as verification_rule (non-forcing)", () => {
+    const result = translateAction(
+      "Track firing rate next cycle",
+      "Promote 1 additional behavioral rule from this cycle: 'Before testing any hypothesis, name the specific dataset or source that would resolve it; if none exists, park it.'",
+    );
+    assert.equal(result.primitive, "verification_rule");
+    const params = result.params as any;
+    assert.ok(String(params.subject).includes("firing"), `subject should mention firing, got ${params.subject}`);
+    assert.equal(params.target, "behavioral_rule");
+    assert.equal(params.windowUnit, "cycle");
+    assert.match(result.verificationCriterion, /observation-only/);
+    // Verification must not be a forcing primitive — minFireCount should be small.
+    assert.ok((result.minFireCount ?? 0) <= 1);
+  });
+
+  it("verification does not eat forcing primitives — 'produce one artifact' still maps to artifact_rule", () => {
+    const result = translateAction(
+      "Produce one concrete artifact within next cycle",
+      "",
+    );
+    assert.equal(result.primitive, "artifact_rule");
+  });
+
+  it("verification does not eat gate primitives — 'pre-testing gate' still maps to gate_rule", () => {
+    const result = translateAction(
+      "Implement a mandatory pre-testing gate: before any hypothesis enters testing, require an accessible data source.",
+      "",
+    );
+    assert.equal(result.primitive, "gate_rule");
+  });
+
+  it("verification skips uselessly-short subjects rather than firing on noise", () => {
+    // Pattern 1's [^\.,]+? would match any single token; we guard against
+    // < 3-char subjects so 'measure X' / 'track Y' don't produce empty rules.
+    const result = translateAction("track X");
+    assert.equal(result.primitive, "none");
+  });
 });

@@ -315,6 +315,30 @@ async function fireArtifactRule(rule: EnforcementRule): Promise<{ sideEffect: bo
   }
 }
 
+/**
+ * VERIFICATION — observation-only primitive. Does NOT force a transition or
+ * produce an artifact. Each tick records the rule's observed subject and
+ * target so the Self-Change Verifier can credit adoption when the metric is
+ * present in the log stream. By design this primitive never produces a
+ * "deficit" event; the goal of the rule is to make observation itself a
+ * tracked behavior, not to drive content downstream.
+ *
+ * Side effect: structured-log line each tick. The rule remains on the
+ * registered list and continues to tick until disabled by the operator.
+ */
+async function fireVerificationRule(rule: EnforcementRule): Promise<{ sideEffect: boolean; outcome: string }> {
+  const { subject, target, windowCount, windowUnit } = rule.params as any;
+  // No external probe — the rule is purely observational. We log the
+  // measurement intent so downstream verification can credit the cycle.
+  console.log(
+    `[ActionEnforcer] verification_rule observed: subject="${subject}" target=${target} window=${windowCount}${windowUnit}`,
+  );
+  return {
+    sideEffect: true,
+    outcome: `verification_observed:${subject}:${target}`,
+  };
+}
+
 // -- Tick ---------------------------------------------------------------------
 
 export interface TickResult {
@@ -348,6 +372,7 @@ export async function tickEnforcer(): Promise<TickResult> {
         case "gate_rule":     outcome = await fireGateRule(rule); break;
         case "archive_rule":  outcome = await fireArchiveRule(rule); break;
         case "artifact_rule": outcome = await fireArtifactRule(rule); break;
+        case "verification_rule": outcome = await fireVerificationRule(rule); break;
         default:              outcome = { sideEffect: false, outcome: "no-primitive" };
       }
     } catch (e: any) {
