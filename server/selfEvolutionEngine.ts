@@ -606,7 +606,26 @@ export function classifyGovernanceCluster(text: string): GovernanceCluster {
     return "output-conversion";
   }
   // kb-accumulation
-  if (/\b(kb|knowledge)\s+(?:accumulation|growth|bloat|cap|size|count)\b|\b(cap|limit)\s+(?:kb|knowledge)\b/.test(t)) {
+  // Original pattern required "kb/knowledge <accumulation|growth|bloat|cap|...>"
+  // adjacency. The 5/6 self-rec log surfaced "73 KB entries added ... 0
+  // archived; open-question hoarding/governance debt" and proposed a 3:1
+  // archive-or-synthesize rule. None of the original cues fired, so the rec
+  // landed in `other`. Added cues:
+  //   - "<N> kb/knowledge entries added ... 0 archived"
+  //   - "open[-\s]?question hoarding"
+  //   - explicit ratio shapes ("3:1", "for every 3 new research entries archive 1")
+  //   - "synthesize ... into methodology" / "archive or synthesize"
+  if (
+    /\b(kb|knowledge)\s+(?:accumulation|growth|bloat|cap|size|count|hoarding)\b/.test(t) ||
+    /\b(cap|limit)\s+(?:kb|knowledge)\b/.test(t) ||
+    /\b(?:kb|knowledge)\s+entries\s+added\b.*\b0\s+archived\b/.test(t) ||
+    /\b\d+\s+(?:kb|knowledge)\s+entries\s+added\b/.test(t) ||
+    /\bopen[-\s]?question\s+hoarding\b/.test(t) ||
+    /\b3\s*:\s*1\s+(?:rule|ratio)\b/.test(t) ||
+    /\bfor\s+every\s+\d+\s+(?:new\s+)?(?:research|kb|knowledge)\b.*\b(?:archive|synthesi[sz]e)\b/.test(t) ||
+    /\barchive\s+or\s+synthesi[sz]e\b/.test(t) ||
+    /\bsynthesi[sz](?:e|ing|es|ed)\s+\d*\s*\w*\s*(?:dream\s+insights?|kb|knowledge|research)\s+(?:into|as)\s+(?:a\s+)?(?:testable\s+hypothes\w+|methodology)\b/.test(t)
+  ) {
     return "kb-accumulation";
   }
   // behavioral-rule promotion
@@ -614,7 +633,23 @@ export function classifyGovernanceCluster(text: string): GovernanceCluster {
     return "behavioral-rule";
   }
   // framing-debt
-  if (/\b(binary|dichotom\w+|adversarial|spectrum|conditional|nuanced)\s+(?:framing|format|hypothes|template)\b|\bspectrum\s+rewrite\b|\btemplate\s+rewrite\b/.test(t)) {
+  // Catches the canonical "binary X vs Y" template-rewrite shape AND the
+  // looser-worded variants that surfaced in the 5/6 self-recommendation log:
+  //   "4 hypotheses share binary positional framing"
+  //   "X is more accurate than Y" / "X-vs-Y" / "false dichotomy"
+  //   "require a third option (both partially true under different conditions)"
+  // The original regex required "<modifier> framing|format|hypothes|template"
+  // adjacent — "binary positional framing" had a token between them and fell
+  // through to `other`.
+  if (
+    /\b(binary|dichotom\w+|adversarial|spectrum|conditional|nuanced)\s+(?:\w+\s+)?(?:framing|format|hypothes|template|positions?)\b/.test(t) ||
+    /\bspectrum\s+rewrite\b|\btemplate\s+rewrite\b/.test(t) ||
+    /\bfalse\s+dichotom\w+\b/.test(t) ||
+    /\bthird\s+option\b/.test(t) ||
+    /\b(?:x[-\s]?vs[-\s]?y|a\s+vs\s+b)\b/.test(t) ||
+    /\b\w+\s+is\s+more\s+(?:accurate|correct|right|true)\s+than\s+\w+\b/.test(t) ||
+    /\bbinary\s+position(?:al|s)?\b/.test(t)
+  ) {
     return "framing-debt";
   }
   // kb-quality (dedupe / merge / clean)

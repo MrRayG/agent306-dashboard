@@ -402,6 +402,66 @@ describe("classifyGovernanceCluster", () => {
     assert.equal(classifyGovernanceCluster("totally unrelated muttering"), "other");
     assert.equal(classifyGovernanceCluster(""), "other");
   });
+
+  // ── 5/6 framing-debt coverage ────────────────────────────────────────────
+  // The 5/6 self-rec described "4 hypotheses share binary positional framing
+  // ('X is more accurate than Y'), false dichotomy ... require a third option
+  // ('both partially true under different conditions')". The original regex
+  // required "<modifier> framing|format|hypothes|template" adjacency, which
+  // the inserted "positional" token broke — the rec landed in `other`.
+  it("classifies binary positional framing / X-vs-Y / false dichotomy as framing-debt", () => {
+    assert.equal(
+      classifyGovernanceCluster(
+        "4 hypotheses share binary positional framing ('X is more accurate than Y'), false dichotomy",
+      ),
+      "framing-debt",
+    );
+    assert.equal(
+      classifyGovernanceCluster(
+        "Before forming a new X-vs-Y hypothesis, require a third option ('both partially true under different conditions') and only proceed with binary framing if third option is logically impossible.",
+      ),
+      "framing-debt",
+    );
+    assert.equal(
+      classifyGovernanceCluster("position A is more accurate than position B"),
+      "framing-debt",
+    );
+    assert.equal(
+      classifyGovernanceCluster("the recurring failure mode is false dichotomy"),
+      "framing-debt",
+    );
+  });
+
+  // ── 5/6 kb-accumulation coverage ────────────────────────────────────────
+  // The 5/6 self-rec described "73 KB entries added (47 research, 26
+  // methodology), 0 archived; open-question hoarding/governance debt" and
+  // proposed a 3:1 archive-or-synthesize rule. None of the original cues
+  // matched, so it fell through to `other`. Classification is now driven by
+  // the additive-without-archival shape AND by the explicit ratio shape.
+  it("classifies KB-added-without-archive / hoarding / 3:1 rule as kb-accumulation", () => {
+    assert.equal(
+      classifyGovernanceCluster(
+        "73 KB entries added (47 research, 26 methodology), 0 archived; open-question hoarding/governance debt",
+      ),
+      "kb-accumulation",
+    );
+    assert.equal(
+      classifyGovernanceCluster(
+        "Implement a 3:1 rule — for every 3 new research-category entries, archive or synthesize 1 existing entry into methodology",
+      ),
+      "kb-accumulation",
+    );
+    assert.equal(
+      classifyGovernanceCluster(
+        "start next cycle by synthesizing 2 dream insights into a testable hypothesis",
+      ),
+      "kb-accumulation",
+    );
+    assert.equal(
+      classifyGovernanceCluster("open-question hoarding is the dominant failure mode"),
+      "kb-accumulation",
+    );
+  });
 });
 
 describe("governance-debt recs — collapse by cluster across rephrasings", () => {
@@ -461,6 +521,45 @@ describe("governance-debt recs — collapse by cluster across rephrasings", () =
     );
     const ids = new Set(recs.map(r => r.id));
     assert.equal(ids.size, 4, "four distinct clusters → four distinct rows");
+  });
+
+  it("the 5/6 KB-hoarding insight + 3:1 rule rephrasing collapse to ONE kb-accumulation rec", () => {
+    // Both texts describe the same concern (additive KB without archival),
+    // pre-PR they classified as `other` and produced two near-duplicate rows
+    // on consecutive cycles. With the broadened kb-accumulation cues both
+    // land in the same cluster and dedupe to a single row.
+    const c1 = classifyGovernanceCluster(
+      "73 KB entries added (47 research, 26 methodology), 0 archived; open-question hoarding/governance debt",
+    );
+    const c2 = classifyGovernanceCluster(
+      "Implement a 3:1 rule — for every 3 new research-category entries, archive or synthesize 1 existing entry into methodology",
+    );
+    assert.equal(c1, "kb-accumulation");
+    assert.equal(c2, "kb-accumulation");
+
+    const dedupeKey = computeDedupeKey(
+      "engine",
+      `governance-cluster:${c1}`,
+      c1,
+    );
+    const first = proposeRecommendation({
+      category: "engine",
+      title: `Self-evolution: ${c1} concern`,
+      rationale: "73 KB entries added, 0 archived",
+      proposedChange: "additive without archival — propose 3:1 rule",
+      sourceInsightId: "evo_1700000010000_kbacc1",
+      dedupeKey,
+    });
+    const second = proposeRecommendation({
+      category: "engine",
+      title: `Self-evolution: ${c2} concern`,
+      rationale: "Implement a 3:1 rule for research entries",
+      proposedChange: "for every 3 new research-category entries, archive or synthesize 1",
+      sourceInsightId: "evo_1700000020000_kbacc2",
+      dedupeKey,
+    });
+    assert.equal(first.id, second.id, "kb-accumulation rephrasings collapse to ONE rec");
+    assert.equal(listRecommendations({}).length, 1);
   });
 
   it("'other' cluster collapses unrelated unrecognized insights to ONE catch-all row", () => {

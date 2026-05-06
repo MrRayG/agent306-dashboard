@@ -38,6 +38,7 @@ export type EnforcementPrimitive =
   | "archive_rule"
   | "artifact_rule"
   | "verification_rule"
+  | "rewrite_rule"
   | "none";
 
 export interface InsightLedgerEntry {

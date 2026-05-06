@@ -339,6 +339,33 @@ async function fireVerificationRule(rule: EnforcementRule): Promise<{ sideEffect
   };
 }
 
+/**
+ * REWRITE — observation-only structural-template primitive. The action
+ * commits to changing the *shape* of a downstream artifact (a hypothesis
+ * template, a content-strategy framing, a goal phrasing) rather than
+ * forcing a count or blocking a transition. The runtime can't author the
+ * rewrite itself — that's an authoring change an operator or upstream
+ * generator owns — but ticking the rule each cycle gives the Self-Change
+ * Verifier a stable surface to credit observed adoption (the new template
+ * shape appearing in produced artifacts) instead of letting the commitment
+ * silently expire as a missing primitive.
+ *
+ * No deficit signal is produced; this is intentionally non-forcing per
+ * the propose-only invariant. Promote to a forcing primitive (gate_rule)
+ * only when the rewrite has stabilized enough to be expressed as a
+ * structural check.
+ */
+async function fireRewriteRule(rule: EnforcementRule): Promise<{ sideEffect: boolean; outcome: string }> {
+  const { target, structuralChange } = rule.params as any;
+  console.log(
+    `[ActionEnforcer] rewrite_rule observed: target=${target} change="${String(structuralChange).slice(0, 120)}"`,
+  );
+  return {
+    sideEffect: true,
+    outcome: `rewrite_observed:${target}`,
+  };
+}
+
 // -- Tick ---------------------------------------------------------------------
 
 export interface TickResult {
@@ -373,6 +400,7 @@ export async function tickEnforcer(): Promise<TickResult> {
         case "archive_rule":  outcome = await fireArchiveRule(rule); break;
         case "artifact_rule": outcome = await fireArtifactRule(rule); break;
         case "verification_rule": outcome = await fireVerificationRule(rule); break;
+        case "rewrite_rule":  outcome = await fireRewriteRule(rule); break;
         default:              outcome = { sideEffect: false, outcome: "no-primitive" };
       }
     } catch (e: any) {

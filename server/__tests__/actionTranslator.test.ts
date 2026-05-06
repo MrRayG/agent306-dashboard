@@ -185,4 +185,52 @@ describe("ActionTranslator", () => {
     const result = translateAction("track X");
     assert.equal(result.primitive, "none");
   });
+
+  // ── 5/6 missing-primitive coverage: rewrite family ──────────────────────────
+  // SelfEvolution emitted "Reframe content strategy growth focus from
+  // 'produce story-first posts' to 'stop adding KB entries that don't have a
+  // named audience and a delivery format attached.'" The translator had no
+  // rewrite primitive so it fell through to `none`, which surfaced
+  // "missing-primitive: rewrite family" recs each cycle. The rewrite
+  // primitive is observation-only — it ticks each cycle so adoption can be
+  // credited but does not block transitions.
+  it("parses 'reframe X from A to B' as rewrite_rule (5/6 content-strategy case)", () => {
+    const result = translateAction(
+      "Reframe content strategy growth focus from 'produce story-first posts' to 'stop adding KB entries that don't have a named audience and a delivery format attached.'",
+      "content strategy drifting toward open-ended posts",
+    );
+    assert.equal(result.primitive, "rewrite_rule");
+    const params = result.params as any;
+    assert.ok(String(params.subject).toLowerCase().includes("content strategy"));
+    assert.equal(params.target, "content_strategy");
+    assert.ok(String(params.structuralChange).length > 0, "structuralChange must capture the new shape");
+    assert.match(result.verificationCriterion, /observation-only/);
+    // Non-forcing — should be small minFireCount.
+    assert.ok((result.minFireCount ?? 0) <= 1);
+  });
+
+  it("rewrite_rule does not eat spectrum/template-rewrite (still routes to gate_rule)", () => {
+    // Sanity: spectrum-framing template rewrites must still classify as
+    // gate_rule (they're forcing checks on hypothesis creation).
+    const result = translateAction(
+      "Rewrite the hypothesis template to require conditional/spectrum framing rather than 'Position A is more accurate than Position B' structure.",
+      "",
+    );
+    assert.equal(result.primitive, "gate_rule");
+    assert.equal((result.params as any).framingMode, "spectrum");
+  });
+
+  it("rewrite_rule does not eat artifact-shaped actions", () => {
+    // "produce one concrete artifact ..." must still be artifact_rule.
+    const result = translateAction(
+      "Produce one concrete artifact within next cycle",
+      "",
+    );
+    assert.equal(result.primitive, "artifact_rule");
+  });
+
+  it("rewrite_rule skips uselessly-short subjects rather than firing on noise", () => {
+    const result = translateAction("rewrite X to Y");
+    assert.equal(result.primitive, "none");
+  });
 });
