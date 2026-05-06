@@ -24,6 +24,20 @@
 //                       is forced — but the rule still fires each tick so the
 //                       Self-Change Verifier can credit observed adoption
 //                       instead of letting the commitment quietly expire.)
+//   rewrite_rule      — structural template rewrite (non-forcing).
+//                       (added 2026-05-06: SelfEvolution kept emitting
+//                       "Reframe content strategy growth focus from 'produce
+//                       story-first posts' to '...'" — a commitment to change
+//                       the *shape* of a downstream template/framing, not a
+//                       count or a transition gate. The translator previously
+//                       fell through to `none` and the GoalEngine emitted the
+//                       same "missing-primitive: rewrite family" rec every
+//                       cycle. The rewrite primitive is observation-only:
+//                       it ticks each cycle so the Self-Change Verifier can
+//                       credit adoption when the new template appears, but
+//                       does not block transitions or force counts. Promote
+//                       to gate_rule once the structural check is stable
+//                       enough to express as a hard rule.)
 //
 // Agent 306's own action strings from the log (verbatim) are the design input:
 //   - "For every 10 new knowledge entries, force-generate one synthesis"      → ratio_rule
@@ -131,6 +145,24 @@ const VERIFICATION_PATTERNS = [
 const SPECTRUM_PATTERNS = [
   /(?:rewrite|change|update|reframe)\s+(?:the\s+)?(\w+(?:\s+\w+){0,2})\s+template\s+(?:to\s+)?require[s]?\s+(?:conditional|spectrum|nuanced|continuous)/i,
   /(?:replace|swap)\s+(?:binary|dichotom\w+|adversarial)\s+\w*\s*(?:framing|format|structure)\s+with\s+(?:conditional|spectrum|nuanced|continuous)/i,
+];
+
+// REWRITE — generic structural-template change. Surfaces actions that
+// commit to changing the *shape* of a downstream template/framing/goal
+// without forcing a count or blocking a transition. Common shape:
+//   "Reframe <subject> from '<old>' to '<new>'"
+//   "Rewrite the <subject> to <new>"
+//   "Replace <subject> with <new>"
+// Must be checked AFTER the more-specific primitives (artifact/gate/
+// spectrum) so we don't eat their canonical matches. Non-forcing — the
+// rule ticks each cycle so the Self-Change Verifier can credit adoption.
+const REWRITE_PATTERNS = [
+  // "reframe content strategy growth focus from 'X' to 'Y'"
+  /(?:reframe|rewrite|restructure|reword)\s+(?:the\s+)?([^.'"]+?)\s+from\s+['"]?([^'"]+?)['"]?\s+to\s+['"]([^'"]+)['"]/i,
+  // "reframe X from A to B" — fallback without strict quoting
+  /(?:reframe|rewrite|restructure|reword)\s+(?:the\s+)?([^.]+?)\s+from\s+([^.]+?)\s+to\s+([^.]+)/i,
+  // "rewrite the X to Y" / "restructure the X to Y" — single-clause rewrite
+  /(?:rewrite|restructure|reword)\s+(?:the\s+)?([^.]+?)\s+to\s+([^.]+)/i,
 ];
 
 // -- Main translator ---------------------------------------------------------
@@ -308,6 +340,37 @@ export function translateAction(actionText: string, insightText: string = ""): T
     }
   }
 
+  // REWRITE — structural template change. Non-forcing; the rule ticks each
+  // cycle so the Self-Change Verifier can credit adoption when artifacts
+  // produced under the new shape appear. Must come last so the more-specific
+  // primitives (gate/artifact/spectrum) win when an action is forcing in
+  // shape, not just structural.
+  for (const pat of REWRITE_PATTERNS) {
+    const m = a.match(pat);
+    if (m) {
+      const subject = (m[1] ?? "").trim();
+      // Skip uselessly-short subjects so we don't fire on noise like "rewrite X to Y".
+      if (!subject || subject.length < 3) continue;
+      const fromText = (m[2] ?? "").trim();
+      const toText = (m[3] ?? m[2] ?? "").trim();
+      const target = inferRewriteTarget(subject, insightText);
+      return {
+        primitive: "rewrite_rule",
+        params: {
+          subject: subject.slice(0, 200),
+          target,
+          structuralChange: toText.slice(0, 240),
+          fromText: fromText.slice(0, 240),
+        },
+        verificationCriterion: `observation-only: detect "${target}" artifacts produced under the new template shape`,
+        suggestedCategory: "identity",
+        // Non-forcing — credit adoption as soon as one artifact under the new
+        // shape is observed.
+        minFireCount: 1,
+      };
+    }
+  }
+
   return {
     primitive: "none",
     params: {},
@@ -352,6 +415,21 @@ function inferVerificationTarget(action: string, insight: string): string {
   if (/\bkb|knowledge\b/.test(t)) return "kb_entry";
   if (/\bgoal\b/.test(t)) return "goal";
   return "entity";
+}
+
+/**
+ * Hint at which subsystem a rewrite_rule should observe. Mirrors
+ * inferVerificationTarget but biased toward authoring surfaces (templates,
+ * content strategy, goal phrasing) rather than measurement targets.
+ */
+function inferRewriteTarget(subject: string, insight: string): string {
+  const t = `${subject} ${insight}`.toLowerCase();
+  if (/\bcontent\s+strategy\b/.test(t)) return "content_strategy";
+  if (/\bhypothes/.test(t)) return "hypothesis_template";
+  if (/\bgoal/.test(t)) return "goal_template";
+  if (/\bkb|knowledge\b/.test(t)) return "kb_template";
+  if (/\bartifact|briefing|thread|post|narrative\b/.test(t)) return "artifact_template";
+  return "template";
 }
 
 /**
