@@ -1248,9 +1248,21 @@ async function seedResearchThreadsIfEmpty(): Promise<number> {
 export async function runDailyCycle(): Promise<DailyBriefing | null> {
   const cycleStart = Date.now();
   console.log("[DailyCycle] Starting daily intelligence cycle...");
+  const cycleId = `cycle_${cycleStart}`;
 
   // Initialize cycle context accumulator (non-fatal)
   try { startCycleContext(); } catch (e: any) { console.warn("[DailyCycle] Cycle context start failed (non-fatal):", e.message); }
+
+  // PR #286 — start the research focus rubric trace accumulator. Every
+  // hypothesis evaluated through researchFocusGate during this cycle is
+  // recorded; runResearchCycleMetaImprovement() reads & resets it before
+  // the briefing is built.
+  try {
+    const { startResearchCycle } = await import("./researchFocusGate.js");
+    startResearchCycle(cycleId);
+  } catch (e: any) {
+    console.warn("[DailyCycle] Focus rubric cycle start failed (non-fatal):", e.message);
+  }
 
   // ── Phase 0: One-time hypothesis queue reset (runs once, flagged) ──────────
   try {
@@ -2126,6 +2138,24 @@ Write a single tweet sharing the most interesting insight from this research. Re
   // ── End cycle context accumulator (before wrap-up) ──────────────────────
   let cycleSummary: ReturnType<typeof endCycleContext> | null = null;
   try { cycleSummary = endCycleContext(); } catch (e: any) { console.warn("[DailyCycle] Cycle context end failed (non-fatal):", e.message); }
+
+  // PR #286 — research-cycle meta-improvement: read the rubric trace
+  // accumulator, append a lesson to improvementArchive, and file
+  // procedure-change suggestions as propose-only self-recommendations.
+  // Never auto-applies anything; operator approval + promotion gate remain
+  // the sole path to status='applied'.
+  try {
+    const { runResearchCycleMetaImprovement } = await import("./researchCycleMetaImprovement.js");
+    const meta = runResearchCycleMetaImprovement({ cycleId });
+    if (meta) {
+      console.log(
+        `[DailyCycle] Meta-improvement: pursued=${meta.stats.pursued} reviewed=${meta.stats.reviewed} ` +
+        `rejected=${meta.stats.rejected} proposals=${meta.recommendations.length}`,
+      );
+    }
+  } catch (e: any) {
+    console.warn("[DailyCycle] Meta-improvement failed (non-fatal):", e.message);
+  }
 
   // ── Phase F: Sequential wrap-up ────────────────────────────────────────────
 
