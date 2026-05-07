@@ -20,6 +20,8 @@ import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { gateHypothesisForTesting } from "./hypothesisFeasibilityGate.js";
 import { gateHypothesisDataSource, type DataSourceGateOutcome } from "./hypothesisDataSourceGate.js";
+import { evaluateHypothesisForFocus } from "./researchFocusGate.js";
+import type { SelfExperimentProtocol, RubricVerdict } from "./researchFocusRubric.js";
 import { addKnowledge } from "./memoryEngine.js";
 import { getModel } from "./modelRouter.js";
 import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders, LLM_TIMEOUTS } from "./llmConfig.js";
@@ -312,6 +314,13 @@ export interface Hypothesis {
   measurementPathAccessible?:     boolean;
   dataSourceGateBlockedAt?:       string;
   dataSourceGateReason?:          string;
+  // PR #286 — Research focus rubric verdict stamped at hypothesis-formation
+  // time. Never silently drops candidates; "review" / "reject" verdicts are
+  // surfaced via these fields and the operator triage queue.
+  rubricVerdict?:                 RubricVerdict;
+  rubricOverall?:                 number;
+  rubricBlockedReason?:           string;
+  selfExperimentProtocol?:        SelfExperimentProtocol;
 }
 
 export type HypothesisDomain = "ai-news" | "regulatory" | "foundational" | "unknown";
@@ -1153,15 +1162,46 @@ export async function runPhase3_HypothesisFormation(
   console.log(`[Research] Phase 3: Forming hypothesis for "${topic.topic}"`);
   addPhaseEntry(topic, "hypothesis_formation", "Forming testable hypothesis based on literature gaps");
 
+  // PR #286 — extend the generation prompt with the 4-axis research focus
+  // rubric and a self-experiment protocol. Generators may still omit fields;
+  // the focus gate routes anything missing to operator review (never silent
+  // drop). Existing data-source / feasibility gates remain in place.
   const parsed = await callGrok(
     grokKey,
-    "You are Agent 306 forming a research hypothesis. Base it on identified gaps in existing knowledge. Return valid JSON only.",
-    `Research question: ${topic.researchQuestion}\n\nExisting work: ${(topic.existingWork ?? "").slice(0, 1500)}\n\nKnowledge gaps:\n${(topic.literatureGaps ?? []).map((g, i) => `${i + 1}. ${g}`).join("\n")}\n\nForm a specific, testable hypothesis that addresses one or more of the identified gaps.\n\nReturn JSON:\n{\n  "hypothesis": "a clear, specific, testable claim",\n  "confidence": "high|medium|low",\n  "metric": "what measurable indicator would confirm or deny this",\n  "prediction": "specific predicted outcome",\n  "basis": "what evidence supports this hypothesis"\n}`,
+    "You are Agent 306 forming a research hypothesis. Base it on identified gaps in existing knowledge. Score the hypothesis against the four-axis Research Focus Rubric and attach a self-experiment protocol. Return valid JSON only.",
+    `Research question: ${topic.researchQuestion}\n\nExisting work: ${(topic.existingWork ?? "").slice(0, 1500)}\n\nKnowledge gaps:\n${(topic.literatureGaps ?? []).map((g, i) => `${i + 1}. ${g}`).join("\n")}\n\nForm a specific, testable hypothesis that addresses one or more of the identified gaps.\n\nThen score the hypothesis on each axis (0-10):\n  selfImprovementLeverage  — direct uplift to A306 reasoning, hypothesis quality, completion rate, or codebase\n  selfExperimentFeasibility — can a clean, low-cost self-experiment run with a measurable metric\n  aiBreakthroughNovelty     — realistic contribution to AI reasoning / agent architectures / recursive improvement\n  efficiencyLowWaste        — low duplication risk + reasonable resource estimate\n\nThen describe a self-experiment protocol with all four fields populated.\n\nReturn JSON:\n{\n  "hypothesis": "a clear, specific, testable claim",\n  "confidence": "high|medium|low",\n  "metric": "what measurable indicator would confirm or deny this",\n  "prediction": "specific predicted outcome",\n  "basis": "what evidence supports this hypothesis",\n  "rubricScores": {\n    "selfImprovementLeverage": 0-10,\n    "selfExperimentFeasibility": 0-10,\n    "aiBreakthroughNovelty": 0-10,\n    "efficiencyLowWaste": 0-10\n  },\n  "selfExperimentProtocol": {\n    "metric": "what metric the experiment will move",\n    "design": "one-paragraph design",\n    "successThreshold": "concrete numeric/boolean threshold for success",\n    "rollbackCondition": "what is reverted, and how, if it fails"\n  }\n}`,
   );
 
   if (parsed?.hypothesis) {
     topic.hypothesis = parsed.hypothesis;
     topic.confidence = parsed.confidence ?? "medium";
+
+    // Run the focus-rubric gate. The gate never silently drops: a sub-threshold
+    // claim becomes verdict='reject' with a reason; a passing claim with no
+    // protocol becomes verdict='review' so the operator decides; a clean pass
+    // gets verdict='pursue'. We stamp all three fields onto the persisted row.
+    let gateResult: ReturnType<typeof evaluateHypothesisForFocus>;
+    try {
+      gateResult = evaluateHypothesisForFocus({
+        claim:                  parsed.hypothesis,
+        scores:                 parsed.rubricScores,
+        selfExperimentProtocol: parsed.selfExperimentProtocol,
+        notes:                  `topic=${topic.topic}`.slice(0, 100),
+      }, { source: "phase3" });
+      console.log(
+        `[Research] Phase 3 focus rubric: verdict=${gateResult.verdict} ` +
+        `overall=${gateResult.overall ?? "n/a"} for "${parsed.hypothesis.slice(0, 60)}"`,
+      );
+    } catch (e: any) {
+      // Fail open to 'review' so we never silently drop a generated hypothesis.
+      console.warn("[Research] Focus rubric gate threw, routing to review:", e?.message ?? e);
+      gateResult = {
+        verdict: "review",
+        reason:  `focus_rubric_error: ${e?.message ?? String(e)}`,
+        overall: null,
+        capExceeded: false,
+      };
+    }
 
     addHypothesis({
       claim:          parsed.hypothesis,
@@ -1171,6 +1211,10 @@ export async function runPhase3_HypothesisFormation(
       timeframe:      "30-90 days",
       confidence:     parsed.confidence ?? "medium",
       relatedTopicId: topic.id,
+      rubricVerdict:          gateResult.verdict,
+      rubricOverall:          gateResult.overall ?? undefined,
+      rubricBlockedReason:    gateResult.verdict === "pursue" ? undefined : gateResult.reason,
+      selfExperimentProtocol: gateResult.selfExperimentProtocol,
     });
   }
 }
