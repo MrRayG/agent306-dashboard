@@ -6,6 +6,7 @@ import { registerDiagnosticsRoutes } from "./routers/diagnosticsRouter.js";
 import { registerAgentRoutes } from "./routers/agentRouter.js";
 import { registerKnowledgeRoutes } from "./routers/knowledgeRouter.js";
 import { registerHypothesisRoutes } from "./routers/hypothesisRouter.js";
+import { selectStalledTriageCandidates as selectStalledHypothesisTriageCandidates } from "./hypothesisTriageQueue.js";
 import { registerContentRoutes } from "./routers/contentRouter.js";
 import { registerEpisodeRoutes } from "./routers/episodeRouter.js";
 import { dataPath } from "./dataPaths.js";
@@ -4365,6 +4366,65 @@ needsHelp: true only when you genuinely need his direction or information`,
       const { forceHypothesisQueueReset } = await import("./archiveHypotheses.js");
       const result = forceHypothesisQueueReset();
       res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // GET /api/hypotheses/triage-queue — operator triage view of stalled,
+  // low-confidence ("research-gap") hypotheses. Read-only; never mutates.
+  // Sorted by days-since-last-activity descending (oldest first).
+  app.get("/api/hypotheses/triage-queue", (_req, res) => {
+    try {
+      const lab = getResearchLab();
+      const rows = selectStalledHypothesisTriageCandidates(lab.hypotheses ?? []);
+      res.json({ rows, total: rows.length, generatedAt: new Date().toISOString() });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/hypotheses/:id/mark-data-unavailable — operator-triggered
+  // closure of a stalled hypothesis. Records an audit log line with the
+  // closure timestamp and a `source-change` action so the post-resolution
+  // gate accepts the transition. Returns 400 if the hypothesis is already
+  // resolved (idempotent guard).
+  app.post("/api/hypotheses/:id/mark-data-unavailable", requireDashAuth, (req, res) => {
+    try {
+      const { id } = req.params;
+      const note = typeof req.body?.note === "string" ? req.body.note.trim() : "";
+      const lab = getResearchLab();
+      const hyp = lab.hypotheses.find(h => h.id === id);
+      if (!hyp) return res.status(404).json({ error: "hypothesis not found" });
+
+      const RESOLVED: Array<typeof hyp.status> = ["confirmed", "rejected", "expired", "data-unavailable", "stale-retired"];
+      if (RESOLVED.includes(hyp.status)) {
+        return res.status(400).json({ error: `already in '${hyp.status}' — refusing to overwrite`, status: hyp.status });
+      }
+
+      const closedAt = new Date().toISOString();
+      const detail = (note.length >= 1
+        ? `Operator marked data-unavailable: ${note}`
+        : "Operator marked data-unavailable — public/measurable evidence stream not available");
+
+      const action = {
+        type:        "source-change" as const,
+        detail,
+        committedAt: closedAt,
+      };
+
+      const ok = resolveHypothesis(id, "data-unavailable", detail, action);
+      if (!ok) {
+        return res.status(500).json({ error: "resolveHypothesis refused the transition" });
+      }
+      // Stamp the closure timestamp + retired reason for triage-queue history.
+      const fresh = getResearchLab();
+      const stored = fresh.hypotheses.find(h => h.id === id);
+      if (stored) {
+        stored.retiredReason = detail;
+      }
+      console.log(`[Hypothesis] operator-marked data-unavailable id=${id} closedAt=${closedAt} note="${note.slice(0, 120)}"`);
+      res.json({ ok: true, id, status: "data-unavailable", closedAt, retiredReason: detail });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }

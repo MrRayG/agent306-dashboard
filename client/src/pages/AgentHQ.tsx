@@ -1328,6 +1328,147 @@ function ResearchQueueTab({ topics, goals, refetch }: { topics: ResearchTopic[];
 }
 
 // ── Hypotheses tab ────────────────────────────────────────────────────────────
+// ── Stalled-hypothesis triage panel ───────────────────────────────────────────
+// Surfaces low-confidence ("research-gap") hypotheses that are still active,
+// sorted by days-since-last-activity, with a one-click `Mark data-unavailable`
+// action. Operator-triggered only — no auto-archival.
+interface TriageRow {
+  id:                  string;
+  claim:               string;
+  status:              string;
+  confidence:          string;
+  triageConfidence?:   string;
+  stake?:              string;
+  formedAt:            string;
+  lastActivityAt:      string;
+  daysSinceActivity:   number;
+  staleReason:         string;
+  dataSourceGateReason?: string;
+}
+
+function StalledHypothesisTriagePanel({ onChange }: { onChange: () => void }) {
+  const { toast } = useToast();
+  const queryKey = ["/api/hypotheses/triage-queue"];
+  const { data, refetch, isLoading } = useQuery<{ rows: TriageRow[]; total: number }>({
+    queryKey,
+    refetchOnWindowFocus: false,
+  });
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [note, setNote] = useState("");
+
+  const markMutation = useMutation({
+    mutationFn: ({ id, note }: { id: string; note: string }) =>
+      apiRequest("POST", `/api/hypotheses/${id}/mark-data-unavailable`, { note }).then(r => r.json()),
+    onSuccess: (resp: any) => {
+      if (resp?.error) {
+        toast({ title: "Refused", description: resp.error, variant: "destructive" });
+        return;
+      }
+      toast({ title: "Marked data-unavailable", description: `Closed at ${new Date(resp.closedAt).toLocaleString()}` });
+      setConfirmingId(null);
+      setNote("");
+      refetch();
+      onChange();
+    },
+    onError: (e: any) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+
+  const rows = data?.rows ?? [];
+  if (isLoading && rows.length === 0) return null;
+
+  return (
+    <div style={{ background: "rgba(248,113,113,0.04)", border: "1px solid rgba(248,113,113,0.20)", padding: "0.85rem 1rem", marginBottom: "1rem" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, gap: 12 }}>
+        <div>
+          <p style={{ ...mono, fontSize: "0.78rem", color: RED, margin: 0, fontWeight: 700, letterSpacing: "0.06em" }}>
+            STALLED TRIAGE — {rows.length} low-confidence research-gap hypotheses
+          </p>
+          <p style={{ ...mono, fontSize: "0.66rem", color: DIM, margin: "3px 0 0" }}>
+            Sorted by days since last activity. One-click closure logs a closure timestamp and audit line. No bulk action.
+          </p>
+        </div>
+        <button
+          onClick={() => refetch()}
+          style={{ ...mono, fontSize: "0.66rem", color: DIM, background: "transparent", border: `1px solid ${DIMMEST}`, padding: "3px 8px", cursor: "pointer" }}
+        >
+          ↻ Refresh
+        </button>
+      </div>
+
+      {rows.length === 0 ? (
+        <p style={{ ...mono, fontSize: "0.70rem", color: DIMMER, margin: 0, padding: "0.4rem 0" }}>
+          Queue is clear — no stalled low-confidence hypotheses.
+        </p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column" as const, gap: 6 }}>
+          {rows.map(r => (
+            <div key={r.id} style={{ background: "rgba(0,0,0,0.25)", border: `1px solid ${DIMMEST}`, padding: "0.5rem 0.65rem" }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "flex-start", justifyContent: "space-between" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const, marginBottom: 3, alignItems: "center" }}>
+                    <span style={{ ...mono, fontSize: "0.62rem", color: r.daysSinceActivity >= 14 ? RED : r.daysSinceActivity >= 7 ? YELLOW : DIM, border: `1px solid ${DIMMEST}`, padding: "1px 5px" }}>
+                      {r.daysSinceActivity}d stale
+                    </span>
+                    <span style={{ ...mono, fontSize: "0.62rem", color: DIM, padding: "1px 5px" }}>
+                      {r.status}
+                    </span>
+                    <span style={{ ...mono, fontSize: "0.62rem", color: DIMMER }}>{r.staleReason}</span>
+                  </div>
+                  <p style={{ ...mono, fontSize: "0.70rem", color: "#efefef", margin: 0, lineHeight: 1.35 }}>
+                    {r.claim}
+                  </p>
+                  {r.dataSourceGateReason && (
+                    <p style={{ ...mono, fontSize: "0.62rem", color: DIMMER, margin: "3px 0 0", fontStyle: "italic" }}>
+                      gate: {r.dataSourceGateReason}
+                    </p>
+                  )}
+                </div>
+                {confirmingId === r.id ? null : (
+                  <button
+                    onClick={() => { setConfirmingId(r.id); setNote(""); }}
+                    style={{ ...mono, fontSize: "0.64rem", color: RED, background: "transparent", border: `1px solid ${RED}55`, padding: "3px 8px", cursor: "pointer", whiteSpace: "nowrap" as const }}
+                  >
+                    Mark data-unavailable
+                  </button>
+                )}
+              </div>
+              {confirmingId === r.id && (
+                <div style={{ marginTop: 6, paddingTop: 6, borderTop: `1px solid ${DIMMEST}`, display: "flex", flexDirection: "column" as const, gap: 6 }}>
+                  <p style={{ ...mono, fontSize: "0.64rem", color: DIM, margin: 0 }}>
+                    Closure note (optional — saved on the hypothesis as the retired-reason audit line):
+                  </p>
+                  <input
+                    value={note}
+                    onChange={e => setNote(e.target.value)}
+                    placeholder="e.g. IRB protocol, firmware logs, non-public data — checked X"
+                    style={{ ...mono, fontSize: "0.66rem", padding: "4px 6px", background: "rgba(0,0,0,0.4)", color: "#efefef", border: `1px solid ${DIMMEST}` }}
+                  />
+                  <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                    <button
+                      onClick={() => { setConfirmingId(null); setNote(""); }}
+                      disabled={markMutation.isPending}
+                      style={{ ...mono, fontSize: "0.64rem", color: DIM, background: "transparent", border: `1px solid ${DIMMEST}`, padding: "3px 10px", cursor: "pointer" }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => markMutation.mutate({ id: r.id, note })}
+                      disabled={markMutation.isPending}
+                      style={{ ...mono, fontSize: "0.64rem", color: RED, background: "rgba(248,113,113,0.10)", border: `1px solid ${RED}`, padding: "3px 10px", cursor: "pointer" }}
+                    >
+                      {markMutation.isPending ? "Closing…" : "Confirm — close & log"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function HypothesesTab({ hypotheses, refetch }: { hypotheses: Hypothesis[]; refetch: () => void }) {
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
@@ -1364,6 +1505,7 @@ function HypothesesTab({ hypotheses, refetch }: { hypotheses: Hypothesis[]; refe
 
   return (
     <div>
+      <StalledHypothesisTriagePanel onChange={refetch} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
         <span style={{ ...mono, fontSize: "0.73rem", color: DIM, textTransform: "uppercase" as const, letterSpacing: "0.1em" }}>
           {hypotheses.length} hypotheses tracked
