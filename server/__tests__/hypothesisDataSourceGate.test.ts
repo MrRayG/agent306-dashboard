@@ -29,10 +29,14 @@ let researchRepo: {
 } | null = null;
 let testHypothesisDetailed: typeof import("../researchEngine.js").testHypothesisDetailed;
 let evaluateDataSourceGate: typeof import("../hypothesisDataSourceGate.js").evaluateDataSourceGate;
+let evaluateBinaryFramingGate: typeof import("../hypothesisDataSourceGate.js").evaluateBinaryFramingGate;
+let evaluateInaccessibleSourceAge: typeof import("../hypothesisDataSourceGate.js").evaluateInaccessibleSourceAge;
 
 {
   const gateMod = await import("../hypothesisDataSourceGate.js");
   evaluateDataSourceGate = gateMod.evaluateDataSourceGate;
+  evaluateBinaryFramingGate = gateMod.evaluateBinaryFramingGate;
+  evaluateInaccessibleSourceAge = gateMod.evaluateInaccessibleSourceAge;
   const engine = await import("../researchEngine.js");
   testHypothesisDetailed = engine.testHypothesisDetailed;
   const repo = await import("../repositories/researchRepository.js");
@@ -275,5 +279,128 @@ describe("testHypothesisDetailed — forming → testing gate", () => {
     assert.equal(h.status, "testing");
     assert.equal(h.dataSourceGateBlockedAt, undefined);
     assert.equal(h.dataSourceGateReason, undefined);
+  });
+});
+
+// ── 5/7 binary-framing check (live rec #2) ──────────────────────────────────
+describe("evaluateBinaryFramingGate — pure", () => {
+  it("flags 'X is more accurate than Y' as binary and returns a conditional rewrite", () => {
+    const r = evaluateBinaryFramingGate({
+      claim: "GPT-4 is more accurate than Claude on multi-step reasoning.",
+    });
+    assert.equal(r.isBinary, true);
+    if (r.isBinary) {
+      assert.match(r.detectedPattern, /quality|outperforms|vs|either/i);
+      // Rewrite must mention threshold/conditional shape so the operator
+      // has guidance, not just a block.
+      assert.match(r.rewriteSuggestion, /threshold|conditional/i);
+      assert.match(r.rewriteSuggestion, /Under conditions/);
+    }
+  });
+
+  it("flags 'A vs B' framing", () => {
+    const r = evaluateBinaryFramingGate({
+      claim: "Bayesian vs Frequentist methods on small-sample inference",
+    });
+    assert.equal(r.isBinary, true);
+  });
+
+  it("flags 'X outperforms Y' framing", () => {
+    const r = evaluateBinaryFramingGate({
+      claim: "Retrieval augmented generation outperforms fine-tuning on factual recall.",
+    });
+    assert.equal(r.isBinary, true);
+  });
+
+  it("does not flag a conditional / threshold claim", () => {
+    const r = evaluateBinaryFramingGate({
+      claim: "Under conditions of >32k context, retrieval augmentation reduces hallucination rate above threshold 0.15.",
+    });
+    assert.equal(r.isBinary, false);
+  });
+
+  it("returns false when there is no claim text", () => {
+    const r = evaluateBinaryFramingGate({});
+    assert.equal(r.isBinary, false);
+  });
+});
+
+// ── 5/7 inaccessible-source-age (live rec #3) ───────────────────────────────
+describe("evaluateInaccessibleSourceAge — pure", () => {
+  const now = new Date("2026-05-07T00:00:00.000Z");
+
+  it("recommends speculative-watchlist when forming hypothesis has been blocked > 7 days", () => {
+    const r = evaluateInaccessibleSourceAge(
+      {
+        status: "forming",
+        dataSourceGateBlockedAt: "2026-04-25T00:00:00.000Z", // 12 days ago
+      },
+      now,
+    );
+    assert.equal(r.shouldArchive, true);
+    if (r.shouldArchive) {
+      assert.equal(r.recommendedRoute, "speculative-watchlist");
+      assert.ok(r.ageDays > 7);
+    }
+  });
+
+  it("does NOT recommend archiving inside the grace window", () => {
+    const r = evaluateInaccessibleSourceAge(
+      {
+        status: "forming",
+        dataSourceGateBlockedAt: "2026-05-04T00:00:00.000Z", // 3 days ago
+      },
+      now,
+    );
+    assert.equal(r.shouldArchive, false);
+  });
+
+  it("does NOT archive once the operator supplies an accessible measurement path", () => {
+    const r = evaluateInaccessibleSourceAge(
+      {
+        status: "forming",
+        dataSourceGateBlockedAt: "2026-04-20T00:00:00.000Z",
+        measurementPath: "OpenAlex citation count for paper arXiv:2401.01234",
+        measurementPathAccessible: true,
+      },
+      now,
+    );
+    assert.equal(r.shouldArchive, false);
+  });
+
+  it("ignores hypotheses not in 'forming'", () => {
+    const r = evaluateInaccessibleSourceAge(
+      {
+        status: "testing",
+        dataSourceGateBlockedAt: "2026-04-01T00:00:00.000Z",
+      },
+      now,
+    );
+    assert.equal(r.shouldArchive, false);
+  });
+
+  it("returns false when never blocked", () => {
+    const r = evaluateInaccessibleSourceAge(
+      { status: "forming" },
+      now,
+    );
+    assert.equal(r.shouldArchive, false);
+  });
+
+  it("respects a custom grace window", () => {
+    // 5 days ago — outside a 3-day grace, inside a 14-day grace.
+    const blocked = "2026-05-02T00:00:00.000Z";
+    const r3 = evaluateInaccessibleSourceAge(
+      { status: "forming", dataSourceGateBlockedAt: blocked },
+      now,
+      3,
+    );
+    assert.equal(r3.shouldArchive, true);
+    const r14 = evaluateInaccessibleSourceAge(
+      { status: "forming", dataSourceGateBlockedAt: blocked },
+      now,
+      14,
+    );
+    assert.equal(r14.shouldArchive, false);
   });
 });

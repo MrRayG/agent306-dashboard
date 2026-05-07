@@ -8,7 +8,11 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { translateAction } from "../actionTranslator.js";
+import {
+  translateAction,
+  classifyMissingPrimitiveFamily,
+  describeMissingPrimitiveFamily,
+} from "../actionTranslator.js";
 
 describe("ActionTranslator", () => {
   it("parses a ratio rule (the canonical KB / synthesis case)", () => {
@@ -232,5 +236,81 @@ describe("ActionTranslator", () => {
   it("rewrite_rule skips uselessly-short subjects rather than firing on noise", () => {
     const result = translateAction("rewrite X to Y");
     assert.equal(result.primitive, "none");
+  });
+
+  // ── 5/7 missing-primitive coverage: front-loaded artifact + verification_scaffold ──
+  // The 5/7 self-rec log surfaced an artifact-shaped insight that the
+  // existing two ARTIFACT patterns missed because the cycle marker was
+  // *front-loaded* ("Next cycle: ... and produce a single narrative
+  // artifact ..."). The post-window pattern requires the time-window
+  // phrase AFTER the artifact noun, the dedicate pattern requires the
+  // "dedicate ... action to producing" framing — neither matched. The
+  // GoalEngine kept emitting "missing-primitive: artifact family" recs.
+
+  it("parses the front-loaded 'Next cycle: ... produce a single narrative artifact (...)' shape (5/7 content-strategy case)", () => {
+    const result = translateAction(
+      "Next cycle: take one confirmed hypothesis from the content-strategy cluster and produce a single narrative artifact (story-first format, named example, verified detail) as a concrete exercise.",
+      "Score insight on storytelling competency.",
+    );
+    assert.equal(result.primitive, "artifact_rule");
+    const params = result.params as any;
+    assert.equal(params.requiredCount, 1);
+    assert.equal(params.windowUnit, "cycle");
+    // Examples should be parsed from the parens.
+    assert.ok(Array.isArray(params.examples));
+    assert.ok(params.examples.length >= 1, `expected examples to include the parenthetical hints, got ${JSON.stringify(params.examples)}`);
+    assert.match(result.verificationCriterion, /produced within/);
+  });
+
+  it("front-loaded artifact pattern does not eat ratio/gate/archive matches", () => {
+    // Sanity: a front-loaded "Next cycle" preamble must not let
+    // ratio/gate/archive shapes fall through to artifact.
+    const ratio = translateAction(
+      "Next cycle: for every 10 new knowledge entries, force-generate one synthesis",
+      "",
+    );
+    assert.equal(ratio.primitive, "ratio_rule");
+  });
+
+  it("classifies a verification-scaffold action as the new family (not 'other')", () => {
+    // Live rec #4 (5/7): "For every externally-facing output, include a
+    // verification scaffold: (1) primary source link, (2) confidence band,
+    // (3) one falsification condition." Previously fell through to "other".
+    const family = classifyMissingPrimitiveFamily(
+      "For every externally-facing output, include a verification scaffold: (1) primary source link, (2) confidence band, (3) one falsification condition.",
+    );
+    assert.equal(family, "verification_scaffold");
+    assert.ok(describeMissingPrimitiveFamily("verification_scaffold").includes("primary source"));
+  });
+
+  it("translates a verification-scaffold action as observation-only verification_rule with subtype=scaffold", () => {
+    const result = translateAction(
+      "For every externally-facing output, include a verification scaffold: (1) primary source link, (2) confidence band, (3) one falsification condition. Track whether this improves engagement/trust signals.",
+      "Verification Debt dream insight + semantic retrieval fidelity hypothesis",
+    );
+    assert.equal(result.primitive, "verification_rule");
+    const params = result.params as any;
+    assert.equal(params.subtype, "scaffold");
+    assert.equal(params.target, "externally_facing_output");
+    // Guardrails: no auto-publish, no auto-attach.
+    assert.equal(params.autoPublish, false);
+    assert.equal(params.autoAttach, false);
+    assert.deepEqual(params.requiredFields, [
+      "primary_source_link",
+      "confidence_band",
+      "falsification_condition",
+    ]);
+    assert.match(result.verificationCriterion, /no auto-attach.*no auto-publish/);
+    // Non-forcing.
+    assert.ok((result.minFireCount ?? 0) <= 1);
+  });
+
+  it("verification-scaffold does NOT swallow generic 'track firing rate' verification actions", () => {
+    // Generic verification language without the trio must still classify
+    // as plain `verification`, not `verification_scaffold`.
+    const family = classifyMissingPrimitiveFamily(
+      "Track firing rate of new behavioral rule next cycle",
+    );
+    assert.equal(family, "verification");
   });
 });
