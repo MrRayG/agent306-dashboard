@@ -53,7 +53,11 @@ import {
 import { fetchSourceContent } from "./sourceFetcher.js";
 import { verifyClaims, type VerifierReport } from "./claimVerifier.js";
 import { buildSharedClaimLaneContractBlock } from "./claimLaneContract.js";
-import { recordNewsDraft, readNewsDrafts } from "./newsDraftStore.js";
+import { recordNewsDraft, readNewsDrafts, deleteNewsDraft } from "./newsDraftStore.js";
+import {
+  readEngineQuarantines,
+  deleteEngineQuarantine,
+} from "./engineQuarantineStore.js";
 import {
   parseUserMessage,
   checkAgentCoherence,
@@ -3350,8 +3354,62 @@ export function registerRoutes(httpServer: Server, app: Express) {
         platforms:   d.platforms,
         metadata:    d.metadata,
       }));
-      let merged: Array<typeof articleDrafts[number] | typeof tweetDrafts[number]> =
-        [...articleDrafts, ...tweetDrafts];
+      // PR #283 — review-only quarantines for short-form post engines whose
+      // verifier hard-fail path used to silently drop the draft. These never
+      // posted; they exist purely so the operator can see "the 8am dispatch
+      // didn't go out and here's why" without trawling Railway logs. There
+      // is no auto-publish path from this surface (verifier gate stays hard).
+      const newsQuarantines = readNewsDrafts()
+        .filter(d => d.status === "quarantined")
+        .map(d => ({
+          source:             "quarantine" as const,
+          id:                 d.id,
+          engine:             "news" as const,
+          generatedAt:        d.createdAt,
+          content:            d.text,
+          severity:           d.severity,
+          unsupportedCount:   d.unsupportedCount,
+          unsupportedReasons: d.unsupportedReasons,
+          verifierReport:     d.verifierReport,
+          quarantineSource:   d.source,
+        }));
+      const signalQuarantines = readEngineQuarantines("signal").map(d => ({
+        source:             "quarantine" as const,
+        id:                 d.id,
+        engine:             "signal" as const,
+        generatedAt:        d.createdAt,
+        content:            d.text,
+        topic:              d.topic,
+        severity:           d.severity,
+        unsupportedCount:   d.unsupportedCount,
+        unsupportedReasons: d.unsupportedReasons,
+        verifierReport:     d.verifierReport,
+      }));
+      const academyQuarantines = readEngineQuarantines("academy").map(d => ({
+        source:             "quarantine" as const,
+        id:                 d.id,
+        engine:             "academy" as const,
+        generatedAt:        d.createdAt,
+        content:            d.text,
+        topic:              d.topic,
+        severity:           d.severity,
+        unsupportedCount:   d.unsupportedCount,
+        unsupportedReasons: d.unsupportedReasons,
+        verifierReport:     d.verifierReport,
+      }));
+      let merged: Array<
+        | typeof articleDrafts[number]
+        | typeof tweetDrafts[number]
+        | typeof newsQuarantines[number]
+        | typeof signalQuarantines[number]
+        | typeof academyQuarantines[number]
+      > = [
+        ...articleDrafts,
+        ...tweetDrafts,
+        ...newsQuarantines,
+        ...signalQuarantines,
+        ...academyQuarantines,
+      ];
       if (engine) merged = merged.filter(d => d.engine === engine);
       // Newest first
       merged.sort((a, b) => new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime());
@@ -3366,10 +3424,37 @@ export function registerRoutes(httpServer: Server, app: Express) {
           blog:           tweetDrafts.filter(d => d.engine === "blog").length,
           research:       tweetDrafts.filter(d => d.engine === "research").length,
           reflection:     tweetDrafts.filter(d => d.engine === "reflection").length,
+          news:           newsQuarantines.length,
+          signal:         signalQuarantines.length,
+          academy:        academyQuarantines.length,
         },
       });
     } catch (e: any) {
       res.status(500).json({ error: e.message ?? "Failed to list drafts" });
+    }
+  });
+
+  // PR #283 — DELETE for quarantine records (news, signal, academy). The
+  // operator clicks "DELETE" on a reviewed quarantine card to acknowledge
+  // the loss and clear it from the inbox. Append-only writers + per-id
+  // rewrite keep the JSONL stores small. There is no "publish" /
+  // "mark posted" path — these never went out and there is no
+  // rerun-with-bypass action.
+  app.delete("/api/quarantine/:engine/:id", (req, res) => {
+    const { engine, id } = req.params;
+    try {
+      let removed = false;
+      if (engine === "news") {
+        removed = deleteNewsDraft(id);
+      } else if (engine === "signal" || engine === "academy") {
+        removed = deleteEngineQuarantine(id);
+      } else {
+        return res.status(400).json({ error: "engine must be 'news', 'signal', or 'academy'" });
+      }
+      if (!removed) return res.status(404).json({ error: "quarantine record not found" });
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message ?? "Failed to delete quarantine" });
     }
   });
 

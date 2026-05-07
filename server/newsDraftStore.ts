@@ -97,6 +97,36 @@ export function readNewsDrafts(): NewsDraftRecord[] {
   }
 }
 
+/** Delete a single news-draft record by id. Rewrites the JSONL file minus
+ *  that line. Used by the dashboard's per-card DELETE action once the
+ *  operator has reviewed a quarantine and accepted the loss. Returns true
+ *  iff a record was removed. */
+export function deleteNewsDraft(id: string): boolean {
+  try {
+    if (!fs.existsSync(newsDraftsPath())) return false;
+    const raw = fs.readFileSync(newsDraftsPath(), "utf8");
+    const kept: string[] = [];
+    let removed = false;
+    for (const line of raw.split(/\r?\n/)) {
+      if (!line.trim()) continue;
+      try {
+        const rec = JSON.parse(line) as NewsDraftRecord;
+        if (rec.id === id) { removed = true; continue; }
+        kept.push(line);
+      } catch {
+        kept.push(line);
+      }
+    }
+    if (removed) {
+      fs.writeFileSync(newsDraftsPath(), kept.length ? kept.join("\n") + "\n" : "", "utf8");
+    }
+    return removed;
+  } catch (e: any) {
+    console.error("[NewsDraftStore] delete failed:", e?.message ?? String(e));
+    return false;
+  }
+}
+
 /** Helper used by the dispatch engines to assemble + append in one call. */
 export function recordNewsDraft(args: {
   status: "quarantined" | "published_with_warnings";
