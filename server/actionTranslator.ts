@@ -119,6 +119,15 @@ const ARTIFACT_PATTERNS = [
   /(?:produce|ship|publish|generate|create|deliver|write|draft)\s+(?:exactly\s+)?(?:one|1|a\s+single)\s+(?:concrete\s+)?(?:output\s+)?(\w+(?:\s+\w+){0,3}?)(?:\s*\(([^)]+)\))?[^.]*?\b(?:within|in|by|before|this|next|each)\s+(?:the\s+)?(?:next\s+)?(\d+)?\s*(cycle|day|week|cycles|days|weeks)\b/i,
   // "dedicate next cycle's first action to producing one concrete output artifact"
   /(?:dedicate|commit|allocate)\s+(?:next\s+)?(?:cycle['']?s?\s+)?(?:first\s+)?action\s+to\s+(?:producing|shipping|publishing|generating|creating|delivering|writing|drafting)\s+(?:one|1|a\s+single)\s+(?:concrete\s+)?(\w+(?:\s+\w+){0,3})/i,
+  // Front-loaded cycle marker (added 2026-05-07 for live rec from content-strategy
+  // cluster: "Next cycle: take one confirmed hypothesis from the content-strategy
+  // cluster and produce a single narrative artifact (story-first format, named
+  // example, verified detail) as a concrete exercise."
+  // The previous patterns required the time-window phrase AFTER the artifact
+  // noun. This one anchors on the leading "Next cycle:" / "This cycle:" / "Each
+  // cycle:" preamble, then matches a downstream produce/ship/etc. verb against
+  // a "single|one|a" artifact-shaped noun. Examples paren is optional.
+  /^(?:next|this|each|every)\s+(\d+)?\s*(cycle|day|week|cycles|days|weeks)\b[^.]*?\b(?:produce|ship|publish|generate|create|deliver|write|draft)\s+(?:exactly\s+)?(?:one|1|a\s+single|a)\s+(?:concrete\s+)?(?:output\s+)?(\w+(?:\s+\w+){0,3}?)\s+(?:artifact|asset|output|deliverable|piece|exercise)?(?:\s*\(([^)]+)\))?/i,
 ];
 
 // VERIFICATION — observation-only primitive. Surfaces patterns like
@@ -136,6 +145,26 @@ const VERIFICATION_PATTERNS = [
   /(?:track|monitor|measure|observe|quantify)\s+(?:the\s+)?([^\.,]+?)(?:\s+(?:over|across|for|next|each|this|every)\s+(?:the\s+)?(?:next\s+)?(\d+)?\s*(cycle|day|week|cycles|days|weeks))?\b/i,
   // "verify firing rate" / "verify adoption"
   /verify\s+(?:the\s+)?(\w+(?:[-\s]\w+){0,3}?\s+rate)\b/i,
+];
+
+// VERIFICATION_SCAFFOLD — observation-only primitive for externally-facing
+// outputs. Surfaced 2026-05-07 from the Verification Debt dream insight and
+// the semantic-retrieval fidelity hypothesis: outputs that ship publicly
+// without (1) a primary source link, (2) a confidence band, and (3) one
+// falsification condition cannot be audited by readers or by the
+// Self-Change Verifier. This routes the action to a `verification_rule`
+// with subtype="scaffold", carrying the three required fields. It is
+// non-forcing: it does not block publishing, it does not auto-attach
+// fields, it does not modify any output surface. It only registers the
+// observation so the operator can wire attachment where a common output
+// contract already exists.
+const VERIFICATION_SCAFFOLD_PATTERNS = [
+  // "include verification scaffold: (1) primary source link, (2) confidence band, (3) one falsification condition"
+  /\b(?:include|attach|require|add)\s+(?:a\s+)?verification\s+scaffold\b/i,
+  // "for every externally-facing output, include (...primary source link...confidence...falsification...)"
+  /\bexternally[-\s]?facing\s+output[s]?\b[^.]*?\bfalsif\w+/i,
+  // Loose trio match: any action mentioning all three components together
+  /\bprimary\s+source\b[^.]*?\bconfidence\b[^.]*?\bfalsif\w+/i,
 ];
 
 // SPECTRUM — "rewrite hypothesis template to require conditional/spectrum framing".
@@ -261,18 +290,29 @@ export function translateAction(actionText: string, insightText: string = ""): T
   for (const pat of ARTIFACT_PATTERNS) {
     const m = a.match(pat);
     if (m) {
-      const artifactNoun = normalizeNoun(m[1] ?? "artifact");
-      // Pattern 1 captures examples in parens (e.g. "a briefing, a thread, a post");
-      // Pattern 2 doesn't have that group.
-      const examplesRaw = (pat === ARTIFACT_PATTERNS[0] ? m[2] : "") ?? "";
+      // Group layout differs per pattern:
+      //   P0 (post-window): m[1]=noun, m[2]=examples?, m[3]=count?, m[4]=unit?
+      //   P1 (dedicate):    m[1]=noun
+      //   P2 (front-loaded): m[1]=count?, m[2]=unit, m[3]=noun, m[4]=examples?
+      const isFrontLoaded = pat === ARTIFACT_PATTERNS[2];
+      const nounGroup    = isFrontLoaded ? (m[3] ?? "artifact") : (m[1] ?? "artifact");
+      const examplesRaw  = (pat === ARTIFACT_PATTERNS[0] ? m[2] : isFrontLoaded ? (m[4] ?? "") : "") ?? "";
+      const artifactNoun = normalizeNoun(nounGroup);
       const examples = examplesRaw
         .split(/[,;]|\bor\b/i)
         .map(s => s.trim())
         .filter(s => s.length > 0 && s.length < 50)
         .slice(0, 5);
       // Window: default 1 cycle if not captured.
-      const windowCount = pat === ARTIFACT_PATTERNS[0] && m[3] ? parseInt(m[3], 10) : 1;
-      const windowUnit = pat === ARTIFACT_PATTERNS[0] && m[4] ? m[4].toLowerCase().replace(/s$/, "") : "cycle";
+      let windowCount = 1;
+      let windowUnit = "cycle";
+      if (pat === ARTIFACT_PATTERNS[0]) {
+        if (m[3]) windowCount = parseInt(m[3], 10);
+        if (m[4]) windowUnit = m[4].toLowerCase().replace(/s$/, "");
+      } else if (isFrontLoaded) {
+        if (m[1]) windowCount = parseInt(m[1], 10);
+        if (m[2]) windowUnit = m[2].toLowerCase().replace(/s$/, "");
+      }
       return {
         primitive: "artifact_rule",
         params: {
@@ -288,6 +328,33 @@ export function translateAction(actionText: string, insightText: string = ""): T
         minFireCount: 1,
       };
     }
+  }
+
+  // VERIFICATION_SCAFFOLD — externally-facing output trio (source link +
+  // confidence band + falsification condition). Routed as verification_rule
+  // with subtype="scaffold" so the existing rule lifecycle/verification
+  // applies unchanged. Observation-only — no auto-publish, no surface
+  // modification, no claim-verifier threshold change.
+  for (const pat of VERIFICATION_SCAFFOLD_PATTERNS) {
+    if (!pat.test(a)) continue;
+    return {
+      primitive: "verification_rule",
+      params: {
+        subject: "verification_scaffold",
+        target: "externally_facing_output",
+        subtype: "scaffold",
+        requiredFields: ["primary_source_link", "confidence_band", "falsification_condition"],
+        windowCount: 1,
+        windowUnit: "cycle",
+        autoAttach: false,
+        autoPublish: false,
+      },
+      verificationCriterion:
+        `observation-only: detect each externally-facing output that includes all three scaffold fields ` +
+        `(primary_source_link, confidence_band, falsification_condition); no auto-attach, no auto-publish`,
+      suggestedCategory: "identity",
+      minFireCount: 1,
+    };
   }
 
   // VERIFICATION — observation-only. Must come AFTER the forcing primitives
@@ -458,15 +525,16 @@ function inferCompetencyFromAction(action: string): string | undefined {
 // -- Missing-primitive classification ----------------------------------------
 
 export type MissingPrimitiveFamily =
-  | "artifact"      // produce/ship/publish ONE thing
-  | "ratio"         // for every N input, force one output
-  | "ttl"           // expire/retire after N days
-  | "gate"          // pre-X gate / require Y before Z
-  | "archive"       // archive/retire matching items
-  | "spectrum"      // rewrite binary framing to spectrum
-  | "synthesis"     // synthesize/aggregate/cluster
-  | "rewrite"       // rewrite template / structural change
-  | "verification"  // measure/track/observe — not yet a primitive
+  | "artifact"             // produce/ship/publish ONE thing
+  | "ratio"                // for every N input, force one output
+  | "ttl"                  // expire/retire after N days
+  | "gate"                 // pre-X gate / require Y before Z
+  | "archive"              // archive/retire matching items
+  | "spectrum"             // rewrite binary framing to spectrum
+  | "synthesis"            // synthesize/aggregate/cluster
+  | "rewrite"              // rewrite template / structural change
+  | "verification"         // measure/track/observe — not yet a primitive
+  | "verification_scaffold" // attach (source link, confidence band, falsification) to externally-facing outputs
   | "other";
 
 /**
@@ -515,6 +583,24 @@ export function classifyMissingPrimitiveFamily(actionText: string): MissingPrimi
   if (/\brewrite\b|\breframe\b|\btemplate\b|\bstructure\b/.test(a)) {
     return "rewrite";
   }
+  // verification_scaffold — externally-facing outputs need a (source link,
+  // confidence band, falsification condition) trio. Surfaced 2026-05-07
+  // from the Verification Debt dream insight + semantic-retrieval fidelity
+  // hypothesis: outputs that ship publicly without these three fields can't
+  // be audited by the Self-Change Verifier or by readers. Must be checked
+  // BEFORE generic "verification" because the cues overlap (the trio
+  // language explicitly *includes* "verification scaffold" / "falsification
+  // condition" / "primary source"). Classification only — the runtime
+  // attachment is handled where the externally-facing surface already has a
+  // common contract; we do NOT auto-publish or modify the surface here.
+  if (
+    /\bverification\s+scaffold\b/.test(a) ||
+    /\bfalsification\s+condition\b/.test(a) ||
+    (/\bprimary\s+source\b/.test(a) && /\bconfidence\b/.test(a)) ||
+    (/\bsource\s+link\b/.test(a) && /\bfalsif\w+\b/.test(a))
+  ) {
+    return "verification_scaffold";
+  }
   if (/\bmeasure\b|\btrack\b|\bobserv\w+\b|\bmonitor\b|\bquantif\w+\b/.test(a)) {
     return "verification";
   }
@@ -537,6 +623,7 @@ export function describeMissingPrimitiveFamily(family: MissingPrimitiveFamily): 
     case "synthesis":    return "Add a `synthesis` enforcement primitive (force aggregation / cluster output).";
     case "rewrite":      return "Add a `rewrite` enforcement primitive (structural template change).";
     case "verification": return "Add a `verification` primitive (track/measure a state without a forcing rule).";
+    case "verification_scaffold": return "Add a `verification_scaffold` primitive (attach primary source link + confidence band + falsification condition to externally-facing outputs; observation-only, no auto-publish).";
     case "other":        return "Action did not match any known primitive family — classify and add or sharpen the action.";
   }
 }

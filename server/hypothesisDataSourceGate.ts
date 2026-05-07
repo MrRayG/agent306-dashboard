@@ -236,3 +236,155 @@ export function gateHypothesisDataSource(
 
   return { ...outcome, feasibilityView };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BINARY-FRAMING CHECK (added 2026-05-07)
+//
+// Live rec from 5/7: rejected hypotheses repeatedly arrived as binary
+// position-vs-position comparisons ("Position A is more accurate than
+// Position B"). These force a false dichotomy and almost always resolve to
+// "rejected/stale" because reality is conditional.
+//
+// This check is observation-only at the gate boundary: it does NOT block
+// the transition. It returns a structural rewrite suggestion that the
+// caller can surface to the operator (logged + attached to the hypothesis
+// row) so the hypothesis can be reformulated as a threshold or conditional
+// claim before it consumes a testing slot.
+//
+// Why not block? Blocking would weaken human approval — a binary phrasing
+// that the operator deliberately wants is still a valid hypothesis. We
+// surface the rewrite, log compliance, and let the operator decide.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type BinaryFramingOutcome =
+  | { isBinary: false; reason: string }
+  | {
+      isBinary: true;
+      reason: string;
+      detectedPattern: string;
+      rewriteSuggestion: string;
+    };
+
+const BINARY_FRAMING_PATTERNS: { re: RegExp; label: string }[] = [
+  // "X is more accurate than Y" / "X is more correct than Y" / "X beats Y"
+  { re: /\b([A-Z][\w\s-]{2,40})\s+is\s+(?:more|less)\s+(?:accurate|correct|reliable|effective|precise|right)\s+than\s+([A-Z]?[\w\s-]{2,40})\b/i, label: "X is more <quality> than Y" },
+  // "X outperforms Y" / "X beats Y"
+  { re: /\b([A-Z]?[\w\s-]{2,40})\s+(?:outperforms|outperform|beats|beat|surpasses|surpass)\s+([A-Z]?[\w\s-]{2,40})\b/i, label: "X outperforms Y" },
+  // "A vs B" / "A versus B" framing in the claim itself
+  { re: /\b([A-Z]?[\w-]{2,30})\s+(?:vs\.?|versus)\s+([A-Z]?[\w-]{2,30})\b/i, label: "A vs B" },
+  // "either X or Y" — explicit dichotomy
+  { re: /\beither\s+([\w\s-]{2,40})\s+or\s+([\w\s-]{2,40})\b/i, label: "either X or Y" },
+];
+
+/**
+ * Inspect a hypothesis for binary position-vs-position framing. Pure.
+ * Returns a rewrite suggestion (threshold or conditional shape) when a
+ * binary pattern is detected; the gate caller decides whether to surface
+ * it. Never blocks transitions on its own.
+ */
+export function evaluateBinaryFramingGate(
+  input: { claim?: string; prediction?: string },
+): BinaryFramingOutcome {
+  const text = `${input.claim ?? ""} ${input.prediction ?? ""}`.trim();
+  if (!text) return { isBinary: false, reason: "no claim or prediction text" };
+
+  for (const { re, label } of BINARY_FRAMING_PATTERNS) {
+    const m = text.match(re);
+    if (m) {
+      const [, a, b] = m;
+      const aTrim = (a ?? "").trim();
+      const bTrim = (b ?? "").trim();
+      const rewrite =
+        `Rewrite as a threshold or conditional claim, e.g.: ` +
+        `"Under conditions C, ${aTrim || "X"} holds above threshold T (vs. ${bTrim || "Y"})." ` +
+        `Specify C and T so the hypothesis is testable against a measurement path.`;
+      return {
+        isBinary: true,
+        reason: `binary framing detected (${label}): "${m[0].slice(0, 80)}"`,
+        detectedPattern: label,
+        rewriteSuggestion: rewrite,
+      };
+    }
+  }
+  return { isBinary: false, reason: "no binary framing detected" };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INACCESSIBLE-SOURCE AGE GATE (added 2026-05-07)
+//
+// Live rec from 5/7: stale-retired hypotheses depended on externally
+// unavailable data. The current data-source gate already rejects an
+// inaccessible source on the first transition attempt, but a hypothesis
+// can be created in `forming` with no measurement path at all and sit
+// there indefinitely while the operator hopes a path will materialise.
+//
+// This helper inspects how long a forming hypothesis has been blocked on
+// an inaccessible / missing source. If the operator has not provided an
+// accessible path within DATA_SOURCE_GRACE_DAYS (default 7), the helper
+// recommends auto-archiving to `speculative-watchlist` (an existing
+// state — no new lifecycle state is invented). The caller decides whether
+// to act; this is a recommendation, not an automatic mutation.
+//
+// The 7-day window matches the cadence in the live rec ("If no accessible
+// source exists within 7 days, auto-archive to speculative rather than
+// consuming active slots") and is configurable per call.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const DATA_SOURCE_GRACE_DAYS = 7;
+
+export type InaccessibleSourceAgeOutcome =
+  | { shouldArchive: false; reason: string }
+  | {
+      shouldArchive: true;
+      reason: string;
+      ageDays: number;
+      recommendedRoute: "speculative-watchlist";
+    };
+
+export function evaluateInaccessibleSourceAge(
+  input: {
+    status?: string;
+    dataSourceGateBlockedAt?: string;
+    measurementPath?: string;
+    measurementPathAccessible?: boolean;
+  },
+  now: Date = new Date(),
+  graceDays: number = DATA_SOURCE_GRACE_DAYS,
+): InaccessibleSourceAgeOutcome {
+  // Only relevant when the hypothesis is still in `forming` and was
+  // blocked by the data-source gate at some point.
+  const status = (input.status ?? "").toLowerCase();
+  if (status && status !== "forming") {
+    return { shouldArchive: false, reason: `status=${status} — only forming hypotheses are evaluated` };
+  }
+  const blockedAt = input.dataSourceGateBlockedAt;
+  if (!blockedAt) {
+    return { shouldArchive: false, reason: "never blocked by data-source gate" };
+  }
+
+  // If the operator has since provided an accessible path, the block is
+  // resolved — nothing to archive.
+  const path = (input.measurementPath ?? "").trim();
+  if (path.length >= 8 && input.measurementPathAccessible !== false) {
+    return { shouldArchive: false, reason: "measurement path supplied since block" };
+  }
+
+  const blockedTs = Date.parse(blockedAt);
+  if (!Number.isFinite(blockedTs)) {
+    return { shouldArchive: false, reason: "dataSourceGateBlockedAt unparseable" };
+  }
+  const ageMs = now.getTime() - blockedTs;
+  const ageDays = ageMs / (1000 * 60 * 60 * 24);
+  if (ageDays < graceDays) {
+    return { shouldArchive: false, reason: `${ageDays.toFixed(1)}d since block, grace=${graceDays}d` };
+  }
+  return {
+    shouldArchive: true,
+    reason:
+      `forming hypothesis blocked by data-source gate ${ageDays.toFixed(1)}d ago ` +
+      `(grace=${graceDays}d) without an accessible measurement path. ` +
+      `Recommend routing to speculative-watchlist.`,
+    ageDays,
+    recommendedRoute: "speculative-watchlist",
+  };
+}
