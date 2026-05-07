@@ -115,7 +115,7 @@ import { takeSnapshot, getEvolutionHistory, getLatestSnapshot, scheduleEvolution
 import { runResearchScan, getScannerState, scheduleResearchScan, scanGoalsForResearch } from "./researchScanner.js";
 import { generateArticleCard } from "./articleImageCard.js";
 import { runDailyCycle, getBriefingState, scheduleDailyCycle } from "./dailyCycleEngine.js";
-import { getPublicStatus, getPublicProgress, getPublicActivity, getPublicGoals, getPublicResearch, getPublicMetacognition, getPublicBreakthroughs, getPublicAspirations, getPublicPredictions, getPublicCorrections, getPublicEval } from "./publicApi.js";
+import { getPublicStatus, getPublicProgress, getPublicActivity, getPublicGoals, getPublicResearch, getPublicMetacognition, getPublicBreakthroughs, getPublicAspirations, getPublicPredictions, getPublicCorrections, getPublicEval, getPublicReasoningQuality } from "./publicApi.js";
 import { getPublishedManuscripts, getPublicManuscriptById } from "./publicResearchManuscripts.js";
 import { getReflections, getStyleRules, deleteStyleRule, runReflection } from "./reflectionEngine.js";
 import {
@@ -5035,6 +5035,35 @@ needsHelp: true only when you genuinely need his direction or information`,
       res.set(publicCacheHeaders).json(getPublicEval());
     } catch (e: any) {
       res.status(500).json({ error: "Failed to fetch eval" });
+    }
+  });
+
+  // PR #288 — provisional Grammar v2.6 reasoning-quality scorecards.
+  // Read-only observability; no gating signal. Mirrors the
+  // `provisional`/`autoApply` invariants of the underlying harness.
+  app.get("/api/public/reasoning-quality", (req, res) => {
+    try {
+      const limitRaw = Number(req.query.limit);
+      const limit = Number.isFinite(limitRaw) && limitRaw > 0
+        ? Math.min(100, Math.floor(limitRaw))
+        : 25;
+      res.set(publicCacheHeaders).json(getPublicReasoningQuality(limit));
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to fetch reasoning quality" });
+    }
+  });
+
+  // Internal/AgentHQ alias — same payload, no public-cache headers so the
+  // operator dashboard sees fresh data on each refetch interval.
+  app.get("/api/reasoning-quality", (req, res) => {
+    try {
+      const limitRaw = Number(req.query.limit);
+      const limit = Number.isFinite(limitRaw) && limitRaw > 0
+        ? Math.min(100, Math.floor(limitRaw))
+        : 25;
+      res.json(getPublicReasoningQuality(limit));
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to fetch reasoning quality" });
     }
   });
 
