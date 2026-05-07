@@ -42,6 +42,7 @@ import { verifyClaims } from "./claimVerifier.js";
 import { extractClaimsAndComments } from "./claimExtractor.js";
 import { buildResearchPack } from "./researchPack.js";
 import { buildSharedClaimLaneContractBlock } from "./claimLaneContract.js";
+import { recordEngineQuarantine } from "./engineQuarantineStore.js";
 const GROK_URL          = LLM_BASE_URL;
 const GROK_SEARCH_URL   = LLM_RESPONSE_URL;
 const SIGNAL_STATE_FILE = dataPath("signal_brief_state.json");
@@ -346,6 +347,26 @@ Return JSON:
       const signalExtraction = extractClaimsAndComments(post, verdict.verifierReport, []);
       for (const ec of signalExtraction.editorComments) {
         console.error(`  editor: [${ec.action}] sentence#${ec.sentenceIndex} ${ec.reason}`);
+      }
+      // PR #283 — persist the rejected draft so the operator can see it on
+      // the dashboard. Mirrors news-quarantine behavior so a missing Signal
+      // morning isn't silent in the UI. Verifier gate stays hard — this is
+      // observability, not bypass.
+      try {
+        const draft = recordEngineQuarantine({
+          engine:             "signal",
+          severity:           verdict.severity,
+          text:               post,
+          topic:              `306 SIGNAL Brief #${briefNumber}`,
+          unsupportedReasons: verdict.unsupportedClaims.map(c => `${c.reason}: ${c.sentence.slice(0, 200)}`),
+          verifierReport:     verdict.verifierReport,
+          editorComments:     signalExtraction.editorComments,
+          claims:             signalExtraction.claims,
+          references:         signalExtraction.references,
+        });
+        console.error(`[SignalBrief] Quarantined draft ${draft.id} (verifier hard-fail)`);
+      } catch (storeErr: any) {
+        console.error(`[SignalBrief] Failed to write quarantine draft:`, storeErr?.message ?? String(storeErr));
       }
       return null;
     }

@@ -7,6 +7,8 @@ import { VerifierReport, type VerifierReportData } from "@/components/VerifierRe
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type DraftEngine = "article" | "podcast" | "breakthrough" | "blog";
+type QuarantineEngine = "news" | "signal" | "academy";
+type Filter = "all" | DraftEngine | QuarantineEngine;
 
 interface ArticleDraft {
   source: "article";
@@ -43,7 +45,26 @@ interface TweetDraft {
   };
 }
 
-type AnyDraft = ArticleDraft | TweetDraft;
+// PR #283 — review-only quarantine record for short-form post engines whose
+// verifier hard-fail path used to silently drop the draft. These never
+// posted; surfaced here so the operator can see "the dispatch didn't go out
+// and here's why" without trawling Railway logs. No mark-posted action —
+// they didn't post — and no rerun-with-bypass.
+interface QuarantineDraft {
+  source: "quarantine";
+  id: string;
+  engine: QuarantineEngine;
+  generatedAt: string;
+  content: string;
+  topic?: string;
+  severity?: "PASS" | "SOFT_WARN" | "HARD_FAIL";
+  unsupportedCount?: number;
+  unsupportedReasons?: string[];
+  verifierReport?: VerifierReportData;
+  quarantineSource?: string;
+}
+
+type AnyDraft = ArticleDraft | TweetDraft | QuarantineDraft;
 
 interface DraftsResponse {
   drafts: AnyDraft[];
@@ -53,6 +74,9 @@ interface DraftsResponse {
     podcast: number;
     breakthrough: number;
     blog: number;
+    news?: number;
+    signal?: number;
+    academy?: number;
   };
 }
 
@@ -67,21 +91,27 @@ function timeAgo(iso: string | null | undefined): string {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-const ENGINE_ACCENT: Record<DraftEngine, string> = {
+const ENGINE_ACCENT: Record<DraftEngine | QuarantineEngine, string> = {
   article:      "#2dd4bf",
   podcast:      "#a78bfa",
   breakthrough: "#f97316",
   blog:         "#60a5fa",
+  news:         "#fbbf24",
+  signal:       "#34d399",
+  academy:      "#f472b6",
 };
 
-const ENGINE_LABEL: Record<DraftEngine, string> = {
+const ENGINE_LABEL: Record<DraftEngine | QuarantineEngine, string> = {
   article:      "DEEP READ",
   podcast:      "PODCAST",
   breakthrough: "BREAKTHROUGH",
   blog:         "BLOG",
+  news:         "NEWS",
+  signal:       "SIGNAL",
+  academy:      "ACADEMY",
 };
 
-type Filter = "all" | DraftEngine;
+const QUARANTINE_ENGINES: QuarantineEngine[] = ["news", "signal", "academy"];
 
 // ── Page ───────────────────────────────────────────────────────────────────
 
@@ -102,19 +132,27 @@ export default function Drafts() {
     return drafts.filter(d => d.engine === filter);
   }, [drafts, filter]);
 
-  // Article drafts live under /api/article/drafts/*; tweet drafts under /api/tweet-drafts/*.
+  // Article drafts → /api/article/drafts/*; tweet drafts → /api/tweet-drafts/*;
+  // quarantines (news/signal/academy) → /api/quarantine/:engine/:id (DELETE only).
   function endpointBase(d: AnyDraft): string {
-    return d.source === "article" ? "/api/article/drafts" : "/api/tweet-drafts";
+    if (d.source === "article") return "/api/article/drafts";
+    if (d.source === "tweet")   return "/api/tweet-drafts";
+    return `/api/quarantine/${d.engine}`;
   }
 
   async function copyContent(d: AnyDraft) {
-    // For articles, prefer headline + body. For tweets, content is already the full copy.
     const text = d.source === "article"
       ? `${d.headline}\n\n${d.body}`
       : d.content;
     try {
       await navigator.clipboard.writeText(text);
-      toast({ title: d.source === "article" ? "Draft copied — paste into X Article composer" : "Tweet copied — paste into X" });
+      toast({
+        title: d.source === "article"
+          ? "Draft copied — paste into X Article composer"
+          : d.source === "quarantine"
+            ? "Quarantined draft copied — review claims before any rewrite"
+            : "Tweet copied — paste into X",
+      });
     } catch {
       toast({ title: "Copy failed", variant: "destructive" });
     }
@@ -130,6 +168,7 @@ export default function Drafts() {
   }
 
   async function markPosted(d: AnyDraft) {
+    if (d.source === "quarantine") return; // never posted; nothing to mark
     const postedUrl = window.prompt("Posted URL (optional — press OK to record without URL):") ?? undefined;
     const body = d.source === "article" ? { tweetUrl: postedUrl } : { postedUrl };
     try {
@@ -141,11 +180,15 @@ export default function Drafts() {
   }
 
   async function deleteDraft(d: AnyDraft) {
-    if (!window.confirm("Delete this draft? This cannot be undone.")) return;
+    const isQuarantine = d.source === "quarantine";
+    const msg = isQuarantine
+      ? "Acknowledge and clear this quarantined draft? It never posted; this only removes the record from the inbox."
+      : "Delete this draft? This cannot be undone.";
+    if (!window.confirm(msg)) return;
     try {
       const r = await apiRequest("DELETE", `${endpointBase(d)}/${d.id}`);
       const out = await r.json();
-      if (out.ok) { toast({ title: "Draft deleted" }); refetch(); }
+      if (out.ok) { toast({ title: isQuarantine ? "Quarantine cleared" : "Draft deleted" }); refetch(); }
       else toast({ title: out.error ?? "Failed", variant: "destructive" });
     } catch { toast({ title: "Server error", variant: "destructive" }); }
   }
@@ -161,6 +204,7 @@ export default function Drafts() {
         </h1>
         <p style={{ fontSize: "15px", color: "rgba(227,229,228,0.68)", margin: 0, lineHeight: 1.6 }}>
           Every engine with auto-post turned off writes here first. Review, copy into X, mark as posted — or delete.
+          Verifier-blocked News, Signal, and Academy drafts also land here so a missed dispatch is visible.
         </p>
       </div>
 
@@ -196,13 +240,30 @@ export default function Drafts() {
           active={filter === "blog"}
           onClick={() => setFilter("blog")}
         />
+        {QUARANTINE_ENGINES.map(eng => {
+          const n = counts[eng] ?? 0;
+          if (n === 0 && filter !== eng) return null;
+          return (
+            <Chip
+              key={eng}
+              label={`${ENGINE_LABEL[eng]} ⚠ (${n})`}
+              accent={ENGINE_ACCENT[eng]}
+              active={filter === eng}
+              onClick={() => setFilter(eng)}
+            />
+          );
+        })}
       </div>
 
       {/* List */}
       {isLoading ? (
         <Empty text="Loading drafts…" />
       ) : visible.length === 0 ? (
-        <Empty text={filter === "all" ? "No open drafts. Engines with auto-post off will queue work here." : `No open ${ENGINE_LABEL[filter as DraftEngine]} drafts.`} />
+        <Empty text={
+          filter === "all"
+            ? "No open drafts. Engines with auto-post off will queue work here."
+            : `No open ${ENGINE_LABEL[filter as DraftEngine | QuarantineEngine]} drafts.`
+        } />
       ) : (
         <div>
           {visible.map(d => (
@@ -211,7 +272,7 @@ export default function Drafts() {
               draft={d}
               onCopyContent={() => copyContent(d)}
               onCopyTeaser={d.source === "article" ? () => copyTeaser(d) : undefined}
-              onMarkPosted={() => markPosted(d)}
+              onMarkPosted={d.source !== "quarantine" ? () => markPosted(d) : undefined}
               onDelete={() => deleteDraft(d)}
             />
           ))}
@@ -270,10 +331,10 @@ function DraftCard({
   draft: AnyDraft;
   onCopyContent: () => void;
   onCopyTeaser?: () => void;
-  onMarkPosted: () => void;
+  onMarkPosted?: () => void;
   onDelete: () => void;
 }) {
-  const accent = ENGINE_ACCENT[draft.engine as DraftEngine];
+  const accent = ENGINE_ACCENT[draft.engine as DraftEngine | QuarantineEngine];
   // Both the top long-form card (tweet/engine=article) and the bottom Deep
   // Read card (article-source) share engine="article", but they need
   // different badges: the top card is the publish-ready manuscript
@@ -282,7 +343,7 @@ function DraftCard({
   const isArticleLongForm = draft.source === "tweet" && draft.engine === "article";
   const label = isArticleLongForm
     ? "ARTICLE"
-    : ENGINE_LABEL[draft.engine as DraftEngine];
+    : ENGINE_LABEL[draft.engine as DraftEngine | QuarantineEngine];
 
   // Source display: article drafts have sourceTitle/sourceUrl; tweet drafts may have metadata.sourceTitle/URL or episodeUrl.
   const meta = draft.source === "tweet" ? draft.metadata : undefined;
@@ -300,6 +361,8 @@ function DraftCard({
     ? (draft.content.trim().split(/\s+/).filter(Boolean).length)
     : null;
   const articleVerifierReport = draft.source === "article" ? draft.verifierReport : undefined;
+  const quarantineVerifierReport = draft.source === "quarantine" ? draft.verifierReport : undefined;
+  const isQuarantine = draft.source === "quarantine";
 
   return (
     <div style={{
@@ -320,7 +383,7 @@ function DraftCard({
           padding:      "3px 8px",
           border:       `1px solid ${accent}`,
         }}>
-          [306 {label}]
+          [306 {label}]{isQuarantine ? " · QUARANTINED" : ""}
         </span>
         <span style={{ fontSize: "12px", fontFamily: "monospace", color: "rgba(227,229,228,0.50)" }}>
           {timeAgo(draft.generatedAt)}
@@ -331,6 +394,13 @@ function DraftCard({
       {draft.source === "article" && (
         <div style={{ fontSize: "16px", fontWeight: 700, color: accent, marginBottom: "6px", lineHeight: 1.3 }}>
           {draft.headline}
+        </div>
+      )}
+
+      {/* Quarantine topic line (signal/academy) */}
+      {isQuarantine && draft.topic && (
+        <div style={{ fontSize: "14px", fontWeight: 700, color: accent, marginBottom: "6px", lineHeight: 1.3 }}>
+          {draft.topic}
         </div>
       )}
 
@@ -357,7 +427,42 @@ function DraftCard({
         </div>
       )}
 
+      {/* Quarantine verifier summary line (compact reason header). */}
+      {isQuarantine && (
+        <div style={{
+          color: "#f87171",
+          fontFamily: "monospace",
+          fontSize: "12px",
+          marginBottom: "8px",
+        }}>
+          {draft.severity ?? "HARD_FAIL"} — verifier blocked dispatch
+          {typeof draft.unsupportedCount === "number" ? ` · ${draft.unsupportedCount} unsupported claim(s)` : ""}
+        </div>
+      )}
+
+      {/* Quarantine: top reasons listed inline (verifier report below has full detail). */}
+      {isQuarantine && draft.unsupportedReasons && draft.unsupportedReasons.length > 0 && (
+        <ul style={{
+          fontSize:   "12px",
+          color:      "rgba(248,113,113,0.85)",
+          fontFamily: "monospace",
+          margin:     "0 0 12px 0",
+          paddingLeft:"18px",
+          lineHeight: 1.55,
+        }}>
+          {draft.unsupportedReasons.slice(0, 5).map((r, i) => (
+            <li key={i} style={{ marginBottom: "2px" }}>{r}</li>
+          ))}
+          {draft.unsupportedReasons.length > 5 && (
+            <li style={{ color: "rgba(227,229,228,0.45)" }}>
+              +{draft.unsupportedReasons.length - 5} more — see verifier report
+            </li>
+          )}
+        </ul>
+      )}
+
       {articleVerifierReport && <VerifierReport report={articleVerifierReport} compact />}
+      {quarantineVerifierReport && <VerifierReport report={quarantineVerifierReport} compact />}
 
       {/* Content preview */}
       <div style={{
@@ -388,7 +493,7 @@ function DraftCard({
       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
         <button onClick={onCopyContent}
           style={{ background: "#f97316", color: "#0e0f10", border: "none", padding: "6px 14px", fontFamily: "monospace", fontSize: "12px", fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em" }}>
-          {draft.source === "article" ? "COPY ARTICLE" : "COPY CONTENT"}
+          {draft.source === "article" ? "COPY ARTICLE" : isQuarantine ? "COPY DRAFT" : "COPY CONTENT"}
         </button>
         {onCopyTeaser && (
           <button onClick={onCopyTeaser}
@@ -396,13 +501,15 @@ function DraftCard({
             COPY TEASER
           </button>
         )}
-        <button onClick={onMarkPosted}
-          style={{ background: "transparent", color: "#4ade80", border: "1px solid #4ade80", padding: "6px 14px", fontFamily: "monospace", fontSize: "12px", fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em" }}>
-          MARK POSTED
-        </button>
+        {onMarkPosted && (
+          <button onClick={onMarkPosted}
+            style={{ background: "transparent", color: "#4ade80", border: "1px solid #4ade80", padding: "6px 14px", fontFamily: "monospace", fontSize: "12px", fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em" }}>
+            MARK POSTED
+          </button>
+        )}
         <button onClick={onDelete}
           style={{ background: "transparent", color: "rgba(248,113,113,0.8)", border: "1px solid rgba(248,113,113,0.3)", padding: "6px 14px", fontFamily: "monospace", fontSize: "12px", cursor: "pointer", letterSpacing: "0.08em" }}>
-          DELETE
+          {isQuarantine ? "ACKNOWLEDGE & CLEAR" : "DELETE"}
         </button>
       </div>
     </div>

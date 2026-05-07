@@ -37,6 +37,7 @@ import { verifyClaims } from "./claimVerifier.js";
 import { extractClaimsAndComments } from "./claimExtractor.js";
 import { buildResearchPack } from "./researchPack.js";
 import { buildSharedClaimLaneContractBlock } from "./claimLaneContract.js";
+import { recordEngineQuarantine } from "./engineQuarantineStore.js";
 const GROK_URL = LLM_BASE_URL;
 const ACADEMY_STATE_FILE = dataPath("academy_state.json");
 const TRACKING_START = new Date("2026-03-08T00:00:00Z");
@@ -528,6 +529,25 @@ export async function postAcademyEpisode(xWrite: any): Promise<void> {
         const academyExtraction = extractClaimsAndComments(postText, verdict.verifierReport, []);
         for (const ec of academyExtraction.editorComments) {
           console.error(`  editor: [${ec.action}] sentence#${ec.sentenceIndex} ${ec.reason}`);
+        }
+        // PR #283 — persist the rejected episode draft so the operator can
+        // see it on the dashboard alongside News and Signal quarantines.
+        // Verifier gate stays hard — this is observability, not bypass.
+        try {
+          const draft = recordEngineQuarantine({
+            engine:             "academy",
+            severity:           verdict.severity,
+            text:               postText,
+            topic:              `EP${state.totalEpisodes + 1} ${topic.track}: ${topic.concept}`,
+            unsupportedReasons: verdict.unsupportedClaims.map(c => `${c.reason}: ${c.sentence.slice(0, 200)}`),
+            verifierReport:     verdict.verifierReport,
+            editorComments:     academyExtraction.editorComments,
+            claims:             academyExtraction.claims,
+            references:         academyExtraction.references,
+          });
+          console.error(`[Academy] Quarantined draft ${draft.id} (verifier hard-fail)`);
+        } catch (storeErr: any) {
+          console.error(`[Academy] Failed to write quarantine draft:`, storeErr?.message ?? String(storeErr));
         }
         // Advance rotation pointer so a retry doesn't immediately re-pick
         // the same topic. Without this, every retry on a verifier-rejected

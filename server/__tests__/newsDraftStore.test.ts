@@ -16,7 +16,7 @@ import path from "path";
 const TMP_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "agent306-news-store-"));
 process.env.DATA_DIR = TMP_DATA_DIR;
 
-const { recordNewsDraft, readNewsDrafts } = await import("../newsDraftStore.js");
+const { recordNewsDraft, readNewsDrafts, deleteNewsDraft } = await import("../newsDraftStore.js");
 
 let pass = 0;
 let fail = 0;
@@ -75,6 +75,15 @@ recordNewsDraft({
 });
 drafts = readNewsDrafts();
 check("read skips malformed lines", drafts.length === 3, `got ${drafts.length}`);
+
+// 6. Delete by id (PR #283 — used by the dashboard's per-card DELETE action).
+const removed = deleteNewsDraft(r1.id);
+check("deleteNewsDraft() returns true for existing id", removed);
+drafts = readNewsDrafts();
+check("deleted record no longer in store", !drafts.some(d => d.id === r1.id));
+check("readNewsDrafts() returns 2 records after delete", drafts.length === 2, `got ${drafts.length}`);
+const removedAgain = deleteNewsDraft("nonexistent_news_id");
+check("deleteNewsDraft() returns false for unknown id", !removedAgain);
 
 // Cleanup.
 fs.rmSync(TMP_DATA_DIR, { recursive: true, force: true });
