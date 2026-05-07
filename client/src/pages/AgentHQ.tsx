@@ -3224,6 +3224,13 @@ export default function AgentHQ() {
     refetchInterval: 60_000,
   });
 
+  // PR #288 — provisional Grammar v2.6 reasoning-quality scorecards.
+  // Read-only observability; no gating signal in the UI.
+  const { data: reasoningQualityData } = useQuery<any>({
+    queryKey: ["/api/reasoning-quality"],
+    refetchInterval: 60_000,
+  });
+
   const { data: reflectionsData, refetch: refetchReflections } = useQuery<{ reflections: any[] }>({
     queryKey: ["/api/reflections"],
     refetchInterval: 30_000,
@@ -3435,6 +3442,116 @@ export default function AgentHQ() {
               <span style={{ ...mono, fontSize: "0.76rem", fontWeight: 700, color: GREEN }}>{metaData.conversationStats?.relationshipsTracked ?? 0}</span>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── PR #288 — Reasoning Quality (Grammar v2.6, observational/provisional) ── */}
+      {reasoningQualityData && (
+        <div style={{ marginBottom: "1.25rem", border: "1px solid rgba(167,139,250,0.18)", background: "rgba(167,139,250,0.025)", padding: "0.85rem 1.25rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "0.7rem", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "1.05rem" }}>🜁</span>
+            <span style={{ ...mono, fontSize: "0.78rem", fontWeight: 700, color: PURPLE, textTransform: "uppercase" as const, letterSpacing: "0.12em" }}>
+              Reasoning Quality
+            </span>
+            <span style={{ ...mono, fontSize: "0.62rem", color: "rgba(227,229,228,0.40)", border: "1px solid rgba(167,139,250,0.30)", padding: "1px 8px" }}>
+              Grammar v2.6 · provisional · observational
+            </span>
+            <span style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.40)" }}>
+              No gating · no auto-apply · operator review only
+            </span>
+          </div>
+
+          {/* Summary row */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+            <div style={{ padding: "0.6rem", border: "1px solid rgba(227,229,228,0.12)", background: "rgba(227,229,228,0.04)" }}>
+              <p style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 6px" }}>Scorecards</p>
+              <p style={{ ...mono, fontSize: "1rem", fontWeight: 700, color: PURPLE, margin: "0 0 4px" }}>
+                {reasoningQualityData.summary?.total ?? 0}
+              </p>
+              <p style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.40)", margin: 0 }}>
+                {reasoningQualityData.summary?.lastRecordedAt
+                  ? new Date(reasoningQualityData.summary.lastRecordedAt).toLocaleString()
+                  : "no entries yet"}
+              </p>
+            </div>
+            <div style={{ padding: "0.6rem", border: "1px solid rgba(227,229,228,0.12)", background: "rgba(227,229,228,0.04)" }}>
+              <p style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 6px" }}>Bands</p>
+              <p style={{ ...mono, fontSize: "0.72rem", color: "rgba(227,229,228,0.85)", margin: 0, lineHeight: 1.4 }}>
+                <span style={{ color: GREEN }}>{reasoningQualityData.summary?.bandCounts?.high ?? 0} high</span>
+                {" · "}
+                <span style={{ color: TEAL }}>{reasoningQualityData.summary?.bandCounts?.medium ?? 0} med</span>
+                {" · "}
+                <span style={{ color: YELLOW }}>{reasoningQualityData.summary?.bandCounts?.review ?? 0} review</span>
+                {" · "}
+                <span style={{ color: RED }}>{reasoningQualityData.summary?.bandCounts?.low ?? 0} low</span>
+              </p>
+            </div>
+            <div style={{ padding: "0.6rem", border: "1px solid rgba(227,229,228,0.12)", background: "rgba(227,229,228,0.04)" }}>
+              <p style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 6px" }}>Flourishing F (avg)</p>
+              <p style={{ ...mono, fontSize: "1rem", fontWeight: 700, color: TEAL, margin: "0 0 4px" }}>
+                {reasoningQualityData.summary?.recentFlourishingAvg != null
+                  ? reasoningQualityData.summary.recentFlourishingAvg.toFixed(2)
+                  : "—"}
+              </p>
+              <p style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.40)", margin: 0 }}>
+                rolling, last {Math.max(10, (reasoningQualityData.entries ?? []).length || 0)}
+              </p>
+            </div>
+            <div style={{ padding: "0.6rem", border: "1px solid rgba(227,229,228,0.12)", background: "rgba(227,229,228,0.04)" }}>
+              <p style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase" as const, letterSpacing: "0.15em", margin: "0 0 6px" }}>Recent failed conditions</p>
+              <p style={{ ...mono, fontSize: "0.62rem", color: "rgba(227,229,228,0.55)", margin: 0, lineHeight: 1.4, wordBreak: "break-word" }}>
+                {(reasoningQualityData.summary?.recentFailedConditions ?? []).length > 0
+                  ? (reasoningQualityData.summary?.recentFailedConditions ?? []).join(", ")
+                  : "none in window"}
+              </p>
+            </div>
+          </div>
+
+          {/* Recent scorecards table */}
+          {(reasoningQualityData.entries ?? []).length > 0 && (
+            <div style={{ marginTop: 10, border: "1px solid rgba(227,229,228,0.10)" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "150px 110px 80px 80px 80px 1fr", gap: 8, padding: "0.45rem 0.6rem", background: "rgba(227,229,228,0.04)", borderBottom: "1px solid rgba(227,229,228,0.10)" }}>
+                <span style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase" as const, letterSpacing: "0.12em" }}>When</span>
+                <span style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase" as const, letterSpacing: "0.12em" }}>Engine/Step</span>
+                <span style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase" as const, letterSpacing: "0.12em" }}>Band</span>
+                <span style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase" as const, letterSpacing: "0.12em" }}>F</span>
+                <span style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase" as const, letterSpacing: "0.12em" }}>σ</span>
+                <span style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.48)", textTransform: "uppercase" as const, letterSpacing: "0.12em" }}>Notes</span>
+              </div>
+              {(reasoningQualityData.entries ?? []).slice(0, 8).map((e: any) => {
+                const bandColor =
+                  e.band === "high" ? GREEN :
+                  e.band === "medium" ? TEAL :
+                  e.band === "review" ? YELLOW :
+                  RED;
+                const failed = (e.failedConditions ?? []).join(", ");
+                const ghReasons = (e.gradientHack?.reasons ?? []).join(", ");
+                const notesParts: string[] = [];
+                if (failed) notesParts.push(`failed: ${failed}`);
+                if (ghReasons) notesParts.push(`gh(${e.gradientHack?.score ?? 0}): ${ghReasons}`);
+                if (e.humbleYesDetected) notesParts.push("humble-yes");
+                if (e.gracefulExitDetected) notesParts.push("graceful-exit");
+                if (e.selfObviationRecommended) notesParts.push("selfObviation⚠");
+                const notes = notesParts.join(" · ") || "—";
+                return (
+                  <div key={e.id} style={{ display: "grid", gridTemplateColumns: "150px 110px 80px 80px 80px 1fr", gap: 8, padding: "0.4rem 0.6rem", borderTop: "1px solid rgba(227,229,228,0.06)" }}>
+                    <span style={{ ...mono, fontSize: "0.62rem", color: "rgba(227,229,228,0.65)" }}>
+                      {e.recordedAt ? new Date(e.recordedAt).toLocaleString() : "—"}
+                    </span>
+                    <span style={{ ...mono, fontSize: "0.62rem", color: "rgba(227,229,228,0.65)" }}>{e.engineStep}</span>
+                    <span style={{ ...mono, fontSize: "0.66rem", fontWeight: 700, color: bandColor, textTransform: "uppercase" as const }}>{e.band}</span>
+                    <span style={{ ...mono, fontSize: "0.62rem", color: "rgba(227,229,228,0.75)" }}>{typeof e.flourishingProxy === "number" ? e.flourishingProxy.toFixed(2) : "—"}</span>
+                    <span style={{ ...mono, fontSize: "0.62rem", color: "rgba(227,229,228,0.75)" }}>{typeof e.sigma === "number" ? e.sigma.toFixed(2) : "—"}</span>
+                    <span style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.55)", lineHeight: 1.4, wordBreak: "break-word" }}>{notes}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <p style={{ ...mono, fontSize: "0.58rem", color: "rgba(227,229,228,0.35)", marginTop: 8, marginBottom: 0, fontStyle: "italic" }}>
+            Provisional Grammar v2.6 lens — deterministic heuristics over reasoning traces. Does NOT gate publishing, recommendations, or hypothesis promotion. Operator review only.
+          </p>
         </div>
       )}
 

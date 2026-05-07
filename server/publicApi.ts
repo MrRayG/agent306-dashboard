@@ -19,6 +19,11 @@ import { getBreakthroughs, getPredictions } from "./breakthroughDetector.js";
 import { getCorrections } from "./reasoningEngine.js";
 import { get306EvalResults } from "./evalEngine.js";
 import { getLedgerSummary, getSelfChangeMetrics } from "./insightLedger.js";
+import {
+  readReasoningQualityTail,
+  summarizeReasoningQuality,
+  type ReasoningQualityEntry,
+} from "./reasoningQualityStore.js";
 
 // ── In-memory cache (30-second TTL) ─────────────────────────
 
@@ -694,3 +699,50 @@ export function getPublicEval() {
   });
 }
 
+// -- 11. Reasoning Quality (PR #288) ---------------------------------------
+//
+// Read-only observability surface for the provisional Grammar v2.6 scorecard
+// log. The shape of each entry mirrors `ReasoningQualityScorecard` from
+// reasoningQualityHarness.ts, with a small wrapper carrying engine/step,
+// cycleId, and recordedAt for dashboard rendering. Every payload pins
+// `provisional: true` and `autoApply: false` so downstream code cannot
+// mistake this for a gating signal.
+
+function projectEntry(e: ReasoningQualityEntry) {
+  return {
+    id: e.id,
+    recordedAt: e.recordedAt,
+    engineStep: e.engineStep,
+    cycleId: e.cycleId ?? null,
+    domain: e.domain ?? null,
+    band: e.scorecard.reasoningQualityBand,
+    consentVector: e.scorecard.consentVector,
+    sigma: e.scorecard.sigma,
+    stressEstimate: e.scorecard.stressEstimate,
+    invariantHeld: e.scorecard.invariantHeld,
+    failedConditions: e.scorecard.failedConditions,
+    humbleYesDetected: e.scorecard.humbleYesDetected,
+    gracefulExitDetected: e.scorecard.gracefulExitDetected,
+    selfObviationRecommended: e.scorecard.selfObviationRecommended,
+    gradientHack: e.scorecard.gradientHack,
+    flourishingProxy: e.scorecard.flourishingProxy,
+    deltaF: e.scorecard.deltaF,
+    limitations: e.scorecard.limitations,
+    provisional: e.scorecard.provisional,
+    autoApply: e.scorecard.autoApply,
+  };
+}
+
+export function getPublicReasoningQuality(limit = 25) {
+  return cached(`reasoning-quality:${limit}`, () => {
+    const tail = readReasoningQualityTail(limit);
+    const summary = summarizeReasoningQuality(Math.max(10, limit));
+    return {
+      provisional: true,
+      autoApply: false,
+      summary,
+      entries: tail.map(projectEntry),
+      generatedAt: new Date().toISOString(),
+    };
+  });
+}

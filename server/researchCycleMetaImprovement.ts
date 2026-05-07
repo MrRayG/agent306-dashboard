@@ -32,6 +32,14 @@ import {
 import { appendImprovementRecord, type ImprovementRecord } from "./improvementArchive.js";
 import { proposeRecommendation } from "./selfRecommendationEngine.js";
 import type { SelfRecommendation } from "@shared/schema";
+import {
+  scoreReasoningTrace,
+  type ReasoningQualityScorecard,
+} from "./reasoningQualityHarness.js";
+import {
+  appendReasoningQualityEntry,
+  readReasoningQualityEntries,
+} from "./reasoningQualityStore.js";
 
 // ── Heuristic thresholds for procedure-change suggestions ───────────────────
 
@@ -58,6 +66,12 @@ export interface MetaImprovementResult {
   recommendations: SelfRecommendation[];
   /** Plain-text summary suitable for cycle-end logging. */
   summary: string;
+  /**
+   * PR #288 — provisional reasoning-quality scorecard for this cycle's lesson
+   * trace. Observational only: never gates publishing, never auto-applies a
+   * change. `null` when scoring was disabled for the run.
+   */
+  reasoningScorecard: ReasoningQualityScorecard | null;
 }
 
 export interface RunMetaOptions {
@@ -69,6 +83,12 @@ export interface RunMetaOptions {
   recordsOverride?: CycleEvaluationRecord[];
   /** Disable proposal filing (tests). Default true (filing enabled). */
   fileRecommendations?: boolean;
+  /**
+   * PR #288 — disable observational reasoning-quality scoring (tests).
+   * Default true. When false, no scorecard is computed and no JSONL line
+   * is appended; the rest of the meta-improvement path is unchanged.
+   */
+  scoreReasoning?: boolean;
 }
 
 // ── Procedure-change detection ──────────────────────────────────────────────
@@ -214,6 +234,7 @@ function summarizeForArchive(stats: CycleStats, proposalCount: number): string {
  */
 export function runResearchCycleMetaImprovement(opts: RunMetaOptions = {}): MetaImprovementResult | null {
   const fileRecs = opts.fileRecommendations ?? true;
+  const doScore = opts.scoreReasoning ?? true;
   let cycleId: string;
   let records: CycleEvaluationRecord[];
 
@@ -255,18 +276,67 @@ export function runResearchCycleMetaImprovement(opts: RunMetaOptions = {}): Meta
   }
 
   const variantLabel = opts.variantLabel ?? `cycle/${cycleId}`;
+  const lessonText = summarizeForArchive(stats, filed.length);
   const archiveRecord = appendImprovementRecord({
     variantLabel,
     claim: `meta-improvement trace for cycle ${cycleId}`,
     overall: stats.passRate * 10, // archive expects 0-10; use passRate scaled
-    lesson: summarizeForArchive(stats, filed.length),
+    lesson: lessonText,
     proposesChange: filed.length > 0,
     selfRecommendationId: filed[0]?.id,
   });
 
+  // PR #288 — observational reasoning-quality score over the cycle's lesson
+  // trace. Scoring is pure / deterministic / cheap and the harness pins
+  // autoApply=false. The store rejects any tampered scorecard at the
+  // boundary. Nothing here gates publishing or modifies engine state.
+  let reasoningScorecard: ReasoningQualityScorecard | null = null;
+  if (doScore) {
+    try {
+      // Use prior cycle scorecards' flourishingProxy as recent history so
+      // the harness can compute a delta and (if persistently low) raise the
+      // self-obviation recommendation. Recommendation is observational —
+      // no caller in this PR consumes it for auto-action.
+      const recentHistory = readReasoningQualityEntries()
+        .slice(-5)
+        .map(e => e.scorecard.flourishingProxy)
+        .filter((n): n is number => typeof n === "number" && Number.isFinite(n));
+
+      reasoningScorecard = scoreReasoningTrace({
+        text: lessonText,
+        prompt: `cycle ${cycleId} meta-improvement summary`,
+        reportedConfidence: stats.passRate,
+        irreversibleCommit: false, // archive append is reversible-by-policy
+        alternativesConsidered: proposals.map(p => p.title),
+        sources: records.map(r => r.candidateRef).slice(0, 8),
+        domain: "research-cycle/meta-improvement",
+        recentFlourishingHistory: recentHistory,
+      });
+
+      appendReasoningQualityEntry({
+        engineStep: "research-cycle/meta-improvement",
+        cycleId,
+        domain: "lesson",
+        scorecard: reasoningScorecard,
+      });
+    } catch (e: any) {
+      console.warn(`[MetaImprovement] reasoning-quality scoring failed (non-fatal):`, e?.message ?? e);
+    }
+  }
+
   const summary =
-    `[MetaImprovement] cycle=${cycleId} ${summarizeForArchive(stats, filed.length)}`;
+    `[MetaImprovement] cycle=${cycleId} ${lessonText}` +
+    (reasoningScorecard
+      ? ` | reasoning-band=${reasoningScorecard.reasoningQualityBand} F=${reasoningScorecard.flourishingProxy} σ=${reasoningScorecard.sigma}`
+      : "");
   console.log(summary);
 
-  return { cycleId, stats, archiveRecord, recommendations: filed, summary };
+  return {
+    cycleId,
+    stats,
+    archiveRecord,
+    recommendations: filed,
+    summary,
+    reasoningScorecard,
+  };
 }
