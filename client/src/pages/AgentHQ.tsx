@@ -1344,6 +1344,7 @@ interface TriageRow {
   daysSinceActivity:   number;
   staleReason:         string;
   dataSourceGateReason?: string;
+  pendingConfirmation?: boolean;
 }
 
 function StalledHypothesisTriagePanel({ onChange }: { onChange: () => void }) {
@@ -1375,6 +1376,7 @@ function StalledHypothesisTriagePanel({ onChange }: { onChange: () => void }) {
 
   const rows = data?.rows ?? [];
   if (isLoading && rows.length === 0) return null;
+  const pendingCount = rows.filter(r => r.pendingConfirmation).length;
 
   return (
     <div style={{ background: "rgba(248,113,113,0.04)", border: "1px solid rgba(248,113,113,0.20)", padding: "0.85rem 1rem", marginBottom: "1rem" }}>
@@ -1382,9 +1384,14 @@ function StalledHypothesisTriagePanel({ onChange }: { onChange: () => void }) {
         <div>
           <p style={{ ...mono, fontSize: "0.78rem", color: RED, margin: 0, fontWeight: 700, letterSpacing: "0.06em" }}>
             STALLED TRIAGE — {rows.length} low-confidence research-gap hypotheses
+            {pendingCount > 0 && (
+              <span style={{ color: YELLOW, marginLeft: 8 }}>
+                · {pendingCount} pending confirmation (30d+)
+              </span>
+            )}
           </p>
           <p style={{ ...mono, fontSize: "0.66rem", color: DIM, margin: "3px 0 0" }}>
-            Sorted by days since last activity. One-click closure logs a closure timestamp and audit line. No bulk action.
+            Sorted by days since last activity. One-click closure logs a closure timestamp and audit line. No bulk action, no auto-archive.
           </p>
         </div>
         <button
@@ -1412,6 +1419,11 @@ function StalledHypothesisTriagePanel({ onChange }: { onChange: () => void }) {
                     <span style={{ ...mono, fontSize: "0.62rem", color: DIM, padding: "1px 5px" }}>
                       {r.status}
                     </span>
+                    {r.pendingConfirmation && (
+                      <span style={{ ...mono, fontSize: "0.62rem", color: YELLOW, border: `1px solid ${YELLOW}55`, padding: "1px 5px" }}>
+                        pending confirmation
+                      </span>
+                    )}
                     <span style={{ ...mono, fontSize: "0.62rem", color: DIMMER }}>{r.staleReason}</span>
                   </div>
                   <p style={{ ...mono, fontSize: "0.70rem", color: "#efefef", margin: 0, lineHeight: 1.35 }}>
@@ -2086,6 +2098,116 @@ function CategoryTag({ category }: { category: GoalCategory }) {
   );
 }
 
+// ── Goal Decision Panel ───────────────────────────────────────────────────────
+// Read-only operator decision aids for stalled and potentially-duplicate goals.
+// Surfaces:
+//   1. Stalled-milestone rows projecting the deciding milestone text side-by-
+//      side so the operator sees what's blocking each near-completion goal.
+//   2. Duplicate-goal clusters with a non-binding "carry-forward-higher"
+//      suggestion. No merge happens here — operator decides via existing
+//      status/abandon controls on the goal cards below.
+interface StalledMilestoneRow {
+  goalId:                string;
+  title:                 string;
+  category:              string;
+  totalMilestones:       number;
+  completedMilestones:   number;
+  decidingMilestoneText: string | null;
+  daysSinceProgress:     number;
+}
+interface DuplicateGoalRow {
+  normalizedTitle: string;
+  goals: Array<{
+    id:                  string;
+    title:               string;
+    status:              string;
+    category:            string;
+    completedMilestones: number;
+    totalMilestones:     number;
+    createdAt:           string;
+    updatedAt:           string;
+  }>;
+  suggestion: "carry-forward-higher" | "review";
+}
+function GoalDecisionPanel() {
+  const { data } = useQuery<{
+    stalledMilestones:   StalledMilestoneRow[];
+    duplicateCandidates: DuplicateGoalRow[];
+  }>({
+    queryKey: ["/api/goals/decision-panel"],
+    refetchOnWindowFocus: false,
+  });
+  const stalled = data?.stalledMilestones ?? [];
+  const dupes = data?.duplicateCandidates ?? [];
+  if (stalled.length === 0 && dupes.length === 0) return null;
+  return (
+    <div style={{ background: "rgba(251,191,36,0.04)", border: "1px solid rgba(251,191,36,0.20)", padding: "0.85rem 1rem", marginBottom: "1rem" }}>
+      <p style={{ ...mono, fontSize: "0.78rem", color: YELLOW, margin: "0 0 8px", fontWeight: 700, letterSpacing: "0.06em" }}>
+        DECISION PANEL — read-only
+      </p>
+      {stalled.length > 0 && (
+        <div style={{ marginBottom: dupes.length > 0 ? 12 : 0 }}>
+          <p style={{ ...mono, fontSize: "0.66rem", color: DIM, margin: "0 0 6px", letterSpacing: "0.06em", textTransform: "uppercase" as const }}>
+            Stalled milestone — deciding step ({stalled.length})
+          </p>
+          <div style={{ display: "flex", flexDirection: "column" as const, gap: 6 }}>
+            {stalled.map(r => (
+              <div key={r.goalId} style={{ background: "rgba(0,0,0,0.25)", border: `1px solid ${DIMMEST}`, padding: "0.5rem 0.65rem" }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4, flexWrap: "wrap" as const }}>
+                  <span style={{ ...mono, fontSize: "0.62rem", color: r.daysSinceProgress >= 14 ? RED : YELLOW, border: `1px solid ${DIMMEST}`, padding: "1px 5px" }}>
+                    {r.daysSinceProgress}d no progress
+                  </span>
+                  <span style={{ ...mono, fontSize: "0.62rem", color: DIM, padding: "1px 5px" }}>
+                    {r.completedMilestones}/{r.totalMilestones} done
+                  </span>
+                  <span style={{ ...mono, fontSize: "0.66rem", color: "#efefef" }}>{r.title}</span>
+                </div>
+                <p style={{ ...mono, fontSize: "0.66rem", color: DIMMER, margin: 0, lineHeight: 1.35 }}>
+                  next: {r.decidingMilestoneText ?? "(milestone text unavailable)"}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {dupes.length > 0 && (
+        <div>
+          <p style={{ ...mono, fontSize: "0.66rem", color: DIM, margin: "0 0 6px", letterSpacing: "0.06em", textTransform: "uppercase" as const }}>
+            Duplicate candidates — operator review ({dupes.length})
+          </p>
+          <div style={{ display: "flex", flexDirection: "column" as const, gap: 6 }}>
+            {dupes.map(d => (
+              <div key={d.normalizedTitle} style={{ background: "rgba(0,0,0,0.25)", border: `1px solid ${DIMMEST}`, padding: "0.5rem 0.65rem" }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4, flexWrap: "wrap" as const }}>
+                  <span style={{ ...mono, fontSize: "0.62rem", color: YELLOW, border: `1px solid ${DIMMEST}`, padding: "1px 5px" }}>
+                    {d.goals.length} active rows
+                  </span>
+                  <span style={{ ...mono, fontSize: "0.62rem", color: d.suggestion === "carry-forward-higher" ? TEAL : DIM, padding: "1px 5px" }}>
+                    {d.suggestion === "carry-forward-higher" ? "suggest: carry forward higher" : "suggest: review"}
+                  </span>
+                  <span style={{ ...mono, fontSize: "0.66rem", color: "#efefef" }}>{d.normalizedTitle}</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column" as const, gap: 3 }}>
+                  {d.goals.map(g => (
+                    <div key={g.id} style={{ ...mono, fontSize: "0.62rem", color: DIMMER, lineHeight: 1.4 }}>
+                      <span style={{ color: DIM }}>{g.completedMilestones}/{g.totalMilestones} </span>
+                      <span style={{ color: "#efefef" }}>{g.title}</span>
+                      <span style={{ color: DIMMEST }}> · id={g.id.slice(0, 12)} · {new Date(g.updatedAt).toLocaleDateString()}</span>
+                    </div>
+                  ))}
+                </div>
+                <p style={{ ...mono, fontSize: "0.60rem", color: DIMMEST, margin: "4px 0 0", fontStyle: "italic" as const }}>
+                  No automatic merge — use Abandon on the redundant row to keep the higher-progress one.
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Goals Tab ─────────────────────────────────────────────────────────────────
 function GoalsTab({ goals, stats, topics, refetch }: {
   goals:  AgentGoal[];
@@ -2251,6 +2373,7 @@ function GoalsTab({ goals, stats, topics, refetch }: {
 
   return (
     <div>
+      <GoalDecisionPanel />
       {/* Stats + controls */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem", flexWrap: "wrap" as const, gap: 8 }}>
         <div style={{ display: "flex", gap: 16 }}>

@@ -94,6 +94,21 @@ const GATE_PATTERNS = [
   /before\s+(?:any\s+)?([^\.]+?)\s+(?:moves?|transitions?)\s+from\s+\w+\s+to\s+\w+\s*,?\s*require\s+([^\.]+)/i,
   // "before forming any new hypothesis, require a measurement path field"
   /before\s+forming\s+(?:any\s+)?(?:new\s+)?([^\.,]+?)\s*,?\s*require\s+(?:a\s+|an\s+|the\s+)?([^\.]+)/i,
+  // "before promoting/moving/transitioning any new hypothesis from X to Y, apply a <kind> gate: ..."
+  // (added 2026-05-08: PR #282 added the 'forming→testing' data-source gate but
+  // SelfEvolution kept emitting the closely-related binary-check rephrasing
+  // — "...apply a binary-check gate: if it's structured as 'X is more accurate
+  // than Y', rewrite as a threshold or conditional claim. Log compliance and
+  // rejection rate." — which fell through to `none` because none of the
+  // existing patterns matched the "...apply a ... gate" framing without an
+  // explicit "implement/introduce/add" verb. Captures both the forming→testing
+  // transition and the gate descriptor so downstream classification still
+  // routes to gate_rule on a hypothesis target.)
+  /before\s+(?:promoting|advancing|moving|transitioning)\s+(?:any\s+)?(?:new\s+)?([^\.,]+?)\s+from\s+['"]?\w+['"]?\s+to\s+['"]?\w+['"]?\s*,?\s*(?:apply|enforce|run|use)\s+(?:a\s+|an\s+|the\s+)?([^\.:]+?\s+gate)\b/i,
+  // "apply a binary-check gate" / "apply the data-source gate" — front-loaded
+  // gate verb. Works without the from→to clause for cases like "Apply a binary-
+  // check gate before any forming→testing promotion."
+  /(?:apply|enforce|run)\s+(?:a\s+|an\s+|the\s+)?(binary[-\s]?check|threshold[-\s]?check|conditional[-\s]?check|data[-\s]?source|spectrum[-\s]?check|measurement[-\s]?path)\s+gate\b/i,
 ];
 
 const ARCHIVE_PATTERNS = [
@@ -258,10 +273,20 @@ export function translateAction(actionText: string, insightText: string = ""): T
     const m = a.match(pat);
     if (m) {
       const description = m[1]?.slice(0, 200) ?? "unspecified";
+      const target = inferGateTarget(a);
+      // Binary-check / spectrum-check gates carry the framingMode hint so
+      // downstream consumers (action enforcer, AgentHQ) treat them like the
+      // SPECTRUM_PATTERNS branch. Surface from any gate-descriptor capture
+      // group as well as from the raw action text.
+      const lowered = a.toLowerCase();
+      const params: Record<string, unknown> = { description, target };
+      if (/\bbinary[-\s]?check|\bspectrum[-\s]?check\b/.test(lowered)) {
+        params.framingMode = "spectrum";
+      }
       return {
         primitive: "gate_rule",
-        params: { description, target: inferGateTarget(a) },
-        verificationCriterion: `gate fires on each ${inferGateTarget(a)} entering the guarded state`,
+        params,
+        verificationCriterion: `gate fires on each ${target} entering the guarded state`,
         suggestedCategory: "identity",
         minFireCount: 3,
       };

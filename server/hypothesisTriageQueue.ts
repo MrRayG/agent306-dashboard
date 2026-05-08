@@ -43,6 +43,14 @@ export interface StalledHypothesisRow {
    * before deciding to archive.
    */
   dataSourceGateReason?: string;
+  /**
+   * Pending-confirmation flag (added 2026-05-08). True when the row is a
+   * stalled low-confidence hypothesis with NO evidence update in 30+ days
+   * — the operator should confirm whether to mark data-unavailable. This
+   * is purely advisory — the UI still requires explicit operator click;
+   * nothing auto-archives based on this flag.
+   */
+  pendingConfirmation?: boolean;
 }
 
 /**
@@ -67,6 +75,18 @@ export function lastActivityTimestamp(h: Hypothesis): string {
 }
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * Days of inactivity that flip a stalled low-confidence hypothesis into
+ * "pending-confirmation" — the operator should review and decide whether
+ * to mark it data-unavailable. NOT an auto-archive trigger; the UI still
+ * requires an explicit operator click.
+ *
+ * Surfaced 2026-05-08: status panel kept asking for "auto-flag any
+ * hypothesis with confidence low and no evidence update in 30+ days as
+ * data-unavailable pending human confirmation". 30 days mirrors that ask.
+ */
+export const PENDING_CONFIRMATION_DAYS = 30;
 
 export function daysSince(iso: string, now: Date = new Date()): number {
   const t = new Date(iso).getTime();
@@ -146,6 +166,7 @@ export function selectStalledTriageCandidates(
       daysSinceActivity:    days,
       staleReason,
       dataSourceGateReason: h.dataSourceGateReason,
+      pendingConfirmation:  days >= PENDING_CONFIRMATION_DAYS,
     });
   }
 
@@ -158,4 +179,20 @@ export function selectStalledTriageCandidates(
   });
 
   return rows.slice(0, limit);
+}
+
+/**
+ * Pending-confirmation subset: rows where daysSinceActivity >=
+ * PENDING_CONFIRMATION_DAYS. The full triage queue includes both fresh and
+ * stale rows; this selector is for the dedicated "needs operator decision"
+ * view that surfaces only rows old enough that the agent has stopped
+ * making progress. Read-only — does NOT mutate hypotheses, does NOT
+ * auto-archive. Operator must still click the existing one-click closure
+ * button on each row.
+ */
+export function selectPendingConfirmationRows(
+  hyps: Hypothesis[],
+  opts: { now?: Date; limit?: number } = {},
+): StalledHypothesisRow[] {
+  return selectStalledTriageCandidates(hyps, opts).filter(r => r.pendingConfirmation === true);
 }
