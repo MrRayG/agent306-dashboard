@@ -6,9 +6,28 @@
  * report. Used by the promotion gate to block self-change applications on
  * any failing case.
  *
- * Golden case `fn` is a string like "voice.buildVoiceBlock"; we resolve the
- * module by a small registry below to avoid dynamic `require`/`import`
- * with user-controlled paths.
+ * Two execution modes are supported:
+ *
+ *   1. Simple, declarative cases (voice, hypothesisTriage, modelRouter):
+ *      `fn` is a string like "voice.buildVoiceBlock"; we resolve the module
+ *      via a small static MODULES registry and run the case through the
+ *      declarative `expect` matcher. No dynamic imports, no string→path
+ *      resolution.
+ *
+ *   2. Async handler-driven sets (claimVerifier and any future surface
+ *      whose contract doesn't fit a single fn-call shape): the set name is
+ *      mapped to an async handler in HANDLERS. The handler reads the set,
+ *      runs each case through the real engine code, and returns
+ *      CaseResults. This is how `claimVerifier.golden.json` is enforced —
+ *      `verifyClaims()` is async, so it cannot be expressed via the simple
+ *      MODULES path.
+ *
+ * COVERAGE INVARIANT: every golden file on disk must be reachable by either
+ * (a) a registered HANDLERS entry, or (b) at least one case whose `fn`
+ * resolves into MODULES. If a golden file is unreachable, runAllGoldenSets
+ * surfaces it as a synthetic failure rather than silently skipping it.
+ * Phase 1 audit found `claimVerifier.golden.json` was being silently
+ * skipped because no handler was registered — that bypass is closed here.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -16,18 +35,30 @@ import { loadGoldenSets, type GoldenCase, type GoldenSet, type GoldenExpect } fr
 import * as voice from "../voice.js";
 import * as hypothesisTriage from "../hypothesisTriage.js";
 import * as modelRouter from "../modelRouter.js";
+import { runClaimVerifierGoldenSet } from "./claimVerifierHandler.js";
 
 type FnRegistry = Record<string, Record<string, unknown>>;
 
 /**
- * Static registry of modules the golden runner can address. Intentionally
- * explicit — we never resolve a `fn` string into a dynamic import. Adding
- * a new module here is the mechanism for a new golden case surface.
+ * Static registry of modules the simple golden runner can address.
+ * Intentionally explicit — we never resolve a `fn` string into a dynamic
+ * import. Adding a new module here is the mechanism for a new simple
+ * golden case surface.
  */
 const MODULES: FnRegistry = {
   voice: voice as any,
   hypothesisTriage: hypothesisTriage as any,
   modelRouter: modelRouter as any,
+};
+
+/**
+ * Async handlers for golden sets that don't fit the simple fn-call shape.
+ * Keyed by set name (matches `name` field in the JSON file). Each handler
+ * is responsible for running every case in the set and returning a flat
+ * array of CaseResults.
+ */
+const HANDLERS: Record<string, (set: GoldenSet) => Promise<CaseResult[]>> = {
+  claimVerifier: runClaimVerifierGoldenSet,
 };
 
 export interface CaseResult {
@@ -131,20 +162,92 @@ export function runGoldenSet(set: GoldenSet): CaseResult[] {
   return set.cases.map(c => runCase(set.name, c));
 }
 
-export function runAllGoldenSets(): RegressionReport {
+/**
+ * Decide whether a set is meant to be run by an async handler. We match by
+ * name first (explicit registration is authoritative); otherwise we treat
+ * it as a simple fn-call set.
+ */
+function isHandlerSet(set: GoldenSet): boolean {
+  return Object.prototype.hasOwnProperty.call(HANDLERS, set.name);
+}
+
+/**
+ * Async-aware runner. Handler-backed sets (claimVerifier, …) are awaited.
+ * Simple sets continue to run synchronously inside the same loop. The
+ * promotion gate calls this — see canPromote().
+ */
+export async function runAllGoldenSets(): Promise<RegressionReport> {
   const sets = loadGoldenSets();
   const results: CaseResult[] = [];
   const summary: RegressionReport["sets"] = [];
+
+  // Coverage assertion — every golden file MUST be reachable by either a
+  // registered handler or by case-level fn resolution. If a file is on
+  // disk but unreachable, surface it as a synthetic failure so the gate
+  // blocks rather than silently passing.
   for (const s of sets) {
+    if (isHandlerSet(s)) continue;
+    if (s.cases.length === 0) {
+      results.push({
+        setName: s.name,
+        caseId: "__coverage__",
+        ok: false,
+        reason: `golden set "${s.name}" has no cases AND no async handler — register one in regressionRunner HANDLERS or add cases`,
+      });
+      summary.push({ name: s.name, version: s.version, total: 1, passed: 0, failed: 1 });
+      continue;
+    }
+    const unreachable = s.cases
+      .map(c => ({ c, r: resolveFn(c.fn) }))
+      .filter(({ r }) => "error" in r);
+    if (unreachable.length === s.cases.length) {
+      results.push({
+        setName: s.name,
+        caseId: "__coverage__",
+        ok: false,
+        reason: `golden set "${s.name}" has no resolvable cases — register a handler or expose the module in MODULES`,
+      });
+      summary.push({ name: s.name, version: s.version, total: 1, passed: 0, failed: 1 });
+      continue;
+    }
     const r = runGoldenSet(s);
     results.push(...r);
     const passed = r.filter(x => x.ok).length;
     summary.push({ name: s.name, version: s.version, total: r.length, passed, failed: r.length - passed });
   }
+
+  for (const s of sets) {
+    if (!isHandlerSet(s)) continue;
+    const handler = HANDLERS[s.name];
+    let r: CaseResult[];
+    try {
+      r = await handler(s);
+    } catch (e: any) {
+      r = [{ setName: s.name, caseId: "__handler__", ok: false, reason: `handler threw: ${e?.message ?? e}` }];
+    }
+    results.push(...r);
+    const passed = r.filter(x => x.ok).length;
+    summary.push({ name: s.name, version: s.version, total: r.length, passed, failed: r.length - passed });
+  }
+
   return {
     ranAt: new Date().toISOString(),
     sets: summary,
     results,
     overallOk: results.every(r => r.ok),
   };
+}
+
+/**
+ * Test-only helper: list the set names the runner will dispatch through an
+ * async handler. Used by the coverage assertion test in
+ * server/__tests__/regressionRunnerCoverage.test.ts.
+ */
+export function listRegisteredHandlers(): string[] {
+  return Object.keys(HANDLERS);
+}
+
+/** Test-only helper for coverage assertions. */
+export function listRegisteredModules(): string[] {
+  return Object.keys(MODULES);
 }

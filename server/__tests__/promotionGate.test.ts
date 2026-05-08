@@ -92,8 +92,17 @@ describe("promotionGate", () => {
     }
   });
 
-  it("regression runner reports total pass on current code (sanity)", () => {
-    const report = runAllGoldenSets();
+  it("regression runner reports total pass on current code (sanity)", async () => {
+    const report = await runAllGoldenSets();
     assert.equal(report.overallOk, true, `failed cases: ${report.results.filter(r => !r.ok).map(r => `${r.setName}.${r.caseId}:${r.reason}`).join("; ")}`);
+  });
+
+  it("runs the claimVerifier golden set via async handler (Phase 1 closure — no silent bypass)", async () => {
+    const r = await canPromote(mkRec({ risk: "medium" }));
+    const ranNames = r.ranSets.map(s => s.split("@")[0]).sort();
+    assert.ok(
+      ranNames.includes("claimVerifier"),
+      `claimVerifier must be executed by the gate; ranSets=${ranNames.join(",")}`,
+    );
   });
 });

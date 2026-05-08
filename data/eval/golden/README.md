@@ -52,7 +52,7 @@ opens a draft PR or writes the patch. Nothing auto-merges.
 
 ```
 # Run all sets from a repl
-npx tsx -e "import { runAllGoldenSets } from './server/eval/regressionRunner.js'; console.log(JSON.stringify(runAllGoldenSets(), null, 2));"
+npx tsx -e "import { runAllGoldenSets } from './server/eval/regressionRunner.js'; runAllGoldenSets().then(r => console.log(JSON.stringify(r, null, 2)));"
 
 # Unit tests
 npx tsx --test server/__tests__/promotionGate.test.ts

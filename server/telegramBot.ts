@@ -23,6 +23,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { Express, Request, Response } from "express";
+import { checkDashboardAuth } from "./dashboardAuth.js";
 
 const TG_API = "https://api.telegram.org";
 
@@ -237,8 +238,14 @@ export function registerTelegramRoutes(app: Express) {
   // Call once after deploy: POST /api/telegram/set-webhook { url: "https://<your-app>/api/telegram/webhook" }
   // Requires x-dashboard-secret so randos can't repoint your bot.
   app.post("/api/telegram/set-webhook", async (req: Request, res: Response) => {
-    const DASHBOARD_SECRET = process.env.DASHBOARD_SECRET ?? "";
-    if (DASHBOARD_SECRET && req.headers["x-dashboard-secret"] !== DASHBOARD_SECRET) {
+    const auth = checkDashboardAuth({ presented: req.headers["x-dashboard-secret"] });
+    if (auth.kind === "deny") {
+      if (auth.status === 503) {
+        return res.status(503).json({
+          error: "Service unavailable",
+          reason: "DASHBOARD_SECRET is not configured in production — refusing privileged request",
+        });
+      }
       return res.status(401).json({ error: "Unauthorized" });
     }
     const t = token();
@@ -269,9 +276,18 @@ export function registerTelegramRoutes(app: Express) {
   // Visit /telegram/activate?key=<DASHBOARD_SECRET> in a browser, click the button.
   // Shows status + a single button that wires the webhook with Telegram.
   app.get("/telegram/activate", async (req: Request, res: Response) => {
-    const DASHBOARD_SECRET = process.env.DASHBOARD_SECRET ?? "";
     const providedKey = (req.query.key as string) ?? "";
-    if (DASHBOARD_SECRET && providedKey !== DASHBOARD_SECRET) {
+    const auth = checkDashboardAuth({ presented: providedKey });
+    if (auth.kind === "deny") {
+      if (auth.status === 503) {
+        res.status(503).type("html").send(
+          `<html><body style="font-family:system-ui;background:#0b0b0e;color:#f0f0f0;padding:2rem">
+            <h2>Service unavailable</h2>
+            <p>DASHBOARD_SECRET is not configured in production. The activation page is disabled.</p>
+          </body></html>`,
+        );
+        return;
+      }
       res.status(401).type("html").send(
         `<html><body style="font-family:system-ui;background:#0b0b0e;color:#f0f0f0;padding:2rem">
           <h2>Unauthorized</h2>

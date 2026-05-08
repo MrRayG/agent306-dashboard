@@ -13,6 +13,7 @@ import {
 } from "./goalDecisionPanel.js";
 import { registerContentRoutes } from "./routers/contentRouter.js";
 import { registerEpisodeRoutes } from "./routers/episodeRouter.js";
+import { requireDashAuth as sharedRequireDashAuth } from "./dashboardAuth.js";
 import { dataPath } from "./dataPaths.js";
 import { storage } from "./storage";
 import { insertEpisodeSchema, insertRenderJobSchema, insertSignalSchema } from "@shared/schema";
@@ -890,15 +891,14 @@ export function registerRoutes(httpServer: Server, app: Express) {
   registerTelegramRoutes(app);
 
   // ── Dashboard auth ──────────────────────────────────────────────────────
-  // Checks x-dashboard-secret header against DASHBOARD_SECRET env var.
-  // If DASHBOARD_SECRET is not set, all requests are allowed (dev mode).
-  const DASHBOARD_SECRET = process.env.DASHBOARD_SECRET ?? "";
-  function requireDashAuth(req: any, res: any, next: any) {
-    if (!DASHBOARD_SECRET) return next(); // no secret configured = dev mode
-    const sent = req.headers["x-dashboard-secret"];
-    if (sent === DASHBOARD_SECRET) return next();
-    return res.status(401).json({ error: "Unauthorized" });
-  }
+  // Centralized in server/dashboardAuth.ts. Phase 1 closure:
+  //   - Production with no DASHBOARD_SECRET → 503 (fail closed). The old
+  //     "missing secret = dev mode = allow" path applied in prod and was
+  //     the audit's auth-fails-open finding.
+  //   - Comparison uses crypto.timingSafeEqual.
+  //   - Dev with no DASHBOARD_SECRET → allow, so tests + local dev still
+  //     work without fabricating a header.
+  const requireDashAuth = sharedRequireDashAuth;
 
   // ── Sub-router mounts (spec §2) ──────────────────────────────────────────
   // Each sub-router is a thin factory: `register(app, deps)`. Seven routers

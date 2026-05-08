@@ -1,0 +1,70 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# 306 — CI (Phase 1 closure)
+#
+# Enforces the four Phase 1 safety pillars on every push and PR:
+#   1. Code typechecks (tsc)
+#   2. Aggregate test suite runs (`npm test`)
+#   3. Phase 1 safety tests run as a dedicated job that cannot be bypassed
+#      by an accidental change to `npm test` — keeps the auth + promotion-
+#      gate guarantees front-and-center in the CI report.
+#
+# A failure in any job blocks merge via branch protection (configured in
+# the GitHub repo settings, not here).
+# ─────────────────────────────────────────────────────────────────────────────
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: typecheck + test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run check
+
+      - name: Run aggregate test suite
+        run: npm test
+        env:
+          NODE_ENV: test
+
+  safety:
+    name: phase 1 safety tests (auth + promotion gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Phase 1 safety subset
+        run: npm run test:safety
+        env:
+          NODE_ENV: test
