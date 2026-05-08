@@ -42,9 +42,9 @@ export async function canPromote(rec: SelfRecommendation): Promise<PromotionResu
     return { ok: false, failures, ranSets };
   }
 
-  let report: ReturnType<typeof runAllGoldenSets>;
+  let report: Awaited<ReturnType<typeof runAllGoldenSets>>;
   try {
-    report = runAllGoldenSets();
+    report = await runAllGoldenSets();
   } catch (e: any) {
     failures.push(`regression runner threw: ${e?.message ?? e}`);
     return { ok: false, failures, ranSets };
