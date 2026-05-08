@@ -7,6 +7,10 @@ import { registerAgentRoutes } from "./routers/agentRouter.js";
 import { registerKnowledgeRoutes } from "./routers/knowledgeRouter.js";
 import { registerHypothesisRoutes } from "./routers/hypothesisRouter.js";
 import { selectStalledTriageCandidates as selectStalledHypothesisTriageCandidates } from "./hypothesisTriageQueue.js";
+import {
+  selectStalledMilestoneDecisions,
+  selectDuplicateGoalCandidates,
+} from "./goalDecisionPanel.js";
 import { registerContentRoutes } from "./routers/contentRouter.js";
 import { registerEpisodeRoutes } from "./routers/episodeRouter.js";
 import { dataPath } from "./dataPaths.js";
@@ -4910,6 +4914,28 @@ needsHelp: true only when you genuinely need his direction or information`,
   app.get("/api/goals/stale", requireDashAuth, (_req, res) => {
     const stale = getStaleGoals();
     res.json({ stale, count: stale.length });
+  });
+
+  // GET /api/goals/decision-panel — read-only operator decision aids:
+  // (a) stalled-milestone rows projecting the deciding milestone text for
+  //     near-completion goals so the operator sees milestone 3 of 3 side-by-
+  //     side without expanding each goal card.
+  // (b) duplicate goal clusters (same normalized title, multiple active rows)
+  //     with a non-binding "carry-forward-higher" suggestion. No merge happens
+  //     here — operator decides via existing status/abandon controls.
+  app.get("/api/goals/decision-panel", (_req, res) => {
+    try {
+      const store = getGoals();
+      const stalledMilestones = selectStalledMilestoneDecisions(store.goals);
+      const duplicateCandidates = selectDuplicateGoalCandidates(store.goals);
+      res.json({
+        stalledMilestones,
+        duplicateCandidates,
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   app.post("/api/goals/auto-resolve-stale", requireDashAuth, (_req, res) => {

@@ -12,6 +12,8 @@ import {
   lastActivityTimestamp,
   isTriageCandidate,
   selectStalledTriageCandidates,
+  selectPendingConfirmationRows,
+  PENDING_CONFIRMATION_DAYS,
 } from "../hypothesisTriageQueue.js";
 import type { Hypothesis } from "../researchEngine.js";
 
@@ -168,5 +170,60 @@ describe("selectStalledTriageCandidates", () => {
     const h = mkHyp({ status: "testing", confidence: "low", consecutiveInsufficientCycles: 2 });
     const rows = selectStalledTriageCandidates([h], { now: NOW });
     assert.match(rows[0].staleReason, /consecutive insufficient-evidence cycles/);
+  });
+
+  // ── 5/8 pending-confirmation queue coverage ─────────────────────────────────
+  // SelfEvolution / status panel kept asking for a way to flag stale
+  // low-confidence hypotheses (≥30 days no evidence) as data-unavailable
+  // PENDING HUMAN CONFIRMATION — i.e. surface them, do not auto-archive.
+  // PENDING_CONFIRMATION_DAYS=30 mirrors that ask. The flag is purely
+  // advisory; the existing per-row close button still requires the
+  // operator's explicit click.
+
+  it("sets pendingConfirmation=true on rows >= 30 days stale", () => {
+    const ancient = new Date(NOW.getTime() - (PENDING_CONFIRMATION_DAYS + 5) * 86400000).toISOString();
+    const h = mkHyp({ status: "forming", confidence: "low", formedAt: ancient });
+    const rows = selectStalledTriageCandidates([h], { now: NOW });
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].pendingConfirmation, true);
+  });
+
+  it("sets pendingConfirmation=false on rows < 30 days stale", () => {
+    const recent = new Date(NOW.getTime() - 5 * 86400000).toISOString();
+    const h = mkHyp({ status: "forming", confidence: "low", formedAt: recent });
+    const rows = selectStalledTriageCandidates([h], { now: NOW });
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].pendingConfirmation, false);
+  });
+
+  it("selectPendingConfirmationRows returns ONLY rows past the 30d threshold", () => {
+    const ancient = mkHyp({
+      id: "ancient",
+      status: "forming",
+      confidence: "low",
+      formedAt: new Date(NOW.getTime() - 60 * 86400000).toISOString(),
+    });
+    const fresh = mkHyp({
+      id: "fresh",
+      status: "forming",
+      confidence: "low",
+      formedAt: new Date(NOW.getTime() - 5 * 86400000).toISOString(),
+    });
+    const rows = selectPendingConfirmationRows([ancient, fresh], { now: NOW });
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].id, "ancient");
+    assert.equal(rows[0].pendingConfirmation, true);
+  });
+
+  it("selectPendingConfirmationRows does NOT auto-archive — never mutates the input", () => {
+    const ancient = mkHyp({
+      id: "ancient",
+      status: "forming",
+      confidence: "low",
+      formedAt: new Date(NOW.getTime() - 90 * 86400000).toISOString(),
+    });
+    const before = JSON.parse(JSON.stringify(ancient));
+    selectPendingConfirmationRows([ancient], { now: NOW });
+    assert.deepEqual(ancient, before, "selector must not mutate the hypothesis");
   });
 });

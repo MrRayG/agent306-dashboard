@@ -313,4 +313,53 @@ describe("ActionTranslator", () => {
     );
     assert.equal(family, "verification");
   });
+
+  // ── 5/8 missing-primitive coverage: binary-check gate phrasing ──────────────
+  // The 5/8 GoalEngine log surfaced a gate-shaped insight that fell through
+  // to `none`:
+  //   "Before promoting any new hypothesis from 'forming' to 'testing',
+  //    apply a binary-check gate: if it's structured as 'X is more accurate
+  //    than Y', rewrite as a threshold or conditional claim. Log compliance
+  //    and rejection rate."
+  // The existing GATE_PATTERNS required either an "implement/introduce/add a
+  // ... gate" verb or a "before X moves from A to B, require Y" shape. The
+  // SelfEvolution rephrasing — "before promoting any new hypothesis from
+  // forming to testing, apply a ... gate" — matched neither, so the rec
+  // queued forever as missing-primitive.
+  it("parses 'before promoting … apply a binary-check gate' as gate_rule (5/8 binary-check case)", () => {
+    const result = translateAction(
+      "Before promoting any new hypothesis from 'forming' to 'testing', apply a binary-check gate: if it's structured as 'X is more accurate than Y', rewrite as a threshold or conditional claim. Log compliance and rejection rate.",
+      "binary framing leaks through forming→testing transitions",
+    );
+    assert.equal(result.primitive, "gate_rule");
+    const params = result.params as any;
+    assert.equal(params.target, "hypothesis");
+    assert.equal(params.framingMode, "spectrum");
+    assert.ok(String(params.description).length > 0, "gate description must not be empty");
+  });
+
+  it("parses front-loaded 'apply a binary-check gate' (no from→to clause) as gate_rule", () => {
+    const result = translateAction(
+      "Apply a binary-check gate before any forming→testing promotion to reject A-vs-B framing.",
+      "",
+    );
+    assert.equal(result.primitive, "gate_rule");
+    assert.equal((result.params as any).framingMode, "spectrum");
+  });
+
+  it("data-source / threshold-check gate phrasings still classify correctly", () => {
+    const dataSource = translateAction(
+      "Before promoting any new hypothesis from forming to testing, apply a data-source gate to reject claims with no measurement path.",
+      "",
+    );
+    assert.equal(dataSource.primitive, "gate_rule");
+    // Non-binary framing — framingMode should NOT be set.
+    assert.equal((dataSource.params as any).framingMode, undefined);
+
+    const threshold = translateAction(
+      "Apply a threshold-check gate to incoming hypotheses to enforce numeric framing.",
+      "",
+    );
+    assert.equal(threshold.primitive, "gate_rule");
+  });
 });
