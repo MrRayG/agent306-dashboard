@@ -53,6 +53,11 @@ export interface NewsDraftRecord {
   manualReviewRequired?: boolean;
   manualPublishAllowed?: boolean;
   referenceMetadata?: ReferenceMetadata[];
+  /** Discriminates the failure category that produced this record. The
+   *  dashboard surfaces this so the operator can see at a glance whether
+   *  a draft was quarantined for a verifier hard-fail vs. a malformed
+   *  LLM JSON wrapper that never made it to the verifier. */
+  quarantineReason?: "verifier_hard_fail" | "parse_error" | "soft_warn_audit";
 }
 
 const NEWS_DRAFTS_FILE = "news-drafts.jsonl";
@@ -141,8 +146,12 @@ export function recordNewsDraft(args: {
   manualReviewRequired?: boolean;
   manualPublishAllowed?: boolean;
   referenceMetadata?: ReferenceMetadata[];
+  quarantineReason?: "verifier_hard_fail" | "parse_error" | "soft_warn_audit";
 }): NewsDraftRecord {
   const now = new Date();
+  const inferredReason: NewsDraftRecord["quarantineReason"] =
+    args.quarantineReason
+    ?? (args.status === "published_with_warnings" ? "soft_warn_audit" : "verifier_hard_fail");
   const record: NewsDraftRecord = {
     id: `news_draft_${now.getTime()}`,
     createdAt: now.toISOString(),
@@ -159,6 +168,7 @@ export function recordNewsDraft(args: {
     manualReviewRequired: args.manualReviewRequired,
     manualPublishAllowed: args.manualPublishAllowed,
     referenceMetadata: args.referenceMetadata,
+    quarantineReason: inferredReason,
   };
   appendNewsDraft(record);
   return record;

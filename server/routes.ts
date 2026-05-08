@@ -148,7 +148,7 @@ import {
   getImprovementPlans, getLatestPlan, generateSelfImprovementPlan,
   seedDreams,
 } from "./dreamEngine.js";
-import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import { safeParseLLMJson, extractPostField } from "./safeParseLLMJson.js";
 // PR-G — Validity baseline diagnostic panel + manual probe.
 import { getValiditySummary } from "./experiments/validityAggregates.js";
 import { runKnownBadProbe } from "./experiments/runKnownBadProbe.js";
@@ -454,7 +454,22 @@ async function postDailyNewsDispatch() {
     // open question is —", "Agent 306's analysis:") so analytical voice is
     // recognized rather than confused for source attribution.
     const newsLaneContract = buildSharedClaimLaneContractBlock("news");
-    const dispatchSystemPrompt = `Today is ${new Date().toISOString().slice(0, 10)} (UTC).\n\n${dispatchContext}\n\n${buildVoiceBlock()}\n\n${newsLaneContract}\n\n${citationDiscipline}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
+    // News-tier bare-claim guardrail (May 8 2026 incident).
+    // The Lane B "bare claim" verifier has been firing on numeric assertions
+    // like `$70 million`, `100% YoY`, `40% trapped capital`, `90 days` and on
+    // unsupported comparative analysis like "coordination can respond faster
+    // than traditional institutions". The contract already explains lanes;
+    // this block names the failure pattern in operational terms so the
+    // writer either drops the number or attaches a real source URL inline.
+    // Hard gate on the verifier is preserved — this is purely upstream.
+    const newsBareClaimGuardrail = `BARE NUMERIC / COMPARATIVE CLAIMS (HARD GUARDRAIL — May 8 2026):
+- Specific numbers (dollar amounts, percentages, counts, timeframes like "90 days") are Lane C external context. They REQUIRE either:
+    (a) an inline source URL attached to the SPECIFIC sentence carrying that number, drawn from today's headline pack above, OR
+    (b) a verbal hedge that frames it as widely-reported context ("publicly reported," "industry reporting indicates," "as widely covered") with NO fabricated URL.
+  Never assert a specific number as fact in agent voice without one of the above. Bare numerics fail the Lane B verifier.
+- Comparative / superlative claims about institutions, markets, or systems ("X responds faster than traditional institutions," "this is the first time," "stablecoin spend is up 100% YoY") are Lane C and follow the same rule. If you cannot point to a source URL in today's headline pack, REWRITE the sentence as Lane B framing ("My read — coordination here moves on a different timescale than traditional institutions") OR drop the comparison entirely. Do NOT publish bare comparatives.
+- When in doubt: drop the number or drop the comparative. The verifier hard-fails on bare Lane C; a softer, source-anchored sentence ships, a hard-failed dispatch sits in quarantine all day.`;
+    const dispatchSystemPrompt = `Today is ${new Date().toISOString().slice(0, 10)} (UTC).\n\n${dispatchContext}\n\n${buildVoiceBlock()}\n\n${newsLaneContract}\n\n${citationDiscipline}\n\n${newsBareClaimGuardrail}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
     const grokResp = await postChatCompletions({
         model: getModel("news-dispatch"),
         messages: [
@@ -506,21 +521,68 @@ Return JSON: {"post": "..."}`
       });
 
     let postText = "";
+    let parseRecoveryUsed = false;
+    let parseFailedRaw: string | null = null;
     if (grokResp.ok) {
       const data = await grokResp.json();
       const raw = data.choices?.[0]?.message?.content ?? "";
       const parsed = safeParseLLMJson(raw, "Routes.grokPost") ?? {};
       postText = parsed.post ?? "";
-      // If JSON fails but raw has content, use it directly
-      if (!postText && raw.length > 30) postText = raw;
+
+      // News dispatch incident, May 8 2026 — when Grok returns a malformed
+      // `{"post": "[306 NEWS] ..."` blob (truncated quote / missing brace),
+      // safeParseLLMJson returns null, parsed.post is undefined, and the
+      // previous fallback handed the raw `{"post":` wrapper string straight
+      // to the verifier and X queue. Recover the inner string content if we
+      // can; otherwise quarantine with a parse_error reason rather than
+      // letting JSON syntax leak into the post body.
+      if (!postText && typeof raw === "string" && raw.trim().length > 0) {
+        const recovered = extractPostField(raw);
+        if (recovered) {
+          postText = recovered;
+          parseRecoveryUsed = true;
+          console.warn(`[Agent306:News] Recovered post field from malformed JSON wrapper (${recovered.length} chars)`);
+        } else {
+          // Don't pass raw JSON wrapper text downstream. Hold onto the raw
+          // for quarantine logging and fall through to the deterministic
+          // market-line fallback below.
+          parseFailedRaw = raw;
+        }
+      }
     } else {
       console.error("[Agent306:News] LLM call failed:", grokResp.status);
     }
 
-    // Fallback if Grok fails
+    // If we never got usable post text AND the LLM produced a malformed JSON
+    // wrapper, quarantine the raw blob with parse_error before the verifier
+    // path so the operator can see that the dispatch died at parse stage,
+    // not in the verifier. Then fall through to the deterministic market
+    // line so we still publish *something* the operator can review.
+    if (!postText && parseFailedRaw) {
+      try {
+        const draft = recordNewsDraft({
+          status:             "quarantined",
+          severity:           "HARD_FAIL",
+          text:               parseFailedRaw.slice(0, 4000),
+          unsupportedReasons: [
+            `parse_error: malformed JSON wrapper from LLM — could not extract post field. Head: ${parseFailedRaw.slice(0, 200)}`,
+          ],
+          source:             "auto-dispatch",
+          quarantineReason:   "parse_error",
+        });
+        console.error(`[Agent306:News] Quarantined raw JSON-wrapper draft ${draft.id} (parse_error)`);
+      } catch (storeErr: any) {
+        console.error(`[Agent306:News] Failed to write parse_error quarantine:`, storeErr?.message ?? String(storeErr));
+      }
+      lastNewsDispatchDate = null; // allow retry on next tick
+      return;
+    }
+
+    // Fallback if Grok fails entirely (no response at all, no recovery path)
     if (!postText) {
       postText = `[NEWS DISPATCH] ${dayLabel}\n\nETH ${ethPrice} (${ethChange}) · BTC ${btcPrice} (${btcChange}). AI and Web3 continue to converge.`;
     }
+    void parseRecoveryUsed;
 
     // Enforce [306 NEWS] show tag
     postText = enforceShowTag(postText, "news");

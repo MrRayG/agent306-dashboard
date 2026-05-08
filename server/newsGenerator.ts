@@ -10,7 +10,7 @@ import { getTodaysPostsSummary } from "./xPostScheduler.js";
 import { buildVoiceBlock } from "./voice.js";
 import { getEvolutionContext } from "./soulEvolution.js";
 import { enforceShowTag } from "./contentTypes.js";
-import { safeParseLLMJson } from "./safeParseLLMJson.js";
+import { safeParseLLMJson, extractPostField } from "./safeParseLLMJson.js";
 
 import { postChatCompletions } from "./llmCall.js";
 import { verifyClaims } from "./claimVerifier.js";
@@ -57,7 +57,17 @@ export async function generateNewsContent(): Promise<string | null> {
     // path keeps on-demand news drafts on the same lane discipline as the
     // auto-dispatch.
     const newsLaneContract = buildSharedClaimLaneContractBlock("news");
-    const dispatchSystemPrompt = `${dispatchContext}\n\n${buildVoiceBlock()}\n\n${newsLaneContract}\n\n${citationDiscipline}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
+    // News-tier bare-claim guardrail (May 8 2026 incident). See routes.ts
+    // postDailyNewsDispatch() for the full rationale; mirrored here so the
+    // manual generator path enforces the same upstream prompt-side discipline.
+    const newsBareClaimGuardrail = `BARE NUMERIC / COMPARATIVE CLAIMS (HARD GUARDRAIL — May 8 2026):
+- Specific numbers (dollar amounts, percentages, counts, timeframes like "90 days") are Lane C external context. They REQUIRE either:
+    (a) an inline source URL attached to the SPECIFIC sentence carrying that number, OR
+    (b) a verbal hedge that frames it as widely-reported context ("publicly reported," "industry reporting indicates," "as widely covered") with NO fabricated URL.
+  Never assert a specific number as fact in agent voice without one of the above. Bare numerics fail the Lane B verifier.
+- Comparative / superlative claims about institutions, markets, or systems ("X responds faster than traditional institutions," "this is the first time," "stablecoin spend is up 100% YoY") are Lane C and follow the same rule. If you cannot point to a source URL, REWRITE the sentence as Lane B framing ("My read — coordination here moves on a different timescale than traditional institutions") OR drop the comparison entirely.
+- When in doubt: drop the number or drop the comparative. The verifier hard-fails on bare Lane C.`;
+    const dispatchSystemPrompt = `${dispatchContext}\n\n${buildVoiceBlock()}\n\n${newsLaneContract}\n\n${citationDiscipline}\n\n${newsBareClaimGuardrail}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
 
     const grokResp = await postChatCompletions({
         model: getModel("news-dispatch"),
@@ -102,14 +112,47 @@ Return JSON: {"post": "..."}`
       }, AbortSignal.timeout(60000));
 
     let postText = "";
+    let parseFailedRaw: string | null = null;
     if (grokResp.ok) {
       const data = await grokResp.json();
       const raw = data.choices?.[0]?.message?.content ?? "";
       const parsed = safeParseLLMJson(raw, "NewsGenerator") ?? {};
       postText = parsed.post ?? "";
-      if (!postText && raw.length > 30) postText = raw;
+
+      // Mirrors the auto-dispatch path in routes.ts. When Grok returns a
+      // malformed `{"post": "..."}` wrapper, recover the inner string if we
+      // can; otherwise quarantine with parse_error rather than handing the
+      // raw `{"post":` wrapper to the verifier.
+      if (!postText && typeof raw === "string" && raw.trim().length > 0) {
+        const recovered = extractPostField(raw);
+        if (recovered) {
+          postText = recovered;
+          console.warn(`[NewsGenerator] Recovered post field from malformed JSON wrapper (${recovered.length} chars)`);
+        } else {
+          parseFailedRaw = raw;
+        }
+      }
     } else {
       console.error("[NewsGenerator] LLM call failed:", grokResp.status);
+    }
+
+    if (!postText && parseFailedRaw) {
+      try {
+        const draft = recordNewsDraft({
+          status:             "quarantined",
+          severity:           "HARD_FAIL",
+          text:               parseFailedRaw.slice(0, 4000),
+          unsupportedReasons: [
+            `parse_error: malformed JSON wrapper from LLM — could not extract post field. Head: ${parseFailedRaw.slice(0, 200)}`,
+          ],
+          source:             "manual-generator",
+          quarantineReason:   "parse_error",
+        });
+        console.error(`[NewsGenerator] Quarantined raw JSON-wrapper draft ${draft.id} (parse_error)`);
+      } catch (storeErr: any) {
+        console.error(`[NewsGenerator] Failed to write parse_error quarantine:`, storeErr?.message ?? String(storeErr));
+      }
+      return null;
     }
 
     if (!postText) {
