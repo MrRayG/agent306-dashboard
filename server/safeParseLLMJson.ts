@@ -83,6 +83,67 @@ export function safeParseLLMJson<T = any>(
   return null;
 }
 
+/**
+ * Best-effort extraction of the inner string of a `{"post": "..."}` wrapper
+ * when `safeParseLLMJson` cannot parse the structure (truncated quote, missing
+ * closing brace, escaped newlines that broke JSON.parse, etc.).
+ *
+ * Background — News dispatch incident, May 8 2026
+ * ─────────────────────────────────────────────────
+ * Grok returned a `{"post": "[306 NEWS] Arbitrum DAO voted ..."` blob whose
+ * closing quote/brace was lost. `safeParseLLMJson` returned null. The caller's
+ * fallback (`if (!postText && raw.length > 30) postText = raw`) then handed the
+ * raw `{"post":` wrapper string straight to the claim verifier and the X
+ * queue. The verifier saw the literal `{"post":` prefix as part of the post
+ * text and hard-failed; meanwhile `looksLikeRawJsonPayload` only trips when
+ * two known schema keys appear, so a single-key `{"post": ...}` wrapper would
+ * have leaked all the way to X if the verifier had passed it.
+ *
+ * This helper is a defense-in-depth recovery: when JSON.parse fails on a
+ * payload that begins with `{"post":` (or `{"post" :`), strip the wrapper and
+ * return the inner string content so the caller can run it through the
+ * verifier as a normal post. If the wrapper shape isn't there, return null
+ * and let the caller decide whether to quarantine with a parse_error reason
+ * rather than blindly passing raw text downstream.
+ *
+ * This is intentionally narrow — it only handles the `{"post": "..."}` shape
+ * because that is the shape the news/dispatch prompt asks for. It does NOT
+ * try to be a general JSON repair tool; that's `safeParseLLMJson`'s job.
+ */
+export function extractPostField(raw: string | null | undefined): string | null {
+  if (!raw || typeof raw !== "string") return null;
+  let text = raw.trim();
+  text = stripMarkdownFences(text);
+
+  // Must start with a JSON object whose first key is "post". Tolerate
+  // whitespace and either single or double quoting on the key.
+  const headMatch = text.match(/^\{\s*["']post["']\s*:\s*["']/);
+  if (!headMatch) return null;
+
+  // Slice past the `{"post":"` prefix.
+  let inner = text.slice(headMatch[0].length);
+
+  // Strip trailing wrapper artifacts: a closing `"` then optional `}` plus
+  // whitespace at the end of the string. Truncated payloads will simply have
+  // none of these and we keep whatever content we got.
+  inner = inner.replace(/\s*$/, "");
+  inner = inner.replace(/\}\s*$/, "");
+  inner = inner.replace(/"\s*$/, "");
+
+  // Decode the most common JSON escape sequences so the recovered text reads
+  // as natural prose (the verifier and X poster operate on prose, not JSON).
+  inner = inner
+    .replace(/\\n/g, "\n")
+    .replace(/\\r/g, "")
+    .replace(/\\t/g, "  ")
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, "\\");
+
+  inner = inner.trim();
+  if (inner.length < 10) return null;
+  return inner;
+}
+
 // ── Internals ─────────────────────────────────────────────────────────────────
 
 /** Remove leading ```json / ``` and trailing ``` */
