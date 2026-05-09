@@ -429,15 +429,97 @@ If any of those fails, `planSandboxExecution` emits a structured `SandboxExecuti
 - **No auto-promotion**: Phase 2e does not write decision events, does not mutate hypotheses, and does not schedule anything. There is no scheduler / daily-cycle automation in this module.
 - **Deterministic**: the only state in the module is a per-process counter for `executionPlanId`. With a fixed `now`, plan output is otherwise deterministic. No clock reads at module load, no LLM calls, no file I/O.
 
-## What is deferred to Phase 2e-b (live sandbox registration)
+## Phase 2e-b: Low-risk sandbox registration registry (`server/experiments/lowRiskSandboxRegistry.ts`)
+
+Phase 2e produced typed sandbox execution **plans** for a single supported experiment kind (`modelRouter`) — the kind `registerExperiment` already understands. Operators have approved a small, narrow set of low-risk experiment kinds they want represented in the system separately from the Phase 2 / 2b / 2e formal-hypothesis chain. Phase 2e-b is the registry that represents those kinds and lets exactly one of them (`summarizationTemplate`) produce a typed sandbox **registration** record.
+
+Phase 2e-b is intentionally a separate scope from Phase 2e:
+
+- It does not consume a Phase 2b `MetricBinding`. The kinds it represents are not bound to formal-hypothesis metrics and are not selected by the Phase 2 selector.
+- It does not call the live `registerExperiment` helper. The output is an in-process registration record, not a row in the live `experiments` table.
+- It does not call `applySandboxExecutionPlan` or any other Phase 2e helper; the two modules are independent inputs to a future Phase 2e-c apply layer.
+
+### Operator-approved low-risk candidates (current enablement matrix)
+
+| Kind                        | Description                                | Enabled? | Disabled reason                  | Metric seed                    | Cap |
+|-----------------------------|--------------------------------------------|---------:|----------------------------------|--------------------------------|----:|
+| `summarizationTemplate`     | Output formatting / summariser template    | **YES**  | —                                | `summary_quality_score`        |  25 |
+| `reasoningTemplate`         | Prompt-level reasoning pattern             | no       | `future_phase_not_wired`         | `reasoning_quality_score`      |  25 |
+| `selfCritiquePrompt`        | Internal self-critique persona             | no       | `requires_internal_persona`      | `self_critique_signal`         |  25 |
+| `memoryRetrievalHeuristic`  | Read-only RAG weighting / filtering        | no       | `requires_rag_pipeline`          | `retrieval_quality_score`      |  25 |
+| `taskDecompositionPattern`  | Strategy / task-decomposition pattern      | no       | `requires_strategy_router`       | `decomposition_quality_score`  |  25 |
+
+Disabled kinds are **registered but un-callable**: a registration request returns `{ ok: false, code: "kind_disabled", disabledReason: "<code>" }`. They surface in `listLowRiskSandboxKinds()` for audit panels without giving them an execution path. Flipping `enabled: true` for any of them is a separate decision with its own approval and PR.
+
+### `summarizationTemplate` constraints
+
+A registration for `summarizationTemplate` succeeds only when **every** control is set explicitly:
+
+| Control            | Required value                | Refusal code (when violated)            |
+|--------------------|-------------------------------|-----------------------------------------|
+| `featureFlag`      | `true`                        | `feature_flag_off`                      |
+| `operatorApproved` | `true`                        | `operator_not_approved`                 |
+| `dryRun`           | `true` (Phase 2e-b is dry-run-ONLY) | `dry_run_required`                |
+| `fixtureSource`    | `"static"` (Phase 2e-b is static-fixture-ONLY) | `fixture_source_not_allowed`, or `live_traffic_not_allowed` if the source names live/production |
+| `maxTrials`        | finite integer in `[1, 25]`   | `missing_resource_cap` / `resource_cap_exceeds_limit` |
+| `useScheduler`     | `false` (Phase 2e-b is scheduler-free) | `scheduler_not_allowed`           |
+| `promotionEligible`| `false` (Phase 2e-b registrations are not promotable) | `promotion_not_allowed` |
+
+The metric seed is `summary_quality_score`, with four guardrail keys carried into the registration's evidence trail: `hallucination_count`, `citation_source_retention`, `format_compliance`, `length_compliance`. Phase 2e-b does **not** grade trials — these are measurement targets a future Phase 2e-c runner would compute from static fixture outputs.
+
+### Usage
+
+```ts
+import {
+  registerLowRiskSandboxKind,
+  applyLowRiskSandboxRegistration,
+  listLowRiskSandboxKinds,
+  PHASE2EB_GLOBAL_MAX_TRIALS,
+  type LowRiskSandboxControls,
+} from "./experiments/lowRiskSandboxRegistry.js";
+
+const reg = registerLowRiskSandboxKind("summarizationTemplate", {
+  featureFlag:       true,
+  operatorApproved:  true,
+  dryRun:            true,
+  fixtureSource:     "static",
+  maxTrials:         5,
+  promotionEligible: false,
+  useScheduler:      false,
+  notes:             "approved by ops 2026-05-09 for sandbox eval",
+});
+if (reg.ok) {
+  // reg.registrationId, .kind, .sandboxMode, .metricKey, .guardrails,
+  // .resourceCaps, .registeredAt, .reason, .evidence, .controls
+} else {
+  // reg.code, reg.disabledReason?, reg.reason, reg.evidence
+}
+
+// Phase 2e-b is registration-only — applying is a no-op until Phase 2e-c lands.
+applyLowRiskSandboxRegistration(reg); // { ok: false, deferredTo: "phase-2e-c" }
+```
+
+### Phase 2e-b invariants
+
+- **Registration-only**: nothing in this module calls `registerExperiment`, `recordTrialOutcome`, `runExperiment`, the scheduler, or any other live helper. The output is a typed in-process record. The `applyLowRiskSandboxRegistration` shim is a no-op stub returning `{ ok: false, deferredTo: "phase-2e-c" }`.
+- **Propose-only**: storing a registration in the in-memory map is process-local. Tests pin that no file under `DATA_DIR` is created, the real `data/research_lab.json` and `data/memory_knowledge.json` snapshots are unchanged, and the Phase 2d decision-events ledger is not written.
+- **Default-refuse**: every control is required and explicit. A caller who omits the feature flag, the operator approval, the dry-run flag, the fixture source, the resource cap, the scheduler flag, or the promotion flag gets a structured refusal — there is no convenient "default-yes" path.
+- **Single-kind enablement**: `summarizationTemplate` is the only kind whose `enabled` flag is `true` today. Every other kind in `LOW_RISK_SANDBOX_KINDS` refuses with `kind_disabled` and the registry entry's `disabledReason`.
+- **Independent scope**: Phase 2e-b does not share the Phase 2b metric registry, the Phase 2e plan shape, or the Phase 2c decision rules. It is the next-narrowest input to a future Phase 2e-c apply layer.
+- **Phase 2e plan-only behavior preserved**: the existing Phase 2e module is untouched; `planSandboxExecution` still produces plans for `modelRouter` and `applySandboxExecutionPlan` is still a no-op deferred to Phase 2e-b. (Phase 2e-b does not change Phase 2e's wiring.)
+
+## What is deferred to Phase 2e-c (live sandbox application)
 
 - A live scheduler / daily-cycle helper that consumes `ExperimentDecision` events from the Phase 2d ledger and calls a registration helper. Phase 2e produces plans on demand from a binding; a scheduler that walks the ledger and produces plans automatically is explicitly out of scope.
-- A sandbox-safe `registerExperiment` (or a sandbox flag on the existing helper) that respects `dryRun` and `maxTrials`. The current `registerExperiment` writes a `running` row and invalidates the runtime cache — calling it from a sandbox plan today would mean a live-traffic experiment; Phase 2e refuses to do that.
-- Wiring `applySandboxExecutionPlan` to the new sandbox-safe registration helper. Today the function is a no-op stub.
+- A sandbox-safe `registerExperiment` (or a sandbox flag on the existing helper) that respects `dryRun` and `maxTrials`. The current `registerExperiment` writes a `running` row and invalidates the runtime cache — calling it from a sandbox plan or a Phase 2e-b registration today would mean a live-traffic experiment; Phase 2e and Phase 2e-b both refuse to do that.
+- Wiring `applySandboxExecutionPlan` and `applyLowRiskSandboxRegistration` to the new sandbox-safe registration helper. Today both functions are no-op stubs.
 - Persisting `promotion_events` / `retraction_events` on the hypothesis record (and the schema migrations that come with it). A decision-event is a *proposal* record; an applied promotion is a different record type with its own table.
 - A statistical sequential test (SPRT, Bayesian posterior, CUPED-style variance reduction) that replaces the threshold layer once we have enough trials to calibrate one.
-- Dashboard surfaces over the ledger or the plan record store.
+- Dashboard surfaces over the ledger, the plan record store, or the Phase 2e-b registration map.
 - Growing the metric registry from a database / config file / LLM proposal — and the migration logic that comes with it.
+- A live runner for `summarizationTemplate` that computes `hallucination_count`, `citation_source_retention`, `format_compliance`, and `length_compliance` from static-fixture outputs. The metric seed and guardrails are present so a future Phase 2e-c runner has a clean target.
+- Enabling the four currently-disabled low-risk kinds (`reasoningTemplate`, `selfCritiquePrompt`, `memoryRetrievalHeuristic`, `taskDecompositionPattern`). Each requires its own runner / persona / pipeline before its `enabled` flag can flip.
+- Persistent storage of the Phase 2e-b in-memory registration map.
 
 ## What is deferred to Phase 2f (meta-reflection / lessons database)
 
@@ -445,7 +527,7 @@ If any of those fails, `planSandboxExecution` emits a structured `SandboxExecuti
 - A "lessons database" surface: structured derivations from the ledger that feed back into the research-topic / hypothesis pipeline (e.g. "metric X has produced N inconclusive runs in a row — propose a different operationalisation").
 - Phase 2d gives 2f the raw input: a clean, append-only event log with stable verdict / reason-code enums and `thresholdsUsed` per row. Phase 2d does not compute the summary.
 
-The selector + binding + decision + ledger + sandbox-plan modules are intentionally *propose-only*. Phase 2e produces sandbox execution plans on demand (default-refuse, plan-only). Phase 2e-b will wire `applySandboxExecutionPlan` into a sandbox-safe `registerExperiment` and the daily-cycle / scheduler boot path, but only behind a feature flag and only with `promotion_events` / `retraction_events` persistence in place.
+The selector + binding + decision + ledger + sandbox-plan + low-risk-registry modules are intentionally *propose-only*. Phase 2e produces sandbox execution plans on demand for the formal-hypothesis chain. Phase 2e-b adds an independent low-risk sandbox registration registry (today: `summarizationTemplate` enabled, four other operator-approved kinds disabled). Both are registration-only / plan-only — neither calls `registerExperiment`, mutates a hypothesis, writes the Phase 2d ledger, or schedules anything. Phase 2e-c will wire `applySandboxExecutionPlan` and `applyLowRiskSandboxRegistration` into a sandbox-safe `registerExperiment` and the daily-cycle / scheduler boot path, but only behind a feature flag and only with `promotion_events` / `retraction_events` persistence in place.
 
 ## Invariants Phase 2 preserves
 
