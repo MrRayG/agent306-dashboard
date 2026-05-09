@@ -1,6 +1,6 @@
 # Phase 2 — Evidence-Based Hypothesis Experiments
 
-**Status:** Phase 2 entry slice + Phase 2b metric binding + Phase 2c decision rules + Phase 2d decision evidence persistence + Phase 2e sandboxed execution wiring (plan-only) merged. Live sandbox registration is deferred to **Phase 2e-b**; meta-reflection / lessons database is deferred to **Phase 2f**.
+**Status:** Phase 2 entry slice + Phase 2b metric binding + Phase 2c decision rules + Phase 2d decision evidence persistence + Phase 2e sandboxed execution wiring (plan-only) + Phase 2e-b low-risk sandbox registration registry + Phase 2e-c persistent sandbox registration records merged. Live sandbox application (running fixtures, grading, auto-apply) remains deferred to **Phase 2e-d**; meta-reflection / lessons database is deferred to **Phase 2f**.
 
 Phase 2 turns the formal hypothesis backlog into a *selection* problem: given `research_lab.hypotheses[]`, which records are eligible to feed an experiment, and which are refused — with explicit, structured evidence — and why.
 
@@ -508,18 +508,133 @@ applyLowRiskSandboxRegistration(reg); // { ok: false, deferredTo: "phase-2e-c" }
 - **Independent scope**: Phase 2e-b does not share the Phase 2b metric registry, the Phase 2e plan shape, or the Phase 2c decision rules. It is the next-narrowest input to a future Phase 2e-c apply layer.
 - **Phase 2e plan-only behavior preserved**: the existing Phase 2e module is untouched; `planSandboxExecution` still produces plans for `modelRouter` and `applySandboxExecutionPlan` is still a no-op deferred to Phase 2e-b. (Phase 2e-b does not change Phase 2e's wiring.)
 
-## What is deferred to Phase 2e-c (live sandbox application)
+## Phase 2e-c: Persistent sandbox registration records (`server/experiments/sandboxRegistrationRecords.ts`)
+
+Phase 2e-b produced typed in-memory `LowRiskSandboxRegistration` records. The map was process-local and not durable. Phase 2e-c closes the next narrow gap: persisting those registrations as an append-only audit trail, complete enough for a future apply / promotion / rollback layer to act on without re-running registration.
+
+Phase 2e-c does NOT enable any new live behavior — there is still no scheduler, no `registerExperiment` call, no auto-apply, no mutation of hypotheses or memory. The only side effect is appending JSONL lines to `data/sandbox_registration_records.jsonl` (path resolved through `DATA_DIR`).
+
+### Record shape
+
+Each call appends one event line. Three event types share the ledger; readers branch on `event`:
+
+| Event           | When                                            | Row meaning                                      |
+|-----------------|-------------------------------------------------|--------------------------------------------------|
+| `registration`  | initial persistence of a Phase 2e-b success     | `active: true`, `status: "active"`, manifest + snapshot hash + preMetrics + empty postMetrics + rollback instructions |
+| `completion`    | follow-up that ATTACHES `postMetrics`           | `active: false`, `status: "completed"`, reuses the registration's `recordId`, sets `completedAt` / `updatedAt` |
+| `refused`       | persisted Phase 2e-b refusal (e.g. disabled kind) | `active: false`, `status: "refused"`, never an active registration |
+
+The full required field set on a `registration` row:
+
+| Field                       | Required? | Notes                                                                                              |
+|-----------------------------|-----------|-----------------------------------------------------------------------------------------------------|
+| `recordId`                  | yes       | `regrec_<unix-ms>_<6-base36>`. Reused by the matching `completion` row.                             |
+| `eventId`                   | yes       | Unique per line: `evt_<unix-ms>_<6-base36>`.                                                       |
+| `event`                     | yes       | `"registration" \| "completion" \| "refused"`.                                                     |
+| `kind`                      | yes       | One of the five `LOW_RISK_SANDBOX_KINDS`.                                                          |
+| `active`                    | yes       | `true` only on registration rows.                                                                  |
+| `manifest`                  | yes (registration) | Full Phase 2e-b manifest snapshot: `kind`, `sandboxMode`, `metricKey`, `guardrails`, `resourceCaps`, `registeredAt`, `controls` echo. Defensive copy — later mutation of the in-memory registration cannot retroactively change this. |
+| `sandboxSnapshotHash`       | yes (registration) | When the caller does not supply one, derived as `sha256(canonicalJSON(manifest excluding registrationId))`. Two semantically-equivalent manifests produce the same hash; a tampered manifest does not. |
+| `preMetrics`                | yes (registration) | `Record<string, finite number>`. May be `{}`. Numbers only — non-finite values refuse.            |
+| `postMetrics`               | yes (registration) | Always present. Initially `{}` on the registration row; populated on the matching `completion` row. |
+| `rollbackInstructions`      | yes (registration) | Non-empty array of non-empty strings. Required: missing/empty refuses, writing nothing.            |
+| `operator`                  | yes       | `{ source, note?, approvalRef? }`. `source` non-empty.                                             |
+| `featureFlagState`          | yes (registration) | `{ name, enabled, rollout? }`.                                                                     |
+| `metricKey`                 | yes (registration) | Hoisted from manifest for fast filtering.                                                          |
+| `guardrailKeys`             | yes (registration) | Hoisted from manifest for fast filtering.                                                          |
+| `sandboxAutoApplyEligible`  | optional  | **Defaults to `false`.** Even when explicitly `true`, NO auto-apply behavior runs — this is a flag for a future apply layer.                                                                              |
+| `autoApplyPolicy`           | optional  | Free-text label; defaults to `"manual-only"`.                                                      |
+| `phase2ebRegistrationId`    | optional  | Echo of the in-memory Phase 2e-b id when one exists.                                               |
+| `hypothesisId` / `candidateId` / `bindingId` | optional | Reserved for a future Phase 2e-d binding wiring; today low-risk kinds don't produce these. |
+| `createdAt`                 | yes (registration) | ISO timestamp; mirrors `manifest.registeredAt`.                                                    |
+| `updatedAt` / `completedAt` | yes (completion)   | ISO timestamps set on the completion row.                                                          |
+| `refusalCode` / `refusalReason` / `refusalEvidence` | yes (refused) | Echo of the Phase 2e-b refusal payload.                                          |
+
+### Usage
+
+```ts
+import {
+  appendRegistrationRecord,
+  appendCompletionRecord,
+  appendRefusedRegistrationRecord,
+  readRecords,
+  readRecordsTail,
+  readRecordsForRecordId,
+  readActiveRegistrationRecords,
+} from "./experiments/sandboxRegistrationRecords.js";
+
+const reg = registerLowRiskSandboxKind("summarizationTemplate", controls);
+if (!reg.ok) {
+  // Persist the refusal as a non-active record (audit trail).
+  appendRefusedRegistrationRecord({
+    refusal:  reg,
+    operator: { source: "operator:rey" },
+    featureFlagState: { name: "phase2eb_lowrisk", enabled: true },
+  });
+} else {
+  const ev = appendRegistrationRecord({
+    registration:         reg,
+    rollbackInstructions: [
+      "Disable the Phase 2e-b sandbox feature flag (set to false).",
+      "Drop the in-memory registration via __resetLowRiskSandboxRegistryForTests in dev/test only.",
+      "Append a refused record with reason='operator-initiated rollback' for audit.",
+    ],
+    operator:         { source: "operator:rey", note: "approved 2026-05-09" },
+    featureFlagState: { name: "phase2eb_lowrisk", enabled: true, rollout: 1.0 },
+    preMetrics:       { summary_quality_score: 0.71 },
+    // sandboxAutoApplyEligible: false  (this is the default; no need to set)
+  });
+  // Later, after a sandbox-only static-fixture run produces postMetrics:
+  if (ev.ok) {
+    appendCompletionRecord({
+      recordId:    ev.event.recordId,
+      postMetrics: { summary_quality_score: 0.84, format_compliance: 0.97 },
+      operator:    { source: "operator:rey" },
+      outcome:     "clean",
+    });
+  }
+}
+```
+
+### Phase 2e-c invariants
+
+- **Append-only**: each call writes one JSONL line; existing lines are never rewritten. A torn write or a corrupt line never corrupts prior records — the reader skips bad lines.
+- **Propose-only**: appending a record MUST NOT mutate hypothesis status, the live `experiments` table, the Phase 2d decision-events ledger, the Phase 2e-b in-memory map, `data/research_lab.json`, or `data/memory_knowledge.json`. Tests pin all of these.
+- **No auto-apply**: `sandboxAutoApplyEligible` is recorded but never read by anything that mutates state. The user policy is documented below and enforced by the **absence** of a code path here.
+- **Default-refuse on inputs**: missing rollback instructions, empty rollback instructions, malformed `featureFlagState`, non-finite `preMetrics`, an empty caller-supplied `sandboxSnapshotHash`, a Phase 2e-b refusal passed to `appendRegistrationRecord`, a completion that names no prior registration, or a completion with an empty / non-finite `postMetrics` — all refuse, writing nothing.
+- **Disabled kinds cannot become active registrations**: `appendRegistrationRecord` requires `registration.ok === true`. Disabled-kind requests must go through `appendRefusedRegistrationRecord`, which writes `event: "refused"` / `active: false`.
+- **Deterministic snapshot hash**: when omitted, the snapshot hash is derived from the manifest's canonical JSON (sorted keys, recursive). Identical manifests hash identically; tampered manifests do not.
+
+### Enablement roadmap for the four currently-disabled low-risk kinds
+
+The Phase 2e-b enablement matrix is unchanged in this phase: only `summarizationTemplate` is `enabled: true`. Flipping any other kind is a separate PR with its own approval. The current operator-approved order (subject to revision) is:
+
+1. **`selfCritiquePrompt`** — internal critique persona. Likely the next to enable once the persona harness lands; runs entirely on internal-only personas with no external surface.
+2. **`taskDecompositionPattern`** — strategy / task-decomposition pattern. Enable alongside or shortly after `selfCritiquePrompt`; needs a decomposition router.
+3. **`reasoningTemplate`** — prompt-level reasoning pattern. Enable once a Phase 2e-d reasoning runner exists.
+4. **`memoryRetrievalHeuristic`** — read-only RAG weighting / filtering. **Last** of the four. Even read-only changes affect context selection more broadly, so this kind requires a sandbox-safe RAG read path AND a deeper review of context-selection blast radius before its `enabled` flag flips.
+
+Each enablement is a **registry-flip** change: set `enabled: true` and remove `disabledReason` for that kind in `LOW_RISK_SANDBOX_REGISTRY`. The Phase 2e-c persistence layer needs no changes to support a newly-enabled kind — the JSONL ledger already accepts every kind in `LOW_RISK_SANDBOX_KINDS`.
+
+### Sandbox-only auto-apply policy (post-track-record)
+
+Phase 2e-c records the `sandboxAutoApplyEligible` flag but never acts on it. The operator-approved policy for a future apply layer is:
+
+- After **5–10 clean low-risk sandbox registrations** have landed and run cleanly through the static-fixture cycle (no degraded outcomes, no rollback events, no surprising postMetrics), **consider** allowing Agent 306 to auto-apply selected kinds inside sandbox sessions without per-call human approval. Candidates are kinds whose blast radius is provably contained to the sandbox (most likely `summarizationTemplate` first; `selfCritiquePrompt` and `taskDecompositionPattern` next).
+- **Public posting and publishing remain ALWAYS approval-gated** by GitHub / explicit user approval. Sandbox-only auto-apply does NOT extend to anything that crosses the GitHub boundary, posts to a public surface, or mutates production memory or the live `experiments` table.
+- The transition is itself a separate PR: a future `applyLowRiskSandboxRegistration` would read `sandboxAutoApplyEligible` from the ledger, gate on a feature flag, and refuse anything that would cross the public boundary. Phase 2e-c does not ship that layer.
+
+## What remains deferred to Phase 2e-d (live sandbox application)
 
 - A live scheduler / daily-cycle helper that consumes `ExperimentDecision` events from the Phase 2d ledger and calls a registration helper. Phase 2e produces plans on demand from a binding; a scheduler that walks the ledger and produces plans automatically is explicitly out of scope.
 - A sandbox-safe `registerExperiment` (or a sandbox flag on the existing helper) that respects `dryRun` and `maxTrials`. The current `registerExperiment` writes a `running` row and invalidates the runtime cache — calling it from a sandbox plan or a Phase 2e-b registration today would mean a live-traffic experiment; Phase 2e and Phase 2e-b both refuse to do that.
-- Wiring `applySandboxExecutionPlan` and `applyLowRiskSandboxRegistration` to the new sandbox-safe registration helper. Today both functions are no-op stubs.
+- Wiring `applySandboxExecutionPlan` and `applyLowRiskSandboxRegistration` to the new sandbox-safe registration helper. Today both functions are no-op stubs. A Phase 2e-d apply layer would also be the first reader of `sandboxAutoApplyEligible` from the Phase 2e-c ledger.
 - Persisting `promotion_events` / `retraction_events` on the hypothesis record (and the schema migrations that come with it). A decision-event is a *proposal* record; an applied promotion is a different record type with its own table.
 - A statistical sequential test (SPRT, Bayesian posterior, CUPED-style variance reduction) that replaces the threshold layer once we have enough trials to calibrate one.
-- Dashboard surfaces over the ledger, the plan record store, or the Phase 2e-b registration map.
+- Dashboard surfaces over the ledger, the plan record store, the Phase 2e-b registration map, or the Phase 2e-c records ledger.
 - Growing the metric registry from a database / config file / LLM proposal — and the migration logic that comes with it.
-- A live runner for `summarizationTemplate` that computes `hallucination_count`, `citation_source_retention`, `format_compliance`, and `length_compliance` from static-fixture outputs. The metric seed and guardrails are present so a future Phase 2e-c runner has a clean target.
-- Enabling the four currently-disabled low-risk kinds (`reasoningTemplate`, `selfCritiquePrompt`, `memoryRetrievalHeuristic`, `taskDecompositionPattern`). Each requires its own runner / persona / pipeline before its `enabled` flag can flip.
-- Persistent storage of the Phase 2e-b in-memory registration map.
+- A live runner for `summarizationTemplate` that computes `hallucination_count`, `citation_source_retention`, `format_compliance`, and `length_compliance` from static-fixture outputs. The metric seed and guardrails are present so a future Phase 2e-d runner has a clean target.
+- Enabling the four currently-disabled low-risk kinds (`reasoningTemplate`, `selfCritiquePrompt`, `memoryRetrievalHeuristic`, `taskDecompositionPattern`). Each requires its own runner / persona / pipeline before its `enabled` flag can flip — see the Phase 2e-c enablement roadmap above for current ordering.
 
 ## What is deferred to Phase 2f (meta-reflection / lessons database)
 
@@ -527,11 +642,11 @@ applyLowRiskSandboxRegistration(reg); // { ok: false, deferredTo: "phase-2e-c" }
 - A "lessons database" surface: structured derivations from the ledger that feed back into the research-topic / hypothesis pipeline (e.g. "metric X has produced N inconclusive runs in a row — propose a different operationalisation").
 - Phase 2d gives 2f the raw input: a clean, append-only event log with stable verdict / reason-code enums and `thresholdsUsed` per row. Phase 2d does not compute the summary.
 
-The selector + binding + decision + ledger + sandbox-plan + low-risk-registry modules are intentionally *propose-only*. Phase 2e produces sandbox execution plans on demand for the formal-hypothesis chain. Phase 2e-b adds an independent low-risk sandbox registration registry (today: `summarizationTemplate` enabled, four other operator-approved kinds disabled). Both are registration-only / plan-only — neither calls `registerExperiment`, mutates a hypothesis, writes the Phase 2d ledger, or schedules anything. Phase 2e-c will wire `applySandboxExecutionPlan` and `applyLowRiskSandboxRegistration` into a sandbox-safe `registerExperiment` and the daily-cycle / scheduler boot path, but only behind a feature flag and only with `promotion_events` / `retraction_events` persistence in place.
+The selector + binding + decision + ledger + sandbox-plan + low-risk-registry + sandbox-registration-records modules are intentionally *propose-only*. Phase 2e produces sandbox execution plans on demand for the formal-hypothesis chain. Phase 2e-b adds an independent low-risk sandbox registration registry (today: `summarizationTemplate` enabled, four other operator-approved kinds disabled). Phase 2e-c persists those registrations as an append-only JSONL audit trail with manifest snapshots, snapshot hashes, pre/post metrics fields, and rollback instructions — still without any live application path. All three are registration-only / plan-only — none of them calls `registerExperiment`, mutates a hypothesis, writes the Phase 2d ledger, or schedules anything. Phase 2e-d will wire `applySandboxExecutionPlan` and `applyLowRiskSandboxRegistration` into a sandbox-safe `registerExperiment` and the daily-cycle / scheduler boot path, but only behind a feature flag, only with `promotion_events` / `retraction_events` persistence in place, and only after the operator-approved track-record threshold (5–10 clean low-risk registrations) has been reached.
 
 ## Invariants Phase 2 preserves
 
-- **Propose-only**: nothing in this module writes to the database, the JSON files, or the experiment registry. The output is candidates and refusals; an operator (or a future Phase 2b helper) decides what to do. (Phase 2d's ledger is the only file write — it persists evidence, never engine state.)
+- **Propose-only**: nothing in this module writes to the database, the JSON files, or the experiment registry. The output is candidates and refusals; an operator (or a future Phase 2b helper) decides what to do. (Phase 2d's ledger and Phase 2e-c's records ledger are the only file writes — they persist evidence/registration records, never engine state.)
 - **Single readiness gate**: `canFeedExperiment` from `server/hypothesisHygiene.ts` is the only function that says "yes, a formal hypothesis may proceed". The selector composes it; it does not re-implement it.
 - **Memory-origin records are never candidates**: the type system, the function partitioning, and the absence of any `ok: true` branch on `canMemoryEntryFeedExperiment` all enforce this.
-- **History is preserved**: no records are mutated. The selector is a pure read; the Phase 2d ledger is append-only.
+- **History is preserved**: no records are mutated. The selector is a pure read; the Phase 2d ledger and the Phase 2e-c records ledger are both append-only.
