@@ -10,6 +10,7 @@
     "check": "tsc",
     "db:push": "drizzle-kit push",
     "calibration:backfill": "tsx server/calibration/backfillOutcomes.ts",
+    "hypothesis:audit": "tsx scripts/hypothesisAudit.ts",
     "test": "tsx scripts/runTests.ts",
     "test:safety": "tsx --test server/__tests__/dashboardAuth.test.ts server/__tests__/promotionGate.test.ts server/__tests__/regressionRunnerCoverage.test.ts server/__tests__/claimVerifier.golden.test.ts"
   },
