@@ -9,7 +9,8 @@
 // This file exercises the gate logic directly. We replicate the matchers
 // here so the test runs without spinning up the Express app.
 
-import { describe, it, expect } from "vitest";
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
 
 type Action =
   | { type: "generate_episode"; topic: string; drivingQuestion: string }
@@ -26,9 +27,9 @@ function inferActions(userMsgRaw: string, agentText = ""): Action[] {
   const slashBlog = userMsgRaw.match(/^\s*\/blog\s+(.{3,200})$/im);
   const slashResearch = userMsgRaw.match(/^\s*\/research\s+(.{3,200})$/im);
 
-  const imperativeEpisode = userMsg.match(/(?:create|generate|make|record)\s+(?:a |an |the )?(?:new )?(?:episode|podcast|signal)\s+(?:called|titled|named|about)?\s*["'\u201c\u2018](.{3,200}?)["'\u201d\u2019]/i);
-  const imperativeBlog = userMsg.match(/(?:create|generate|write|publish|draft|post)\s+(?:a |an |the )?(?:new )?(?:blog|post|article)\s+(?:called|titled|named|about)?\s*["'\u201c\u2018](.{3,200}?)["'\u201d\u2019]/i);
-  const imperativeResearch = userMsg.match(/(?:start|begin|create|open)\s+(?:a |an |the )?(?:new )?(?:research thread|research|investigation)\s+(?:on|about|into)?\s*["'\u201c\u2018](.{3,200}?)["'\u201d\u2019]/i);
+  const imperativeEpisode = userMsg.match(/(?:create|generate|make|record)\s+(?:a |an |the )?(?:new )?(?:episode|podcast|signal)\s+(?:called|titled|named|about)?\s*["'“‘](.{3,200}?)["'”’]/i);
+  const imperativeBlog = userMsg.match(/(?:create|generate|write|publish|draft|post)\s+(?:a |an |the )?(?:new )?(?:blog|post|article)\s+(?:called|titled|named|about)?\s*["'“‘](.{3,200}?)["'”’]/i);
+  const imperativeResearch = userMsg.match(/(?:start|begin|create|open)\s+(?:a |an |the )?(?:new )?(?:research thread|research|investigation)\s+(?:on|about|into)?\s*["'“‘](.{3,200}?)["'”’]/i);
 
   if (slashEpisode || imperativeEpisode) {
     const topic = (slashEpisode?.[1] || imperativeEpisode?.[1] || "").trim();
@@ -45,8 +46,6 @@ function inferActions(userMsgRaw: string, agentText = ""): Action[] {
 
 describe("Explicit-intent action gate (deny-by-default)", () => {
   describe("Regression: governance/meta chat must not spawn artifacts", () => {
-    // These four messages all spawned ep_the_signal_* episodes in the
-    // 2026-04-28 incident under the old loose-substring matcher.
     const incidentMessages = [
       "Before I approve, explain ep_the_signal_1777424850839. You created an episode from my clarifying question — a governance message, not a topic prompt.",
       "You did it again. ep_the_signal_1777425028983 was spawned in the same response where you committed to spawning no more episodes from this thread.",
@@ -56,7 +55,7 @@ describe("Explicit-intent action gate (deny-by-default)", () => {
 
     for (const msg of incidentMessages) {
       it(`suppresses spawn for: "${msg.slice(0, 60)}..."`, () => {
-        expect(inferActions(msg)).toEqual([]);
+        assert.deepEqual(inferActions(msg), []);
       });
     }
   });
@@ -64,41 +63,41 @@ describe("Explicit-intent action gate (deny-by-default)", () => {
   describe("Slash commands must spawn the requested artifact", () => {
     it("/episode <topic> creates an episode", () => {
       const actions = inferActions("/episode AI labor displacement in legal services");
-      expect(actions).toHaveLength(1);
-      expect(actions[0].type).toBe("generate_episode");
-      expect(actions[0].topic).toBe("AI labor displacement in legal services");
+      assert.equal(actions.length, 1);
+      assert.equal(actions[0].type, "generate_episode");
+      assert.equal((actions[0] as any).topic, "AI labor displacement in legal services");
     });
 
     it("/blog <topic> creates a blog", () => {
       const actions = inferActions("/blog Anthropic observed exposure metric");
-      expect(actions).toHaveLength(1);
-      expect(actions[0].type).toBe("generate_blog");
+      assert.equal(actions.length, 1);
+      assert.equal(actions[0].type, "generate_blog");
     });
 
     it("/research <topic> creates a research thread", () => {
       const actions = inferActions("/research W3C DID adoption in identity verification");
-      expect(actions).toHaveLength(1);
-      expect(actions[0].type).toBe("start_research");
+      assert.equal(actions.length, 1);
+      assert.equal(actions[0].type, "start_research");
     });
   });
 
   describe("Quoted-imperative form must spawn the requested artifact", () => {
     it("'create an episode \"X\"' creates an episode", () => {
       const actions = inferActions('create an episode "AI labor markets and the red area gap"');
-      expect(actions).toHaveLength(1);
-      expect(actions[0].type).toBe("generate_episode");
+      assert.equal(actions.length, 1);
+      assert.equal(actions[0].type, "generate_episode");
     });
 
     it("'write a blog \"X\"' creates a blog", () => {
       const actions = inferActions('write a blog "Why CIA-1.5.1 should stay in research"');
-      expect(actions).toHaveLength(1);
-      expect(actions[0].type).toBe("generate_blog");
+      assert.equal(actions.length, 1);
+      assert.equal(actions[0].type, "generate_blog");
     });
 
     it("'start a research thread on \"X\"' creates a research thread", () => {
       const actions = inferActions('start a research thread on "iii.dev polyglot worker model"');
-      expect(actions).toHaveLength(1);
-      expect(actions[0].type).toBe("start_research");
+      assert.equal(actions.length, 1);
+      assert.equal(actions[0].type, "start_research");
     });
   });
 
@@ -110,12 +109,12 @@ describe("Explicit-intent action gate (deny-by-default)", () => {
       "can you investigate the architectural decoupling",
       "write me a summary of the recommendation",
       "thanks for the research on this topic",
-      "Created episode 'foo' in Podcast Studio (ep_the_signal_123)", // self-quoting agent output
+      "Created episode 'foo' in Podcast Studio (ep_the_signal_123)",
     ];
 
     for (const msg of conversational) {
       it(`suppresses: "${msg}"`, () => {
-        expect(inferActions(msg)).toEqual([]);
+        assert.deepEqual(inferActions(msg), []);
       });
     }
   });

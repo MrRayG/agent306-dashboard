@@ -67,19 +67,20 @@ describe("HypothesisConsolidation", () => {
   });
 
   describe("findHypothesisClusters", () => {
-    it("should accept similarityThreshold parameter", () => {
-      // Lower threshold should not throw
-      const clusters = findHypothesisClusters(3, 0.35);
+    // findHypothesisClusters became async (returns Promise<HypothesisCluster[]>)
+    // when KB-backed embedding lookups were added; tests now await the result.
+    it("should accept similarityThreshold parameter", async () => {
+      const clusters = await findHypothesisClusters(3, 0.35);
       assert.ok(Array.isArray(clusters));
     });
 
-    it("should accept custom minClusterSize", () => {
-      const clusters = findHypothesisClusters(2, 0.45);
+    it("should accept custom minClusterSize", async () => {
+      const clusters = await findHypothesisClusters(2, 0.45);
       assert.ok(Array.isArray(clusters));
     });
 
-    it("should use defaults when called with no args", () => {
-      const clusters = findHypothesisClusters();
+    it("should use defaults when called with no args", async () => {
+      const clusters = await findHypothesisClusters();
       assert.ok(Array.isArray(clusters));
     });
   });

@@ -11,10 +11,15 @@ import { dataPath } from "../dataPaths.js";
 
 const HISTORY_FILE = dataPath("wisdom_pull_history.json");
 const USAGE_FILE = dataPath("wisdom_api_usage.json");
+// PR introduced a 7-day Google Books cache. Without clearing it, mocked-fetch
+// failure tests still hit cached entries from previous suite runs and report
+// non-zero `entriesIngested`.
+const GOOGLE_BOOKS_CACHE_FILE = dataPath("google_books_cache.json");
 
 function cleanFiles() {
   try { if (fs.existsSync(HISTORY_FILE)) fs.unlinkSync(HISTORY_FILE); } catch {}
   try { if (fs.existsSync(USAGE_FILE)) fs.unlinkSync(USAGE_FILE); } catch {}
+  try { if (fs.existsSync(GOOGLE_BOOKS_CACHE_FILE)) fs.unlinkSync(GOOGLE_BOOKS_CACHE_FILE); } catch {}
 }
 
 // Build a mock EvalResult matching the real interface

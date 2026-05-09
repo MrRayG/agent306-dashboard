@@ -40,13 +40,21 @@ after(() => {
 const originalFetch = globalThis.fetch;
 function stubFetch(): { calls: { url: string; init: any }[]; restore: () => void } {
   const calls: { url: string; init: any }[] = [];
+  // PR #251 empty-body recovery consumes res.text() to detect blank xai-direct
+  // responses, so the stub must serialize the same payload it returns through
+  // .json(). Otherwise non-empty .json() + empty .text() looked like an
+  // unrecoverable empty response and the helper retried + fell back to
+  // OpenRouter, producing 3 fetch calls instead of 1.
+  const bodyJson = { choices: [{ message: { content: "hi" } }] };
+  const bodyText = JSON.stringify(bodyJson);
   globalThis.fetch = (async (url: any, init: any) => {
     calls.push({ url: String(url), init });
     return {
       ok: true,
       status: 200,
-      text: async () => "{}",
-      json: async () => ({ choices: [{ message: { content: "hi" } }] }),
+      headers: new Headers(),
+      text: async () => bodyText,
+      json: async () => bodyJson,
     } as any;
   }) as any;
   return { calls, restore: () => { globalThis.fetch = originalFetch; } };

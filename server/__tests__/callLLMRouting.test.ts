@@ -49,8 +49,9 @@ describe("callLLM — Responses API model translation + non-xAI downgrade", () =
   let originalFetch: typeof globalThis.fetch;
   const savedEnabled = process.env.RESPONSES_API_ENABLED_TASKS;
   const savedFallback = process.env.RESPONSES_API_FALLBACK;
-  const savedModelStd = process.env.MODEL_STANDARD;
-  const savedModelPrem = process.env.MODEL_PREMIUM;
+  const savedModelStd = process.env.MODEL_STANDARD_VOICE;
+  const savedModelFrontFactual = process.env.MODEL_FRONTIER_FACTUAL;
+  const savedModelFrontReasoning = process.env.MODEL_FRONTIER_REASONING;
   const savedModelRoutine = process.env.MODEL_ROUTINE;
 
   beforeEach(() => {
@@ -65,14 +66,17 @@ describe("callLLM — Responses API model translation + non-xAI downgrade", () =
     };
     restore("RESPONSES_API_ENABLED_TASKS", savedEnabled);
     restore("RESPONSES_API_FALLBACK", savedFallback);
-    restore("MODEL_STANDARD", savedModelStd);
-    restore("MODEL_PREMIUM", savedModelPrem);
+    restore("MODEL_STANDARD_VOICE", savedModelStd);
+    restore("MODEL_FRONTIER_FACTUAL", savedModelFrontFactual);
+    restore("MODEL_FRONTIER_REASONING", savedModelFrontReasoning);
     restore("MODEL_ROUTINE", savedModelRoutine);
   });
 
-  it("translates x-ai/grok-4.20 to grok-4-1-fast-non-reasoning when calling Responses API", async () => {
+  it("translates xAI OpenRouter model to native name when calling Responses API", async () => {
+    // self-debate is a standard-voice task → default x-ai/grok-4.20-non-reasoning,
+    // which toXAINativeModel() translates to grok-4.20-0309-non-reasoning before
+    // dispatch to the Responses API.
     process.env.RESPONSES_API_ENABLED_TASKS = "self-debate";
-    process.env.MODEL_STANDARD = "x-ai/grok-4.20";
 
     const fetchMock = mock.fn(async () => responsesOk("ok") as any);
     globalThis.fetch = fetchMock as any;
@@ -87,19 +91,21 @@ describe("callLLM — Responses API model translation + non-xAI downgrade", () =
     const url = String(fetchMock.mock.calls[0].arguments[0]);
     assert.ok(url.includes("/responses"), "should call Responses endpoint");
     const body = JSON.parse(fetchMock.mock.calls[0].arguments[1].body);
-    assert.equal(body.model, "grok-4-1-fast-non-reasoning", "model should be xAI-native, not OpenRouter-prefixed");
+    assert.equal(body.model, "grok-4.20-0309-non-reasoning", "model should be xAI-native, not OpenRouter-prefixed");
   });
 
   it("silently auto-downgrades Anthropic model to chat/completions (does not call Responses API)", async () => {
-    process.env.RESPONSES_API_ENABLED_TASKS = "hypothesis-resolution";
-    process.env.MODEL_PREMIUM = "anthropic/claude-sonnet-4.6";
+    // `blog` is a premium-voice task which defaults to anthropic/claude-sonnet-4.6 —
+    // exercises the non-xAI Responses-downgrade path without env overrides (TIER_MAP
+    // is module-init scoped post-PR-#288, so per-test env mutation is unreliable).
+    process.env.RESPONSES_API_ENABLED_TASKS = "blog";
 
     const fetchMock = mock.fn(async () => chatOk("reply") as any);
     globalThis.fetch = fetchMock as any;
 
     const { callLLM } = await import(`../llmCall.js?t=${Date.now()}`);
     const out = await callLLM({
-      task: "hypothesis-resolution",
+      task: "blog",
       messages: [{ role: "user", content: "hi" }],
     });
 
@@ -133,7 +139,6 @@ describe("callLLM — Responses API model translation + non-xAI downgrade", () =
   it("falls back to chat/completions with ORIGINAL OpenRouter model name when Responses API errors", async () => {
     process.env.RESPONSES_API_ENABLED_TASKS = "self-debate";
     process.env.RESPONSES_API_FALLBACK = "true";
-    process.env.MODEL_STANDARD = "x-ai/grok-4.20";
 
     let call = 0;
     const fetchMock = mock.fn(async () => {
@@ -153,12 +158,13 @@ describe("callLLM — Responses API model translation + non-xAI downgrade", () =
     assert.equal(out.text, "fallback reply");
     assert.equal(fetchMock.mock.callCount(), 2);
 
-    // First call: Responses API with translated model
+    // First call: Responses API with translated model (xAI-native, post PR #287)
     const body1 = JSON.parse(fetchMock.mock.calls[0].arguments[1].body);
-    assert.equal(body1.model, "grok-4-1-fast-non-reasoning", "first (Responses) call uses xAI-native name");
+    assert.equal(body1.model, "grok-4.20-0309-non-reasoning", "first (Responses) call uses xAI-native name");
 
-    // Second call: chat/completions with ORIGINAL OpenRouter model
+    // Second call: chat/completions with ORIGINAL OpenRouter model (the default
+    // for the standard-voice tier).
     const body2 = JSON.parse(fetchMock.mock.calls[1].arguments[1].body);
-    assert.equal(body2.model, "x-ai/grok-4.20", "fallback uses original OpenRouter-format name");
+    assert.equal(body2.model, "x-ai/grok-4.20-non-reasoning", "fallback uses original OpenRouter-format name");
   });
 });

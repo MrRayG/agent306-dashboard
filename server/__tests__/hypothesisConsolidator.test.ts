@@ -29,35 +29,36 @@ describe("HypothesisConsolidator", () => {
   });
 
   describe("findHypothesisClusters", () => {
-    it("should accept minClusterSize parameter", () => {
-      // findHypothesisClusters should not throw when called with custom minClusterSize
-      const result = findHypothesisClusters(2);
+    // findHypothesisClusters became async (returns Promise<HypothesisCluster[]>)
+    // when KB-backed embedding lookups were added; tests now await the result.
+    it("should accept minClusterSize parameter", async () => {
+      const result = await findHypothesisClusters(2);
       assert.ok(Array.isArray(result), "Should return an array of clusters");
     });
 
-    it("should accept similarityThreshold parameter", () => {
-      // Lower threshold should not cause errors
-      const result = findHypothesisClusters(3, 0.35);
+    it("should accept similarityThreshold parameter", async () => {
+      const result = await findHypothesisClusters(3, 0.35);
       assert.ok(Array.isArray(result), "Should return an array of clusters");
     });
 
-    it("should return fewer clusters with high similarity threshold", () => {
-      const looseResults = findHypothesisClusters(2, 0.2);
-      const strictResults = findHypothesisClusters(2, 0.9);
-      // Strict threshold should find equal or fewer clusters
+    it("should return fewer clusters with high similarity threshold", async () => {
+      const looseResults = await findHypothesisClusters(2, 0.2);
+      const strictResults = await findHypothesisClusters(2, 0.9);
       assert.ok(
         strictResults.length <= looseResults.length,
         `Strict threshold (${strictResults.length}) should find <= clusters than loose (${looseResults.length})`
       );
     });
 
-    it("should use default threshold of 0.45 when not specified", () => {
-      const defaultResults = findHypothesisClusters(3);
-      const explicitResults = findHypothesisClusters(3, 0.45);
+    it("should use the function's documented default threshold when not specified", async () => {
+      // Default similarityThreshold in the production code is 0.75 (kept in
+      // sync with hypothesisConsolidator.ts:findHypothesisClusters signature).
+      const defaultResults = await findHypothesisClusters(3);
+      const explicitResults = await findHypothesisClusters(3, 0.75);
       assert.strictEqual(
         defaultResults.length,
         explicitResults.length,
-        "Default and explicit 0.45 threshold should yield same results"
+        "Default and explicit 0.75 threshold should yield same results"
       );
     });
   });

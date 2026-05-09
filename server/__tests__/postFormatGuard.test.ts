@@ -56,10 +56,12 @@ describe("enforcePostFormat", () => {
   });
 
   it("preserves existing valid show tag", () => {
-    const input = "[306 RESEARCH] New paper on transformer efficiency.";
+    // [306 RESEARCH] was renamed to [306 ACADEMY] (commit 5b1ec58); the
+    // research → academy mapping is still exercised by the content type.
+    const input = "[306 ACADEMY] New paper on transformer efficiency.";
     const result = enforcePostFormat(input, "research");
-    assert.ok(result.startsWith("[306 RESEARCH]"), "Should preserve existing tag");
-    const tagCount = (result.match(/\[306 RESEARCH\]/g) || []).length;
+    assert.ok(result.startsWith("[306 ACADEMY]"), "Should preserve existing tag");
+    const tagCount = (result.match(/\[306 ACADEMY\]/g) || []).length;
     assert.equal(tagCount, 1, `Expected 1 tag, found ${tagCount}`);
   });
 

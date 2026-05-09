@@ -38,7 +38,6 @@ describe("NoveltyGate", () => {
   // we use dynamic import.
 
   let checkNovelty: typeof import("../noveltyGate.js").checkNovelty;
-  let shouldFrameAsBreaking: typeof import("../noveltyGate.js").shouldFrameAsBreaking;
   let getNoveltyGateLog: typeof import("../noveltyGate.js").getNoveltyGateLog;
   let addKnowledge: typeof import("../memoryEngine.js").addKnowledge;
   let knowledge: typeof import("../memoryEngine.js").knowledge;
@@ -48,7 +47,6 @@ describe("NoveltyGate", () => {
     cleanLogFile();
     const noveltyMod = await import("../noveltyGate.js");
     checkNovelty = noveltyMod.checkNovelty;
-    shouldFrameAsBreaking = noveltyMod.shouldFrameAsBreaking;
     getNoveltyGateLog = noveltyMod.getNoveltyGateLog;
     const memMod = await import("../memoryEngine.js");
     addKnowledge = memMod.addKnowledge;
@@ -217,32 +215,10 @@ describe("NoveltyGate", () => {
     });
   });
 
-  describe("shouldFrameAsBreaking()", () => {
-    it("should log results and return correct format", async () => {
-      const mockEvent = {
-        id: "test_event_1",
-        headline: "Completely New Unprecedented Discovery in Physics",
-        summary: "Scientists discover a new fundamental force of nature",
-        source: "test",
-        tier: 1 as const,
-        entities: ["physics", "fundamental force"],
-        detectedAt: new Date().toISOString(),
-        posted: false,
-        postedAt: null,
-      };
-
-      const result = await shouldFrameAsBreaking(mockEvent);
-
-      assert.ok(typeof result.allowed === "boolean");
-      assert.ok(typeof result.reframedType === "string");
-      assert.ok(typeof result.reason === "string");
-
-      // Check that the log was written
-      const log = getNoveltyGateLog();
-      assert.ok(log.length > 0, "Should have logged the check");
-      assert.equal(log[0].headline, mockEvent.headline);
-    });
-  });
+  // shouldFrameAsBreaking() was removed in commit 4b605fb together with the
+  // breakingNewsDetector — the test sub-suite that exercised it was removed
+  // in this PR. checkNovelty() (above) covers the equivalent novelty-decision
+  // logic now.
 
   describe("getNoveltyGateLog()", () => {
     it("should return empty array when no checks have been made", () => {
@@ -252,19 +228,14 @@ describe("NoveltyGate", () => {
     });
 
     it("should respect limit parameter", async () => {
-      // Run multiple checks to populate the log
+      // Run multiple checks to populate the log via checkNovelty (the
+      // surviving public entry point).
       for (let i = 0; i < 5; i++) {
-        await shouldFrameAsBreaking({
-          id: `test_${i}`,
-          headline: `Test Event ${i} About Unique Topic ${Math.random()}`,
-          summary: `Summary ${i}`,
-          source: "test",
-          tier: 1,
-          entities: [],
-          detectedAt: new Date().toISOString(),
-          posted: false,
-          postedAt: null,
-        });
+        await checkNovelty(
+          `Test Event ${i} About Unique Topic ${Math.random()}`,
+          `Summary ${i}`,
+          [],
+        );
       }
       const limited = getNoveltyGateLog(3);
       assert.ok(limited.length <= 3, `Should return at most 3 entries, got ${limited.length}`);
