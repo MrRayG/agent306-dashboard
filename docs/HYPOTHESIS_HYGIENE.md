@@ -161,3 +161,7 @@ The new module reads existing fields; it does not duplicate any of those gates. 
 - Dashboards or new experiment-summary tables.
 - Auto-archival logic. The operator decides; this module reports.
 - Mutations of stored records during a normal cycle.
+
+## Downstream — Phase 2
+
+`canFeedExperiment` is consumed by `server/experiments/hypothesisExperimentSelector.ts` (Phase 2). The selector partitions the formal `research_lab.hypotheses[]` backlog into experiment **candidates** and structured **refusals**, and pairs that with explicit hard-no refusals for memory-origin entries. See [`PHASE2_EXPERIMENTS.md`](./PHASE2_EXPERIMENTS.md) for the entry criteria, output types, and the relationship between research topics, formal hypotheses, memory hypotheses, and experiments.
