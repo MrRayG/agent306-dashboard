@@ -22,6 +22,7 @@
  */
 
 import fs from "fs";
+import { randomBytes } from "crypto";
 import { dataPath } from "./dataPaths.js";
 import type { VerifierReport, VerifierSeverity } from "./claimVerifier.js";
 import type { EditorComment, ExtractedClaim, ExtractedReference } from "./claimExtractor.js";
@@ -152,8 +153,12 @@ export function recordNewsDraft(args: {
   const inferredReason: NewsDraftRecord["quarantineReason"] =
     args.quarantineReason
     ?? (args.status === "published_with_warnings" ? "soft_warn_audit" : "verifier_hard_fail");
+  // Suffix with random bytes so two records created in the same millisecond
+  // get distinct ids — without this, recordNewsDraft() called in tight
+  // succession (tests, retry storms) collides and a later deleteNewsDraft(id)
+  // removes more than one row.
   const record: NewsDraftRecord = {
-    id: `news_draft_${now.getTime()}`,
+    id: `news_draft_${now.getTime()}_${randomBytes(4).toString("hex")}`,
     createdAt: now.toISOString(),
     status: args.status,
     severity: args.severity,
