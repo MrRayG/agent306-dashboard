@@ -1,6 +1,6 @@
 # Phase 2 — Evidence-Based Hypothesis Experiments
 
-**Status:** Phase 2 entry slice + Phase 2b metric binding merged. Statistical decision rules, promotion/retraction events, and live scheduler automation are deferred to **Phase 2c**.
+**Status:** Phase 2 entry slice + Phase 2b metric binding + Phase 2c decision rules merged. Promotion/retraction event persistence and live scheduler automation are deferred to **Phase 2d**.
 
 Phase 2 turns the formal hypothesis backlog into a *selection* problem: given `research_lab.hypotheses[]`, which records are eligible to feed an experiment, and which are refused — with explicit, structured evidence — and why.
 
@@ -159,15 +159,122 @@ Adding a new metric is a one-file change: append a `RegisteredMetric` to `PHASE2
 - **Composes with the Phase 2 selector**: the function signature accepts only `HypothesisExperimentCandidate` records — the type system (plus the absence of any `ok: true` branch on `canMemoryEntryFeedExperiment`) ensures memory-origin entries cannot reach metric binding.
 - **No mutation of the hypothesis record**: the candidate's free-text `metric` and `measurementPath` are echoed verbatim in the binding evidence; nothing is rewritten.
 
-## What is deferred to Phase 2c
+## Phase 2c — Experiment decision rules (merged)
 
-- Statistical decision rules (Bayes / SPRT / CUPED-style).
-- Promotion / retraction events and their persistence on the hypothesis record.
-- Live scheduler automation that calls `registerExperiment` from a bound candidate (today the binding output is *advisory* — a Phase 2c registration helper will read `MetricBinding.metricKey` and decide whether to register).
-- Dashboard surfaces over the binding report.
-- Growing the registry from a database, config file, or LLM proposal — and the migration logic that comes with it.
+Phase 2c answers exactly one question on top of a Phase 2b binding plus an aggregate outcome:
 
-The selector + binding modules are intentionally *propose-only*. Phase 2c will wire them into the daily-cycle / scheduler boot path, but only behind a feature flag and only after the statistical decision work is done.
+> "Given the evidence so far, should this experiment be promoted, rejected, continued, or sent to a human reviewer?"
+
+The output is `ExperimentDecision`. The module is pure, deterministic, and propose-only — it never writes `promotion_events`, never calls `registerExperiment`, never mutates a hypothesis record. An operator (or a future Phase 2d helper) decides what to do with the verdict.
+
+### Verdicts
+
+| Verdict          | When                                                                                          |
+|------------------|-----------------------------------------------------------------------------------------------|
+| `promote`        | Treatment beats baseline by ≥ `promoteAbsoluteDelta`, sample threshold met, no guardrail failure, no cost regression. |
+| `reject`         | Hard guardrail failure, OR treatment underperforms by ≥ `rejectAbsoluteDelta`, OR cost rose above the flat-cost ratio with no metric improvement. |
+| `continue`       | Sample below threshold, OR sample met but delta inside the inconclusive band.                  |
+| `needs_review`   | Missing or invalid aggregate fields, OR an advisory (non-fatal) guardrail failed. The safe-default verdict for ambiguous evidence. |
+
+### Reason codes
+
+Stable enum surfaced on every decision so callers can branch without parsing prose:
+
+| `reasonCode`                  | Verdict        |
+|-------------------------------|----------------|
+| `missing_aggregate`           | `needs_review` |
+| `invalid_aggregate`           | `needs_review` |
+| `ambiguous_guardrail`         | `needs_review` |
+| `insufficient_sample`         | `continue`     |
+| `inconclusive`                | `continue`     |
+| `guardrail_failure`           | `reject`       |
+| `primary_metric_worse`        | `reject`       |
+| `cost_up_without_improvement` | `reject`       |
+| `primary_metric_better`       | `promote`      |
+
+### Evaluation order
+
+The rules are evaluated in this order; the first match wins. This ordering is part of the contract — moving a rule changes the verdict on edge cases.
+
+1. Missing aggregate (`baseline` or `treatment` undefined) → `needs_review` / `missing_aggregate`.
+2. Invalid aggregate (NaN, negative count, non-integer count) → `needs_review` / `invalid_aggregate`.
+3. Failed guardrail — `fatal !== false` ⇒ `reject` / `guardrail_failure`; `fatal === false` ⇒ `needs_review` / `ambiguous_guardrail`.
+4. Sample below `minTotalSamples` OR either arm below `minPerArmSamples` → `continue` / `insufficient_sample`.
+5. Cost ratio above `maxFlatCostRatio` with metric delta below `minMetricImprovementForCost` → `reject` / `cost_up_without_improvement`.
+6. `treatment.metric − baseline.metric ≤ −rejectAbsoluteDelta` → `reject` / `primary_metric_worse`.
+7. `treatment.metric − baseline.metric ≥ +promoteAbsoluteDelta` → `promote` / `primary_metric_better`.
+8. Otherwise → `continue` / `inconclusive`.
+
+### Defaults
+
+```ts
+{
+  minTotalSamples:             30,
+  minPerArmSamples:            15,
+  promoteAbsoluteDelta:        0.05,
+  rejectAbsoluteDelta:         0.05,
+  minMetricImprovementForCost: 0.005,
+  maxFlatCostRatio:            0.10,
+}
+```
+
+Defaults are deliberately conservative — Phase 2c is a threshold layer, not a sequential statistical test. We want the module to recommend `continue` or `needs_review` more often than `promote` or `reject` until Phase 2d adds rigor. Callers can override any subset; the active values are echoed on every decision in `thresholdsUsed`.
+
+### Decision module
+
+`server/experiments/hypothesisExperimentDecision.ts` is pure (no I/O, no DB writes, no LLM calls, no clock). The `now` argument is injectable so tests are deterministic.
+
+```ts
+import {
+  decideExperimentOutcome,
+  decideExperimentOutcomes,
+  getDefaultDecisionThresholds,
+  type ExperimentDecisionInput,
+} from "./experiments/hypothesisExperimentDecision.js";
+
+const decision = decideExperimentOutcome({
+  binding,                                    // MetricBinding from Phase 2b
+  baseline:  { count: 20, metric: 0.91 },
+  treatment: { count: 20, metric: 0.96 },
+  baselineCost:  { costUsd: 0.10 },
+  treatmentCost: { costUsd: 0.12 },
+  guardrails: [
+    { name: "judge_outage_rate", passed: true },
+    { name: "p99_latency_ms",    passed: true, fatal: true },
+  ],
+});
+// decision.verdict, .reasonCode, .reason, .evidence, .thresholdsUsed
+```
+
+### Evidence shape
+
+Every decision carries:
+
+- `verdict` — one of the four verdicts.
+- `reasonCode` — the stable enum value.
+- `reason` — a one-sentence narrative for the audit panel.
+- `evidence[]` — concrete observations (per-arm counts, metric delta, active thresholds, failing guardrail detail). The list is ordered roughly by relevance and is stable input-by-input so an operator can diff two decisions.
+- `thresholdsUsed` — the merged threshold record, with defaults filled in.
+- `decidedAt` — ISO timestamp from injected `now`.
+- `candidate` — `{ hypothesisId, origin, tag }` echo so a single decision record is self-describing in logs without a join.
+
+### Phase 2c invariants
+
+- **Propose-only**: nothing in this module writes to the database, the JSON files, the experiment registry, or `promotion_events` / `retraction_events`. The output is a verdict; an operator decides what to do.
+- **Composes with Phase 2 / 2b**: the decision input is a successful `MetricBinding` (TypeScript narrows `MetricBinding | MetricBindingRefusal` on `ok: true`) — a refusal cannot reach the decision module. Memory-origin records cannot become a binding by Phase 1.5b's hard-no, so they cannot become a decision either. There is no bypass.
+- **Deterministic**: every rule is a finite-arithmetic threshold comparison on the inputs. No randomness, no statistical sampling, no clock reads (the `now` argument is injectable). The same input always produces the same verdict.
+- **No invented data**: when an aggregate is missing or invalid, the module returns `needs_review` rather than substituting a default. When cost data is incomplete or invalid on either arm, the cost rule is skipped silently rather than guessed.
+- **Conservative by default**: thresholds are tuned so ambiguous cases recommend `continue` or `needs_review`. Phase 2d may tune them tighter once enough trials exist to calibrate.
+
+## What is deferred to Phase 2d
+
+- Persisting `promotion_events` / `retraction_events` on the hypothesis record (and the schema migrations that come with it).
+- A live scheduler / daily-cycle helper that consumes `ExperimentDecision` and calls a registration / promotion helper — today the decision is purely advisory.
+- A statistical sequential test (SPRT, Bayesian posterior, CUPED-style variance reduction) that replaces the threshold layer once we have enough trials to calibrate one.
+- Dashboard surfaces over the decision report.
+- Growing the metric registry from a database / config file / LLM proposal — and the migration logic that comes with it.
+
+The selector + binding + decision modules are intentionally *propose-only*. Phase 2d will wire them into the daily-cycle / scheduler boot path, but only behind a feature flag and only with `promotion_events` / `retraction_events` persistence in place.
 
 ## Invariants Phase 2 preserves
 
