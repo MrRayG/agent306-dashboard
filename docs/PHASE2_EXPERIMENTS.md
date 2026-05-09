@@ -1,6 +1,6 @@
 # Phase 2 — Evidence-Based Hypothesis Experiments
 
-**Status:** Phase 2 entry slice + Phase 2b metric binding + Phase 2c decision rules merged. Promotion/retraction event persistence and live scheduler automation are deferred to **Phase 2d**.
+**Status:** Phase 2 entry slice + Phase 2b metric binding + Phase 2c decision rules + Phase 2d decision evidence persistence merged. Sandboxed execution wiring is deferred to **Phase 2e**; meta-reflection / lessons database is deferred to **Phase 2f**.
 
 Phase 2 turns the formal hypothesis backlog into a *selection* problem: given `research_lab.hypotheses[]`, which records are eligible to feed an experiment, and which are refused — with explicit, structured evidence — and why.
 
@@ -266,19 +266,95 @@ Every decision carries:
 - **No invented data**: when an aggregate is missing or invalid, the module returns `needs_review` rather than substituting a default. When cost data is incomplete or invalid on either arm, the cost rule is skipped silently rather than guessed.
 - **Conservative by default**: thresholds are tuned so ambiguous cases recommend `continue` or `needs_review`. Phase 2d may tune them tighter once enough trials exist to calibrate.
 
-## What is deferred to Phase 2d
+## Phase 2d — Decision Evidence Persistence
 
-- Persisting `promotion_events` / `retraction_events` on the hypothesis record (and the schema migrations that come with it).
-- A live scheduler / daily-cycle helper that consumes `ExperimentDecision` and calls a registration / promotion helper — today the decision is purely advisory.
+Phase 2c emits a verdict but writes nothing. Phase 2d closes the next narrow gap: persisting that verdict and its evidence as an append-only audit trail an operator (or a future review surface) can read back later — without recomputing it.
+
+### Module
+
+`server/experiments/hypothesisDecisionEvents.ts`. Append-only JSONL ledger at `data/experiment_decision_events.jsonl`, routed through `dataPath()` so `DATA_DIR` overrides isolate the ledger in tests.
+
+```ts
+import {
+  appendDecisionEvent,
+  readDecisionEvents,
+  readDecisionEventsTail,
+  readDecisionEventsForHypothesis,
+} from "./experiments/hypothesisDecisionEvents.js";
+
+const decision = decideExperimentOutcome({ binding, baseline, treatment });
+const result = appendDecisionEvent({
+  decision,
+  source:        "phase2c-cron",       // free-text actor / pipeline label
+  ruleVersion:   "phase2c.v1",         // stable label for the rule revision
+  experimentId:  "exp_42",             // optional
+  candidateId:   "cand_7",             // optional
+  binding: {                            // optional binding summary
+    hypothesisId:       binding.hypothesisId,
+    metricKey:          binding.metricKey,
+    matchedDataSources: binding.matchedDataSources,
+  },
+});
+if (!result.ok) console.warn("event refused:", result.reason);
+```
+
+### Event shape
+
+`HypothesisDecisionEvent` carries everything an audit reader needs without a join:
+
+- `eventId` — `evt_<unix-ms>_<6-char-base36>`. Sortable by time; unique per process.
+- `recordedAt` — ISO timestamp the event was appended.
+- `decidedAt` — ISO timestamp from the Phase 2c input (when the rule fired).
+- `hypothesisId`, `metricKey` — echoed from the decision.
+- `experimentId?`, `candidateId?` — operator-supplied handles when available.
+- `decision` — `promote | reject | continue | needs_review`.
+- `reasonCode` — the stable Phase 2c enum value.
+- `reason` — one-sentence narrative copied from the decision.
+- `evidence[]` — the same observation list the decision produced (defensively copied so a later mutation cannot alter the persisted record).
+- `ruleVersion` — caller-supplied label for the rule revision.
+- `source` — caller-supplied pipeline / actor label.
+- `binding?` — optional `{ hypothesisId, metricKey, matchedDataSources }` summary.
+- `thresholdsUsed` — the merged threshold record from the decision.
+
+### Validation
+
+`appendDecisionEvent` refuses to persist a record that does not look like a Phase 2c decision:
+
+- `decision` must be present, with non-empty `hypothesisId`, `metricKey`, and `decidedAt`.
+- `decision.verdict` must be one of `promote | reject | continue | needs_review`.
+- `decision.reasonCode` must be one of the nine Phase 2c reason codes.
+- `decision.evidence` must be an array; `decision.thresholdsUsed` must be present.
+- `source` and `ruleVersion` are required (non-empty strings).
+
+A refusal returns `{ ok: false, reason: "<diagnostic>" }` and writes nothing. A `MetricBindingRefusal` cannot be persisted by construction (it has no `verdict` field) and a force-coerced one is caught by the validator.
+
+### Phase 2d invariants
+
+- **Append-only**: each call writes exactly one JSONL line; existing lines are never rewritten. A torn write or a corrupt line never corrupts prior records — the reader skips bad lines.
+- **Propose-only**: appending an event MUST NOT mutate hypothesis status, the experiment registry, `promotion_events` / `retraction_events`, memory entries, or any other engine state. The ledger is a record store — nothing more. This mirrors `improvementArchive.ts` and the propose-only invariant in `selfRecommendationEngine.ts` (CLAUDE.md self-evolution policy).
+- **Defense-in-depth**: the input is typed as `ExperimentDecision`, so a refusal cannot be persisted by construction; the runtime validator additionally checks the verdict and reason code are in the closed enum before writing.
+- **Test isolation**: the ledger path is resolved via `dataPath()` on every call (not at import time), so a test that sets `DATA_DIR` after the module loads still sees the redirected path.
+- **No live data migration**: the ledger ships empty; existing deployments do not need a backfill.
+
+## What is deferred to Phase 2e (sandboxed execution)
+
+- A live scheduler / daily-cycle helper that consumes `ExperimentDecision` events from the ledger and calls a registration helper (`registerExperiment`) or a future promotion helper. Phase 2d does not run experiments — it only persists the verdicts the Phase 2c rule already produced.
+- Persisting `promotion_events` / `retraction_events` on the hypothesis record (and the schema migrations that come with it). A decision-event is a *proposal* record; an applied promotion is a different record type with its own table.
 - A statistical sequential test (SPRT, Bayesian posterior, CUPED-style variance reduction) that replaces the threshold layer once we have enough trials to calibrate one.
-- Dashboard surfaces over the decision report.
+- Dashboard surfaces over the ledger.
 - Growing the metric registry from a database / config file / LLM proposal — and the migration logic that comes with it.
 
-The selector + binding + decision modules are intentionally *propose-only*. Phase 2d will wire them into the daily-cycle / scheduler boot path, but only behind a feature flag and only with `promotion_events` / `retraction_events` persistence in place.
+## What is deferred to Phase 2f (meta-reflection / lessons database)
+
+- A layer that reads the decision-events ledger and summarises what the system has learned: which thresholds fire most often, which guardrails dominate, how often `needs_review` resolves to `promote` vs. `reject` after operator review, distribution of decision lag, etc.
+- A "lessons database" surface: structured derivations from the ledger that feed back into the research-topic / hypothesis pipeline (e.g. "metric X has produced N inconclusive runs in a row — propose a different operationalisation").
+- Phase 2d gives 2f the raw input: a clean, append-only event log with stable verdict / reason-code enums and `thresholdsUsed` per row. Phase 2d does not compute the summary.
+
+The selector + binding + decision + ledger modules are intentionally *propose-only*. Phase 2e will wire them into the daily-cycle / scheduler boot path, but only behind a feature flag and only with `promotion_events` / `retraction_events` persistence in place.
 
 ## Invariants Phase 2 preserves
 
-- **Propose-only**: nothing in this module writes to the database, the JSON files, or the experiment registry. The output is candidates and refusals; an operator (or a future Phase 2b helper) decides what to do.
+- **Propose-only**: nothing in this module writes to the database, the JSON files, or the experiment registry. The output is candidates and refusals; an operator (or a future Phase 2b helper) decides what to do. (Phase 2d's ledger is the only file write — it persists evidence, never engine state.)
 - **Single readiness gate**: `canFeedExperiment` from `server/hypothesisHygiene.ts` is the only function that says "yes, a formal hypothesis may proceed". The selector composes it; it does not re-implement it.
 - **Memory-origin records are never candidates**: the type system, the function partitioning, and the absence of any `ok: true` branch on `canMemoryEntryFeedExperiment` all enforce this.
-- **History is preserved**: no records are mutated. The selector is a pure read.
+- **History is preserved**: no records are mutated. The selector is a pure read; the Phase 2d ledger is append-only.
