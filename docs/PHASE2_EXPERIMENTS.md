@@ -1,6 +1,6 @@
 # Phase 2 — Evidence-Based Hypothesis Experiments
 
-**Status:** Phase 2 entry slice + Phase 2b metric binding + Phase 2c decision rules + Phase 2d decision evidence persistence merged. Sandboxed execution wiring is deferred to **Phase 2e**; meta-reflection / lessons database is deferred to **Phase 2f**.
+**Status:** Phase 2 entry slice + Phase 2b metric binding + Phase 2c decision rules + Phase 2d decision evidence persistence + Phase 2e sandboxed execution wiring (plan-only) merged. Live sandbox registration is deferred to **Phase 2e-b**; meta-reflection / lessons database is deferred to **Phase 2f**.
 
 Phase 2 turns the formal hypothesis backlog into a *selection* problem: given `research_lab.hypotheses[]`, which records are eligible to feed an experiment, and which are refused — with explicit, structured evidence — and why.
 
@@ -336,12 +336,107 @@ A refusal returns `{ ok: false, reason: "<diagnostic>" }` and writes nothing. A 
 - **Test isolation**: the ledger path is resolved via `dataPath()` on every call (not at import time), so a test that sets `DATA_DIR` after the module loads still sees the redirected path.
 - **No live data migration**: the ledger ships empty; existing deployments do not need a backfill.
 
-## What is deferred to Phase 2e (sandboxed execution)
+## Phase 2e — Sandboxed execution wiring (plan-only)
 
-- A live scheduler / daily-cycle helper that consumes `ExperimentDecision` events from the ledger and calls a registration helper (`registerExperiment`) or a future promotion helper. Phase 2d does not run experiments — it only persists the verdicts the Phase 2c rule already produced.
+Phase 2d ends with a verdict and an audit trail; nothing in 2a–2d ever calls `registerExperiment`, `runExperiment`, or any other live side effect. Phase 2e closes the next narrow gap: turning a successful Phase 2b binding into a **sandboxed execution plan** an operator can review (or a future Phase 2e-b helper can act on, when live registration is sandbox-safe).
+
+The output is `SandboxExecutionPlan` (success) or `SandboxExecutionRefusal` (failure). Both shapes carry explicit decision evidence so an operator (or a future Phase 2e-b helper) can audit the call without re-running it.
+
+### Module
+
+`server/experiments/hypothesisSandboxExecution.ts`. Pure (no I/O, no DB writes, no LLM calls, no clock at module-load — `now` is injectable). The active `registerExperiment` is a direct DB write that creates a `running` row and invalidates the runtime cache, so it is NOT obviously sandbox-safe; calling it from this layer is **deferred to Phase 2e-b** once a dry-run / sandbox flag exists on the registration helper itself. The `applySandboxExecutionPlan` function is shipped as an explicit no-op stub so the boundary is visible to anyone who imports the module.
+
+```ts
+import {
+  planSandboxExecution,
+  applySandboxExecutionPlan,
+  PHASE2E_HARD_MAX_TRIALS,
+  PHASE2E_SUPPORTED_EXPERIMENT_KINDS,
+  type SandboxExecutionControls,
+} from "./experiments/hypothesisSandboxExecution.js";
+
+const plan = planSandboxExecution(binding, {
+  featureFlag:           true,
+  operatorApproved:      true,
+  dryRun:                false,
+  maxTrials:             20,
+  allowedMetricKey:      binding.metricKey,
+  allowedExperimentKind: "modelRouter",
+  notes:                 "approved by ops 2026-05-09",
+});
+if (plan.ok) {
+  // plan.executionPlanId, .hypothesisId, .candidateId, .metricKey,
+  // .sandboxMode, .dryRun, .resourceCaps, .experimentKind,
+  // .plannedAt, .reason, .evidence, .binding, .controls
+} else {
+  // plan.code, plan.reason, plan.evidence
+}
+
+// Phase 2e is plan-only — applying is a no-op until Phase 2e-b lands.
+applySandboxExecutionPlan(plan); // { ok: false, deferredTo: "phase-2e-b" }
+```
+
+### Entry criteria
+
+A plan is produced if and only if all of:
+
+1. Input is a successful `MetricBinding` from `bindCandidateMetric` (Phase 2b output) — i.e. the Phase 2 selector cleared the formal hypothesis and the binder mapped the metric to a registered key with a known data source. A `MetricBindingRefusal` cannot reach the function by TypeScript narrowing; a force-coerced refusal is caught by a runtime `binding.ok !== true` check.
+2. `binding.candidate.origin === "research_lab.hypotheses"` (defense-in-depth re-check on the binding origin so a hand-rolled record cannot bypass Phase 1.5b's hard-no for memory-origin entries).
+3. `controls.featureFlag === true` (deployment-wide gate).
+4. `controls.operatorApproved === true` (per-call human approval — there is no stored "always approved" shortcut).
+5. `controls.maxTrials` is a finite integer in `[PHASE2E_MIN_TRIALS, PHASE2E_HARD_MAX_TRIALS]` (today: `[1, 200]`).
+6. `controls.allowedMetricKey === binding.metricKey` (the operator must explicitly spell out the metric they are authorizing).
+7. `controls.allowedExperimentKind` is in `PHASE2E_SUPPORTED_EXPERIMENT_KINDS` (today: `["modelRouter"]`, mirroring the surfaces `registerExperiment` supports).
+
+If any of those fails, `planSandboxExecution` emits a structured `SandboxExecutionRefusal` with a stable `code`, a one-sentence `reason`, and an `evidence[]` audit trail.
+
+### Refusal codes
+
+| Code                            | Meaning                                                                                                  |
+|---------------------------------|----------------------------------------------------------------------------------------------------------|
+| `feature_flag_off`              | `controls.featureFlag !== true`.                                                                          |
+| `operator_not_approved`         | `controls.operatorApproved !== true`.                                                                     |
+| `missing_resource_cap`          | `maxTrials` missing, non-integer, NaN, Infinity, or below `PHASE2E_MIN_TRIALS`.                           |
+| `resource_cap_exceeds_limit`    | `maxTrials` exceeds `PHASE2E_HARD_MAX_TRIALS`.                                                            |
+| `metric_not_allowed`            | `allowedMetricKey` missing OR not equal to `binding.metricKey`.                                            |
+| `experiment_kind_not_allowed`   | `allowedExperimentKind` missing or not in `PHASE2E_SUPPORTED_EXPERIMENT_KINDS`.                            |
+| `binding_not_ok`                | Caller force-coerced a `MetricBindingRefusal` past the type system (`binding.ok !== true`).                 |
+| `binding_origin_invalid`        | `binding.candidate.origin !== "research_lab.hypotheses"` (defense-in-depth on the memory-origin hard-no). |
+| `binding_missing_metric_key`    | `binding.metricKey` empty / non-string.                                                                    |
+| `invalid_controls`              | `controls` is `null` / `undefined` / not an object.                                                        |
+
+### Plan shape
+
+`SandboxExecutionPlan` carries everything an audit reader needs without a join:
+
+- `executionPlanId` — `plan_<unix-ms>_<6-char-base36>`. Sortable by time, unique per process.
+- `hypothesisId`, `candidateId`, `metricKey` — echoed from the binding.
+- `sandboxMode` — always `"sandbox"` in Phase 2e. Phase 2e-b may add `"sandbox-live"` for plans the live registration helper is allowed to act on.
+- `dryRun` — when `true`, a future Phase 2e-b helper that *does* call `registerExperiment` MUST skip the live side effect. Phase 2e itself does not look at this flag for any side effect — it is a contract for the next layer.
+- `resourceCaps` — the `{ maxTrials }` cap applied to this plan.
+- `experimentKind` — the operator-authorized kind (today: `"modelRouter"`).
+- `plannedAt` — ISO timestamp from injected `now`.
+- `reason`, `evidence[]` — narrative + concrete observations.
+- `binding` — `{ hypothesisId, metricKey, matchedDataSources, candidateOrigin, candidateTag }` summary.
+- `controls` — defensively-copied echo of the controls so a single plan record is self-describing in logs.
+
+### Phase 2e invariants
+
+- **Plan-only**: nothing in this module calls `registerExperiment`, `recordTrialOutcome`, `runExperiment`, the scheduler, or any other live-side-effect path. The output is a typed plan record. The `applySandboxExecutionPlan` shim is intentionally a no-op stub returning `{ ok: false, deferredTo: "phase-2e-b" }` so the boundary is visible.
+- **Propose-only**: appending a plan MUST NOT mutate hypothesis status, the experiment registry, `promotion_events` / `retraction_events`, the Phase 2d decision-events ledger, memory entries, or any other engine state. Tests pin this by snapshotting `data/research_lab.json` and `data/memory_knowledge.json` before/after, asserting the Phase 2d ledger file does not appear, and asserting `DATA_DIR` stays empty.
+- **Default-refuse**: every control is required and explicit. A caller who omits the feature flag, the operator approval, or the resource cap gets a structured refusal — there is no convenient "default-yes" path.
+- **Defense-in-depth on memory origin**: the function signature requires a successful `MetricBinding`, which by Phase 1.5b's hard-no cannot have come from a memory entry. The runtime additionally re-checks `binding.candidate.origin === "research_lab.hypotheses"` so a hand-rolled record is refused with `binding_origin_invalid`.
+- **No auto-promotion**: Phase 2e does not write decision events, does not mutate hypotheses, and does not schedule anything. There is no scheduler / daily-cycle automation in this module.
+- **Deterministic**: the only state in the module is a per-process counter for `executionPlanId`. With a fixed `now`, plan output is otherwise deterministic. No clock reads at module load, no LLM calls, no file I/O.
+
+## What is deferred to Phase 2e-b (live sandbox registration)
+
+- A live scheduler / daily-cycle helper that consumes `ExperimentDecision` events from the Phase 2d ledger and calls a registration helper. Phase 2e produces plans on demand from a binding; a scheduler that walks the ledger and produces plans automatically is explicitly out of scope.
+- A sandbox-safe `registerExperiment` (or a sandbox flag on the existing helper) that respects `dryRun` and `maxTrials`. The current `registerExperiment` writes a `running` row and invalidates the runtime cache — calling it from a sandbox plan today would mean a live-traffic experiment; Phase 2e refuses to do that.
+- Wiring `applySandboxExecutionPlan` to the new sandbox-safe registration helper. Today the function is a no-op stub.
 - Persisting `promotion_events` / `retraction_events` on the hypothesis record (and the schema migrations that come with it). A decision-event is a *proposal* record; an applied promotion is a different record type with its own table.
 - A statistical sequential test (SPRT, Bayesian posterior, CUPED-style variance reduction) that replaces the threshold layer once we have enough trials to calibrate one.
-- Dashboard surfaces over the ledger.
+- Dashboard surfaces over the ledger or the plan record store.
 - Growing the metric registry from a database / config file / LLM proposal — and the migration logic that comes with it.
 
 ## What is deferred to Phase 2f (meta-reflection / lessons database)
@@ -350,7 +445,7 @@ A refusal returns `{ ok: false, reason: "<diagnostic>" }` and writes nothing. A 
 - A "lessons database" surface: structured derivations from the ledger that feed back into the research-topic / hypothesis pipeline (e.g. "metric X has produced N inconclusive runs in a row — propose a different operationalisation").
 - Phase 2d gives 2f the raw input: a clean, append-only event log with stable verdict / reason-code enums and `thresholdsUsed` per row. Phase 2d does not compute the summary.
 
-The selector + binding + decision + ledger modules are intentionally *propose-only*. Phase 2e will wire them into the daily-cycle / scheduler boot path, but only behind a feature flag and only with `promotion_events` / `retraction_events` persistence in place.
+The selector + binding + decision + ledger + sandbox-plan modules are intentionally *propose-only*. Phase 2e produces sandbox execution plans on demand (default-refuse, plan-only). Phase 2e-b will wire `applySandboxExecutionPlan` into a sandbox-safe `registerExperiment` and the daily-cycle / scheduler boot path, but only behind a feature flag and only with `promotion_events` / `retraction_events` persistence in place.
 
 ## Invariants Phase 2 preserves
 
