@@ -75,22 +75,14 @@ describe("conversationLearningEngine callLLM migration", () => {
     assert.equal(body.max_tokens, 2000);
   });
 
-  it("routes to responses API when conversation-insight is enabled", async () => {
+  it("conversation-insight is opt-in for the Responses API but downgrades to chat for non-xAI models", async () => {
+    // conversation-insight is a routine-tier task → google/gemini-3-flash-preview
+    // by default. Non-xAI models silently downgrade to chat/completions even
+    // when RESPONSES_API_ENABLED_TASKS lists the task — that is the documented
+    // safety hatch, not a bug. (The original test asserted mode==='responses'
+    // back when the task lived in the xAI standard tier.)
     process.env.RESPONSES_API_ENABLED_TASKS = "conversation-insight";
-    const fetchMock = mock.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        id: "resp_cx",
-        output: [
-          {
-            type: "message",
-            content: [{ type: "output_text", text: JSON.stringify({ insight: "yes" }) }],
-          },
-        ],
-      }),
-      text: async () => "",
-    }) as any);
+    const fetchMock = mock.fn(async () => chatOk(JSON.stringify({ insight: "yes" })) as any);
     globalThis.fetch = fetchMock as any;
 
     const { callLLM } = await import(`../llmCall.js?t=${Date.now()}`);
@@ -100,9 +92,8 @@ describe("conversationLearningEngine callLLM migration", () => {
       timeoutMs: 40000,
     });
 
-    assert.equal(out.mode, "responses");
-    assert.equal(out.responseId, "resp_cx");
+    assert.equal(out.mode, "chat");
     const calledUrl = String(fetchMock.mock.calls[0].arguments[0]);
-    assert.ok(calledUrl.includes("/responses"));
+    assert.ok(!calledUrl.includes("/responses"), "non-xAI routine model must NOT hit /responses");
   });
 });

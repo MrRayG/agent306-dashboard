@@ -34,8 +34,10 @@ describe("voice constants", () => {
   });
 
   it("HASHTAG_RULES contains guidance", () => {
-    assert.ok(HASHTAG_RULES.includes("#AIAgents"), "HASHTAG_RULES should mention #AIAgents");
-    assert.ok(HASHTAG_RULES.includes("#DeAI"), "HASHTAG_RULES should mention #DeAI");
+    // Hashtag policy was reversed — the rules now explicitly say "no hashtags",
+    // letting the LLM choose editorially when a hashtag actually adds signal.
+    assert.ok(HASHTAG_RULES.length > 0, "HASHTAG_RULES should be non-empty");
+    assert.ok(/hashtags?/i.test(HASHTAG_RULES), "HASHTAG_RULES should mention hashtags");
   });
 
   it("AI_CONTEXT contains market data", () => {

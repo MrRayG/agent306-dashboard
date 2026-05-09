@@ -46,9 +46,10 @@ const ENV_KEYS = [
   "XAI_DIRECT_BASE_URL",
   "LLM_BASE_URL",
   "MODEL_ROUTINE",
-  "MODEL_STANDARD",
-  "MODEL_PREMIUM",
-  "MODEL_FRONTIER",
+  "MODEL_STANDARD_VOICE",
+  "MODEL_PREMIUM_VOICE",
+  "MODEL_FRONTIER_FACTUAL",
+  "MODEL_FRONTIER_REASONING",
   "MODEL_MULTI_AGENT",
   "RESPONSES_API_ENABLED_TASKS",
   "RESPONSES_API_FALLBACK",
@@ -85,7 +86,9 @@ describe("resolveChatRoute (PR O)", () => {
     const route = resolveChatRoute("x-ai/grok-4.20");
     assert.equal(route.provider, "xai-direct");
     assert.equal(route.url, "https://api.x.ai/v1/chat/completions");
-    assert.equal(route.model, "grok-4-1-fast-non-reasoning"); // translated via toXAINativeModel mapping
+    // Native xAI mapping per docs.x.ai (post PR #287 — no longer a silent
+    // downgrade to grok-4-1-fast).
+    assert.equal(route.model, "grok-4.20-0309-non-reasoning");
     assert.equal(route.headers.Authorization, "Bearer xai-testkey-123");
   });
 
@@ -165,9 +168,13 @@ describe("callChatCompletions wire-level behavior (PR O)", () => {
     process.env.GROK_API_KEY = "xai-testkey-123";
     process.env.OPENROUTER_API_KEY = "or-testkey-456";
     // Pin all tiers to known models so getModel() is deterministic.
-    process.env.MODEL_STANDARD = "x-ai/grok-4.20";
+    // Note: TIER_MAP captures these at modelRouter.js module-init time, so the
+    // assertions below also reflect the defaults the module observed at first
+    // load — the key point is to keep the wire-level behavior (URL, headers,
+    // model translation) stable.
+    process.env.MODEL_STANDARD_VOICE = "x-ai/grok-4.20";
     process.env.MODEL_ROUTINE = "google/gemini-3-flash-preview";
-    process.env.MODEL_FRONTIER = "anthropic/claude-opus-4.6";
+    process.env.MODEL_FRONTIER_REASONING = "anthropic/claude-opus-4.6";
   });
 
   afterEach(() => {
@@ -181,7 +188,7 @@ describe("callChatCompletions wire-level behavior (PR O)", () => {
 
     const { callLLM } = await import(`../llmCall.js?t=${Date.now()}`);
     const out = await callLLM({
-      task: "self-debate", // standard → x-ai/grok-4.20
+      task: "self-debate", // standard-voice → x-ai/grok-4.20-non-reasoning
       messages: [{ role: "user", content: "hi" }],
     });
 
@@ -193,9 +200,10 @@ describe("callChatCompletions wire-level behavior (PR O)", () => {
     const headers = init.headers as Record<string, string>;
     assert.equal(headers.Authorization, "Bearer xai-testkey-123");
     const body = JSON.parse(init.body as string);
-    // Native name (prefix stripped + mapped) — NOT "x-ai/grok-4.20".
-    assert.equal(body.model, "grok-4-1-fast-non-reasoning");
-    // Caller-facing model stays in OpenRouter format for log stability.
+    // Native name (mapped via toXAINativeModel) — NOT the OpenRouter prefix.
+    assert.equal(body.model, "grok-4.20-0309-non-reasoning");
+    // Caller-facing model stays in OpenRouter format for log stability — picks
+    // up the env override pinned in beforeEach.
     assert.equal(out.model, "x-ai/grok-4.20");
   });
 
@@ -204,8 +212,11 @@ describe("callChatCompletions wire-level behavior (PR O)", () => {
     globalThis.fetch = fetchMock as any;
 
     const { callLLM } = await import(`../llmCall.js?t=${Date.now()}`);
+    // `blog` → premium-voice → anthropic/claude-sonnet-4.6 (default).
+    // hypothesis-evaluation now maps to frontier-factual which is xAI by default,
+    // so it would not exercise the OpenRouter path.
     const out = await callLLM({
-      task: "hypothesis-evaluation", // frontier → anthropic/claude-opus-4.6
+      task: "blog",
       messages: [{ role: "user", content: "hi" }],
     });
 
@@ -215,7 +226,7 @@ describe("callChatCompletions wire-level behavior (PR O)", () => {
     const headers = init.headers as Record<string, string>;
     assert.equal(headers.Authorization, "Bearer or-testkey-456");
     const body = JSON.parse(init.body as string);
-    assert.equal(body.model, "anthropic/claude-opus-4.6");
+    assert.equal(body.model, "anthropic/claude-sonnet-4.6");
   });
 
   it("hard-fails when xAI returns 403 — no fallback to OpenRouter", async () => {
@@ -258,7 +269,8 @@ describe("callChatCompletions wire-level behavior (PR O)", () => {
     const [url, init] = fetchMock.mock.calls[0].arguments as [string, RequestInit];
     assert.equal(url, "https://openrouter.ai/api/v1/chat/completions");
     const body = JSON.parse(init.body as string);
-    // Kill-switch preserves OpenRouter-format model name.
+    // Kill-switch preserves the OpenRouter-format model name (not the
+    // toXAINativeModel-mapped one). Tracks the MODEL_STANDARD_VOICE override.
     assert.equal(body.model, "x-ai/grok-4.20");
   });
 });

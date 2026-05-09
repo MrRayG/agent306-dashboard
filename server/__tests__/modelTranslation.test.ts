@@ -8,14 +8,18 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
 describe("toXAINativeModel", () => {
-  it("maps x-ai/grok-4.20 to grok-4-1-fast-non-reasoning", async () => {
+  // Updated for the docs.x.ai-native mapping introduced in PR #288/#290 — the
+  // old test expected the silent downgrade to grok-4-1-fast-non-reasoning that
+  // the audit specifically called out as a bug (Agent 306 was never invoking
+  // the flagship grok-4.20 family).
+  it("maps x-ai/grok-4.20 to grok-4.20-0309-non-reasoning", async () => {
     const { toXAINativeModel } = await import("../llmConfig.js");
-    assert.equal(toXAINativeModel("x-ai/grok-4.20"), "grok-4-1-fast-non-reasoning");
+    assert.equal(toXAINativeModel("x-ai/grok-4.20"), "grok-4.20-0309-non-reasoning");
   });
 
-  it("maps x-ai/grok-4.20-multi-agent to grok-4-1-fast-non-reasoning (degraded)", async () => {
+  it("maps x-ai/grok-4.20-multi-agent to grok-4.20-multi-agent-0309", async () => {
     const { toXAINativeModel } = await import("../llmConfig.js");
-    assert.equal(toXAINativeModel("x-ai/grok-4.20-multi-agent"), "grok-4-1-fast-non-reasoning");
+    assert.equal(toXAINativeModel("x-ai/grok-4.20-multi-agent"), "grok-4.20-multi-agent-0309");
   });
 
   it("returns null for non-xAI models (Anthropic)", async () => {

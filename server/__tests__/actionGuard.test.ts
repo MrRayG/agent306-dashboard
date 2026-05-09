@@ -9,7 +9,8 @@
 
 process.env.ACTION_GUARD_LOG_FILE = "/dev/null";
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
 import {
   evaluateAction,
   guardedExecute,
@@ -35,12 +36,12 @@ const ctxAgent = (overrides: Partial<ActionContext> = {}): ActionContext => ({
 describe("evaluateAction — allowlist policy", () => {
   it("allows generate_blog from chat_user_command with userAuthorized=true", () => {
     const d = evaluateAction("generate_blog", ctxUser());
-    expect(d.allow).toBe(true);
+    assert.equal(d.allow, true);
   });
 
   it("allows generate_episode from chat_user_command with userAuthorized=true", () => {
     const d = evaluateAction("generate_episode", ctxUser());
-    expect(d.allow).toBe(true);
+    assert.equal(d.allow, true);
   });
 
   it("allows start_research from http_api_explicit with userAuthorized=true", () => {
@@ -48,7 +49,7 @@ describe("evaluateAction — allowlist policy", () => {
       origin: "http_api_explicit",
       userAuthorized: true,
     });
-    expect(d.allow).toBe(true);
+    assert.equal(d.allow, true);
   });
 
   it("allows add_hypothesis from research_auto_consolidate without user authorization", () => {
@@ -56,31 +57,26 @@ describe("evaluateAction — allowlist policy", () => {
       origin: "research_auto_consolidate",
       userAuthorized: false,
     });
-    expect(d.allow).toBe(true);
+    assert.equal(d.allow, true);
   });
 });
 
 describe("evaluateAction — denial cases (the structural fix)", () => {
   it("DENIES generate_blog from chat_agent_emitted — this is the bug 306 reported", () => {
-    // Even though chat_agent_emitted passed coherence, the agent did not get
-    // explicit user authorization. The gate refuses to run actions just
-    // because the agent emitted them.
     const d = evaluateAction("generate_blog", ctxAgent());
-    expect(d.allow).toBe(false);
-    if (!d.allow) expect(d.reason).toBe("no_matching_allow_rule");
+    assert.equal(d.allow, false);
+    if (!d.allow) assert.equal(d.reason, "no_matching_allow_rule");
   });
 
   it("DENIES generate_episode from chat_agent_emitted", () => {
     const d = evaluateAction("generate_episode", ctxAgent());
-    expect(d.allow).toBe(false);
+    assert.equal(d.allow, false);
   });
 
   it("DENIES generate_blog from chat_user_command when userAuthorized=false", () => {
-    // Defense-in-depth: even if the chat path passes the wrong context,
-    // the gate enforces the authorization requirement independently.
     const d = evaluateAction("generate_blog", ctxUser({ userAuthorized: false }));
-    expect(d.allow).toBe(false);
-    if (!d.allow) expect(d.reason).toBe("user_authorization_required");
+    assert.equal(d.allow, false);
+    if (!d.allow) assert.equal(d.reason, "user_authorization_required");
   });
 
   it("DENIES generate_blog from research_auto_consolidate (auto origins cannot spawn blogs)", () => {
@@ -88,8 +84,8 @@ describe("evaluateAction — denial cases (the structural fix)", () => {
       origin: "research_auto_consolidate",
       userAuthorized: false,
     });
-    expect(d.allow).toBe(false);
-    if (!d.allow) expect(d.reason).toBe("no_matching_allow_rule");
+    assert.equal(d.allow, false);
+    if (!d.allow) assert.equal(d.reason, "no_matching_allow_rule");
   });
 
   it("DENIES generate_episode from podcast_auto_chain (no internal auto-chain spawn)", () => {
@@ -97,49 +93,57 @@ describe("evaluateAction — denial cases (the structural fix)", () => {
       origin: "podcast_auto_chain",
       userAuthorized: false,
     });
-    expect(d.allow).toBe(false);
+    assert.equal(d.allow, false);
   });
 
   it("DENIES anything from origin=unknown", () => {
-    const d = evaluateAction("generate_blog", { origin: "unknown", userAuthorized: true });
-    expect(d.allow).toBe(false);
-    if (!d.allow) expect(d.reason).toBe("unknown_origin");
+    const d = evaluateAction("generate_blog", { origin: "unknown" as any, userAuthorized: true });
+    assert.equal(d.allow, false);
+    if (!d.allow) assert.equal(d.reason, "unknown_origin");
   });
 
   it("DENIES the canary action — used by /api/diagnostics/gate-canary", () => {
     const d = evaluateAction("generate_blog", { origin: "canary_test", userAuthorized: false });
-    expect(d.allow).toBe(false);
-    if (!d.allow) expect(d.reason).toBe("canary_action_must_be_denied");
+    assert.equal(d.allow, false);
+    if (!d.allow) assert.equal(d.reason, "canary_action_must_be_denied");
   });
 });
 
 describe("guardedExecute", () => {
   it("runs the execute callback and returns its value when allowed", async () => {
-    const execute = vi.fn().mockResolvedValue({ id: "blog_123", title: "T" });
+    let calls = 0;
+    const execute = async () => {
+      calls += 1;
+      return { id: "blog_123", title: "T" };
+    };
     const out = await guardedExecute("generate_blog", ctxUser(), execute);
-    expect(execute).toHaveBeenCalledOnce();
-    expect(out).toEqual({ id: "blog_123", title: "T" });
+    assert.equal(calls, 1);
+    assert.deepEqual(out, { id: "blog_123", title: "T" });
   });
 
   it("does NOT call execute and throws ActionDeniedError when denied", async () => {
-    const execute = vi.fn();
-    await expect(
-      guardedExecute("generate_blog", ctxAgent(), execute),
-    ).rejects.toBeInstanceOf(ActionDeniedError);
-    expect(execute).not.toHaveBeenCalled();
+    let called = false;
+    const execute = async () => {
+      called = true;
+    };
+    await assert.rejects(
+      () => guardedExecute("generate_blog", ctxAgent(), execute),
+      (err: any) => err instanceof ActionDeniedError,
+    );
+    assert.equal(called, false);
   });
 
   it("preserves the deny reason on the error so the caller can surface it", async () => {
-    const execute = vi.fn();
+    const execute = async () => {};
     try {
       await guardedExecute("generate_blog", ctxAgent(), execute);
       throw new Error("expected ActionDeniedError");
     } catch (e: any) {
-      expect(e).toBeInstanceOf(ActionDeniedError);
-      expect(e.decision.allow).toBe(false);
-      expect(e.decision.reason).toBe("no_matching_allow_rule");
-      expect(e.action).toBe("generate_blog");
-      expect(e.ctx.origin).toBe("chat_agent_emitted");
+      assert.ok(e instanceof ActionDeniedError);
+      assert.equal(e.decision.allow, false);
+      assert.equal(e.decision.reason, "no_matching_allow_rule");
+      assert.equal(e.action, "generate_blog");
+      assert.equal(e.ctx.origin, "chat_agent_emitted");
     }
   });
 });
@@ -147,12 +151,6 @@ describe("guardedExecute", () => {
 describe("assertGateLive (canary contract)", () => {
   it("returns ok=true when the gate denies the canary action", async () => {
     const out = await assertGateLive();
-    expect(out.ok).toBe(true);
+    assert.equal(out.ok, true);
   });
-
-  // The catastrophic-bypass test is implicit: if the canary ever ran the
-  // execute callback, assertGateLive throws "execute() ran despite denial",
-  // which would fail this test. We don't simulate the bypass directly
-  // because doing so would require monkey-patching evaluateAction —
-  // exactly the surface area the canary is designed to detect.
 });
