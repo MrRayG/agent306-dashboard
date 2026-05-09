@@ -58,6 +58,11 @@ npx tsx scripts/hypothesisAudit.ts --json
 npx tsx scripts/hypothesisAudit.ts --details
 npx tsx scripts/hypothesisAudit.ts --file data/hypothesis_archive.json
 npx tsx scripts/hypothesisAudit.ts --stale-days 14
+
+# also exposed as an npm script
+npm run hypothesis:audit
+npm run hypothesis:audit -- --json
+npm run hypothesis:audit -- --memory-file data/memory_knowledge.json
 ```
 
 Output sections:
@@ -69,6 +74,59 @@ Output sections:
 - **Stale active hypotheses** — `forming`/`testing` records older than `--stale-days` (default 30)
 
 The CLI **never writes back** to `research_lab.json`. Annotation is operator-only.
+
+### Live (Railway) audit commands
+
+`research_lab.json` (formal hypotheses) and `memory_knowledge.json` are mounted at `/app/data/` on the deployed Railway container. Run the CLI against the live files via the Railway shell:
+
+```bash
+# Phase 1.5 — formal research_lab hypotheses
+npx tsx scripts/hypothesisAudit.ts --file /app/data/research_lab.json
+npx tsx scripts/hypothesisAudit.ts --file /app/data/hypothesis_archive.json
+
+# Phase 1.5b — memory-origin hypothesis-shaped entries
+npx tsx scripts/hypothesisAudit.ts --memory-file /app/data/memory_knowledge.json
+npx tsx scripts/hypothesisAudit.ts --memory-file /app/data/memory_knowledge.json --details
+npx tsx scripts/hypothesisAudit.ts --memory-file /app/data/memory_soul.json   # 0-entry shape; reports cleanly
+```
+
+The 2026-05 Railway audit revealed `topics: []` and `hypotheses: []` in `research_lab.json` while `memory_knowledge.json` carried 28 entries whose `title` started with `Hypothesis:`. Those memory entries were written by `researchEngine.ts` (`addKnowledge({ title: "Hypothesis: ${topic.hypothesis.slice(0,60)}", ... })`) as a write-only telemetry side effect of past research cycles. They are **not** formal hypothesis records — they have no `metric`, `prediction`, `basis`, or `measurementPath`, and no production code path treats them as candidate experiment inputs. Phase 1.5b makes that invariant explicit (see below).
+
+## Phase 1.5b: memory-origin hypothesis hygiene
+
+`server/memoryHypothesisHygiene.ts` extends Phase 1.5 to cover hypothesis-shaped records living in `data/memory_knowledge.json`. It is **propose-only** in the same sense as Phase 1.5: pure functions, no mutation of stored memory entries, no auto-archival. History is preserved.
+
+### Detection
+
+A memory entry is treated as a memory-origin hypothesis when its `title` starts with `Hypothesis:` (case-insensitive). The prefix is exported as `HYPOTHESIS_TITLE_PREFIX` for reuse.
+
+### Classification
+
+Memory-origin entries default to **`needs_review`**. They never receive `ready_for_experiment` or `candidate` regardless of their content — by Phase 1.5 readiness rules they would always fail (no `metric`, `prediction`, `basis`, or `measurementPath`), and the operator action is "decide whether to promote to a formal hypothesis", not "fix fields on this entry". Operator-set `status === "archived"` maps to `archived_irrelevant`.
+
+### Phase 2 readiness gate
+
+```ts
+import { canMemoryEntryFeedExperiment } from "./memoryHypothesisHygiene.js";
+
+const verdict = canMemoryEntryFeedExperiment(entry);
+if (!verdict.ok) {
+  // refuse — log verdict.reasons and verdict.blockers
+  return;
+}
+// (unreachable — there is no ok=true branch)
+```
+
+`canMemoryEntryFeedExperiment` has **no `ok: true` branch**. Raw memory-origin entries cannot feed Phase 2 experiments under any condition. Promotion to a formal `research_lab.hypotheses[]` record (with hygiene metadata + readiness fields) is the only supported path; once promoted, the formal `canFeedExperiment` from `hypothesisHygiene.ts` decides. This keeps the Phase 2 readiness gate single-source-of-truth on formal `Hypothesis` records.
+
+At the time of writing, no production code path enumerates `memory_knowledge.json` entries as candidate hypotheses for experiments. The gate exists as defense-in-depth: any future code path that *might* iterate the memory has a single, documented place to refuse.
+
+### How to interpret the 28 live `Hypothesis:`-prefixed memory entries
+
+- They are **historical research output**, not current experiment candidates.
+- They were authored by `researchEngine.ts:1666` (`addKnowledge({ title: "Hypothesis: ..." })`) as `category: "research"`, `tier: "operational"`, `weight: 7`, `learnedAt` 2026-03-29 / 2026-03-30.
+- Phase 1.5b classifies all 28 as `needs_review` with `canFeedExperiment: false`. None of them carries the readiness fields a Phase 2 experiment needs.
+- To resurface a specific entry as a real experiment candidate, an operator must hand-author a corresponding formal hypothesis in `research_lab.hypotheses[]` (with `claim` / `metric` / `basis` / `prediction` / `measurementPath` / hygiene metadata) and set `promotedToHypothesisId` on the memory entry for traceability. The formal record then goes through the Phase 1.5 readiness gate.
 
 ## Operator annotation
 
@@ -92,7 +150,8 @@ Adds: `hygieneTag`, `hygieneReason`, `hygieneTaggedAt`, `hygieneTaggedBy`. No pr
 | `hypothesisStateMachine.ts`                 | Lifecycle transitions (awaiting-deadline / data-unavailable / stale)  |
 | `hypothesisTriage.ts` (Wave 2.3 PR-4)       | Stake × confidence 2×2; computes `queue` (active/backlog)             |
 | `hypothesisConsolidator.ts`                 | Pre-insertion similarity dedup; sets `aliasOf` for duplicates         |
-| `hypothesisHygiene.ts` (this PR)            | Phase 1.5 triage tags + Phase 2 readiness gate — composes all of the above |
+| `hypothesisHygiene.ts` (Phase 1.5)          | Triage tags + Phase 2 readiness gate — composes all of the above       |
+| `memoryHypothesisHygiene.ts` (Phase 1.5b)   | Detect/classify memory-origin `Hypothesis:`-titled entries; hard-no Phase 2 gate |
 
 The new module reads existing fields; it does not duplicate any of those gates. Each lower-level signal feeds a tag verdict (e.g. `aliasOf` → `duplicate`, `dataSourceGateBlockedAt` → `needs_data`).
 
