@@ -29,6 +29,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 
 // Keep hermetic — the LLM fallback should not fire with skipLLM.
@@ -38,7 +39,22 @@ delete process.env.OPENROUTER_API_KEY;
 delete process.env.ANTHROPIC_API_KEY;
 delete process.env.OPENAI_API_KEY;
 
-import { verifyClaims } from "../claimVerifier.js";
+// Per-process DB isolation. Without this, the safety subset (which runs
+// concurrently with the aggregate suite in CI) can race against the default
+// `data/agent306.db` write lock — claimVerifier transitively imports
+// `observability/structuredLog`, which on module load runs `new Database(...)`
+// plus a large `CREATE TABLE IF NOT EXISTS` block, exceeding better-sqlite3's
+// busy timeout under load and failing with SQLITE_BUSY ("database is locked").
+// Pointing DB_PATH at a unique tmpdir scopes the lock to this process. We do
+// NOT redirect DATA_DIR — the golden JSON still needs to load from the repo's
+// data/eval/golden/ directory.
+const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "claim-verifier-golden-"));
+process.env.DB_PATH = path.join(TMP_DIR, "test.db");
+process.env.NODE_ENV = process.env.NODE_ENV ?? "test";
+
+// Dynamic import of claimVerifier so DB_PATH above is in place before
+// `server/db.ts` evaluates (static ESM imports would be hoisted and miss it).
+const { verifyClaims } = await import("../claimVerifier.js");
 import { dataPath } from "../dataPaths.js";
 
 interface GoldenCase {
