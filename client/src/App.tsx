@@ -19,6 +19,7 @@ import EvalDashboard from "@/pages/EvalDashboard";
 import Diagnostics from "@/pages/Diagnostics";
 import Drafts from "@/pages/Drafts";
 import SelfRecommendations from "@/pages/SelfRecommendations";
+import AutonomyMonitor from "@/pages/AutonomyMonitor";
 import MissionControl from "@/pages/MissionControl";
 import NotFound from "@/pages/not-found";
 import PerplexityAttribution from "@/components/PerplexityAttribution";
@@ -41,6 +42,7 @@ const nav = [
   { href: "/competency", label: "Competencies",    desc: "Skills \u00B7 Radar chart"       },
   { href: "/diagnostics", label: "Diagnostics",    desc: "System probes"       },
   { href: "/self-recommendations", label: "Self-Recs", desc: "Agent proposals · propose-only" },
+  { href: "/autonomy",   label: "Autonomy",       desc: "Full evidence-loop monitor · read-only" },
 ];
 
 function Sidebar() {
@@ -193,6 +195,7 @@ function App() {
             <Route path="/competency" component={CompetencyDashboard} />
             <Route path="/diagnostics" component={Diagnostics} />
             <Route path="/self-recommendations" component={SelfRecommendations} />
+            <Route path="/autonomy" component={AutonomyMonitor} />
             <Route component={NotFound} />
           </Switch>
         </Layout>
