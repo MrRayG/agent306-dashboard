@@ -1,22 +1,12 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# 306 — CI (Phase 1 closure)
+# 306 — CI
 #
-# Required / blocking surface for this PR:
+# Required / blocking surface:
 #   1. Install dependencies
 #   2. Typecheck (tsc)
 #   3. Phase 1 safety tests (auth + promotion gate) — dedicated job that
 #      cannot be bypassed by changes to `npm test`.
-#
-# Advisory / non-blocking:
-#   - Aggregate `npm test` suite. It currently surfaces ~31 pre-existing
-#     failures unrelated to Phase 1 hardening. We keep it visible in CI as
-#     `continue-on-error: true` so progress is observable, but it is not a
-#     merge gate until the pre-existing failures are cleaned up in a
-#     follow-up. Do NOT mark this job required in branch protection until
-#     that cleanup lands.
-#
-# Branch protection should require: `typecheck` and
-# `phase 1 safety tests (auth + promotion gate)`.
+#   4. Aggregate `npm test` suite — full repo test suite, blocking.
 # ─────────────────────────────────────────────────────────────────────────────
 name: ci
 
@@ -71,14 +61,10 @@ jobs:
         env:
           NODE_ENV: test
 
-  # Advisory only — surfaces the full repo test suite for visibility.
-  # ~31 pre-existing failures are known and tracked for cleanup outside
-  # this PR. `continue-on-error: true` keeps this job non-blocking.
   aggregate-tests:
-    name: aggregate test suite (advisory)
+    name: aggregate test suite
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -90,7 +76,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run aggregate test suite (advisory, non-blocking)
+      - name: Run aggregate test suite
         run: npm test
         env:
           NODE_ENV: test
