@@ -2,6 +2,15 @@
  * Tests for server/claimMapVerifierMap.ts (Roadmap A2). The mapping is a
  * best-effort deterministic match from verifier-flagged sentences to the
  * claim_map_items.itemKey they most likely came from.
+ *
+ * Isolation note: this test sets `DB_PATH`/`DATA_DIR` to a per-run temp
+ * directory and imports `db.js` (and any module that transitively imports
+ * it) DYNAMICALLY inside each test. Static `import` statements at the top
+ * of an ESM module are hoisted above the env-var assignment, which means
+ * the singleton `db` would otherwise open the real `data/agent306.db` and
+ * concurrent test files would race on it. Dynamic imports preserve source
+ * order and pin db.ts to the temp path. See PR #292 for the original
+ * flake (CI aggregate suite).
  */
 
 import { describe, it, beforeEach } from "node:test";
@@ -14,19 +23,7 @@ process.env.DB_PATH = path.join(TMP_DIR, "test.db");
 process.env.DATA_DIR = TMP_DIR;
 process.env.NODE_ENV = "test";
 
-import { db } from "../db.js";
-import { claimMap, claimMapItems } from "@shared/schema";
-import { createOrReplaceClaimMap } from "../repositories/claimMapRepository.js";
-import {
-  mapVerifierFailuresToClaims,
-  mapVerifierFailuresWithItems,
-} from "../claimMapVerifierMap.js";
 import type { VerifierReport } from "../claimVerifier.js";
-
-function wipe() {
-  try { db.delete(claimMapItems).run(); } catch {}
-  try { db.delete(claimMap).run(); } catch {}
-}
 
 function emptyReport(entries: VerifierReport["entries"]): VerifierReport {
   return {
@@ -47,9 +44,16 @@ function emptyReport(entries: VerifierReport["entries"]): VerifierReport {
 }
 
 describe("claimMapVerifierMap (Roadmap A2)", () => {
-  beforeEach(wipe);
+  beforeEach(async () => {
+    const { db } = await import("../db.js");
+    const { claimMap, claimMapItems } = await import("@shared/schema");
+    try { db.delete(claimMapItems).run(); } catch {}
+    try { db.delete(claimMap).run(); } catch {}
+  });
 
-  it("annotates failing entries with their best-match claim itemKey", () => {
+  it("annotates failing entries with their best-match claim itemKey", async () => {
+    const { createOrReplaceClaimMap } = await import("../repositories/claimMapRepository.js");
+    const { mapVerifierFailuresToClaims } = await import("../claimMapVerifierMap.js");
     createOrReplaceClaimMap({
       engine: "blog",
       draftId: "blog_v1",
@@ -94,7 +98,9 @@ describe("claimMapVerifierMap (Roadmap A2)", () => {
     assert.equal(matches[1].classification, "LANE_A_FAIL");
   });
 
-  it("returns claimItemKey=null when no claim overlaps the sentence", () => {
+  it("returns claimItemKey=null when no claim overlaps the sentence", async () => {
+    const { createOrReplaceClaimMap } = await import("../repositories/claimMapRepository.js");
+    const { mapVerifierFailuresToClaims } = await import("../claimMapVerifierMap.js");
     createOrReplaceClaimMap({
       engine: "blog",
       draftId: "blog_v2",
@@ -124,7 +130,8 @@ describe("claimMapVerifierMap (Roadmap A2)", () => {
     assert.equal(matches[0].claimItemKey, null);
   });
 
-  it("ignores OK / passing entries — only failures are emitted", () => {
+  it("ignores OK / passing entries — only failures are emitted", async () => {
+    const { mapVerifierFailuresWithItems } = await import("../claimMapVerifierMap.js");
     const items = [
       {
         id: 1,
@@ -159,7 +166,8 @@ describe("claimMapVerifierMap (Roadmap A2)", () => {
     assert.equal(matches.length, 0);
   });
 
-  it("returns [] when no claim map exists for the draft", () => {
+  it("returns [] when no claim map exists for the draft", async () => {
+    const { mapVerifierFailuresToClaims } = await import("../claimMapVerifierMap.js");
     const report = emptyReport([
       {
         sentenceIndex: 0,
