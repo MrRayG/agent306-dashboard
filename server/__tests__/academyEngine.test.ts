@@ -18,6 +18,25 @@
 
 import { describe, it, beforeEach, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+
+// Per-process DB isolation. Without this, every test file under `npm test`
+// (which runs `*.test.ts` files as parallel child processes via `tsx --test`)
+// falls through to the default `dataPath("agent306.db")`. Modules loaded
+// transitively from academyEngine — `modelRouter` → `experiments/runExperiment`
+// and `claimVerifier` → `observability/structuredLog` — both `import { db }
+// from "./db.js"`, which on module init runs `new Database(DB_PATH)` plus a
+// large `sqlite.exec(...CREATE TABLE IF NOT EXISTS...)` block. With many
+// processes racing for the same file's write lock on a slow CI runner, the
+// loser exceeds better-sqlite3's busy timeout and fails with SQLITE_BUSY
+// "database is locked" — which is exactly what 25602361096 surfaced. Pointing
+// DB_PATH at a unique tmpdir scopes the lock to this process.
+const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "academy-engine-test-"));
+process.env.DATA_DIR = TMP_DIR;
+process.env.DB_PATH = path.join(TMP_DIR, "test.db");
+process.env.NODE_ENV = "test";
 
 function chatResponse(body: {
   content: string;
