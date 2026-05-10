@@ -287,6 +287,196 @@ function LowRiskRegistryTable({ extra }: { extra?: Record<string, unknown> }) {
   );
 }
 
+interface ReadinessKind {
+  kind:                       string;
+  description?:               string;
+  enabled?:                   boolean;
+  disabledReason?:            string;
+  readiness?:                 string;
+  blockedReasons?:            string[];
+  missingPrerequisites?:      string[];
+  recommendedExpansionOrder?: number;
+  metricKey?:                 string;
+  guardrails?:                string[];
+  safetyControls?:            Record<string, boolean | number>;
+}
+
+interface ReadinessExtra {
+  kinds?:      ReadinessKind[];
+  summary?:    {
+    enabled?:        number;
+    ready?:          number;
+    blocked?:        number;
+    needsReview?:    number;
+    disabled?:       number;
+    enabledKinds?:   string[];
+    expansionOrder?: string[];
+  };
+  invariants?: Record<string, string>;
+}
+
+function readinessColor(s?: string): string {
+  switch (s) {
+    case "ready":        return GREEN;
+    case "blocked":      return YELLOW;
+    case "needs_review": return ORANGE;
+    case "disabled":     return GRAY;
+    default:             return DIM;
+  }
+}
+
+function LowRiskReadinessPanel({ extra }: { extra?: Record<string, unknown> }) {
+  const readiness = extra?.readiness as ReadinessExtra | undefined;
+  const kinds = readiness?.kinds ?? [];
+  const summary = readiness?.summary ?? {};
+  const invariants = readiness?.invariants ?? {};
+  if (kinds.length === 0) return null;
+  return (
+    <div style={{ marginTop: "0.9rem" }}>
+      <div style={{
+        ...mono,
+        fontSize: "0.7rem",
+        color: DIM,
+        textTransform: "uppercase",
+        letterSpacing: "0.1em",
+        marginBottom: "0.35rem",
+      }}>Low-risk sandbox readiness (Phase 2h-a)</div>
+
+      <p style={{ ...mono, fontSize: "0.78rem", color: FG, margin: 0, marginBottom: "0.4rem", lineHeight: 1.5 }}>
+        Only <span style={{ color: GREEN }}>summarizationTemplate</span> is enabled today.
+        Other kinds are <span style={{ color: DIM }}>preparation-only</span> — visibility does not enable them.
+      </p>
+
+      <div style={{
+        ...mono,
+        fontSize: "0.74rem",
+        color: DIM,
+        marginBottom: "0.5rem",
+        display: "flex",
+        gap: "1rem",
+        flexWrap: "wrap",
+      }}>
+        <span>enabled: <span style={{ color: GREEN }}>{summary.enabled ?? 0}</span></span>
+        <span>ready: <span style={{ color: GREEN }}>{summary.ready ?? 0}</span></span>
+        <span>blocked: <span style={{ color: YELLOW }}>{summary.blocked ?? 0}</span></span>
+        <span>needs review: <span style={{ color: ORANGE }}>{summary.needsReview ?? 0}</span></span>
+        <span>disabled: <span style={{ color: GRAY }}>{summary.disabled ?? 0}</span></span>
+      </div>
+
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ ...mono, width: "100%", fontSize: "0.76rem", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              {["#", "kind", "readiness", "enabled", "blocked / missing", "expansion order"].map(h => (
+                <th key={h} style={{
+                  textAlign: "left",
+                  padding: "0.3rem 0.5rem",
+                  color: DIM,
+                  borderBottom: `1px solid ${BORDER}`,
+                  textTransform: "uppercase",
+                  fontSize: "0.64rem",
+                  letterSpacing: "0.08em",
+                }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {kinds.map((k, i) => {
+              const enabled = k.enabled === true;
+              const color = readinessColor(k.readiness);
+              const blocked = (k.blockedReasons ?? []).join("; ");
+              const missing = (k.missingPrerequisites ?? []).join(", ");
+              const blockedCell = blocked || missing
+                ? `${blocked}${missing ? ` [${missing}]` : ""}`
+                : "—";
+              return (
+                <tr key={i}>
+                  <td style={{ padding: "0.3rem 0.5rem", borderBottom: `1px solid ${BORDER}`, color: DIM }}>
+                    {k.recommendedExpansionOrder ?? i + 1}
+                  </td>
+                  <td style={{ padding: "0.3rem 0.5rem", borderBottom: `1px solid ${BORDER}`, color: FG }}>
+                    {k.kind}
+                  </td>
+                  <td style={{
+                    padding: "0.3rem 0.5rem",
+                    borderBottom: `1px solid ${BORDER}`,
+                    color,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.06em",
+                    fontSize: "0.7rem",
+                  }}>
+                    {String(k.readiness ?? "—").replace(/_/g, " ")}
+                  </td>
+                  <td style={{
+                    padding: "0.3rem 0.5rem",
+                    borderBottom: `1px solid ${BORDER}`,
+                    color: enabled ? GREEN : GRAY,
+                  }}>
+                    {enabled ? "enabled" : "disabled"}
+                  </td>
+                  <td style={{ padding: "0.3rem 0.5rem", borderBottom: `1px solid ${BORDER}`, color: DIM }}>
+                    {blockedCell}
+                  </td>
+                  <td style={{ padding: "0.3rem 0.5rem", borderBottom: `1px solid ${BORDER}`, color: FG }}>
+                    {k.recommendedExpansionOrder ?? "—"}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ marginTop: "0.6rem" }}>
+        <div style={{
+          ...mono,
+          fontSize: "0.68rem",
+          color: DIM,
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
+          marginBottom: "0.3rem",
+        }}>Static safety controls (apply to every kind)</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+          {[
+            "dryRunOnly",
+            "staticFixturesOnly",
+            "noLiveTraffic",
+            "noScheduler",
+            "noMutation",
+            "noPublicOutput",
+            "operatorApprovalRequired",
+            "evidenceRequired",
+            "rollbackImplicit",
+          ].map(flag => (
+            <span key={flag} style={{
+              ...mono,
+              fontSize: "0.72rem",
+              padding: "0.16rem 0.45rem",
+              border: `1px solid ${GREEN}`,
+              borderRadius: 3,
+              color: GREEN,
+              background: "rgba(74,222,128,0.04)",
+            }}>
+              {flag}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {Object.values(invariants).some(v => typeof v === "string" && v.length > 0) && (
+        <div style={{ marginTop: "0.7rem" }}>
+          {Object.entries(invariants).map(([k, v]) => (
+            <p key={k} style={{ ...mono, fontSize: "0.74rem", color: DIM, margin: 0, marginBottom: "0.25rem", lineHeight: 1.45 }}>
+              <span style={{ color: ORANGE, textTransform: "uppercase", letterSpacing: "0.08em" }}>{k}:</span>{" "}
+              {String(v)}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RiskImpactReasonCodes({ extra }: { extra?: Record<string, unknown> }) {
   const byReasonCode = (extra?.byReasonCode as Record<string, number> | undefined) ?? {};
   // The server publishes the "neutral" reason-code allow-list; the dashboard
@@ -401,6 +591,7 @@ function StageCard({ stage, idx }: { stage: AutonomyStage; idx: number }) {
       <CountsGrid counts={stage.counts} />
       <LatestList latest={stage.latest} />
       {stage.id === "sandbox_execution" && <LowRiskRegistryTable extra={stage.extra} />}
+      {stage.id === "sandbox_execution" && <LowRiskReadinessPanel extra={stage.extra} />}
       {stage.id === "risk_impact_score" && <RiskImpactReasonCodes extra={stage.extra} />}
       {stage.id === "risk_impact_score" && <RiskImpactInvariants extra={stage.extra} />}
       <TextList items={stage.blockers} label="Blockers" color={YELLOW} />
