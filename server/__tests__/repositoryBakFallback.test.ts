@@ -73,6 +73,16 @@ describe("repository .bak fallback — DB empty + JSON renamed → recover from 
   });
 
   it("read order: live JSON beats .bak when both exist", () => {
+    // Defense-in-depth: the readThrough order is DB → live JSON → .bak, so
+    // this test depends on the DB row being absent when it runs. wipeAll()
+    // covers that in beforeEach via drizzle, but CI has surfaced a flaky
+    // ordering case (PR #307 follow-up) where a residual row from an
+    // earlier test file's writeGoalsBlob reaches this assertion. Re-wipe
+    // inline using raw SQL too, so we do not depend on a single delete
+    // path. This is a test-only safeguard and changes nothing about the
+    // production read order.
+    try { db.delete(agentGoals).run(); } catch {}
+    try { (db as any).$client?.exec?.("DELETE FROM agent_goals"); } catch {}
     fs.writeFileSync(goalsJson, JSON.stringify({ goals: [{ id: "live" }] }));
     fs.writeFileSync(goalsBak,  JSON.stringify({ goals: [{ id: "stale" }] }));
     const result = readGoalsBlob<any>();

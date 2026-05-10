@@ -287,6 +287,72 @@ function LowRiskRegistryTable({ extra }: { extra?: Record<string, unknown> }) {
   );
 }
 
+function RiskImpactReasonCodes({ extra }: { extra?: Record<string, unknown> }) {
+  const byReasonCode = (extra?.byReasonCode as Record<string, number> | undefined) ?? {};
+  // The server publishes the "neutral" reason-code allow-list; the dashboard
+  // never hard-codes which codes are eligible vs alarming. Anything not in
+  // this list is treated as a non-eligible code and rendered yellow.
+  const neutralCodes = new Set(
+    Array.isArray(extra?.neutralReasonCodes)
+      ? (extra!.neutralReasonCodes as unknown[]).filter((s): s is string => typeof s === "string")
+      : [],
+  );
+  const entries = Object.entries(byReasonCode).filter(([, v]) => typeof v === "number" && v > 0);
+  if (entries.length === 0) return null;
+  return (
+    <div style={{ marginTop: "0.7rem" }}>
+      <div style={{
+        ...mono,
+        fontSize: "0.7rem",
+        color: DIM,
+        textTransform: "uppercase",
+        letterSpacing: "0.1em",
+        marginBottom: "0.3rem",
+      }}>Reason codes</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+        {entries.map(([code, count]) => {
+          const neutral = neutralCodes.has(code);
+          return (
+            <span key={code} style={{
+              ...mono,
+              fontSize: "0.74rem",
+              padding: "0.18rem 0.5rem",
+              border: `1px solid ${neutral ? GREEN : YELLOW}`,
+              borderRadius: 3,
+              color: neutral ? GREEN : YELLOW,
+              background: "rgba(227,229,228,0.02)",
+            }}>
+              {code} <span style={{ color: DIM }}>×{count}</span>
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function RiskImpactInvariants({ extra }: { extra?: Record<string, unknown> }) {
+  const propose = typeof extra?.proposeOnlyInvariant === "string" ? extra.proposeOnlyInvariant as string : "";
+  const refuse  = typeof extra?.defaultRefuseInvariant === "string" ? extra.defaultRefuseInvariant as string : "";
+  if (!propose && !refuse) return null;
+  return (
+    <div style={{ marginTop: "0.6rem" }}>
+      {refuse && (
+        <p style={{ ...mono, fontSize: "0.74rem", color: DIM, margin: 0, marginBottom: "0.3rem", lineHeight: 1.45 }}>
+          <span style={{ color: ORANGE, textTransform: "uppercase", letterSpacing: "0.08em" }}>default-refuse:</span>{" "}
+          {refuse}
+        </p>
+      )}
+      {propose && (
+        <p style={{ ...mono, fontSize: "0.74rem", color: DIM, margin: 0, lineHeight: 1.45 }}>
+          <span style={{ color: ORANGE, textTransform: "uppercase", letterSpacing: "0.08em" }}>propose-only:</span>{" "}
+          {propose}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function StageCard({ stage, idx }: { stage: AutonomyStage; idx: number }) {
   const color = statusColor(stage.status);
   return (
@@ -335,6 +401,8 @@ function StageCard({ stage, idx }: { stage: AutonomyStage; idx: number }) {
       <CountsGrid counts={stage.counts} />
       <LatestList latest={stage.latest} />
       {stage.id === "sandbox_execution" && <LowRiskRegistryTable extra={stage.extra} />}
+      {stage.id === "risk_impact_score" && <RiskImpactReasonCodes extra={stage.extra} />}
+      {stage.id === "risk_impact_score" && <RiskImpactInvariants extra={stage.extra} />}
       <TextList items={stage.blockers} label="Blockers" color={YELLOW} />
       <TextList items={stage.nextActions} label="Next safe actions" color={FG} />
     </section>
