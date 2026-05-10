@@ -120,7 +120,13 @@ describe("autonomyMonitor — shape + stage completeness", () => {
     // claim `active` and mislead the operator about live activity.
     assert.equal(risk.status, "ready",
       `risk_impact_score must be ready (not active) when there are no real research inputs, got ${risk.status}`);
-    assert.equal(meta.status, "not_implemented");
+    // Phase 2j-b: meta_reflection now has a live, read-only generator.
+    // With registration history visible the generator emits at least the
+    // disabled-kind + history-empty/populated candidates, so the stage
+    // typically lands at `active`. Either `active` or `ready` is valid —
+    // the stage must NOT remain `not_implemented`.
+    assert.ok(meta.status === "active" || meta.status === "ready",
+      `meta_reflection must be active or ready in phase 2j-b, got ${meta.status}`);
     assert.equal(lessons.status, "not_implemented");
     for (const s of [risk, meta, lessons]) {
       // Planned/future stages still carry next actions so the gap is readable.
@@ -187,10 +193,10 @@ describe("autonomyMonitor — shape + stage completeness", () => {
     const { implementedStageCount, plannedStageCount, totalStageCount, headline } = snap.pipelineSummary;
     assert.equal(totalStageCount, 11);
     assert.equal(implementedStageCount + plannedStageCount, 11);
-    // Phase 2g: risk_impact_score is now implemented; only meta_reflection
-    // + lessons_database remain not_implemented.
-    assert.equal(plannedStageCount, 2);
-    assert.equal(implementedStageCount, 9);
+    // Phase 2j-b: meta_reflection is now implemented (live, read-only
+    // generator). Only lessons_database remains not_implemented.
+    assert.equal(plannedStageCount, 1);
+    assert.equal(implementedStageCount, 10);
     assert.ok(headline.includes("approval-gated"));
   });
 
