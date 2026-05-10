@@ -69,6 +69,15 @@ import {
   SANDBOX_REGISTRATION_AUDIT_EXPORT_LABEL,
 } from "./experiments/sandboxRegistrationAuditExport.js";
 import {
+  buildMetaReflectionLiveReport,
+  META_REFLECTION_LIVE_REPORT_SCHEMA_VERSION,
+  META_REFLECTION_LIVE_REPORT_LABEL,
+  type MetaReflectionLiveReport,
+} from "./experiments/metaReflectionLiveGenerator.js";
+import {
+  META_REFLECTION_CANDIDATE_SCHEMA_VERSION,
+} from "./experiments/metaReflectionCandidateSchema.js";
+import {
   readDecisionEvents,
 } from "./experiments/hypothesisDecisionEvents.js";
 import {
@@ -860,21 +869,119 @@ function buildEvidencePackageStage(): AutonomyStage {
 }
 
 function buildMetaReflectionStage(): AutonomyStage {
+  // Phase 2j-b: live, read-only meta-reflection generator. Pulls the latest
+  // available evidence from the existing Phase 2i-b history, Phase 2i-c
+  // audit export, and Phase 2h-a readiness helpers and hands them to the
+  // Phase 2j-a candidate-schema projection. Defensive — any source error
+  // surfaces as a `missingSourceWarnings` entry and the stage degrades to
+  // zero candidates rather than throwing. NEVER writes, schedules, posts,
+  // or mutates state. Risk-impact summary is intentionally not pulled in
+  // here — see the live generator's docs for why this stays opt-in.
+  let report: MetaReflectionLiveReport;
+  try {
+    report = buildMetaReflectionLiveReport({ generatedBy: "autonomy_monitor" });
+  } catch {
+    report = buildMetaReflectionLiveReport({
+      // Defensive fallback — pass empty inputs so the report is well-typed
+      // even if a downstream helper somehow throws synchronously.
+      history:     undefined,
+      auditExport: undefined,
+      readiness:   undefined,
+      generatedBy: "autonomy_monitor",
+    });
+  }
+
+  const sourceStatuses = report.latestEvidenceMarker.sources.map(s => ({
+    source: s.source,
+    status: s.status,
+    recordCount: s.recordCount,
+  }));
+
+  // The stage is `ready` (implemented but degrade-friendly) until at least
+  // one populated evidence source has produced a non-empty candidate. With
+  // candidates present we escalate to `active` so the dashboard reflects
+  // that reflection is currently producing output. We never escalate past
+  // `active` — meta-reflection is propose-only.
+  const status: AutonomyStageStatus =
+    report.candidateSet.candidates.length > 0 ? "active" : "ready";
+
+  // Group candidates by reasonCode for a compact tail.
+  const tail = report.candidateSet.candidates.slice(0, 5).map(c => ({
+    candidateId: c.candidateId,
+    kind:        c.kind,
+    scope:       c.scope,
+    subsystem:   c.subsystem,
+    reasonCode:  c.reasonCode,
+    title:       c.title,
+    confidence:  c.confidence,
+    riskLevel:   c.riskLevel,
+  }));
+
   return {
     id:    "meta_reflection",
     label: "Meta-Reflection",
-    status: "not_implemented",
+    status,
     summary:
-      "A future loop that summarises which thresholds fire most often, which guardrails dominate, and how needs_review verdicts resolve. Reads ledgers; writes nothing public.",
-    implementedBy: [],
-    counts: {},
-    blockers: [
-      "No meta-reflection module exists yet",
-      "Requires more decision events than the current ledger holds",
+      "Phase 2j-b live read-only meta-reflection. Reads the latest Phase 2i-b registration history, Phase 2i-c audit export, and Phase 2h-a readiness snapshot, hands them to the Phase 2j-a candidate-schema projection, and exposes the resulting candidates here. Propose-only: every candidate is humanReviewRequired and not auto-apply eligible. Disabled kinds remain disabled — candidates about disabled kinds describe their disabled state for review; they never propose enabling. No writes, no scheduler, no public output, no apply path.",
+    implementedBy: [
+      "server/experiments/metaReflectionCandidateSchema.ts",
+      "server/experiments/metaReflectionLiveGenerator.ts",
     ],
+    counts: {
+      candidateCount:            report.metrics.candidateCount,
+      humanReviewRequiredCount:  report.metrics.humanReviewRequiredCount,
+      autoApplyEligibleCount:    report.metrics.autoApplyEligibleCount,
+      missingSourceWarningCount: report.missingSourceWarnings.length,
+      sourcesAvailable:          sourceStatuses.filter(s =>
+        s.status === "available_populated" || s.status === "available_empty",
+      ).length,
+      sourcesMissing:            sourceStatuses.filter(s => s.status === "missing").length,
+      sourcesErrored:            sourceStatuses.filter(s => s.status === "error").length,
+    },
+    latest: tail,
+    extra: {
+      liveReport: {
+        schemaVersion:             report.schemaVersion,
+        label:                     report.label,
+        candidateSetSchemaVersion: report.candidateSetSchemaVersion,
+        candidateSetLabel:         report.candidateSetLabel,
+        generatedAt:               report.generatedAt,
+        generatedBy:               report.generatedBy,
+        isEmpty:                   report.isEmpty,
+        latestEvidenceMarker:      report.latestEvidenceMarker,
+        missingSourceWarnings:     report.missingSourceWarnings,
+        metrics:                   report.metrics,
+        invariants:                report.invariants,
+        candidateSet: {
+          schemaVersion:    report.candidateSet.schemaVersion,
+          label:            report.candidateSet.label,
+          generatedAt:      report.candidateSet.generatedAt,
+          generatedBy:      report.candidateSet.generatedBy,
+          isEmpty:          report.candidateSet.isEmpty,
+          candidates:       report.candidateSet.candidates,
+          aggregate:        report.candidateSet.aggregate,
+          evidenceProvided: report.candidateSet.evidenceProvided,
+          invariants:       report.candidateSet.invariants,
+        },
+      },
+      qualityScorePlaceholder:
+        "Phase 2j-c will introduce candidate quality scoring; this stage exposes a `metrics.qualityScore: null` placeholder so future scoring can populate without a schema break.",
+      proposeOnlyInvariant:
+        "Every candidate is humanReviewRequired: true and autoApplyEligible: false. There is no apply path on this stage; no candidate enables a sandbox kind, registers a kind, promotes a record, or marks anything actionable.",
+      nonWideningInvariant:
+        "Disabled kinds remain disabled. The live generator never widens the registry; it only re-projects the existing read-only Phase 2h-a / 2i-b / 2i-c snapshots.",
+      latestEvidenceProvenance:
+        `Live report schema ${META_REFLECTION_LIVE_REPORT_SCHEMA_VERSION} / label ${META_REFLECTION_LIVE_REPORT_LABEL}; candidate set schema ${META_REFLECTION_CANDIDATE_SCHEMA_VERSION}.`,
+    },
+    blockers: report.missingSourceWarnings.length > 0
+      ? [...report.missingSourceWarnings]
+      : [],
     nextActions: [
-      "Design the reflection schema in docs/PHASE2_EXPERIMENTS.md",
-      "Build a propose-only summary that reads the Phase 2d + 2e-c ledgers",
+      "Inspect candidates above; every entry requires human review and is not auto-apply eligible",
+      report.candidateSet.candidates.length === 0
+        ? "Run scripts/registerSummarizationSandboxFixture.ts to produce evidence the next reflection pass can re-project"
+        : "Review the latest reflection candidates and their evidenceRefs; no action is taken by this stage",
+      "Quality scoring (Phase 2j-c) is not yet wired — `metrics.qualityScore` is intentionally null for now",
     ],
   };
 }
