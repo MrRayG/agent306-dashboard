@@ -48,6 +48,9 @@ import {
   listLowRiskSandboxRegistrations,
 } from "./experiments/lowRiskSandboxRegistry.js";
 import {
+  buildLowRiskSandboxReadinessSnapshot,
+} from "./experiments/lowRiskSandboxReadiness.js";
+import {
   readRecords as readSandboxRecords,
   readActiveRegistrationRecords,
 } from "./experiments/sandboxRegistrationRecords.js";
@@ -526,21 +529,32 @@ function buildSandboxExecutionStage(): AutonomyStage {
   const disabled = kinds.filter(k => !k.enabled);
   const inMemoryRegistrations = listLowRiskSandboxRegistrations();
 
+  // Phase 2h-a: read-only readiness view. Pure derivation of the registry —
+  // adds no new boundary, never widens eligibility. Surfaces blocked reasons,
+  // missing prerequisites, the static safety controls every Phase 2e-b
+  // registration must already satisfy, and a recommended expansion order.
+  const readiness = buildLowRiskSandboxReadinessSnapshot();
+
   return {
     id:    "sandbox_execution",
     label: "Sandboxed Execution + Monitoring",
     status: "ready",
     summary:
-      "Phase 2e plan-only sandbox bridge + Phase 2e-b low-risk registry. Today only summarizationTemplate is enabled. Every other low-risk kind is registered but disabled. No live traffic, no scheduler, no auto-apply.",
+      "Phase 2e plan-only sandbox bridge + Phase 2e-b low-risk registry. Today only summarizationTemplate is enabled. Every other low-risk kind is registered but disabled. Phase 2h-a adds a pure read-only readiness view for the registry. No live traffic, no scheduler, no auto-apply.",
     implementedBy: [
       "server/experiments/hypothesisSandboxExecution.ts",
       "server/experiments/lowRiskSandboxRegistry.ts",
+      "server/experiments/lowRiskSandboxReadiness.ts",
     ],
     counts: {
       registeredKinds:        kinds.length,
       enabledKinds:           enabled.length,
       disabledKinds:          disabled.length,
       inMemoryRegistrations:  inMemoryRegistrations.length,
+      readinessReady:         readiness.summary.ready,
+      readinessBlocked:       readiness.summary.blocked,
+      readinessNeedsReview:   readiness.summary.needsReview,
+      readinessDisabled:      readiness.summary.disabled,
     },
     extra: {
       kinds: kinds.map(k => ({
@@ -552,9 +566,15 @@ function buildSandboxExecutionStage(): AutonomyStage {
         maxTrialsCap:   k.maxTrialsCap,
         guardrails:     k.guardrails,
       })),
+      readiness: {
+        kinds:          readiness.kinds,
+        summary:        readiness.summary,
+        invariants:     readiness.invariants,
+      },
     },
     nextActions: [
       "Disabled kinds are visible for audit but cannot be registered",
+      "Readiness verdicts are documentation: a `blocked` / `needs_review` kind cannot be registered without a separate enablement PR",
       "applyLowRiskSandboxRegistration is a no-op stub; live application is deferred to Phase 2e-c+",
     ],
   };
