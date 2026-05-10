@@ -78,6 +78,12 @@ import {
   META_REFLECTION_CANDIDATE_SCHEMA_VERSION,
 } from "./experiments/metaReflectionCandidateSchema.js";
 import {
+  scoreMetaReflectionLiveReport,
+  META_REFLECTION_QUALITY_SCORE_SCHEMA_VERSION,
+  META_REFLECTION_QUALITY_SCORE_LABEL,
+  type MetaReflectionQualityScore,
+} from "./experiments/metaReflectionQualityScoring.js";
+import {
   readDecisionEvents,
 } from "./experiments/hypothesisDecisionEvents.js";
 import {
@@ -897,6 +903,24 @@ function buildMetaReflectionStage(): AutonomyStage {
     recordCount: s.recordCount,
   }));
 
+  // Phase 2j-c: deterministic, advisory-only quality score over the live
+  // report. Pure; no I/O. The underlying `report.metrics.qualityScore`
+  // placeholder remains `null` so the Phase 2j-b schema is untouched —
+  // scoring is exposed alongside the report on the autonomy monitor.
+  let qualityScore: MetaReflectionQualityScore;
+  try {
+    qualityScore = scoreMetaReflectionLiveReport(report);
+  } catch {
+    // Defensive: if scoring throws (it shouldn't — the scorer is pure),
+    // fall back to a cold score so the stage stays renderable.
+    qualityScore = scoreMetaReflectionLiveReport({
+      ...report,
+      candidateSet: { ...report.candidateSet, candidates: [] },
+      latestEvidenceMarker: { ...report.latestEvidenceMarker, sources: [] },
+      missingSourceWarnings: [],
+    } as MetaReflectionLiveReport);
+  }
+
   // The stage is `ready` (implemented but degrade-friendly) until at least
   // one populated evidence source has produced a non-empty candidate. With
   // candidates present we escalate to `active` so the dashboard reflects
@@ -926,6 +950,7 @@ function buildMetaReflectionStage(): AutonomyStage {
     implementedBy: [
       "server/experiments/metaReflectionCandidateSchema.ts",
       "server/experiments/metaReflectionLiveGenerator.ts",
+      "server/experiments/metaReflectionQualityScoring.ts",
     ],
     counts: {
       candidateCount:            report.metrics.candidateCount,
@@ -937,6 +962,13 @@ function buildMetaReflectionStage(): AutonomyStage {
       ).length,
       sourcesMissing:            sourceStatuses.filter(s => s.status === "missing").length,
       sourcesErrored:            sourceStatuses.filter(s => s.status === "error").length,
+      // Phase 2j-c — advisory quality counts. `humanReviewNeededCount`
+      // mirrors `humanReviewRequiredCount`; restated here as part of the
+      // dedicated quality block so a reviewer can read the score in one
+      // place. Overall score is rounded to 4 decimals already.
+      qualityHumanReviewNeededCount: qualityScore.counts.humanReviewNeededCount,
+      qualityDistinctReasonCodeCount: qualityScore.counts.distinctReasonCodeCount,
+      qualityDistinctSubsystemCount:  qualityScore.counts.distinctSubsystemCount,
     },
     latest: tail,
     extra: {
@@ -965,7 +997,24 @@ function buildMetaReflectionStage(): AutonomyStage {
         },
       },
       qualityScorePlaceholder:
-        "Phase 2j-c will introduce candidate quality scoring; this stage exposes a `metrics.qualityScore: null` placeholder so future scoring can populate without a schema break.",
+        "Phase 2j-b exposes `metrics.qualityScore: null` as a stable placeholder. Phase 2j-c now surfaces a richer advisory-only score adjacent to it via `extra.qualityScore` — no consumer mutates the placeholder.",
+      qualityScore: {
+        schemaVersion:    qualityScore.schemaVersion,
+        label:            qualityScore.label,
+        overallScore:     qualityScore.overallScore,
+        qualityBand:      qualityScore.qualityBand,
+        usefulnessBand:   qualityScore.usefulnessBand,
+        dimensions:       qualityScore.dimensions,
+        counts:           qualityScore.counts,
+        reviewReadiness:  qualityScore.reviewReadiness,
+        generatedAt:      qualityScore.generatedAt,
+        generatedBy:      qualityScore.generatedBy,
+        advisoryOnly:     qualityScore.advisoryOnly,
+        applyEligibility: qualityScore.applyEligibility,
+        invariants:       qualityScore.invariants,
+      },
+      qualityScoreAdvisoryInvariant:
+        `Quality scoring is advisory only (schema ${META_REFLECTION_QUALITY_SCORE_SCHEMA_VERSION} / label ${META_REFLECTION_QUALITY_SCORE_LABEL}). It does NOT open an apply path, enable a sandbox kind, register a kind, promote a record, or mark any candidate auto-apply eligible. Disabled kinds remain disabled.`,
       proposeOnlyInvariant:
         "Every candidate is humanReviewRequired: true and autoApplyEligible: false. There is no apply path on this stage; no candidate enables a sandbox kind, registers a kind, promotes a record, or marks anything actionable.",
       nonWideningInvariant:
@@ -981,7 +1030,7 @@ function buildMetaReflectionStage(): AutonomyStage {
       report.candidateSet.candidates.length === 0
         ? "Run scripts/registerSummarizationSandboxFixture.ts to produce evidence the next reflection pass can re-project"
         : "Review the latest reflection candidates and their evidenceRefs; no action is taken by this stage",
-      "Quality scoring (Phase 2j-c) is not yet wired — `metrics.qualityScore` is intentionally null for now",
+      `Phase 2j-c quality score is advisory only — overall=${qualityScore.overallScore} (band=${qualityScore.qualityBand}); reviewReady=${qualityScore.reviewReadiness.readyForReview}. No apply path is opened.`,
     ],
   };
 }
