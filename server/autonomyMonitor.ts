@@ -60,6 +60,10 @@ import {
   type SummarizationFixtureLedgerSummary,
 } from "./experiments/summarizationSandboxFixtureRegistration.js";
 import {
+  buildSandboxRegistrationHistorySnapshot,
+  type SandboxRegistrationHistorySnapshot,
+} from "./experiments/sandboxRegistrationHistory.js";
+import {
   readDecisionEvents,
 } from "./experiments/hypothesisDecisionEvents.js";
 import {
@@ -670,6 +674,55 @@ function buildEvidencePackageStage(): AutonomyStage {
       refusalCode:  r.refusalCode,
     }));
 
+  // Phase 2i-b: read-only history view of the Phase 2e-c ledger. NEVER
+  // writes. Empty / absent ledger surfaces as `isEmpty: true` with
+  // `entries: []` and zeroed counts. Reuses Phase 2e-c's `readRecords()`
+  // and Phase 2i-a's fixture summary — no parallel ledger parsing here.
+  let history: SandboxRegistrationHistorySnapshot;
+  try {
+    history = buildSandboxRegistrationHistorySnapshot();
+  } catch {
+    history = {
+      totalRecords:               0,
+      registrationEvents:         0,
+      completionEvents:           0,
+      refusedEvents:              0,
+      activeRegistrations:        0,
+      manualFixtureRegistrations: 0,
+      appliedLimit:               25,
+      isEmpty:                    true,
+      entries:                    [],
+      byKind:                     [],
+      disabledKinds:              [],
+      summarizationFixture: {
+        totalEvents:               0,
+        registrationEvents:        0,
+        completionEvents:          0,
+        refusedEvents:             0,
+        fixtureRegistrationEvents: 0,
+        hasFixtureEvidence:        false,
+        latestFixtureRegistration: null,
+        invariants: {
+          fixtureOnly:              true,
+          dryRunOnly:               true,
+          sandboxAutoApplyEligible: false,
+          autoApplyPolicy:          "manual-only",
+          schedulerDriven:          false,
+          publicAction:             false,
+          mutating:                 false,
+        },
+      },
+      invariants: {
+        readOnly:                 true,
+        nonWidening:              true,
+        sandboxAutoApplyEligible: false,
+        schedulerDriven:          false,
+        publicAction:             false,
+        mutating:                 false,
+      },
+    };
+  }
+
   // Phase 2i-a: read-only summary of the summarizationTemplate fixture
   // evidence (if any). NEVER writes. Empty / absent ledger surfaces as
   // `hasFixtureEvidence: false` with `latestFixtureRegistration: null`.
@@ -704,10 +757,11 @@ function buildEvidencePackageStage(): AutonomyStage {
     label: "Evidence Package",
     status,
     summary:
-      "Phase 2e-c persists each Phase 2e-b sandbox registration (and follow-up completion / refused events) as JSONL in data/sandbox_registration_records.jsonl. Append-only audit trail. Phase 2i-a adds the first deterministic summarizationTemplate fixture registration path so this ledger has real evidence on the only enabled low-risk kind.",
+      "Phase 2e-c persists each Phase 2e-b sandbox registration (and follow-up completion / refused events) as JSONL in data/sandbox_registration_records.jsonl. Append-only audit trail. Phase 2i-a adds the first deterministic summarizationTemplate fixture registration path so this ledger has real evidence on the only enabled low-risk kind. Phase 2i-b adds a read-only registration history view so an operator can audit every persisted row at a glance.",
     implementedBy: [
       "server/experiments/sandboxRegistrationRecords.ts",
       "server/experiments/summarizationSandboxFixtureRegistration.ts",
+      "server/experiments/sandboxRegistrationHistory.ts",
     ],
     counts: {
       totalRecords:                records.length,
@@ -717,6 +771,8 @@ function buildEvidencePackageStage(): AutonomyStage {
       activeRegistrations:         active.length,
       sandboxAutoApplyEligible:    autoApplyEligible,
       summarizationFixtureRegistrations: summarizationFixture.fixtureRegistrationEvents,
+      historyEntriesShown:         history.entries.length,
+      manualFixtureRegistrations:  history.manualFixtureRegistrations,
     },
     latest: tail,
     extra: {
@@ -733,6 +789,20 @@ function buildEvidencePackageStage(): AutonomyStage {
         invariants:                 summarizationFixture.invariants,
         manualEntryPoint:           "scripts/registerSummarizationSandboxFixture.ts",
       },
+      registrationHistory: {
+        totalRecords:               history.totalRecords,
+        registrationEvents:         history.registrationEvents,
+        completionEvents:           history.completionEvents,
+        refusedEvents:              history.refusedEvents,
+        activeRegistrations:        history.activeRegistrations,
+        manualFixtureRegistrations: history.manualFixtureRegistrations,
+        appliedLimit:               history.appliedLimit,
+        isEmpty:                    history.isEmpty,
+        entries:                    history.entries,
+        byKind:                     history.byKind,
+        disabledKinds:              history.disabledKinds,
+        invariants:                 history.invariants,
+      },
     },
     nextActions: [
       "Inspect the ledger via readRecordsTail(50)",
@@ -740,6 +810,9 @@ function buildEvidencePackageStage(): AutonomyStage {
       summarizationFixture.hasFixtureEvidence
         ? "Phase 2i-a fixture evidence is present; completion (postMetrics) is deferred to Phase 2e-d"
         : "Run scripts/registerSummarizationSandboxFixture.ts manually to append the first Phase 2i-a fixture row (no scheduler is wired)",
+      history.isEmpty
+        ? "Phase 2i-b registration history is empty — the dashboard will populate as ledger rows accumulate"
+        : `Phase 2i-b registration history shows the most-recent ${history.entries.length} ledger row(s) for audit`,
     ],
   };
 }
