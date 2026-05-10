@@ -61,6 +61,7 @@ import {
 import {
   scoreHypothesisRiskImpactBatch,
   summarizeRiskImpactScores,
+  NEUTRAL_REASON_CODES,
   type ScoreInput,
 } from "./experiments/hypothesisRiskImpactScoring.js";
 import type { Hypothesis } from "./researchEngine.js";
@@ -165,7 +166,7 @@ function readResearchLabSafe(): ResearchLabBlob | null {
 }
 
 interface MemoryKnowledgeBlobShape {
-  entries?: Array<{ title?: string; promotedToHypothesisId?: string }>;
+  entries?: Array<{ id?: string; title?: string; promotedToHypothesisId?: string }>;
 }
 
 function readMemoryKnowledgeSafe(): MemoryKnowledgeBlobShape | null {
@@ -183,6 +184,10 @@ function readMemoryKnowledgeSafe(): MemoryKnowledgeBlobShape | null {
 
 function isMemoryHypothesisTitle(t: unknown): boolean {
   return typeof t === "string" && t.trim().toLowerCase().startsWith("hypothesis:");
+}
+
+function isNonEmptyString(v: unknown): v is string {
+  return typeof v === "string" && v.trim().length > 0;
 }
 
 // ── Stage builders ──────────────────────────────────────────────────────────
@@ -253,26 +258,26 @@ function buildRiskImpactStage(
 
   // Scoring inputs:
   //   1. Each formal hypothesis (origin: research_lab.hypotheses)
-  //   2. Each memory-origin entry (origin: memory_knowledge — always blocked)
+  //   2. Each memory-origin entry that has NOT already been promoted
+  //      (already-promoted entries are deduped — the formal counterpart will
+  //      be scored on its own through path 1)
   //   3. Each low-risk sandbox kind in the Phase 2e-b registry as a candidate
   //      shaped by its enablement matrix (only `summarizationTemplate` is
   //      affirmatively enabled; the other four are sandbox-fixture but not
   //      recognised-enabled, so they land at `needs_review` — matching the
   //      registry intent).
+  // LOW-2 fix: dedupe — skip memory entries that already have a formal
+  // counterpart, so the operator-facing "promote first" copy doesn't tell
+  // them to promote entries that have already been promoted.
+  const memUnpromoted = memHyp.filter(e => !isNonEmptyString((e as { promotedToHypothesisId?: string })?.promotedToHypothesisId));
+  const memAlreadyPromotedCount = memHyp.length - memUnpromoted.length;
+
+  // Order matters for the trailing-tail slice: sandbox kinds first
+  // (self-test inputs), then real research inputs last, so the dashboard's
+  // last-N tail biases toward formal hypotheses + memory entries when
+  // present. With no real research, the tail naturally falls back to the
+  // sandbox kinds.
   const inputs: ScoreInput[] = [];
-  for (const h of formal) {
-    inputs.push({ origin: "research_lab.hypotheses", hypothesis: h as any });
-  }
-  for (const e of memHyp) {
-    inputs.push({
-      origin: "memory_knowledge",
-      id:     typeof (e as any)?.id === "string" ? (e as any).id : "(missing)",
-      title:  typeof e?.title === "string" ? e.title : "",
-      promotedToHypothesisId: typeof (e as any)?.promotedToHypothesisId === "string"
-        ? (e as any).promotedToHypothesisId
-        : undefined,
-    });
-  }
   const sandboxKinds = listLowRiskSandboxKinds();
   for (const k of sandboxKinds) {
     inputs.push({
@@ -291,12 +296,33 @@ function buildRiskImpactStage(
       },
     });
   }
+  for (let i = 0; i < memUnpromoted.length; i++) {
+    const e = memUnpromoted[i];
+    // LOW-3 fix: use entry.id when present; otherwise a deterministic index
+    // fallback so tail rows remain distinguishable instead of collapsing to
+    // "memory:(missing)".
+    const id = isNonEmptyString(e?.id) ? e.id! : `index_${i}`;
+    inputs.push({
+      origin: "memory_knowledge",
+      id,
+      title:  typeof e?.title === "string" ? e.title : "",
+      promotedToHypothesisId: undefined,
+    });
+  }
+  for (const h of formal) {
+    // Hypothesis is structurally assignable to HygieneAwareHypothesis
+    // (the latter only adds optional fields). No cast required.
+    inputs.push({ origin: "research_lab.hypotheses", hypothesis: h });
+  }
 
   const scores = scoreHypothesisRiskImpactBatch(inputs, { now });
   const summary = summarizeRiskImpactScores(scores);
 
   // Build a short, propose-only blockers list summarising why anything is
-  // refused. This is read-only narration, not an action surface.
+  // refused. This is read-only narration, not an action surface. Resolved /
+  // success-state archived records (`hygiene_resolved_archived`) are NOT
+  // listed here — they appear in `extra.notes` instead so the operator
+  // doesn't see "success" as alarming.
   const blockers: string[] = [];
   if (summary.byReasonCode.public_action_blocked > 0) {
     blockers.push(`${summary.byReasonCode.public_action_blocked} candidate(s) blocked: public-action shape`);
@@ -311,10 +337,13 @@ function buildRiskImpactStage(
     blockers.push(`${summary.byReasonCode.promotion_blocked} candidate(s) blocked: auto-promote shape`);
   }
   if (summary.byReasonCode.memory_origin_blocked > 0) {
-    blockers.push(`${summary.byReasonCode.memory_origin_blocked} memory-origin record(s) blocked — promote first`);
+    blockers.push(
+      `${summary.byReasonCode.memory_origin_blocked} memory-origin record(s) need promotion to research_lab.hypotheses[]` +
+        (memAlreadyPromotedCount > 0 ? ` (${memAlreadyPromotedCount} already promoted, deduped from this count)` : ""),
+    );
   }
   if (summary.byReasonCode.hygiene_archived_or_blocked > 0) {
-    blockers.push(`${summary.byReasonCode.hygiene_archived_or_blocked} hygiene-archived/blocked record(s)`);
+    blockers.push(`${summary.byReasonCode.hygiene_archived_or_blocked} hygiene-archived / operator-blocked record(s)`);
   }
   if (summary.byReasonCode.readiness_blockers_present + summary.byReasonCode.readiness_partial > 0) {
     blockers.push(
@@ -338,11 +367,13 @@ function buildRiskImpactStage(
     reasonCode:  s.reasonCodes[0] ?? "",
   }));
 
-  // Status: implemented and exercising real inputs. If the scorer ran with
-  // zero inputs (no formal, no memory, no registry — implausible after
-  // Phase 2e-b but still defensible) we fall back to `ready` rather than
-  // `active` to avoid implying activity that didn't happen.
-  const status: AutonomyStageStatus = scores.length === 0 ? "ready" : "active";
+  // Status: the scorer module is implemented today, so the stage is at
+  // minimum `ready`. We only escalate to `active` when there is at least one
+  // real research input (a formal hypothesis or an unpromoted memory entry).
+  // Scoring just the static low-risk sandbox registry is a self-test and
+  // should not imply "this stage is currently in use" on a cold deployment.
+  const realInputCount = formal.length + memUnpromoted.length;
+  const status: AutonomyStageStatus = realInputCount > 0 ? "active" : "ready";
 
   return {
     id:    "risk_impact_score",
@@ -353,10 +384,13 @@ function buildRiskImpactStage(
     implementedBy: ["server/experiments/hypothesisRiskImpactScoring.ts"],
     counts: {
       scoredInputs:        summary.total,
+      realResearchInputs:  realInputCount,
+      memoryAlreadyPromoted: memAlreadyPromotedCount,
       eligible:            summary.byDecision.eligible,
       needsReview:         summary.byDecision.needs_review,
       blocked:             summary.byDecision.blocked,
       eligibleLowRisk:     summary.eligibleLowRisk,
+      resolvedArchived:    summary.byReasonCode.hygiene_resolved_archived,
       riskLow:             summary.byRisk.low,
       riskModerate:        summary.byRisk.moderate,
       riskHigh:            summary.byRisk.high,
@@ -372,10 +406,16 @@ function buildRiskImpactStage(
     latest: tail,
     extra: {
       byReasonCode:        summary.byReasonCode,
+      neutralReasonCodes:  [...NEUTRAL_REASON_CODES],
       defaultRefuseInvariant:
         "Unknown / memory-origin / public-action / scheduler / mutation / promotion shapes are blocked rather than allowed.",
       proposeOnlyInvariant:
         "Scoring is pure and read-only. No record, ledger, registry, or experiment is mutated by this stage.",
+      notes: summary.byReasonCode.hygiene_resolved_archived > 0
+        ? [
+            `${summary.byReasonCode.hygiene_resolved_archived} record(s) are resolved (status confirmed/rejected) — success state, not a problem`,
+          ]
+        : [],
     },
     blockers,
     nextActions: [

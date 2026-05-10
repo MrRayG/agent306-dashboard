@@ -113,12 +113,13 @@ describe("autonomyMonitor — shape + stage completeness", () => {
     const risk = snap.stages.find(s => s.id === "risk_impact_score")!;
     const meta = snap.stages.find(s => s.id === "meta_reflection")!;
     const lessons = snap.stages.find(s => s.id === "lessons_database")!;
-    // Phase 2g: risk_impact_score now has an implementation. With no inputs
-    // (TMP DATA_DIR has no research_lab.json or memory_knowledge.json), the
-    // stage still scores the five low-risk sandbox kinds from the registry,
-    // so it is `active`. With a fully empty registry it would be `ready`.
-    assert.ok(risk.status === "active" || risk.status === "ready",
-      `risk_impact_score must be active/ready post-Phase-2g, got ${risk.status}`);
+    // Phase 2g: risk_impact_score now has an implementation. With no real
+    // research inputs (TMP DATA_DIR has no research_lab.json or
+    // memory_knowledge.json), the stage scores the static low-risk sandbox
+    // registry as a self-test only — status MUST stay `ready` rather than
+    // claim `active` and mislead the operator about live activity.
+    assert.equal(risk.status, "ready",
+      `risk_impact_score must be ready (not active) when there are no real research inputs, got ${risk.status}`);
     assert.equal(meta.status, "not_implemented");
     assert.equal(lessons.status, "not_implemented");
     for (const s of [risk, meta, lessons]) {
@@ -219,6 +220,33 @@ describe("autonomyMonitor — shape + stage completeness", () => {
       "risk_impact_score must not advertise actionable mutation");
     assert.ok(typeof risk.extra?.proposeOnlyInvariant === "string");
     assert.ok(typeof risk.extra?.defaultRefuseInvariant === "string");
+  });
+
+  it("risk_impact_score: extra.byReasonCode shape is the dashboard contract", () => {
+    const snap = buildAutonomyMonitorSnapshot();
+    const risk = snap.stages.find(s => s.id === "risk_impact_score")!;
+    const byReasonCode = risk.extra?.byReasonCode as Record<string, number> | undefined;
+    assert.ok(byReasonCode && typeof byReasonCode === "object",
+      "extra.byReasonCode must be an object — the dashboard reads it");
+    // Every reason code is a number, including the 0s. The dashboard filters
+    // by > 0 itself; the contract here is that the keys are stable.
+    for (const v of Object.values(byReasonCode!)) {
+      assert.equal(typeof v, "number");
+    }
+    // The neutral allow-list must be exposed so the dashboard does not
+    // hard-code which codes are eligible vs alarming. It must include at
+    // least the affirmative codes plus hygiene_resolved_archived.
+    const neutral = risk.extra?.neutralReasonCodes;
+    assert.ok(Array.isArray(neutral), "extra.neutralReasonCodes must be an array");
+    const neutralSet = new Set(neutral as string[]);
+    for (const code of [
+      "low_risk_sandbox_fixture_shape",
+      "summarization_template_kind",
+      "readiness_complete_metric_present",
+      "hygiene_resolved_archived",
+    ]) {
+      assert.ok(neutralSet.has(code), `neutralReasonCodes must include ${code}`);
+    }
   });
 });
 
@@ -321,6 +349,105 @@ describe("autonomyMonitor — surfaces real ledger + registration data", () => {
       !(e.nextActions ?? []).some(a => /apply\s+now|run\s+now|promote\s+now/i.test(a)),
       "evidence_package must not advertise actionable auto-apply",
     );
+  });
+});
+
+describe("autonomyMonitor — phase 2g status / dedupe / resolved-archived behavior", () => {
+  const RESEARCH = path.join(TMP, "research_lab.json");
+  const MEMORY   = path.join(TMP, "memory_knowledge.json");
+
+  after(() => {
+    fs.rmSync(RESEARCH, { force: true });
+    fs.rmSync(MEMORY,   { force: true });
+  });
+
+  it("status flips to active when at least one real formal hypothesis is present", () => {
+    fs.writeFileSync(RESEARCH, JSON.stringify({
+      hypotheses: [
+        {
+          id: "hyp_real_1",
+          claim: "real claim that is at least ten chars long",
+          basis: "evidence basis",
+          metric: "primary_metric",
+          prediction: "specific predicted outcome",
+          timeframe: "Q3 2026",
+          status: "testing",
+          confidence: "medium",
+          formedAt: "2026-04-01T00:00:00Z",
+          measurementPath: "data/source_x.jsonl",
+          hygieneTag: "ready_for_experiment",
+        },
+      ],
+    }));
+    const snap = buildAutonomyMonitorSnapshot();
+    const risk = snap.stages.find(s => s.id === "risk_impact_score")!;
+    assert.equal(risk.status, "active", "real research input must escalate stage to active");
+    assert.ok((risk.counts?.realResearchInputs ?? 0) >= 1);
+    assert.ok((risk.counts?.eligible ?? 0) >= 1);
+    fs.rmSync(RESEARCH, { force: true });
+  });
+
+  it("resolved (status=confirmed/rejected) records emit hygiene_resolved_archived, not hygiene_archived_or_blocked", () => {
+    fs.writeFileSync(RESEARCH, JSON.stringify({
+      hypotheses: [
+        {
+          id: "hyp_confirmed",
+          claim: "this hypothesis has been confirmed by data",
+          basis: "long-form basis text",
+          metric: "primary_metric",
+          prediction: "specific predicted outcome",
+          timeframe: "Q3 2026",
+          status: "confirmed",
+          confidence: "high",
+          formedAt: "2026-01-01T00:00:00Z",
+          measurementPath: "data/source_x.jsonl",
+        },
+      ],
+    }));
+    const snap = buildAutonomyMonitorSnapshot();
+    const risk = snap.stages.find(s => s.id === "risk_impact_score")!;
+    const byCode = risk.extra?.byReasonCode as Record<string, number>;
+    assert.ok((byCode.hygiene_resolved_archived ?? 0) >= 1);
+    assert.equal(byCode.hygiene_archived_or_blocked, 0);
+    // It must NOT show up in the alarming blockers list.
+    const blockerJoined = (risk.blockers ?? []).join(" ");
+    assert.ok(!/hygiene-archived|hygiene-blocked/.test(blockerJoined),
+      "resolved records must not appear in blockers");
+    // notes mentions the resolved count.
+    const notes = (risk.extra?.notes as string[] | undefined) ?? [];
+    assert.ok(notes.some(n => /resolved/i.test(n)));
+    fs.rmSync(RESEARCH, { force: true });
+  });
+
+  it("memory entries with promotedToHypothesisId are deduped from scoring", () => {
+    fs.writeFileSync(MEMORY, JSON.stringify({
+      entries: [
+        { id: "mem_unp_1", title: "Hypothesis: unpromoted A" },
+        { id: "mem_promoted_1", title: "Hypothesis: already promoted B", promotedToHypothesisId: "hyp_x" },
+      ],
+    }));
+    const snap = buildAutonomyMonitorSnapshot();
+    const risk = snap.stages.find(s => s.id === "risk_impact_score")!;
+    // Only the unpromoted memory entry must be scored.
+    const byCode = risk.extra?.byReasonCode as Record<string, number>;
+    assert.equal(byCode.memory_origin_blocked, 1);
+    assert.equal(risk.counts?.memoryAlreadyPromoted, 1);
+    fs.rmSync(MEMORY, { force: true });
+  });
+
+  it("memory entry id is preserved in the latest tail (never collapses to memory:(missing))", () => {
+    fs.writeFileSync(MEMORY, JSON.stringify({
+      entries: [
+        { id: "mem_tailtest_42", title: "Hypothesis: tail test" },
+      ],
+    }));
+    const snap = buildAutonomyMonitorSnapshot();
+    const risk = snap.stages.find(s => s.id === "risk_impact_score")!;
+    const tail = (risk.latest ?? []) as Array<Record<string, unknown>>;
+    const memRow = tail.find(r => String(r.refId).startsWith("memory:"));
+    assert.ok(memRow, "memory entry must appear in tail");
+    assert.equal(memRow!.refId, "memory:mem_tailtest_42");
+    fs.rmSync(MEMORY, { force: true });
   });
 });
 

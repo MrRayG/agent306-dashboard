@@ -289,6 +289,14 @@ function LowRiskRegistryTable({ extra }: { extra?: Record<string, unknown> }) {
 
 function RiskImpactReasonCodes({ extra }: { extra?: Record<string, unknown> }) {
   const byReasonCode = (extra?.byReasonCode as Record<string, number> | undefined) ?? {};
+  // The server publishes the "neutral" reason-code allow-list; the dashboard
+  // never hard-codes which codes are eligible vs alarming. Anything not in
+  // this list is treated as a non-eligible code and rendered yellow.
+  const neutralCodes = new Set(
+    Array.isArray(extra?.neutralReasonCodes)
+      ? (extra!.neutralReasonCodes as unknown[]).filter((s): s is string => typeof s === "string")
+      : [],
+  );
   const entries = Object.entries(byReasonCode).filter(([, v]) => typeof v === "number" && v > 0);
   if (entries.length === 0) return null;
   return (
@@ -303,17 +311,15 @@ function RiskImpactReasonCodes({ extra }: { extra?: Record<string, unknown> }) {
       }}>Reason codes</div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
         {entries.map(([code, count]) => {
-          const blocked = code !== "low_risk_sandbox_fixture_shape"
-            && code !== "summarization_template_kind"
-            && code !== "readiness_complete_metric_present";
+          const neutral = neutralCodes.has(code);
           return (
             <span key={code} style={{
               ...mono,
               fontSize: "0.74rem",
               padding: "0.18rem 0.5rem",
-              border: `1px solid ${blocked ? YELLOW : GREEN}`,
+              border: `1px solid ${neutral ? GREEN : YELLOW}`,
               borderRadius: 3,
-              color: blocked ? YELLOW : GREEN,
+              color: neutral ? GREEN : YELLOW,
               background: "rgba(227,229,228,0.02)",
             }}>
               {code} <span style={{ color: DIM }}>×{count}</span>

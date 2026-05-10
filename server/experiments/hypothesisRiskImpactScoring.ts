@@ -95,7 +95,8 @@ export type RiskImpactReasonCode =
   | "promotion_blocked"
   | "unknown_or_unclassifiable"
   | "missing_required_fields"
-  | "hygiene_archived_or_blocked";
+  | "hygiene_archived_or_blocked"
+  | "hygiene_resolved_archived";
 
 /**
  * The full per-record verdict. Intentionally explicit: the classification is
@@ -228,12 +229,18 @@ function scoreFormalHypothesis(
   const { tag } = classifyHypothesis(hyp);
 
   // 1. Hard-block hygiene-archived / hygiene-blocked records.
+  //    Distinguish resolved-archived (status: confirmed | rejected — i.e.
+  //    success state, intentionally retired) from operator-blocked /
+  //    irrelevant records, so the dashboard does not surface a confirmed-true
+  //    hypothesis as an alarming "blocker".
   if (
     tag === "archived_irrelevant" ||
     tag === "archived_unsolvable" ||
     tag === "archived_stale" ||
     tag === "blocked"
   ) {
+    const hypStatus = (hyp as Hypothesis).status;
+    const isResolved = hypStatus === "confirmed" || hypStatus === "rejected";
     return {
       refId,
       origin:     "research_lab.hypotheses",
@@ -242,13 +249,21 @@ function scoreFormalHypothesis(
       readiness:  "blocked",
       confidence: "high",
       decision:   "blocked",
-      reasons: [
-        `hygiene tag '${tag}' marks this record as out of the active loop`,
-        "Phase 2g refuses to score a record the hygiene gate has archived/blocked",
-      ],
-      reasonCodes: ["hygiene_archived_or_blocked"],
+      reasons: isResolved
+        ? [
+            `record is resolved (status='${hypStatus}') and intentionally retired`,
+            "resolved records are not eligible for re-scoring — this is success, not a blocker",
+          ]
+        : [
+            `hygiene tag '${tag}' marks this record as out of the active loop`,
+            "Phase 2g refuses to score a record the hygiene gate has archived/blocked",
+          ],
+      reasonCodes: isResolved
+        ? ["hygiene_resolved_archived"]
+        : ["hygiene_archived_or_blocked"],
       evidence: [
         `hygieneTag: ${tag}`,
+        `status: ${String(hypStatus ?? "")}`,
         `canFeedExperiment.ok: ${String(verdict.ok)}`,
       ],
       scoredAt,
@@ -646,6 +661,26 @@ const ALL_REASON_CODES: RiskImpactReasonCode[] = [
   "unknown_or_unclassifiable",
   "missing_required_fields",
   "hygiene_archived_or_blocked",
+  "hygiene_resolved_archived",
+];
+
+/**
+ * Reason codes that represent "this record is intentionally not eligible —
+ * not an operator-facing problem". The dashboard uses this set to color
+ * neutrally (rather than as a yellow blocker). Source-of-truth here, so the
+ * dashboard never has to hard-code which codes are eligible vs alarming.
+ *
+ *   - eligible/affirmative codes (`low_risk_sandbox_fixture_shape`,
+ *     `summarization_template_kind`, `readiness_complete_metric_present`)
+ *     are listed here too so the dashboard renders them neutrally as well.
+ *   - `hygiene_resolved_archived` is success-state retirement.
+ *   - Everything not listed here defaults to "needs operator attention".
+ */
+export const NEUTRAL_REASON_CODES: readonly RiskImpactReasonCode[] = [
+  "low_risk_sandbox_fixture_shape",
+  "summarization_template_kind",
+  "readiness_complete_metric_present",
+  "hygiene_resolved_archived",
 ];
 
 function emptyRecord<K extends string>(keys: readonly K[]): Record<K, number> {

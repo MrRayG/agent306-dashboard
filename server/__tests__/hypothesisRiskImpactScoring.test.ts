@@ -132,6 +132,23 @@ describe("scoreHypothesisRiskImpact — formal hypotheses", () => {
     assert.equal(score.decision, "blocked");
     assert.ok(score.reasonCodes.includes("hygiene_archived_or_blocked"));
   });
+
+  it("status=confirmed → blocked with hygiene_resolved_archived (not hygiene_archived_or_blocked)", () => {
+    const hyp = mkHyp({ status: "confirmed" });
+    const input: FormalHypothesisInput = { origin: "research_lab.hypotheses", hypothesis: hyp };
+    const score = scoreHypothesisRiskImpact(input, { now: FIXED_NOW });
+    assert.equal(score.decision, "blocked");
+    assert.ok(score.reasonCodes.includes("hygiene_resolved_archived"));
+    assert.ok(!score.reasonCodes.includes("hygiene_archived_or_blocked"));
+  });
+
+  it("status=rejected → blocked with hygiene_resolved_archived", () => {
+    const hyp = mkHyp({ status: "rejected" });
+    const input: FormalHypothesisInput = { origin: "research_lab.hypotheses", hypothesis: hyp };
+    const score = scoreHypothesisRiskImpact(input, { now: FIXED_NOW });
+    assert.equal(score.decision, "blocked");
+    assert.ok(score.reasonCodes.includes("hygiene_resolved_archived"));
+  });
 });
 
 describe("scoreHypothesisRiskImpact — memory-origin entries", () => {
