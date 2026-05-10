@@ -55,6 +55,11 @@ import {
   readActiveRegistrationRecords,
 } from "./experiments/sandboxRegistrationRecords.js";
 import {
+  readSummarizationFixtureLedgerSummary,
+  SUMMARIZATION_FIXTURE_ID,
+  type SummarizationFixtureLedgerSummary,
+} from "./experiments/summarizationSandboxFixtureRegistration.js";
+import {
   readDecisionEvents,
 } from "./experiments/hypothesisDecisionEvents.js";
 import {
@@ -665,6 +670,33 @@ function buildEvidencePackageStage(): AutonomyStage {
       refusalCode:  r.refusalCode,
     }));
 
+  // Phase 2i-a: read-only summary of the summarizationTemplate fixture
+  // evidence (if any). NEVER writes. Empty / absent ledger surfaces as
+  // `hasFixtureEvidence: false` with `latestFixtureRegistration: null`.
+  let summarizationFixture: SummarizationFixtureLedgerSummary;
+  try {
+    summarizationFixture = readSummarizationFixtureLedgerSummary();
+  } catch {
+    summarizationFixture = {
+      totalEvents:              0,
+      registrationEvents:       0,
+      completionEvents:         0,
+      refusedEvents:            0,
+      fixtureRegistrationEvents: 0,
+      hasFixtureEvidence:       false,
+      latestFixtureRegistration: null,
+      invariants: {
+        fixtureOnly:              true,
+        dryRunOnly:               true,
+        sandboxAutoApplyEligible: false,
+        autoApplyPolicy:          "manual-only",
+        schedulerDriven:          false,
+        publicAction:             false,
+        mutating:                 false,
+      },
+    };
+  }
+
   const status: AutonomyStageStatus = records.length === 0 ? "ready" : "active";
 
   return {
@@ -672,8 +704,11 @@ function buildEvidencePackageStage(): AutonomyStage {
     label: "Evidence Package",
     status,
     summary:
-      "Phase 2e-c persists each Phase 2e-b sandbox registration (and follow-up completion / refused events) as JSONL in data/sandbox_registration_records.jsonl. Append-only audit trail.",
-    implementedBy: ["server/experiments/sandboxRegistrationRecords.ts"],
+      "Phase 2e-c persists each Phase 2e-b sandbox registration (and follow-up completion / refused events) as JSONL in data/sandbox_registration_records.jsonl. Append-only audit trail. Phase 2i-a adds the first deterministic summarizationTemplate fixture registration path so this ledger has real evidence on the only enabled low-risk kind.",
+    implementedBy: [
+      "server/experiments/sandboxRegistrationRecords.ts",
+      "server/experiments/summarizationSandboxFixtureRegistration.ts",
+    ],
     counts: {
       totalRecords:                records.length,
       registrationEvents:          byEvent.registration,
@@ -681,14 +716,30 @@ function buildEvidencePackageStage(): AutonomyStage {
       refusedEvents:               byEvent.refused,
       activeRegistrations:         active.length,
       sandboxAutoApplyEligible:    autoApplyEligible,
+      summarizationFixtureRegistrations: summarizationFixture.fixtureRegistrationEvents,
     },
     latest: tail,
     extra: {
       autoApplyPolicy: "manual-only — sandboxAutoApplyEligible is recorded for audit but no auto-apply path runs",
+      summarizationFixture: {
+        fixtureId:                  SUMMARIZATION_FIXTURE_ID,
+        hasFixtureEvidence:         summarizationFixture.hasFixtureEvidence,
+        totalEvents:                summarizationFixture.totalEvents,
+        registrationEvents:         summarizationFixture.registrationEvents,
+        completionEvents:           summarizationFixture.completionEvents,
+        refusedEvents:              summarizationFixture.refusedEvents,
+        fixtureRegistrationEvents:  summarizationFixture.fixtureRegistrationEvents,
+        latestFixtureRegistration:  summarizationFixture.latestFixtureRegistration,
+        invariants:                 summarizationFixture.invariants,
+        manualEntryPoint:           "scripts/registerSummarizationSandboxFixture.ts",
+      },
     },
     nextActions: [
       "Inspect the ledger via readRecordsTail(50)",
       "sandboxAutoApplyEligible records still require operator approval — there is no auto-apply runner",
+      summarizationFixture.hasFixtureEvidence
+        ? "Phase 2i-a fixture evidence is present; completion (postMetrics) is deferred to Phase 2e-d"
+        : "Run scripts/registerSummarizationSandboxFixture.ts manually to append the first Phase 2i-a fixture row (no scheduler is wired)",
     ],
   };
 }
