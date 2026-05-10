@@ -64,6 +64,11 @@ import {
   type SandboxRegistrationHistorySnapshot,
 } from "./experiments/sandboxRegistrationHistory.js";
 import {
+  buildSandboxRegistrationAuditExport,
+  SANDBOX_REGISTRATION_AUDIT_EXPORT_SCHEMA_VERSION,
+  SANDBOX_REGISTRATION_AUDIT_EXPORT_LABEL,
+} from "./experiments/sandboxRegistrationAuditExport.js";
+import {
   readDecisionEvents,
 } from "./experiments/hypothesisDecisionEvents.js";
 import {
@@ -752,16 +757,29 @@ function buildEvidencePackageStage(): AutonomyStage {
 
   const status: AutonomyStageStatus = records.length === 0 ? "ready" : "active";
 
+  // Phase 2i-c: deterministic, read-only audit export of the existing
+  // Phase 2i-b history snapshot. Reuses the snapshot we already built —
+  // does NOT re-parse the ledger. `now` is intentionally NOT passed so
+  // `generatedAt` is `null`; the autonomy monitor surfaces schema metadata
+  // and counts only, never an injected wall-clock timestamp.
+  let auditExport: ReturnType<typeof buildSandboxRegistrationAuditExport>;
+  try {
+    auditExport = buildSandboxRegistrationAuditExport({ snapshot: history });
+  } catch {
+    auditExport = buildSandboxRegistrationAuditExport({ snapshot: history });
+  }
+
   return {
     id:    "evidence_package",
     label: "Evidence Package",
     status,
     summary:
-      "Phase 2e-c persists each Phase 2e-b sandbox registration (and follow-up completion / refused events) as JSONL in data/sandbox_registration_records.jsonl. Append-only audit trail. Phase 2i-a adds the first deterministic summarizationTemplate fixture registration path so this ledger has real evidence on the only enabled low-risk kind. Phase 2i-b adds a read-only registration history view so an operator can audit every persisted row at a glance.",
+      "Phase 2e-c persists each Phase 2e-b sandbox registration (and follow-up completion / refused events) as JSONL in data/sandbox_registration_records.jsonl. Append-only audit trail. Phase 2i-a adds the first deterministic summarizationTemplate fixture registration path so this ledger has real evidence on the only enabled low-risk kind. Phase 2i-b adds a read-only registration history view so an operator can audit every persisted row at a glance. Phase 2i-c adds a deterministic, read-only audit export projection over that history — schema-versioned, reuse-first, no UI control, no scheduler.",
     implementedBy: [
       "server/experiments/sandboxRegistrationRecords.ts",
       "server/experiments/summarizationSandboxFixtureRegistration.ts",
       "server/experiments/sandboxRegistrationHistory.ts",
+      "server/experiments/sandboxRegistrationAuditExport.ts",
     ],
     counts: {
       totalRecords:                records.length,
@@ -773,6 +791,7 @@ function buildEvidencePackageStage(): AutonomyStage {
       summarizationFixtureRegistrations: summarizationFixture.fixtureRegistrationEvents,
       historyEntriesShown:         history.entries.length,
       manualFixtureRegistrations:  history.manualFixtureRegistrations,
+      auditExportEntries:          auditExport.entries.length,
     },
     latest: tail,
     extra: {
@@ -803,6 +822,28 @@ function buildEvidencePackageStage(): AutonomyStage {
         disabledKinds:              history.disabledKinds,
         invariants:                 history.invariants,
       },
+      // Phase 2i-c: schema-versioned audit export metadata. Surfaces just
+      // enough so an operator can see "an audit export is available" without
+      // dumping the full payload into the dashboard. The full export remains
+      // a server helper — no API endpoint, no UI control, no scheduler.
+      registrationAuditExport: {
+        schemaVersion:              auditExport.schemaVersion,
+        label:                      auditExport.label,
+        generatedAt:                auditExport.generatedAt,
+        generatedBy:                auditExport.generatedBy,
+        totalRecords:               auditExport.totalRecords,
+        registrationEvents:         auditExport.registrationEvents,
+        completionEvents:           auditExport.completionEvents,
+        refusedEvents:              auditExport.refusedEvents,
+        activeRegistrations:        auditExport.activeRegistrations,
+        manualFixtureRegistrations: auditExport.manualFixtureRegistrations,
+        appliedLimit:               auditExport.appliedLimit,
+        isEmpty:                    auditExport.isEmpty,
+        entriesShown:               auditExport.entries.length,
+        kindEnablement:             auditExport.kindEnablement,
+        invariants:                 auditExport.invariants,
+        helperEntryPoint:           "server/experiments/sandboxRegistrationAuditExport.ts",
+      },
     },
     nextActions: [
       "Inspect the ledger via readRecordsTail(50)",
@@ -813,6 +854,7 @@ function buildEvidencePackageStage(): AutonomyStage {
       history.isEmpty
         ? "Phase 2i-b registration history is empty — the dashboard will populate as ledger rows accumulate"
         : `Phase 2i-b registration history shows the most-recent ${history.entries.length} ledger row(s) for audit`,
+      `Phase 2i-c audit export is available via buildSandboxRegistrationAuditExport() (schema ${SANDBOX_REGISTRATION_AUDIT_EXPORT_SCHEMA_VERSION}, label ${SANDBOX_REGISTRATION_AUDIT_EXPORT_LABEL}); read-only helper, no API endpoint`,
     ],
   };
 }
