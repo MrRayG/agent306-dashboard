@@ -650,3 +650,95 @@ The selector + binding + decision + ledger + sandbox-plan + low-risk-registry + 
 - **Single readiness gate**: `canFeedExperiment` from `server/hypothesisHygiene.ts` is the only function that says "yes, a formal hypothesis may proceed". The selector composes it; it does not re-implement it.
 - **Memory-origin records are never candidates**: the type system, the function partitioning, and the absence of any `ok: true` branch on `canMemoryEntryFeedExperiment` all enforce this.
 - **History is preserved**: no records are mutated. The selector is a pure read; the Phase 2d ledger and the Phase 2e-c records ledger are both append-only.
+
+## Phase 2f-a: Autonomy Monitor (read-only end-state dashboard)
+
+Phase 2f-a closes the visibility gap. With Phase 1 through Phase 2e-c on `main`, the system has formal hypotheses, a hygiene gate, an experiment-candidate selector, a metric binding, a decision rule, a decision-events ledger, a sandbox-execution plan bridge, a low-risk sandbox registry, and a persistent sandbox-registration records ledger — but a human operator could not see all of those at once. Phase 2f-a is the read-only monitor that does.
+
+### Endpoint
+
+`GET /api/autonomy/monitor` (auth: `requireDashAuth`). Returns a single JSON snapshot. Implementation: `server/autonomyMonitor.ts`. The endpoint is wired directly in `server/routes.ts` rather than in a sub-router because it composes across many modules and is read-only.
+
+### Response shape
+
+```ts
+{
+  generatedAt:   string;        // ISO timestamp the snapshot was built
+  safetyBoundary: {
+    noAutoPost: true;
+    noAutoPublish: true;
+    noAutoPromote: true;
+    noScheduler: true;
+    publicApprovalRequired: true;
+    banner: string;             // human-readable boundary statement
+  };
+  stages: AutonomyStage[];      // 11 stages in canonical order
+  pipelineSummary: {
+    implementedStageCount: number;
+    plannedStageCount:     number;
+    totalStageCount:       11;
+    headline:              string;
+  };
+}
+```
+
+Each `AutonomyStage` carries `id`, `label`, `status` (`active | ready | blocked | disabled | data_missing | planned | not_implemented`), `summary`, `implementedBy?` (module list), `counts?`, `latest?`, `blockers?`, `nextActions?`, `extra?`.
+
+### Stage model (eleven full-loop stages, always present)
+
+| # | Stage id | Today's status | Source |
+|---|---|---|---|
+| 1 | `research_topic` | `active`/`ready` | `server/researchEngine.ts`, `server/memoryEngine.ts` |
+| 2 | `risk_impact_score` | `planned` | — (no module yet) |
+| 3 | `hygiene_gate` | `active`/`ready` | `server/hypothesisHygiene.ts`, `server/memoryHypothesisHygiene.ts` |
+| 4 | `experiment_candidate` | `ready` | `server/experiments/hypothesisExperimentSelector.ts` |
+| 5 | `metric_binding` | `ready` | `server/experiments/hypothesisMetricBinding.ts` |
+| 6 | `decision_rule` | `ready` | `server/experiments/hypothesisExperimentDecision.ts` |
+| 7 | `sandbox_execution` | `ready` | `server/experiments/hypothesisSandboxExecution.ts`, `server/experiments/lowRiskSandboxRegistry.ts` |
+| 8 | `decision_outcome` | `active`/`ready` | `server/experiments/hypothesisDecisionEvents.ts` |
+| 9 | `evidence_package` | `active`/`ready` | `server/experiments/sandboxRegistrationRecords.ts` |
+| 10 | `meta_reflection` | `not_implemented` | — (Phase 2f roadmap) |
+| 11 | `lessons_database` | `not_implemented` | — (Phase 2f roadmap) |
+
+Stages 2, 10, 11 are visible on the dashboard with explicit blockers and next actions — they are NOT hidden. The point of the page is to show the end goal AND the gap to it, so future work is always visible.
+
+### Read-only guarantee
+
+The aggregator only calls `read*` helpers and reads JSON snapshots. There is no write path:
+
+- No file under `data/` is created, mutated, or appended to by `buildAutonomyMonitorSnapshot()`. The Phase 2f-a tests pin this — they hash `research_lab.json`, `memory_knowledge.json`, the Phase 2d ledger, and the Phase 2e-c records ledger before/after to confirm none is touched.
+- The endpoint is a single `app.get`. No sibling `POST` / `PATCH` / `DELETE` is registered alongside it.
+- The UI page renders only `<a>` links, headings, count tiles, tables, and text lists. It does NOT render any button that calls a mutating endpoint, includes any `apply`/`approve`/`promote`/`post`/`publish`/`schedule` affordance, or sends any non-GET request.
+- `sandboxAutoApplyEligible` is exposed in the `evidence_package` counts for audit visibility but the page renders it as a number only — there is no "apply now" path; that remains deferred to Phase 2e-d behind the operator-approved track-record threshold.
+- Defensive reads: every source file is loaded inside a `try { ... } catch { ... }`. Missing or corrupt data does not throw — the affected stage reports `0` counts (and where appropriate, a `data_missing` blocker).
+
+### Defense-in-depth invariants pinned by tests
+
+`server/__tests__/autonomyMonitor.test.ts` pins the following:
+
+1. All 11 stages present in canonical order, even when no source data exists.
+2. Future stages (`risk_impact_score`, `meta_reflection`, `lessons_database`) carry explicit `planned` or `not_implemented` statuses + non-empty `nextActions`.
+3. Empty / missing data files do not throw — counts are `0`.
+4. Memory-origin hypotheses always show `memoryFeedEligible: 0` and `extra.memoryRefused: true`.
+5. Disabled low-risk registry kinds are visible in the `sandbox_execution` extra, marked `enabled: false` with their `disabledReason`.
+6. `sandboxAutoApplyEligible` surfaces in the `evidence_package` counts, but `nextActions` does not advertise an apply path.
+7. Building the snapshot does not create ledger files under `DATA_DIR` and does not touch the real data files.
+8. Safety boundary flags (`noAutoPost` / `noAutoPublish` / `noAutoPromote` / `noScheduler` / `publicApprovalRequired`) are all `true`.
+
+### UI
+
+Client page: `client/src/pages/AutonomyMonitor.tsx`, mounted at the hash route `#/autonomy` and added to the sidebar nav as `Autonomy`. Layout:
+
+- **Public approval banner** (orange, always visible): `noAutoPost / noAutoPublish / noAutoPromote / noScheduler / publicApprovalRequired = true`.
+- **Pipeline summary**: `N of 11 loop stages have an implementation today; M remain planned.`
+- **Stage cards** (one per stage, in canonical order): label, status pill (color-coded by `status`), summary, implemented-by modules, count tiles, latest evidence rows, blockers (yellow), next safe actions (text only).
+- **Low-risk registry table** rendered inside the `sandbox_execution` card.
+
+### What Phase 2f-a does NOT add
+
+- No mutation endpoint. No `POST /api/autonomy/...` of any kind.
+- No scheduler. No background polling on the server. The UI uses a 30s `refetchInterval`; the server endpoint is stateless.
+- No new data files. No new persistence. No write path.
+- No new safety relaxation. The existing public-action approval boundary stays intact.
+
+Phase 2f (meta-reflection + lessons database) and any future apply path remain separate, gated PRs.

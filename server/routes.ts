@@ -6,6 +6,7 @@ import { registerDiagnosticsRoutes } from "./routers/diagnosticsRouter.js";
 import { registerAgentRoutes } from "./routers/agentRouter.js";
 import { registerKnowledgeRoutes } from "./routers/knowledgeRouter.js";
 import { registerHypothesisRoutes } from "./routers/hypothesisRouter.js";
+import { buildAutonomyMonitorSnapshot } from "./autonomyMonitor.js";
 import { selectStalledTriageCandidates as selectStalledHypothesisTriageCandidates } from "./hypothesisTriageQueue.js";
 import {
   selectStalledMilestoneDecisions,
@@ -913,6 +914,17 @@ export function registerRoutes(httpServer: Server, app: Express) {
   registerHypothesisRoutes(app, { requireDashAuth });
   registerContentRoutes(app, { requireDashAuth });
   registerEpisodeRoutes(app, { requireDashAuth });
+
+  // ── Autonomy Monitor (Phase 2f-a) ────────────────────────────────────────
+  // Read-only aggregation across the full Agent 306 evidence-based autonomy
+  // loop. No mutation surface; safe to call on every page render.
+  app.get("/api/autonomy/monitor", requireDashAuth, (_req, res) => {
+    try {
+      res.json(buildAutonomyMonitorSnapshot());
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message ?? String(e) });
+    }
+  });
 
   // OAuth 2.0 routes removed — using OAuth 1.0a only (tokens don't expire).
   // To reauthorize: regenerate tokens in X Developer Portal + update Railway env vars.
