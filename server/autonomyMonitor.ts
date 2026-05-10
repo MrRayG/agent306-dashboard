@@ -58,6 +58,11 @@ import {
   buildAutonomyRuntimeVisibility,
   type AutonomyRuntimeVisibility,
 } from "./autonomyRuntimeVisibility.js";
+import {
+  scoreHypothesisRiskImpactBatch,
+  summarizeRiskImpactScores,
+  type ScoreInput,
+} from "./experiments/hypothesisRiskImpactScoring.js";
 import type { Hypothesis } from "./researchEngine.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -237,22 +242,146 @@ function buildResearchTopicStage(
   };
 }
 
-function buildRiskImpactStage(): AutonomyStage {
+function buildRiskImpactStage(
+  lab: ResearchLabBlob | null,
+  memory: MemoryKnowledgeBlobShape | null,
+  now: Date,
+): AutonomyStage {
+  const formal = Array.isArray(lab?.hypotheses) ? lab!.hypotheses! : [];
+  const memEntries = Array.isArray(memory?.entries) ? memory!.entries! : [];
+  const memHyp = memEntries.filter(e => isMemoryHypothesisTitle(e?.title));
+
+  // Scoring inputs:
+  //   1. Each formal hypothesis (origin: research_lab.hypotheses)
+  //   2. Each memory-origin entry (origin: memory_knowledge — always blocked)
+  //   3. Each low-risk sandbox kind in the Phase 2e-b registry as a candidate
+  //      shaped by its enablement matrix (only `summarizationTemplate` is
+  //      affirmatively enabled; the other four are sandbox-fixture but not
+  //      recognised-enabled, so they land at `needs_review` — matching the
+  //      registry intent).
+  const inputs: ScoreInput[] = [];
+  for (const h of formal) {
+    inputs.push({ origin: "research_lab.hypotheses", hypothesis: h as any });
+  }
+  for (const e of memHyp) {
+    inputs.push({
+      origin: "memory_knowledge",
+      id:     typeof (e as any)?.id === "string" ? (e as any).id : "(missing)",
+      title:  typeof e?.title === "string" ? e.title : "",
+      promotedToHypothesisId: typeof (e as any)?.promotedToHypothesisId === "string"
+        ? (e as any).promotedToHypothesisId
+        : undefined,
+    });
+  }
+  const sandboxKinds = listLowRiskSandboxKinds();
+  for (const k of sandboxKinds) {
+    inputs.push({
+      origin: "candidate",
+      id:     `sandbox:${k.kind}`,
+      label:  k.kind,
+      shape: {
+        sandboxFixtureOnly: true,
+        lowRiskSandboxKind: true,
+        learningRead:       k.enabled, // only the enabled kind is treated as
+                                       // a learning-read affirmative path
+        publicAction:       false,
+        schedulerDriven:    false,
+        mutates:            false,
+        autoPromote:        false,
+      },
+    });
+  }
+
+  const scores = scoreHypothesisRiskImpactBatch(inputs, { now });
+  const summary = summarizeRiskImpactScores(scores);
+
+  // Build a short, propose-only blockers list summarising why anything is
+  // refused. This is read-only narration, not an action surface.
+  const blockers: string[] = [];
+  if (summary.byReasonCode.public_action_blocked > 0) {
+    blockers.push(`${summary.byReasonCode.public_action_blocked} candidate(s) blocked: public-action shape`);
+  }
+  if (summary.byReasonCode.scheduler_blocked > 0) {
+    blockers.push(`${summary.byReasonCode.scheduler_blocked} candidate(s) blocked: scheduler-driven shape`);
+  }
+  if (summary.byReasonCode.mutation_blocked > 0) {
+    blockers.push(`${summary.byReasonCode.mutation_blocked} candidate(s) blocked: mutation / live-apply shape`);
+  }
+  if (summary.byReasonCode.promotion_blocked > 0) {
+    blockers.push(`${summary.byReasonCode.promotion_blocked} candidate(s) blocked: auto-promote shape`);
+  }
+  if (summary.byReasonCode.memory_origin_blocked > 0) {
+    blockers.push(`${summary.byReasonCode.memory_origin_blocked} memory-origin record(s) blocked — promote first`);
+  }
+  if (summary.byReasonCode.hygiene_archived_or_blocked > 0) {
+    blockers.push(`${summary.byReasonCode.hygiene_archived_or_blocked} hygiene-archived/blocked record(s)`);
+  }
+  if (summary.byReasonCode.readiness_blockers_present + summary.byReasonCode.readiness_partial > 0) {
+    blockers.push(
+      `${summary.byReasonCode.readiness_blockers_present + summary.byReasonCode.readiness_partial} record(s) ` +
+      "with incomplete readiness fields",
+    );
+  }
+  if (summary.byReasonCode.unknown_or_unclassifiable > 0) {
+    blockers.push(`${summary.byReasonCode.unknown_or_unclassifiable} unclassifiable input(s)`);
+  }
+
+  // A small tail of recent scores so the dashboard can show which records
+  // landed where. Trimmed to keep the payload small.
+  const tail = scores.slice(-5).reverse().map(s => ({
+    refId:       s.refId,
+    origin:      s.origin,
+    risk:        s.risk,
+    impact:      s.impact,
+    readiness:   s.readiness,
+    decision:    s.decision,
+    reasonCode:  s.reasonCodes[0] ?? "",
+  }));
+
+  // Status: implemented and exercising real inputs. If the scorer ran with
+  // zero inputs (no formal, no memory, no registry — implausible after
+  // Phase 2e-b but still defensible) we fall back to `ready` rather than
+  // `active` to avoid implying activity that didn't happen.
+  const status: AutonomyStageStatus = scores.length === 0 ? "ready" : "active";
+
   return {
     id:    "risk_impact_score",
     label: "Risk + Impact Score",
-    status: "planned",
+    status,
     summary:
-      "Per-hypothesis risk + impact scoring is on the autonomy roadmap but has no module today. The downstream pipeline currently treats every readiness-gated hypothesis equally.",
-    implementedBy: [],
-    counts: { scoredHypotheses: 0 },
-    blockers: [
-      "No risk-impact scorer module exists yet",
-      "Defer to operator review until a scorer ships",
-    ],
+      "Phase 2g pure scorer. Each formal hypothesis, memory-origin entry, and low-risk sandbox kind is mapped to a (risk, impact, readiness) verdict with a downstream decision. Eligible/low-risk records are surfaced; public-action / scheduler / mutation / unknown shapes are blocked. Propose-only — nothing is registered or applied here.",
+    implementedBy: ["server/experiments/hypothesisRiskImpactScoring.ts"],
+    counts: {
+      scoredInputs:        summary.total,
+      eligible:            summary.byDecision.eligible,
+      needsReview:         summary.byDecision.needs_review,
+      blocked:             summary.byDecision.blocked,
+      eligibleLowRisk:     summary.eligibleLowRisk,
+      riskLow:             summary.byRisk.low,
+      riskModerate:        summary.byRisk.moderate,
+      riskHigh:            summary.byRisk.high,
+      riskUnclassifiable:  summary.byRisk.unclassifiable,
+      impactHigh:          summary.byImpact.high,
+      impactModerate:      summary.byImpact.moderate,
+      impactLow:           summary.byImpact.low,
+      impactUnknown:       summary.byImpact.unknown,
+      readinessReady:      summary.byReadiness.ready,
+      readinessPlanned:    summary.byReadiness.planned,
+      readinessBlocked:    summary.byReadiness.blocked,
+    },
+    latest: tail,
+    extra: {
+      byReasonCode:        summary.byReasonCode,
+      defaultRefuseInvariant:
+        "Unknown / memory-origin / public-action / scheduler / mutation / promotion shapes are blocked rather than allowed.",
+      proposeOnlyInvariant:
+        "Scoring is pure and read-only. No record, ledger, registry, or experiment is mutated by this stage.",
+    },
+    blockers,
     nextActions: [
-      "Design a risk-impact scoring rubric in docs/PHASE2_EXPERIMENTS.md",
-      "Land a pure scoring module gated behind a propose-only flag",
+      "Inspect blocked entries' reasonCodes to see which boundary tripped",
+      "Eligible/low-risk records are candidates for the existing hygiene/candidate/binding flow — still approval-gated",
+      "Memory-origin entries must be promoted to research_lab.hypotheses[] before they can score",
     ],
   };
 }
@@ -569,7 +698,7 @@ export function buildAutonomyMonitorSnapshot(now: Date = new Date()): AutonomyMo
 
   const stages: AutonomyStage[] = [
     buildResearchTopicStage(lab, memory),
-    buildRiskImpactStage(),
+    buildRiskImpactStage(lab, memory, now),
     buildHygieneGateStage(lab, memory),
     buildExperimentCandidateStage(),
     buildMetricBindingStage(),

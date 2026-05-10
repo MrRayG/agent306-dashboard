@@ -113,7 +113,12 @@ describe("autonomyMonitor — shape + stage completeness", () => {
     const risk = snap.stages.find(s => s.id === "risk_impact_score")!;
     const meta = snap.stages.find(s => s.id === "meta_reflection")!;
     const lessons = snap.stages.find(s => s.id === "lessons_database")!;
-    assert.equal(risk.status, "planned");
+    // Phase 2g: risk_impact_score now has an implementation. With no inputs
+    // (TMP DATA_DIR has no research_lab.json or memory_knowledge.json), the
+    // stage still scores the five low-risk sandbox kinds from the registry,
+    // so it is `active`. With a fully empty registry it would be `ready`.
+    assert.ok(risk.status === "active" || risk.status === "ready",
+      `risk_impact_score must be active/ready post-Phase-2g, got ${risk.status}`);
     assert.equal(meta.status, "not_implemented");
     assert.equal(lessons.status, "not_implemented");
     for (const s of [risk, meta, lessons]) {
@@ -181,10 +186,39 @@ describe("autonomyMonitor — shape + stage completeness", () => {
     const { implementedStageCount, plannedStageCount, totalStageCount, headline } = snap.pipelineSummary;
     assert.equal(totalStageCount, 11);
     assert.equal(implementedStageCount + plannedStageCount, 11);
-    // Today risk_impact_score (planned) + meta_reflection + lessons_database (not_implemented).
-    assert.equal(plannedStageCount, 3);
-    assert.equal(implementedStageCount, 8);
+    // Phase 2g: risk_impact_score is now implemented; only meta_reflection
+    // + lessons_database remain not_implemented.
+    assert.equal(plannedStageCount, 2);
+    assert.equal(implementedStageCount, 9);
     assert.ok(headline.includes("approval-gated"));
+  });
+
+  it("risk_impact_score: scores low-risk registry kinds; only summarizationTemplate is eligible/low-risk", () => {
+    const snap = buildAutonomyMonitorSnapshot();
+    const risk = snap.stages.find(s => s.id === "risk_impact_score")!;
+    // Even with empty data files, the five sandbox kinds are scored.
+    assert.ok((risk.counts?.scoredInputs ?? 0) >= 5);
+    // Exactly one (summarizationTemplate) lands at eligible/low-risk.
+    assert.ok((risk.counts?.eligibleLowRisk ?? 0) >= 1);
+    // The other four sandbox kinds are needs_review (not blocked, not eligible).
+    assert.ok((risk.counts?.needsReview ?? 0) >= 4);
+    // The implementation pointer is present.
+    assert.ok(
+      Array.isArray(risk.implementedBy) &&
+      risk.implementedBy!.some(p => p.includes("hypothesisRiskImpactScoring")),
+    );
+  });
+
+  it("risk_impact_score: read-only / no action controls — invariants surfaced in extra", () => {
+    const snap = buildAutonomyMonitorSnapshot();
+    const risk = snap.stages.find(s => s.id === "risk_impact_score")!;
+    // The stage advertises its propose-only invariant but does NOT expose any
+    // actionable next steps that would post / publish / promote / apply.
+    const next = (risk.nextActions ?? []).join(" ");
+    assert.ok(!/post\s+now|publish\s+now|apply\s+now|promote\s+now/i.test(next),
+      "risk_impact_score must not advertise actionable mutation");
+    assert.ok(typeof risk.extra?.proposeOnlyInvariant === "string");
+    assert.ok(typeof risk.extra?.defaultRefuseInvariant === "string");
   });
 });
 
