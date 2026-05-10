@@ -54,6 +54,10 @@ import {
 import {
   readDecisionEvents,
 } from "./experiments/hypothesisDecisionEvents.js";
+import {
+  buildAutonomyRuntimeVisibility,
+  type AutonomyRuntimeVisibility,
+} from "./autonomyRuntimeVisibility.js";
 import type { Hypothesis } from "./researchEngine.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -118,6 +122,12 @@ export interface AutonomyMonitorSnapshot {
   /** ISO timestamp the snapshot was generated. */
   generatedAt:    string;
   safetyBoundary: AutonomySafetyBoundary;
+  /**
+   * Phase 2f-b runtime visibility block. Answers "is everything running
+   * right now?" — separate from the per-stage view above. Always present;
+   * fields degrade to null on missing data.
+   */
+  runtime:        AutonomyRuntimeVisibility;
   stages:         AutonomyStage[];
   /** Summary of "what is visible now / what remains" — text only. */
   pipelineSummary: {
@@ -577,6 +587,7 @@ export function buildAutonomyMonitorSnapshot(now: Date = new Date()): AutonomyMo
   return {
     generatedAt:    now.toISOString(),
     safetyBoundary: buildSafetyBoundary(),
+    runtime:        buildAutonomyRuntimeVisibility(now),
     stages,
     pipelineSummary: {
       implementedStageCount: implemented,

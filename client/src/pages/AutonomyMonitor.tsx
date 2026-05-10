@@ -31,9 +31,66 @@ interface AutonomySafetyBoundary {
   banner:                 string;
 }
 
+interface AutonomyRuntimeBuild {
+  commitSha:        string | null;
+  commitShortSha:   string | null;
+  deployId:         string | null;
+  environment:      string | null;
+  nodeEnv:          string | null;
+  nodeVersion:      string;
+  packageVersion:   string | null;
+  railwayProjectId: string | null;
+  railwayServiceId: string | null;
+  railwayRegion:    string | null;
+}
+
+interface AutonomyRuntimeNewPath {
+  label:                  string;
+  description:            string;
+  safetyFlags: {
+    noAutoPost:               boolean;
+    noAutoPublish:            boolean;
+    noAutoPromote:            boolean;
+    noScheduler:              boolean;
+    publicApprovalRequired:   boolean;
+  };
+  latestDecisionAt:       string | null;
+  latestRegistrationAt:   string | null;
+  activity: {
+    decisionEventsLast24h:        number;
+    sandboxRegistrationsLast24h:  number;
+  };
+}
+
+interface AutonomyRuntimeLegacy {
+  label:                 string;
+  description:           string;
+  latestEngineRunAt:     string | null;
+  latestEngineRunId:     string | null;
+  latestEngineRunStatus: string | null;
+  runsLast24h:           number;
+  errorsLast24h:         number;
+}
+
+interface AutonomyRuntime {
+  freshness:        "running" | "stale" | "blocked" | "unknown";
+  freshnessReason:  string;
+  generatedAt:      string;
+  serverStartedAt:  string;
+  uptimeSeconds:    number;
+  build:            AutonomyRuntimeBuild;
+  newAutonomyPath:  AutonomyRuntimeNewPath;
+  legacyRuntime:    AutonomyRuntimeLegacy;
+  changesSinceLastRefresh: {
+    available: boolean;
+    note:      string;
+  };
+}
+
 interface AutonomyMonitorSnapshot {
   generatedAt:    string;
   safetyBoundary: AutonomySafetyBoundary;
+  runtime:        AutonomyRuntime;
   stages:         AutonomyStage[];
   pipelineSummary: {
     implementedStageCount: number;
@@ -284,6 +341,202 @@ function StageCard({ stage, idx }: { stage: AutonomyStage; idx: number }) {
   );
 }
 
+function freshnessColor(f: AutonomyRuntime["freshness"]): string {
+  switch (f) {
+    case "running": return GREEN;
+    case "stale":   return YELLOW;
+    case "blocked": return ORANGE;
+    case "unknown": return GRAY;
+    default:        return GRAY;
+  }
+}
+
+function fmtUptime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return "—";
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function fmtField(v: unknown): string {
+  if (v === null || v === undefined || v === "") return "—";
+  return String(v);
+}
+
+function RuntimeKvRow({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: "0.6rem", padding: "0.18rem 0" }}>
+      <span style={{ ...mono, fontSize: "0.72rem", color: DIM, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+        {label}
+      </span>
+      <span style={{ ...mono, fontSize: "0.78rem", color: color ?? FG, textAlign: "right", wordBreak: "break-all" }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function RuntimeVisibilityPanel({ rt }: { rt: AutonomyRuntime }) {
+  const fc = freshnessColor(rt.freshness);
+  return (
+    <section style={{
+      border: `1px solid ${BORDER}`,
+      borderLeft: `3px solid ${fc}`,
+      borderRadius: 4,
+      padding: "0.9rem 1rem",
+      marginBottom: "1rem",
+      background: "#15171a",
+    }}>
+      <header style={{ display: "flex", alignItems: "baseline", gap: "0.7rem", flexWrap: "wrap" }}>
+        <h2 style={{ ...mono, fontSize: "1rem", color: FG, margin: 0, letterSpacing: "0.05em" }}>
+          Runtime Visibility
+        </h2>
+        <span style={{
+          ...mono,
+          fontSize: "0.72rem",
+          color: fc,
+          textTransform: "uppercase",
+          letterSpacing: "0.1em",
+          padding: "0.1rem 0.5rem",
+          border: `1px solid ${fc}`,
+          borderRadius: 3,
+        }}>
+          {rt.freshness}
+        </span>
+        <span style={{ ...mono, fontSize: "0.74rem", color: DIM }}>
+          uptime {fmtUptime(rt.uptimeSeconds)}
+        </span>
+      </header>
+      <p style={{ ...mono, fontSize: "0.78rem", color: DIM, marginTop: "0.4rem", marginBottom: "0.6rem", lineHeight: 1.5 }}>
+        {rt.freshnessReason}
+      </p>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "0.75rem", marginTop: "0.5rem" }}>
+        {/* Build / deploy box */}
+        <div style={{
+          border: `1px solid ${BORDER}`,
+          borderRadius: 3,
+          padding: "0.55rem 0.7rem",
+          background: "rgba(227,229,228,0.02)",
+        }}>
+          <div style={{ ...mono, fontSize: "0.7rem", color: DIM, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "0.35rem" }}>
+            Build / Deploy
+          </div>
+          <RuntimeKvRow label="commit" value={fmtField(rt.build.commitShortSha ?? rt.build.commitSha)} />
+          <RuntimeKvRow label="deploy id" value={fmtField(rt.build.deployId)} />
+          <RuntimeKvRow label="environment" value={fmtField(rt.build.environment)} />
+          <RuntimeKvRow label="node env" value={fmtField(rt.build.nodeEnv)} />
+          <RuntimeKvRow label="node" value={fmtField(rt.build.nodeVersion)} />
+          <RuntimeKvRow label="package" value={fmtField(rt.build.packageVersion)} />
+          {(rt.build.railwayProjectId || rt.build.railwayServiceId || rt.build.railwayRegion) && (
+            <>
+              <RuntimeKvRow label="railway project" value={fmtField(rt.build.railwayProjectId)} />
+              <RuntimeKvRow label="railway service" value={fmtField(rt.build.railwayServiceId)} />
+              <RuntimeKvRow label="railway region" value={fmtField(rt.build.railwayRegion)} />
+            </>
+          )}
+        </div>
+
+        {/* Refresh anchor */}
+        <div style={{
+          border: `1px solid ${BORDER}`,
+          borderRadius: 3,
+          padding: "0.55rem 0.7rem",
+          background: "rgba(227,229,228,0.02)",
+        }}>
+          <div style={{ ...mono, fontSize: "0.7rem", color: DIM, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "0.35rem" }}>
+            Refresh anchor
+          </div>
+          <RuntimeKvRow label="generated at" value={rt.generatedAt} />
+          <RuntimeKvRow label="server started" value={rt.serverStartedAt} />
+          <RuntimeKvRow label="uptime" value={fmtUptime(rt.uptimeSeconds)} />
+          <RuntimeKvRow label="changes since last refresh" value={rt.changesSinceLastRefresh.available ? "available" : "unavailable"} />
+          <p style={{ ...mono, fontSize: "0.7rem", color: DIM, marginTop: "0.4rem", marginBottom: 0, lineHeight: 1.4 }}>
+            {rt.changesSinceLastRefresh.note}
+          </p>
+        </div>
+      </div>
+
+      {/* Two-track separation: new autonomy path vs legacy runtime */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+        gap: "0.75rem",
+        marginTop: "0.85rem",
+      }}>
+        <div style={{
+          border: `1px solid ${BLUE}`,
+          borderRadius: 3,
+          padding: "0.6rem 0.75rem",
+          background: "rgba(96,165,250,0.04)",
+        }}>
+          <div style={{ ...mono, fontSize: "0.72rem", color: BLUE, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "0.25rem" }}>
+            {rt.newAutonomyPath.label}
+          </div>
+          <p style={{ ...mono, fontSize: "0.74rem", color: DIM, margin: 0, marginBottom: "0.4rem", lineHeight: 1.45 }}>
+            {rt.newAutonomyPath.description}
+          </p>
+          <RuntimeKvRow label="latest decision" value={fmtField(rt.newAutonomyPath.latestDecisionAt)} />
+          <RuntimeKvRow label="latest registration" value={fmtField(rt.newAutonomyPath.latestRegistrationAt)} />
+          <RuntimeKvRow label="decision events 24h" value={String(rt.newAutonomyPath.activity.decisionEventsLast24h)} />
+          <RuntimeKvRow label="sandbox registrations 24h" value={String(rt.newAutonomyPath.activity.sandboxRegistrationsLast24h)} />
+          <div style={{
+            ...mono,
+            fontSize: "0.7rem",
+            color: DIM,
+            marginTop: "0.45rem",
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.15rem",
+          }}>
+            {Object.entries(rt.newAutonomyPath.safetyFlags).map(([k, v]) => (
+              <span key={k}>
+                {k}: <span style={{ color: v ? GREEN : RED }}>{String(v)}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div style={{
+          border: `1px solid ${GRAY}`,
+          borderRadius: 3,
+          padding: "0.6rem 0.75rem",
+          background: "rgba(156,163,175,0.04)",
+        }}>
+          <div style={{ ...mono, fontSize: "0.72rem", color: GRAY, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "0.25rem" }}>
+            {rt.legacyRuntime.label} (read-only)
+          </div>
+          <p style={{ ...mono, fontSize: "0.74rem", color: DIM, margin: 0, marginBottom: "0.4rem", lineHeight: 1.45 }}>
+            {rt.legacyRuntime.description}
+          </p>
+          <RuntimeKvRow label="latest engine run" value={fmtField(rt.legacyRuntime.latestEngineRunAt)} />
+          <RuntimeKvRow label="latest engine id" value={fmtField(rt.legacyRuntime.latestEngineRunId)} />
+          <RuntimeKvRow
+            label="latest run status"
+            value={fmtField(rt.legacyRuntime.latestEngineRunStatus)}
+            color={
+              rt.legacyRuntime.latestEngineRunStatus === "ok"      ? GREEN :
+              rt.legacyRuntime.latestEngineRunStatus === "error"   ? RED   :
+              rt.legacyRuntime.latestEngineRunStatus === "running" ? BLUE  : FG
+            }
+          />
+          <RuntimeKvRow label="runs 24h" value={String(rt.legacyRuntime.runsLast24h)} />
+          <RuntimeKvRow
+            label="errors 24h"
+            value={String(rt.legacyRuntime.errorsLast24h)}
+            color={rt.legacyRuntime.errorsLast24h > 0 ? RED : FG}
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function SafetyBanner({ b }: { b: AutonomySafetyBoundary }) {
   return (
     <section style={{
@@ -354,6 +607,7 @@ export default function AutonomyMonitor() {
 
       {data && (
         <>
+          <RuntimeVisibilityPanel rt={data.runtime} />
           <SafetyBanner b={data.safetyBoundary} />
           <section style={{
             border: `1px solid ${BORDER}`,
