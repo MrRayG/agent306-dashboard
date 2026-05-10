@@ -21,9 +21,19 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 
-const TMP_DIR = fs.mkdtempSync(path.join(process.cwd(), "tmp-blog-pipeline-"));
+// Per-process DB isolation. ESM hoists static imports to the top, so any
+// `import { db } from "../db.js"` here runs BEFORE the env writes below
+// and the `db.ts` singleton opens at the default `data/agent306.db`. With
+// `--test-concurrency` > 1 (CI default behavior) multiple test files race
+// on that shared DB and `wipeEvents()` in one process clears events that
+// another process expects to read. Dynamic imports defer module loading
+// until after `process.env.DB_PATH` / `DATA_DIR` are set, so each test
+// file gets its own SQLite file. Same pattern as
+// hypothesisDecisionEvents.test.ts and academyEngine.test.ts.
+const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "blog-pipeline-test-"));
 process.env.DB_PATH = path.join(TMP_DIR, "test.db");
 process.env.DATA_DIR = TMP_DIR;
 process.env.NODE_ENV = "test";
@@ -36,11 +46,13 @@ delete process.env.ANTHROPIC_API_KEY;
 delete process.env.GROK_API_KEY;
 delete process.env.XAI_API_KEY;
 
-import { db } from "../db.js";
-import { engineEvents } from "@shared/schema";
-import { eq } from "drizzle-orm";
-import { BlogPipelineAdapter } from "../pipeline/blogAdapter.js";
-import { generateBlogPostMaybeViaPipeline } from "../pipeline/blogPipelineEntry.js";
+const { db } = await import("../db.js");
+const { engineEvents } = await import("@shared/schema");
+const { eq } = await import("drizzle-orm");
+const { BlogPipelineAdapter } = await import("../pipeline/blogAdapter.js");
+const { generateBlogPostMaybeViaPipeline } = await import(
+  "../pipeline/blogPipelineEntry.js"
+);
 
 function wipeEvents() {
   try { db.delete(engineEvents).run(); } catch {}
