@@ -5,26 +5,48 @@
  * asserts the read-through shim falls back to JSON when the DB is empty.
  *
  * Run: npx tsx --test server/__tests__/repositories.test.ts
+ *
+ * Per-process DB / DATA_DIR isolation. Same pattern as
+ * `claimVerifier.golden.test.ts` (PR #299): under the aggregate `npm test`
+ * runner, files run as parallel subprocesses against a shared
+ * `data/agent306.db`. Sibling test files (`repositoryBakFallback.test.ts`,
+ * `migrationOrphanGuard.test.ts`, `goalEngine.test.ts`) wipe / re-insert
+ * `agent_goals`, and the cross-process timing window can leave this test's
+ * `goalRepository round-trips a blob` reading `null` in the brief instant
+ * between its `writeGoalsBlob` and `readGoalsBlob`. Pointing `DB_PATH` and
+ * `DATA_DIR` at a per-process tmpdir scopes the lock and the read-through
+ * resolution to this test only — production behavior is unchanged.
  */
 
 import { describe, it, before, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "fs";
-import { db } from "../db.js";
-import {
+import * as os from "os";
+import * as path from "path";
+
+const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "repositories-test-"));
+process.env.DB_PATH = path.join(TMP_DIR, "test.db");
+process.env.DATA_DIR = TMP_DIR;
+process.env.NODE_ENV = process.env.NODE_ENV ?? "test";
+
+// Dynamic imports so DB_PATH / DATA_DIR above are in place before
+// `server/db.ts` and `server/dataPaths.ts` evaluate (static ESM imports
+// would be hoisted and miss them).
+const { db } = await import("../db.js");
+const {
   memoryKnowledge,
   memorySoul,
   memorySoulHistory,
   agentGoals,
   competencyProfileTable,
   researchLab,
-} from "@shared/schema";
-import { readMemoryKnowledgeBlob, writeMemoryKnowledgeBlob } from "../repositories/memoryRepository.js";
-import { readSoulBlob, writeSoulBlob, getSoulHistory } from "../repositories/soulRepository.js";
-import { readGoalsBlob, writeGoalsBlob } from "../repositories/goalRepository.js";
-import { readCompetencyBlob, writeCompetencyBlob } from "../repositories/competencyRepository.js";
-import { readResearchBlob, writeResearchBlob } from "../repositories/researchRepository.js";
-import { dataPath } from "../dataPaths.js";
+} = await import("@shared/schema");
+const { readMemoryKnowledgeBlob, writeMemoryKnowledgeBlob } = await import("../repositories/memoryRepository.js");
+const { readSoulBlob, writeSoulBlob, getSoulHistory } = await import("../repositories/soulRepository.js");
+const { readGoalsBlob, writeGoalsBlob } = await import("../repositories/goalRepository.js");
+const { readCompetencyBlob, writeCompetencyBlob } = await import("../repositories/competencyRepository.js");
+const { readResearchBlob, writeResearchBlob } = await import("../repositories/researchRepository.js");
+const { dataPath } = await import("../dataPaths.js");
 
 function wipe() {
   try { db.delete(memoryKnowledge).run(); } catch {}

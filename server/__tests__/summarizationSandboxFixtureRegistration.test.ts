@@ -37,6 +37,16 @@ import * as os from "os";
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "phase2ia-fixture-test-"));
 process.env.DATA_DIR = TMP;
+// Per-process DB isolation. Same pattern as PR #299
+// (claimVerifier.golden.test.ts): autonomyMonitor → autonomyRuntimeVisibility
+// → server/db.ts opens a SQLite connection at module load. Without a unique
+// DB_PATH this test would open `data/agent306.db` and race the aggregate
+// suite's other DB-using files, intermittently masking writes that other
+// tests' `beforeEach` performs (notably `repositories.test.ts`'s
+// `goalRepository round-trips a blob`). Pointing DB_PATH at this run's
+// tmpdir scopes the lock to this process. We do NOT redirect DB_PATH for
+// any other test — only this one.
+process.env.DB_PATH = path.join(TMP, "test.db");
 
 const REPO_ROOT = path.resolve(new URL(".", import.meta.url).pathname, "../..");
 const REAL_RESEARCH_LAB    = path.join(REPO_ROOT, "data", "research_lab.json");
