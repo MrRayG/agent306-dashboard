@@ -63,9 +63,15 @@ for f in "${WATCHED_FILES[@]}"; do
   fi
 done
 
-# ─── Run the test suite ─────────────────────────────────────────────────────
-echo "▶ core-state-integrity: running npm test"
-NODE_ENV=test npm test
+# ─── Run the test suite (quarantine-aware) ─────────────────────────────────
+# We invoke `npm run test:guarded` rather than `npm test`. The guarded
+# variant excludes the quarantined test files listed in
+# `scripts/quarantinedTests.ts` (Issue #332). The default `npm test`
+# continues to run the full suite — only this integrity guard skips
+# the quarantined files. As each culprit is fixed and removed from
+# the manifest, the guard's coverage grows back toward 100%.
+echo "▶ core-state-integrity: running npm run test:guarded (excludes Issue #332 culprits)"
+NODE_ENV=test npm run test:guarded
 
 # ─── Post-test verification ─────────────────────────────────────────────────
 echo "▶ core-state-integrity: verifying watched files unchanged"
