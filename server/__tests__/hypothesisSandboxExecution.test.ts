@@ -27,15 +27,24 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
-// Redirect DATA_DIR so any accidental ledger / data write would land in the
-// tmpdir rather than the repo's `data/`. The Phase 2e module performs no
-// writes, but we want the test to fail loudly if that ever changes.
+// Redirect DATA_DIR and DB_PATH so any accidental ledger / data / db write
+// would land in the tmpdir rather than the repo's `data/`. The Phase 2e
+// module performs no writes, but we want the test to fail loudly if that
+// ever changes. These env vars MUST be set before any module that captures
+// them at import time (server/dataPaths.ts, server/db.ts) is imported.
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "phase2e-sandbox-test-"));
 process.env.DATA_DIR = TMP;
+process.env.DB_PATH = path.join(TMP, "test.db");
 
 const REPO_ROOT = path.resolve(new URL(".", import.meta.url).pathname, "../..");
-const REAL_RESEARCH_LAB = path.join(REPO_ROOT, "data", "research_lab.json");
-const REAL_MEMORY_KB    = path.join(REPO_ROOT, "data", "memory_knowledge.json");
+const REAL_DATA_DIR        = path.join(REPO_ROOT, "data");
+const REAL_RESEARCH_LAB    = path.join(REAL_DATA_DIR, "research_lab.json");
+const REAL_MEMORY_KB       = path.join(REAL_DATA_DIR, "memory_knowledge.json");
+const REAL_AGENT_GOALS     = path.join(REAL_DATA_DIR, "agent_goals.json");
+const REAL_COMPETENCY      = path.join(REAL_DATA_DIR, "competencyProfile.json");
+const REAL_DECISION_EVENTS = path.join(REAL_DATA_DIR, "experiment_decision_events.jsonl");
+const REAL_SANDBOX_REG     = path.join(REAL_DATA_DIR, "sandbox_registration_records.jsonl");
+const REAL_DB              = path.join(REAL_DATA_DIR, "agent306.db");
 
 const {
   planSandboxExecution,
@@ -102,12 +111,45 @@ function controls(overrides: Partial<SandboxExecutionControls> = {}): SandboxExe
 const NOW = new Date("2026-05-09T12:00:00.000Z");
 
 // Snapshot the real data files so we can prove the module made no writes.
-let researchLabBefore: string | null = null;
-let memoryKbBefore:    string | null = null;
+let researchLabBefore:     string | null = null;
+let memoryKbBefore:        string | null = null;
+let agentGoalsBefore:      string | null = null;
+let competencyBefore:      string | null = null;
+let decisionEventsBefore:  string | null = null;
+let sandboxRegBefore:      string | null = null;
+let dbSizeBefore: number | null = null;
+let dbMtimeBefore: number | null = null;
+
+function readIfExists(p: string): string | null {
+  return fs.existsSync(p) ? fs.readFileSync(p, "utf-8") : null;
+}
 
 before(() => {
-  researchLabBefore = fs.existsSync(REAL_RESEARCH_LAB) ? fs.readFileSync(REAL_RESEARCH_LAB, "utf-8") : null;
-  memoryKbBefore    = fs.existsSync(REAL_MEMORY_KB)    ? fs.readFileSync(REAL_MEMORY_KB, "utf-8")    : null;
+  // Loud-failure pin: assert env-var redirects are still pointing at TMP,
+  // not at the real repo `data/`. If anything earlier in the test process
+  // mutated these, fail before we can write live state.
+  assert.ok(
+    TMP.startsWith(os.tmpdir()) && !TMP.startsWith(REAL_DATA_DIR),
+    `TMP must be under os.tmpdir() and not under real data/: TMP=${TMP}`,
+  );
+  assert.equal(process.env.DATA_DIR, TMP, "DATA_DIR drifted from TMP");
+  assert.equal(
+    process.env.DB_PATH,
+    path.join(TMP, "test.db"),
+    "DB_PATH drifted from TMP/test.db",
+  );
+
+  researchLabBefore    = readIfExists(REAL_RESEARCH_LAB);
+  memoryKbBefore       = readIfExists(REAL_MEMORY_KB);
+  agentGoalsBefore     = readIfExists(REAL_AGENT_GOALS);
+  competencyBefore     = readIfExists(REAL_COMPETENCY);
+  decisionEventsBefore = readIfExists(REAL_DECISION_EVENTS);
+  sandboxRegBefore     = readIfExists(REAL_SANDBOX_REG);
+  if (fs.existsSync(REAL_DB)) {
+    const st = fs.statSync(REAL_DB);
+    dbSizeBefore = st.size;
+    dbMtimeBefore = st.mtimeMs;
+  }
 });
 
 after(() => {
@@ -380,8 +422,8 @@ describe("planSandboxExecution — plan-only invariant", () => {
     planSandboxExecution(mkBinding(), controls({ dryRun: true }), NOW);
     planSandboxExecution(mkBinding(), controls({ featureFlag: false }), NOW);
 
-    const research = fs.existsSync(REAL_RESEARCH_LAB) ? fs.readFileSync(REAL_RESEARCH_LAB, "utf-8") : null;
-    const memory   = fs.existsSync(REAL_MEMORY_KB)    ? fs.readFileSync(REAL_MEMORY_KB, "utf-8")    : null;
+    const research = readIfExists(REAL_RESEARCH_LAB);
+    const memory   = readIfExists(REAL_MEMORY_KB);
     assert.equal(research, researchLabBefore, "research_lab.json must be unchanged");
     assert.equal(memory,   memoryKbBefore,    "memory_knowledge.json must be unchanged");
   });
@@ -402,5 +444,55 @@ describe("planSandboxExecution — plan-only invariant", () => {
     assert.equal(apply.ok, false);
     assert.equal(apply.deferredTo, "phase-2e-b");
     assert.match(apply.reason, /plan-only|deferred|sandbox|dry-run/i);
+  });
+});
+
+// ── File-level isolation contract ────────────────────────────────────────────
+//
+// Mirrors the contract added by Phase 2n drains #1–#3 (repositoryBakFallback,
+// autonomyMonitor, hypothesisDecisionEvents). Asserts that after every test
+// in this file runs, none of the 7 watched live-state files under repo `data/`
+// have been touched, and that env-var redirects are still pinned.
+
+describe("hypothesisSandboxExecution.test.ts — file-level isolation contract", () => {
+  it("env-var redirects are still pointing at TMP", () => {
+    assert.equal(process.env.DATA_DIR, TMP);
+    assert.equal(process.env.DB_PATH, path.join(TMP, "test.db"));
+  });
+
+  it("research_lab.json is unchanged", () => {
+    assert.equal(readIfExists(REAL_RESEARCH_LAB), researchLabBefore);
+  });
+
+  it("memory_knowledge.json is unchanged", () => {
+    assert.equal(readIfExists(REAL_MEMORY_KB), memoryKbBefore);
+  });
+
+  it("agent_goals.json is unchanged", () => {
+    assert.equal(readIfExists(REAL_AGENT_GOALS), agentGoalsBefore);
+  });
+
+  it("competencyProfile.json is unchanged", () => {
+    assert.equal(readIfExists(REAL_COMPETENCY), competencyBefore);
+  });
+
+  it("experiment_decision_events.jsonl is unchanged", () => {
+    assert.equal(readIfExists(REAL_DECISION_EVENTS), decisionEventsBefore);
+  });
+
+  it("sandbox_registration_records.jsonl is unchanged", () => {
+    assert.equal(readIfExists(REAL_SANDBOX_REG), sandboxRegBefore);
+  });
+
+  it("agent306.db is unchanged (size + mtime)", () => {
+    if (dbSizeBefore === null) {
+      // db did not exist before; assert it still does not exist
+      assert.equal(fs.existsSync(REAL_DB), false, "agent306.db should not have been created");
+      return;
+    }
+    assert.ok(fs.existsSync(REAL_DB), "agent306.db must still exist");
+    const st = fs.statSync(REAL_DB);
+    assert.equal(st.size, dbSizeBefore, "agent306.db size changed");
+    assert.equal(st.mtimeMs, dbMtimeBefore, "agent306.db mtime changed (WAL-aware check)");
   });
 });

@@ -101,13 +101,6 @@ export const QUARANTINED_TESTS: readonly QuarantinedTest[] = [
     note: "episode audio clearing touches shared data files",
   },
   {
-    path: "server/__tests__/hypothesisSandboxExecution.test.ts",
-    reason: "mutates_core_state",
-    priority: "high",
-    issue: "#332",
-    note: "sandbox execution wiring exercises shared core paths",
-  },
-  {
     path: "server/__tests__/listHypothesisPromotionCandidates.test.ts",
     reason: "mutates_core_state",
     priority: "high",
