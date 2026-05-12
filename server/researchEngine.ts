@@ -242,6 +242,61 @@ export function validateResolutionAction(
   };
 }
 
+/**
+ * Phase 2m-c / 2m-d — typed shape of an optional manual / read-only
+ * validation evidence record attached to a hypothesis.
+ *
+ * Used for hypotheses whose measurement path is a static, operator-run
+ * audit (e.g. the safety-gating single-write-boundary hypothesis whose
+ * metric is `promotion_boundary_violation_count`). Recording evidence
+ * here NEVER changes the hypothesis's hygieneTag, rubricVerdict, status,
+ * queue, or any runtime authority. canPromote / applyRecommendation
+ * authority is unchanged.
+ *
+ * All fields are optional except a small required core (label, metricKey,
+ * status) so legacy / partial records remain readable. The shape mirrors
+ * the payload written by `server/eval/promotionBoundaryAudit.ts` so its
+ * output can be persisted verbatim under `manualValidation`.
+ */
+export interface HypothesisManualValidation {
+  /** Stable schema tag, e.g. `"phase2m-b.v1"`. */
+  schemaVersion?:   string;
+  /** Phase tag the evidence was captured under, e.g. `"phase2m-c"`. */
+  phase?:           string;
+  /** Provenance label, e.g. `"agent306.promotion_boundary_audit"`. */
+  label:            string;
+  /** Metric key the evidence measures. Must match `hypothesis.metric`. */
+  metricKey:        string;
+  /** Source identifier — e.g. `"manual:railway"`, `"manual:cli"`. */
+  source?:          string;
+  /** Operator identifier (informational; no authority). */
+  operator?:        string;
+  /** Optional run label echoed from the audit payload. */
+  runLabel?:        string;
+  /** Optional environment marker, e.g. `"production-railway"`. */
+  environment?:     string;
+  /** Coarse status of the validation run. */
+  status:           "ok" | "violated" | "blocked";
+  /** Number of failing checks; matches `metricKey`. 0 = invariant holds. */
+  violationCount?:  number;
+  /** Stable ids of passing per-check findings. */
+  findingsPassed?:  string[];
+  /** Non-fatal observations (drift hints). */
+  warnings?:        string[];
+  /** Reasons the operator should not treat the measurement as ready. */
+  blockers?:        string[];
+  /** Optional ISO-8601 timestamp from the caller; null/undefined when
+   *  the audit did not pin a wall-clock value. */
+  validatedAt?:     string;
+  /** Optional ISO-8601 timestamp the evidence record was generated. */
+  generatedAt?:     string;
+  /** Free-text operator note. Informational only. */
+  note?:            string;
+  /** Verbatim safety disclaimer copied from the audit. Restated so the
+   *  evidence record carries the propose-only contract with it. */
+  disclaimer?:      string;
+}
+
 export interface Hypothesis {
   id:            string;
   claim:         string;
@@ -321,6 +376,12 @@ export interface Hypothesis {
   rubricOverall?:                 number;
   rubricBlockedReason?:           string;
   selfExperimentProtocol?:        SelfExperimentProtocol;
+  // Phase 2m-c / 2m-d — Optional record of a manual, read-only validation
+  // run of the hypothesis's measurement path. Recording evidence here does
+  // NOT change hygieneTag, rubricVerdict, status, queue, or the
+  // propose-only invariant. See `server/eval/safetyGatingValidationSummary.ts`
+  // for the pure read-only projection.
+  manualValidation?:              HypothesisManualValidation;
 }
 
 export type HypothesisDomain = "ai-news" | "regulatory" | "foundational" | "unknown";
