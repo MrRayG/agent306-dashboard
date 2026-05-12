@@ -7,6 +7,9 @@
 #   3. Phase 1 safety tests (auth + promotion gate) — dedicated job that
 #      cannot be bypassed by changes to `npm test`.
 #   4. Aggregate `npm test` suite — full repo test suite, blocking.
+#   5. Core-state integrity guard (Issue #330) — runs npm test under a
+#      pre/post snapshot of the four core agent-state files and the
+#      tmp-blog-legacy-* root leak pattern. Hard-fails on any mutation.
 # ─────────────────────────────────────────────────────────────────────────────
 name: ci
 
@@ -78,5 +81,25 @@ jobs:
 
       - name: Run aggregate test suite
         run: npm test
+        env:
+          NODE_ENV: test
+
+  core-state-integrity:
+    name: core-state integrity guard (Issue #330)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify npm test does not mutate core agent state
+        run: bash scripts/checkCoreStateIntegrity.sh
         env:
           NODE_ENV: test
