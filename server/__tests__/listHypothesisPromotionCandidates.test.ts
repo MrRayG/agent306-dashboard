@@ -41,15 +41,24 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
+// Redirect DATA_DIR and DB_PATH so any accidental write would land in the
+// tmpdir rather than the repo's `data/`. These env vars MUST be set before
+// any module that captures them at import time (server/dataPaths.ts,
+// server/db.ts) is imported. The CLI itself is I/O-injected so it does not
+// actually write anywhere, but we pin loudly anyway.
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "phase2le-cli-test-"));
 process.env.DATA_DIR = TMP;
 process.env.DB_PATH = path.join(TMP, "test.db");
 
 const REPO_ROOT = path.resolve(new URL(".", import.meta.url).pathname, "../..");
-const REAL_RESEARCH_LAB    = path.join(REPO_ROOT, "data", "research_lab.json");
-const REAL_MEMORY_KB       = path.join(REPO_ROOT, "data", "memory_knowledge.json");
-const REAL_DECISION_LEDGER = path.join(REPO_ROOT, "data", "experiment_decision_events.jsonl");
-const REPO_RECORDS_LEDGER  = path.join(REPO_ROOT, "data", "sandbox_registration_records.jsonl");
+const REAL_DATA_DIR        = path.join(REPO_ROOT, "data");
+const REAL_RESEARCH_LAB    = path.join(REAL_DATA_DIR, "research_lab.json");
+const REAL_MEMORY_KB       = path.join(REAL_DATA_DIR, "memory_knowledge.json");
+const REAL_AGENT_GOALS     = path.join(REAL_DATA_DIR, "agent_goals.json");
+const REAL_COMPETENCY      = path.join(REAL_DATA_DIR, "competencyProfile.json");
+const REAL_DECISION_LEDGER = path.join(REAL_DATA_DIR, "experiment_decision_events.jsonl");
+const REPO_RECORDS_LEDGER  = path.join(REAL_DATA_DIR, "sandbox_registration_records.jsonl");
+const REAL_DB              = path.join(REAL_DATA_DIR, "agent306.db");
 
 const SCRIPT_PATH = path.join(REPO_ROOT, "scripts", "listHypothesisPromotionCandidates.ts");
 
@@ -78,9 +87,31 @@ function snapshot(p: string): { exists: boolean; content?: string } {
 
 const RESEARCH_SNAPSHOT        = snapshot(REAL_RESEARCH_LAB);
 const MEMORY_SNAPSHOT          = snapshot(REAL_MEMORY_KB);
+const AGENT_GOALS_SNAPSHOT     = snapshot(REAL_AGENT_GOALS);
+const COMPETENCY_SNAPSHOT      = snapshot(REAL_COMPETENCY);
 const DECISION_LEDGER_SNAPSHOT = snapshot(REAL_DECISION_LEDGER);
 const REPO_RECORDS_SNAPSHOT    = snapshot(REPO_RECORDS_LEDGER);
+// agent306.db is binary + WAL; check size + mtime rather than content equality
+const DB_STAT_BEFORE: { size: number; mtimeMs: number } | null = fs.existsSync(REAL_DB)
+  ? (() => { const st = fs.statSync(REAL_DB); return { size: st.size, mtimeMs: st.mtimeMs }; })()
+  : null;
 const ENV_SNAPSHOT             = JSON.stringify(process.env);
+
+before(() => {
+  // Loud-failure pin: assert env-var redirects still point at TMP. If anything
+  // earlier in the test process mutated these, fail before we can write live
+  // state. Mirrors the contract added by Phase 2n drains #1–#4.
+  assert.ok(
+    TMP.startsWith(os.tmpdir()) && !TMP.startsWith(REAL_DATA_DIR),
+    `TMP must be under os.tmpdir() and not under real data/: TMP=${TMP}`,
+  );
+  assert.equal(process.env.DATA_DIR, TMP, "DATA_DIR drifted from TMP");
+  assert.equal(
+    process.env.DB_PATH,
+    path.join(TMP, "test.db"),
+    "DB_PATH drifted from TMP/test.db",
+  );
+});
 
 after(() => {
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch {}
@@ -88,6 +119,8 @@ after(() => {
   for (const [label, before, p] of [
     ["research_lab.json",                  RESEARCH_SNAPSHOT,        REAL_RESEARCH_LAB],
     ["memory_knowledge.json",              MEMORY_SNAPSHOT,          REAL_MEMORY_KB],
+    ["agent_goals.json",                   AGENT_GOALS_SNAPSHOT,     REAL_AGENT_GOALS],
+    ["competencyProfile.json",             COMPETENCY_SNAPSHOT,      REAL_COMPETENCY],
     ["experiment_decision_events.jsonl",   DECISION_LEDGER_SNAPSHOT, REAL_DECISION_LEDGER],
     ["sandbox_registration_records.jsonl", REPO_RECORDS_SNAPSHOT,    REPO_RECORDS_LEDGER],
   ] as const) {
@@ -99,6 +132,25 @@ after(() => {
       if (after.exists) throw new Error(`Phase 2l-e CLI tests created live ${label}!`);
     }
   }
+
+  // agent306.db: size + mtime check (WAL-aware).
+  if (DB_STAT_BEFORE === null) {
+    if (fs.existsSync(REAL_DB)) {
+      throw new Error("Phase 2l-e CLI tests created live agent306.db!");
+    }
+  } else {
+    if (!fs.existsSync(REAL_DB)) {
+      throw new Error("Phase 2l-e CLI tests removed live agent306.db!");
+    }
+    const st = fs.statSync(REAL_DB);
+    if (st.size !== DB_STAT_BEFORE.size) {
+      throw new Error(`Phase 2l-e CLI tests changed agent306.db size: ${DB_STAT_BEFORE.size} → ${st.size}`);
+    }
+    if (st.mtimeMs !== DB_STAT_BEFORE.mtimeMs) {
+      throw new Error(`Phase 2l-e CLI tests changed agent306.db mtime (WAL-aware check)`);
+    }
+  }
+
   const before = JSON.parse(ENV_SNAPSHOT);
   for (const key of Object.keys(process.env)) {
     if (key === "DATA_DIR" || key === "DB_PATH") continue;
