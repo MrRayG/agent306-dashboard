@@ -23,14 +23,22 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
-// Redirect DATA_DIR to a temp dir BEFORE importing the module so dataPaths.ts
-// sees the override at first import. Same pattern as improvementArchive.test.ts.
+// Redirect DATA_DIR and DB_PATH to a per-process tmpdir BEFORE importing any
+// module that captures those env vars at evaluation time (dataPaths.ts, db.ts).
+// This matches the Issue #332 drain template established by
+// repositoryBakFallback.test.ts (PR #338) and autonomyMonitor.test.ts (PR #339).
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "phase2d-events-test-"));
 process.env.DATA_DIR = TMP;
+process.env.DB_PATH = path.join(TMP, "test.db");
 
 const REPO_ROOT = path.resolve(new URL(".", import.meta.url).pathname, "../..");
 const REAL_RESEARCH_LAB = path.join(REPO_ROOT, "data", "research_lab.json");
 const REAL_MEMORY_KB    = path.join(REPO_ROOT, "data", "memory_knowledge.json");
+const REAL_AGENT_GOALS  = path.join(REPO_ROOT, "data", "agent_goals.json");
+const REAL_COMPETENCY   = path.join(REPO_ROOT, "data", "competencyProfile.json");
+const REAL_DECISION_LEDGER = path.join(REPO_ROOT, "data", "experiment_decision_events.jsonl");
+const REAL_RECORDS_LEDGER  = path.join(REPO_ROOT, "data", "sandbox_registration_records.jsonl");
+const REAL_AGENT_DB        = path.join(REPO_ROOT, "data", "agent306.db");
 
 const {
   appendDecisionEvent,
@@ -110,8 +118,15 @@ function snapshotFile(p: string): { exists: boolean; content?: string } {
   if (!fs.existsSync(p)) return { exists: false };
   return { exists: true, content: fs.readFileSync(p, "utf8") };
 }
-const RESEARCH_SNAPSHOT = snapshotFile(REAL_RESEARCH_LAB);
-const MEMORY_SNAPSHOT   = snapshotFile(REAL_MEMORY_KB);
+const RESEARCH_SNAPSHOT       = snapshotFile(REAL_RESEARCH_LAB);
+const MEMORY_SNAPSHOT         = snapshotFile(REAL_MEMORY_KB);
+const AGENT_GOALS_SNAPSHOT    = snapshotFile(REAL_AGENT_GOALS);
+const COMPETENCY_SNAPSHOT     = snapshotFile(REAL_COMPETENCY);
+const DECISION_LEDGER_SNAPSHOT = snapshotFile(REAL_DECISION_LEDGER);
+const RECORDS_LEDGER_SNAPSHOT  = snapshotFile(REAL_RECORDS_LEDGER);
+const AGENT_DB_STAT_SNAPSHOT = fs.existsSync(REAL_AGENT_DB)
+  ? { exists: true as const, size: fs.statSync(REAL_AGENT_DB).size, mtimeMs: fs.statSync(REAL_AGENT_DB).mtimeMs }
+  : { exists: false as const };
 
 before(() => {
   try { fs.unlinkSync(LEDGER_FILE); } catch {}
@@ -380,6 +395,80 @@ describe("DATA_DIR isolation", () => {
     assert.equal(research.content, RESEARCH_SNAPSHOT.content);
     assert.equal(memory.exists,   MEMORY_SNAPSHOT.exists);
     assert.equal(memory.content,  MEMORY_SNAPSHOT.content);
+  });
+
+  // ── File-level isolation contract (Issue #332 drain template) ─────────────
+  //
+  // The two assertions above already cover the two JSON fixtures this test
+  // historically cared about. The block below extends coverage to every
+  // other core-state file the CI integrity guard watches, so any future
+  // regression that re-introduces a write to live state fails THIS test
+  // rather than the CI guard. Same pattern as PR #338 / PR #339.
+
+  it("does not mutate live data/agent_goals.json", () => {
+    const post = snapshotFile(REAL_AGENT_GOALS);
+    assert.equal(post.exists, AGENT_GOALS_SNAPSHOT.exists,
+      "agent_goals.json existence flipped during the test run");
+    assert.equal(post.content, AGENT_GOALS_SNAPSHOT.content,
+      "agent_goals.json was mutated by the test run");
+  });
+
+  it("does not mutate live data/competencyProfile.json", () => {
+    const post = snapshotFile(REAL_COMPETENCY);
+    assert.equal(post.exists, COMPETENCY_SNAPSHOT.exists,
+      "competencyProfile.json existence flipped during the test run");
+    assert.equal(post.content, COMPETENCY_SNAPSHOT.content,
+      "competencyProfile.json was mutated by the test run");
+  });
+
+  it("does not mutate live data/experiment_decision_events.jsonl", () => {
+    const post = snapshotFile(REAL_DECISION_LEDGER);
+    assert.equal(post.exists, DECISION_LEDGER_SNAPSHOT.exists,
+      "experiment_decision_events.jsonl existence flipped during the test run");
+    assert.equal(post.content, DECISION_LEDGER_SNAPSHOT.content,
+      "experiment_decision_events.jsonl was mutated by the test run");
+  });
+
+  it("does not mutate live data/sandbox_registration_records.jsonl", () => {
+    const post = snapshotFile(REAL_RECORDS_LEDGER);
+    assert.equal(post.exists, RECORDS_LEDGER_SNAPSHOT.exists,
+      "sandbox_registration_records.jsonl existence flipped during the test run");
+    assert.equal(post.content, RECORDS_LEDGER_SNAPSHOT.content,
+      "sandbox_registration_records.jsonl was mutated by the test run");
+  });
+
+  it("does not mutate live data/agent306.db (size + mtime stable)", () => {
+    // Size+mtime rather than byte-equality: WAL journals make a strict
+    // byte-pin flaky. Either field changing indicates an unintended write.
+    if (!AGENT_DB_STAT_SNAPSHOT.exists) {
+      assert.equal(fs.existsSync(REAL_AGENT_DB), false,
+        "agent306.db appeared during the test run (was absent at start)");
+      return;
+    }
+    assert.equal(fs.existsSync(REAL_AGENT_DB), true,
+      "agent306.db disappeared during the test run");
+    const post = fs.statSync(REAL_AGENT_DB);
+    assert.equal(post.size, AGENT_DB_STAT_SNAPSHOT.size,
+      "agent306.db size changed during the test run");
+    assert.equal(post.mtimeMs, AGENT_DB_STAT_SNAPSHOT.mtimeMs,
+      "agent306.db mtime changed during the test run");
+  });
+
+  it("the DATA_DIR / DB_PATH redirect points outside the project's data/ directory", () => {
+    // Loud failure if a future contributor accidentally removes the env
+    // redirect block at the top of this file.
+    const realDataDir = path.join(REPO_ROOT, "data");
+    assert.equal(
+      TMP.startsWith(realDataDir),
+      false,
+      `TMP (${TMP}) must NOT be under the real data/ directory (${realDataDir})`,
+    );
+    assert.equal(process.env.DATA_DIR, TMP, "DATA_DIR drifted from TMP during the test run");
+    assert.equal(
+      process.env.DB_PATH,
+      path.join(TMP, "test.db"),
+      "DB_PATH drifted from the test tmpdir during the test run",
+    );
   });
 });
 

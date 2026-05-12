@@ -80,10 +80,10 @@ describe("quarantinedTests manifest — shape", () => {
     assert.ok(QUARANTINED_TESTS.length > 0);
   });
 
-  it("contains exactly 17 quarantined culprits (19 - 2 drained: repositoryBakFallback, autonomyMonitor)", () => {
+  it("contains exactly 16 quarantined culprits (19 - 3 drained: repositoryBakFallback, autonomyMonitor, hypothesisDecisionEvents)", () => {
     // Each entry removed by a per-culprit drain PR updates this count.
     // When this reaches 0 the quarantine mechanism itself can be removed.
-    assert.equal(QUARANTINED_TESTS.length, 17);
+    assert.equal(QUARANTINED_TESTS.length, 16);
   });
 
   it("is sorted alphabetically by path", () => {
@@ -147,9 +147,9 @@ describe("quarantinedTests manifest — shape", () => {
 });
 
 describe("quarantinedTests manifest — high/low priority split", () => {
-  it("has exactly 9 high-priority entries (was 11; drained: repositoryBakFallback, autonomyMonitor)", () => {
+  it("has exactly 8 high-priority entries (was 11; drained: repositoryBakFallback, autonomyMonitor, hypothesisDecisionEvents)", () => {
     const counts = countByPriority();
-    assert.equal(counts.high, 9, `expected 9 high, got ${counts.high}`);
+    assert.equal(counts.high, 8, `expected 8 high, got ${counts.high}`);
   });
 
   it("has exactly 8 low-priority entries", () => {
