@@ -12,6 +12,7 @@
     "calibration:backfill": "tsx server/calibration/backfillOutcomes.ts",
     "hypothesis:audit": "tsx scripts/hypothesisAudit.ts",
     "test": "tsx scripts/runTests.ts",
+    "test:guarded": "tsx scripts/runTests.ts --exclude-quarantined",
     "test:safety": "tsx --test server/__tests__/dashboardAuth.test.ts server/__tests__/promotionGate.test.ts server/__tests__/regressionRunnerCoverage.test.ts server/__tests__/claimVerifier.golden.test.ts"
   },
   "dependencies": {
