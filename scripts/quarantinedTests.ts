@@ -101,13 +101,6 @@ export const QUARANTINED_TESTS: readonly QuarantinedTest[] = [
     note: "episode audio clearing touches shared data files",
   },
   {
-    path: "server/__tests__/lowRiskSandboxRegistry.test.ts",
-    reason: "mutates_core_state",
-    priority: "high",
-    issue: "#332",
-    note: "low-risk registry tests write into the live registry path",
-  },
-  {
     path: "server/__tests__/noveltyGate.test.ts",
     reason: "mutates_core_state",
     priority: "low",
