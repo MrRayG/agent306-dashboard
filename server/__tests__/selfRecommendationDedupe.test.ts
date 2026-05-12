@@ -19,16 +19,38 @@
 
 import { describe, it, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
-import { db } from "../db.js";
-import { selfRecommendations } from "@shared/schema";
-import {
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+
+// Per-process DB / DATA_DIR isolation. Same pattern as `repositories.test.ts`
+// (PR #299): under the aggregate `npm test` / `npm run test:guarded` runner,
+// files run as parallel subprocesses against a shared `data/agent306.db`.
+// Sibling tests that touch `self_recommendations` (e.g.
+// `selfRecBuildupSecondPass.test.ts`) wipe / re-insert rows, and the
+// cross-process timing window can leave this test's `proposeRecommendation`
+// → `listRecommendations({}).length === 1` reading 2 in the brief instant
+// between insert and select. Pointing `DB_PATH` and `DATA_DIR` at a
+// per-process tmpdir scopes the lock and the row visibility to this file
+// only — production behavior is unchanged.
+const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "selfRecDedupe-test-"));
+process.env.DB_PATH = path.join(TMP_DIR, "test.db");
+process.env.DATA_DIR = TMP_DIR;
+process.env.NODE_ENV = process.env.NODE_ENV ?? "test";
+
+// Dynamic imports so DB_PATH / DATA_DIR above are in place before
+// `server/db.ts` and `server/dataPaths.ts` evaluate (static ESM imports
+// would be hoisted and miss them).
+const { db } = await import("../db.js");
+const { selfRecommendations } = await import("@shared/schema");
+const {
   proposeRecommendation,
   approveRecommendation,
   rejectRecommendation,
   listRecommendations,
   computeDedupeKey,
   findActiveRecommendationByDedupeKey,
-} from "../selfRecommendationEngine.js";
+} = await import("../selfRecommendationEngine.js");
 
 function wipe() {
   try {
