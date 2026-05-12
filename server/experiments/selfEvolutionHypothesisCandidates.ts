@@ -93,8 +93,13 @@ export const SELF_EVOLUTION_CANDIDATES_SCHEMA_VERSION = "phase2l-f.v1";
 export const SELF_EVOLUTION_CANDIDATES_LABEL =
   "phase2l-f operator-synthesized self-evolution hypothesis candidates";
 
-/** Default candidate cap. Operator wants 3-5 candidates at a time. */
-export const DEFAULT_SELF_EVOLUTION_LIMIT = 5;
+/** Default candidate cap. Set to 8 so the default run surfaces every
+ *  self-evolution dimension (reversibility, rollback_proof, sigma_variance,
+ *  saturation_void_balance, meta_reflection_usefulness,
+ *  learning_loop_compounding, safety_gating, sandbox_readiness) rather than
+ *  hiding three trigger-less groups. Operators can still pass `--limit <n>`
+ *  to narrow the set or `--no-limit` to disable the cap entirely. */
+export const DEFAULT_SELF_EVOLUTION_LIMIT = 8;
 
 /** Hard upper bound on candidate count. Defends against a typo. */
 export const MAX_SELF_EVOLUTION_LIMIT = 25;

@@ -59,7 +59,7 @@
  * Flags:
  *   --json                       Print the candidate set as compact JSON (default).
  *   --pretty                     Print the candidate set as 2-space-indented JSON.
- *   --limit <n>                  Cap candidate count. Default 5. Use --no-limit to disable.
+ *   --limit <n>                  Cap candidate count. Default 8 (one per self-evolution dimension). Use --no-limit to disable.
  *   --no-limit                   Disable the candidate limit entirely.
  *   --qg-failure <code>          Add a QualityGrammar failure code. May be repeated.
  *                                Allowed codes: reversibility_below_threshold,
