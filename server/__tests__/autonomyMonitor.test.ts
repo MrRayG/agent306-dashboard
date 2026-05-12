@@ -28,17 +28,22 @@ import * as path from "path";
 import * as os from "os";
 import * as crypto from "crypto";
 
-// Redirect DATA_DIR to a temp dir BEFORE importing the module so dataPaths.ts
-// sees the override at first import. Matches the pattern in
-// hypothesisDecisionEvents.test.ts / sandboxRegistrationRecords.test.ts.
+// Redirect DATA_DIR and DB_PATH to a per-process tmpdir BEFORE importing any
+// module that captures those env vars at evaluation time (dataPaths.ts, db.ts).
+// This pattern matches the Issue #332 drain template established by
+// repositoryBakFallback.test.ts (PR #338).
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "phase2fa-monitor-test-"));
 process.env.DATA_DIR = TMP;
+process.env.DB_PATH = path.join(TMP, "test.db");
 
 const REPO_ROOT = path.resolve(new URL(".", import.meta.url).pathname, "../..");
 const REAL_RESEARCH_LAB = path.join(REPO_ROOT, "data", "research_lab.json");
 const REAL_MEMORY_KB    = path.join(REPO_ROOT, "data", "memory_knowledge.json");
 const REAL_DECISION_LEDGER = path.join(REPO_ROOT, "data", "experiment_decision_events.jsonl");
 const REAL_RECORDS_LEDGER  = path.join(REPO_ROOT, "data", "sandbox_registration_records.jsonl");
+const REAL_AGENT_GOALS  = path.join(REPO_ROOT, "data", "agent_goals.json");
+const REAL_COMPETENCY   = path.join(REPO_ROOT, "data", "competencyProfile.json");
+const REAL_AGENT_DB     = path.join(REPO_ROOT, "data", "agent306.db");
 
 function hash(p: string): string | null {
   if (!fs.existsSync(p)) return null;
@@ -50,6 +55,11 @@ const PRE_RESEARCH = hash(REAL_RESEARCH_LAB);
 const PRE_MEMORY   = hash(REAL_MEMORY_KB);
 const PRE_DECISION = hash(REAL_DECISION_LEDGER);
 const PRE_RECORDS  = hash(REAL_RECORDS_LEDGER);
+const PRE_AGENT_GOALS = hash(REAL_AGENT_GOALS);
+const PRE_COMPETENCY  = hash(REAL_COMPETENCY);
+const PRE_AGENT_DB_STAT = fs.existsSync(REAL_AGENT_DB)
+  ? { exists: true as const, size: fs.statSync(REAL_AGENT_DB).size, mtimeMs: fs.statSync(REAL_AGENT_DB).mtimeMs }
+  : { exists: false as const };
 
 const {
   buildAutonomyMonitorSnapshot,
@@ -73,14 +83,23 @@ const {
 describe("autonomyMonitor — shape + stage completeness", () => {
   before(() => {
     __resetLowRiskSandboxRegistryForTests();
-  });
-
-  after(() => {
-    // Confirm the monitor did NOT write to any real data file.
-    assert.equal(hash(REAL_RESEARCH_LAB), PRE_RESEARCH, "research_lab.json must not be touched");
-    assert.equal(hash(REAL_MEMORY_KB),    PRE_MEMORY,   "memory_knowledge.json must not be touched");
-    assert.equal(hash(REAL_DECISION_LEDGER), PRE_DECISION, "decision ledger must not be touched");
-    assert.equal(hash(REAL_RECORDS_LEDGER),  PRE_RECORDS,  "records ledger must not be touched");
+    // Loud-failure pin: if a future refactor caches DATA_DIR before our
+    // env redirect can take effect, the dataPath()-resolved targets below
+    // would point at the real data/ directory and the test could damage
+    // live state. Assert the redirect took effect at the moment the
+    // first describe block runs (which is after all module imports above).
+    const realDataDir = path.join(REPO_ROOT, "data");
+    assert.equal(
+      TMP.startsWith(realDataDir),
+      false,
+      `TMP (${TMP}) must NOT be under the real data/ directory (${realDataDir})`,
+    );
+    assert.equal(process.env.DATA_DIR, TMP, "DATA_DIR drifted from TMP");
+    assert.equal(
+      process.env.DB_PATH,
+      path.join(TMP, "test.db"),
+      "DB_PATH drifted from the test tmpdir",
+    );
   });
 
   it("returns all 11 stages in canonical order", () => {
@@ -481,5 +500,76 @@ describe("autonomyMonitor — read-only invariant", () => {
     assert.equal(d.counts?.totalEvents, 0);
     const e = snap.stages.find(s => s.id === "evidence_package")!;
     assert.equal(e.counts?.totalRecords, 0);
+  });
+});
+
+describe("autonomyMonitor isolation contract — live core state untouched", () => {
+  after(() => {
+    // Clean up the per-process tmpdir.
+    try { fs.rmSync(TMP, { recursive: true, force: true }); } catch {}
+  });
+
+  it("live data/research_lab.json is byte-identical to the pre-test snapshot", () => {
+    assert.equal(hash(REAL_RESEARCH_LAB), PRE_RESEARCH,
+      "research_lab.json was mutated by the test run");
+  });
+
+  it("live data/memory_knowledge.json is byte-identical to the pre-test snapshot", () => {
+    assert.equal(hash(REAL_MEMORY_KB), PRE_MEMORY,
+      "memory_knowledge.json was mutated by the test run");
+  });
+
+  it("live data/experiment_decision_events.jsonl is byte-identical to the pre-test snapshot", () => {
+    assert.equal(hash(REAL_DECISION_LEDGER), PRE_DECISION,
+      "experiment_decision_events.jsonl was mutated by the test run");
+  });
+
+  it("live data/sandbox_registration_records.jsonl is byte-identical to the pre-test snapshot", () => {
+    assert.equal(hash(REAL_RECORDS_LEDGER), PRE_RECORDS,
+      "sandbox_registration_records.jsonl was mutated by the test run");
+  });
+
+  it("live data/agent_goals.json is byte-identical to the pre-test snapshot", () => {
+    assert.equal(hash(REAL_AGENT_GOALS), PRE_AGENT_GOALS,
+      "agent_goals.json was mutated by the test run");
+  });
+
+  it("live data/competencyProfile.json is byte-identical to the pre-test snapshot", () => {
+    assert.equal(hash(REAL_COMPETENCY), PRE_COMPETENCY,
+      "competencyProfile.json was mutated by the test run");
+  });
+
+  it("live data/agent306.db size and mtime are unchanged", () => {
+    if (!PRE_AGENT_DB_STAT.exists) {
+      assert.equal(fs.existsSync(REAL_AGENT_DB), false,
+        "agent306.db appeared during the test run (was absent at start)");
+      return;
+    }
+    assert.equal(fs.existsSync(REAL_AGENT_DB), true,
+      "agent306.db disappeared during the test run");
+    const post = fs.statSync(REAL_AGENT_DB);
+    assert.equal(post.size, PRE_AGENT_DB_STAT.size,
+      "agent306.db size changed during the test run");
+    assert.equal(post.mtimeMs, PRE_AGENT_DB_STAT.mtimeMs,
+      "agent306.db mtime changed during the test run");
+  });
+
+  it("the DATA_DIR / DB_PATH redirect points outside the project's data/ directory", () => {
+    // Belt-and-suspenders: confirm the env redirect was honored. If a
+    // future contributor accidentally removes the redirect block at the
+    // top of this file, this assertion fails loudly instead of silently
+    // re-introducing the live-state regression.
+    const realDataDir = path.join(REPO_ROOT, "data");
+    assert.equal(
+      TMP.startsWith(realDataDir),
+      false,
+      `TMP (${TMP}) must NOT be under the real data/ directory (${realDataDir})`,
+    );
+    assert.equal(process.env.DATA_DIR, TMP, "DATA_DIR drifted from TMP during the test run");
+    assert.equal(
+      process.env.DB_PATH,
+      path.join(TMP, "test.db"),
+      "DB_PATH drifted from the test tmpdir during the test run",
+    );
   });
 });
