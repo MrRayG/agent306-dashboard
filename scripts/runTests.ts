@@ -18,6 +18,14 @@
  *     "0 tests ran" is the failure mode this whole runner is meant to
  *     prevent.
  *
+ * Flags:
+ *   --exclude-quarantined
+ *     Filters out any test file whose path matches an entry in
+ *     `scripts/quarantinedTests.ts` (Issue #332). Used by
+ *     `npm run test:guarded`, which is in turn used by the
+ *     `core-state-integrity` CI guard (PR #331). Default `npm test`
+ *     behavior is unchanged — the full suite still runs.
+ *
  * Exit code mirrors the spawned `tsx --test` process so CI fails loudly
  * on any test failure.
  * ─────────────────────────────────────────────────────────────────────────────
@@ -26,6 +34,7 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { QUARANTINED_TEST_PATHS } from "./quarantinedTests.ts";
 
 const ROOT = path.resolve(new URL(".", import.meta.url).pathname, "..");
 const TESTS_DIR = path.join(ROOT, "server", "__tests__");
@@ -40,20 +49,61 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-const tests = walk(TESTS_DIR).sort();
-if (tests.length === 0) {
-  console.error(`[runTests] no *.test.ts files under ${TESTS_DIR} — refusing to report success`);
-  process.exit(2);
+/**
+ * Filter the discovered test list against the quarantine manifest.
+ * Returns `{ kept, excluded }` where each element of `excluded` is the
+ * repo-relative path matched against the manifest.
+ *
+ * Exported and pure so `quarantinedTests.test.ts` can exercise the
+ * filtering logic without spawning a child process.
+ */
+export function applyQuarantineFilter(
+  testPaths: readonly string[],
+  repoRoot: string,
+  quarantined: ReadonlySet<string> = QUARANTINED_TEST_PATHS,
+): { kept: string[]; excluded: string[] } {
+  const kept: string[] = [];
+  const excluded: string[] = [];
+  for (const abs of testPaths) {
+    const rel = path.relative(repoRoot, abs).split(path.sep).join("/");
+    if (quarantined.has(rel)) excluded.push(rel);
+    else kept.push(abs);
+  }
+  return { kept, excluded };
 }
 
-console.error(`[runTests] discovered ${tests.length} test file(s)`);
+// CLI entry point. Guarded so importing this module from a test file
+// (for `applyQuarantineFilter`) does not spawn the test runner.
+const INVOKED_AS_CLI = import.meta.url === `file://${process.argv[1]}`;
 
-const tsxBin = path.join(ROOT, "node_modules", ".bin", "tsx");
-const child = spawn(tsxBin, ["--test", ...tests], {
-  stdio: "inherit",
-  env: process.env,
-});
+if (INVOKED_AS_CLI) {
+  const excludeQuarantined = process.argv.includes("--exclude-quarantined");
 
-child.on("exit", code => {
-  process.exit(typeof code === "number" ? code : 1);
-});
+  const discovered = walk(TESTS_DIR).sort();
+  if (discovered.length === 0) {
+    console.error(`[runTests] no *.test.ts files under ${TESTS_DIR} — refusing to report success`);
+    process.exit(2);
+  }
+
+  let tests = discovered;
+  if (excludeQuarantined) {
+    const { kept, excluded } = applyQuarantineFilter(discovered, ROOT);
+    tests = kept;
+    console.error(
+      `[runTests] --exclude-quarantined: ${excluded.length} file(s) excluded, ${kept.length} kept`,
+    );
+    for (const rel of excluded) console.error(`  - ${rel}`);
+  }
+
+  console.error(`[runTests] discovered ${discovered.length} test file(s); running ${tests.length}`);
+
+  const tsxBin = path.join(ROOT, "node_modules", ".bin", "tsx");
+  const child = spawn(tsxBin, ["--test", ...tests], {
+    stdio: "inherit",
+    env: process.env,
+  });
+
+  child.on("exit", code => {
+    process.exit(typeof code === "number" ? code : 1);
+  });
+}
