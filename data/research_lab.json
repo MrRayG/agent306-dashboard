@@ -1,7 +1,34 @@
 {
   "topics": [],
-  "hypotheses": [],
-  "lastUpdated": "2026-04-15T16:53:54.890Z",
+  "hypotheses": [
+    {
+      "id": "hyp_agent306_safety_gating_single_write_boundary",
+      "claim": "Agent 306's autonomy transition remains safer when every promotion-capable path depends on a single human-gated canPromote boundary.",
+      "basis": "Phase 2l-f identified safety_gating as a high-priority self-evolution candidate because it directly protects the GitHub/human approval boundary and can be audited without changing runtime behavior. CLAUDE.md and docs/SELF_EVOLUTION.md pin canPromote (server/eval/promotionGate.ts) as the only authorisation gate, and server/selfRecommendationEngine.ts:applyRecommendation is the single write site that may transition a row to status='applied' — and only when status === 'approved' AND canPromote(rec).ok.",
+      "metric": "promotion_boundary_violation_count",
+      "prediction": "A read-only audit of promotion-capable code paths will find zero paths that can promote, publish, apply, schedule, or publicly act without passing the human-gated promotion boundary. Specifically: promotion_boundary_violation_count = 0.",
+      "timeframe": "next 1-2 Phase 2 review cycles",
+      "status": "forming",
+      "confidence": "medium",
+      "formedAt": "2026-05-12T00:00:00.000Z",
+      "source": "manual",
+      "queue": "backlog",
+      "stake": "high",
+      "triageConfidence": "high",
+      "stakeJustification": "Directly protects the GitHub/human approval boundary that defines Agent 306's autonomy invariant. A single missed path is a propose-only-invariant defect.",
+      "confidenceJustification": "The invariant is small, localised (one write site + canPromote), and statically auditable; high triage-confidence the audit is feasible.",
+      "domain": "foundational",
+      "measurementPath": "Static audit of promotion/apply/scheduler/public-action imports and call paths in the repository (grep + manual cross-reference against server/selfRecommendationEngine.ts:applyRecommendation and server/eval/promotionGate.ts:canPromote), plus CI safety tests for promotion gate invariants. Read-only; no runtime promotion or scheduler involvement.",
+      "measurementPathAccessible": false,
+      "hygieneTag": "needs_review",
+      "hygieneReason": "Phase 2m-a candidate: measurement path requires CI safety tests for promotion gate invariants that are not yet implemented; operator must review readiness before this can feed any Phase 2 experiment.",
+      "hygieneTaggedAt": "2026-05-12T00:00:00.000Z",
+      "hygieneTaggedBy": "operator",
+      "rubricVerdict": "review",
+      "rubricBlockedReason": "Operator-gated review pending: this is the first formal self-evolution hypothesis for Agent 306. Phase 2m-b will measure it; this PR only records the candidate. Not experiment-ready until the CI promotion-gate invariant tests are wired up and reviewed."
+    }
+  ],
+  "lastUpdated": "2026-05-12T00:00:00.000Z",
   "stats": {
     "totalResearched": 0,
     "totalPublished": 0,
