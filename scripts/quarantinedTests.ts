@@ -73,13 +73,6 @@ export interface QuarantinedTest {
  */
 export const QUARANTINED_TESTS: readonly QuarantinedTest[] = [
   {
-    path: "server/__tests__/autonomyMonitor.test.ts",
-    reason: "mutates_core_state",
-    priority: "high",
-    issue: "#332",
-    note: "autonomy monitor reads/writes core state during test setup",
-  },
-  {
     path: "server/__tests__/blogEngineLegacyErrorParity.test.ts",
     reason: "tmp_blog_legacy_root_leak",
     priority: "low",
