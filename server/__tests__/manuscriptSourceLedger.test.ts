@@ -24,24 +24,34 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 
-const TMP_DIR = fs.mkdtempSync(path.join(process.cwd(), "tmp-manuscript-ledger-"));
+// Per-process DB / DATA_DIR isolation. Same pattern as `repositories.test.ts`
+// (PR #299). Note: previous revision of this file already set DB_PATH /
+// DATA_DIR before its imports, but the imports were STATIC ESM, which the
+// runtime hoists above the env-var assignments — so `db.ts` opened a
+// connection against the default `data/agent306.db` and raced with sibling
+// files under parallel `test:guarded` execution. Switching to dynamic
+// `await import()` ensures the env vars are in place before any
+// db-touching module evaluates. Also moves TMP_DIR under os.tmpdir() so
+// nothing lands in the repo working tree.
+const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "manuscript-ledger-test-"));
 process.env.DB_PATH = path.join(TMP_DIR, "test.db");
 process.env.DATA_DIR = TMP_DIR;
-process.env.NODE_ENV = "test";
+process.env.NODE_ENV = process.env.NODE_ENV ?? "test";
 
-import { db } from "../db.js";
-import { sourceLedger, sourceLedgerItems } from "@shared/schema";
-import {
+const { db } = await import("../db.js");
+const { sourceLedger, sourceLedgerItems } = await import("@shared/schema");
+const {
   getLedgerByDraft,
   listLedgerSourceUrls,
-} from "../repositories/sourceLedgerRepository.js";
-import {
+} = await import("../repositories/sourceLedgerRepository.js");
+const {
   persistManuscriptSourceLedger,
   buildManuscriptReviseSourceContext,
   MANUSCRIPT_LEDGER_ENGINE,
-} from "../manuscriptSourceLedger.js";
+} = await import("../manuscriptSourceLedger.js");
 
 function wipe() {
   try { db.delete(sourceLedgerItems).run(); } catch {}
