@@ -33,7 +33,7 @@ import * as path from "path";
 const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "article-revise-hydration-"));
 process.env.DATA_DIR = TMP_DIR;
 process.env.DB_PATH = path.join(TMP_DIR, "test.db");
-process.env.NODE_ENV = "test";
+process.env.NODE_ENV = process.env.NODE_ENV ?? "test";
 
 // Keep the test hermetic — no real LLM keys.
 delete process.env.GROK_API_KEY;
@@ -42,13 +42,19 @@ delete process.env.OPENROUTER_API_KEY;
 delete process.env.ANTHROPIC_API_KEY;
 delete process.env.OPENAI_API_KEY;
 
-import { db } from "../db.js";
-import { sourceLedger, sourceLedgerItems } from "@shared/schema";
-import {
+// Dynamic imports so DB_PATH / DATA_DIR above are in place before
+// `server/db.ts` evaluates. Static ESM imports are hoisted ABOVE top-level
+// statements, so even one static import that transitively pulls db.js would
+// open a connection against the default data/agent306.db and race with
+// sibling test subprocesses under parallel test:guarded execution. Every
+// db-touching import must be dynamic.
+const { db } = await import("../db.js");
+const { sourceLedger, sourceLedgerItems } = await import("@shared/schema");
+const {
   buildArticleReviseSourceContext,
   persistArticleSourceLedger,
-} from "../articleEngine.js";
-import { createOrReplaceLedger } from "../repositories/sourceLedgerRepository.js";
+} = await import("../articleEngine.js");
+const { createOrReplaceLedger } = await import("../repositories/sourceLedgerRepository.js");
 
 function wipeLedger() {
   try { db.delete(sourceLedgerItems).run(); } catch {}

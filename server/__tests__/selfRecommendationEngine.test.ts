@@ -10,9 +10,27 @@
 
 import { describe, it, before, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { db } from "../db.js";
-import { selfRecommendations } from "@shared/schema";
-import {
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+
+// Per-process DB / DATA_DIR isolation. Same pattern as `repositories.test.ts`
+// (PR #299): parallel test subprocesses share `data/agent306.db`, and sibling
+// files that wipe / insert into `self_recommendations` (e.g.
+// `selfRecommendationDedupe.test.ts`, `selfRecBuildupSecondPass.test.ts`)
+// race with this file's promotion-gate lifecycle assertions. Scoping the DB
+// to a per-process tmpdir eliminates the race; production behavior is
+// unchanged.
+const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "selfRecEngine-test-"));
+process.env.DB_PATH = path.join(TMP_DIR, "test.db");
+process.env.DATA_DIR = TMP_DIR;
+process.env.NODE_ENV = process.env.NODE_ENV ?? "test";
+
+// Dynamic imports so DB_PATH / DATA_DIR above are in place before
+// `server/db.ts` evaluates (static ESM imports would be hoisted and miss them).
+const { db } = await import("../db.js");
+const { selfRecommendations } = await import("@shared/schema");
+const {
   proposeRecommendation,
   approveRecommendation,
   rejectRecommendation,
@@ -21,7 +39,7 @@ import {
   listRecommendations,
   getRecommendation,
   parseEvidence,
-} from "../selfRecommendationEngine.js";
+} = await import("../selfRecommendationEngine.js");
 
 function wipe() {
   try { db.delete(selfRecommendations).run(); } catch {}

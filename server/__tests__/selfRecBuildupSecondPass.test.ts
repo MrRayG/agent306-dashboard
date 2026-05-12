@@ -23,19 +23,39 @@
 
 import { describe, it, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
-import { db } from "../db.js";
-import { selfRecommendations } from "@shared/schema";
-import {
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+
+// Per-process DB / DATA_DIR isolation. Same pattern as `repositories.test.ts`
+// (PR #299): under parallel test subprocesses sharing `data/agent306.db`,
+// the `wipe()` hook here and in `selfRecommendationDedupe.test.ts` can race,
+// producing assertion misses like `listRecommendations({}).length` == 2
+// when the test expects 1. Pointing `DB_PATH` and `DATA_DIR` at a per-process
+// tmpdir scopes the lock to this file only — production behavior unchanged.
+const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "selfRecBuildup-test-"));
+process.env.DB_PATH = path.join(TMP_DIR, "test.db");
+process.env.DATA_DIR = TMP_DIR;
+process.env.NODE_ENV = process.env.NODE_ENV ?? "test";
+
+// Dynamic imports so DB_PATH / DATA_DIR above are in place before
+// `server/db.ts` and `server/dataPaths.ts` evaluate (static ESM imports
+// would be hoisted and miss them). All engine modules transitively pull in
+// `selfRecommendationEngine.ts` → `db.ts`, so every db-touching import must
+// resolve after the env vars are set.
+const { db } = await import("../db.js");
+const { selfRecommendations } = await import("@shared/schema");
+const {
   proposeRecommendation,
   listRecommendations,
   computeDedupeKey,
-} from "../selfRecommendationEngine.js";
-import {
+} = await import("../selfRecommendationEngine.js");
+const {
   classifyMissingPrimitiveFamily,
   describeMissingPrimitiveFamily,
-} from "../actionTranslator.js";
-import { classifyGovernanceCluster } from "../selfEvolutionEngine.js";
-import { isoWeekKey } from "../dreamEngine.js";
+} = await import("../actionTranslator.js");
+const { classifyGovernanceCluster } = await import("../selfEvolutionEngine.js");
+const { isoWeekKey } = await import("../dreamEngine.js");
 
 function wipe() {
   try {
