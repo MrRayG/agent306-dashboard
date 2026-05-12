@@ -126,10 +126,8 @@ import * as path from "node:path";
 
 import {
   summarizeSafetyGatingValidation,
-  serializeSafetyGatingValidationSummary,
   SAFETY_GATING_VALIDATION_SUMMARY_SCHEMA_VERSION,
   SAFETY_GATING_VALIDATION_SUMMARY_LABEL,
-  SAFETY_GATING_HYPOTHESIS_ID,
   type SafetyGatingValidationSummary,
 } from "../server/eval/safetyGatingValidationSummary.js";
 import type { HygieneAwareHypothesis } from "../server/hypothesisHygiene.js";
@@ -367,9 +365,6 @@ export function loadHypothesesFile(
       reason: "hypothesis file must contain { hypotheses: [...] } or a bare array",
     };
   }
-  if (!Array.isArray(arr)) {
-    return { ok: false, reason: "hypothesis file did not yield an array" };
-  }
   // The summary helper accepts a broad union; we cast to the hygiene-aware
   // shape because `canFeedExperiment` reads optional hygiene fields. The
   // cast is structurally safe: any missing field is read as `undefined`
@@ -510,16 +505,6 @@ export function runManualSafetyGatingValidationSummaryCli(
 
   const envelope = buildEnvelope(options, loaded.hypotheses.length, summary);
   const serialized = serializeEnvelope(envelope, options.pretty);
-
-  // The embedded summary already pretty-prints via
-  // `serializeSafetyGatingValidationSummary`. We use the envelope's own
-  // serializer for stable formatting, then reference the helper's
-  // serializer for parity assertions in tests.
-  void serializeSafetyGatingValidationSummary;
-
-  // Pin a stable reference to the hypothesis id so tests can sanity-check
-  // detection through the envelope without re-importing the constant.
-  void SAFETY_GATING_HYPOTHESIS_ID;
 
   io.stdout(serialized + "\n");
   return { exitCode: exitCodeForSummary(summary), envelope };
