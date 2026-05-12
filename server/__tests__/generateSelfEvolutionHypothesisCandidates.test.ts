@@ -4,8 +4,10 @@
  * Spec invariants pinned by this file:
  *
  *   1. The CLI argument parser handles every documented flag, defaults
- *      `--limit` to 5, defaults `--generated-by` to `manual:cli`, and
- *      rejects unknown / malformed flags with a clear reason.
+ *      `--limit` to `DEFAULT_SELF_EVOLUTION_LIMIT` (8 — one per
+ *      self-evolution dimension), defaults `--generated-by` to
+ *      `manual:cli`, and rejects unknown / malformed flags with a clear
+ *      reason.
  *   2. `--help` / `-h` short-circuits cleanly, prints the usage text to
  *      stdout, returns exit code 0.
  *   3. The runner reuses `buildSelfEvolutionHypothesisCandidates` /
@@ -309,6 +311,49 @@ describe("Phase 2l-f CLI — runSelfEvolutionCli happy path", () => {
     const parsed = JSON.parse(stdout());
     assert.equal(parsed.candidates.length, 3);
     assert.equal(parsed.appliedLimit, 3);
+  });
+
+  // Phase 2l-g: the default CLI run must surface every self-evolution
+  // dimension, including the trigger-less ones the previous default
+  // (limit=5) hid (learning_loop_compounding, safety_gating,
+  // sandbox_readiness).
+  it("default CLI run (no --limit) surfaces all 8 self-evolution dimensions", () => {
+    const { io, stdout } = makeIo();
+    const r = runSelfEvolutionCli(["--now", PINNED_AT], io);
+    assert.equal(r.exitCode, 0);
+    const parsed = JSON.parse(stdout());
+    assert.equal(parsed.appliedLimit, DEFAULT_SELF_EVOLUTION_LIMIT);
+    assert.equal(parsed.appliedLimit, 8);
+    assert.equal(parsed.candidates.length, 8);
+    const dims = new Set<string>(parsed.candidates.map((c: any) => c.dimension));
+    for (const required of [
+      "reversibility",
+      "rollback_proof",
+      "sigma_variance",
+      "saturation_void_balance",
+      "meta_reflection_usefulness",
+      "learning_loop_compounding",
+      "safety_gating",
+      "sandbox_readiness",
+    ]) {
+      assert.ok(dims.has(required), `default CLI run hid dimension ${required}`);
+    }
+  });
+
+  it("explicit --limit still narrows the default sample output", () => {
+    const { io, stdout } = makeIo();
+    runSelfEvolutionCli(["--limit", "2", "--now", PINNED_AT], io);
+    const parsed = JSON.parse(stdout());
+    assert.equal(parsed.appliedLimit, 2);
+    assert.equal(parsed.candidates.length, 2);
+  });
+
+  it("--no-limit on the default sample yields every template (≥8)", () => {
+    const { io, stdout } = makeIo();
+    runSelfEvolutionCli(["--no-limit", "--now", PINNED_AT], io);
+    const parsed = JSON.parse(stdout());
+    assert.equal(parsed.appliedLimit, null);
+    assert.ok(parsed.candidates.length >= 8);
   });
 });
 

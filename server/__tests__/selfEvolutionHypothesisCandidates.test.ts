@@ -122,7 +122,10 @@ describe("Phase 2l-f — empty / cold inputs fall back to default sample", () =>
     assert.equal(set.label, SELF_EVOLUTION_CANDIDATES_LABEL);
     assert.equal(set.usedDefaultSample, true);
     assert.ok(set.candidates.length >= 3, `expected ≥3 candidates, got ${set.candidates.length}`);
-    assert.ok(set.candidates.length <= 5, `expected ≤5 candidates by default, got ${set.candidates.length}`);
+    assert.ok(
+      set.candidates.length <= DEFAULT_SELF_EVOLUTION_LIMIT,
+      `expected ≤${DEFAULT_SELF_EVOLUTION_LIMIT} candidates by default, got ${set.candidates.length}`,
+    );
     assert.equal(set.generatedAt, PINNED_AT);
     assert.equal(set.isEmpty, false);
   });
@@ -554,6 +557,51 @@ describe("Phase 2l-f — --limit applies and is capped", () => {
     const set = buildSelfEvolutionHypothesisCandidates({ now: PINNED_AT });
     assert.equal(set.appliedLimit, DEFAULT_SELF_EVOLUTION_LIMIT);
     assert.ok(set.candidates.length <= DEFAULT_SELF_EVOLUTION_LIMIT);
+  });
+
+  // Phase 2l-g: the default limit must cover every self-evolution
+  // dimension so trigger-less groups (learning_loop_compounding,
+  // safety_gating, sandbox_readiness) are not silently hidden when
+  // operators run the helper without flags.
+  it("DEFAULT_SELF_EVOLUTION_LIMIT equals the number of mission-aligned dimensions (8)", () => {
+    assert.equal(DEFAULT_SELF_EVOLUTION_LIMIT, 8);
+  });
+
+  it("default run (limit omitted) emits every mission-aligned self-evolution dimension, including the trigger-less ones", () => {
+    const set = buildSelfEvolutionHypothesisCandidates({ now: PINNED_AT });
+    const dims = new Set(set.candidates.map(c => c.dimension));
+    for (const required of [
+      "reversibility",
+      "rollback_proof",
+      "sigma_variance",
+      "saturation_void_balance",
+      "meta_reflection_usefulness",
+      "learning_loop_compounding",
+      "safety_gating",
+      "sandbox_readiness",
+    ] as const) {
+      assert.ok(dims.has(required), `default run hid dimension ${required}`);
+    }
+    assert.equal(set.candidates.length, 8);
+  });
+
+  it("default run aggregate byDimension counts every dimension at least once", () => {
+    const set = buildSelfEvolutionHypothesisCandidates({ now: PINNED_AT });
+    for (const required of [
+      "reversibility",
+      "rollback_proof",
+      "sigma_variance",
+      "saturation_void_balance",
+      "meta_reflection_usefulness",
+      "learning_loop_compounding",
+      "safety_gating",
+      "sandbox_readiness",
+    ] as const) {
+      assert.ok(
+        set.aggregate.byDimension[required] >= 1,
+        `default run byDimension.${required} was ${set.aggregate.byDimension[required]}`,
+      );
+    }
   });
 
   it("limit=3 caps at 3 candidates", () => {
