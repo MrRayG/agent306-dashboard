@@ -19,16 +19,41 @@
       "confidenceJustification": "The invariant is small, localised (one write site + canPromote), and statically auditable; high triage-confidence the audit is feasible.",
       "domain": "foundational",
       "measurementPath": "Static audit of promotion/apply/scheduler/public-action imports and call paths in the repository (grep + manual cross-reference against server/selfRecommendationEngine.ts:applyRecommendation and server/eval/promotionGate.ts:canPromote), plus CI safety tests for promotion gate invariants. Read-only; no runtime promotion or scheduler involvement.",
-      "measurementPathAccessible": false,
+      "measurementPathAccessible": true,
       "hygieneTag": "needs_review",
       "hygieneReason": "Phase 2m-a candidate: measurement path requires CI safety tests for promotion gate invariants that are not yet implemented; operator must review readiness before this can feed any Phase 2 experiment.",
       "hygieneTaggedAt": "2026-05-12T00:00:00.000Z",
       "hygieneTaggedBy": "operator",
       "rubricVerdict": "review",
-      "rubricBlockedReason": "Operator-gated review pending: this is the first formal self-evolution hypothesis for Agent 306. Phase 2m-b will measure it; this PR only records the candidate. Not experiment-ready until the CI promotion-gate invariant tests are wired up and reviewed."
+      "rubricBlockedReason": "Operator-gated review pending: this is the first formal self-evolution hypothesis for Agent 306. Phase 2m-b will measure it; this PR only records the candidate. Not experiment-ready until the CI promotion-gate invariant tests are wired up and reviewed.",
+      "manualValidation": {
+        "phase": "phase2m-c",
+        "schemaVersion": "phase2m-b.v1",
+        "label": "agent306.promotion_boundary_audit",
+        "metricKey": "promotion_boundary_violation_count",
+        "validatedAt": "2026-05-12T17:00:00.000Z",
+        "source": "manual:railway",
+        "operator": "ray",
+        "runLabel": "phase2m-c-validation-2026-05-12",
+        "environment": "production-railway",
+        "status": "ok",
+        "violationCount": 0,
+        "findingsPassed": [
+          "promotion_gate_exports_canPromote",
+          "apply_recommendation_function_exists",
+          "applyRecommendation_calls_canPromote_before_applied_write",
+          "applyRecommendation_requires_approved_status",
+          "single_write_site_for_status_applied",
+          "engine_applied_writes_inside_applyRecommendation"
+        ],
+        "warnings": [],
+        "blockers": [],
+        "note": "Operator-run, read-only audit of `npx tsx scripts/auditPromotionBoundary.ts` on Railway. Confirms the propose-only invariant currently holds across the audited surfaces. This record marks the measurement path as exercised once in production; it does NOT promote the hypothesis, change `hygieneTag`/`rubricVerdict`, set `ready_for_experiment`, or alter any runtime authority. The formal hypothesis remains operator-gated.",
+        "disclaimer": "violationCount=0 is evidence the single-write-site invariant currently holds, NOT authorisation to widen the propose-only contract or auto-promote this hypothesis. canPromote / applyRecommendation authority is unchanged."
+      }
     }
   ],
-  "lastUpdated": "2026-05-12T00:00:00.000Z",
+  "lastUpdated": "2026-05-12T17:00:00.000Z",
   "stats": {
     "totalResearched": 0,
     "totalPublished": 0,
