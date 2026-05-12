@@ -157,13 +157,6 @@ export const QUARANTINED_TESTS: readonly QuarantinedTest[] = [
     note: "repository tests mutate live DB / json paths",
   },
   {
-    path: "server/__tests__/repositoryBakFallback.test.ts",
-    reason: "mutates_core_state",
-    priority: "high",
-    issue: "#332",
-    note: "DELETES research_lab.json, agent_goals.json, competencyProfile.json (most severe; found via bisect)",
-  },
-  {
     path: "server/__tests__/researchManuscriptApi.test.ts",
     reason: "mutates_core_state",
     priority: "low",

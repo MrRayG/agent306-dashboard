@@ -76,12 +76,14 @@ describe("quarantinedTests manifest — source-level guards", () => {
 });
 
 describe("quarantinedTests manifest — shape", () => {
-  it("is non-empty (this PR establishes the initial 19 culprits)", () => {
+  it("is non-empty (Issue #332 established the initial 19 culprits; drain reduces this number)", () => {
     assert.ok(QUARANTINED_TESTS.length > 0);
   });
 
-  it("contains exactly the 19 known culprits from Issue #332", () => {
-    assert.equal(QUARANTINED_TESTS.length, 19);
+  it("contains exactly 18 quarantined culprits (19 - 1 drained: repositoryBakFallback)", () => {
+    // Each entry removed by a per-culprit drain PR updates this count.
+    // When this reaches 0 the quarantine mechanism itself can be removed.
+    assert.equal(QUARANTINED_TESTS.length, 18);
   });
 
   it("is sorted alphabetically by path", () => {
@@ -145,9 +147,9 @@ describe("quarantinedTests manifest — shape", () => {
 });
 
 describe("quarantinedTests manifest — high/low priority split", () => {
-  it("has exactly 11 high-priority entries (Phase 3a critical path)", () => {
+  it("has exactly 10 high-priority entries (was 11 before repositoryBakFallback drained)", () => {
     const counts = countByPriority();
-    assert.equal(counts.high, 11, `expected 11 high, got ${counts.high}`);
+    assert.equal(counts.high, 10, `expected 10 high, got ${counts.high}`);
   });
 
   it("has exactly 8 low-priority entries", () => {
@@ -211,7 +213,7 @@ describe("applyQuarantineFilter — pure partition", () => {
     assert.deepEqual(result.excluded, [QUARANTINED_TESTS[0]!.path]);
   });
 
-  it("excludes all 14 culprits when given the full manifest as input", () => {
+  it("excludes every culprit when given the full manifest as input", () => {
     const inputs = QUARANTINED_TESTS.map(e => path.join(REPO_ROOT, e.path));
     const result = applyQuarantineFilter(inputs, REPO_ROOT);
     assert.deepEqual(result.kept, []);
