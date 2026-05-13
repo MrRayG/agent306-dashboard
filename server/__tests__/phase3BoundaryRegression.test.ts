@@ -53,6 +53,17 @@
  *      .ts`, `server/eval/promotionGate.ts`) do not import the
  *      Phase 3a entry-point or any of its precondition / contract
  *      symbols.
+ *  11. Track A — Phase 3a-prep harness key-order parity:
+ *      `PHASE3A_PREP_PRECONDITION_KEYS` (from `phase3aPrepHarness.ts`)
+ *      equals `PHASE3_ENTRY_PRECONDITIONS` element-for-element, in
+ *      order. The two arrays are deliberately re-declared rather than
+ *      one importing the other (entry-point isolation, Pin 4), so this
+ *      cross-module parity is the contract that keeps them in lock-
+ *      step. Drifting either side without bumping its own schema
+ *      version is a contract break. The harness module is ALSO
+ *      structurally isolated: not imported by any production-runtime
+ *      surface and (until a Phase 3a-prep-b PR adds it) not listed in
+ *      `PHASE3_NEVER_AUTHORIZED_BY`.
  */
 
 import { describe, it } from "node:test";
@@ -82,6 +93,12 @@ const {
 const {
   LOW_RISK_SANDBOX_REGISTRY,
 } = await import("../experiments/lowRiskSandboxRegistry.ts");
+
+const {
+  PHASE3A_PREP_PRECONDITION_KEYS,
+  PHASE3A_PREP_PRIORITY_TIERS,
+  PHASE3A_PREP_HARNESS_VERSION,
+} = await import("../experiments/phase3aPrepHarness.ts");
 
 // ── Helper: list every .ts / .tsx / .mts / .cts / .js / .mjs / .cjs file
 // under one or more directories, skipping node_modules and dotfiles.
@@ -383,6 +400,14 @@ describe("Phase 2n-c — ENTRY_POINT_VERSION single-source-of-truth", () => {
       "phase3EntryPoint.ts",
       "phase3EntryPoint.test.ts",
       "phase3BoundaryRegression.test.ts",
+      // Track A — Phase 3a-prep harness cross-references the entry-point
+      // version in its doc comments (and its test mirrors the rule). The
+      // harness does NOT export, embed, or reuse the literal in code —
+      // grep for `phase3a.v1` in these two files and you will only find
+      // it inside `/* ... */` blocks. The Pin 11 parity test pins the
+      // cross-module key-order equality independently.
+      "phase3aPrepHarness.ts",
+      "phase3aPrepHarness.test.ts",
     ]);
     const offenders: string[] = [];
     for (const file of candidates) {
@@ -444,6 +469,50 @@ describe("Phase 2n-c — production-runtime surfaces stay off Phase 3a imports",
     }
     assert.deepEqual(offenders, [],
       `Production surfaces must not reference Phase 3a entry-point symbols yet:\n${offenders.map(o => `  - ${o.surface} references ${o.symbol}`).join("\n")}`);
+  });
+});
+
+// ── Pin 11: Phase 3a-prep harness key-order parity ────────────────────────
+
+describe("Phase 2n-c / Track A — Phase 3a-prep harness key-order parity", () => {
+  it("PHASE3A_PREP_PRECONDITION_KEYS equals PHASE3_ENTRY_PRECONDITIONS element-for-element", () => {
+    assert.deepEqual(
+      [...PHASE3A_PREP_PRECONDITION_KEYS],
+      [...PHASE3_ENTRY_PRECONDITIONS],
+      "phase3aPrepHarness PHASE3A_PREP_PRECONDITION_KEYS must match phase3EntryPoint PHASE3_ENTRY_PRECONDITIONS exactly",
+    );
+  });
+
+  it("PHASE3A_PREP_PRIORITY_TIERS is exactly ['high', 'low']", () => {
+    assert.deepEqual([...PHASE3A_PREP_PRIORITY_TIERS], ["high", "low"]);
+  });
+
+  it("PHASE3A_PREP_HARNESS_VERSION is 'phase3aPrep.v1' — paired but distinct from entry-point version", () => {
+    assert.equal(PHASE3A_PREP_HARNESS_VERSION, "phase3aPrep.v1");
+    // Sanity: harness version is its own literal, not a reuse of the
+    // entry-point version.
+    assert.notEqual(PHASE3A_PREP_HARNESS_VERSION, PHASE3_ENTRY_POINT_VERSION);
+  });
+
+  it("Phase 3a-prep harness is NOT imported by any production-runtime surface", () => {
+    const PRODUCTION_SURFACES = [
+      "server/index.ts",
+      "server/autonomyMonitor.ts",
+      "server/selfRecommendationEngine.ts",
+      "server/eval/promotionGate.ts",
+    ];
+    const offenders: string[] = [];
+    for (const rel of PRODUCTION_SURFACES) {
+      const abs = path.join(REPO_ROOT, rel);
+      if (!fs.existsSync(abs)) continue;
+      const text = fs.readFileSync(abs, "utf8");
+      const src = stripComments(text);
+      if (/\bphase3aPrepHarness\b/.test(src)) {
+        offenders.push(rel);
+      }
+    }
+    assert.deepEqual(offenders, [],
+      `Phase 3a-prep harness must not be referenced by production-runtime surfaces yet. Offenders: ${offenders.join(", ")}`);
   });
 });
 
