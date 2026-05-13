@@ -307,6 +307,8 @@ describe("Phase 3a-prep-c — CLI argument parser", () => {
       assert.equal(r.options.pretty, false);
       assert.equal(r.options.runLabel, null);
       assert.equal(r.options.operator, null);
+      // Phase 3a-prep-e: --explain defaults to false
+      assert.equal(r.options.explain, false);
     }
   });
 
@@ -554,6 +556,7 @@ describe("Phase 3a-prep-c — toPayload helper", () => {
         runLabel:      "L",
         operator:      "O",
         source:        "S",
+        explain:       false,
       },
       cand as unknown as Parameters<typeof toPayload>[1],
       fakeReadiness,
@@ -730,11 +733,13 @@ describe("Phase 3a-prep-c — file-level isolation contract", () => {
 // ── 12. Usage text + banner content sanity ─────────────────────────────
 
 describe("Phase 3a-prep-c — usage text + banner sanity", () => {
-  it("USAGE_TEXT mentions --candidate, --pretty, --json, --help", () => {
+  it("USAGE_TEXT mentions --candidate, --pretty, --json, --help, --explain", () => {
     assert.match(USAGE_TEXT, /--candidate/);
     assert.match(USAGE_TEXT, /--pretty/);
     assert.match(USAGE_TEXT, /--json/);
     assert.match(USAGE_TEXT, /--help/);
+    // Phase 3a-prep-e: --explain advertised in usage text
+    assert.match(USAGE_TEXT, /--explain/);
   });
 
   it("SAFETY_INVARIANTS_BANNER restates the propose-only / no-scheduler contract", () => {
@@ -743,5 +748,247 @@ describe("Phase 3a-prep-c — usage text + banner sanity", () => {
     assert.match(SAFETY_INVARIANTS_BANNER, /no auto-apply/i);
     assert.match(SAFETY_INVARIANTS_BANNER, /no public action/i);
     assert.match(SAFETY_INVARIANTS_BANNER, /stdout-only/i);
+  });
+});
+
+// ── 13. Phase 3a-prep-e: --explain flag ────────────────────────────────
+//
+// Pin invariants pinned by this suite:
+//
+//   E-1. The CLI parser accepts `--explain` with no value, defaults the
+//        new `options.explain` boolean to `false`, and rejects no other
+//        existing argument shape (no regression on prior flags).
+//   E-2. `--explain` is independent of `--json` / `--pretty` (no mutual
+//        exclusion, no ordering constraint).
+//   E-3. When `--explain` is OFF (default), the stdout JSON payload
+//        does NOT include an `explanation` field at all — payload
+//        output is byte-identical to a pre-Phase-3a-prep-e invocation.
+//   E-4. When `--explain` is ON, the stdout JSON payload includes a
+//        well-formed `explanation` field with:
+//          - `kindParity: { ok: boolean, blocker: string|null }`
+//          - `byPrecondition`: 7 entries in PHASE3A_PREP_PRECONDITION_KEYS
+//            order, each with `{ key, high, low }` and per-tier
+//            `{ satisfied, blockers: string[] }`.
+//          - `unclassifiedBlockers: string[]` (empty under normal flow).
+//   E-5. For a fully-prepared candidate, every tier in every
+//        precondition is `satisfied: true` with empty blockers, and
+//        `kindParity.ok === true`.
+//   E-6. For a high-tier-ready candidate, every `high` tier is
+//        `satisfied: true` and every `low` tier is `satisfied: false`
+//        with the original blocker string echoed verbatim.
+//   E-7. For a wrong-kind candidate, `kindParity.ok === false` and
+//        `kindParity.blocker` is the original verbatim blocker.
+//   E-8. The flat blocker list (sum across all buckets +
+//        kindParity.blocker if any + unclassifiedBlockers) re-creates
+//        readiness.blockers as a (multi-)set (every blocker classified;
+//        nothing dropped, nothing fabricated). Missing-both-tiers
+//        blockers appear in BOTH the high and low buckets per the
+//        documented classifier contract.
+//   E-9. `--explain` adds NO new authority: the source-level guards
+//        (Pin 4, no scheduler / monitor / promotion / apply imports,
+//        no Date.now / Math.random / randomUUID / process.env reads,
+//        no fs WRITE API) all still pass against the updated runner.
+//
+describe("Phase 3a-prep-e — --explain CLI parser", () => {
+  it("--explain sets options.explain = true", () => {
+    const r = parseManualPhase3aPrepEvaluationCliArgs([
+      "--candidate", "/x.json", "--explain",
+    ]);
+    assert.equal(r.ok, true);
+    if (r.ok === true && "options" in r) {
+      assert.equal(r.options.explain, true);
+    }
+  });
+
+  it("--explain is idempotent (supplying it twice does not error)", () => {
+    const r = parseManualPhase3aPrepEvaluationCliArgs([
+      "--candidate", "/x.json", "--explain", "--explain",
+    ]);
+    assert.equal(r.ok, true);
+    if (r.ok === true && "options" in r) {
+      assert.equal(r.options.explain, true);
+    }
+  });
+
+  it("--explain coexists with --pretty (no mutual exclusion)", () => {
+    const r = parseManualPhase3aPrepEvaluationCliArgs([
+      "--candidate", "/x.json", "--pretty", "--explain",
+    ]);
+    assert.equal(r.ok, true);
+    if (r.ok === true && "options" in r) {
+      assert.equal(r.options.explain, true);
+      assert.equal(r.options.pretty,  true);
+    }
+  });
+
+  it("--explain coexists with --json (no mutual exclusion)", () => {
+    const r = parseManualPhase3aPrepEvaluationCliArgs([
+      "--candidate", "/x.json", "--json", "--explain",
+    ]);
+    assert.equal(r.ok, true);
+    if (r.ok === true && "options" in r) {
+      assert.equal(r.options.explain, true);
+      assert.equal(r.options.pretty,  false);
+    }
+  });
+});
+
+describe("Phase 3a-prep-e — --explain OFF preserves byte-identity", () => {
+  it("omitting --explain produces a payload with NO 'explanation' field", () => {
+    const p = writeCandidateFile("explain-off-fully", buildSatisfiedCandidate("cand-explain-off"));
+    const { io, out } = makeIo();
+    const r = runManualPhase3aPrepEvaluationCli(["--candidate", p], io);
+    assert.equal(r.exitCode, 0);
+    assert.ok(r.payload);
+    // In-memory payload also omits the field (it is conditionally
+    // attached, not always-present-but-null).
+    assert.equal("explanation" in (r.payload as object), false,
+      "payload object must not even have 'explanation' as a key when --explain is OFF");
+    const parsed = JSON.parse(out().trim());
+    assert.equal("explanation" in parsed, false,
+      "serialised JSON must not include 'explanation' field when --explain is OFF");
+  });
+
+  it("byte-for-byte equality between two --explain-OFF invocations on the same file", () => {
+    const p = writeCandidateFile("explain-off-twice", buildSatisfiedCandidate("cand-explain-off-2"));
+    const { io: io1, out: out1 } = makeIo();
+    const { io: io2, out: out2 } = makeIo();
+    runManualPhase3aPrepEvaluationCli(["--candidate", p],            io1);
+    runManualPhase3aPrepEvaluationCli(["--candidate", p, "--json"], io2);
+    // --json is the documented default; the payload should match.
+    assert.equal(out1(), out2());
+  });
+});
+
+describe("Phase 3a-prep-e — --explain ON: shape + content", () => {
+  it("fully_prepared candidate: every tier satisfied, kindParity ok, no unclassified", () => {
+    const p = writeCandidateFile("explain-on-fully", buildSatisfiedCandidate("cand-explain-fully"));
+    const { io, out } = makeIo();
+    const r = runManualPhase3aPrepEvaluationCli(["--candidate", p, "--explain"], io);
+    assert.equal(r.exitCode, 0);
+    assert.ok(r.payload);
+    const parsed = JSON.parse(out().trim());
+    const ex = parsed.explanation;
+    assert.ok(ex, "payload.explanation must be present when --explain is ON");
+    assert.equal(ex.kindParity.ok, true);
+    assert.equal(ex.kindParity.blocker, null);
+    assert.equal(ex.byPrecondition.length, PHASE3A_PREP_PRECONDITION_KEYS.length);
+    // Keys must appear in the canonical order.
+    assert.deepEqual(
+      ex.byPrecondition.map((row: { key: string }) => row.key),
+      [...PHASE3A_PREP_PRECONDITION_KEYS],
+    );
+    for (const row of ex.byPrecondition) {
+      assert.equal(row.high.satisfied, true);
+      assert.deepEqual(row.high.blockers, []);
+      assert.equal(row.low.satisfied,  true);
+      assert.deepEqual(row.low.blockers,  []);
+    }
+    assert.deepEqual(ex.unclassifiedBlockers, []);
+  });
+
+  it("high_tier_ready candidate: every high satisfied, every low NOT satisfied with verbatim blockers", () => {
+    const p = writeCandidateFile("explain-on-high-only", buildHighTierOnlyCandidate("cand-explain-high"));
+    const { io, out } = makeIo();
+    const r = runManualPhase3aPrepEvaluationCli(["--candidate", p, "--explain"], io);
+    assert.equal(r.exitCode, 0);
+    assert.ok(r.payload);
+    const parsed = JSON.parse(out().trim());
+    const ex = parsed.explanation;
+    assert.equal(ex.kindParity.ok, true);
+    assert.equal(ex.byPrecondition.length, PHASE3A_PREP_PRECONDITION_KEYS.length);
+    for (const row of ex.byPrecondition) {
+      assert.equal(row.high.satisfied, true,  `high tier should be satisfied for ${row.key}`);
+      assert.deepEqual(row.high.blockers, []);
+      assert.equal(row.low.satisfied,  false, `low tier should be unsatisfied for ${row.key}`);
+      assert.ok(row.low.blockers.length >= 1, `low tier should have >=1 blocker for ${row.key}`);
+      // Verbatim echo: every bucketed blocker is also in readiness.blockers.
+      for (const b of row.low.blockers) {
+        assert.ok(parsed.readiness.blockers.includes(b),
+          `bucketed low blocker not found verbatim in readiness.blockers: ${b}`);
+      }
+    }
+    assert.deepEqual(ex.unclassifiedBlockers, []);
+  });
+
+  it("wrong-kind candidate: kindParity.ok=false, blocker is the original verbatim string", () => {
+    const bad = buildSatisfiedCandidate("cand-explain-wrongkind") as { kind: string };
+    bad.kind = "someOtherKind";
+    const p = writeCandidateFile("explain-on-wrongkind", bad);
+    const { io, out } = makeIo();
+    const r = runManualPhase3aPrepEvaluationCli(["--candidate", p, "--explain"], io);
+    assert.equal(r.exitCode, 0);
+    assert.ok(r.payload);
+    const parsed = JSON.parse(out().trim());
+    const ex = parsed.explanation;
+    assert.equal(ex.kindParity.ok, false);
+    assert.equal(typeof ex.kindParity.blocker, "string");
+    // The kindParity.blocker should be one of readiness.blockers verbatim.
+    assert.ok(parsed.readiness.blockers.includes(ex.kindParity.blocker),
+      "kindParity.blocker must appear verbatim in readiness.blockers");
+    assert.match(ex.kindParity.blocker, /candidate\.kind/);
+    assert.deepEqual(ex.unclassifiedBlockers, []);
+  });
+
+  it("--explain works under --pretty: payload still parses; same explanation tree", () => {
+    const p = writeCandidateFile("explain-pretty", buildHighTierOnlyCandidate("cand-explain-pretty"));
+    const { io: ioA, out: outA } = makeIo();
+    const { io: ioB, out: outB } = makeIo();
+    runManualPhase3aPrepEvaluationCli(["--candidate", p, "--explain"],            ioA);
+    runManualPhase3aPrepEvaluationCli(["--candidate", p, "--explain", "--pretty"], ioB);
+    const a = JSON.parse(outA().trim());
+    const b = JSON.parse(outB().trim());
+    assert.deepEqual(a, b);
+    assert.ok(outB().includes("\n  "), "pretty output must contain 2-space indent");
+    assert.ok(a.explanation, "compact --explain payload must include explanation");
+    assert.ok(b.explanation, "pretty  --explain payload must include explanation");
+  });
+
+  it("every blocker in readiness.blockers is classified exactly once across buckets (no drop, no fabrication)", () => {
+    // Build a candidate that triggers multiple blocker varieties at once:
+    // wrong kind + one missing tier + one violated high + one empty-evidenceRef low.
+    const cand = buildSatisfiedCandidate("cand-explain-multi") as {
+      kind: string;
+      preconditions: Record<string, Record<string, Record<string, unknown> | undefined>>;
+    };
+    cand.kind = "wrongKind";
+    cand.preconditions["rollbackProof"]!["high"]!["status"] = "violated";
+    // Remove a low-tier slot entirely (triggers missing-tier blocker).
+    cand.preconditions["noPublicAction"]!["low"] = undefined;
+    delete cand.preconditions["noPublicAction"]!["low"];
+    // Satisfied low-tier with empty evidenceRef.
+    (cand.preconditions["metricsClockReadiness"]!["low"] as Record<string, unknown>)["evidenceRef"] = "";
+
+    const p = writeCandidateFile("explain-multi-blocker", cand);
+    const { io, out } = makeIo();
+    const r = runManualPhase3aPrepEvaluationCli(["--candidate", p, "--explain"], io);
+    assert.equal(r.exitCode, 0);
+    const parsed = JSON.parse(out().trim());
+    const flat: readonly string[] = parsed.readiness.blockers;
+    const ex   = parsed.explanation;
+
+    // Reconstruct: kindParity.blocker (0 or 1) + every per-tier bucket + unclassified.
+    const reconstructed: string[] = [];
+    if (ex.kindParity.blocker !== null) reconstructed.push(ex.kindParity.blocker);
+    for (const row of ex.byPrecondition) {
+      for (const b of row.high.blockers) reconstructed.push(b);
+      for (const b of row.low.blockers)  reconstructed.push(b);
+    }
+    for (const b of ex.unclassifiedBlockers) reconstructed.push(b);
+
+    // Every flat blocker must appear at least once in the reconstruction.
+    for (const b of flat) {
+      assert.ok(reconstructed.includes(b),
+        `flat blocker not classified by --explain: ${b}`);
+    }
+    // No fabrication: every reconstructed blocker must be in the flat list.
+    for (const b of reconstructed) {
+      assert.ok(flat.includes(b),
+        `--explain emitted blocker not in readiness.blockers: ${b}`);
+    }
+    // Under the documented classifier (and current harness phrasings),
+    // unclassifiedBlockers must be empty.
+    assert.deepEqual([...ex.unclassifiedBlockers], [],
+      "unclassifiedBlockers must be empty when harness phrasings are recognised");
   });
 });

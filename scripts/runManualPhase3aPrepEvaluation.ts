@@ -1,6 +1,7 @@
 /**
  * ─────────────────────────────────────────────────────────────────────────────
- * 306 — TRACK A / PHASE 3a-prep-c: MANUAL PHASE 3a-prep READINESS RUNNER
+ * 306 — TRACK A / PHASE 3a-prep-c + PHASE 3a-prep-e: MANUAL PHASE 3a-prep
+ *                                   READINESS RUNNER
  *                                   (READ-ONLY / STDOUT-ONLY)
  *
  * Phase 3a-prep-b shipped the per-precondition attestation harness
@@ -62,9 +63,27 @@
  *   • no auto-apply
  *   • no public action
  *
+ * Phase 3a-prep-e adds one OPTIONAL, PRESENTATION-ONLY flag:
+ *
+ *   --explain         Attach a per-precondition / per-tier expansion of
+ *                     `readiness.blockers` to the payload as the field
+ *                     `explanation`.  Pure projection over the readiness
+ *                     result — NO schema bump, NO new authority, NO new
+ *                     side effect.  When `--explain` is omitted the
+ *                     payload is byte-identical to a pre-Phase-3a-prep-e
+ *                     invocation: the `explanation` field is absent
+ *                     from the object, not set to `null`.
+ *
+ * Pin 7 phrases (read-only, stdout-only, no scheduler, no auto-apply,
+ * no public action) are re-asserted unchanged — `--explain` cannot
+ * widen any contract, register any kind, promote any record, mark
+ * anything auto-apply eligible, or authorise Phase 3 execution.
+ *
  * Usage:
  *   npx tsx scripts/runManualPhase3aPrepEvaluation.ts --candidate <path>
  *   npx tsx scripts/runManualPhase3aPrepEvaluation.ts --candidate <path> --pretty
+ *   npx tsx scripts/runManualPhase3aPrepEvaluation.ts --candidate <path> --explain
+ *   npx tsx scripts/runManualPhase3aPrepEvaluation.ts --candidate <path> --pretty --explain
  *   npx tsx scripts/runManualPhase3aPrepEvaluation.ts --candidate <path> \
  *     --run-label phase3aprep-c-daily-2026-05-12 \
  *     --operator op@phase3aprep-c \
@@ -78,6 +97,13 @@
  *                        (default).
  *   --pretty             Print the readiness payload as 2-space-indented
  *                        JSON.
+ *   --explain            OPTIONAL.  Attach a per-precondition /
+ *                        per-tier expansion of `readiness.blockers` to
+ *                        the payload as `explanation`.  Presentation-
+ *                        only — pure projection over the readiness
+ *                        result, NO schema bump, NO new authority.
+ *                        When omitted, the payload is byte-identical
+ *                        to a pre-Phase-3a-prep-e invocation.
  *   --run-label <text>   Echo a free-text run label into the payload's
  *                        `runLabel` metadata field. Informational only.
  *   --operator <text>    Echo a free-text operator identifier into the
@@ -124,6 +150,15 @@ import {
   type Phase3aPrepReadiness,
 } from "../server/experiments/phase3aPrepHarness.js";
 
+/** Type alias for the 7 precondition keys.  Re-derived locally so the
+ *  `--explain` projection's type does NOT need to import a new symbol
+ *  from the harness.  Pin 4 (read-only / declarative-only) is
+ *  preserved — this is a presentation-time vocabulary, not a schema. */
+type Phase3aPrepPreconditionKey =
+  (typeof PHASE3A_PREP_PRECONDITION_KEYS)[number];
+type Phase3aPrepPriorityTier =
+  (typeof PHASE3A_PREP_PRIORITY_TIERS)[number];
+
 /** Parsed CLI options. Each field maps 1:1 onto either a candidate-load
  *  parameter or an echo metadata field. */
 export interface ManualPhase3aPrepEvaluationCliOptions {
@@ -137,6 +172,14 @@ export interface ManualPhase3aPrepEvaluationCliOptions {
   operator:      string | null;
   /** Caller-supplied `--source`. Defaults to `"manual:cli"`. */
   source:        string;
+  /** True when `--explain` is supplied.  Presentation-only.  When
+   *  `false` (the default) the payload is byte-identical to a
+   *  pre-Phase-3a-prep-e invocation — the `explanation` field is
+   *  omitted entirely (not set to `null`).  When `true`, a pure
+   *  per-precondition / per-tier projection over `readiness.blockers`
+   *  is attached as `payload.explanation`.  Adds NO authority, NO
+   *  schema change, NO side effect. */
+  explain:       boolean;
 }
 
 /** Default value for the `source` metadata field when `--source` is
@@ -153,7 +196,7 @@ const PROGRAM_NAME = "runManualPhase3aPrepEvaluation";
 export const USAGE_TEXT = [
   "Usage: tsx scripts/runManualPhase3aPrepEvaluation.ts --candidate <path> [flags]",
   "",
-  "Phase 3a-prep-c manual Phase 3a-prep readiness runner.",
+  "Phase 3a-prep-c + Phase 3a-prep-e manual Phase 3a-prep readiness runner.",
   "Reads exactly one candidate JSON file, calls the Phase 3a-prep",
   "harness's pure readiness helper, and prints exactly one deterministic,",
   "read-only, propose-only readiness payload to stdout. The runner does",
@@ -168,6 +211,12 @@ export const USAGE_TEXT = [
   "                       Phase3aPrepCandidate.",
   "  --json               Print the payload as compact JSON (default).",
   "  --pretty             Print the payload as 2-space-indented JSON.",
+  "  --explain            Attach a per-precondition / per-tier expansion",
+  "                       of readiness.blockers to the payload as",
+  "                       'explanation'. Presentation-only — no schema",
+  "                       bump, no new authority. When omitted the",
+  "                       payload is byte-identical to a pre-3a-prep-e",
+  "                       invocation.",
   "  --run-label <text>   Echo a free-text run label into the payload.",
   "  --operator <text>    Echo a free-text operator identifier.",
   "                       Informational only — confers no authority.",
@@ -211,6 +260,7 @@ export function parseManualPhase3aPrepEvaluationCliArgs(
   let runLabel: string | null      = null;
   let operator: string | null      = null;
   let source:   string | null      = null;
+  let explain                      = false;
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -234,6 +284,9 @@ export function parseManualPhase3aPrepEvaluationCliArgs(
         break;
       case "--pretty":
         pretty = true;
+        break;
+      case "--explain":
+        explain = true;
         break;
       case "--run-label": {
         const v = argv[++i];
@@ -280,14 +333,65 @@ export function parseManualPhase3aPrepEvaluationCliArgs(
       runLabel,
       operator,
       source: source ?? DEFAULT_CLI_SOURCE,
+      explain,
     },
   };
+}
+
+/** Per-tier blocker bucket emitted by the `--explain` projection.  The
+ *  `satisfied` flag is the canonical truth for that tier at that
+ *  precondition (mirrors `highTierAllSatisfied` / `lowTierAllSatisfied`
+ *  but narrowed to one precondition).  `blockers` is the subset of the
+ *  flat readiness blocker list classified to this (precondition, tier)
+ *  cell — it is the SAME string, not a re-phrased one, so an operator
+ *  can grep for it. */
+export interface ManualPhase3aPrepTierExplanation {
+  readonly satisfied: boolean;
+  readonly blockers:  readonly string[];
+}
+
+/** One row of the `--explain` projection.  One row per precondition
+ *  key, in `PHASE3A_PREP_PRECONDITION_KEYS` order. */
+export interface ManualPhase3aPrepPreconditionExplanation {
+  readonly key:  Phase3aPrepPreconditionKey;
+  readonly high: ManualPhase3aPrepTierExplanation;
+  readonly low:  ManualPhase3aPrepTierExplanation;
+}
+
+/** Top-level `--explain` projection.  Pure function of
+ *  `readiness.blockers`.  All blocker strings are preserved verbatim;
+ *  the projection classifies them into structural buckets without
+ *  re-phrasing.  Any blocker the classifier does not recognise is
+ *  echoed into `unclassifiedBlockers` so an audit-grade reviewer sees
+ *  the unmodified flat list as well.  Under normal operation
+ *  `unclassifiedBlockers` is empty. */
+export interface ManualPhase3aPrepExplanation {
+  /** Result of the gate-0 kind-parity check.  `ok` is `true` when the
+   *  candidate kind matches the only Phase 3a-eligible kind; `blocker`
+   *  carries the verbatim blocker string when not.  This bucket exists
+   *  separately from the per-precondition rows because the kind
+   *  parity gate is global, not per-precondition. */
+  readonly kindParity:           { readonly ok: boolean; readonly blocker: string | null };
+  /** Per-precondition rows in `PHASE3A_PREP_PRECONDITION_KEYS` order.
+   *  Always 7 entries; an empty `blockers` array means that tier of
+   *  that precondition is clean.  Frozen for safety. */
+  readonly byPrecondition:       readonly ManualPhase3aPrepPreconditionExplanation[];
+  /** Verbatim blocker strings the classifier did not match.  Empty
+   *  under normal operation; populated only if the harness adds new
+   *  blocker phrasing the runner does not yet know about (Pin 4 makes
+   *  that a schema-bump-level event). */
+  readonly unclassifiedBlockers: readonly string[];
 }
 
 /** Shape of the payload printed to stdout. Caller-supplied echo
  *  metadata is interleaved with the pure readiness verdict. The
  *  `harnessVersion` field anchors the payload to the harness schema so
- *  a downstream consumer can detect a future bump. */
+ *  a downstream consumer can detect a future bump.
+ *
+ *  When `--explain` is NOT supplied, the `explanation` field is
+ *  omitted entirely (the property is absent from the serialised JSON
+ *  object) so default invocations remain byte-identical to a
+ *  pre-Phase-3a-prep-e run. */
 export interface ManualPhase3aPrepEvaluationPayload {
   readonly harnessVersion:        typeof PHASE3A_PREP_HARNESS_VERSION;
   readonly source:                string;
@@ -299,6 +403,9 @@ export interface ManualPhase3aPrepEvaluationPayload {
   readonly preconditionKeys:      readonly string[];
   readonly priorityTiers:         readonly string[];
   readonly readiness:             Phase3aPrepReadiness;
+  /** Present iff `--explain` was supplied.  Pure projection of
+   *  `readiness.blockers` — adds NO new authority and NO new schema. */
+  readonly explanation?:          ManualPhase3aPrepExplanation;
 }
 
 /** Read and parse the candidate JSON file. Pure aside from the single
@@ -343,6 +450,130 @@ export function loadCandidate(
   return { ok: true, candidate: parsed as Phase3aPrepCandidate };
 }
 
+/** Build the `--explain` projection over a readiness result.  Pure
+ *  function: same `readiness` in → same projection out, no I/O, no
+ *  clock, no env.  All blocker strings are preserved verbatim; the
+ *  classifier only buckets them.  Any blocker that does not match a
+ *  known harness phrasing flows into `unclassifiedBlockers` so a
+ *  reviewer always sees the full flat list as well as the structured
+ *  view.
+ *
+ *  Classifier phrasings (must stay in lock-step with
+ *  `computePhase3aPrepReadiness` in `phase3aPrepHarness.ts`):
+ *
+ *    - `candidate.kind '<x>' does not match the only Phase 3a-eligible kind '<y>'`
+ *      → kindParity
+ *    - `precondition '<key>' is missing both tiers`
+ *      → both high + low buckets for `<key>`
+ *    - `precondition '<key>' missing '<tier>'-priority attestation`
+ *      → `<tier>` bucket for `<key>`
+ *    - `precondition '<key>' '<tier>'-attestation has mismatched key '<x>'`
+ *      → `<tier>` bucket for `<key>`
+ *    - `precondition '<key>' '<tier>'-attestation has mismatched priority '<x>'`
+ *      → `<tier>` bucket for `<key>`
+ *    - `<tier>-tier precondition '<key>' is '<status>' (...)`
+ *      → `<tier>` bucket for `<key>`
+ *    - `<tier>-tier precondition '<key>' is 'satisfied' but has empty evidenceRef`
+ *      → `<tier>` bucket for `<key>`
+ */
+export function buildExplanation(
+  readiness: Phase3aPrepReadiness,
+): ManualPhase3aPrepExplanation {
+  // Build mutable per-key buckets, then freeze on the way out.
+  const buckets: Record<
+    Phase3aPrepPreconditionKey,
+    { high: string[]; low: string[] }
+  > = Object.create(null);
+  for (const key of PHASE3A_PREP_PRECONDITION_KEYS) {
+    buckets[key] = { high: [], low: [] };
+  }
+
+  let kindParityBlocker: string | null = null;
+  const unclassified: string[] = [];
+
+  // Classifier regexes — anchored so a future verbatim change in the
+  // harness shows up as `unclassifiedBlockers` rather than silently
+  // mis-bucketing.
+  const RE_KIND          = /^candidate\.kind '.*' does not match the only Phase 3a-eligible kind '.*'$/;
+  const RE_MISSING_BOTH  = /^precondition '([^']+)' is missing both tiers$/;
+  const RE_MISSING_TIER  = /^precondition '([^']+)' missing '([^']+)'-priority attestation$/;
+  const RE_MISMATCH_KEY  = /^precondition '([^']+)' '([^']+)'-attestation has mismatched key '[^']*'$/;
+  const RE_MISMATCH_PRI  = /^precondition '([^']+)' '([^']+)'-attestation has mismatched priority '[^']*'$/;
+  const RE_TIER_STATUS   = /^([^-]+)-tier precondition '([^']+)' is '[^']+' \(.*\)$/;
+  const RE_TIER_EMPTY    = /^([^-]+)-tier precondition '([^']+)' is 'satisfied' but has empty evidenceRef$/;
+
+  const validKeys = new Set<string>(PHASE3A_PREP_PRECONDITION_KEYS);
+  const validTiers = new Set<string>(PHASE3A_PREP_PRIORITY_TIERS);
+
+  const pushToTier = (
+    key: string,
+    tier: string,
+    blocker: string,
+  ): boolean => {
+    if (!validKeys.has(key) || !validTiers.has(tier)) return false;
+    const k = key as Phase3aPrepPreconditionKey;
+    const t = tier as Phase3aPrepPriorityTier;
+    buckets[k][t].push(blocker);
+    return true;
+  };
+
+  for (const blocker of readiness.blockers) {
+    if (RE_KIND.test(blocker)) {
+      kindParityBlocker = blocker;
+      continue;
+    }
+    let m = blocker.match(RE_MISSING_BOTH);
+    if (m) {
+      const key = m[1];
+      if (validKeys.has(key)) {
+        const k = key as Phase3aPrepPreconditionKey;
+        buckets[k].high.push(blocker);
+        buckets[k].low.push(blocker);
+      } else {
+        unclassified.push(blocker);
+      }
+      continue;
+    }
+    m = blocker.match(RE_MISSING_TIER);
+    if (m && pushToTier(m[1], m[2], blocker)) continue;
+    m = blocker.match(RE_MISMATCH_KEY);
+    if (m && pushToTier(m[1], m[2], blocker)) continue;
+    m = blocker.match(RE_MISMATCH_PRI);
+    if (m && pushToTier(m[1], m[2], blocker)) continue;
+    m = blocker.match(RE_TIER_STATUS);
+    if (m && pushToTier(m[2], m[1], blocker)) continue;
+    m = blocker.match(RE_TIER_EMPTY);
+    if (m && pushToTier(m[2], m[1], blocker)) continue;
+    unclassified.push(blocker);
+  }
+
+  const byPrecondition: ManualPhase3aPrepPreconditionExplanation[] = [];
+  for (const key of PHASE3A_PREP_PRECONDITION_KEYS) {
+    const highBlockers = buckets[key].high;
+    const lowBlockers  = buckets[key].low;
+    byPrecondition.push(Object.freeze({
+      key,
+      high: Object.freeze({
+        satisfied: highBlockers.length === 0,
+        blockers:  Object.freeze(highBlockers.slice()),
+      }),
+      low:  Object.freeze({
+        satisfied: lowBlockers.length === 0,
+        blockers:  Object.freeze(lowBlockers.slice()),
+      }),
+    }));
+  }
+
+  return Object.freeze({
+    kindParity: Object.freeze({
+      ok:      kindParityBlocker === null,
+      blocker: kindParityBlocker,
+    }),
+    byPrecondition:       Object.freeze(byPrecondition),
+    unclassifiedBlockers: Object.freeze(unclassified.slice()),
+  });
+}
+
 /** Shape the readiness verdict + echo metadata into the payload that
  *  gets printed to stdout. Pure projection. */
 export function toPayload(
@@ -350,7 +581,7 @@ export function toPayload(
   candidate: Phase3aPrepCandidate,
   readiness: Phase3aPrepReadiness,
 ): ManualPhase3aPrepEvaluationPayload {
-  return {
+  const base: ManualPhase3aPrepEvaluationPayload = {
     harnessVersion:   PHASE3A_PREP_HARNESS_VERSION,
     source:           options.source,
     runLabel:         options.runLabel,
@@ -362,6 +593,13 @@ export function toPayload(
     priorityTiers:    [...PHASE3A_PREP_PRIORITY_TIERS],
     readiness,
   };
+  // Conditional property: when `--explain` is OFF, the field is not
+  // present in the object at all, so `JSON.stringify` produces a
+  // byte-identical default invocation.
+  if (options.explain) {
+    return { ...base, explanation: buildExplanation(readiness) };
+  }
+  return base;
 }
 
 /** I/O handles passed into `runManualPhase3aPrepEvaluationCli` so tests
