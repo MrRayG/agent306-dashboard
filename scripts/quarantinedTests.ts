@@ -79,13 +79,6 @@ export const QUARANTINED_TESTS: readonly QuarantinedTest[] = [
     issue: "#332",
     note: "creates tmp-blog-legacy-* directories at repo root",
   },
-  {
-    path: "server/__tests__/clearEpisodeAudio.test.ts",
-    reason: "mutates_core_state",
-    priority: "low",
-    issue: "#332",
-    note: "episode audio clearing touches shared data files",
-  },
 ];
 
 /** Quick lookup set of quarantined paths (relative to repo root). */
