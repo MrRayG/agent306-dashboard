@@ -23,6 +23,7 @@ import {
   applyRecommendation,
   getRecommendation,
   listRecommendations,
+  listPromotionAttestationsForRecommendation,
   proposeRecommendation,
   rejectRecommendation,
   revertRecommendation,
@@ -63,6 +64,18 @@ export function registerSelfRecommendationRoutes(app: Express, deps: SelfRecomme
     const rec = getRecommendation(String(req.params.id));
     if (!rec) return res.status(404).json({ error: "not_found" });
     res.json(serialize(rec));
+  });
+
+  // Phase 3b-b: read-only attestation-event surface for one recommendation.
+  // Pure UI consumer of the Phase 3b-a engine_events rows. Advisory telemetry
+  // only — does NOT participate in canPromote(), the apply boundary, or any
+  // public-action surface. No mutation route is paired with this read.
+  app.get("/api/self-recommendations/:id/attestations", (req, res) => {
+    const rec = getRecommendation(String(req.params.id));
+    if (!rec) return res.status(404).json({ error: "not_found" });
+    const limit = req.query.limit ? Math.min(100, Number(req.query.limit) || 25) : 25;
+    const attestations = listPromotionAttestationsForRecommendation(rec.id, limit);
+    res.json({ recommendationId: rec.id, attestations });
   });
 
   app.post("/api/self-recommendations", requireDashAuth, (req, res) => {
