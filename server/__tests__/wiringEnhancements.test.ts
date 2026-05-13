@@ -2,10 +2,107 @@
  * Tests for cross-system wiring enhancements.
  *
  * Run: npx tsx --test server/__tests__/wiringEnhancements.test.ts
+ *
+ * Phase 2n drain #11 — Path B isolation:
+ *   The entity-dedup tests call `addHypothesis()` / `saveResearchLab()` from
+ *   `server/researchEngine.ts`, which captures `dataPath("research_lab.json")`
+ *   at module-eval time (line 42). Without redirecting DATA_DIR _before_ the
+ *   first import of researchEngine.js, writes land in the repo's live
+ *   data/research_lab.json. The dynamic `await import()` calls inside each
+ *   `it()` would normally make this safe, BUT they only help if DATA_DIR is
+ *   already set when that first dynamic import resolves. Bisect-found cause.
+ *
+ *   Fix: env vars set in a top-of-file IIFE BEFORE any other import or any
+ *   test body executes. Watched-file snapshots + after()-hook contract +
+ *   file-level isolation contract describe block (drain template).
  */
 
-import { describe, it } from "node:test";
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
+
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "phase2n-drain11-wiring-test-"));
+process.env.DATA_DIR = TMP;
+process.env.DB_PATH = path.join(TMP, "test.db");
+
+import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
+
+const REPO_ROOT = path.resolve(new URL(".", import.meta.url).pathname, "../..");
+const REAL_RESEARCH_LAB    = path.join(REPO_ROOT, "data", "research_lab.json");
+const REAL_MEMORY_KB       = path.join(REPO_ROOT, "data", "memory_knowledge.json");
+const REAL_AGENT_GOALS     = path.join(REPO_ROOT, "data", "agent_goals.json");
+const REAL_COMPETENCY      = path.join(REPO_ROOT, "data", "competencyProfile.json");
+const REAL_DECISION_LEDGER = path.join(REPO_ROOT, "data", "experiment_decision_events.jsonl");
+const REPO_RECORDS_LEDGER  = path.join(REPO_ROOT, "data", "sandbox_registration_records.jsonl");
+const REAL_DB              = path.join(REPO_ROOT, "data", "agent306.db");
+
+function snapshot(p: string): { exists: boolean; content?: string } {
+  if (!fs.existsSync(p)) return { exists: false };
+  return { exists: true, content: fs.readFileSync(p, "utf8") };
+}
+function dbStat(p: string): { exists: boolean; size?: number; mtimeMs?: number } {
+  if (!fs.existsSync(p)) return { exists: false };
+  const st = fs.statSync(p);
+  return { exists: true, size: st.size, mtimeMs: st.mtimeMs };
+}
+const RESEARCH_SNAPSHOT        = snapshot(REAL_RESEARCH_LAB);
+const MEMORY_SNAPSHOT          = snapshot(REAL_MEMORY_KB);
+const AGENT_GOALS_SNAPSHOT     = snapshot(REAL_AGENT_GOALS);
+const COMPETENCY_SNAPSHOT      = snapshot(REAL_COMPETENCY);
+const DECISION_LEDGER_SNAPSHOT = snapshot(REAL_DECISION_LEDGER);
+const REPO_RECORDS_SNAPSHOT    = snapshot(REPO_RECORDS_LEDGER);
+const DB_SNAPSHOT              = dbStat(REAL_DB);
+
+before(() => {
+  // Loud-failure pin (drain template).
+  const tmpRoot = fs.realpathSync(os.tmpdir());
+  const tmpReal = fs.realpathSync(TMP);
+  if (!tmpReal.startsWith(tmpRoot)) {
+    throw new Error(`wiringEnhancements isolation broke: TMP not under os.tmpdir(): ${tmpReal}`);
+  }
+  if (tmpReal.startsWith(REPO_ROOT)) {
+    throw new Error(`wiringEnhancements isolation broke: TMP under repo root: ${tmpReal}`);
+  }
+  if (process.env.DATA_DIR !== TMP) {
+    throw new Error(`wiringEnhancements isolation broke: DATA_DIR drifted to ${process.env.DATA_DIR}`);
+  }
+  if (process.env.DB_PATH !== path.join(TMP, "test.db")) {
+    throw new Error(`wiringEnhancements isolation broke: DB_PATH drifted to ${process.env.DB_PATH}`);
+  }
+});
+
+after(() => {
+  try { fs.rmSync(TMP, { recursive: true, force: true }); } catch {}
+
+  const after = (p: string) => snapshot(p);
+  for (const [label, before, p] of [
+    ["research_lab.json",                   RESEARCH_SNAPSHOT,        REAL_RESEARCH_LAB],
+    ["memory_knowledge.json",               MEMORY_SNAPSHOT,          REAL_MEMORY_KB],
+    ["agent_goals.json",                    AGENT_GOALS_SNAPSHOT,     REAL_AGENT_GOALS],
+    ["competencyProfile.json",              COMPETENCY_SNAPSHOT,      REAL_COMPETENCY],
+    ["experiment_decision_events.jsonl",    DECISION_LEDGER_SNAPSHOT, REAL_DECISION_LEDGER],
+    ["sandbox_registration_records.jsonl",  REPO_RECORDS_SNAPSHOT,    REPO_RECORDS_LEDGER],
+  ] as const) {
+    const a = after(p);
+    if (before.exists) {
+      if (!a.exists) throw new Error(`wiringEnhancements tests removed live ${label}!`);
+      if (a.content !== before.content) throw new Error(`wiringEnhancements tests mutated live ${label}!`);
+    } else {
+      if (a.exists) throw new Error(`wiringEnhancements tests created live ${label}!`);
+    }
+  }
+
+  const dbAfter = dbStat(REAL_DB);
+  if (DB_SNAPSHOT.exists) {
+    if (!dbAfter.exists) throw new Error(`wiringEnhancements tests removed live agent306.db!`);
+    if (dbAfter.size !== DB_SNAPSHOT.size || dbAfter.mtimeMs !== DB_SNAPSHOT.mtimeMs) {
+      throw new Error(`wiringEnhancements tests mutated live agent306.db (size/mtime changed)!`);
+    }
+  } else if (dbAfter.exists) {
+    throw new Error(`wiringEnhancements tests created live agent306.db!`);
+  }
+});
 
 // ── Enhancement 1: Entity-Level Hypothesis Dedup ─────────────────────────────
 
@@ -258,5 +355,57 @@ describe("prioritizeClusters", () => {
     // Unknown dimension
     const result2 = prioritizeClusters(clusters, "nonexistentDimension");
     assert.deepEqual(result2, clusters);
+  });
+});
+
+// ── File-level isolation contract ───────────────────────────────────────────
+//
+// Standalone, in-file assertions that this test never crosses into real
+// repo state. Companion to the `after()` hook above; these run during file
+// evaluation and assert the env+TMP setup itself, plus that the 7 watched
+// files are still untouched at the moment this describe block executes.
+//
+// Mirrors the drain-template contract from drains #2–#10. Drain #11 is a
+// Path B fix: research_lab.json was being mutated because
+// `server/researchEngine.ts` captures `dataPath("research_lab.json")` at
+// module-eval time. Env-var redirect BEFORE first import resolves it.
+describe("wiringEnhancements — file-level isolation contract", () => {
+  it("DATA_DIR is redirected to this run's tmpdir", () => {
+    assert.equal(process.env.DATA_DIR, TMP, "DATA_DIR must point at this run's TMP");
+    const tmpRoot = fs.realpathSync(os.tmpdir());
+    assert.ok(fs.realpathSync(TMP).startsWith(tmpRoot), "TMP must live under os.tmpdir()");
+    assert.ok(!fs.realpathSync(TMP).startsWith(REPO_ROOT), "TMP must NOT live under repo root");
+    assert.equal(process.env.DB_PATH, path.join(TMP, "test.db"), "DB_PATH must point at TMP/test.db");
+  });
+
+  const watched: Array<[string, { exists: boolean; content?: string }, string]> = [
+    ["research_lab.json",                   RESEARCH_SNAPSHOT,        REAL_RESEARCH_LAB],
+    ["memory_knowledge.json",               MEMORY_SNAPSHOT,          REAL_MEMORY_KB],
+    ["agent_goals.json",                    AGENT_GOALS_SNAPSHOT,     REAL_AGENT_GOALS],
+    ["competencyProfile.json",              COMPETENCY_SNAPSHOT,      REAL_COMPETENCY],
+    ["experiment_decision_events.jsonl",    DECISION_LEDGER_SNAPSHOT, REAL_DECISION_LEDGER],
+    ["sandbox_registration_records.jsonl",  REPO_RECORDS_SNAPSHOT,    REPO_RECORDS_LEDGER],
+  ];
+  for (const [label, before, p] of watched) {
+    it(`live ${label} is unchanged at file-level checkpoint`, () => {
+      const cur = snapshot(p);
+      if (before.exists) {
+        assert.ok(cur.exists, `live ${label} disappeared`);
+        assert.equal(cur.content, before.content, `live ${label} mutated`);
+      } else {
+        assert.equal(cur.exists, false, `live ${label} was created`);
+      }
+    });
+  }
+
+  it("live agent306.db is unchanged at file-level checkpoint (WAL-aware)", () => {
+    const cur = dbStat(REAL_DB);
+    if (DB_SNAPSHOT.exists) {
+      assert.ok(cur.exists, "live agent306.db disappeared");
+      assert.equal(cur.size, DB_SNAPSHOT.size, "agent306.db size changed");
+      assert.equal(cur.mtimeMs, DB_SNAPSHOT.mtimeMs, "agent306.db mtime changed");
+    } else {
+      assert.equal(cur.exists, false, "live agent306.db was created");
+    }
   });
 });

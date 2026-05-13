@@ -122,13 +122,6 @@ export const QUARANTINED_TESTS: readonly QuarantinedTest[] = [
     note: "manuscript API tests write into research_lab.json",
   },
   {
-    path: "server/__tests__/wiringEnhancements.test.ts",
-    reason: "mutates_core_state",
-    priority: "high",
-    issue: "#332",
-    note: "wiring enhancements test mutates research_lab.json (found via bisect)",
-  },
-  {
     path: "server/__tests__/wisdomEngine.test.ts",
     reason: "mutates_core_state",
     priority: "low",
