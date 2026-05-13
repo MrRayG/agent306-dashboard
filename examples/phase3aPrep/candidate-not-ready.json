@@ -1,0 +1,118 @@
+{
+  "candidateId": "example-not-ready",
+  "kind": "summarizationTemplate",
+  "preconditions": {
+    "reversibleLowRiskActionOnly": {
+      "high": {
+        "key": "reversibleLowRiskActionOnly",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "examples/phase3aPrep/evidence/reversibleLowRiskActionOnly/high.md",
+        "rationale": "candidate trial only emits propose-only summaries; no public-action sink wired"
+      },
+      "low": {
+        "key": "reversibleLowRiskActionOnly",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "examples/phase3aPrep/evidence/reversibleLowRiskActionOnly/low.md",
+        "rationale": "documented reversal path: drop draft and re-run"
+      }
+    },
+    "explicitKillSwitchAndResourceLimits": {
+      "high": {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "examples/phase3aPrep/evidence/explicitKillSwitchAndResourceLimits/high.md",
+        "rationale": "kill switch wired; per-run wall-clock + token cap enforced"
+      },
+      "low": {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "examples/phase3aPrep/evidence/explicitKillSwitchAndResourceLimits/low.md",
+        "rationale": "soft warnings emitted at 80% of token cap; documented in operator runbook"
+      }
+    },
+    "anomalyAndDriftDetectionPlaceholder": {
+      "high": {
+        "key": "anomalyAndDriftDetectionPlaceholder",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "examples/phase3aPrep/evidence/anomalyAndDriftDetectionPlaceholder/high.md",
+        "rationale": "placeholder hook records run_id + verdict; no auto-trigger"
+      },
+      "low": {
+        "key": "anomalyAndDriftDetectionPlaceholder",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "examples/phase3aPrep/evidence/anomalyAndDriftDetectionPlaceholder/low.md",
+        "rationale": "drift threshold ranges documented; alert wiring deferred"
+      }
+    },
+    "rollbackProof": {
+      "high": {
+        "key": "rollbackProof",
+        "priority": "high",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "rollback rehearsal pending — operator has not yet completed the deletion-path drill"
+      },
+      "low": {
+        "key": "rollbackProof",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "examples/phase3aPrep/evidence/rollbackProof/low.md",
+        "rationale": "rehearsal step in operator runbook covers the deletion path"
+      }
+    },
+    "humanApprovalBoundary": {
+      "high": {
+        "key": "humanApprovalBoundary",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "examples/phase3aPrep/evidence/humanApprovalBoundary/high.md",
+        "rationale": "promotion gate requires explicit human-approval record"
+      },
+      "low": {
+        "key": "humanApprovalBoundary",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "examples/phase3aPrep/evidence/humanApprovalBoundary/low.md",
+        "rationale": "approval-request UI surfaces the change diff before submit"
+      }
+    },
+    "metricsClockReadiness": {
+      "high": {
+        "key": "metricsClockReadiness",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "examples/phase3aPrep/evidence/metricsClockReadiness/high.md",
+        "rationale": "brierMetricsClock reports isReady=true after warmup window"
+      },
+      "low": {
+        "key": "metricsClockReadiness",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "examples/phase3aPrep/evidence/metricsClockReadiness/low.md",
+        "rationale": "dashboard panel surfaces metrics-clock health alongside verifier health"
+      }
+    },
+    "noPublicAction": {
+      "high": {
+        "key": "noPublicAction",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "examples/phase3aPrep/evidence/noPublicAction/high.md",
+        "rationale": "candidate produces no outbound network call, no posting, no replying"
+      },
+      "low": {
+        "key": "noPublicAction",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "examples/phase3aPrep/evidence/noPublicAction/low.md",
+        "rationale": "operator runbook documents how to confirm no-public-action by reading engine_events for the run_id"
+      }
+    }
+  }
+}
