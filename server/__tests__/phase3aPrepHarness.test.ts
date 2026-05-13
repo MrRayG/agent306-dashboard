@@ -502,10 +502,26 @@ describe("Track A — source-level guards", () => {
 // ── Production runtime isolation ──────────────────────────────────────────
 
 describe("Track A — production runtime isolation", () => {
-  it("is NOT imported by any module under server/ (other than its own test)", () => {
+  it("is NOT imported by any module under server/ except the advisory attestation adapter (and its tests)", () => {
     const SERVER_DIR = path.join(REPO_ROOT, "server");
     const MODULE_BASENAME = "phase3aPrepHarness";
     const SELF_BASENAME   = path.basename(new URL(import.meta.url).pathname);
+
+    // Track A / Phase 3a-proper introduced the FIRST authorized in-process
+    // consumer of the harness: the advisory promotion-gate attestation
+    // adapter. The adapter is read-only, returns telemetry that NEVER
+    // flips `canPromote(rec).ok` (Pin 11 boundary), and is itself
+    // exercised by two test files. No other server-side module is
+    // permitted to import the harness — extending this set is a
+    // deliberate boundary change that requires updating this allow-list
+    // (which is the visible signal that a new authorized consumer was
+    // added).
+    const ALLOWED_SERVER_IMPORTERS = new Set([
+      "phase3aPrepAttestation.ts",            // server/eval/phase3aPrepAttestation.ts — the adapter
+      "phase3aPrepAttestation.test.ts",       // server/__tests__/phase3aPrepAttestation.test.ts — adapter unit tests
+      "promotionGateAttestation.test.ts",     // server/__tests__/promotionGateAttestation.test.ts — gate integration tests
+    ]);
+
     const offenders: string[] = [];
 
     function walk(dir: string): void {
@@ -517,6 +533,7 @@ describe("Track A — production runtime isolation", () => {
         if (!/\.(ts|tsx|mts|cts|js|mjs|cjs)$/.test(entry.name)) continue;
         if (path.basename(full) === `${MODULE_BASENAME}.ts`) continue;
         if (path.basename(full) === SELF_BASENAME) continue;
+        if (ALLOWED_SERVER_IMPORTERS.has(path.basename(full))) continue;
         const text = fs.readFileSync(full, "utf8");
         const importRe = new RegExp(`from\\s+["'][^"']*${MODULE_BASENAME}[^"']*["']`);
         if (importRe.test(text)) {
@@ -527,7 +544,7 @@ describe("Track A — production runtime isolation", () => {
 
     walk(SERVER_DIR);
     assert.deepEqual(offenders, [],
-      `Phase 3a-prep harness must not be imported by any module under server/ yet. Offenders: ${offenders.join(", ")}`);
+      `Phase 3a-prep harness must not be imported by any module under server/ except the authorized advisory-attestation adapter and its tests. Offenders: ${offenders.join(", ")}`);
   });
 
   it("is NOT imported by any script under scripts/ other than the Phase 3a-prep-c manual CLI runner", () => {
