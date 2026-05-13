@@ -11,17 +11,115 @@
  * concurrent test files would race on it. Dynamic imports preserve source
  * order and pin db.ts to the temp path. See PR #292 for the original
  * flake (CI aggregate suite).
+ *
+ * Phase 2n drain #17 — Path B + template hardening:
+ *   The file previously created TMP_DIR under `process.cwd()` (the repo
+ *   root) as `tmp-claimMapVerify-*`. The dynamic-import pattern already
+ *   neutralised the shared-`agent306.db` race, but the repo-root tmp
+ *   directory leaked across runs and would trip the canonical drain
+ *   `before()` pin ("TMP must NOT live under repo root"). The fix:
+ *   route TMP through `os.tmpdir()` instead of `process.cwd()`, then
+ *   upgrade the file to the canonical drain template (env-var pin
+ *   above node:test import, ORIGINAL_* capture/restore, loud-failure
+ *   pin, 7-file snapshots, after() hook diff, 8-assertion contract).
  */
 
-import { describe, it, beforeEach } from "node:test";
-import assert from "node:assert/strict";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 
-const TMP_DIR = fs.mkdtempSync(path.join(process.cwd(), "tmp-claimMapVerify-"));
+const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "phase2n-drain17-claimMapVerifierMap-test-"));
+const ORIGINAL_DB_PATH  = process.env.DB_PATH;
+const ORIGINAL_DATA_DIR = process.env.DATA_DIR;
+const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
 process.env.DB_PATH = path.join(TMP_DIR, "test.db");
 process.env.DATA_DIR = TMP_DIR;
-process.env.NODE_ENV = "test";
+process.env.NODE_ENV = process.env.NODE_ENV ?? "test";
+
+import { describe, it, before, beforeEach, after } from "node:test";
+import assert from "node:assert/strict";
+
+const REPO_ROOT = path.resolve(new URL(".", import.meta.url).pathname, "../..");
+const REAL_RESEARCH_LAB    = path.join(REPO_ROOT, "data", "research_lab.json");
+const REAL_MEMORY_KB       = path.join(REPO_ROOT, "data", "memory_knowledge.json");
+const REAL_AGENT_GOALS     = path.join(REPO_ROOT, "data", "agent_goals.json");
+const REAL_COMPETENCY      = path.join(REPO_ROOT, "data", "competencyProfile.json");
+const REAL_DECISION_LEDGER = path.join(REPO_ROOT, "data", "experiment_decision_events.jsonl");
+const REPO_RECORDS_LEDGER  = path.join(REPO_ROOT, "data", "sandbox_registration_records.jsonl");
+const REAL_DB              = path.join(REPO_ROOT, "data", "agent306.db");
+
+function snapshot(p: string): { exists: boolean; content?: string } {
+  if (!fs.existsSync(p)) return { exists: false };
+  return { exists: true, content: fs.readFileSync(p, "utf8") };
+}
+function dbStat(p: string): { exists: boolean; size?: number; mtimeMs?: number } {
+  if (!fs.existsSync(p)) return { exists: false };
+  const st = fs.statSync(p);
+  return { exists: true, size: st.size, mtimeMs: st.mtimeMs };
+}
+const RESEARCH_SNAPSHOT        = snapshot(REAL_RESEARCH_LAB);
+const MEMORY_SNAPSHOT          = snapshot(REAL_MEMORY_KB);
+const AGENT_GOALS_SNAPSHOT     = snapshot(REAL_AGENT_GOALS);
+const COMPETENCY_SNAPSHOT      = snapshot(REAL_COMPETENCY);
+const DECISION_LEDGER_SNAPSHOT = snapshot(REAL_DECISION_LEDGER);
+const REPO_RECORDS_SNAPSHOT    = snapshot(REPO_RECORDS_LEDGER);
+const DB_SNAPSHOT              = dbStat(REAL_DB);
+
+before(() => {
+  // Loud-failure pin (drain template).
+  const tmpRoot = fs.realpathSync(os.tmpdir());
+  const tmpReal = fs.realpathSync(TMP_DIR);
+  if (!tmpReal.startsWith(tmpRoot)) {
+    throw new Error(`claimMapVerifierMap isolation broke: TMP not under os.tmpdir(): ${tmpReal}`);
+  }
+  if (tmpReal.startsWith(REPO_ROOT)) {
+    throw new Error(`claimMapVerifierMap isolation broke: TMP under repo root: ${tmpReal}`);
+  }
+  if (process.env.DATA_DIR !== TMP_DIR) {
+    throw new Error(`claimMapVerifierMap isolation broke: DATA_DIR drifted to ${process.env.DATA_DIR}`);
+  }
+  if (process.env.DB_PATH !== path.join(TMP_DIR, "test.db")) {
+    throw new Error(`claimMapVerifierMap isolation broke: DB_PATH drifted to ${process.env.DB_PATH}`);
+  }
+});
+
+after(() => {
+  if (ORIGINAL_DATA_DIR === undefined) delete process.env.DATA_DIR;
+  else process.env.DATA_DIR = ORIGINAL_DATA_DIR;
+  if (ORIGINAL_DB_PATH === undefined) delete process.env.DB_PATH;
+  else process.env.DB_PATH = ORIGINAL_DB_PATH;
+  if (ORIGINAL_NODE_ENV === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = ORIGINAL_NODE_ENV;
+  try { fs.rmSync(TMP_DIR, { recursive: true, force: true }); } catch {}
+
+  const afterSnap = (p: string) => snapshot(p);
+  for (const [label, beforeSnap, p] of [
+    ["research_lab.json",                   RESEARCH_SNAPSHOT,        REAL_RESEARCH_LAB],
+    ["memory_knowledge.json",               MEMORY_SNAPSHOT,          REAL_MEMORY_KB],
+    ["agent_goals.json",                    AGENT_GOALS_SNAPSHOT,     REAL_AGENT_GOALS],
+    ["competencyProfile.json",              COMPETENCY_SNAPSHOT,      REAL_COMPETENCY],
+    ["experiment_decision_events.jsonl",    DECISION_LEDGER_SNAPSHOT, REAL_DECISION_LEDGER],
+    ["sandbox_registration_records.jsonl",  REPO_RECORDS_SNAPSHOT,    REPO_RECORDS_LEDGER],
+  ] as const) {
+    const a = afterSnap(p);
+    if (beforeSnap.exists) {
+      if (!a.exists) throw new Error(`claimMapVerifierMap tests removed live ${label}!`);
+      if (a.content !== beforeSnap.content) throw new Error(`claimMapVerifierMap tests mutated live ${label}!`);
+    } else {
+      if (a.exists) throw new Error(`claimMapVerifierMap tests created live ${label}!`);
+    }
+  }
+
+  const dbAfter = dbStat(REAL_DB);
+  if (DB_SNAPSHOT.exists) {
+    if (!dbAfter.exists) throw new Error(`claimMapVerifierMap tests removed live agent306.db!`);
+    if (dbAfter.size !== DB_SNAPSHOT.size || dbAfter.mtimeMs !== DB_SNAPSHOT.mtimeMs) {
+      throw new Error(`claimMapVerifierMap tests mutated live agent306.db (size/mtime changed)!`);
+    }
+  } else if (dbAfter.exists) {
+    throw new Error(`claimMapVerifierMap tests created live agent306.db!`);
+  }
+});
 
 import type { VerifierReport } from "../claimVerifier.js";
 
@@ -182,5 +280,54 @@ describe("claimMapVerifierMap (Roadmap A2)", () => {
       report,
     });
     assert.equal(matches.length, 0);
+  });
+});
+
+// ── File-level isolation contract ───────────────────────────────────────────
+//
+// Drain template contract — matches drains #2–#16. Drain #17 is a Path B
+// fix: the file previously created TMP_DIR under `process.cwd()` (repo
+// root) as `tmp-claimMapVerify-*`. Dynamic imports already neutralised
+// the agent306.db race, but the repo-root tmp directory leaked across
+// runs. Fix: route TMP through `os.tmpdir()`. This contract block
+// upgrades the file to the canonical drain template.
+describe("claimMapVerifierMap — file-level isolation contract", () => {
+  it("DATA_DIR is redirected to this run's tmpdir", () => {
+    assert.equal(process.env.DATA_DIR, TMP_DIR, "DATA_DIR must point at this run's TMP");
+    const tmpRoot = fs.realpathSync(os.tmpdir());
+    assert.ok(fs.realpathSync(TMP_DIR).startsWith(tmpRoot), "TMP must live under os.tmpdir()");
+    assert.ok(!fs.realpathSync(TMP_DIR).startsWith(REPO_ROOT), "TMP must NOT live under repo root");
+    assert.equal(process.env.DB_PATH, path.join(TMP_DIR, "test.db"), "DB_PATH must point at TMP/test.db");
+  });
+
+  const watched: Array<[string, { exists: boolean; content?: string }, string]> = [
+    ["research_lab.json",                   RESEARCH_SNAPSHOT,        REAL_RESEARCH_LAB],
+    ["memory_knowledge.json",               MEMORY_SNAPSHOT,          REAL_MEMORY_KB],
+    ["agent_goals.json",                    AGENT_GOALS_SNAPSHOT,     REAL_AGENT_GOALS],
+    ["competencyProfile.json",              COMPETENCY_SNAPSHOT,      REAL_COMPETENCY],
+    ["experiment_decision_events.jsonl",    DECISION_LEDGER_SNAPSHOT, REAL_DECISION_LEDGER],
+    ["sandbox_registration_records.jsonl",  REPO_RECORDS_SNAPSHOT,    REPO_RECORDS_LEDGER],
+  ];
+  for (const [label, before, p] of watched) {
+    it(`live ${label} is unchanged at file-level checkpoint`, () => {
+      const cur = snapshot(p);
+      if (before.exists) {
+        assert.ok(cur.exists, `live ${label} disappeared`);
+        assert.equal(cur.content, before.content, `live ${label} mutated`);
+      } else {
+        assert.equal(cur.exists, false, `live ${label} was created`);
+      }
+    });
+  }
+
+  it("live agent306.db is unchanged at file-level checkpoint (WAL-aware)", () => {
+    const cur = dbStat(REAL_DB);
+    if (DB_SNAPSHOT.exists) {
+      assert.ok(cur.exists, "live agent306.db disappeared");
+      assert.equal(cur.size, DB_SNAPSHOT.size, "agent306.db size changed");
+      assert.equal(cur.mtimeMs, DB_SNAPSHOT.mtimeMs, "agent306.db mtime changed");
+    } else {
+      assert.equal(cur.exists, false, "live agent306.db was created");
+    }
   });
 });
