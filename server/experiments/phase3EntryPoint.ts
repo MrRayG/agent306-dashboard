@@ -28,7 +28,7 @@
  * checkpoint, this file is a documentation + structural anchor only —
  * importing it confers no authority.
  *
- * Naming: `phase3a.v2` is the current schema version. Any change to the
+ * Naming: `phase3a.v3` is the current schema version. Any change to the
  * boundary contract (criteria added/removed, kind widened, etc.)
  * REQUIRES bumping this version and updating every dependent
  * assertion. Silent edits are a contract drift and the boundary
@@ -41,6 +41,14 @@
  *     attestation schema) to `PHASE3_NEVER_AUTHORIZED_BY`. Criteria
  *     list, entry kind, and boundary contract are UNCHANGED — the bump
  *     reflects only a widened negative-space declaration.
+ *   - phase3a.v3: Track A / Phase 3a-prep-c. Adds
+ *     `scripts/runManualPhase3aPrepEvaluation.ts` (the manual CLI
+ *     runner over the prep harness) to `PHASE3_NEVER_AUTHORIZED_BY`.
+ *     Same posture as the other `runManual*.ts` runners: propose-only,
+ *     read-only, stdout-only, no scheduler, no auto-apply, no public
+ *     action. Criteria list, entry kind, and boundary contract are
+ *     UNCHANGED — the bump reflects only a widened negative-space
+ *     declaration.
  * ───────────────────────────────────────────────────────────────────────────
  */
 
@@ -49,7 +57,7 @@ import type { Phase3GateCriterionKey } from "./phase2CloseOutReport.js";
 /** Schema version for the Phase 3a entry-point contract. Bump on any
  *  change to the criteria list, the entry kind, or the boundary
  *  contract. */
-export const PHASE3_ENTRY_POINT_VERSION = "phase3a.v2" as const;
+export const PHASE3_ENTRY_POINT_VERSION = "phase3a.v3" as const;
 
 /** Human-readable label for the entry point. Stable across patch
  *  revisions; only changes when the schema version bumps. */
@@ -142,6 +150,12 @@ export const PHASE3_NEVER_AUTHORIZED_BY: readonly string[] = Object.freeze([
   // Declarative-only / zero-authority. Importing this module records
   // an attestation schema but confers no Phase 3a execution authority.
   "server/experiments/phase3aPrepHarness.ts",
+  // Track A / Phase 3a-prep-c — manual CLI runner over the prep harness.
+  // Propose-only / read-only / stdout-only. Reading a candidate file
+  // and printing a readiness verdict confers no Phase 3a execution
+  // authority — the verdict is a CANDIDATE signal for human-reviewed
+  // planning only.
+  "scripts/runManualPhase3aPrepEvaluation.ts",
 ] as const);
 
 /** Set of import paths that MUST NOT appear in any Phase 3a
@@ -175,6 +189,6 @@ export type Phase3EntryPrecondition = Phase3GateCriterionKey;
 
 /** Type of the aggregated entry-point constant. Dependent code that
  *  accepts a Phase 3a entry-point object should accept this type so a
- *  future variant (e.g. `phase3a.v2`) is a type-level breaking
+ *  future variant (e.g. `phase3a.v3`) is a type-level breaking
  *  change. */
 export type Phase3EntryPoint = typeof PHASE3_ENTRY_POINT;

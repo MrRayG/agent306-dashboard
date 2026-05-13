@@ -6,13 +6,18 @@
  *   1. Every exported constant is structurally frozen — `Object.isFrozen`
  *      returns true at the top level, and mutation attempts in strict
  *      mode throw.
- *   2. `PHASE3_ENTRY_POINT_VERSION` is the literal string `"phase3a.v2"`.
+ *   2. `PHASE3_ENTRY_POINT_VERSION` is the literal string `"phase3a.v3"`.
  *      Any change to this value is a contract break and MUST be paired
  *      with an updated test expectation. The bump from `phase3a.v1` to
  *      `phase3a.v2` was Track A / Phase 3a-prep-b: added
  *      `server/experiments/phase3aPrepHarness.ts` to
- *      `PHASE3_NEVER_AUTHORIZED_BY`.  Criteria list, entry kind, and
- *      boundary contract were UNCHANGED.
+ *      `PHASE3_NEVER_AUTHORIZED_BY`. The bump from `phase3a.v2` to
+ *      `phase3a.v3` was Track A / Phase 3a-prep-c: added
+ *      `scripts/runManualPhase3aPrepEvaluation.ts` (the manual CLI
+ *      runner over the prep harness) to `PHASE3_NEVER_AUTHORIZED_BY`.
+ *      In both bumps the criteria list, entry kind, and boundary
+ *      contract were UNCHANGED — only the negative-space declaration
+ *      widened.
  *   3. `PHASE3_ENTRY_KIND` is exactly `"summarizationTemplate"`. This
  *      matches the Phase 2 invariant that summarizationTemplate is the
  *      only enabled low-risk sandbox kind. Widening this value is a
@@ -69,8 +74,8 @@ const {
 // ── Schema version + identity ──────────────────────────────────────────────
 
 describe("Phase 2n-b — schema version + identity", () => {
-  it("pins PHASE3_ENTRY_POINT_VERSION to phase3a.v2", () => {
-    assert.equal(PHASE3_ENTRY_POINT_VERSION, "phase3a.v2");
+  it("pins PHASE3_ENTRY_POINT_VERSION to phase3a.v3", () => {
+    assert.equal(PHASE3_ENTRY_POINT_VERSION, "phase3a.v3");
   });
 
   it("PHASE3_ENTRY_POINT_LABEL mentions Phase 3a, sandbox-only, and human-approval", () => {
@@ -184,6 +189,13 @@ describe("Phase 2n-b — PHASE3_NEVER_AUTHORIZED_BY artefacts exist on disk", ()
     assert.ok(
       PHASE3_NEVER_AUTHORIZED_BY.includes("server/experiments/phase3aPrepHarness.ts"),
       "phase3a.v2 must list the Phase 3a-prep harness as a non-authorising artefact",
+    );
+  });
+
+  it("contains the Phase 3a-prep manual CLI runner (added in phase3a.v3)", () => {
+    assert.ok(
+      PHASE3_NEVER_AUTHORIZED_BY.includes("scripts/runManualPhase3aPrepEvaluation.ts"),
+      "phase3a.v3 must list the Phase 3a-prep manual CLI runner as a non-authorising artefact",
     );
   });
 });

@@ -20,6 +20,12 @@
  *   3. Schema-version pair lock: the close-out report's schema version
  *      and the Phase 3a entry-point version are coupled — bumping one
  *      requires bumping the other (this test pins the current pair).
+ *      Phase 3a-prep-b bumped the entry-point to `phase3a.v2`;
+ *      Phase 3a-prep-c bumped it to `phase3a.v3`. The close-out
+ *      schema version `phase2l-c.v1` is intentionally stable across
+ *      those bumps because neither widened the close-out contract —
+ *      both only widened the entry-point's negative-space declaration.
+ *      A future change to the close-out contract itself MUST bump both.
  *   4. Phase 3a entry-point structural isolation across the full repo:
  *      `phase3EntryPoint` is not imported by `server/index.ts`, any
  *      autonomy-monitor / scheduler / promotion-gate / apply-
@@ -44,7 +50,7 @@
  *      forbidden.
  *   9. ENTRY_POINT_VERSION single-source-of-truth: any subsequent
  *      Phase 3a PR must import the version constant rather than
- *      hard-code `"phase3a.v2"` elsewhere. Until Phase 3a code lands,
+ *      hard-code `"phase3a.v3"` elsewhere. Until Phase 3a code lands,
  *      the version string occurs ONLY in the entry-point module
  *      itself, this test, the entry-point's own unit test, and the
  *      Track A harness module / test (where it appears in doc
@@ -208,9 +214,9 @@ describe("Phase 2n-c — close-out FIXED_INVARIANTS parity", () => {
 // ── Pin 3: schema-version pair lock ────────────────────────────────────────
 
 describe("Phase 2n-c — schema-version pair lock", () => {
-  it("close-out schema version is 'phase2l-c.v1' and entry-point version is 'phase3a.v2'", () => {
+  it("close-out schema version is 'phase2l-c.v1' and entry-point version is 'phase3a.v3'", () => {
     assert.equal(PHASE2_CLOSE_OUT_REPORT_SCHEMA_VERSION, "phase2l-c.v1");
-    assert.equal(PHASE3_ENTRY_POINT_VERSION,             "phase3a.v2");
+    assert.equal(PHASE3_ENTRY_POINT_VERSION,             "phase3a.v3");
   });
 });
 
@@ -391,8 +397,8 @@ describe("Phase 2n-c — Phase 3a entry-point module self-import sanity", () => 
 // ── Pin 9: ENTRY_POINT_VERSION single-source-of-truth ─────────────────────
 
 describe("Phase 2n-c — ENTRY_POINT_VERSION single-source-of-truth", () => {
-  it("'phase3a.v2' literal occurs only in the entry-point module and its own / regression tests", () => {
-    const VERSION_LITERAL = "phase3a.v2";
+  it("'phase3a.v3' literal occurs only in the entry-point module and its own / regression tests", () => {
+    const VERSION_LITERAL = "phase3a.v3";
     const candidates = listSourceFiles([
       path.join(REPO_ROOT, "server"),
       path.join(REPO_ROOT, "scripts"),
@@ -402,14 +408,24 @@ describe("Phase 2n-c — ENTRY_POINT_VERSION single-source-of-truth", () => {
       "phase3EntryPoint.ts",
       "phase3EntryPoint.test.ts",
       "phase3BoundaryRegression.test.ts",
-      // Track A — Phase 3a-prep harness cross-references the entry-point
-      // version in its doc comments (and its test mirrors the rule). The
-      // harness does NOT export, embed, or reuse the literal in code —
-      // grep for `phase3a.v2` in these two files and you will only find
-      // it inside `/* ... */` blocks. The Pin 11 parity test pins the
-      // cross-module key-order equality independently.
+      // Track A — the Phase 3a-prep harness module and its test are
+      // pre-allowed: they belong to the Phase 3a-prep cluster, and if a
+      // future PR adds an entry-point-version cross-reference to either
+      // file's doc comments (the harness is paired but not version-
+      // identical), it must not trip this single-source-of-truth check.
+      // The harness does NOT export, embed, or reuse the literal in
+      // code. The Pin 11 parity test pins the cross-module key-order
+      // equality independently.
       "phase3aPrepHarness.ts",
       "phase3aPrepHarness.test.ts",
+      // Track A / Phase 3a-prep-c — the manual CLI runner over the
+      // prep harness and its test are pre-allowed for the same reason:
+      // they belong to the Phase 3a-prep cluster. Neither file embeds
+      // the entry-point-version literal in code or doc today, but the
+      // allowlist is the cluster-level contract so a future doc-only
+      // cross-reference cannot break this check.
+      "runManualPhase3aPrepEvaluation.ts",
+      "runManualPhase3aPrepEvaluation.test.ts",
     ]);
     const offenders: string[] = [];
     for (const file of candidates) {

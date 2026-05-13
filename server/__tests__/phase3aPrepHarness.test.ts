@@ -11,8 +11,8 @@
  *      paired with an updated test expectation. This literal is allowed
  *      to occur only in the harness module itself and its own test
  *      (the boundary regression suite enforces the corresponding rule
- *      for the entry-point `phase3a.v2` literal — we mirror it here
- *      for the harness).
+ *      for the entry-point version literal — we mirror it here for
+ *      the harness).
  *   3. `PHASE3A_PREP_PRECONDITION_KEYS` is an ordered array whose
  *      contents and order match `PHASE3_ENTRY_PRECONDITIONS` 1:1.
  *      This is also pinned cross-module in
@@ -530,20 +530,28 @@ describe("Track A — production runtime isolation", () => {
       `Phase 3a-prep harness must not be imported by any module under server/ yet. Offenders: ${offenders.join(", ")}`);
   });
 
-  it("is NOT imported by any script under scripts/", () => {
+  it("is NOT imported by any script under scripts/ other than the Phase 3a-prep-c manual CLI runner", () => {
     const SCRIPTS_DIR = path.join(REPO_ROOT, "scripts");
     if (!fs.existsSync(SCRIPTS_DIR)) return;
+    // Track A / Phase 3a-prep-c added the only allowed importer: the
+    // manual CLI runner. It is propose-only / read-only / stdout-only
+    // and itself listed in `PHASE3_NEVER_AUTHORIZED_BY`. No other
+    // script may import the harness.
+    const ALLOWED_SCRIPT_IMPORTERS = new Set([
+      "runManualPhase3aPrepEvaluation.ts",
+    ]);
     const offenders: string[] = [];
     for (const entry of fs.readdirSync(SCRIPTS_DIR, { withFileTypes: true })) {
       if (!entry.isFile()) continue;
       if (!/\.(ts|tsx|mts|cts|js|mjs|cjs)$/.test(entry.name)) continue;
+      if (ALLOWED_SCRIPT_IMPORTERS.has(entry.name)) continue;
       const text = fs.readFileSync(path.join(SCRIPTS_DIR, entry.name), "utf8");
       if (/from\s+["'][^"']*phase3aPrepHarness[^"']*["']/.test(text)) {
         offenders.push(entry.name);
       }
     }
     assert.deepEqual(offenders, [],
-      `Phase 3a-prep harness must not be imported by any script. Offenders: ${offenders.join(", ")}`);
+      `Phase 3a-prep harness must not be imported by any script except the propose-only manual CLI runner. Offenders: ${offenders.join(", ")}`);
   });
 });
 
