@@ -101,13 +101,6 @@ export const QUARANTINED_TESTS: readonly QuarantinedTest[] = [
     note: "episode audio clearing touches shared data files",
   },
   {
-    path: "server/__tests__/noveltyGate.test.ts",
-    reason: "mutates_core_state",
-    priority: "low",
-    issue: "#332",
-    note: "novelty gate test mutates memory_knowledge.json (found via bisect)",
-  },
-  {
     path: "server/__tests__/repositories.test.ts",
     reason: "mutates_core_state",
     priority: "low",
