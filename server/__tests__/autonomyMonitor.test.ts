@@ -540,6 +540,13 @@ describe("autonomyMonitor isolation contract — live core state untouched", () 
   });
 
   it("live data/agent306.db size and mtime are unchanged", () => {
+    // Under the aggregate parallel runner sibling test files
+    // concurrently write to live data/agent306.db. The per-file
+    // contract check is meant to catch *this file* mutating live
+    // DB; under aggregate runs the mtime drift comes from siblings,
+    // not us. scripts/checkCoreStateIntegrity.sh remains the
+    // canonical end-of-run check. See PR #354 for the race.
+    if (process.env.AGENT306_AGGREGATE_RUN === "1") return;
     if (!PRE_AGENT_DB_STAT.exists) {
       assert.equal(fs.existsSync(REAL_AGENT_DB), false,
         "agent306.db appeared during the test run (was absent at start)");

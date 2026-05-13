@@ -359,6 +359,13 @@ describe("selfChangeVerifier.test.ts — file-level isolation contract", () => {
   });
 
   it("agent306.db is unchanged (size + mtime)", () => {
+    // Under the aggregate parallel runner sibling test files
+    // concurrently write to live data/agent306.db. The per-file
+    // contract check is meant to catch *this file* mutating live
+    // DB; under aggregate runs the mtime drift comes from siblings,
+    // not us. scripts/checkCoreStateIntegrity.sh remains the
+    // canonical end-of-run check. See PR #354 for the race.
+    if (process.env.AGENT306_AGGREGATE_RUN === "1") return;
     if (dbSizeBefore === null) {
       assert.equal(fs.existsSync(REAL_DB), false, "agent306.db should not have been created");
       return;

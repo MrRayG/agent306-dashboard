@@ -97,10 +97,20 @@ if (INVOKED_AS_CLI) {
 
   console.error(`[runTests] discovered ${discovered.length} test file(s); running ${tests.length}`);
 
+  // AGENT306_AGGREGATE_RUN tells per-file isolation contracts that they
+  // are executing under the aggregate parallel runner (where sibling test
+  // files concurrently write to live data/agent306.db). The contract
+  // block's WAL-aware DB-stat assertion is meant to catch *this file*
+  // mutating live DB; under aggregate runs the live-DB mtime drift is
+  // caused by siblings, not by the file under test, so the contract
+  // skips that single assertion. Watched-JSON contracts still run, and
+  // the end-of-run scripts/checkCoreStateIntegrity.sh remains the
+  // canonical source-of-truth for "did the full suite mutate live DB".
+  // See PR #354 (drain #17) for the race that surfaced this.
   const tsxBin = path.join(ROOT, "node_modules", ".bin", "tsx");
   const child = spawn(tsxBin, ["--test", ...tests], {
     stdio: "inherit",
-    env: process.env,
+    env: { ...process.env, AGENT306_AGGREGATE_RUN: "1" },
   });
 
   child.on("exit", code => {

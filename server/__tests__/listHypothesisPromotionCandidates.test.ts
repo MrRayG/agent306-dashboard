@@ -134,20 +134,26 @@ after(() => {
   }
 
   // agent306.db: size + mtime check (WAL-aware).
-  if (DB_STAT_BEFORE === null) {
-    if (fs.existsSync(REAL_DB)) {
-      throw new Error("Phase 2l-e CLI tests created live agent306.db!");
-    }
-  } else {
-    if (!fs.existsSync(REAL_DB)) {
-      throw new Error("Phase 2l-e CLI tests removed live agent306.db!");
-    }
-    const st = fs.statSync(REAL_DB);
-    if (st.size !== DB_STAT_BEFORE.size) {
-      throw new Error(`Phase 2l-e CLI tests changed agent306.db size: ${DB_STAT_BEFORE.size} → ${st.size}`);
-    }
-    if (st.mtimeMs !== DB_STAT_BEFORE.mtimeMs) {
-      throw new Error(`Phase 2l-e CLI tests changed agent306.db mtime (WAL-aware check)`);
+  // Under aggregate parallel runs, sibling test files write to live
+  // data/agent306.db, drifting its mtime. Skip the per-file DB-stat
+  // check there; scripts/checkCoreStateIntegrity.sh runs the canonical
+  // end-of-suite check. See PR #354.
+  if (process.env.AGENT306_AGGREGATE_RUN !== "1") {
+    if (DB_STAT_BEFORE === null) {
+      if (fs.existsSync(REAL_DB)) {
+        throw new Error("Phase 2l-e CLI tests created live agent306.db!");
+      }
+    } else {
+      if (!fs.existsSync(REAL_DB)) {
+        throw new Error("Phase 2l-e CLI tests removed live agent306.db!");
+      }
+      const st = fs.statSync(REAL_DB);
+      if (st.size !== DB_STAT_BEFORE.size) {
+        throw new Error(`Phase 2l-e CLI tests changed agent306.db size: ${DB_STAT_BEFORE.size} → ${st.size}`);
+      }
+      if (st.mtimeMs !== DB_STAT_BEFORE.mtimeMs) {
+        throw new Error(`Phase 2l-e CLI tests changed agent306.db mtime (WAL-aware check)`);
+      }
     }
   }
 

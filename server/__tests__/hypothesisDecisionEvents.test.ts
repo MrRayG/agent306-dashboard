@@ -438,6 +438,13 @@ describe("DATA_DIR isolation", () => {
   });
 
   it("does not mutate live data/agent306.db (size + mtime stable)", () => {
+    // Under the aggregate parallel runner sibling test files
+    // concurrently write to live data/agent306.db. The per-file
+    // contract check is meant to catch *this file* mutating live
+    // DB; under aggregate runs the mtime drift comes from siblings,
+    // not us. scripts/checkCoreStateIntegrity.sh remains the
+    // canonical end-of-run check. See PR #354 for the race.
+    if (process.env.AGENT306_AGGREGATE_RUN === "1") return;
     // Size+mtime rather than byte-equality: WAL journals make a strict
     // byte-pin flaky. Either field changing indicates an unintended write.
     if (!AGENT_DB_STAT_SNAPSHOT.exists) {
