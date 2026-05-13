@@ -100,13 +100,6 @@ export const QUARANTINED_TESTS: readonly QuarantinedTest[] = [
     issue: "#332",
     note: "episode audio clearing touches shared data files",
   },
-  {
-    path: "server/__tests__/repositories.test.ts",
-    reason: "mutates_core_state",
-    priority: "low",
-    issue: "#332",
-    note: "repository tests mutate live DB / json paths",
-  },
 ];
 
 /** Quick lookup set of quarantined paths (relative to repo root). */
