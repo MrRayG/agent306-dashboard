@@ -8,6 +8,10 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
+import {
+  PromotionGateAuthorityPanel,
+  type PromotionGateAuthorityVisibility,
+} from "../components/PromotionGateAuthorityPanel";
 
 interface AutonomyStage {
   id:             string;
@@ -91,6 +95,7 @@ interface AutonomyMonitorSnapshot {
   generatedAt:    string;
   safetyBoundary: AutonomySafetyBoundary;
   runtime:        AutonomyRuntime;
+  promotionGateAuthority: PromotionGateAuthorityVisibility;
   stages:         AutonomyStage[];
   pipelineSummary: {
     implementedStageCount: number;
@@ -796,6 +801,7 @@ function RuntimeVisibilityPanel({ rt }: { rt: AutonomyRuntime }) {
   );
 }
 
+
 function SafetyBanner({ b }: { b: AutonomySafetyBoundary }) {
   return (
     <section style={{
@@ -868,6 +874,7 @@ export default function AutonomyMonitor() {
         <>
           <RuntimeVisibilityPanel rt={data.runtime} />
           <SafetyBanner b={data.safetyBoundary} />
+          <PromotionGateAuthorityPanel p={data.promotionGateAuthority} />
           <section style={{
             border: `1px solid ${BORDER}`,
             padding: "0.7rem 1rem",

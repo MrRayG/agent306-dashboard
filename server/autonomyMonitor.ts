@@ -91,6 +91,10 @@ import {
   type AutonomyRuntimeVisibility,
 } from "./autonomyRuntimeVisibility.js";
 import {
+  buildPromotionGateAuthorityVisibility,
+  type PromotionGateAuthorityVisibility,
+} from "./promotionGateAuthorityVisibility.js";
+import {
   scoreHypothesisRiskImpactBatch,
   summarizeRiskImpactScores,
   NEUTRAL_REASON_CODES,
@@ -166,6 +170,15 @@ export interface AutonomyMonitorSnapshot {
    * fields degrade to null on missing data.
    */
   runtime:        AutonomyRuntimeVisibility;
+  /**
+   * Phase 4 visibility block: read-only natural-language projection of the
+   * promotion-gate authority surface (Phase 4-a soft warning flag,
+   * Phase 4-b low-risk hard-block flag, per-risk-class verdicts, and a
+   * reference to the deterministic Phase 2m-b boundary audit). This block
+   * is non-authoritative and visibility-only — consumers must NOT read
+   * it into `canPromote(rec).ok`. Always present.
+   */
+  promotionGateAuthority: PromotionGateAuthorityVisibility;
   stages:         AutonomyStage[];
   /** Summary of "what is visible now / what remains" — text only. */
   pipelineSummary: {
@@ -1099,6 +1112,7 @@ export function buildAutonomyMonitorSnapshot(now: Date = new Date()): AutonomyMo
     generatedAt:    now.toISOString(),
     safetyBoundary: buildSafetyBoundary(),
     runtime:        buildAutonomyRuntimeVisibility(now),
+    promotionGateAuthority: buildPromotionGateAuthorityVisibility(),
     stages,
     pipelineSummary: {
       implementedStageCount: implemented,
