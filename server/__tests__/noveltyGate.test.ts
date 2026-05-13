@@ -2,18 +2,114 @@
  * Tests for Novelty Gate — KB self-check before [306 NEWS] framing.
  *
  * Run: npx tsx --test server/__tests__/noveltyGate.test.ts
+ *
+ * Phase 2n drain #12 — Path B isolation:
+ *   memoryEngine.addKnowledge() / archiveKnowledge() write to
+ *   memory_knowledge.json AND to agent306.db (transitive import of
+ *   repositories/db). Without DATA_DIR + DB_PATH redirects set BEFORE any
+ *   import that resolves dataPaths.ts (line 15: DATA_DIR captured at
+ *   module-eval time), writes land in the repo's live data/. The prior
+ *   `import { dataPath } from "../dataPaths.js"` static import was the
+ *   bug: it loaded dataPaths.js before this file's previous (nonexistent)
+ *   redirect ran. Fixed by setting env vars FIRST and inlining the
+ *   LOG_FILE path under TMP.
  */
 
-import { describe, it, beforeEach, afterEach, mock } from "node:test";
-import assert from "node:assert/strict";
-import fs from "fs";
-import { dataPath } from "../dataPaths.js";
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
 
-const LOG_FILE = dataPath("novelty_gate_log.json");
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "phase2n-drain12-novelty-test-"));
+process.env.DATA_DIR = TMP;
+process.env.DB_PATH = path.join(TMP, "test.db");
+
+import { describe, it, beforeEach, afterEach, before, after, mock } from "node:test";
+import assert from "node:assert/strict";
+
+const REPO_ROOT = path.resolve(new URL(".", import.meta.url).pathname, "../..");
+const REAL_RESEARCH_LAB    = path.join(REPO_ROOT, "data", "research_lab.json");
+const REAL_MEMORY_KB       = path.join(REPO_ROOT, "data", "memory_knowledge.json");
+const REAL_AGENT_GOALS     = path.join(REPO_ROOT, "data", "agent_goals.json");
+const REAL_COMPETENCY      = path.join(REPO_ROOT, "data", "competencyProfile.json");
+const REAL_DECISION_LEDGER = path.join(REPO_ROOT, "data", "experiment_decision_events.jsonl");
+const REPO_RECORDS_LEDGER  = path.join(REPO_ROOT, "data", "sandbox_registration_records.jsonl");
+const REAL_DB              = path.join(REPO_ROOT, "data", "agent306.db");
+
+function snapshot(p: string): { exists: boolean; content?: string } {
+  if (!fs.existsSync(p)) return { exists: false };
+  return { exists: true, content: fs.readFileSync(p, "utf8") };
+}
+function dbStat(p: string): { exists: boolean; size?: number; mtimeMs?: number } {
+  if (!fs.existsSync(p)) return { exists: false };
+  const st = fs.statSync(p);
+  return { exists: true, size: st.size, mtimeMs: st.mtimeMs };
+}
+const RESEARCH_SNAPSHOT        = snapshot(REAL_RESEARCH_LAB);
+const MEMORY_SNAPSHOT          = snapshot(REAL_MEMORY_KB);
+const AGENT_GOALS_SNAPSHOT     = snapshot(REAL_AGENT_GOALS);
+const COMPETENCY_SNAPSHOT      = snapshot(REAL_COMPETENCY);
+const DECISION_LEDGER_SNAPSHOT = snapshot(REAL_DECISION_LEDGER);
+const REPO_RECORDS_SNAPSHOT    = snapshot(REPO_RECORDS_LEDGER);
+const DB_SNAPSHOT              = dbStat(REAL_DB);
+
+// LOG_FILE is the novelty-gate log file the production module would write
+// to. By inlining the TMP path here (rather than importing dataPath()) we
+// avoid loading dataPaths.js before env vars are set.
+const LOG_FILE = path.join(TMP, "novelty_gate_log.json");
 
 function cleanLogFile() {
   try { if (fs.existsSync(LOG_FILE)) fs.unlinkSync(LOG_FILE); } catch {}
 }
+
+before(() => {
+  // Loud-failure pin (drain template).
+  const tmpRoot = fs.realpathSync(os.tmpdir());
+  const tmpReal = fs.realpathSync(TMP);
+  if (!tmpReal.startsWith(tmpRoot)) {
+    throw new Error(`noveltyGate isolation broke: TMP not under os.tmpdir(): ${tmpReal}`);
+  }
+  if (tmpReal.startsWith(REPO_ROOT)) {
+    throw new Error(`noveltyGate isolation broke: TMP under repo root: ${tmpReal}`);
+  }
+  if (process.env.DATA_DIR !== TMP) {
+    throw new Error(`noveltyGate isolation broke: DATA_DIR drifted to ${process.env.DATA_DIR}`);
+  }
+  if (process.env.DB_PATH !== path.join(TMP, "test.db")) {
+    throw new Error(`noveltyGate isolation broke: DB_PATH drifted to ${process.env.DB_PATH}`);
+  }
+});
+
+after(() => {
+  try { fs.rmSync(TMP, { recursive: true, force: true }); } catch {}
+
+  const after = (p: string) => snapshot(p);
+  for (const [label, before, p] of [
+    ["research_lab.json",                   RESEARCH_SNAPSHOT,        REAL_RESEARCH_LAB],
+    ["memory_knowledge.json",               MEMORY_SNAPSHOT,          REAL_MEMORY_KB],
+    ["agent_goals.json",                    AGENT_GOALS_SNAPSHOT,     REAL_AGENT_GOALS],
+    ["competencyProfile.json",              COMPETENCY_SNAPSHOT,      REAL_COMPETENCY],
+    ["experiment_decision_events.jsonl",    DECISION_LEDGER_SNAPSHOT, REAL_DECISION_LEDGER],
+    ["sandbox_registration_records.jsonl",  REPO_RECORDS_SNAPSHOT,    REPO_RECORDS_LEDGER],
+  ] as const) {
+    const a = after(p);
+    if (before.exists) {
+      if (!a.exists) throw new Error(`noveltyGate tests removed live ${label}!`);
+      if (a.content !== before.content) throw new Error(`noveltyGate tests mutated live ${label}!`);
+    } else {
+      if (a.exists) throw new Error(`noveltyGate tests created live ${label}!`);
+    }
+  }
+
+  const dbAfter = dbStat(REAL_DB);
+  if (DB_SNAPSHOT.exists) {
+    if (!dbAfter.exists) throw new Error(`noveltyGate tests removed live agent306.db!`);
+    if (dbAfter.size !== DB_SNAPSHOT.size || dbAfter.mtimeMs !== DB_SNAPSHOT.mtimeMs) {
+      throw new Error(`noveltyGate tests mutated live agent306.db (size/mtime changed)!`);
+    }
+  } else if (dbAfter.exists) {
+    throw new Error(`noveltyGate tests created live agent306.db!`);
+  }
+});
 
 // ── Mock KB state ─────────────────────────────────────────────────────────────
 
@@ -72,25 +168,34 @@ describe("NoveltyGate", () => {
     });
 
     it("should flag a topic with existing high-weight KB entries as NOT novel", async () => {
-      // Seed the KB with entries about a well-known topic
+      // Seed the KB with entries about a well-known topic.
+      //
+      // Directly push to KB with custom learnedAt — addKnowledge() always
+      // sets learnedAt=now (server/memoryEngine.ts:787), which would make
+      // the seeded entries appear < 6h old to noveltyGate's temporal
+      // analysis (ageHours < 6 → temporalScore = 0.8 → isNovel = true),
+      // defeating the test. Matches the pattern already used by the
+      // "recent mentions" / "old mentions" tests below in this same file.
       const oldDate = new Date();
       oldDate.setDate(oldDate.getDate() - 30); // 30 days ago
 
-      // Find existing entries about our test topic, or check against what we're about to add
       const testEntries = [
         makeKBEntry({
+          id: `kb_novelty_seed_arch_${Date.now()}`,
           title: "OpenAI GPT-5 Architecture Deep Dive",
           summary: "GPT-5 uses a revolutionary mixture of experts architecture with improved reasoning capabilities",
           weight: 8,
           learnedAt: oldDate.toISOString(),
         }),
         makeKBEntry({
+          id: `kb_novelty_seed_bench_${Date.now()}`,
           title: "GPT-5 Benchmark Results Analysis",
           summary: "GPT-5 achieves state of the art on multiple reasoning benchmarks including ARC-AGI",
           weight: 7,
           learnedAt: oldDate.toISOString(),
         }),
         makeKBEntry({
+          id: `kb_novelty_seed_launch_${Date.now()}`,
           title: "OpenAI GPT-5 Launch Coverage",
           summary: "OpenAI announced GPT-5 with major improvements in reasoning and multimodal understanding",
           weight: 9,
@@ -99,25 +204,28 @@ describe("NoveltyGate", () => {
       ];
 
       for (const entry of testEntries) {
-        addKnowledge(entry);
+        knowledge.entries.push(entry);
       }
 
-      const result = await checkNovelty(
-        "OpenAI Releases GPT-5 with Advanced Reasoning",
-        "OpenAI has launched GPT-5, featuring improved reasoning and multimodal capabilities",
-        ["OpenAI", "GPT-5"],
-      );
+      try {
+        const result = await checkNovelty(
+          "OpenAI Releases GPT-5 with Advanced Reasoning",
+          "OpenAI has launched GPT-5, featuring improved reasoning and multimodal capabilities",
+          ["OpenAI", "GPT-5"],
+        );
 
-      assert.equal(result.isNovel, false, "Topic with established KB entries should NOT be novel");
-      assert.ok(result.existingEntries.length > 0, "Should have found existing entries");
-      assert.ok(
-        result.recommendation === "analysis" || result.recommendation === "skip",
-        `recommendation should be "analysis" or "skip", got "${result.recommendation}"`,
-      );
-
-      // Clean up test entries
-      for (const entry of testEntries) {
-        archiveKnowledge(entry.id);
+        assert.equal(result.isNovel, false, "Topic with established KB entries should NOT be novel");
+        assert.ok(result.existingEntries.length > 0, "Should have found existing entries");
+        assert.ok(
+          result.recommendation === "analysis" || result.recommendation === "skip",
+          `recommendation should be "analysis" or "skip", got "${result.recommendation}"`,
+        );
+      } finally {
+        // Clean up by removing from array (matches push-based seeding)
+        for (const entry of testEntries) {
+          const idx = knowledge.entries.findIndex(e => e.id === entry.id);
+          if (idx !== -1) knowledge.entries.splice(idx, 1);
+        }
       }
     });
 
@@ -240,5 +348,52 @@ describe("NoveltyGate", () => {
       const limited = getNoveltyGateLog(3);
       assert.ok(limited.length <= 3, `Should return at most 3 entries, got ${limited.length}`);
     });
+  });
+});
+
+// ── File-level isolation contract ───────────────────────────────────────────
+//
+// Drain template contract — matches drains #2–#11. Drain #12 is a Path B
+// fix: memoryEngine.addKnowledge / archiveKnowledge mutate
+// memory_knowledge.json AND agent306.db. Env-var redirect BEFORE first
+// import of dataPaths.ts resolves the capture-at-import-time bug.
+describe("noveltyGate — file-level isolation contract", () => {
+  it("DATA_DIR is redirected to this run's tmpdir", () => {
+    assert.equal(process.env.DATA_DIR, TMP, "DATA_DIR must point at this run's TMP");
+    const tmpRoot = fs.realpathSync(os.tmpdir());
+    assert.ok(fs.realpathSync(TMP).startsWith(tmpRoot), "TMP must live under os.tmpdir()");
+    assert.ok(!fs.realpathSync(TMP).startsWith(REPO_ROOT), "TMP must NOT live under repo root");
+    assert.equal(process.env.DB_PATH, path.join(TMP, "test.db"), "DB_PATH must point at TMP/test.db");
+  });
+
+  const watched: Array<[string, { exists: boolean; content?: string }, string]> = [
+    ["research_lab.json",                   RESEARCH_SNAPSHOT,        REAL_RESEARCH_LAB],
+    ["memory_knowledge.json",               MEMORY_SNAPSHOT,          REAL_MEMORY_KB],
+    ["agent_goals.json",                    AGENT_GOALS_SNAPSHOT,     REAL_AGENT_GOALS],
+    ["competencyProfile.json",              COMPETENCY_SNAPSHOT,      REAL_COMPETENCY],
+    ["experiment_decision_events.jsonl",    DECISION_LEDGER_SNAPSHOT, REAL_DECISION_LEDGER],
+    ["sandbox_registration_records.jsonl",  REPO_RECORDS_SNAPSHOT,    REPO_RECORDS_LEDGER],
+  ];
+  for (const [label, before, p] of watched) {
+    it(`live ${label} is unchanged at file-level checkpoint`, () => {
+      const cur = snapshot(p);
+      if (before.exists) {
+        assert.ok(cur.exists, `live ${label} disappeared`);
+        assert.equal(cur.content, before.content, `live ${label} mutated`);
+      } else {
+        assert.equal(cur.exists, false, `live ${label} was created`);
+      }
+    });
+  }
+
+  it("live agent306.db is unchanged at file-level checkpoint (WAL-aware)", () => {
+    const cur = dbStat(REAL_DB);
+    if (DB_SNAPSHOT.exists) {
+      assert.ok(cur.exists, "live agent306.db disappeared");
+      assert.equal(cur.size, DB_SNAPSHOT.size, "agent306.db size changed");
+      assert.equal(cur.mtimeMs, DB_SNAPSHOT.mtimeMs, "agent306.db mtime changed");
+    } else {
+      assert.equal(cur.exists, false, "live agent306.db was created");
+    }
   });
 });
