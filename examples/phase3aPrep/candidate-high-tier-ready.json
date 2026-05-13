@@ -1,0 +1,118 @@
+{
+  "candidateId": "example-high-tier-ready",
+  "kind": "summarizationTemplate",
+  "preconditions": {
+    "reversibleLowRiskActionOnly": {
+      "high": {
+        "key": "reversibleLowRiskActionOnly",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "examples/phase3aPrep/evidence/reversibleLowRiskActionOnly/high.md",
+        "rationale": "candidate trial only emits propose-only summaries; no public-action sink wired"
+      },
+      "low": {
+        "key": "reversibleLowRiskActionOnly",
+        "priority": "low",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "low-tier reversal-path rehearsal not yet completed"
+      }
+    },
+    "explicitKillSwitchAndResourceLimits": {
+      "high": {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "examples/phase3aPrep/evidence/explicitKillSwitchAndResourceLimits/high.md",
+        "rationale": "kill switch wired; per-run wall-clock + token cap enforced"
+      },
+      "low": {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "priority": "low",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "soft-warning thresholds not yet documented in operator runbook"
+      }
+    },
+    "anomalyAndDriftDetectionPlaceholder": {
+      "high": {
+        "key": "anomalyAndDriftDetectionPlaceholder",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "examples/phase3aPrep/evidence/anomalyAndDriftDetectionPlaceholder/high.md",
+        "rationale": "placeholder hook records run_id + verdict; no auto-trigger"
+      },
+      "low": {
+        "key": "anomalyAndDriftDetectionPlaceholder",
+        "priority": "low",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "drift threshold ranges not yet documented"
+      }
+    },
+    "rollbackProof": {
+      "high": {
+        "key": "rollbackProof",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "examples/phase3aPrep/evidence/rollbackProof/high.md",
+        "rationale": "every state mutation guarded by sandbox_registration_records row; deletion = rollback"
+      },
+      "low": {
+        "key": "rollbackProof",
+        "priority": "low",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "rehearsal step in operator runbook not yet finalised"
+      }
+    },
+    "humanApprovalBoundary": {
+      "high": {
+        "key": "humanApprovalBoundary",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "examples/phase3aPrep/evidence/humanApprovalBoundary/high.md",
+        "rationale": "promotion gate requires explicit human-approval record"
+      },
+      "low": {
+        "key": "humanApprovalBoundary",
+        "priority": "low",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "approval-request UI diff-view not yet wired"
+      }
+    },
+    "metricsClockReadiness": {
+      "high": {
+        "key": "metricsClockReadiness",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "examples/phase3aPrep/evidence/metricsClockReadiness/high.md",
+        "rationale": "brierMetricsClock reports isReady=true after warmup window"
+      },
+      "low": {
+        "key": "metricsClockReadiness",
+        "priority": "low",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "dashboard panel for metrics-clock health not yet surfaced"
+      }
+    },
+    "noPublicAction": {
+      "high": {
+        "key": "noPublicAction",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "examples/phase3aPrep/evidence/noPublicAction/high.md",
+        "rationale": "candidate produces no outbound network call, no posting, no replying"
+      },
+      "low": {
+        "key": "noPublicAction",
+        "priority": "low",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "operator runbook documentation deferred"
+      }
+    }
+  }
+}
