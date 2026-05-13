@@ -41,14 +41,34 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 
-const REPO_ROOT = path.resolve(new URL(".", import.meta.url).pathname, "../..");
+// Phase 2n drain #7 — Redirect DATA_DIR and DB_PATH so any accidental ledger,
+// data, or db write lands in the tmpdir rather than the repo's `data/`.
+// promotionBoundaryAudit is fs-read-only and the CLI is I/O-injected, so this
+// test does no live writes today; we set these env vars eagerly so the test
+// fails loudly if that ever changes. These env vars MUST be set before any
+// module that captures them at import time (server/dataPaths.ts, server/db.ts)
+// is imported transitively.
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "phase2mb-promotion-audit-"));
+process.env.DATA_DIR = TMP;
+process.env.DB_PATH = path.join(TMP, "test.db");
 
-const REAL_RESEARCH_LAB = path.join(REPO_ROOT, "data", "research_lab.json");
-const REAL_MEMORY_KB    = path.join(REPO_ROOT, "data", "memory_knowledge.json");
+const REPO_ROOT = path.resolve(new URL(".", import.meta.url).pathname, "../..");
+const REAL_DATA_DIR = path.join(REPO_ROOT, "data");
+
+// Source / module files the audit reads (and the test reads them too).
+const REAL_RESEARCH_LAB = path.join(REAL_DATA_DIR, "research_lab.json");
+const REAL_MEMORY_KB    = path.join(REAL_DATA_DIR, "memory_knowledge.json");
 const REAL_ENGINE       = path.join(REPO_ROOT, "server", "selfRecommendationEngine.ts");
 const REAL_GATE         = path.join(REPO_ROOT, "server", "eval", "promotionGate.ts");
 const AUDIT_MODULE      = path.join(REPO_ROOT, "server", "eval", "promotionBoundaryAudit.ts");
 const CLI_MODULE        = path.join(REPO_ROOT, "scripts", "auditPromotionBoundary.ts");
+
+// 7 watched live-state files for the file-level isolation contract.
+const REAL_AGENT_GOALS  = path.join(REAL_DATA_DIR, "agent_goals.json");
+const REAL_COMPETENCY   = path.join(REAL_DATA_DIR, "competencyProfile.json");
+const REAL_LEDGER       = path.join(REAL_DATA_DIR, "experiment_decision_events.jsonl");
+const REAL_SANDBOX_REG  = path.join(REAL_DATA_DIR, "sandbox_registration_records.jsonl");
+const REAL_DB           = path.join(REAL_DATA_DIR, "agent306.db");
 
 const {
   auditPromotionBoundary,
@@ -72,42 +92,66 @@ const {
 
 const PINNED_NOW = "2026-05-12T17:00:00.000Z";
 
-function snapshot(p: string): { exists: boolean; content?: string } {
-  if (!fs.existsSync(p)) return { exists: false };
-  return { exists: true, content: fs.readFileSync(p, "utf8") };
+function readIfExists(p: string): string | null {
+  return fs.existsSync(p) ? fs.readFileSync(p, "utf8") : null;
 }
 
-const REAL_RESEARCH_SNAPSHOT = snapshot(REAL_RESEARCH_LAB);
-const REAL_MEMORY_SNAPSHOT   = snapshot(REAL_MEMORY_KB);
-const REAL_ENGINE_SNAPSHOT   = snapshot(REAL_ENGINE);
-const REAL_GATE_SNAPSHOT     = snapshot(REAL_GATE);
-const ENV_SNAPSHOT           = JSON.stringify(process.env);
+// Snapshots used by the isolation contract describe block at the bottom of
+// this file. Captured in before() so they reflect repo state right when this
+// test process starts running.
+let researchLabBefore: string | null = null;
+let memoryKbBefore:    string | null = null;
+let engineBefore:      string | null = null;
+let gateBefore:        string | null = null;
+let agentGoalsBefore:  string | null = null;
+let competencyBefore:  string | null = null;
+let ledgerBefore:      string | null = null;
+let sandboxRegBefore:  string | null = null;
+let dbSizeBefore:  number | null = null;
+let dbMtimeBefore: number | null = null;
 
-const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "phase2mb-promotion-audit-"));
+const ENV_SNAPSHOT = JSON.stringify(process.env);
+
+before(() => {
+  // Loud-failure pin: assert env-var redirects still point at TMP, not at
+  // the real repo `data/`. If anything earlier in the test process mutated
+  // these, fail before we can write live state.
+  assert.ok(
+    TMP.startsWith(os.tmpdir()) && !TMP.startsWith(REAL_DATA_DIR),
+    `TMP must be under os.tmpdir() and not under real data/: TMP=${TMP}`,
+  );
+  assert.equal(process.env.DATA_DIR, TMP, "DATA_DIR drifted from TMP");
+  assert.equal(
+    process.env.DB_PATH,
+    path.join(TMP, "test.db"),
+    "DB_PATH drifted from TMP/test.db",
+  );
+
+  researchLabBefore = readIfExists(REAL_RESEARCH_LAB);
+  memoryKbBefore    = readIfExists(REAL_MEMORY_KB);
+  engineBefore      = readIfExists(REAL_ENGINE);
+  gateBefore        = readIfExists(REAL_GATE);
+  agentGoalsBefore  = readIfExists(REAL_AGENT_GOALS);
+  competencyBefore  = readIfExists(REAL_COMPETENCY);
+  ledgerBefore      = readIfExists(REAL_LEDGER);
+  sandboxRegBefore  = readIfExists(REAL_SANDBOX_REG);
+  if (fs.existsSync(REAL_DB)) {
+    const st = fs.statSync(REAL_DB);
+    dbSizeBefore = st.size;
+    dbMtimeBefore = st.mtimeMs;
+  }
+});
 
 after(() => {
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch {}
 
-  for (const [label, before, p] of [
-    ["research_lab.json",                  REAL_RESEARCH_SNAPSHOT, REAL_RESEARCH_LAB],
-    ["memory_knowledge.json",              REAL_MEMORY_SNAPSHOT,   REAL_MEMORY_KB],
-    ["server/selfRecommendationEngine.ts", REAL_ENGINE_SNAPSHOT,   REAL_ENGINE],
-    ["server/eval/promotionGate.ts",       REAL_GATE_SNAPSHOT,     REAL_GATE],
-  ] as const) {
-    const after_ = snapshot(p);
-    if (before.exists) {
-      if (!after_.exists) throw new Error(`Phase 2m-b tests removed live ${label}!`);
-      if (after_.content !== before.content) {
-        throw new Error(`Phase 2m-b tests mutated live ${label}!`);
-      }
-    } else {
-      if (after_.exists) throw new Error(`Phase 2m-b tests created live ${label}!`);
-    }
-  }
-
+  // Preserve the original Phase 2m-b env-drift guard.
   const beforeEnv = JSON.parse(ENV_SNAPSHOT);
   for (const key of Object.keys(process.env)) {
     if (beforeEnv[key] !== process.env[key]) {
+      // DATA_DIR and DB_PATH were intentionally set at file-eval time before
+      // ENV_SNAPSHOT was taken, so they should match beforeEnv. If anything
+      // ELSE changed, fail loudly.
       throw new Error(`Phase 2m-b tests mutated env var ${key}`);
     }
   }
@@ -627,5 +671,69 @@ describe("Phase 2m-b — formal hypothesis remains non-ready", () => {
     assert.notEqual(hyp.hygieneTag, "ready_for_experiment");
     assert.notEqual(hyp.status, "confirmed");
     assert.notEqual(hyp.status, "running");
+  });
+});
+
+// ── File-level isolation contract ────────────────────────────────────────────
+//
+// Phase 2n drain #7 — mirrors the contract added by drains #1–#6. Asserts
+// that after every test in this file runs, none of the 7 watched live-state
+// files under repo `data/` have been touched, and that env-var redirects are
+// still pinned. The promotionBoundaryAudit test predates the drain template
+// and already snapshotted four files (research_lab.json, memory_knowledge.json,
+// server/selfRecommendationEngine.ts, server/eval/promotionGate.ts); those
+// engine + gate checks are preserved at the top of the file via the existing
+// hand-rolled assertions, and this block extends coverage to the canonical
+// 7 watched live-state files.
+
+describe("promotionBoundaryAudit.test.ts — file-level isolation contract", () => {
+  it("env-var redirects are still pointing at TMP", () => {
+    assert.equal(process.env.DATA_DIR, TMP);
+    assert.equal(process.env.DB_PATH, path.join(TMP, "test.db"));
+  });
+
+  it("research_lab.json is unchanged", () => {
+    assert.equal(readIfExists(REAL_RESEARCH_LAB), researchLabBefore);
+  });
+
+  it("memory_knowledge.json is unchanged", () => {
+    assert.equal(readIfExists(REAL_MEMORY_KB), memoryKbBefore);
+  });
+
+  it("agent_goals.json is unchanged", () => {
+    assert.equal(readIfExists(REAL_AGENT_GOALS), agentGoalsBefore);
+  });
+
+  it("competencyProfile.json is unchanged", () => {
+    assert.equal(readIfExists(REAL_COMPETENCY), competencyBefore);
+  });
+
+  it("experiment_decision_events.jsonl is unchanged", () => {
+    assert.equal(readIfExists(REAL_LEDGER), ledgerBefore);
+  });
+
+  it("sandbox_registration_records.jsonl is unchanged", () => {
+    assert.equal(readIfExists(REAL_SANDBOX_REG), sandboxRegBefore);
+  });
+
+  it("agent306.db is unchanged (size + mtime)", () => {
+    if (dbSizeBefore === null) {
+      assert.equal(fs.existsSync(REAL_DB), false, "agent306.db should not have been created");
+      return;
+    }
+    assert.ok(fs.existsSync(REAL_DB), "agent306.db must still exist");
+    const st = fs.statSync(REAL_DB);
+    assert.equal(st.size, dbSizeBefore, "agent306.db size changed");
+    assert.equal(st.mtimeMs, dbMtimeBefore, "agent306.db mtime changed (WAL-aware check)");
+  });
+
+  // Preserve the original Phase 2m-b source-file pins (engine + gate) so the
+  // audit-helper test surface remains protected alongside the 7 watched files.
+  it("server/selfRecommendationEngine.ts is unchanged", () => {
+    assert.equal(readIfExists(REAL_ENGINE), engineBefore);
+  });
+
+  it("server/eval/promotionGate.ts is unchanged", () => {
+    assert.equal(readIfExists(REAL_GATE), gateBefore);
   });
 });
