@@ -45,14 +45,14 @@
  * status value REQUIRES a schema version bump.
  *
  * Naming: `phase3aPrep.v1` is this harness's own schema version. It is
- * INDEPENDENT of `phase3EntryPoint.ts`'s `phase3a.v2`. The two are
- * version-paired by the Phase 2n-c regression suite (key-order parity)
- * but can evolve independently as long as the key order stays in lock-
- * step.
+ * INDEPENDENT of `phase3EntryPoint.ts`'s entry-point schema version
+ * (currently the third revision). The two are version-paired by the
+ * Phase 2n-c regression suite (key-order parity) but can evolve
+ * independently as long as the key order stays in lock-step.
  *
  * Authority: this file IS in `phase3EntryPoint.ts`'s
  * `PHASE3_NEVER_AUTHORIZED_BY` list (added in Phase 3a-prep-b alongside
- * the entry-point schema bump `phase3a.v1 -> phase3a.v2`). The list is
+ * the entry-point schema bump to the second revision). The list is
  * the explicit negative-space declaration: even with this harness
  * recording a `"fully_prepared"` verdict, Phase 3a execution remains
  * gated by an out-of-band human approval. Importing this module records
