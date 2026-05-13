@@ -51,6 +51,34 @@
  * widen any public-action surface. Pin 7 and Pin 11 are preserved.
  * Removing the channel is a single-file delete plus removing the
  * `softWarnings` field on this type.
+ *
+ * Operator-gated hard block for low-risk (Phase 4-b)
+ * ──────────────────────────────────────────────────
+ * `PROMOTION_GATE_BLOCK_LOW_RISK_ON_PHASE3A_PREP_NOT_READY` is a
+ * SEPARATE, EXPLICIT operator gate from the Phase 4-a soft warning
+ * channel. When this env var is set to the literal string `"true"`
+ * (case-insensitive) AND the recommendation is `risk === "low"`, the
+ * gate authoritatively BLOCKS promotion when the Phase 3a-prep readiness
+ * attestation is missing, fails to parse, or reports a verdict other
+ * than `fully_prepared`. The block prevents the apply outcome through
+ * the existing `gate.ok=false` path — there is NO new write site to
+ * `status: "applied"` and NO new public-action surface.
+ *
+ * Scope is deliberately narrow:
+ *   - LOW-RISK ONLY. Medium- and high-risk recommendations are NOT
+ *     affected even with the flag on (they follow their existing
+ *     golden-set policy and high-risk override flag).
+ *   - DEFAULT OFF. Without the env var the gate is byte-identical to
+ *     the pre-Phase-4-b baseline for every recommendation.
+ *   - This is the FIRST AUTHORITATIVE USE of the attestation channel:
+ *     `promotionBoundaryAudit` is updated in lock-step to recognise
+ *     the new authorised block source. Pin 11 (single-write-site
+ *     boundary) is preserved — `applyRecommendation` still routes only
+ *     through `canPromote(rec).ok` and there is exactly one
+ *     `status: "applied"` write site.
+ *   - The Phase 4-a soft-warning channel is independent: the flag
+ *     above does not influence Phase 4-b, and vice-versa. Operators
+ *     who enabled only Phase 4-a will see no behavioral change here.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -99,6 +127,93 @@ export function readPhase3aPrepReadyRequiredFlag(): boolean {
   const v = process.env[PROMOTION_GATE_REQUIRE_PHASE3A_PREP_READY_ENV];
   if (typeof v !== "string") return false;
   return v.toLowerCase() === "true";
+}
+
+/** Env-flag identifier for the Phase 4-b operator-gated authoritative
+ *  hard block on LOW-RISK promotions when the phase3aPrep readiness
+ *  attestation is missing/parse_error/not `fully_prepared`. When this
+ *  env var is set to the literal string `"true"` (case-insensitive)
+ *  AND the recommendation is `risk === "low"`, the gate flips
+ *  `ok = false` and surfaces a `"phase3aPrep readiness not satisfied
+ *  …"` failure string. Default behavior (flag unset / any other value
+ *  / non-low risk) is unchanged. */
+export const PROMOTION_GATE_BLOCK_LOW_RISK_ON_PHASE3A_PREP_NOT_READY_ENV =
+  "PROMOTION_GATE_BLOCK_LOW_RISK_ON_PHASE3A_PREP_NOT_READY" as const;
+
+/** Pure helper: read the Phase 4-b flag from `process.env`. Mirrors
+ *  `readPhase3aPrepReadyRequiredFlag` semantics: returns `true` ONLY
+ *  for the literal string `"true"` (case-insensitive). Any other
+ *  value, including unset / empty / `"1"` / `"yes"`, returns `false`.
+ *  Phase 4-a and Phase 4-b flags are deliberately INDEPENDENT —
+ *  enabling one does not enable the other. */
+export function readPhase3aPrepBlockLowRiskFlag(): boolean {
+  const v = process.env[PROMOTION_GATE_BLOCK_LOW_RISK_ON_PHASE3A_PREP_NOT_READY_ENV];
+  if (typeof v !== "string") return false;
+  return v.toLowerCase() === "true";
+}
+
+/** Pure helper (exported for tests): derive Phase 4-b hard-block
+ *  failure strings from the attestation array.
+ *
+ *  Phase 4-b authoritatively blocks LOW-RISK promotion when the
+ *  operator opts in (`flagOn === true`) AND the recommendation is
+ *  `risk === "low"` AND the phase3aPrep readiness signal is missing,
+ *  parse_error, or its verdict is anything other than `fully_prepared`.
+ *
+ *  Returns an array of failure strings:
+ *    - empty array  → no Phase 4-b block applies. Either the flag is
+ *      off, the rec is not low-risk, or readiness is `fully_prepared`.
+ *    - one entry    → the gate must surface this as an authoritative
+ *      failure (the caller folds it into `failures` and sets `ok=false`).
+ *
+ *  This helper NEVER reads env / clock / fs / db — `flagOn` and `risk`
+ *  are passed by the caller. It is pure: same input → same output.
+ *
+ *  Pin 11: the helper returns FAILURE STRINGS, not a new write path.
+ *  The caller still owns the `ok` boolean and routes everything
+ *  through the existing `failures.length === 0` gate. The single
+ *  authoritative `status: "applied"` write site is unchanged. */
+export function derivePhase3aPrepHardBlockFailures(
+  attestations: ReadonlyArray<PromotionAttestation>,
+  flagOn: boolean,
+  risk: SelfRecommendation["risk"],
+): string[] {
+  if (!flagOn) return [];
+  if (risk !== "low") return [];
+
+  // Find the phase3aPrep attestation (the adapter contract guarantees
+  // at most one is emitted today; if a future adapter emits multiple
+  // we conservatively examine the first).
+  const att = attestations.find(a => a.source === "phase3aPrep");
+
+  if (att === undefined) {
+    return [
+      `phase3aPrep readiness attestation missing on low-risk promotion ` +
+      `(operator opted in via ${PROMOTION_GATE_BLOCK_LOW_RISK_ON_PHASE3A_PREP_NOT_READY_ENV}=true). ` +
+      `Hard block — attach a phase3aPrepCandidate evidence marker with verdict='fully_prepared' to unblock.`,
+    ];
+  }
+
+  if (att.status === "parse_error") {
+    return [
+      `phase3aPrep readiness attestation could not be parsed (parseError: ${att.parseError ?? "unknown"}); ` +
+      `operator opted in via ${PROMOTION_GATE_BLOCK_LOW_RISK_ON_PHASE3A_PREP_NOT_READY_ENV}=true. ` +
+      `Hard block — fix the phase3aPrepCandidate evidence payload to unblock.`,
+    ];
+  }
+
+  const verdict = att.readiness?.verdict;
+  if (verdict !== "fully_prepared") {
+    const candidate = att.candidateId.length > 0 ? att.candidateId : "(unknown)";
+    const verdictStr = verdict ?? "(missing)";
+    return [
+      `phase3aPrep readiness for candidate '${candidate}' is '${verdictStr}' ` +
+      `(operator opted in via ${PROMOTION_GATE_BLOCK_LOW_RISK_ON_PHASE3A_PREP_NOT_READY_ENV}=true). ` +
+      `Hard block — drive the candidate to verdict='fully_prepared' to unblock.`,
+    ];
+  }
+
+  return [];
 }
 
 /** Pure helper (exported for tests): derive Phase 4-a soft warnings from
@@ -173,6 +288,14 @@ export async function canPromote(rec: SelfRecommendation): Promise<PromotionResu
   // the same value, mirroring `attestations`. Read after `ok` is decided
   // — never feeds into the gate's working state.
   const flagOn = readPhase3aPrepReadyRequiredFlag();
+  // Phase 4-b: env flag snapshot taken ONCE, independent of Phase 4-a.
+  // When set AND the rec is low-risk AND the phase3aPrep readiness
+  // signal is missing/parse_error/not `fully_prepared`, the gate
+  // appends an authoritative failure and `ok` flips to `false`. This
+  // is the FIRST authoritative use of the attestation channel and is
+  // mirrored by an update to `promotionBoundaryAudit` so the boundary
+  // model recognises the new authorised block source.
+  const hardBlockFlagOn = readPhase3aPrepBlockLowRiskFlag();
 
   // Single helper used by every return path. Computes soft warnings
   // strictly AFTER the gate has decided its own `ok` / `failures` /
@@ -218,6 +341,21 @@ export async function canPromote(rec: SelfRecommendation): Promise<PromotionResu
       for (const f of failed.slice(0, 5)) {
         console.warn(`  ${f.setName}.${f.caseId}: ${f.reason ?? "fail"}`);
       }
+    }
+    // Phase 4-b: operator-gated hard block on low-risk when the
+    // phase3aPrep readiness attestation is missing / parse_error /
+    // not `fully_prepared`. Default off; when off, this branch is a
+    // no-op and we fall through to `finalize(true, ...)`. The block
+    // is routed through the existing `failures`/`ok` machinery — no
+    // new write site, no new mutation endpoint, no new public surface.
+    const hardBlockFailures = derivePhase3aPrepHardBlockFailures(
+      attestations,
+      hardBlockFlagOn,
+      rec.risk,
+    );
+    if (hardBlockFailures.length > 0) {
+      for (const f of hardBlockFailures) failures.push(f);
+      return finalize(false, failures, ranSets);
     }
     return finalize(true, failures, ranSets);
   }

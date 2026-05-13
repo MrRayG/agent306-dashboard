@@ -273,9 +273,56 @@ describe("Phase 2m-b — audit helper on the real repo", () => {
       "applyRecommendation_requires_approved_status",
       "apply_recommendation_function_exists",
       "engine_applied_writes_inside_applyRecommendation",
+      // Phase 4-b: confirms the gate declares the operator-gated
+      // authoritative-block flag literal for low-risk recs.
+      "phase4b_hard_block_flag_wired",
       "promotion_gate_exports_canPromote",
       "single_write_site_for_status_applied",
     ]);
+  });
+
+  // Phase 4-b: the audit acknowledges the new authoritative-block
+  // channel by asserting the gate source declares the flag literal.
+  // This is a SOURCE-LEVEL handshake (no runtime evaluation) — the
+  // audit must continue to satisfy violationCount=0 on the real repo.
+  it("Phase 4-b: phase4b_hard_block_flag_wired finding passes on real repo", () => {
+    const r = auditPromotionBoundary({ repoRoot: REPO_ROOT });
+    const f = r.findings.find(x => x.id === "phase4b_hard_block_flag_wired");
+    assert.ok(f, "expected phase4b_hard_block_flag_wired finding");
+    assert.equal(f!.ok, true, `detail: ${f!.detail}`);
+    assert.match(f!.detail, /PROMOTION_GATE_BLOCK_LOW_RISK_ON_PHASE3A_PREP_NOT_READY/);
+  });
+
+  it("Phase 4-b: audit fixture without the flag literal flags the finding", () => {
+    // Build a tiny fixture repo with a gate source that lacks the
+    // Phase 4-b authoritative-block flag literal. The other gate
+    // checks (canPromote export, etc.) still pass; only the Phase 4-b
+    // finding should fail. The engine source is the real one so the
+    // single-write-site contract still holds.
+    const fakeRoot = path.join(TMP, "fake-repo-no-phase4b-flag");
+    fs.mkdirSync(path.join(fakeRoot, "server", "eval"), { recursive: true });
+    fs.writeFileSync(
+      path.join(fakeRoot, "server", "selfRecommendationEngine.ts"),
+      fs.readFileSync(REAL_ENGINE, "utf8"),
+    );
+    // Minimal gate source: still exports canPromote async function,
+    // but does NOT declare the Phase 4-b flag literal anywhere.
+    fs.writeFileSync(
+      path.join(fakeRoot, "server", "eval", "promotionGate.ts"),
+      [
+        "export interface PromotionResult { ok: boolean; failures: string[]; ranSets: string[]; }",
+        "export async function canPromote(_rec: any): Promise<PromotionResult> {",
+        "  return { ok: true, failures: [], ranSets: [] };",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    const r = auditPromotionBoundary({ repoRoot: fakeRoot });
+    const f = r.findings.find(x => x.id === "phase4b_hard_block_flag_wired");
+    assert.ok(f);
+    assert.equal(f!.ok, false);
+    assert.match(f!.detail, /missing from promotion gate source/);
+    assert.equal(r.status, "violated");
   });
 });
 
