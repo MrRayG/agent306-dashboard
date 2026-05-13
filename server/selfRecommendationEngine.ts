@@ -276,6 +276,17 @@ export function rejectRecommendation(id: string, operator: string, note?: string
  * wants (draft PR, patch file) are produced by githubBridge when invoked
  * separately via the router. This keeps "apply" a bookkeeping transition
  * that promotionGate.canPromote() can be tested against in isolation.
+ *
+ * Advisory attestation persistence (Phase 3b-a)
+ * ─────────────────────────────────────────────
+ * After every gate evaluation that yields a non-empty attestation array,
+ * one row is appended to `engine_events` (engine="selfRecommendation",
+ * event="promotionAttestation"). This is OBSERVABLE-ONLY telemetry:
+ *   - It does not change the apply outcome (`ok`, `reason`, `failures`).
+ *   - It does not change the promotion boundary (Pin 11).
+ *   - It does not add any public-action surface.
+ * The single write site for `status: applied` remains the db.update below,
+ * gated by `canPromote(existing).ok` and `existing.status === 'approved'`.
  */
 export async function applyRecommendation(id: string, operator: string): Promise<ApplyResult> {
   const existing = getRecommendation(id);
@@ -287,6 +298,7 @@ export async function applyRecommendation(id: string, operator: string): Promise
   // itself may reference recommendations when scoring.
   const { canPromote } = await import("./eval/promotionGate.js");
   const gate = await canPromote(existing);
+  await persistPromotionAttestations(existing.id, gate);
   if (!gate.ok) {
     return { ok: false, reason: "promotion_gate_failed", failures: gate.failures };
   }
@@ -301,6 +313,46 @@ export async function applyRecommendation(id: string, operator: string): Promise
     .run();
   const row = getRecommendation(id)!;
   return { ok: true, recommendation: row, prUrl: row.prUrl ?? undefined, patchPath: row.patchPath ?? undefined };
+}
+
+/**
+ * Write one engine_events row capturing the advisory attestations the gate
+ * collected, when any are present. No-op when the attestation array is
+ * absent or empty — that keeps event-log noise proportional to actual
+ * attestation traffic. Lazy-imported so the structuredLog module is only
+ * touched on apply paths that actually have an attestation to persist.
+ *
+ * Pin 7 (read-only, no public action) and Pin 11 (boundary regression):
+ *   - This function never mutates `self_recommendations`.
+ *   - This function never reads/writes the gate's `ok` value.
+ *   - A throw inside logEvent is already swallowed by structuredLog; a
+ *     throw on the import path is caught here so a future regression
+ *     cannot break the apply-bookkeeping write site.
+ */
+async function persistPromotionAttestations(
+  recommendationId: string,
+  gate: { ok: boolean; failures: string[]; ranSets: string[]; attestations?: ReadonlyArray<unknown> },
+): Promise<void> {
+  const attestations = gate.attestations;
+  if (!attestations || attestations.length === 0) return;
+  try {
+    const { logEvent } = await import("./observability/structuredLog.js");
+    logEvent({
+      engine: "selfRecommendation",
+      event: "promotionAttestation",
+      level: "info",
+      data: {
+        recommendationId,
+        gateOk: gate.ok,
+        attestations,
+      },
+    });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn(
+      `[selfRecommendationEngine] attestation persistence failed (ignored): ${msg}`,
+    );
+  }
 }
 
 export function revertRecommendation(id: string, operator: string, note?: string): SelfRecommendation {
