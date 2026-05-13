@@ -76,28 +76,25 @@ describe("quarantinedTests manifest — source-level guards", () => {
 });
 
 describe("quarantinedTests manifest — shape", () => {
-  it("is non-empty (Issue #332 established the initial 19 culprits; drain reduces this number)", () => {
-    assert.ok(QUARANTINED_TESTS.length > 0);
+  it("is empty (all 19 original culprits drained off Issue #332: repositoryBakFallback, autonomyMonitor, hypothesisDecisionEvents, hypothesisSandboxExecution, listHypothesisPromotionCandidates, lowRiskSandboxRegistry, promotionBoundaryAudit, sandboxRegistrationRecords, selfChangeVerifier, summarizationSandboxFixtureRegistration, wiringEnhancements, noveltyGate, researchManuscriptApi, wisdomEngine, repositories, blogPipelineActivation, claimMapVerifierMap, clearEpisodeAudio, blogEngineLegacyErrorParity)", () => {
+    // The quarantine has been fully drained. The manifest scaffolding
+    // (types, filter, integrity guard hook-up) is kept so a future
+    // culprit can be added without re-introducing the plumbing.
+    assert.equal(QUARANTINED_TESTS.length, 0);
   });
 
-  it("contains exactly 1 quarantined culprit (19 - 18 drained: repositoryBakFallback, autonomyMonitor, hypothesisDecisionEvents, hypothesisSandboxExecution, listHypothesisPromotionCandidates, lowRiskSandboxRegistry, promotionBoundaryAudit, sandboxRegistrationRecords, selfChangeVerifier, summarizationSandboxFixtureRegistration, wiringEnhancements, noveltyGate, researchManuscriptApi, wisdomEngine, repositories, blogPipelineActivation, claimMapVerifierMap, clearEpisodeAudio)", () => {
-    // Each entry removed by a per-culprit drain PR updates this count.
-    // When this reaches 0 the quarantine mechanism itself can be removed.
-    assert.equal(QUARANTINED_TESTS.length, 1);
-  });
-
-  it("is sorted alphabetically by path", () => {
+  it("is sorted alphabetically by path (vacuously true when empty)", () => {
     const paths = QUARANTINED_TESTS.map(e => e.path);
     const sorted = [...paths].sort();
     assert.deepEqual(paths, sorted);
   });
 
-  it("has no duplicate paths", () => {
+  it("has no duplicate paths (vacuously true when empty)", () => {
     const paths = QUARANTINED_TESTS.map(e => e.path);
     assert.equal(new Set(paths).size, paths.length);
   });
 
-  it("every entry has a valid priority", () => {
+  it("every entry has a valid priority (vacuously true when empty)", () => {
     for (const entry of QUARANTINED_TESTS) {
       assert.ok(
         ALLOWED_PRIORITIES.has(entry.priority),
@@ -106,7 +103,7 @@ describe("quarantinedTests manifest — shape", () => {
     }
   });
 
-  it("every entry has a valid reason", () => {
+  it("every entry has a valid reason (vacuously true when empty)", () => {
     for (const entry of QUARANTINED_TESTS) {
       assert.ok(
         ALLOWED_REASONS.has(entry.reason),
@@ -115,20 +112,20 @@ describe("quarantinedTests manifest — shape", () => {
     }
   });
 
-  it("every entry references Issue #332 as the filing issue", () => {
+  it("every entry references Issue #332 as the filing issue (vacuously true when empty)", () => {
     for (const entry of QUARANTINED_TESTS) {
       assert.equal(entry.issue, "#332", `wrong issue for ${entry.path}`);
     }
   });
 
-  it("every entry has a non-empty note", () => {
+  it("every entry has a non-empty note (vacuously true when empty)", () => {
     for (const entry of QUARANTINED_TESTS) {
       assert.ok(entry.note.length > 0, `empty note for ${entry.path}`);
       assert.equal(entry.note.includes("\n"), false, `multi-line note for ${entry.path}`);
     }
   });
 
-  it("every path is under server/__tests__/ and ends with .test.ts", () => {
+  it("every path is under server/__tests__/ and ends with .test.ts (vacuously true when empty)", () => {
     for (const entry of QUARANTINED_TESTS) {
       assert.ok(
         entry.path.startsWith("server/__tests__/"),
@@ -138,7 +135,7 @@ describe("quarantinedTests manifest — shape", () => {
     }
   });
 
-  it("every quarantined path resolves to a real file on disk", () => {
+  it("every quarantined path resolves to a real file on disk (vacuously true when empty)", () => {
     for (const entry of QUARANTINED_TESTS) {
       const abs = path.join(REPO_ROOT, entry.path);
       assert.ok(fs.existsSync(abs), `manifest references missing file: ${entry.path}`);
@@ -147,14 +144,14 @@ describe("quarantinedTests manifest — shape", () => {
 });
 
 describe("quarantinedTests manifest — high/low priority split", () => {
-  it("has exactly 0 high-priority entries (was 11; drained: repositoryBakFallback, autonomyMonitor, hypothesisDecisionEvents, hypothesisSandboxExecution, listHypothesisPromotionCandidates, lowRiskSandboxRegistry, promotionBoundaryAudit, sandboxRegistrationRecords, selfChangeVerifier, summarizationSandboxFixtureRegistration, wiringEnhancements)", () => {
+  it("has exactly 0 high-priority entries (manifest fully drained)", () => {
     const counts = countByPriority();
     assert.equal(counts.high, 0, `expected 0 high, got ${counts.high}`);
   });
 
-  it("has exactly 1 low-priority entry", () => {
+  it("has exactly 0 low-priority entries (manifest fully drained)", () => {
     const counts = countByPriority();
-    assert.equal(counts.low, 1, `expected 1 low, got ${counts.low}`);
+    assert.equal(counts.low, 0, `expected 0 low, got ${counts.low}`);
   });
 
   it("high + low equals the manifest length", () => {
@@ -174,6 +171,10 @@ describe("QUARANTINED_TEST_PATHS lookup set", () => {
 });
 
 describe("applyQuarantineFilter — pure partition", () => {
+  // The manifest is empty post-drain, so the filter must keep every input.
+  // The `injected` overload below exercises the partition logic itself
+  // independently of the manifest contents.
+
   it("returns empty kept/excluded for empty input", () => {
     const result = applyQuarantineFilter([], REPO_ROOT);
     assert.deepEqual(result.kept, []);
@@ -192,28 +193,37 @@ describe("applyQuarantineFilter — pure partition", () => {
     assert.deepEqual(result.excluded, []);
   });
 
-  it("excludes a path that is in the manifest", () => {
-    const culprit = QUARANTINED_TESTS[0]!.path;
-    const abs = path.join(REPO_ROOT, culprit);
-    const result = applyQuarantineFilter([abs], REPO_ROOT);
-    assert.deepEqual(result.kept, []);
-    assert.deepEqual(result.excluded, [culprit]);
+  it("keeps every input when the manifest is empty (post-drain invariant)", () => {
+    const a = path.join(REPO_ROOT, "server", "__tests__", "a.test.ts");
+    const b = path.join(REPO_ROOT, "server", "__tests__", "b.test.ts");
+    const result = applyQuarantineFilter([a, b], REPO_ROOT);
+    assert.deepEqual(result.kept, [a, b]);
+    assert.deepEqual(result.excluded, []);
   });
 
-  it("partitions a mixed list correctly", () => {
-    const culprit = path.join(REPO_ROOT, QUARANTINED_TESTS[0]!.path);
+  it("excludes a path that IS in an injected manifest (filter logic check, manifest-independent)", () => {
+    const injected = new Set(["server/__tests__/legacy.test.ts"]);
+    const culprit = path.join(REPO_ROOT, "server", "__tests__", "legacy.test.ts");
+    const result = applyQuarantineFilter([culprit], REPO_ROOT, injected);
+    assert.deepEqual(result.kept, []);
+    assert.deepEqual(result.excluded, ["server/__tests__/legacy.test.ts"]);
+  });
+
+  it("partitions a mixed list correctly (filter logic check, manifest-independent)", () => {
+    const injected = new Set(["server/__tests__/legacy.test.ts"]);
+    const culprit = path.join(REPO_ROOT, "server", "__tests__", "legacy.test.ts");
     const clean = path.join(
       REPO_ROOT,
       "server",
       "__tests__",
       "runManualSafetyGatingValidationSummary.test.ts",
     );
-    const result = applyQuarantineFilter([culprit, clean], REPO_ROOT);
+    const result = applyQuarantineFilter([culprit, clean], REPO_ROOT, injected);
     assert.deepEqual(result.kept, [clean]);
-    assert.deepEqual(result.excluded, [QUARANTINED_TESTS[0]!.path]);
+    assert.deepEqual(result.excluded, ["server/__tests__/legacy.test.ts"]);
   });
 
-  it("excludes every culprit when given the full manifest as input", () => {
+  it("vacuously excludes every culprit when given the full (empty) manifest as input", () => {
     const inputs = QUARANTINED_TESTS.map(e => path.join(REPO_ROOT, e.path));
     const result = applyQuarantineFilter(inputs, REPO_ROOT);
     assert.deepEqual(result.kept, []);
@@ -229,24 +239,41 @@ describe("applyQuarantineFilter — pure partition", () => {
     assert.deepEqual(result.excluded, ["server/__tests__/x.test.ts"]);
   });
 
-  it("is deterministic across repeated calls", () => {
-    const inputs = QUARANTINED_TESTS.map(e => path.join(REPO_ROOT, e.path));
-    const first = applyQuarantineFilter(inputs, REPO_ROOT);
-    const second = applyQuarantineFilter(inputs, REPO_ROOT);
+  it("is deterministic across repeated calls (injected manifest)", () => {
+    const injected = new Set(["server/__tests__/x.test.ts"]);
+    const inputs = [
+      path.join(REPO_ROOT, "server", "__tests__", "x.test.ts"),
+      path.join(REPO_ROOT, "server", "__tests__", "y.test.ts"),
+    ];
+    const first = applyQuarantineFilter(inputs, REPO_ROOT, injected);
+    const second = applyQuarantineFilter(inputs, REPO_ROOT, injected);
     assert.deepEqual(first, second);
   });
 
-  it("does not mutate its input array", () => {
-    const inputs: string[] = QUARANTINED_TESTS.map(e => path.join(REPO_ROOT, e.path));
+  it("does not mutate its input array (injected manifest)", () => {
+    const injected = new Set(["server/__tests__/x.test.ts"]);
+    const inputs: string[] = [
+      path.join(REPO_ROOT, "server", "__tests__", "x.test.ts"),
+      path.join(REPO_ROOT, "server", "__tests__", "y.test.ts"),
+    ];
     const snapshot = [...inputs];
-    applyQuarantineFilter(inputs, REPO_ROOT);
+    applyQuarantineFilter(inputs, REPO_ROOT, injected);
     assert.deepEqual(inputs, snapshot);
   });
 });
 
 describe("manifest type — compile-time exhaustiveness sanity", () => {
-  it("typed entry shape round-trips", () => {
-    const sample: QuarantinedTest = QUARANTINED_TESTS[0]!;
+  it("typed entry shape round-trips (constructed sample, manifest is empty post-drain)", () => {
+    // The manifest is empty, so we construct a typed sample here to keep
+    // the type-level invariants exercised. This catches accidental shape
+    // changes to the QuarantinedTest interface even when the array is empty.
+    const sample: QuarantinedTest = {
+      path: "server/__tests__/example.test.ts",
+      reason: "mutates_core_state",
+      priority: "low",
+      issue: "#332",
+      note: "shape-only sample",
+    };
     assert.equal(typeof sample.path, "string");
     assert.equal(typeof sample.note, "string");
     assert.equal(typeof sample.priority, "string");
