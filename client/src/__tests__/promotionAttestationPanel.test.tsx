@@ -116,6 +116,48 @@ describe("Phase 3b-b — PromotionAttestationList renders events", () => {
     const html = renderToString(<PromotionAttestationList events={[]} />);
     assert.equal(html, "");
   });
+
+  /* ─── Phase 4-a: soft warning rendering ─────────────────────────── */
+
+  it("renders Phase 4-a soft warnings as advisory and never exposes a mutation control", () => {
+    const ev: PromotionAttestationEvent = {
+      ...evaluatedEvent(500, { verdict: "not_ready" }),
+      softWarnings: [
+        "phase3aPrep readiness for candidate 'cand-x' is 'not_ready' " +
+        "(operator opted in via PROMOTION_GATE_REQUIRE_PHASE3A_PREP_READY=true). " +
+        "ADVISORY ONLY — gate.ok is unaffected and apply is not blocked.",
+      ],
+    };
+    const html = renderToString(<PromotionAttestationList events={[ev]} />);
+    assert.match(html, /data-testid="promotion-soft-warnings-500"/);
+    assert.match(html, /data-soft-warning-count="1"/);
+    assert.match(html, /data-testid="promotion-soft-warning-500-0"/);
+    assert.match(html, /soft warning \(advisory/);
+    assert.match(html, /ADVISORY ONLY/);
+    // Pin 7: the soft warning must not surface any mutation control.
+    assert.doesNotMatch(html, /Apply/);
+    assert.doesNotMatch(html, /Approve/);
+    assert.doesNotMatch(html, /Reject/);
+    assert.doesNotMatch(html, /Revert/);
+    assert.doesNotMatch(html, /Draft PR/);
+  });
+
+  it("renders no soft-warning region when softWarnings is absent (pre-Phase-4-a row)", () => {
+    const ev = evaluatedEvent(501);
+    const html = renderToString(<PromotionAttestationList events={[ev]} />);
+    assert.doesNotMatch(html, /data-testid="promotion-soft-warnings-501"/);
+    assert.doesNotMatch(html, /soft warning/);
+  });
+
+  it("renders no soft-warning region when softWarnings is present-and-empty", () => {
+    const ev: PromotionAttestationEvent = {
+      ...evaluatedEvent(502),
+      softWarnings: [],
+    };
+    const html = renderToString(<PromotionAttestationList events={[ev]} />);
+    assert.doesNotMatch(html, /data-testid="promotion-soft-warnings-502"/);
+    assert.doesNotMatch(html, /soft warning/);
+  });
 });
 
 describe("Phase 3b-b — PromotionAttestationPanel handles event presence/absence", () => {

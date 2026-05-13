@@ -332,10 +332,23 @@ export async function applyRecommendation(id: string, operator: string): Promise
  */
 async function persistPromotionAttestations(
   recommendationId: string,
-  gate: { ok: boolean; failures: string[]; ranSets: string[]; attestations?: ReadonlyArray<unknown> },
+  gate: {
+    ok: boolean;
+    failures: string[];
+    ranSets: string[];
+    attestations?: ReadonlyArray<unknown>;
+    softWarnings?: ReadonlyArray<string>;
+  },
 ): Promise<void> {
   const attestations = gate.attestations;
   if (!attestations || attestations.length === 0) return;
+  // Phase 4-a: include operator-gated soft warnings on the persisted
+  // event row so they surface alongside the existing attestation data.
+  // Default to empty array when absent — the UI/router consumer treats
+  // absence and empty-array as equivalent, mirroring the attestation
+  // channel's contract. Soft warnings DO NOT affect gate.ok and DO NOT
+  // open any public-action surface (Pin 7 / Pin 11 preserved).
+  const softWarnings = Array.isArray(gate.softWarnings) ? gate.softWarnings : [];
   try {
     const { logEvent } = await import("./observability/structuredLog.js");
     logEvent({
@@ -346,6 +359,7 @@ async function persistPromotionAttestations(
         recommendationId,
         gateOk: gate.ok,
         attestations,
+        softWarnings,
       },
     });
   } catch (e: unknown) {
@@ -417,6 +431,13 @@ export interface PromotionAttestationEvent {
   emittedAt: string;
   gateOk: boolean;
   attestations: unknown[];
+  /** Phase 4-a: operator-gated advisory soft warnings persisted on the
+   *  same row. ALWAYS empty unless an operator opted in via
+   *  `PROMOTION_GATE_REQUIRE_PHASE3A_PREP_READY=true` at the time the
+   *  event was emitted. ADVISORY ONLY — no consumer is permitted to
+   *  treat presence as a block signal. Older rows (Phase 3b-a, before
+   *  Phase 4-a) read back as `[]`. */
+  softWarnings: string[];
 }
 
 /** Read-only: list `promotionAttestation` rows for one recommendation,
@@ -450,11 +471,20 @@ export function listPromotionAttestationsForRecommendation(
     }
     if (!parsed || parsed.recommendationId !== recommendationId) continue;
     const attestations = Array.isArray(parsed.attestations) ? parsed.attestations : [];
+    // Phase 4-a: tolerate older rows that pre-date the field. Only
+    // string entries are surfaced; non-string entries are silently
+    // dropped so a corrupted row never crashes the UI.
+    const rawWarnings = Array.isArray(parsed.softWarnings) ? parsed.softWarnings : [];
+    const softWarnings: string[] = [];
+    for (const w of rawWarnings) {
+      if (typeof w === "string") softWarnings.push(w);
+    }
     out.push({
       id: row.id,
       emittedAt: row.emittedAt,
       gateOk: Boolean(parsed.gateOk),
       attestations,
+      softWarnings,
     });
     if (out.length >= safeLimit) break;
   }
