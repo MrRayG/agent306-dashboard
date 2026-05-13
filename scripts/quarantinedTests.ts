@@ -122,13 +122,6 @@ export const QUARANTINED_TESTS: readonly QuarantinedTest[] = [
     note: "manuscript API tests write into research_lab.json",
   },
   {
-    path: "server/__tests__/sandboxRegistrationRecords.test.ts",
-    reason: "mutates_core_state",
-    priority: "high",
-    issue: "#332",
-    note: "append-only ledger tests write outside tmpdir",
-  },
-  {
     path: "server/__tests__/selfChangeVerifier.test.ts",
     reason: "mutates_core_state",
     priority: "high",

@@ -36,14 +36,27 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
+// Phase 2n drain #8 — Redirect both DATA_DIR and DB_PATH so any accidental
+// ledger / data / db write lands in the tmpdir rather than the repo's `data/`.
+// The original Phase 2e-c test only set DATA_DIR; DB_PATH is added here for
+// parity with the canonical drain template (server/dataPaths.ts captures
+// DATA_DIR and server/db.ts captures DB_PATH at import-time, so both must
+// be set before any transitively-imported repo module evaluates).
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "phase2ec-records-test-"));
 process.env.DATA_DIR = TMP;
+process.env.DB_PATH = path.join(TMP, "test.db");
 
 const REPO_ROOT = path.resolve(new URL(".", import.meta.url).pathname, "../..");
-const REAL_RESEARCH_LAB = path.join(REPO_ROOT, "data", "research_lab.json");
-const REAL_MEMORY_KB    = path.join(REPO_ROOT, "data", "memory_knowledge.json");
-const REAL_DECISION_LEDGER = path.join(REPO_ROOT, "data", "experiment_decision_events.jsonl");
-const REPO_RECORDS_LEDGER  = path.join(REPO_ROOT, "data", "sandbox_registration_records.jsonl");
+const REAL_DATA_DIR = path.join(REPO_ROOT, "data");
+const REAL_RESEARCH_LAB = path.join(REAL_DATA_DIR, "research_lab.json");
+const REAL_MEMORY_KB    = path.join(REAL_DATA_DIR, "memory_knowledge.json");
+const REAL_DECISION_LEDGER = path.join(REAL_DATA_DIR, "experiment_decision_events.jsonl");
+const REPO_RECORDS_LEDGER  = path.join(REAL_DATA_DIR, "sandbox_registration_records.jsonl");
+
+// 7 watched live-state files for the file-level isolation contract.
+const REAL_AGENT_GOALS = path.join(REAL_DATA_DIR, "agent_goals.json");
+const REAL_COMPETENCY  = path.join(REAL_DATA_DIR, "competencyProfile.json");
+const REAL_DB          = path.join(REAL_DATA_DIR, "agent306.db");
 
 const {
   appendRegistrationRecord,
@@ -116,11 +129,46 @@ function snapshot(p: string): { exists: boolean; content?: string } {
   if (!fs.existsSync(p)) return { exists: false };
   return { exists: true, content: fs.readFileSync(p, "utf8") };
 }
+function readIfExists(p: string): string | null {
+  return fs.existsSync(p) ? fs.readFileSync(p, "utf8") : null;
+}
 const RESEARCH_SNAPSHOT     = snapshot(REAL_RESEARCH_LAB);
 const MEMORY_SNAPSHOT       = snapshot(REAL_MEMORY_KB);
 const DECISION_LEDGER_SNAPSHOT = snapshot(REAL_DECISION_LEDGER);
 
+// Phase 2n drain #8 — extended baselines for the file-level isolation
+// contract. Captured in before() so they reflect repo state right when this
+// test process starts running.
+let agentGoalsBefore:  string | null = null;
+let competencyBefore:  string | null = null;
+let sandboxRegBefore:  string | null = null;
+let dbSizeBefore:  number | null = null;
+let dbMtimeBefore: number | null = null;
+
 before(() => {
+  // Loud-failure pin: assert env-var redirects still point at TMP, not at
+  // the real repo `data/`. If anything earlier in the test process mutated
+  // these, fail before we can write live state.
+  assert.ok(
+    TMP.startsWith(os.tmpdir()) && !TMP.startsWith(REAL_DATA_DIR),
+    `TMP must be under os.tmpdir() and not under real data/: TMP=${TMP}`,
+  );
+  assert.equal(process.env.DATA_DIR, TMP, "DATA_DIR drifted from TMP");
+  assert.equal(
+    process.env.DB_PATH,
+    path.join(TMP, "test.db"),
+    "DB_PATH drifted from TMP/test.db",
+  );
+
+  agentGoalsBefore = readIfExists(REAL_AGENT_GOALS);
+  competencyBefore = readIfExists(REAL_COMPETENCY);
+  sandboxRegBefore = readIfExists(REPO_RECORDS_LEDGER);
+  if (fs.existsSync(REAL_DB)) {
+    const st = fs.statSync(REAL_DB);
+    dbSizeBefore = st.size;
+    dbMtimeBefore = st.mtimeMs;
+  }
+
   __resetLowRiskSandboxRegistryForTests();
   try { fs.unlinkSync(LEDGER_FILE); } catch {}
 });
@@ -669,5 +717,63 @@ describe("readRecordsForRecordId", () => {
     assert.equal(none.length, 0);
     const blank = readRecordsForRecordId("");
     assert.equal(blank.length, 0);
+  });
+});
+
+// ── File-level isolation contract ────────────────────────────────────────────
+//
+// Phase 2n drain #8 — mirrors the contract added by drains #1–#7. Asserts
+// that after every test in this file runs, none of the 7 watched live-state
+// files under repo `data/` have been touched, and that env-var redirects are
+// still pinned. The Phase 2e-c test predates the drain template and already
+// snapshotted three files (research_lab.json, memory_knowledge.json, and the
+// Phase 2d decision-events ledger); those pins are preserved by the existing
+// "DATA_DIR isolation + non-mutation" describe block, and this block extends
+// coverage to the canonical 7 watched live-state files.
+
+describe("sandboxRegistrationRecords.test.ts — file-level isolation contract", () => {
+  it("env-var redirects are still pointing at TMP", () => {
+    assert.equal(process.env.DATA_DIR, TMP);
+    assert.equal(process.env.DB_PATH, path.join(TMP, "test.db"));
+  });
+
+  it("research_lab.json is unchanged", () => {
+    assert.equal(readIfExists(REAL_RESEARCH_LAB), RESEARCH_SNAPSHOT.content ?? null);
+  });
+
+  it("memory_knowledge.json is unchanged", () => {
+    assert.equal(readIfExists(REAL_MEMORY_KB), MEMORY_SNAPSHOT.content ?? null);
+  });
+
+  it("agent_goals.json is unchanged", () => {
+    assert.equal(readIfExists(REAL_AGENT_GOALS), agentGoalsBefore);
+  });
+
+  it("competencyProfile.json is unchanged", () => {
+    assert.equal(readIfExists(REAL_COMPETENCY), competencyBefore);
+  });
+
+  it("experiment_decision_events.jsonl is unchanged", () => {
+    assert.equal(readIfExists(REAL_DECISION_LEDGER), DECISION_LEDGER_SNAPSHOT.content ?? null);
+  });
+
+  it("sandbox_registration_records.jsonl in repo data/ is unchanged (no ledger leak)", () => {
+    // This is the SAFETY-CRITICAL pin for this drain: the ledger MUST live in
+    // TMP, never in the repo's data/ directory. The original Phase 2e-c test
+    // had a "ledger leaked into the repo's data/ directory" assertion, but
+    // this block strengthens it to the byte-equal baseline form used by all
+    // other drains.
+    assert.equal(readIfExists(REPO_RECORDS_LEDGER), sandboxRegBefore);
+  });
+
+  it("agent306.db is unchanged (size + mtime)", () => {
+    if (dbSizeBefore === null) {
+      assert.equal(fs.existsSync(REAL_DB), false, "agent306.db should not have been created");
+      return;
+    }
+    assert.ok(fs.existsSync(REAL_DB), "agent306.db must still exist");
+    const st = fs.statSync(REAL_DB);
+    assert.equal(st.size, dbSizeBefore, "agent306.db size changed");
+    assert.equal(st.mtimeMs, dbMtimeBefore, "agent306.db mtime changed (WAL-aware check)");
   });
 });
