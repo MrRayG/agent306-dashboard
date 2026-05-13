@@ -13,6 +13,21 @@
  * This module computes the violation count by doing a deterministic static
  * audit over the repository's TypeScript source files.
  *
+ * Phase 4-b update (FIRST authoritative use of the attestation channel)
+ * ──────────────────────────────────────────────────────────────────────
+ * Phase 4-b introduces an operator-gated, low-risk-only authoritative
+ * hard block on the promotion gate keyed by the phase3aPrep readiness
+ * attestation. The boundary topology is UNCHANGED: there is still
+ * exactly one `status: "applied"` write site in the engine, and the
+ * gate's `ok` boolean is still the only authorisation signal consumed
+ * by `applyRecommendation`. The audit acknowledges Phase 4-b by adding
+ * a non-fatal `phase4b_hard_block_flag_wired` finding that confirms
+ * the gate source declares the explicit operator gate
+ * `PROMOTION_GATE_BLOCK_LOW_RISK_ON_PHASE3A_PREP_NOT_READY`. The flag
+ * itself is opt-in and default-off; the finding asserts that the
+ * gate's authoritative authorisation surface includes Phase 4-b, NOT
+ * that the flag is enabled.
+ *
  * Phase 2m-b is intentionally:
  *
  *   - READ-ONLY: no fs.write, no DB, no env mutation, no ledger append, no
@@ -194,6 +209,15 @@ export interface PromotionBoundaryAuditResult {
 
 const SINGLE_WRITE_SITE_PATH = "server/selfRecommendationEngine.ts";
 const PROMOTION_GATE_PATH    = "server/eval/promotionGate.ts";
+
+/** Phase 4-b: the operator gate flag literal that authorises the
+ *  low-risk hard block on missing/parse_error/not-ready phase3aPrep
+ *  readiness. The audit confirms the gate source declares this flag
+ *  so any rename/removal that would silently widen the propose-only
+ *  posture surfaces as a failing finding. Default-off behaviour is
+ *  not asserted here — that contract is owned by the gate's tests. */
+const PHASE4B_HARD_BLOCK_FLAG_LITERAL =
+  "PROMOTION_GATE_BLOCK_LOW_RISK_ON_PHASE3A_PREP_NOT_READY";
 
 /**
  * Read a repo-relative source file as UTF-8 text. Returns `null` when the
@@ -537,6 +561,28 @@ export function auditPromotionBoundary(
       "engine source contains no status='applied' write — promotion path may have been removed; verify intentional",
     );
   }
+
+  // CHECK 7 (Phase 4-b) — gate source declares the operator-gated
+  // authoritative hard-block flag for low-risk phase3aPrep readiness.
+  // This is an ADDITIVE source-level check that recognises Phase 4-b
+  // as an AUTHORISED authoritative-block source routed through the
+  // existing `gate.ok` boundary. The check is satisfied by the
+  // presence of the literal flag name in the gate source; it does
+  // NOT assert the flag is enabled at runtime (default off).
+  const phase4bFlagWired =
+    gateSource !== null &&
+    gateSource.includes(PHASE4B_HARD_BLOCK_FLAG_LITERAL);
+  findings.push({
+    id:    "phase4b_hard_block_flag_wired",
+    label: "Promotion gate declares the Phase 4-b operator-gated low-risk hard-block flag",
+    ok:    phase4bFlagWired,
+    detail: phase4bFlagWired
+      ? `Found literal '${PHASE4B_HARD_BLOCK_FLAG_LITERAL}' in promotion gate source — ` +
+        "Phase 4-b authoritative-block channel is wired through the existing gate.ok boundary"
+      : `Literal '${PHASE4B_HARD_BLOCK_FLAG_LITERAL}' missing from promotion gate source — ` +
+        "Phase 4-b authoritative-block channel is not declared (operator-gated authorisation may have been silently removed)",
+    surfaces: [PROMOTION_GATE_PATH],
+  });
 
   // Aggregate metric: count of failing checks.
   const failingFindings = findings.filter(f => !f.ok);
