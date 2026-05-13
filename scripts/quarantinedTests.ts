@@ -108,13 +108,6 @@ export const QUARANTINED_TESTS: readonly QuarantinedTest[] = [
     note: "repository tests mutate live DB / json paths",
   },
   {
-    path: "server/__tests__/researchManuscriptApi.test.ts",
-    reason: "mutates_core_state",
-    priority: "low",
-    issue: "#332",
-    note: "manuscript API tests write into research_lab.json",
-  },
-  {
     path: "server/__tests__/wisdomEngine.test.ts",
     reason: "mutates_core_state",
     priority: "low",

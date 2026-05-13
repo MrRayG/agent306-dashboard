@@ -6,22 +6,59 @@
  *
  * Run: npx tsx --test server/__tests__/researchManuscriptApi.test.ts
  *
- * Route DATA_DIR to a throwaway tmp before any server-side import so the
- * research_lab.json loaded by the module under test is the fixture we seed
- * here — not the dev data/.
+ * Phase 2n drain #13 — isolation hardening:
+ *   The file already routed DATA_DIR to a tmp dir before importing
+ *   researchEngine.js (which captures dataPath("research_lab.json") at
+ *   module-eval time — server/researchEngine.ts:42). That partial
+ *   isolation kept research_lab.json safe in isolated runs, but the
+ *   file was quarantined out of an abundance of caution while the
+ *   integrity guard was being established. This drain upgrades it to
+ *   the full drain template: DB_PATH redirect, 7 watched-file
+ *   snapshots, loud-failure pin in before(), after() hook diffs all 7,
+ *   plus the 8-assertion file-level contract describe block at the end
+ *   — matching drains #2–#12.
  */
 
-import { describe, it, before, after } from "node:test";
-import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "research-manuscript-api-"));
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "phase2n-drain13-research-manuscript-api-"));
 const ORIGINAL_DATA_DIR = process.env.DATA_DIR;
+const ORIGINAL_DB_PATH  = process.env.DB_PATH;
 process.env.DATA_DIR = TMP;
+process.env.DB_PATH  = path.join(TMP, "test.db");
 
-// Import AFTER setting DATA_DIR so dataPaths.ts picks it up.
+import { describe, it, before, after } from "node:test";
+import assert from "node:assert/strict";
+
+const REPO_ROOT = path.resolve(new URL(".", import.meta.url).pathname, "../..");
+const REAL_RESEARCH_LAB    = path.join(REPO_ROOT, "data", "research_lab.json");
+const REAL_MEMORY_KB       = path.join(REPO_ROOT, "data", "memory_knowledge.json");
+const REAL_AGENT_GOALS     = path.join(REPO_ROOT, "data", "agent_goals.json");
+const REAL_COMPETENCY      = path.join(REPO_ROOT, "data", "competencyProfile.json");
+const REAL_DECISION_LEDGER = path.join(REPO_ROOT, "data", "experiment_decision_events.jsonl");
+const REPO_RECORDS_LEDGER  = path.join(REPO_ROOT, "data", "sandbox_registration_records.jsonl");
+const REAL_DB              = path.join(REPO_ROOT, "data", "agent306.db");
+
+function snapshot(p: string): { exists: boolean; content?: string } {
+  if (!fs.existsSync(p)) return { exists: false };
+  return { exists: true, content: fs.readFileSync(p, "utf8") };
+}
+function dbStat(p: string): { exists: boolean; size?: number; mtimeMs?: number } {
+  if (!fs.existsSync(p)) return { exists: false };
+  const st = fs.statSync(p);
+  return { exists: true, size: st.size, mtimeMs: st.mtimeMs };
+}
+const RESEARCH_SNAPSHOT        = snapshot(REAL_RESEARCH_LAB);
+const MEMORY_SNAPSHOT          = snapshot(REAL_MEMORY_KB);
+const AGENT_GOALS_SNAPSHOT     = snapshot(REAL_AGENT_GOALS);
+const COMPETENCY_SNAPSHOT      = snapshot(REAL_COMPETENCY);
+const DECISION_LEDGER_SNAPSHOT = snapshot(REAL_DECISION_LEDGER);
+const REPO_RECORDS_SNAPSHOT    = snapshot(REPO_RECORDS_LEDGER);
+const DB_SNAPSHOT              = dbStat(REAL_DB);
+
+// Import AFTER setting DATA_DIR/DB_PATH so dataPaths.ts and db.ts pick them up.
 const {
   saveResearchLab,
   getResearchLab,
@@ -31,6 +68,24 @@ const {
   getPublicManuscriptById,
   buildManuscriptExcerpt,
 } = await import("../publicResearchManuscripts.js");
+
+before(() => {
+  // Loud-failure pin (drain template).
+  const tmpRoot = fs.realpathSync(os.tmpdir());
+  const tmpReal = fs.realpathSync(TMP);
+  if (!tmpReal.startsWith(tmpRoot)) {
+    throw new Error(`researchManuscriptApi isolation broke: TMP not under os.tmpdir(): ${tmpReal}`);
+  }
+  if (tmpReal.startsWith(REPO_ROOT)) {
+    throw new Error(`researchManuscriptApi isolation broke: TMP under repo root: ${tmpReal}`);
+  }
+  if (process.env.DATA_DIR !== TMP) {
+    throw new Error(`researchManuscriptApi isolation broke: DATA_DIR drifted to ${process.env.DATA_DIR}`);
+  }
+  if (process.env.DB_PATH !== path.join(TMP, "test.db")) {
+    throw new Error(`researchManuscriptApi isolation broke: DB_PATH drifted to ${process.env.DB_PATH}`);
+  }
+});
 
 type Topic = ReturnType<typeof getResearchLab>["topics"][number];
 
@@ -61,7 +116,37 @@ function seedLab(topics: Topic[]) {
 after(() => {
   if (ORIGINAL_DATA_DIR === undefined) delete process.env.DATA_DIR;
   else process.env.DATA_DIR = ORIGINAL_DATA_DIR;
+  if (ORIGINAL_DB_PATH === undefined) delete process.env.DB_PATH;
+  else process.env.DB_PATH = ORIGINAL_DB_PATH;
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch {}
+
+  const after = (p: string) => snapshot(p);
+  for (const [label, before, p] of [
+    ["research_lab.json",                   RESEARCH_SNAPSHOT,        REAL_RESEARCH_LAB],
+    ["memory_knowledge.json",               MEMORY_SNAPSHOT,          REAL_MEMORY_KB],
+    ["agent_goals.json",                    AGENT_GOALS_SNAPSHOT,     REAL_AGENT_GOALS],
+    ["competencyProfile.json",              COMPETENCY_SNAPSHOT,      REAL_COMPETENCY],
+    ["experiment_decision_events.jsonl",    DECISION_LEDGER_SNAPSHOT, REAL_DECISION_LEDGER],
+    ["sandbox_registration_records.jsonl",  REPO_RECORDS_SNAPSHOT,    REPO_RECORDS_LEDGER],
+  ] as const) {
+    const a = after(p);
+    if (before.exists) {
+      if (!a.exists) throw new Error(`researchManuscriptApi tests removed live ${label}!`);
+      if (a.content !== before.content) throw new Error(`researchManuscriptApi tests mutated live ${label}!`);
+    } else {
+      if (a.exists) throw new Error(`researchManuscriptApi tests created live ${label}!`);
+    }
+  }
+
+  const dbAfter = dbStat(REAL_DB);
+  if (DB_SNAPSHOT.exists) {
+    if (!dbAfter.exists) throw new Error(`researchManuscriptApi tests removed live agent306.db!`);
+    if (dbAfter.size !== DB_SNAPSHOT.size || dbAfter.mtimeMs !== DB_SNAPSHOT.mtimeMs) {
+      throw new Error(`researchManuscriptApi tests mutated live agent306.db (size/mtime changed)!`);
+    }
+  } else if (dbAfter.exists) {
+    throw new Error(`researchManuscriptApi tests created live agent306.db!`);
+  }
 });
 
 // ── 1. List endpoint: sorted newest first ───────────────────────────────────
@@ -349,5 +434,55 @@ describe("buildManuscriptExcerpt", () => {
   it("returns the full string untouched when under the cap", () => {
     const out = buildManuscriptExcerpt("short body", 200);
     assert.equal(out, "short body");
+  });
+});
+
+// ── File-level isolation contract ───────────────────────────────────────────
+//
+// Drain template contract — matches drains #2–#12. Drain #13 hardens an
+// already-isolated test (the file already redirected DATA_DIR before the
+// researchEngine import) to the full template: DB_PATH redirect, 7
+// watched-file snapshots, loud-failure pin, after() hook diff, and the
+// 8-assertion contract below. researchEngine.ts:42 captures
+// dataPath("research_lab.json") at module-eval time, so env vars must be
+// set before any import that resolves dataPaths.ts.
+describe("researchManuscriptApi — file-level isolation contract", () => {
+  it("DATA_DIR is redirected to this run's tmpdir", () => {
+    assert.equal(process.env.DATA_DIR, TMP, "DATA_DIR must point at this run's TMP");
+    const tmpRoot = fs.realpathSync(os.tmpdir());
+    assert.ok(fs.realpathSync(TMP).startsWith(tmpRoot), "TMP must live under os.tmpdir()");
+    assert.ok(!fs.realpathSync(TMP).startsWith(REPO_ROOT), "TMP must NOT live under repo root");
+    assert.equal(process.env.DB_PATH, path.join(TMP, "test.db"), "DB_PATH must point at TMP/test.db");
+  });
+
+  const watched: Array<[string, { exists: boolean; content?: string }, string]> = [
+    ["research_lab.json",                   RESEARCH_SNAPSHOT,        REAL_RESEARCH_LAB],
+    ["memory_knowledge.json",               MEMORY_SNAPSHOT,          REAL_MEMORY_KB],
+    ["agent_goals.json",                    AGENT_GOALS_SNAPSHOT,     REAL_AGENT_GOALS],
+    ["competencyProfile.json",              COMPETENCY_SNAPSHOT,      REAL_COMPETENCY],
+    ["experiment_decision_events.jsonl",    DECISION_LEDGER_SNAPSHOT, REAL_DECISION_LEDGER],
+    ["sandbox_registration_records.jsonl",  REPO_RECORDS_SNAPSHOT,    REPO_RECORDS_LEDGER],
+  ];
+  for (const [label, before, p] of watched) {
+    it(`live ${label} is unchanged at file-level checkpoint`, () => {
+      const cur = snapshot(p);
+      if (before.exists) {
+        assert.ok(cur.exists, `live ${label} disappeared`);
+        assert.equal(cur.content, before.content, `live ${label} mutated`);
+      } else {
+        assert.equal(cur.exists, false, `live ${label} was created`);
+      }
+    });
+  }
+
+  it("live agent306.db is unchanged at file-level checkpoint (WAL-aware)", () => {
+    const cur = dbStat(REAL_DB);
+    if (DB_SNAPSHOT.exists) {
+      assert.ok(cur.exists, "live agent306.db disappeared");
+      assert.equal(cur.size, DB_SNAPSHOT.size, "agent306.db size changed");
+      assert.equal(cur.mtimeMs, DB_SNAPSHOT.mtimeMs, "agent306.db mtime changed");
+    } else {
+      assert.equal(cur.exists, false, "live agent306.db was created");
+    }
   });
 });
