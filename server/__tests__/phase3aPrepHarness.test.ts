@@ -11,7 +11,7 @@
  *      paired with an updated test expectation. This literal is allowed
  *      to occur only in the harness module itself and its own test
  *      (the boundary regression suite enforces the corresponding rule
- *      for the entry-point `phase3a.v1` literal — we mirror it here
+ *      for the entry-point `phase3a.v2` literal — we mirror it here
  *      for the harness).
  *   3. `PHASE3A_PREP_PRECONDITION_KEYS` is an ordered array whose
  *      contents and order match `PHASE3_ENTRY_PRECONDITIONS` 1:1.

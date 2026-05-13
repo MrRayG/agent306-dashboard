@@ -6,9 +6,13 @@
  *   1. Every exported constant is structurally frozen — `Object.isFrozen`
  *      returns true at the top level, and mutation attempts in strict
  *      mode throw.
- *   2. `PHASE3_ENTRY_POINT_VERSION` is the literal string `"phase3a.v1"`.
+ *   2. `PHASE3_ENTRY_POINT_VERSION` is the literal string `"phase3a.v2"`.
  *      Any change to this value is a contract break and MUST be paired
- *      with an updated test expectation.
+ *      with an updated test expectation. The bump from `phase3a.v1` to
+ *      `phase3a.v2` was Track A / Phase 3a-prep-b: added
+ *      `server/experiments/phase3aPrepHarness.ts` to
+ *      `PHASE3_NEVER_AUTHORIZED_BY`.  Criteria list, entry kind, and
+ *      boundary contract were UNCHANGED.
  *   3. `PHASE3_ENTRY_KIND` is exactly `"summarizationTemplate"`. This
  *      matches the Phase 2 invariant that summarizationTemplate is the
  *      only enabled low-risk sandbox kind. Widening this value is a
@@ -65,8 +69,8 @@ const {
 // ── Schema version + identity ──────────────────────────────────────────────
 
 describe("Phase 2n-b — schema version + identity", () => {
-  it("pins PHASE3_ENTRY_POINT_VERSION to phase3a.v1", () => {
-    assert.equal(PHASE3_ENTRY_POINT_VERSION, "phase3a.v1");
+  it("pins PHASE3_ENTRY_POINT_VERSION to phase3a.v2", () => {
+    assert.equal(PHASE3_ENTRY_POINT_VERSION, "phase3a.v2");
   });
 
   it("PHASE3_ENTRY_POINT_LABEL mentions Phase 3a, sandbox-only, and human-approval", () => {
@@ -173,6 +177,13 @@ describe("Phase 2n-b — PHASE3_NEVER_AUTHORIZED_BY artefacts exist on disk", ()
     assert.ok(
       PHASE3_NEVER_AUTHORIZED_BY.includes("scripts/runManualPhase2CloseOutReport.ts"),
       "must list the Phase 2n-a manual runner as a non-authorising artefact",
+    );
+  });
+
+  it("contains the Phase 3a-prep harness (added in phase3a.v2)", () => {
+    assert.ok(
+      PHASE3_NEVER_AUTHORIZED_BY.includes("server/experiments/phase3aPrepHarness.ts"),
+      "phase3a.v2 must list the Phase 3a-prep harness as a non-authorising artefact",
     );
   });
 });

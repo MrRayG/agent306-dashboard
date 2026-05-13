@@ -44,9 +44,11 @@
  *      forbidden.
  *   9. ENTRY_POINT_VERSION single-source-of-truth: any subsequent
  *      Phase 3a PR must import the version constant rather than
- *      hard-code `"phase3a.v1"` elsewhere. Until Phase 3a code lands,
+ *      hard-code `"phase3a.v2"` elsewhere. Until Phase 3a code lands,
  *      the version string occurs ONLY in the entry-point module
- *      itself, this test, and the entry-point's own unit test.
+ *      itself, this test, the entry-point's own unit test, and the
+ *      Track A harness module / test (where it appears in doc
+ *      comments only).
  *  10. Production-runtime surfaces stay off the Phase 3a list: the
  *      currently-running production modules (`server/index.ts`,
  *      `server/autonomyMonitor.ts`, `server/selfRecommendationEngine
@@ -206,9 +208,9 @@ describe("Phase 2n-c — close-out FIXED_INVARIANTS parity", () => {
 // ── Pin 3: schema-version pair lock ────────────────────────────────────────
 
 describe("Phase 2n-c — schema-version pair lock", () => {
-  it("close-out schema version is 'phase2l-c.v1' and entry-point version is 'phase3a.v1'", () => {
+  it("close-out schema version is 'phase2l-c.v1' and entry-point version is 'phase3a.v2'", () => {
     assert.equal(PHASE2_CLOSE_OUT_REPORT_SCHEMA_VERSION, "phase2l-c.v1");
-    assert.equal(PHASE3_ENTRY_POINT_VERSION,             "phase3a.v1");
+    assert.equal(PHASE3_ENTRY_POINT_VERSION,             "phase3a.v2");
   });
 });
 
@@ -389,8 +391,8 @@ describe("Phase 2n-c — Phase 3a entry-point module self-import sanity", () => 
 // ── Pin 9: ENTRY_POINT_VERSION single-source-of-truth ─────────────────────
 
 describe("Phase 2n-c — ENTRY_POINT_VERSION single-source-of-truth", () => {
-  it("'phase3a.v1' literal occurs only in the entry-point module and its own / regression tests", () => {
-    const VERSION_LITERAL = "phase3a.v1";
+  it("'phase3a.v2' literal occurs only in the entry-point module and its own / regression tests", () => {
+    const VERSION_LITERAL = "phase3a.v2";
     const candidates = listSourceFiles([
       path.join(REPO_ROOT, "server"),
       path.join(REPO_ROOT, "scripts"),
@@ -403,7 +405,7 @@ describe("Phase 2n-c — ENTRY_POINT_VERSION single-source-of-truth", () => {
       // Track A — Phase 3a-prep harness cross-references the entry-point
       // version in its doc comments (and its test mirrors the rule). The
       // harness does NOT export, embed, or reuse the literal in code —
-      // grep for `phase3a.v1` in these two files and you will only find
+      // grep for `phase3a.v2` in these two files and you will only find
       // it inside `/* ... */` blocks. The Pin 11 parity test pins the
       // cross-module key-order equality independently.
       "phase3aPrepHarness.ts",

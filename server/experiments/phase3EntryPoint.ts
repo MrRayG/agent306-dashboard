@@ -28,12 +28,20 @@
  * checkpoint, this file is a documentation + structural anchor only —
  * importing it confers no authority.
  *
- * Naming: `phase3a.v1` is the schema version. Any change to the
+ * Naming: `phase3a.v2` is the current schema version. Any change to the
  * boundary contract (criteria added/removed, kind widened, etc.)
  * REQUIRES bumping this version and updating every dependent
  * assertion. Silent edits are a contract drift and the boundary
  * regression tests in Phase 2n-c will fail loudly.
- * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * Version history:
+ *   - phase3a.v1: initial declarative anchor (Phase 2n-b).
+ *   - phase3a.v2: Track A / Phase 3a-prep-b. Adds
+ *     `server/experiments/phase3aPrepHarness.ts` (the per-precondition
+ *     attestation schema) to `PHASE3_NEVER_AUTHORIZED_BY`. Criteria
+ *     list, entry kind, and boundary contract are UNCHANGED — the bump
+ *     reflects only a widened negative-space declaration.
+ * ───────────────────────────────────────────────────────────────────────────
  */
 
 import type { Phase3GateCriterionKey } from "./phase2CloseOutReport.js";
@@ -41,7 +49,7 @@ import type { Phase3GateCriterionKey } from "./phase2CloseOutReport.js";
 /** Schema version for the Phase 3a entry-point contract. Bump on any
  *  change to the criteria list, the entry kind, or the boundary
  *  contract. */
-export const PHASE3_ENTRY_POINT_VERSION = "phase3a.v1" as const;
+export const PHASE3_ENTRY_POINT_VERSION = "phase3a.v2" as const;
 
 /** Human-readable label for the entry point. Stable across patch
  *  revisions; only changes when the schema version bumps. */
@@ -130,6 +138,10 @@ export const PHASE3_NEVER_AUTHORIZED_BY: readonly string[] = Object.freeze([
   "scripts/runManualPhase2CloseOutReport.ts",
   // Phase 2m-e manual safety-gating validation CLI — propose-only.
   "scripts/runManualSafetyGatingValidationSummary.ts",
+  // Track A / Phase 3a-prep-b — per-precondition attestation harness.
+  // Declarative-only / zero-authority. Importing this module records
+  // an attestation schema but confers no Phase 3a execution authority.
+  "server/experiments/phase3aPrepHarness.ts",
 ] as const);
 
 /** Set of import paths that MUST NOT appear in any Phase 3a
