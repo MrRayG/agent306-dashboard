@@ -21,6 +21,7 @@ import { createHash } from "crypto";
 import { db } from "./db";
 import {
   selfRecommendations,
+  engineEvents,
   type SelfRecommendation,
   type InsertSelfRecommendation,
   type SelfRecCategory,
@@ -397,4 +398,65 @@ export function parseEvidence(rec: SelfRecommendation): string[] {
   } catch {
     return [];
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 3b-b: read-only attestation-event lookup
+//
+// Surfaces the rows persisted by `persistPromotionAttestations()` (Phase 3b-a)
+// so the SelfRecommendations page can display the advisory evidence next to
+// each rec. PURE READER — no writes, no mutation routes, no behaviour change
+// to apply/promotion paths. The Phase 3b-a row shape (engine, event, data)
+// is the contract this consumer reads.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Public, narrow projection of a `promotionAttestation` engine_events row.
+ *  Mirrors only the fields the UI needs; raw rows stay inside the engine. */
+export interface PromotionAttestationEvent {
+  id: number;
+  emittedAt: string;
+  gateOk: boolean;
+  attestations: unknown[];
+}
+
+/** Read-only: list `promotionAttestation` rows for one recommendation,
+ *  newest first. Returns an empty array when nothing has been persisted.
+ *  Never throws — payloads that fail to parse are skipped so the UI can
+ *  render even when one row is malformed. */
+export function listPromotionAttestationsForRecommendation(
+  recommendationId: string,
+  limit = 25,
+): PromotionAttestationEvent[] {
+  const safeLimit = Math.max(1, Math.min(100, Math.floor(limit) || 25));
+  const rows = db
+    .select()
+    .from(engineEvents)
+    .where(
+      and(
+        eq(engineEvents.engine, "selfRecommendation"),
+        eq(engineEvents.event, "promotionAttestation"),
+      ),
+    )
+    .orderBy(desc(engineEvents.id))
+    .limit(500)
+    .all();
+  const out: PromotionAttestationEvent[] = [];
+  for (const row of rows) {
+    let parsed: any;
+    try {
+      parsed = JSON.parse(row.data);
+    } catch {
+      continue;
+    }
+    if (!parsed || parsed.recommendationId !== recommendationId) continue;
+    const attestations = Array.isArray(parsed.attestations) ? parsed.attestations : [];
+    out.push({
+      id: row.id,
+      emittedAt: row.emittedAt,
+      gateOk: Boolean(parsed.gateOk),
+      attestations,
+    });
+    if (out.length >= safeLimit) break;
+  }
+  return out;
 }

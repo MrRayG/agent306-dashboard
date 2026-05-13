@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import {
+  PromotionAttestationPanel,
+  type PromotionAttestationsResponse,
+} from "@/components/PromotionAttestationPanel";
 
 interface SelfRecommendation {
   id: string;
@@ -162,6 +166,13 @@ export default function SelfRecommendations() {
             {rec.patchPath && (
               <div style={{ marginBottom: 8, fontSize: 12, color: DIM }}>patch: {rec.patchPath}</div>
             )}
+            <PromotionAttestationPanel
+              recommendationId={rec.id}
+              fetcher={() =>
+                apiRequest("GET", `/api/self-recommendations/${rec.id}/attestations`)
+                  .then(r => r.json() as Promise<PromotionAttestationsResponse>)
+              }
+            />
             {rec.status === "proposed" && (
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
                 <input
