@@ -72,13 +72,12 @@ export interface QuarantinedTest {
  * `quarantinedTests.test.ts` asserts this.
  */
 export const QUARANTINED_TESTS: readonly QuarantinedTest[] = [
-  {
-    path: "server/__tests__/blogEngineLegacyErrorParity.test.ts",
-    reason: "tmp_blog_legacy_root_leak",
-    priority: "low",
-    issue: "#332",
-    note: "creates tmp-blog-legacy-* directories at repo root",
-  },
+  // Issue #332 quarantine drained empty. All 19 original culprits have been
+  // fixed via per-PR drains (#352, #353, #354, #355, and earlier). The
+  // manifest is kept here as the type+filter scaffolding so the integrity
+  // guard (scripts/checkCoreStateIntegrity.sh) can continue to consume
+  // QUARANTINED_TEST_PATHS without conditional checks. If/when a new
+  // culprit is filed against #332 (or a successor), add the entry here.
 ];
 
 /** Quick lookup set of quarantined paths (relative to repo root). */
