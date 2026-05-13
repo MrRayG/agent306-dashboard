@@ -2,25 +2,131 @@
  * Tests for Wisdom Engine — historical sources driven by 306Eval calibration.
  *
  * Run: npx tsx --test server/__tests__/wisdomEngine.test.ts
+ *
+ * Phase 2n drain #14 — Path B isolation:
+ *   wisdomEngine.pullWisdom() ingests entries via memoryEngine.addKnowledge,
+ *   which writes memory_knowledge.json AND agent306.db. Pre-fix isolated
+ *   run mutated memory_knowledge.json and advanced agent306.db mtime
+ *   (transitive through repositories / db import). The previous static
+ *   `import { dataPath } from "../dataPaths.js"` at the top of the file
+ *   captured DATA_DIR at module-eval time, so the unlinkSync() calls in
+ *   cleanFiles() would also resolve to repo's live data/ if those wisdom
+ *   files happened to be present. Fixed by:
+ *     1. Set DATA_DIR + DB_PATH BEFORE any import that resolves dataPaths
+ *     2. Inline HISTORY_FILE / USAGE_FILE / GOOGLE_BOOKS_CACHE_FILE under
+ *        TMP (so even if dataPaths resolves first, the unlink targets are
+ *        scoped to TMP)
  */
 
-import { describe, it, beforeEach, afterEach, mock } from "node:test";
-import assert from "node:assert/strict";
 import fs from "fs";
-import { dataPath } from "../dataPaths.js";
+import path from "path";
+import os from "os";
 
-const HISTORY_FILE = dataPath("wisdom_pull_history.json");
-const USAGE_FILE = dataPath("wisdom_api_usage.json");
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "phase2n-drain14-wisdom-engine-"));
+const ORIGINAL_DATA_DIR = process.env.DATA_DIR;
+const ORIGINAL_DB_PATH  = process.env.DB_PATH;
+process.env.DATA_DIR = TMP;
+process.env.DB_PATH  = path.join(TMP, "test.db");
+
+import { describe, it, beforeEach, afterEach, before, after, mock } from "node:test";
+import assert from "node:assert/strict";
+
+const REPO_ROOT = path.resolve(new URL(".", import.meta.url).pathname, "../..");
+const REAL_RESEARCH_LAB    = path.join(REPO_ROOT, "data", "research_lab.json");
+const REAL_MEMORY_KB       = path.join(REPO_ROOT, "data", "memory_knowledge.json");
+const REAL_AGENT_GOALS     = path.join(REPO_ROOT, "data", "agent_goals.json");
+const REAL_COMPETENCY      = path.join(REPO_ROOT, "data", "competencyProfile.json");
+const REAL_DECISION_LEDGER = path.join(REPO_ROOT, "data", "experiment_decision_events.jsonl");
+const REPO_RECORDS_LEDGER  = path.join(REPO_ROOT, "data", "sandbox_registration_records.jsonl");
+const REAL_DB              = path.join(REPO_ROOT, "data", "agent306.db");
+
+function snapshot(p: string): { exists: boolean; content?: string } {
+  if (!fs.existsSync(p)) return { exists: false };
+  return { exists: true, content: fs.readFileSync(p, "utf8") };
+}
+function dbStat(p: string): { exists: boolean; size?: number; mtimeMs?: number } {
+  if (!fs.existsSync(p)) return { exists: false };
+  const st = fs.statSync(p);
+  return { exists: true, size: st.size, mtimeMs: st.mtimeMs };
+}
+const RESEARCH_SNAPSHOT        = snapshot(REAL_RESEARCH_LAB);
+const MEMORY_SNAPSHOT          = snapshot(REAL_MEMORY_KB);
+const AGENT_GOALS_SNAPSHOT     = snapshot(REAL_AGENT_GOALS);
+const COMPETENCY_SNAPSHOT      = snapshot(REAL_COMPETENCY);
+const DECISION_LEDGER_SNAPSHOT = snapshot(REAL_DECISION_LEDGER);
+const REPO_RECORDS_SNAPSHOT    = snapshot(REPO_RECORDS_LEDGER);
+const DB_SNAPSHOT              = dbStat(REAL_DB);
+
+// Inline the wisdom-engine companion file paths under TMP. Inlining (rather
+// than calling dataPath()) avoids re-loading dataPaths.ts before env vars
+// are set, even though we already set them above. Belt-and-suspenders for
+// module-eval timing.
+const HISTORY_FILE = path.join(TMP, "wisdom_pull_history.json");
+const USAGE_FILE = path.join(TMP, "wisdom_api_usage.json");
 // PR introduced a 7-day Google Books cache. Without clearing it, mocked-fetch
 // failure tests still hit cached entries from previous suite runs and report
 // non-zero `entriesIngested`.
-const GOOGLE_BOOKS_CACHE_FILE = dataPath("google_books_cache.json");
+const GOOGLE_BOOKS_CACHE_FILE = path.join(TMP, "google_books_cache.json");
 
 function cleanFiles() {
   try { if (fs.existsSync(HISTORY_FILE)) fs.unlinkSync(HISTORY_FILE); } catch {}
   try { if (fs.existsSync(USAGE_FILE)) fs.unlinkSync(USAGE_FILE); } catch {}
   try { if (fs.existsSync(GOOGLE_BOOKS_CACHE_FILE)) fs.unlinkSync(GOOGLE_BOOKS_CACHE_FILE); } catch {}
 }
+
+before(() => {
+  // Loud-failure pin (drain template).
+  const tmpRoot = fs.realpathSync(os.tmpdir());
+  const tmpReal = fs.realpathSync(TMP);
+  if (!tmpReal.startsWith(tmpRoot)) {
+    throw new Error(`wisdomEngine isolation broke: TMP not under os.tmpdir(): ${tmpReal}`);
+  }
+  if (tmpReal.startsWith(REPO_ROOT)) {
+    throw new Error(`wisdomEngine isolation broke: TMP under repo root: ${tmpReal}`);
+  }
+  if (process.env.DATA_DIR !== TMP) {
+    throw new Error(`wisdomEngine isolation broke: DATA_DIR drifted to ${process.env.DATA_DIR}`);
+  }
+  if (process.env.DB_PATH !== path.join(TMP, "test.db")) {
+    throw new Error(`wisdomEngine isolation broke: DB_PATH drifted to ${process.env.DB_PATH}`);
+  }
+});
+
+after(() => {
+  if (ORIGINAL_DATA_DIR === undefined) delete process.env.DATA_DIR;
+  else process.env.DATA_DIR = ORIGINAL_DATA_DIR;
+  if (ORIGINAL_DB_PATH === undefined) delete process.env.DB_PATH;
+  else process.env.DB_PATH = ORIGINAL_DB_PATH;
+  try { fs.rmSync(TMP, { recursive: true, force: true }); } catch {}
+
+  const afterSnap = (p: string) => snapshot(p);
+  for (const [label, beforeSnap, p] of [
+    ["research_lab.json",                   RESEARCH_SNAPSHOT,        REAL_RESEARCH_LAB],
+    ["memory_knowledge.json",               MEMORY_SNAPSHOT,          REAL_MEMORY_KB],
+    ["agent_goals.json",                    AGENT_GOALS_SNAPSHOT,     REAL_AGENT_GOALS],
+    ["competencyProfile.json",              COMPETENCY_SNAPSHOT,      REAL_COMPETENCY],
+    ["experiment_decision_events.jsonl",    DECISION_LEDGER_SNAPSHOT, REAL_DECISION_LEDGER],
+    ["sandbox_registration_records.jsonl",  REPO_RECORDS_SNAPSHOT,    REPO_RECORDS_LEDGER],
+  ] as const) {
+    const a = afterSnap(p);
+    if (beforeSnap.exists) {
+      if (!a.exists) throw new Error(`wisdomEngine tests removed live ${label}!`);
+      if (a.content !== beforeSnap.content) throw new Error(`wisdomEngine tests mutated live ${label}!`);
+    } else {
+      if (a.exists) throw new Error(`wisdomEngine tests created live ${label}!`);
+    }
+  }
+
+  const dbAfter = dbStat(REAL_DB);
+  if (DB_SNAPSHOT.exists) {
+    if (!dbAfter.exists) throw new Error(`wisdomEngine tests removed live agent306.db!`);
+    if (dbAfter.size !== DB_SNAPSHOT.size || dbAfter.mtimeMs !== DB_SNAPSHOT.mtimeMs) {
+      throw new Error(`wisdomEngine tests mutated live agent306.db (size/mtime changed)!`);
+    }
+  } else if (dbAfter.exists) {
+    throw new Error(`wisdomEngine tests created live agent306.db!`);
+  }
+});
 
 // Build a mock EvalResult matching the real interface
 function mockEvalResult(overrides: Partial<any> = {}): any {
@@ -434,5 +540,55 @@ describe("WisdomEngine", () => {
       const idx = knowledge.entries.findIndex(e => e.id === id);
       if (idx !== -1) knowledge.entries.splice(idx, 1);
     });
+  });
+});
+
+// ── File-level isolation contract ───────────────────────────────────────────
+//
+// Drain template contract — matches drains #2–#13. Drain #14 is a Path B
+// fix: wisdomEngine.pullWisdom() ingests via memoryEngine.addKnowledge,
+// which mutates memory_knowledge.json AND agent306.db. The pre-fix static
+// `import { dataPath } from "../dataPaths.js"` captured DATA_DIR at
+// module-eval time. Env-var redirect BEFORE first import of dataPaths.ts
+// resolves the capture-at-import-time bug. HISTORY_FILE / USAGE_FILE /
+// GOOGLE_BOOKS_CACHE_FILE are inlined under TMP for defense in depth.
+describe("wisdomEngine — file-level isolation contract", () => {
+  it("DATA_DIR is redirected to this run's tmpdir", () => {
+    assert.equal(process.env.DATA_DIR, TMP, "DATA_DIR must point at this run's TMP");
+    const tmpRoot = fs.realpathSync(os.tmpdir());
+    assert.ok(fs.realpathSync(TMP).startsWith(tmpRoot), "TMP must live under os.tmpdir()");
+    assert.ok(!fs.realpathSync(TMP).startsWith(REPO_ROOT), "TMP must NOT live under repo root");
+    assert.equal(process.env.DB_PATH, path.join(TMP, "test.db"), "DB_PATH must point at TMP/test.db");
+  });
+
+  const watched: Array<[string, { exists: boolean; content?: string }, string]> = [
+    ["research_lab.json",                   RESEARCH_SNAPSHOT,        REAL_RESEARCH_LAB],
+    ["memory_knowledge.json",               MEMORY_SNAPSHOT,          REAL_MEMORY_KB],
+    ["agent_goals.json",                    AGENT_GOALS_SNAPSHOT,     REAL_AGENT_GOALS],
+    ["competencyProfile.json",              COMPETENCY_SNAPSHOT,      REAL_COMPETENCY],
+    ["experiment_decision_events.jsonl",    DECISION_LEDGER_SNAPSHOT, REAL_DECISION_LEDGER],
+    ["sandbox_registration_records.jsonl",  REPO_RECORDS_SNAPSHOT,    REPO_RECORDS_LEDGER],
+  ];
+  for (const [label, before, p] of watched) {
+    it(`live ${label} is unchanged at file-level checkpoint`, () => {
+      const cur = snapshot(p);
+      if (before.exists) {
+        assert.ok(cur.exists, `live ${label} disappeared`);
+        assert.equal(cur.content, before.content, `live ${label} mutated`);
+      } else {
+        assert.equal(cur.exists, false, `live ${label} was created`);
+      }
+    });
+  }
+
+  it("live agent306.db is unchanged at file-level checkpoint (WAL-aware)", () => {
+    const cur = dbStat(REAL_DB);
+    if (DB_SNAPSHOT.exists) {
+      assert.ok(cur.exists, "live agent306.db disappeared");
+      assert.equal(cur.size, DB_SNAPSHOT.size, "agent306.db size changed");
+      assert.equal(cur.mtimeMs, DB_SNAPSHOT.mtimeMs, "agent306.db mtime changed");
+    } else {
+      assert.equal(cur.exists, false, "live agent306.db was created");
+    }
   });
 });

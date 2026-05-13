@@ -107,13 +107,6 @@ export const QUARANTINED_TESTS: readonly QuarantinedTest[] = [
     issue: "#332",
     note: "repository tests mutate live DB / json paths",
   },
-  {
-    path: "server/__tests__/wisdomEngine.test.ts",
-    reason: "mutates_core_state",
-    priority: "low",
-    issue: "#332",
-    note: "wisdom engine test mutates memory_knowledge.json (found via bisect)",
-  },
 ];
 
 /** Quick lookup set of quarantined paths (relative to repo root). */
