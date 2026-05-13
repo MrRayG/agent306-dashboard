@@ -122,13 +122,6 @@ export const QUARANTINED_TESTS: readonly QuarantinedTest[] = [
     note: "manuscript API tests write into research_lab.json",
   },
   {
-    path: "server/__tests__/summarizationSandboxFixtureRegistration.test.ts",
-    reason: "mutates_core_state",
-    priority: "high",
-    issue: "#332",
-    note: "summarizationTemplate sandbox fixture writes shared state",
-  },
-  {
     path: "server/__tests__/wiringEnhancements.test.ts",
     reason: "mutates_core_state",
     priority: "high",
