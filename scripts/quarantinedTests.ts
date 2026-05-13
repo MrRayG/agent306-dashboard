@@ -80,13 +80,6 @@ export const QUARANTINED_TESTS: readonly QuarantinedTest[] = [
     note: "creates tmp-blog-legacy-* directories at repo root",
   },
   {
-    path: "server/__tests__/blogPipelineActivation.test.ts",
-    reason: "mutates_core_state",
-    priority: "low",
-    issue: "#332",
-    note: "blog pipeline activation rewrites memory_knowledge.json",
-  },
-  {
     path: "server/__tests__/claimMapVerifierMap.test.ts",
     reason: "mutates_core_state",
     priority: "low",
