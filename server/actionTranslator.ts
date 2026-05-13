@@ -109,9 +109,52 @@ const GATE_PATTERNS = [
   // gate verb. Works without the from→to clause for cases like "Apply a binary-
   // check gate before any forming→testing promotion."
   /(?:apply|enforce|run)\s+(?:a\s+|an\s+|the\s+)?(binary[-\s]?check|threshold[-\s]?check|conditional[-\s]?check|data[-\s]?source|spectrum[-\s]?check|measurement[-\s]?path)\s+gate\b/i,
+  // (added 2026-05-13: parser-coverage fix for the 4 stale missing-primitive
+  // recs the user reviewed after Phase 3b. SelfEvolution kept emitting three
+  // gate-shaped insights that all fell through to `none`:
+  //   (a) "Implement a mandatory evidence accessibility check: before moving
+  //       any hypothesis from forming to testing, name the dataset/API/
+  //       observable metric that would resolve it."
+  //   (b) "Evidence accessibility check: name the dataset/API/observable
+  //       metric for each hypothesis."
+  //   (c) "Binary-check gate: before promoting any hypothesis from forming to
+  //       testing, rewrite binary positional framing into a measurable
+  //       single-variable claim."
+  //   (d) "Before promoting any hypothesis from forming to testing, rewrite
+  //       binary positional framing into a measurable single-variable claim."
+  // (a)/(b) — "<accessibility|data-source|measurement-path|evidence>
+  // check" framing. The earlier GATE patterns matched "<descriptor> gate" but
+  // not "<descriptor> check"; "check" is an equally common SelfEvolution
+  // phrasing for the same forcing pre-transition guardrail.
+  /\b(?:mandatory\s+)?((?:evidence\s+accessibility|accessibility|data[-\s]?source|measurement[-\s]?path|evidence)\s+check)\b/i,
+  // (c) — leading "binary-check gate:" / "data-source gate:" preamble.
+  // Existing pattern 0 required whitespace between "gate" and the
+  // colon-or-keyword separator, so "Binary-check gate:" (no whitespace before
+  // colon) fell through. This narrowly catches the leading-preamble shape.
+  /^\s*(binary[-\s]?check|threshold[-\s]?check|spectrum[-\s]?check|conditional[-\s]?check|data[-\s]?source|measurement[-\s]?path)\s+gate\s*[:,]/i,
+  // (d) — "before promoting … from A to B, rewrite/reject …" without the
+  // "apply a … gate" framing. Pattern 5 required apply/enforce/run/use as
+  // the action verb; SelfEvolution sometimes phrases the same forcing
+  // rule directly as "rewrite binary X into measurable Y" or "reject A-vs-B
+  // claims at the boundary". Treat as gate_rule on the transition target;
+  // framingMode hint added downstream when the action mentions binary
+  // positional framing.
+  /before\s+(?:promoting|advancing|moving|transitioning)\s+(?:any\s+)?(?:new\s+)?([^\.,]+?)\s+from\s+['"]?\w+['"]?\s+to\s+['"]?\w+['"]?\s*,?\s*(?:rewrite|reject)\s+([^\.]+)/i,
 ];
 
 const ARCHIVE_PATTERNS = [
+  // (added 2026-05-13: parser-coverage fix for stale "missing-primitive: other"
+  // rec — "Tag pure unanswered KB questions as speculative-queue and
+  // review/archive if no evidence attaches within 7 days." The loose pattern
+  // below matched but assigned junk groups (target="if"). This more-specific
+  // shape captures the KB-question target, the "speculative-queue" tag, and
+  // the staleness window so the archive_rule carries a usable criteria
+  // string. Listed FIRST so it beats the loose pattern on the same input.
+  //   m[1] = source noun ("KB"/"knowledge"/"knowledge-base"),
+  //   m[2] = item noun (question/entry/item),
+  //   m[3] = tag/queue label,
+  //   m[4] = optional staleness day count.
+  /\btag\s+(?:pure\s+)?(?:unanswered\s+)?(kb|knowledge|knowledge[-\s]?base)\s+(question|entry|item|questions|entries|items)s?\s+as\s+([a-z][-\w]*?)\s+and\s+(?:review|archive|prune|delete|remove)(?:[^.]*?within\s+(\d+)\s+days?)?/i,
   // "archive the 2 dream insight entries (speculative, no evidence)"
   /archive\s+(?:the\s+)?(\d+\s+)?([^\.(]+?)(?:\s*\(([^)]+)\))?(?:\s|$|\.)/i,
   // "retire X matching Y"
@@ -143,6 +186,18 @@ const ARTIFACT_PATTERNS = [
   // cycle:" preamble, then matches a downstream produce/ship/etc. verb against
   // a "single|one|a" artifact-shaped noun. Examples paren is optional.
   /^(?:next|this|each|every)\s+(\d+)?\s*(cycle|day|week|cycles|days|weeks)\b[^.]*?\b(?:produce|ship|publish|generate|create|deliver|write|draft)\s+(?:exactly\s+)?(?:one|1|a\s+single|a)\s+(?:concrete\s+)?(?:output\s+)?(\w+(?:\s+\w+){0,3}?)\s+(?:artifact|asset|output|deliverable|piece|exercise)?(?:\s*\(([^)]+)\))?/i,
+  // (added 2026-05-13: parser-coverage fix for stale "missing-primitive:
+  // artifact family" rec. SelfEvolution emitted "Force one concrete content
+  // artifact (a post draft or thread outline) within 2 cycles." and the
+  // closely-related "Force production of one post draft or thread outline
+  // within 2 cycles." Both fell through every existing ARTIFACT pattern
+  // because the verb "force" was not in the produce/ship/publish/... set.
+  // The semantics are identical to the canonical artifact_rule case — one
+  // concrete output within an N-cycle window — so we add a "force"-prefixed
+  // shape rather than introducing a new primitive. Layout:
+  //   m[1] = noun, m[2] = optional parenthetical examples, m[3] = count?,
+  //   m[4] = unit. Mirrors ARTIFACT_PATTERNS[0] downstream consumption.
+  /\bforce\s+(?:production\s+of\s+)?(?:exactly\s+)?(?:one|1|a\s+single)\s+(?:concrete\s+)?(?:output\s+)?(\w+(?:\s+\w+){0,4})(?:\s*\(([^)]+)\))?[^.]*?\b(?:within|in|by|each|this|next|every|per)\s+(?:the\s+)?(?:next\s+)?(\d+)?\s*(cycle|day|week|cycles|days|weeks)\b/i,
 ];
 
 // VERIFICATION — observation-only primitive. Surfaces patterns like
@@ -280,7 +335,11 @@ export function translateAction(actionText: string, insightText: string = ""): T
       // group as well as from the raw action text.
       const lowered = a.toLowerCase();
       const params: Record<string, unknown> = { description, target };
-      if (/\bbinary[-\s]?check|\bspectrum[-\s]?check\b/.test(lowered)) {
+      if (
+        /\bbinary[-\s]?check|\bspectrum[-\s]?check\b/.test(lowered) ||
+        /\brewrite\s+binary\b/.test(lowered) ||
+        /\bbinary\s+positional\s+framing\b/.test(lowered)
+      ) {
         params.framingMode = "spectrum";
       }
       return {
@@ -297,6 +356,27 @@ export function translateAction(actionText: string, insightText: string = ""): T
   for (const pat of ARCHIVE_PATTERNS) {
     const m = a.match(pat);
     if (m) {
+      // Specific KB-question speculative-queue pattern (index 0) carries
+      // its own group layout: source/item/tag/staleness-days. Map it to
+      // the same archive_rule params so downstream consumers don't change.
+      if (pat === ARCHIVE_PATTERNS[0]) {
+        const source = normalizeNoun(m[1] ?? "kb");
+        const item = normalizeNoun(m[2] ?? "question");
+        const tag = (m[3] ?? "").trim();
+        const staleDays = m[4] ? parseInt(m[4], 10) : undefined;
+        const target = `${source}_${item}`;
+        const criteriaParts: string[] = [];
+        if (tag) criteriaParts.push(`tag=${tag}`);
+        if (staleDays !== undefined) criteriaParts.push(`no evidence within ${staleDays}d`);
+        const criteria = criteriaParts.join("; ").slice(0, 200);
+        return {
+          primitive: "archive_rule",
+          params: { target, criteria, staleDays },
+          verificationCriterion: `${target} items tagged "${tag}" with no evidence within ${staleDays ?? "N"}d are archived`,
+          suggestedCategory: "knowledge",
+          minFireCount: 1,
+        };
+      }
       const target = normalizeNoun(m[2] ?? m[1] ?? "items");
       const criteria = (m[3] ?? m[2] ?? "").slice(0, 200);
       const count = m[1] ? parseInt(m[1], 10) : undefined;
@@ -319,9 +399,13 @@ export function translateAction(actionText: string, insightText: string = ""): T
       //   P0 (post-window): m[1]=noun, m[2]=examples?, m[3]=count?, m[4]=unit?
       //   P1 (dedicate):    m[1]=noun
       //   P2 (front-loaded): m[1]=count?, m[2]=unit, m[3]=noun, m[4]=examples?
+      //   P3 (force):       m[1]=noun, m[2]=examples?, m[3]=count?, m[4]=unit?
       const isFrontLoaded = pat === ARTIFACT_PATTERNS[2];
+      const isForce = pat === ARTIFACT_PATTERNS[3];
       const nounGroup    = isFrontLoaded ? (m[3] ?? "artifact") : (m[1] ?? "artifact");
-      const examplesRaw  = (pat === ARTIFACT_PATTERNS[0] ? m[2] : isFrontLoaded ? (m[4] ?? "") : "") ?? "";
+      const examplesRaw  = (pat === ARTIFACT_PATTERNS[0] || isForce
+        ? (m[2] ?? "")
+        : isFrontLoaded ? (m[4] ?? "") : "") ?? "";
       const artifactNoun = normalizeNoun(nounGroup);
       const examples = examplesRaw
         .split(/[,;]|\bor\b/i)
@@ -331,7 +415,7 @@ export function translateAction(actionText: string, insightText: string = ""): T
       // Window: default 1 cycle if not captured.
       let windowCount = 1;
       let windowUnit = "cycle";
-      if (pat === ARTIFACT_PATTERNS[0]) {
+      if (pat === ARTIFACT_PATTERNS[0] || isForce) {
         if (m[3]) windowCount = parseInt(m[3], 10);
         if (m[4]) windowUnit = m[4].toLowerCase().replace(/s$/, "");
       } else if (isFrontLoaded) {
@@ -593,7 +677,14 @@ export function classifyMissingPrimitiveFamily(actionText: string): MissingPrimi
   if (/\bttl\b|\bexpir(?:e|y)\b|\bretire\b.*\bafter\b|\bcutoff\b/.test(a)) {
     return "ttl";
   }
-  if (/\b(pre[-\s]?registration|pre[-\s]?check|gate|block)\b|\brequire[s]?\b.*\bbefore\b/.test(a)) {
+  // Gate cues: explicit gate/block keywords, "require X before Y", or the
+  // newer "<accessibility|data-source|measurement-path|evidence> check"
+  // framing (the 5/13 parser-coverage fix). The check-cue requires a
+  // qualifier so plain "check" alone doesn't fire on noise.
+  if (
+    /\b(pre[-\s]?registration|pre[-\s]?check|gate|block)\b|\brequire[s]?\b.*\bbefore\b/.test(a) ||
+    /\b(evidence\s+accessibility|accessibility|data[-\s]?source|measurement[-\s]?path|evidence)\s+check\b/.test(a)
+  ) {
     return "gate";
   }
   if (/\barchive\b|\bprune\b|\bdelete\b.*\b(stale|old|matching)\b/.test(a)) {

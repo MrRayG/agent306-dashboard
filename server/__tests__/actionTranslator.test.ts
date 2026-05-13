@@ -347,6 +347,141 @@ describe("ActionTranslator", () => {
     assert.equal((result.params as any).framingMode, "spectrum");
   });
 
+  // ── 5/13 parser-coverage fix: four stale missing-primitive shapes ──────────
+  // After Phase 3b shipped, the user reviewed SelfRecommendations and flagged
+  // four still-emitted "missing-primitive" recs whose primitives already
+  // exist (verification_rule, artifact_rule, gate_rule, archive_rule). The
+  // shapes below verbatim from the live recs — each was previously falling
+  // through to `none` because the parser did not recognize the phrasing.
+  // These tests pin the new mappings so a regression resurfaces immediately.
+
+  it("parses 'Implement a mandatory evidence accessibility check: before moving any hypothesis from forming to testing, name the dataset/API/observable metric…' as gate_rule (5/13 evidence-accessibility case)", () => {
+    const result = translateAction(
+      "Implement a mandatory evidence accessibility check: before moving any hypothesis from forming to testing, name the dataset, API, or observable metric that would resolve it.",
+      "evidence accessibility check missing from forming→testing transitions",
+    );
+    assert.equal(result.primitive, "gate_rule");
+    assert.equal((result.params as any).target, "hypothesis");
+    assert.ok(
+      String((result.params as any).description).length > 0,
+      "gate description must not be empty",
+    );
+  });
+
+  it("parses 'Evidence accessibility check: name the dataset…' as gate_rule (no transition clause)", () => {
+    const result = translateAction(
+      "Evidence accessibility check: name the dataset, API, or observable metric for each hypothesis.",
+      "",
+    );
+    assert.equal(result.primitive, "gate_rule");
+    // Target inference may fall back to "hypothesis" via the action body.
+    assert.equal((result.params as any).target, "hypothesis");
+  });
+
+  it("parses 'Force one concrete content artifact (a post draft or thread outline) within 2 cycles' as artifact_rule (5/13 force-content case)", () => {
+    const result = translateAction(
+      "Force one concrete content artifact (a post draft or thread outline) within 2 cycles.",
+      "no concrete content shipped this week",
+    );
+    assert.equal(result.primitive, "artifact_rule");
+    const params = result.params as any;
+    assert.equal(params.requiredCount, 1);
+    assert.equal(params.windowCount, 2);
+    assert.equal(params.windowUnit, "cycle");
+    assert.ok(Array.isArray(params.examples));
+    assert.ok(
+      params.examples.length >= 1,
+      `expected at least one parsed example, got ${JSON.stringify(params.examples)}`,
+    );
+  });
+
+  it("parses 'Force production of one post draft or thread outline within 2 cycles' as artifact_rule (no paren examples)", () => {
+    const result = translateAction(
+      "Force production of one post draft or thread outline within 2 cycles.",
+      "",
+    );
+    assert.equal(result.primitive, "artifact_rule");
+    const params = result.params as any;
+    assert.equal(params.requiredCount, 1);
+    assert.equal(params.windowCount, 2);
+    assert.equal(params.windowUnit, "cycle");
+  });
+
+  it("parses 'Binary-check gate: before promoting any hypothesis from forming to testing, rewrite binary positional framing…' as gate_rule (5/13 binary-check preamble case)", () => {
+    const result = translateAction(
+      "Binary-check gate: before promoting any hypothesis from forming to testing, rewrite binary positional framing into a measurable single-variable claim.",
+      "binary positional framing leaking into testing transitions",
+    );
+    assert.equal(result.primitive, "gate_rule");
+    const params = result.params as any;
+    assert.equal(params.framingMode, "spectrum");
+    assert.equal(params.target, "hypothesis");
+  });
+
+  it("parses 'Before promoting any hypothesis from forming to testing, rewrite binary positional framing…' as gate_rule (no leading preamble)", () => {
+    const result = translateAction(
+      "Before promoting any hypothesis from forming to testing, rewrite binary positional framing into a measurable single-variable claim.",
+      "",
+    );
+    assert.equal(result.primitive, "gate_rule");
+    const params = result.params as any;
+    assert.equal(params.framingMode, "spectrum");
+    assert.equal(params.target, "hypothesis");
+  });
+
+  it("parses 'Tag pure unanswered KB questions as speculative-queue and review/archive if no evidence attaches within 7 days' as archive_rule (5/13 speculative-queue case)", () => {
+    const result = translateAction(
+      "Tag pure unanswered KB questions as speculative-queue and review/archive if no evidence attaches within 7 days.",
+      "unanswered KB questions accumulating with no evidence path",
+    );
+    assert.equal(result.primitive, "archive_rule");
+    const params = result.params as any;
+    // Target should mention KB question, not the loose-pattern junk ("if").
+    assert.ok(
+      String(params.target).includes("kb") && String(params.target).includes("question"),
+      `expected target to identify KB questions, got ${params.target}`,
+    );
+    assert.equal(params.staleDays, 7);
+    assert.ok(
+      String(params.criteria).includes("speculative-queue"),
+      `expected criteria to capture the speculative-queue tag, got ${params.criteria}`,
+    );
+  });
+
+  // ── Regression: classifyMissingPrimitiveFamily would have been the
+  // *fallback* path for these four shapes had they fallen through to `none`.
+  // Now that they translate cleanly, the classifier should never be reached
+  // for these inputs — but we still pin the family labels so a future
+  // parser regression that re-introduces `none` would surface them under the
+  // correct missing-primitive family rather than the catch-all "other".
+  it("classifies the four 5/13 shapes under specific families (not 'other') as a safety net", () => {
+    const evidence = classifyMissingPrimitiveFamily(
+      "Implement a mandatory evidence accessibility check: before moving any hypothesis from forming to testing, name the dataset.",
+    );
+    assert.equal(evidence, "gate");
+
+    const force = classifyMissingPrimitiveFamily(
+      "Force one concrete content artifact (a post draft or thread outline) within 2 cycles.",
+    );
+    assert.equal(force, "artifact");
+
+    const binary = classifyMissingPrimitiveFamily(
+      "Binary-check gate: before promoting any hypothesis from forming to testing, rewrite binary positional framing into a measurable single-variable claim.",
+    );
+    // "binary" cue wins over "gate" cue here — spectrum family describes the
+    // binary→spectrum rewrite intent. Either family would be acceptable;
+    // pin to the current classifier output so a drift is visible.
+    assert.ok(
+      binary === "spectrum" || binary === "gate",
+      `expected spectrum or gate, got ${binary}`,
+    );
+
+    const kb = classifyMissingPrimitiveFamily(
+      "Tag pure unanswered KB questions as speculative-queue and review/archive if no evidence attaches within 7 days.",
+    );
+    assert.equal(kb, "archive");
+  });
+
   it("data-source / threshold-check gate phrasings still classify correctly", () => {
     const dataSource = translateAction(
       "Before promoting any new hypothesis from forming to testing, apply a data-source gate to reject claims with no measurement path.",
