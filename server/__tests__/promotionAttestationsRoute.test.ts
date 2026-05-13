@@ -24,12 +24,27 @@ import {
   proposeRecommendation,
 } from "../selfRecommendationEngine.js";
 import { PHASE3A_PREP_EVIDENCE_PREFIX } from "../eval/phase3aPrepAttestation.js";
-import {
-  PHASE3A_PREP_PRECONDITION_KEYS,
-  PHASE3A_PREP_PRIORITY_TIERS,
-  PHASE3A_PREP_HARNESS_VERSION,
-  type Phase3aPrepCandidate,
-} from "../experiments/phase3aPrepHarness.js";
+
+// Track A import-isolation pin (see server/__tests__/phase3aPrepHarness.test.ts):
+// this file is NOT on the allow-list of harness importers. Phase 3b-b is a
+// pure read-only consumer of `engine_events` — it does not depend on the
+// harness vocabulary at runtime. We mirror the precondition keys / tiers /
+// harness-version constants inline here so the test can construct a
+// fully-satisfied candidate JSON payload without importing the harness
+// module. The Phase 3a-prep-f golden-output test still owns parity between
+// these literals and the harness exports; if the vocabulary ever shifts,
+// this test will fail loudly with a parse_error on the persisted row.
+const PHASE3A_PREP_PRECONDITION_KEYS = [
+  "reversibleLowRiskActionOnly",
+  "explicitKillSwitchAndResourceLimits",
+  "anomalyAndDriftDetectionPlaceholder",
+  "rollbackProof",
+  "humanApprovalBoundary",
+  "metricsClockReadiness",
+  "noPublicAction",
+] as const;
+const PHASE3A_PREP_PRIORITY_TIERS = ["high", "low"] as const;
+const PHASE3A_PREP_HARNESS_VERSION = "phase3aPrep.v1" as const;
 
 function wipe() {
   try { db.delete(selfRecommendations).run(); } catch {}
@@ -56,8 +71,8 @@ async function listen(app: express.Express): Promise<{ url: string; close: () =>
   });
 }
 
-function fullySatisfiedCandidate(candidateId: string): Phase3aPrepCandidate {
-  const preconditions: Phase3aPrepCandidate["preconditions"] = {} as any;
+function fullySatisfiedCandidate(candidateId: string): Record<string, unknown> {
+  const preconditions: Record<string, Record<string, unknown>> = {};
   for (const key of PHASE3A_PREP_PRECONDITION_KEYS) {
     const tiers: Record<string, unknown> = {};
     for (const tier of PHASE3A_PREP_PRIORITY_TIERS) {
@@ -69,7 +84,7 @@ function fullySatisfiedCandidate(candidateId: string): Phase3aPrepCandidate {
         rationale: "ok",
       };
     }
-    (preconditions as any)[key] = tiers;
+    preconditions[key] = tiers;
   }
   return { candidateId, kind: "summarizationTemplate", preconditions };
 }
