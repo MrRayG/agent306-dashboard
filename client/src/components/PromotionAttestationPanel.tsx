@@ -44,6 +44,12 @@ export interface PromotionAttestationEvent {
   emittedAt: string;
   gateOk: boolean;
   attestations: ReadonlyArray<AttestationEntry>;
+  /** Phase 4-a: operator-gated advisory soft warnings persisted on the
+   *  same event row. Older rows pre-dating Phase 4-a may omit this
+   *  field; consumers should treat absence and empty-array as
+   *  equivalent. ADVISORY ONLY — the panel renders these as text and
+   *  never derives any action from them. */
+  softWarnings?: ReadonlyArray<string>;
 }
 
 export interface PromotionAttestationsResponse {
@@ -114,6 +120,33 @@ export function PromotionAttestationList(props: {
               {ev.attestations.length} attestation{ev.attestations.length === 1 ? "" : "s"}
             </span>
           </div>
+          {ev.softWarnings && ev.softWarnings.length > 0 && (
+            <div
+              data-testid={`promotion-soft-warnings-${ev.id}`}
+              data-soft-warning-count={ev.softWarnings.length}
+              style={{
+                marginTop: 6,
+                padding: "4px 6px",
+                border: `1px dashed ${YELLOW}`,
+                borderRadius: 3,
+                color: YELLOW,
+                fontSize: 11,
+              }}
+            >
+              <div style={{ color: YELLOW, fontWeight: 600 }}>
+                soft warning (advisory · gate.ok unchanged)
+              </div>
+              {ev.softWarnings.map((w, i) => (
+                <div
+                  key={i}
+                  data-testid={`promotion-soft-warning-${ev.id}-${i}`}
+                  style={{ marginTop: 2 }}
+                >
+                  {w}
+                </div>
+              ))}
+            </div>
+          )}
           {ev.attestations.map((att, idx) => (
             <div
               key={idx}

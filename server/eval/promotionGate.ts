@@ -33,6 +33,24 @@
  * promotion-boundary audit (`server/eval/promotionBoundaryAudit.ts`)
  * remain the canonical pin. Removing the channel is a single-file
  * delete plus removing the `attestations` field on this type.
+ *
+ * Operator-gated soft warning channel (Phase 4-a)
+ * ───────────────────────────────────────────────
+ * `softWarnings` is an ADVISORY array of human-readable strings. It is
+ * computed STRICTLY after `ok` / `failures` / `ranSets` are determined,
+ * is wholly DERIVED FROM `attestations`, and NEVER feeds back into `ok`.
+ * Entries are populated only when an operator explicitly opts in via
+ * `PROMOTION_GATE_REQUIRE_PHASE3A_PREP_READY=true`. With the flag off
+ * (the default) `softWarnings` is an empty array — output is byte-
+ * identical to pre-Phase-4-a behavior.
+ *
+ * The flag name uses the verb "REQUIRE" for forward-compatibility with
+ * Phase 4-b's authoritative variant; in Phase 4-a it is SOFT-only: the
+ * warning is informational, surfaces alongside the existing advisory
+ * attestation telemetry, and does not block, reject, mutate status, or
+ * widen any public-action surface. Pin 7 and Pin 11 are preserved.
+ * Removing the channel is a single-file delete plus removing the
+ * `softWarnings` field on this type.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -54,6 +72,70 @@ export interface PromotionResult {
    *  attestations; callers should treat absence and empty-array as
    *  equivalent. */
   attestations?: PromotionAttestation[];
+  /** Operator-gated advisory soft warnings (Phase 4-a). Populated only
+   *  when `PROMOTION_GATE_REQUIRE_PHASE3A_PREP_READY=true` AND a
+   *  phase3aPrep attestation is present but its readiness verdict is
+   *  not `fully_prepared` (or it is a `parse_error`). The array is
+   *  ALWAYS irrelevant to `ok`; computed from `attestations` AFTER `ok`
+   *  is decided. Callers should treat absence and empty-array as
+   *  equivalent. Strings are human-readable; do not parse. */
+  softWarnings?: string[];
+}
+
+/** Env-flag identifier for the Phase 4-a operator-gated soft warning.
+ *  When this env var is set to the literal string `"true"` (case-
+ *  insensitive), `canPromote` populates `softWarnings` with one entry
+ *  per advisory attestation whose readiness is not `fully_prepared`.
+ *  Default behavior (flag unset / any other value) is unchanged. */
+export const PROMOTION_GATE_REQUIRE_PHASE3A_PREP_READY_ENV =
+  "PROMOTION_GATE_REQUIRE_PHASE3A_PREP_READY" as const;
+
+/** Pure helper: read the Phase 4-a flag from `process.env`. Exported for
+ *  test seams and future call sites; the gate itself is the only live
+ *  caller. Returns `true` ONLY when the env var equals the literal
+ *  string `"true"` (case-insensitive). Any other value, including
+ *  unset / empty / `"1"` / `"yes"`, returns `false`. */
+export function readPhase3aPrepReadyRequiredFlag(): boolean {
+  const v = process.env[PROMOTION_GATE_REQUIRE_PHASE3A_PREP_READY_ENV];
+  if (typeof v !== "string") return false;
+  return v.toLowerCase() === "true";
+}
+
+/** Pure helper (exported for tests): derive Phase 4-a soft warnings from
+ *  the attestation array. Returns an empty array when the flag is off,
+ *  when no attestations are present, or when every attestation reports
+ *  `status === "evaluated"` AND `readiness.verdict === "fully_prepared"`.
+ *  This function NEVER reads env / clock / fs / db — `flagOn` is passed
+ *  by the caller. */
+export function deriveSoftWarnings(
+  attestations: ReadonlyArray<PromotionAttestation>,
+  flagOn: boolean,
+): string[] {
+  if (!flagOn) return [];
+  if (attestations.length === 0) return [];
+  const out: string[] = [];
+  for (const att of attestations) {
+    if (att.source !== "phase3aPrep") continue;
+    if (att.status === "parse_error") {
+      out.push(
+        `phase3aPrep attestation could not be parsed (parseError: ${att.parseError ?? "unknown"}); ` +
+        `operator opted in via ${PROMOTION_GATE_REQUIRE_PHASE3A_PREP_READY_ENV}=true. ` +
+        `ADVISORY ONLY — gate.ok is unaffected and apply is not blocked.`,
+      );
+      continue;
+    }
+    const verdict = att.readiness?.verdict;
+    if (verdict !== "fully_prepared") {
+      const candidate = att.candidateId.length > 0 ? att.candidateId : "(unknown)";
+      const verdictStr = verdict ?? "(missing)";
+      out.push(
+        `phase3aPrep readiness for candidate '${candidate}' is '${verdictStr}' ` +
+        `(operator opted in via ${PROMOTION_GATE_REQUIRE_PHASE3A_PREP_READY_ENV}=true). ` +
+        `ADVISORY ONLY — gate.ok is unaffected and apply is not blocked.`,
+      );
+    }
+  }
+  return out;
 }
 
 /** Run every registered advisory attestation adapter against the
@@ -87,10 +169,31 @@ export async function canPromote(rec: SelfRecommendation): Promise<PromotionResu
   // needs gate state (it shouldn't), it must take it as an argument —
   // we never let attestations read from the gate's working state.
   const attestations = collectAttestations(rec);
+  // Phase 4-a: env flag snapshot taken ONCE so every return path shares
+  // the same value, mirroring `attestations`. Read after `ok` is decided
+  // — never feeds into the gate's working state.
+  const flagOn = readPhase3aPrepReadyRequiredFlag();
+
+  // Single helper used by every return path. Computes soft warnings
+  // strictly AFTER the gate has decided its own `ok` / `failures` /
+  // `ranSets`. Pin 11 (single write boundary) is preserved by
+  // construction: `softWarnings` is a separate field that no consumer
+  // is allowed to read into `ok`.
+  const finalize = (
+    ok: boolean,
+    failuresOut: string[],
+    ranSetsOut: string[],
+  ): PromotionResult => ({
+    ok,
+    failures: failuresOut,
+    ranSets: ranSetsOut,
+    attestations,
+    softWarnings: deriveSoftWarnings(attestations, flagOn),
+  });
 
   if (rec.status !== "approved") {
     failures.push(`recommendation not approved (status=${rec.status})`);
-    return { ok: false, failures, ranSets, attestations };
+    return finalize(false, failures, ranSets);
   }
 
   let report: Awaited<ReturnType<typeof runAllGoldenSets>>;
@@ -98,7 +201,7 @@ export async function canPromote(rec: SelfRecommendation): Promise<PromotionResu
     report = await runAllGoldenSets();
   } catch (e: any) {
     failures.push(`regression runner threw: ${e?.message ?? e}`);
-    return { ok: false, failures, ranSets, attestations };
+    return finalize(false, failures, ranSets);
   }
 
   for (const s of report.sets) ranSets.push(`${s.name}@v${s.version}`);
@@ -116,7 +219,7 @@ export async function canPromote(rec: SelfRecommendation): Promise<PromotionResu
         console.warn(`  ${f.setName}.${f.caseId}: ${f.reason ?? "fail"}`);
       }
     }
-    return { ok: true, failures, ranSets, attestations };
+    return finalize(true, failures, ranSets);
   }
 
   // medium / high: block on any failure.
@@ -133,5 +236,5 @@ export async function canPromote(rec: SelfRecommendation): Promise<PromotionResu
     failures.push("high-risk changes require PROMOTION_GATE_ALLOW_HIGH_RISK=true as an explicit operator override");
   }
 
-  return { ok: failures.length === 0, failures, ranSets, attestations };
+  return finalize(failures.length === 0, failures, ranSets);
 }
