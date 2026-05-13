@@ -108,13 +108,6 @@ export const QUARANTINED_TESTS: readonly QuarantinedTest[] = [
     note: "novelty gate test mutates memory_knowledge.json (found via bisect)",
   },
   {
-    path: "server/__tests__/promotionBoundaryAudit.test.ts",
-    reason: "mutates_core_state",
-    priority: "high",
-    issue: "#332",
-    note: "promotion boundary audit fixture leaks into shared state",
-  },
-  {
     path: "server/__tests__/repositories.test.ts",
     reason: "mutates_core_state",
     priority: "low",
