@@ -80,10 +80,10 @@ describe("quarantinedTests manifest — shape", () => {
     assert.ok(QUARANTINED_TESTS.length > 0);
   });
 
-  it("contains exactly 9 quarantined culprits (19 - 10 drained: repositoryBakFallback, autonomyMonitor, hypothesisDecisionEvents, hypothesisSandboxExecution, listHypothesisPromotionCandidates, lowRiskSandboxRegistry, promotionBoundaryAudit, sandboxRegistrationRecords, selfChangeVerifier, summarizationSandboxFixtureRegistration)", () => {
+  it("contains exactly 8 quarantined culprits (19 - 11 drained: repositoryBakFallback, autonomyMonitor, hypothesisDecisionEvents, hypothesisSandboxExecution, listHypothesisPromotionCandidates, lowRiskSandboxRegistry, promotionBoundaryAudit, sandboxRegistrationRecords, selfChangeVerifier, summarizationSandboxFixtureRegistration, wiringEnhancements)", () => {
     // Each entry removed by a per-culprit drain PR updates this count.
     // When this reaches 0 the quarantine mechanism itself can be removed.
-    assert.equal(QUARANTINED_TESTS.length, 9);
+    assert.equal(QUARANTINED_TESTS.length, 8);
   });
 
   it("is sorted alphabetically by path", () => {
@@ -147,9 +147,9 @@ describe("quarantinedTests manifest — shape", () => {
 });
 
 describe("quarantinedTests manifest — high/low priority split", () => {
-  it("has exactly 1 high-priority entry (was 11; drained: repositoryBakFallback, autonomyMonitor, hypothesisDecisionEvents, hypothesisSandboxExecution, listHypothesisPromotionCandidates, lowRiskSandboxRegistry, promotionBoundaryAudit, sandboxRegistrationRecords, selfChangeVerifier, summarizationSandboxFixtureRegistration)", () => {
+  it("has exactly 0 high-priority entries (was 11; drained: repositoryBakFallback, autonomyMonitor, hypothesisDecisionEvents, hypothesisSandboxExecution, listHypothesisPromotionCandidates, lowRiskSandboxRegistry, promotionBoundaryAudit, sandboxRegistrationRecords, selfChangeVerifier, summarizationSandboxFixtureRegistration, wiringEnhancements)", () => {
     const counts = countByPriority();
-    assert.equal(counts.high, 1, `expected 1 high, got ${counts.high}`);
+    assert.equal(counts.high, 0, `expected 0 high, got ${counts.high}`);
   });
 
   it("has exactly 8 low-priority entries", () => {
