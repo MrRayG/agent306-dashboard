@@ -69,6 +69,8 @@ import {
   looksLikeAttributionByLink,
   hasAttributionVerbAnalysis as hasAttributionVerbInAnalysisMode,
   extractQuotedSpans,
+  hasExplicitAgent306AnalysisFraming,
+  embeddedFactualClaimRequiresSourcing,
 } from "./artifactMode.js";
 import { logEvent } from "./observability/structuredLog.js";
 import { VERIFIER_CONTRACT_ID, VERIFIER_CONTRACT_VERSION } from "./verifierContract.js";
@@ -732,6 +734,41 @@ async function verifyClaimsImpl(opts: VerifyClaimsOpts): Promise<ClaimVerdict> {
         }
       }
     }
+  }
+
+  // ── Mode-independent: explicit Agent 306 analysis/recommendation framing ──
+  // A sentence that is explicitly labeled as "Agent 306's analysis: …",
+  // "Agent 306's recommendation: …", "Agent 306's advice — …" etc. is
+  // the agent's own voice, not a claim attributed to the source. The
+  // user-reported regression (sentence 55 of a 2026-05 blog publish)
+  // was such a sentence — the source contained no mention of Agent 306
+  // or the recommended habit (correctly so, because the recommendation
+  // is the agent's), and the verifier hard-failed it as Lane A
+  // source-attribution drift.
+  //
+  // This exemption applies in ALL modes (REPORT / ANALYSIS / MANUSCRIPT)
+  // because the framing is an explicit boundary phrase, not a
+  // mode-relaxation. It is INTENTIONALLY conservative:
+  //   - Match is anchored at the sentence's leading subject (after
+  //     stripping markdown emphasis and any leading `## Heading`).
+  //   - The framing phrase must be followed by `:` / `—` / `–` / `-`.
+  //   - Sentences with an embedded factual claim (numeric markers,
+  //     named-authority "study by …" phrases, or an embedded
+  //     attribution verb beyond the framing itself) fall through to the
+  //     regular Lane A / Lane B paths — the writer cannot duck factual
+  //     overreach behind the framing label.
+  //   - Quoted-span fabrication detection (section 1 below) runs
+  //     independently in all modes, so a fabricated quoted span inside
+  //     a framed sentence still flags LANE_A_FAIL.
+  //
+  // Counted as `authorVoice` for telemetry (this IS the agent's voice).
+  for (const s of sentences) {
+    const key = normalize(s);
+    if (exemptKeys.has(key)) continue;
+    if (!hasExplicitAgent306AnalysisFraming(s)) continue;
+    if (embeddedFactualClaimRequiresSourcing(s)) continue;
+    exemptKeys.add(key);
+    exemptionCounters.authorVoice += 1;
   }
 
   // 0. Do-not-republish registry — highest severity, checked before publish gates.

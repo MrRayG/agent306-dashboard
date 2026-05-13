@@ -804,3 +804,154 @@ export function extractQuotedSpans(sentence: string): string[] {
 
   return spans;
 }
+
+// ── Explicit Agent 306 analysis/recommendation framing ─────────────────────
+//
+// Mode-independent detector for sentences whose author has EXPLICITLY
+// labeled them as Agent 306's analysis / recommendation / advice /
+// take / read / caveat using a sentence-leading boundary phrase
+// (typically followed by `:` or em-dash).
+//
+// Example (the reported regression):
+//   "**Agent 306's analysis: build a brief regular review habit.** Check
+//    your bank statement periodically for AI-handled transactions — look
+//    for auto-pay notes or assistant-flagged entries."
+//
+// Such a sentence should NOT be treated as Lane A source-attribution and
+// hard-failed when the source text does not contain Agent 306 or the
+// recommended habit. The user has explicitly told the reader (and the
+// verifier) that this is the agent's voice, not a claim attributed to
+// the source.
+//
+// IMPORTANT — boundary-phrase abuse guard:
+//   The framing is recognized ONLY at the sentence's leading subject
+//   (after markdown bold/italic and any leading header is stripped).
+//   It does NOT exempt embedded factual claims — see
+//   `embeddedFactualClaimRequiresSourcing` below — so a sentence like
+//     "Agent 306's analysis: the model hit 92.4% accuracy in the
+//      benchmark."
+//   still routes through the regular Lane B numeric-fact check (and
+//   "Politico reports …" inside the analysis still routes through the
+//   regular attribution-verb path).
+//
+// Two checks are exported:
+//   - `hasExplicitAgent306AnalysisFraming(s)` → sentence is framed as
+//     Agent 306 analysis/recommendation/advice/take/read/caveat.
+//   - `embeddedFactualClaimRequiresSourcing(s)` → sentence (presumed
+//     already framed) carries a numeric/year marker, named external
+//     authority phrase, or explicit attribution verb that still needs
+//     sourcing. When true, the regular Lane B / Lane A path applies.
+
+/** Phrases that, when they appear at the start of the sentence (after
+ *  optional markdown bold/italic + leading header), label the sentence
+ *  as Agent 306's own voice. Each entry is the LOWERCASE prefix exactly
+ *  as it appears in the draft, MINUS the trailing `:` or em-dash —
+ *  those are checked separately below.
+ *
+ *  Curated and small. Extending this list is a deliberate act — every
+ *  new entry licenses a sentence to bypass the deterministic Lane A
+ *  attribution gate. */
+export const AGENT_306_FRAMING_PREFIXES = [
+  "agent 306's analysis",
+  "agent 306's recommendation",
+  "agent 306's recommendations",
+  "agent 306's advice",
+  "agent 306's take",
+  "agent 306's read",
+  "agent 306's caveat",
+  "agent 306 analysis",
+  "agent 306 recommendation",
+  "agent 306 recommendations",
+  "agent 306 advice",
+];
+
+/** Strip leading markdown emphasis (`**`, `__`, `*`, `_`) from a string. */
+function stripLeadingEmphasis(s: string): string {
+  return s.replace(/^[\s*_`]+/, "");
+}
+
+/** True when `s` begins with one of `AGENT_306_FRAMING_PREFIXES` followed
+ *  by a colon, em-dash, en-dash, or hyphen — i.e. the writer is using
+ *  the contract's boundary phrase to label the sentence as the agent's
+ *  voice.
+ *
+ *  The check tolerates leading markdown emphasis (`**Agent 306's
+ *  analysis:**`) and a leading `## Heading ` so the merged-into-paragraph
+ *  form still classifies. Apostrophe typography is normalized (curly
+ *  `'` → straight `'`) before matching so writers using either form get
+ *  the same exemption. */
+export function hasExplicitAgent306AnalysisFraming(s: string): boolean {
+  if (!s) return false;
+  const { body } = stripLeadingMarkdownHeader(s);
+  // Fold curly apostrophes/quotes to ASCII so the prefix list (which uses
+  // straight apostrophes) matches drafts written with either typography.
+  // Case-fold off — we lowercase explicitly below.
+  const folded = normalizeForMatching(body.trim(), { caseFold: false });
+  // Strip leading emphasis markers and whitespace, then lowercase.
+  const head = stripLeadingEmphasis(folded).toLowerCase().slice(0, 96);
+  for (const prefix of AGENT_306_FRAMING_PREFIXES) {
+    if (!head.startsWith(prefix)) continue;
+    const after = head.slice(prefix.length);
+    // The boundary phrase must be followed by an explicit framing
+    // punctuation — colon, em-dash, en-dash, or hyphen — possibly
+    // preceded by `**` (closing bold) and/or spaces.
+    if (/^[\s*_`]*[:—–\-]/.test(after)) return true;
+  }
+  return false;
+}
+
+/** Single-token "named authority" pattern that should still require
+ *  sourcing even inside an Agent 306 analysis sentence. Mirrors the
+ *  Lane B `LANE_B_NAMED_AUTHORITY_RX` shape: `study|report|index|…`
+ *  followed by `by|from|of`. */
+const NAMED_AUTHORITY_INSIDE_ANALYSIS_RX =
+  /\b(study|report|index|benchmark|paper|survey)\s+(by|from|of)\b/i;
+
+/** Numeric / unit markers that read as concrete factual claims and
+ *  should not be exempted by the Agent 306 framing on their own. */
+const NUMERIC_INSIDE_ANALYSIS_RX =
+  /(\d{1,3}(?:[.,]\d+)?\s*%|\$\s*\d+(?:[.,]\d+)?\s*(?:thousand|million|billion|trillion|[KMBT])?\b|\b\d+(?:\.\d+)?\s*(?:days?|users?|parameters?|tokens?|attendees?|models?|percent|bps|K|M|B|T)\b|\b\d+(?:\.\d+)?[xX]\b|\b(?:19|20)\d{2}\b)/i;
+
+/** Verb-shape phrases that, inside a framed Agent-306 sentence, signal
+ *  an EMBEDDED attribution claim the writer cannot duck behind the
+ *  framing label. Each entry must be a strong verb-shape construction:
+ *  the bare-noun forms ("notes", "reports") are deliberately excluded
+ *  because they show up in ordinary prose ("auto-pay notes",
+ *  "expense reports").
+ *
+ *  Curated and small. Compared to `ATTRIBUTION_VERBS_ANALYSIS`, this
+ *  list drops the bare nouns and keeps only verb-shape forms with a
+ *  clear subject-verb construction. */
+const EMBEDDED_ATTRIBUTION_VERB_RX = new RegExp(
+  [
+    // "X reports that …", "X stated that …", "X writes that …", …
+    "\\b(reports|reported|reporting|stated|states|writes|wrote|argues|argued|claims|claimed|said|says|noted)\\s+(?:that|how|when|why|whether)\\b",
+    // "according to …", "per the document …" — discourse-level attribution.
+    "\\baccording to\\b",
+    "\\bper the (?:document|article|report|principles|piece|paper|study|essay|statement)\\b",
+    "\\bthe (?:document|article|report|principles|piece|paper|study|essay|statement)\\s+(?:states|said|says|writes|wrote|argues|reported|reports)\\b",
+  ].join("|"),
+  "i",
+);
+
+function containsEmbeddedAttributionVerb(s: string): boolean {
+  return EMBEDDED_ATTRIBUTION_VERB_RX.test(s);
+}
+
+/** True when an Agent-306-framed sentence ALSO carries a concrete
+ *  factual claim that the writer cannot duck behind the framing label —
+ *  numeric markers, named-authority "study by …" phrases, or an
+ *  embedded explicit attribution verb construction. In that case, the
+ *  verifier falls through to the regular Lane A / Lane B paths so the
+ *  embedded claim still gets checked.
+ *
+ *  Quoted spans are NOT counted here — the verifier's verbatim-quote
+ *  check (claimVerifier.ts section 1) handles fabricated quotes
+ *  independently and runs in all modes. */
+export function embeddedFactualClaimRequiresSourcing(s: string): boolean {
+  if (!s) return false;
+  if (NUMERIC_INSIDE_ANALYSIS_RX.test(s)) return true;
+  if (NAMED_AUTHORITY_INSIDE_ANALYSIS_RX.test(s)) return true;
+  if (containsEmbeddedAttributionVerb(s)) return true;
+  return false;
+}
