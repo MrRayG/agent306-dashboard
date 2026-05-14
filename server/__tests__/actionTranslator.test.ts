@@ -378,6 +378,52 @@ describe("ActionTranslator", () => {
     assert.equal((result.params as any).target, "hypothesis");
   });
 
+  // ── 5/14 parser-coverage fix: live "evidence access check" recurrence ──────
+  // After #367, production STILL emitted a missing-primitive rec for this
+  // exact wording from the logs:
+  //   "Add a mandatory 'evidence access check' before any hypothesis moves
+  //    from forming to testing: explicitly name the data source, access
+  //    method, and expected timeline. If all three can't be specified, the…"
+  // #367 covered `evidence accessibility check` and bare `evidence check`,
+  // but the three-word `evidence access check` shape fell through. Same
+  // gate_rule semantics; widening the descriptor alternation rather than
+  // adding a new primitive.
+  it("parses live 'Add a mandatory evidence access check before any hypothesis moves from forming to testing…' as gate_rule (5/14 evidence-access case)", () => {
+    const result = translateAction(
+      "Add a mandatory 'evidence access check' before any hypothesis moves from forming to testing: explicitly name the data source, access method, and expected timeline. If all three can't be specified, the hypothesis stays in forming.",
+      "evidence access check missing on forming→testing transitions",
+    );
+    assert.equal(result.primitive, "gate_rule");
+    assert.equal((result.params as any).target, "hypothesis");
+    assert.ok(
+      String((result.params as any).description).length > 0,
+      "gate description must not be empty",
+    );
+  });
+
+  it("parses the truncated live 'Add a mandatory evidence access check … explicitly name the data so' shape as gate_rule", () => {
+    // Truncated log shape (mid-sentence cut after "data so…"). Must still
+    // route to gate_rule on hypothesis — the descriptor cue is present and
+    // the forming→testing transition is in the action body.
+    const result = translateAction(
+      "Add a mandatory 'evidence access check' before any hypothesis moves from forming to testing: explicitly name the data so",
+      "",
+    );
+    assert.equal(result.primitive, "gate_rule");
+    assert.equal((result.params as any).target, "hypothesis");
+  });
+
+  it("parses unquoted 'evidence access check' phrasing as gate_rule", () => {
+    // Defensive: the live rec used single quotes around the descriptor.
+    // The same wording without the surrounding quotes must still match.
+    const result = translateAction(
+      "Add a mandatory evidence access check before any hypothesis moves from forming to testing.",
+      "",
+    );
+    assert.equal(result.primitive, "gate_rule");
+    assert.equal((result.params as any).target, "hypothesis");
+  });
+
   it("parses 'Force one concrete content artifact (a post draft or thread outline) within 2 cycles' as artifact_rule (5/13 force-content case)", () => {
     const result = translateAction(
       "Force one concrete content artifact (a post draft or thread outline) within 2 cycles.",
@@ -480,6 +526,19 @@ describe("ActionTranslator", () => {
       "Tag pure unanswered KB questions as speculative-queue and review/archive if no evidence attaches within 7 days.",
     );
     assert.equal(kb, "archive");
+
+    // 5/14 follow-up: "evidence access check" shape. Must classify as `gate`
+    // (not `other`) even if parsing ever regresses to `none`. Both the
+    // quoted and unquoted variants from the live rec are exercised.
+    const evidenceAccess = classifyMissingPrimitiveFamily(
+      "Add a mandatory 'evidence access check' before any hypothesis moves from forming to testing.",
+    );
+    assert.equal(evidenceAccess, "gate");
+
+    const evidenceAccessUnquoted = classifyMissingPrimitiveFamily(
+      "Add a mandatory evidence access check before any hypothesis moves from forming to testing.",
+    );
+    assert.equal(evidenceAccessUnquoted, "gate");
   });
 
   it("data-source / threshold-check gate phrasings still classify correctly", () => {
