@@ -313,6 +313,13 @@ export async function applyRecommendation(id: string, operator: string): Promise
     .where(eq(selfRecommendations.id, id))
     .run();
   const row = getRecommendation(id)!;
+  // PR-C: eligible engine recs (operator-approved, linked to an insight,
+  // proposedChange translates to an existing primitive) register an
+  // executable enforcement rule via the existing registration path. This
+  // is a downstream effect of a successful apply; it never affects the
+  // ApplyResult `ok`, the status='applied' write, or the promotion gate.
+  // Translation failures are logged as a diagnostic event and ignored.
+  await maybeRegisterRuleForRecommendation(row);
   return { ok: true, recommendation: row, prUrl: row.prUrl ?? undefined, patchPath: row.patchPath ?? undefined };
 }
 
@@ -366,6 +373,127 @@ async function persistPromotionAttestations(
     const msg = e instanceof Error ? e.message : String(e);
     console.warn(
       `[selfRecommendationEngine] attestation persistence failed (ignored): ${msg}`,
+    );
+  }
+}
+
+/**
+ * PR-C — register an executable enforcement rule for an eligible engine
+ * recommendation that has just transitioned to `status: applied`.
+ *
+ * Eligibility (intentionally narrow):
+ *   - rec.category === "engine"
+ *   - rec.sourceInsightId is present (rule registration keys off insight id)
+ *   - actionTranslator.translateAction(proposedChange, rationale) yields a
+ *     primitive other than "none"
+ *
+ * Effect: delegates to actionTranslator.registerRuleFromInsight, which
+ * dedupes by insightId in actionEnforcer.registerRule (filters existing
+ * rules for the same insight before unshift). That is the existing rule
+ * registration path used by GoalEngine.promoteInsightToGoal; nothing new
+ * is introduced.
+ *
+ * Idempotency: re-running apply on the same recommendation is already
+ * blocked by the `status !== "approved"` guard in applyRecommendation, so
+ * this helper cannot be invoked twice for the same rec in normal flow.
+ * Even if it were, the actionEnforcer.registerRule dedupes by insightId
+ * (one rule per insight), so the executable-rule registry remains stable.
+ *
+ * Pin 7 / Pin 11 / promotion-gate posture:
+ *   - This helper never writes to `self_recommendations`.
+ *   - This helper never reads/writes apply's `ok` or the promotion gate.
+ *   - The single `status: "applied"` write site remains the db.update in
+ *     applyRecommendation; this runs strictly after that write.
+ *   - No new primitive families are introduced.
+ *   - No public-action / posting / scheduler surface is opened.
+ *
+ * Failure mode: if anything throws (translation parser, rule registration,
+ * structured-log import), the error is swallowed with a console.warn and
+ * a best-effort diagnostic event. The apply transition remains as written.
+ */
+async function maybeRegisterRuleForRecommendation(
+  rec: SelfRecommendation,
+): Promise<void> {
+  try {
+    if (rec.category !== "engine") return;
+    const insightId = rec.sourceInsightId;
+    if (!insightId) {
+      await logRuleRegistrationEvent({
+        recommendationId: rec.id,
+        registered: false,
+        reason: "no_source_insight_id",
+      });
+      return;
+    }
+
+    const { translateAction, registerRuleFromInsight } = await import(
+      "./actionTranslator.js"
+    );
+    const translation = translateAction(rec.proposedChange, rec.rationale);
+    if (translation.primitive === "none") {
+      await logRuleRegistrationEvent({
+        recommendationId: rec.id,
+        sourceInsightId: insightId,
+        registered: false,
+        reason: "untranslatable",
+        translationReason: translation.reason ?? "no primitive matched",
+      });
+      return;
+    }
+
+    const ruleId = registerRuleFromInsight(insightId, translation);
+    await logRuleRegistrationEvent({
+      recommendationId: rec.id,
+      sourceInsightId: insightId,
+      registered: true,
+      ruleId,
+      primitive: translation.primitive,
+    });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn(
+      `[selfRecommendationEngine] rule registration on apply failed (ignored): ${msg}`,
+    );
+    try {
+      await logRuleRegistrationEvent({
+        recommendationId: rec.id,
+        sourceInsightId: rec.sourceInsightId ?? undefined,
+        registered: false,
+        reason: "error",
+        errorMessage: msg,
+      });
+    } catch {
+      // best-effort; never escalate
+    }
+  }
+}
+
+interface RuleRegistrationEventPayload {
+  recommendationId: string;
+  sourceInsightId?: string;
+  registered: boolean;
+  ruleId?: string;
+  primitive?: string;
+  reason?: "no_source_insight_id" | "untranslatable" | "error";
+  translationReason?: string;
+  errorMessage?: string;
+}
+
+async function logRuleRegistrationEvent(
+  payload: RuleRegistrationEventPayload,
+): Promise<void> {
+  try {
+    const { logEvent } = await import("./observability/structuredLog.js");
+    logEvent({
+      engine: "selfRecommendation",
+      event: "ruleRegistrationOnApply",
+      level: payload.registered ? "info" : "warn",
+      data: payload,
+    });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn(
+      `[selfRecommendationEngine] ruleRegistrationOnApply log failed (ignored): ${msg}`,
     );
   }
 }
