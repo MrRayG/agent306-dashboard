@@ -126,7 +126,16 @@ const GATE_PATTERNS = [
   // check" framing. The earlier GATE patterns matched "<descriptor> gate" but
   // not "<descriptor> check"; "check" is an equally common SelfEvolution
   // phrasing for the same forcing pre-transition guardrail.
-  /\b(?:mandatory\s+)?((?:evidence\s+accessibility|accessibility|data[-\s]?source|measurement[-\s]?path|evidence)\s+check)\b/i,
+  // (added 2026-05-14: "evidence access check" — production after #367 still
+  // emitted a missing-primitive rec for this exact wording from logs:
+  //   "Add a mandatory 'evidence access check' before any hypothesis moves
+  //    from forming to testing: explicitly name the data source, access
+  //    method, and expected timeline."
+  // #367 covered `evidence accessibility check` and bare `evidence check` but
+  // not the three-word `evidence access check` shape. Same gate_rule
+  // semantics — pre-transition guardrail naming the resolving evidence —
+  // so widen the descriptor alternation rather than add a new primitive.)
+  /\b(?:mandatory\s+)?((?:evidence\s+accessibility|evidence\s+access|accessibility|data[-\s]?source|measurement[-\s]?path|evidence)\s+check)\b/i,
   // (c) — leading "binary-check gate:" / "data-source gate:" preamble.
   // Existing pattern 0 required whitespace between "gate" and the
   // colon-or-keyword separator, so "Binary-check gate:" (no whitespace before
@@ -683,7 +692,7 @@ export function classifyMissingPrimitiveFamily(actionText: string): MissingPrimi
   // qualifier so plain "check" alone doesn't fire on noise.
   if (
     /\b(pre[-\s]?registration|pre[-\s]?check|gate|block)\b|\brequire[s]?\b.*\bbefore\b/.test(a) ||
-    /\b(evidence\s+accessibility|accessibility|data[-\s]?source|measurement[-\s]?path|evidence)\s+check\b/.test(a)
+    /\b(evidence\s+accessibility|evidence\s+access|accessibility|data[-\s]?source|measurement[-\s]?path|evidence)\s+check\b/.test(a)
   ) {
     return "gate";
   }
