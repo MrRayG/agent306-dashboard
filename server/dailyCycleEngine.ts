@@ -1521,24 +1521,26 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
           console.warn("[DailyCycle] Breakthrough detection failed (non-fatal):", e.message);
         }
 
-        // Record corrections when hypotheses rejected after testing with confidence > 0.6
+        // Record corrections when hypotheses rejected after testing with
+        // confidence > 0.6. Hypothesis.confidence is a categorical label
+        // ("high" | "medium" | "low"), so qualification flows through
+        // normalizeConfidence to get a 0..1 scalar. The prior version called
+        // parseFloat on the label, which returned NaN and silently filtered
+        // out every hypothesis — corrections never got recorded.
         try {
-          const { recordCorrection } = await import("./reasoningEngine.js");
+          const { recordCorrection, qualifiesForCorrection } = await import("./reasoningEngine.js");
+          const { normalizeConfidence } = await import("./calibration/normalizeConfidence.js");
           const lab = getResearchLab();
-          const recentlyRejected = lab.hypotheses.filter((h: any) =>
-            h.status === "rejected" && h.resolvedAt &&
-            (Date.now() - new Date(h.resolvedAt).getTime()) < 24 * 60 * 60 * 1000 &&
-            h.testingStartedAt && // was in testing
-            parseFloat(h.confidence) > 0.6
-          );
+          const recentlyRejected = lab.hypotheses.filter((h: any) => qualifiesForCorrection(h));
           for (const h of recentlyRejected.slice(0, 3)) {
+            const norm = normalizeConfidence(h);
             recordCorrection({
               originalClaim: h.claim,
               originalDate: new Date(h.formedAt).getTime(),
               correctedClaim: h.resolution ?? `Rejected: ${h.claim}`,
               sourceHypothesisId: h.id,
               whatChanged: h.resolution ?? "Evidence contradicted the hypothesis",
-              lessonLearned: `Hypothesis "${h.claim.slice(0, 60)}" was rejected despite ${h.confidence} confidence. The evidence did not support the prediction.`,
+              lessonLearned: `Hypothesis "${h.claim.slice(0, 60)}" was rejected despite ${h.confidence} confidence (${norm.predictedConfidence.toFixed(2)} via ${norm.source}). The evidence did not support the prediction.`,
             });
           }
         } catch (e: any) {

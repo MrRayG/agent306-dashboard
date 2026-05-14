@@ -333,6 +333,10 @@ function computeIntellectualHonesty(): EvalDimension {
       correctionRate: Math.round(correctionRate * 10) / 10,
       insightValidationRate: Math.round(insightValidationRate * 10) / 10,
       pruningHealth: Math.round(pruningHealth * 10) / 10,
+      // Diagnostic counts so operators can distinguish "zero because no
+      // qualifying events" from "zero because the recorder is unwired".
+      correctionsCount30d: recentCorrections.length,
+      openContradictionsCount: openContradictions.length,
     },
   };
 }
@@ -457,6 +461,10 @@ function computeAudienceImpact(): EvalDimension {
       engagementTrend: Math.round(engagementTrend * 10) / 10,
       competencyGrowth: Math.round(competencyGrowth * 10) / 10,
       breakthroughRate: Math.round(breakthroughRate * 10) / 10,
+      // Diagnostic counts so operators can distinguish "zero because no
+      // qualifying events" from "zero because the detector is unwired".
+      breakthroughsCount30d: recentBreakthroughs.length,
+      confirmedHypothesesCount30d: confirmedRecent,
     },
   };
 }

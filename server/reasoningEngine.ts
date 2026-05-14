@@ -14,6 +14,7 @@ import { callLLM } from "./llmCall.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { semanticSearch } from "./embeddingEngine.js";
 import { evidenceQueue, routeEvidenceSearch } from "./evidenceDispatcher.js";
+import { normalizeConfidence } from "./calibration/normalizeConfidence.js";
 
 const GROK_API_KEY = LLM_API_KEY;
 const DEBATES_FILE = dataPath("reasoning-debates.json");
@@ -166,6 +167,32 @@ export function recordCorrection(correction: Omit<Correction, "id" | "correction
 
 export function getCorrections(): CorrectionsStore {
   return loadCorrections();
+}
+
+// ── Correction qualification ────────────────────────────────────────────────
+//
+// A "correction" is recorded when Agent 306 was strongly committed to a
+// hypothesis (confidence > 0.6 on the calibrated 0..1 scale) and then
+// rejected it after testing. The qualification predicate is split out so
+// the same rule is exercised by both the daily-cycle recorder and the
+// dashboard's diagnostic surface, and so the filter is unit-testable
+// without booting the whole daily cycle.
+//
+// Inputs are intentionally shaped as `any` because callers pass live
+// research-lab hypothesis rows whose typing varies across the codebase.
+
+const CORRECTION_RECENCY_MS = 24 * 60 * 60 * 1000;
+const CORRECTION_CONFIDENCE_THRESHOLD = 0.6;
+
+export function qualifiesForCorrection(h: any, now: number = Date.now()): boolean {
+  if (!h || typeof h !== "object") return false;
+  if (h.status !== "rejected") return false;
+  if (!h.resolvedAt) return false;
+  if (!h.testingStartedAt) return false;
+  const resolvedMs = new Date(h.resolvedAt).getTime();
+  if (!Number.isFinite(resolvedMs)) return false;
+  if (now - resolvedMs >= CORRECTION_RECENCY_MS) return false;
+  return normalizeConfidence(h).predictedConfidence > CORRECTION_CONFIDENCE_THRESHOLD;
 }
 
 // ── Grok call ─────────────────────────────────────────────────────────────────
