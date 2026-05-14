@@ -863,6 +863,20 @@ export const AGENT_306_FRAMING_PREFIXES = [
   "agent 306 recommendation",
   "agent 306 recommendations",
   "agent 306 advice",
+  // First-person analysis framings — recognized in the same conservative
+  // way as the named "Agent 306" prefixes: the phrase must be at the very
+  // start of the sentence (after markdown emphasis / leading header) and
+  // must be followed by an explicit framing punctuation (`:` / `—` /
+  // `–` / `-`). The boundary-phrase abuse guard
+  // (`embeddedFactualClaimRequiresSourcing`) still applies, so numeric
+  // facts, named-authority phrases, and embedded attribution verbs inside
+  // such a sentence continue to require sourcing.
+  //
+  // Live log shape (2026-05-13 ClaimVerifier rejection): "My read — this
+  // is agent analysis, not a source claim — is that the WhatsApp
+  // integration may be genuinely useful for businesses…".
+  "my read",
+  "my take",
 ];
 
 /** Strip leading markdown emphasis (`**`, `__`, `*`, `_`) from a string. */
