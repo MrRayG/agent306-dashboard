@@ -16,6 +16,7 @@ import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 import { postChatCompletions } from "./llmCall.js";
 import { proposeRecommendation, computeDedupeKey, findActiveRecommendationByDedupeKey } from "./selfRecommendationEngine.js";
+import { applyPromotionDecision, type PromotionApplyResult } from "./styleRulePromoter.js";
 import { waitForBatchComplete } from "./xaiBatchEngine.js";
 import {
   shouldUseReflectionBatch,
@@ -70,6 +71,19 @@ export interface StyleRule {
   confidence: "high" | "medium";
   createdAt: string;
   hitCount: number; // how many times this pattern has been confirmed
+  // PR-D: evidence-based promotion metadata. Optional + back-compat with
+  // existing on-disk style-rules.json rows (older rules implicitly weight 1).
+  weight?: number;                // 1 = normal, 2 = promoted (stronger prompt inclusion)
+  promotedAt?: string;
+  promotionReason?: string;
+  promotionEvidence?: {
+    associatedPostCount: number;
+    avgAssociatedScore: number;
+    baselineAvgScore: number;
+    margin: number;
+    hitCount: number;
+    checkedAt: string;
+  };
 }
 
 interface ReflectionsState {
@@ -157,15 +171,7 @@ let styleRules = loadStyleRules();
 })();
 
 // Register style rules provider so memoryEngine can inject rules into agent context
-setStyleRulesProvider(() => {
-  if (styleRules.rules.length === 0) return "";
-  const rules = styleRules.rules
-    .filter(r => r.confidence === "high" || r.hitCount >= 2)
-    .slice(0, 10)
-    .map(r => `- ${r.rule}`)
-    .join("\n");
-  return rules ? `\nACTIVE STYLE RULES (learned from post performance):\n${rules}` : "";
-});
+setStyleRulesProvider(() => buildStyleRulesContextString());
 
 // ── Grok call ─────────────────────────────────────────────────────────────────
 
@@ -424,6 +430,78 @@ export function deleteStyleRule(ruleId: string): boolean {
   return false;
 }
 
+// ── PR-D: Style-rule confidence promoter (internal maintenance) ──────────────
+//
+// Evaluate every existing style rule against the conservative promoter and
+// lift weight/confidence for rules with repeated evidence + above-baseline
+// post performance. Pure-by-default — the promoter only mutates style-rule
+// metadata. No public surface, no scheduler, no content generation.
+//
+// Designed to be invoked from the existing reflection maintenance path
+// (runReflection) and also manually exposed for operator inspection.
+
+export interface StyleRulePromotionRunSummary {
+  evaluated: number;
+  promoted: number;
+  alreadyPromoted: number;
+  skipped: number;
+  results: PromotionApplyResult[];
+}
+
+export function runStyleRulePromotion(): StyleRulePromotionRunSummary {
+  const nowIso = new Date().toISOString();
+  const results: PromotionApplyResult[] = [];
+  let promoted = 0;
+  let alreadyPromoted = 0;
+  let skipped = 0;
+
+  for (const rule of styleRules.rules) {
+    const r = applyPromotionDecision(
+      rule,
+      reflections.reflections,
+      performance.lessons,
+      nowIso,
+    );
+    results.push(r);
+    if (r.promoted) {
+      promoted++;
+      console.log(
+        `[Reflection] PROMOTED style rule ${r.ruleId} — reason=${r.reason} ` +
+          `avg=${r.evidence.avgAssociatedScore} baseline=${r.evidence.baselineAvgScore} ` +
+          `posts=${r.evidence.associatedPostCount} hits=${r.evidence.hitCount}`,
+      );
+    } else if (r.alreadyPromoted) {
+      alreadyPromoted++;
+    } else {
+      skipped++;
+    }
+  }
+
+  if (promoted > 0) {
+    styleRules.lastUpdated = nowIso;
+    saveStyleRules(styleRules);
+  }
+
+  return {
+    evaluated: results.length,
+    promoted,
+    alreadyPromoted,
+    skipped,
+    results,
+  };
+}
+
+// Test-only seam: lets unit tests inject a fresh styleRules state and run
+// the promoter against it deterministically. NOT exported to the API layer
+// — operators reach this via runReflection() or the maintenance helper.
+export function __resetStyleRulesForTest(rules: StyleRule[]): void {
+  styleRules = { rules: [...rules], lastUpdated: null };
+}
+
+export function __getStyleRulesStateForTest(): StyleRulesState {
+  return styleRules;
+}
+
 // ── Public: run reflection on unchecked posts ─────────────────────────────────
 
 /**
@@ -577,6 +655,21 @@ export async function runReflection(): Promise<Reflection[]> {
     console.warn("[Reflection] Podcast reflection integration failed:", e.message);
   }
 
+  // PR-D: opportunistically evaluate the promoter at the end of the
+  // reflection cycle. Conservative — only metadata mutates, no public
+  // surface, no scheduler.
+  try {
+    const summary = runStyleRulePromotion();
+    if (summary.promoted > 0) {
+      console.log(
+        `[Reflection] Style-rule promoter: ${summary.promoted} promoted / ` +
+          `${summary.evaluated} evaluated (already=${summary.alreadyPromoted}, skipped=${summary.skipped})`,
+      );
+    }
+  } catch (e: any) {
+    console.warn("[Reflection] Style-rule promoter run failed:", e?.message);
+  }
+
   return results;
 }
 
@@ -591,13 +684,53 @@ export function getStyleRules(): StyleRule[] {
 }
 
 export function getStyleRulesContext(): string {
+  return buildStyleRulesContextString();
+}
+
+/**
+ * Shared context-string builder used by both the memoryEngine provider and
+ * the exported `getStyleRulesContext()` API. Promoted rules (weight >= 2)
+ * are surfaced first under a stronger directive header and remaining
+ * eligible rules ship under the normal header. Total cap of 10 rules
+ * preserved from prior behavior.
+ */
+function buildStyleRulesContextString(): string {
   if (styleRules.rules.length === 0) return "";
-  const rules = styleRules.rules
-    .filter(r => r.confidence === "high" || r.hitCount >= 2)
-    .slice(0, 10)
-    .map(r => `- ${r.rule}`)
-    .join("\n");
-  return rules ? `\nACTIVE STYLE RULES (learned from post performance):\n${rules}` : "";
+
+  const eligible = styleRules.rules.filter(
+    r => r.confidence === "high" || r.hitCount >= 2,
+  );
+  if (eligible.length === 0) return "";
+
+  // Promoted-first ordering; within each band keep hitCount desc as a
+  // stable secondary sort so the same rule list is reproducible.
+  const sorted = [...eligible].sort((a, b) => {
+    const wa = a.weight ?? 1;
+    const wb = b.weight ?? 1;
+    if (wb !== wa) return wb - wa;
+    return (b.hitCount ?? 0) - (a.hitCount ?? 0);
+  });
+
+  const top = sorted.slice(0, 10);
+  const promoted = top.filter(r => (r.weight ?? 1) >= 2);
+  const normal = top.filter(r => (r.weight ?? 1) < 2);
+
+  const parts: string[] = [];
+  if (promoted.length > 0) {
+    parts.push(
+      `\nPROMOTED STYLE RULES (evidence-validated — apply firmly):\n${promoted
+        .map(r => `- ${r.rule}`)
+        .join("\n")}`,
+    );
+  }
+  if (normal.length > 0) {
+    parts.push(
+      `\nACTIVE STYLE RULES (learned from post performance):\n${normal
+        .map(r => `- ${r.rule}`)
+        .join("\n")}`,
+    );
+  }
+  return parts.join("\n");
 }
 
 export function getReflectionStats() {
