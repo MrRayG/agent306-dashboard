@@ -73,6 +73,22 @@ const RATIO_PATTERNS = [
   /(?:for\s+every|per|every)\s+(\d+)\s+(?:new\s+)?(\w+(?:\s+\w+){0,3}?)[,\s]+(?:force[-\s]?generate|generate|produce|ship|publish|create)\s+(?:one|an?|\d+)\s+(\w+(?:\s+\w+){0,2})/i,
   // "1 synthesis per 10 KB entries"
   /(\d+)\s+(\w+(?:\s+\w+){0,2})\s+per\s+(\d+)\s+(\w+(?:\s+\w+){0,3})/i,
+  // (added 2026-05-15: live self-recs after #376 kept producing missing-
+  // primitive "other" recs for hard KB archive/merge ratio commitments:
+  //   "Implement a hard 1:1 ratio rule: for every new KB entry added, one
+  //    existing entry must be archived or merged."
+  //   "Implement a hard gate: for every 5 new KB entries added, 1 must be
+  //    archived or merged before the next addition is permitted."
+  // The existing patterns required a generate/produce/ship/... verb in
+  // active voice. These live shapes use passive "must be archived/merged",
+  // which is semantically the same ratio_rule (one output per N inputs) —
+  // route them to the existing primitive rather than introducing a new one.
+  // (P2) "for every N <input> added, M must be archived/merged"
+  //   m[1]=N, m[2]=input noun, m[3]=M, m[4]=archive verb
+  /(?:for\s+every|per|every)\s+(\d+)\s+(?:new\s+)?(\w+(?:\s+\w+){0,3}?)\s+(?:added|created|recorded|made)[,\s]+(\d+)\s+(?:must\s+be\s+|of\s+them\s+must\s+be\s+)?(archived|merged|retired|pruned|removed|deleted)/i,
+  // (P3) "for every new <input> added, one <output> must be archived/merged" — implicit 1:1
+  //   m[1]=input noun, m[2]=output noun, m[3]=archive verb
+  /(?:for\s+every|per|every)\s+(?:new\s+)?(\w+(?:\s+\w+){0,3}?)\s+(?:added|created|recorded|made)[,\s]+(?:one|1|a\s+single)\s+(?:existing\s+)?(\w+(?:\s+\w+){0,3}?)\s+(?:must\s+be\s+)?(archived|merged|retired|pruned|removed|deleted)/i,
 ];
 
 const TTL_PATTERNS = [
@@ -108,7 +124,14 @@ const GATE_PATTERNS = [
   // "apply a binary-check gate" / "apply the data-source gate" — front-loaded
   // gate verb. Works without the from→to clause for cases like "Apply a binary-
   // check gate before any forming→testing promotion."
-  /(?:apply|enforce|run)\s+(?:a\s+|an\s+|the\s+)?(binary[-\s]?check|threshold[-\s]?check|conditional[-\s]?check|data[-\s]?source|spectrum[-\s]?check|measurement[-\s]?path)\s+gate\b/i,
+  // (added 2026-05-15: live rec after #376 quoted the descriptor — "apply a
+  // 'data access gate'" — and used 'data access' (two words) which the
+  // existing alternation did not cover. Widened to (a) tolerate surrounding
+  // single/double quotes around the descriptor and (b) include data[-\s]?
+  // access. Same gate_rule semantics — the descriptor still gates the same
+  // forming→testing transition by demanding the resolving evidence be
+  // realistically obtainable — so widen rather than add a new primitive.)
+  /(?:apply|enforce|run)\s+(?:a\s+|an\s+|the\s+)?['"]?(binary[-\s]?check|threshold[-\s]?check|conditional[-\s]?check|data[-\s]?source|data[-\s]?access|spectrum[-\s]?check|measurement[-\s]?path)['"]?\s+gate\b/i,
   // (added 2026-05-13: parser-coverage fix for the 4 stale missing-primitive
   // recs the user reviewed after Phase 3b. SelfEvolution kept emitting three
   // gate-shaped insights that all fell through to `none`:
@@ -293,11 +316,26 @@ export function translateAction(actionText: string, insightText: string = ""): T
         inputNoun = normalizeNoun(m[2]);
         outputNoun = normalizeNoun(m[3]);
         outputCount = 1;
-      } else {
+      } else if (pat === RATIO_PATTERNS[1]) {
         outputCount = parseInt(m[1], 10);
         outputNoun = normalizeNoun(m[2]);
         inputCount = parseInt(m[3], 10);
         inputNoun = normalizeNoun(m[4]);
+      } else if (pat === RATIO_PATTERNS[2]) {
+        // "for every N <input> added, M must be archived/merged"
+        // Output noun is the archive verb itself (archive/merge action on
+        // an item from the same kind as the input).
+        inputCount = parseInt(m[1], 10);
+        inputNoun = normalizeNoun(m[2]);
+        outputCount = parseInt(m[3], 10);
+        outputNoun = normalizeNoun(m[4]);
+      } else {
+        // RATIO_PATTERNS[3]: implicit 1:1
+        // "for every new <input> added, one <output> must be archived/merged"
+        inputCount = 1;
+        inputNoun = normalizeNoun(m[1]);
+        outputCount = 1;
+        outputNoun = normalizeNoun(m[3]);
       }
       const params = { inputCount, inputNoun, outputCount, outputNoun };
       return {
@@ -677,7 +715,15 @@ export function classifyMissingPrimitiveFamily(actionText: string): MissingPrimi
   // Most-specific cues first. Ratio is checked BEFORE artifact because
   // "for every N new entries, generate one synthesis" matches both — the
   // ratio framing is the more informative classification.
-  if (/\b(for\s+every|per|every)\s+\d+/.test(a) && /\b(produce|generate|ship|publish|create|force[-\s]?generate)\b/.test(a)) {
+  // (added 2026-05-15: live KB archive/merge ratio recs after #376 used
+  // (a) passive "must be archived/merged" instead of the produce/ship
+  // verb set, and (b) "for every new <noun>" with no digit count. Widen
+  // the cue alternation as a safety net so a future parser regression
+  // surfaces these under `ratio` rather than the catch-all `other`.)
+  if (
+    /\b(for\s+every|per|every)\s+(?:\d+|new\b|the\s+)/.test(a) &&
+    /\b(produce|generate|ship|publish|create|force[-\s]?generate|archive|archived|merge|merged|retire|retired|prune|pruned)\b/.test(a)
+  ) {
     return "ratio";
   }
   if (/\b(produce|ship|publish|deliver|write|draft|generate|create)\b.*\b(artifact|briefing|thread|post|synthes(?:is|ized?)|narrative|framework|draft)\b/.test(a)) {

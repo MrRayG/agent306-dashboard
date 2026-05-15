@@ -541,6 +541,137 @@ describe("ActionTranslator", () => {
     assert.equal(evidenceAccessUnquoted, "gate");
   });
 
+  // ── 5/15 parser-coverage fix: live 'data access gate' + hard KB archive/merge ratio ──
+  // After #376 the SelfRecommendation log still showed three shapes routing
+  // to missing-primitive ('gate' or 'other'):
+  //   (A) "Before forming any new hypothesis, apply a 'data access gate':
+  //        can I realistically obtain evidence within 2 cycles? If not,
+  //        don't form it. Retroactively apply this to all 'forming' and
+  //        'testing' hypothes..." — gate descriptor 'data access' + quoted.
+  //   (B) "Implement a hard 1:1 ratio rule: for every new KB entry added,
+  //        one existing entry must be archived or merged. Start next cycle
+  //        by archiving the 5 stale-retired hypotheses..." — implicit 1:1
+  //        with passive 'must be archived/merged' verb.
+  //   (C) "Implement a hard gate: for every 5 new KB entries added, 1 must
+  //        be archived or merged before the next addition is permitted..."
+  //        — 5:1 ratio with passive archive/merge verb.
+  // All three are existing-primitive matches (gate_rule / ratio_rule); the
+  // gap was parser coverage only. These tests pin the new mappings.
+
+  it("parses 'apply a data access gate' (quoted descriptor) as gate_rule (5/15 data-access case)", () => {
+    const result = translateAction(
+      "Before forming any new hypothesis, apply a 'data access gate': can I realistically obtain evidence within 2 cycles? If not, don't form it. Retroactively apply this to all 'forming' and 'testing' hypotheses.",
+      "data access gate missing on forming transitions",
+    );
+    assert.equal(result.primitive, "gate_rule");
+    assert.equal((result.params as any).target, "hypothesis");
+    assert.ok(
+      String((result.params as any).description).toLowerCase().includes("data access"),
+      `gate description should capture the 'data access' descriptor, got "${(result.params as any).description}"`,
+    );
+  });
+
+  it("parses the truncated live 'data access gate' shape as gate_rule (5/15 truncated case)", () => {
+    // Truncated log shape (mid-sentence cut after "hypot..."). Must still
+    // route to gate_rule on hypothesis.
+    const result = translateAction(
+      "Before forming any new hypothesis, apply a 'data access gate': can I realistically obtain evidence within 2 cycles? If not, don't form it. Retroactively apply this to all 'forming' and 'testing' hypot",
+      "",
+    );
+    assert.equal(result.primitive, "gate_rule");
+    assert.equal((result.params as any).target, "hypothesis");
+  });
+
+  it("parses unquoted 'data access gate' descriptor as gate_rule", () => {
+    // Defensive: same descriptor without surrounding quotes must still match.
+    const result = translateAction(
+      "Apply a data access gate before any new hypothesis forms.",
+      "",
+    );
+    assert.equal(result.primitive, "gate_rule");
+    assert.equal((result.params as any).target, "hypothesis");
+  });
+
+  it("parses 'Implement a hard 1:1 ratio rule: for every new KB entry added, one existing entry must be archived or merged' as ratio_rule (5/15 implicit-1:1 case)", () => {
+    const result = translateAction(
+      "Implement a hard 1:1 ratio rule: for every new KB entry added, one existing entry must be archived or merged. Start next cycle by archiving the 5 stale-retired hypotheses.",
+      "KB entries accumulating without pruning",
+    );
+    assert.equal(result.primitive, "ratio_rule");
+    const params = result.params as any;
+    assert.equal(params.inputCount, 1);
+    assert.equal(params.outputCount, 1);
+    assert.ok(
+      String(params.inputNoun).includes("kb") || String(params.inputNoun).includes("entry"),
+      `expected inputNoun to mention KB/entry, got ${params.inputNoun}`,
+    );
+    assert.match(result.verificationCriterion, /ratio/);
+  });
+
+  it("parses 'Implement a hard gate: for every 5 new KB entries added, 1 must be archived or merged' as ratio_rule (5/15 5:1 case)", () => {
+    const result = translateAction(
+      "Implement a hard gate: for every 5 new KB entries added, 1 must be archived or merged before the next addition is permitted.",
+      "KB growth outpacing archive/merge cadence",
+    );
+    assert.equal(result.primitive, "ratio_rule");
+    const params = result.params as any;
+    assert.equal(params.inputCount, 5);
+    assert.equal(params.outputCount, 1);
+    assert.ok(
+      String(params.inputNoun).includes("kb") || String(params.inputNoun).includes("entries"),
+      `expected inputNoun to mention KB/entries, got ${params.inputNoun}`,
+    );
+    assert.match(result.verificationCriterion, /ratio/);
+  });
+
+  it("parses the truncated live 'hard 1:1 ratio rule … archiving the 5 stale-retired hypot…' shape as ratio_rule", () => {
+    // Truncated log shape (mid-sentence cut). Must still route to ratio_rule.
+    const result = translateAction(
+      "Implement a hard 1:1 ratio rule: for every new KB entry added, one existing entry must be archived or merged. Start next cycle by archiving the 5 stale-retired hypot",
+      "",
+    );
+    assert.equal(result.primitive, "ratio_rule");
+    assert.equal((result.params as any).inputCount, 1);
+    assert.equal((result.params as any).outputCount, 1);
+  });
+
+  it("classifies 5/15 KB archive/merge ratio shapes under 'ratio' (not 'other') as a safety net", () => {
+    // Both shapes must classify as `ratio` so a future parser regression
+    // surfaces them under the correct missing-primitive family rather than
+    // the catch-all 'other'.
+    const oneToOne = classifyMissingPrimitiveFamily(
+      "Implement a hard 1:1 ratio rule: for every new KB entry added, one existing entry must be archived or merged.",
+    );
+    assert.equal(oneToOne, "ratio");
+
+    const fiveToOne = classifyMissingPrimitiveFamily(
+      "Implement a hard gate: for every 5 new KB entries added, 1 must be archived or merged before the next addition is permitted.",
+    );
+    assert.equal(fiveToOne, "ratio");
+  });
+
+  it("data-access gate does not eat existing 'data-source gate' phrasings", () => {
+    // Sanity: the data-source descriptor must still classify as gate_rule
+    // without framingMode (non-binary).
+    const result = translateAction(
+      "Before promoting any new hypothesis from forming to testing, apply a data-source gate to reject claims with no measurement path.",
+      "",
+    );
+    assert.equal(result.primitive, "gate_rule");
+    assert.equal((result.params as any).framingMode, undefined);
+  });
+
+  it("new ratio patterns do not eat the canonical KB→synthesis ratio", () => {
+    // Sanity: the original ratio shape must still translate the same way.
+    const result = translateAction(
+      "For every 10 new knowledge entries, force-generate one synthesis",
+      "",
+    );
+    assert.equal(result.primitive, "ratio_rule");
+    assert.equal((result.params as any).inputCount, 10);
+    assert.equal((result.params as any).outputCount, 1);
+  });
+
   it("data-source / threshold-check gate phrasings still classify correctly", () => {
     const dataSource = translateAction(
       "Before promoting any new hypothesis from forming to testing, apply a data-source gate to reject claims with no measurement path.",
