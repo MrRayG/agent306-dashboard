@@ -12,6 +12,10 @@ import {
   PromotionGateAuthorityPanel,
   type PromotionGateAuthorityVisibility,
 } from "../components/PromotionGateAuthorityPanel";
+import {
+  SelfRuleEnforcementPanel,
+  type SelfRuleEnforcementVisibility,
+} from "../components/SelfRuleEnforcementPanel";
 
 interface AutonomyStage {
   id:             string;
@@ -96,6 +100,7 @@ interface AutonomyMonitorSnapshot {
   safetyBoundary: AutonomySafetyBoundary;
   runtime:        AutonomyRuntime;
   promotionGateAuthority: PromotionGateAuthorityVisibility;
+  selfRuleEnforcement: SelfRuleEnforcementVisibility;
   stages:         AutonomyStage[];
   pipelineSummary: {
     implementedStageCount: number;
@@ -875,6 +880,7 @@ export default function AutonomyMonitor() {
           <RuntimeVisibilityPanel rt={data.runtime} />
           <SafetyBanner b={data.safetyBoundary} />
           <PromotionGateAuthorityPanel p={data.promotionGateAuthority} />
+          <SelfRuleEnforcementPanel data={data.selfRuleEnforcement} />
           <section style={{
             border: `1px solid ${BORDER}`,
             padding: "0.7rem 1rem",

@@ -95,6 +95,10 @@ import {
   type PromotionGateAuthorityVisibility,
 } from "./promotionGateAuthorityVisibility.js";
 import {
+  buildSelfRuleEnforcementVisibility,
+  type SelfRuleEnforcementVisibility,
+} from "./selfRuleEnforcementVisibility.js";
+import {
   scoreHypothesisRiskImpactBatch,
   summarizeRiskImpactScores,
   NEUTRAL_REASON_CODES,
@@ -179,6 +183,14 @@ export interface AutonomyMonitorSnapshot {
    * it into `canPromote(rec).ok`. Always present.
    */
   promotionGateAuthority: PromotionGateAuthorityVisibility;
+  /**
+   * Read-only Self-Rule Enforcement visibility. Surfaces what happened with
+   * executable self-rules registered via the approve → apply path and ticked
+   * by the ActionEnforcer. Visibility only: rendering this block must not
+   * register, mutate, disable, or schedule any rule. No corrective obligation
+   * is queued from a reported deficit in this snapshot.
+   */
+  selfRuleEnforcement: SelfRuleEnforcementVisibility;
   stages:         AutonomyStage[];
   /** Summary of "what is visible now / what remains" — text only. */
   pipelineSummary: {
@@ -1113,6 +1125,7 @@ export function buildAutonomyMonitorSnapshot(now: Date = new Date()): AutonomyMo
     safetyBoundary: buildSafetyBoundary(),
     runtime:        buildAutonomyRuntimeVisibility(now),
     promotionGateAuthority: buildPromotionGateAuthorityVisibility(),
+    selfRuleEnforcement:    buildSelfRuleEnforcementVisibility(now),
     stages,
     pipelineSummary: {
       implementedStageCount: implemented,

@@ -1,0 +1,305 @@
+/**
+ * Read-only Self-Rule Enforcement panel. Consumed by the Agent 306
+ * Autonomy Monitor page.
+ *
+ * VISIBILITY ONLY. There are no controls on this panel — no buttons that
+ * POST, no toggles, no form inputs, no on-click handlers that mutate any
+ * server state. The panel is a pure projection of the
+ * `/api/autonomy/monitor` snapshot's `selfRuleEnforcement` block.
+ *
+ * Nothing in this component registers, mutates, disables, or schedules an
+ * executable self-rule. A reported ratio_rule deficit is shown as a
+ * diagnostic / observable signal only; this PR does not queue a
+ * corrective obligation in response.
+ */
+
+import * as React from "react";
+
+export interface SelfRuleEnforcementCounts {
+  activeRules: number;
+  byPrimitive: Record<string, number>;
+  recentRegistrationEvents: number;
+  recentRegistrationsSucceeded: number;
+  recentRegistrationsRefused: number;
+}
+
+export interface LatestRegistration {
+  emittedAt: string;
+  recommendationId: string | null;
+  sourceInsightId: string | null;
+  primitive: string | null;
+  ruleId: string | null;
+  registered: boolean;
+  reason?: string | null;
+  translationReason?: string | null;
+  summary: string;
+}
+
+export interface LatestRuleFiring {
+  ruleId: string;
+  insightId: string;
+  primitive: string;
+  fireCount: number;
+  sideEffectCount: number;
+  lastFiredAt: string | null;
+  lastOutcome: string | null;
+  summary: string;
+}
+
+export interface RatioRuleDeficit {
+  ruleId: string;
+  insightId: string;
+  outputNoun: string | null;
+  deficit: number | null;
+  lastFiredAt: string | null;
+  rawOutcome: string;
+  summary: string;
+}
+
+export interface SelfRuleEnforcementVisibility {
+  generatedAt: string;
+  headline: string;
+  enforcementSemanticsNote: string;
+  counts: SelfRuleEnforcementCounts;
+  latestRegistrations: LatestRegistration[];
+  latestFirings: LatestRuleFiring[];
+  ratioDeficits: RatioRuleDeficit[];
+  visibilityLimitations: string[];
+}
+
+const mono = { fontFamily: "'Courier New', monospace" } as const;
+const FG = "#e3e5e4";
+const DIM = "rgba(227,229,228,0.55)";
+const BORDER = "rgba(227,229,228,0.12)";
+const YELLOW = "#fbbf24";
+const BLUE = "#60a5fa";
+const RED = "#f87171";
+const GREEN = "#4ade80";
+
+interface PanelProps {
+  data: SelfRuleEnforcementVisibility;
+}
+
+export function SelfRuleEnforcementPanel({ data }: PanelProps): JSX.Element {
+  const c = data.counts;
+  return (
+    <section
+      data-testid="self-rule-enforcement-panel"
+      style={{
+        border: `1px solid ${BORDER}`,
+        borderRadius: 4,
+        padding: "1rem",
+        marginBottom: "1rem",
+        background: "#15171a",
+      }}
+    >
+      <header style={{ marginBottom: "0.6rem" }}>
+        <div
+          style={{
+            ...mono,
+            fontSize: "0.78rem",
+            color: DIM,
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+          }}
+        >
+          Self-Rule Enforcement (read-only visibility)
+        </div>
+        <h2
+          style={{
+            ...mono,
+            fontSize: "1.05rem",
+            color: FG,
+            margin: "0.3rem 0 0",
+          }}
+        >
+          {data.headline}
+        </h2>
+      </header>
+
+      <p
+        data-testid="self-rule-enforcement-semantics-note"
+        style={{
+          ...mono,
+          fontSize: "0.82rem",
+          color: DIM,
+          lineHeight: 1.45,
+          margin: "0 0 0.8rem",
+        }}
+      >
+        {data.enforcementSemanticsNote}
+      </p>
+
+      <Subhead label="Counts" />
+      <ul
+        data-testid="self-rule-enforcement-counts"
+        style={{
+          ...mono,
+          fontSize: "0.84rem",
+          color: FG,
+          listStyle: "none",
+          paddingLeft: 0,
+          margin: "0 0 0.8rem",
+        }}
+      >
+        <li>active executable rules: {c.activeRules}</li>
+        <li>
+          by primitive:{" "}
+          {Object.keys(c.byPrimitive).length === 0
+            ? "none"
+            : Object.entries(c.byPrimitive)
+                .map(([k, v]) => `${k}=${v}`)
+                .join(", ")}
+        </li>
+        <li>
+          recent ruleRegistrationOnApply events: {c.recentRegistrationEvents}{" "}
+          (succeeded {c.recentRegistrationsSucceeded}, refused/errored{" "}
+          {c.recentRegistrationsRefused})
+        </li>
+      </ul>
+
+      <Subhead label="Latest rule registrations from the apply path" />
+      {data.latestRegistrations.length === 0 ? (
+        <Empty text="No ruleRegistrationOnApply events have been persisted yet." />
+      ) : (
+        <ul
+          data-testid="self-rule-enforcement-registrations"
+          style={listStyle()}
+        >
+          {data.latestRegistrations.slice(0, 5).map((r, i) => (
+            <li
+              key={`${r.recommendationId ?? "rec"}-${i}`}
+              style={{ marginBottom: "0.5rem" }}
+            >
+              <div
+                style={{
+                  color: r.registered ? GREEN : YELLOW,
+                  fontSize: "0.84rem",
+                }}
+              >
+                {r.summary}
+              </div>
+              <div style={{ color: DIM, fontSize: "0.74rem" }}>
+                {r.ruleId ? `ruleId=${r.ruleId} · ` : ""}
+                {r.primitive ? `primitive=${r.primitive} · ` : ""}
+                {r.sourceInsightId ? `insight=${r.sourceInsightId}` : ""}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <Subhead label="Latest rule firings" />
+      {data.latestFirings.length === 0 ? (
+        <Empty text="No registered rule has fired yet." />
+      ) : (
+        <ul data-testid="self-rule-enforcement-firings" style={listStyle()}>
+          {data.latestFirings.map((f) => (
+            <li key={f.ruleId} style={{ marginBottom: "0.5rem" }}>
+              <div style={{ color: BLUE, fontSize: "0.84rem" }}>
+                {f.summary}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <Subhead label="Ratio rule deficits (diagnostic / observable only)" />
+      {data.ratioDeficits.length === 0 ? (
+        <Empty text="No ratio_rule currently logs a deficit on its most recent firing." />
+      ) : (
+        <ul data-testid="self-rule-enforcement-deficits" style={listStyle()}>
+          {data.ratioDeficits.map((d) => (
+            <li key={d.ruleId} style={{ marginBottom: "0.5rem" }}>
+              <div style={{ color: RED, fontSize: "0.84rem" }}>
+                {d.summary}
+              </div>
+              <div style={{ color: DIM, fontSize: "0.74rem" }}>
+                rule registered and fired, but deficit is not yet operationally
+                satisfied
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <details
+        data-testid="self-rule-enforcement-limitations"
+        style={{ marginTop: "0.6rem" }}
+      >
+        <summary
+          style={{
+            ...mono,
+            fontSize: "0.78rem",
+            color: DIM,
+            cursor: "default",
+          }}
+        >
+          What this panel does NOT yet show
+        </summary>
+        <ul style={{ ...listStyle(), marginTop: "0.4rem" }}>
+          {data.visibilityLimitations.map((line, i) => (
+            <li
+              key={i}
+              style={{ color: DIM, fontSize: "0.76rem", marginBottom: "0.3rem" }}
+            >
+              {line}
+            </li>
+          ))}
+        </ul>
+      </details>
+
+      <div
+        style={{
+          ...mono,
+          marginTop: "0.7rem",
+          fontSize: "0.72rem",
+          color: DIM,
+        }}
+      >
+        snapshot generated at {data.generatedAt}
+      </div>
+    </section>
+  );
+}
+
+function Subhead({ label }: { label: string }): JSX.Element {
+  return (
+    <div
+      style={{
+        ...mono,
+        fontSize: "0.72rem",
+        color: DIM,
+        textTransform: "uppercase",
+        letterSpacing: "0.08em",
+        marginBottom: "0.25rem",
+      }}
+    >
+      {label}
+    </div>
+  );
+}
+
+function Empty({ text }: { text: string }): JSX.Element {
+  return (
+    <div
+      style={{
+        ...mono,
+        fontSize: "0.8rem",
+        color: DIM,
+        marginBottom: "0.7rem",
+      }}
+    >
+      {text}
+    </div>
+  );
+}
+
+function listStyle(): React.CSSProperties {
+  return {
+    ...mono,
+    listStyle: "none",
+    paddingLeft: 0,
+    margin: "0 0 0.6rem",
+  };
+}
