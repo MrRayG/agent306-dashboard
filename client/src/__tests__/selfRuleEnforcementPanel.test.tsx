@@ -35,7 +35,7 @@ function emptySnap(): SelfRuleEnforcementVisibility {
     generatedAt: "2026-05-16T12:00:00.000Z",
     headline: "No executable self-rules are registered, and no recent apply paths have attempted to register one.",
     enforcementSemanticsNote:
-      "This panel reports observation only. A registered self-rule fires once per DailyCycle tick and may log a structured deficit, but the runtime does NOT yet queue a corrective obligation from a deficit. Rule registration and firing are visibility-only signals on top of the existing approve → apply path (Pin 7 / Pin 11 preserved). No control on this page registers, mutates, or disables a rule.",
+      "This panel reports observation only. A registered self-rule fires once per DailyCycle tick and may log a structured deficit. A ratio_rule deficit now creates or refreshes a bounded corrective obligation (cap=10 per cycle) — a visible, finite work-item the next cycle is asked to satisfy. The obligation does NOT block KB writes, does NOT auto-archive, and does NOT schedule anything; it is recorded and surfaced only. Rule registration, firing, and obligation queueing are visibility-only signals on top of the existing approve → apply path (Pin 7 / Pin 11 preserved). No control on this page registers, mutates, or disables a rule or obligation.",
     counts: {
       activeRules: 0,
       byPrimitive: {},
@@ -47,6 +47,8 @@ function emptySnap(): SelfRuleEnforcementVisibility {
     latestFirings: [],
     ratioDeficits: [],
     latestTick: null,
+    correctiveObligations: [],
+    correctiveObligationCap: 10,
     visibilityLimitations: [
       "ActionEnforcer per-tick summary is now persisted as a structured engine_events row.",
       "Ratio_rule deficits are sourced from structured events when available with fallback to lastOutcome.",
@@ -118,7 +120,7 @@ function richSnap(): SelfRuleEnforcementVisibility {
         inputNoun: "kb_entries",
         fromStructuredEvent: true,
         summary:
-          "Ratio rule rule_evo_1778846172013_1ces_mp71w3i2 (insight evo_1778846172013_1ces) most recently logged a deficit of +174 archived (have 52, expected 226 for 1131 kb_entries) at 2026-05-16T11:00:00.000Z. Rule fired; deficit observed; no corrective obligation queued yet — diagnostic / observable only.",
+          "Ratio rule rule_evo_1778846172013_1ces_mp71w3i2 (insight evo_1778846172013_1ces) most recently logged a deficit of +174 archived (have 52, expected 226 for 1131 kb_entries) at 2026-05-16T11:00:00.000Z. Rule fired; deficit observed; a bounded corrective obligation has been queued for the next cycle (cap=10). This is not a hard block — KB writes are not gated by the obligation today.",
       },
     ],
     latestTick: {
@@ -132,6 +134,31 @@ function richSnap(): SelfRuleEnforcementVisibility {
       summary:
         "Latest ActionEnforcer tick at 2026-05-16T11:00:01.000Z: fired 36/36 rules (36 registered), 10 side effects — by primitive: ratio_rule=8, ttl_rule=4, archive_rule=24.",
     },
+    correctiveObligations: [
+      {
+        obligationId: "oblg_deadbeefdeadbeef",
+        ruleId: "rule_evo_1778846172013_1ces_mp71w3i2",
+        insightId: "evo_1778846172013_1ces",
+        sourceInsightId: "evo_1778846172013_1ces",
+        primitive: "ratio_rule",
+        outputNoun: "archived",
+        inputNoun: "kb_entry",
+        status: "open" as const,
+        createdAt: "2026-05-16T10:00:00.000Z",
+        updatedAt: "2026-05-16T11:00:01.000Z",
+        deficitCount: 174,
+        requiredActionCount: 10,
+        cap: 10,
+        expectedCount: 226,
+        actualCount: 52,
+        inputCount: 1131,
+        refreshCount: 2,
+        deadlineNote: "next DailyCycle tick",
+        summary:
+          "A corrective obligation has been queued: archive or merge up to 10 archived before further expansion is considered healthy (raw deficit 174, ratio probe 52/226 for 1131 kb_entry). Deadline: next DailyCycle tick. Refreshed 2 times. This is NOT a hard block — KB writes are not gated by this obligation.",
+      },
+    ],
+    correctiveObligationCap: 10,
     visibilityLimitations: [
       "ActionEnforcer per-tick summary is now persisted as a structured engine_events row.",
       "Ratio_rule deficits prefer structured events when available.",
@@ -149,7 +176,8 @@ describe("SelfRuleEnforcementPanel — empty state", () => {
   it("renders the enforcement-semantics note (visibility only)", () => {
     assert.match(html, /data-testid="self-rule-enforcement-semantics-note"/);
     assert.match(html, /observation only/);
-    assert.match(html, /does NOT yet queue a corrective obligation/);
+    assert.match(html, /bounded corrective obligation/i);
+    assert.match(html, /does NOT block KB writes/);
     assert.match(html, /Pin 7 \/ Pin 11 preserved/);
   });
 
@@ -162,6 +190,7 @@ describe("SelfRuleEnforcementPanel — empty state", () => {
     assert.match(html, /No registered rule has fired yet/);
     assert.match(html, /No ratio_rule currently logs a deficit/);
     assert.match(html, /No ActionEnforcer tick event has been persisted yet/);
+    assert.match(html, /No open corrective obligations are currently queued/);
   });
 
   it("renders the visibility-limitations disclosure", () => {
@@ -197,13 +226,14 @@ describe("SelfRuleEnforcementPanel — populated state", () => {
     assert.match(html, /deficit_logged:\+174_archived/);
   });
 
-  it("renders ratio deficit with diagnostic-only note", () => {
+  it("renders ratio deficit with bounded-obligation note", () => {
     assert.match(html, /data-testid="self-rule-enforcement-deficits"/);
     assert.match(html, /most recently logged a deficit of \+174 archived/);
     assert.match(
       html,
-      /Rule fired; deficit observed; no corrective obligation queued yet\./,
+      /a bounded corrective obligation has been queued for the next cycle/,
     );
+    assert.match(html, /not a hard block/);
   });
 
   it("renders exact deficit details when structured event is present", () => {
@@ -223,6 +253,18 @@ describe("SelfRuleEnforcementPanel — populated state", () => {
     assert.match(html, /registered=<!-- -->36/);
     assert.match(html, /fired=<!-- -->36/);
     assert.match(html, /sideEffects=<!-- -->10/);
+  });
+
+  it("renders an open corrective obligation with bounded count and non-blocking copy", () => {
+    assert.match(html, /data-testid="self-rule-enforcement-corrective-obligations"/);
+    assert.match(html, /data-testid="corrective-obligation-oblg_deadbeefdeadbeef"/);
+    assert.match(html, /A corrective obligation has been queued/);
+    assert.match(html, /archive or merge up to 10 archived/);
+    assert.match(html, /raw deficit 174/);
+    assert.match(html, /NOT a hard block/);
+    assert.match(html, /obligationId=<!-- -->oblg_deadbeefdeadbeef/);
+    assert.match(html, /cap=<!-- -->10/);
+    assert.match(html, /refreshed <!-- -->2/);
   });
 });
 

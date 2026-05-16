@@ -157,7 +157,7 @@ describe("buildSelfRuleEnforcementVisibility", () => {
     assert.match(d.summary, /\+174 archived/);
     assert.match(
       d.summary,
-      /no corrective obligation queued yet|diagnostic \/ observable only/i,
+      /bounded corrective obligation has been queued|not a hard block/i,
     );
     // Latest firings includes the rule
     assert.equal(snap.latestFirings.length, 1);
@@ -209,7 +209,7 @@ describe("buildSelfRuleEnforcementVisibility", () => {
     assert.equal(d.inputCount, 1131);
     assert.equal(d.inputNoun, "kb_entry");
     assert.match(d.summary, /have 52, expected 226 for 1131 kb_entry/);
-    assert.match(d.summary, /Rule fired; deficit observed; no corrective obligation queued yet/);
+    assert.match(d.summary, /Rule fired; deficit observed; a bounded corrective obligation has been queued/);
   });
 
   it("surfaces a structured actionEnforcer.tick event as latestTick", () => {

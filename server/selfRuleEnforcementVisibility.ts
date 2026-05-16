@@ -32,6 +32,11 @@ import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { getAllActiveRules, type EnforcementRule } from "./actionEnforcer.js";
 import { recentEvents } from "./observability/structuredLog.js";
+import {
+  getOpenObligations,
+  type OpenObligationProjection,
+  OBLIGATION_BOUND_CAP,
+} from "./ruleCorrectiveObligations.js";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -102,6 +107,30 @@ export interface RatioRuleDeficit {
   summary: string;
 }
 
+export interface CorrectiveObligationView {
+  obligationId: string;
+  ruleId: string;
+  insightId: string;
+  sourceInsightId: string;
+  primitive: "ratio_rule";
+  outputNoun: string;
+  inputNoun: string;
+  status: "open";
+  createdAt: string;
+  updatedAt: string;
+  deficitCount: number;
+  requiredActionCount: number;
+  /** The bound cap that was applied. Always equal to OBLIGATION_BOUND_CAP. */
+  cap: number;
+  expectedCount: number;
+  actualCount: number;
+  inputCount: number;
+  refreshCount: number;
+  deadlineNote: string;
+  /** Natural-language line for the panel. */
+  summary: string;
+}
+
 export interface LatestActionEnforcerTick {
   /** ISO timestamp of the tick event (engine_events emittedAt). */
   emittedAt: string;
@@ -132,6 +161,11 @@ export interface SelfRuleEnforcementVisibility {
   ratioDeficits: RatioRuleDeficit[];
   /** Latest structured ActionEnforcer tick event (null when none has been persisted). */
   latestTick: LatestActionEnforcerTick | null;
+  /** Currently open corrective obligations queued from ratio_rule deficits. */
+  correctiveObligations: CorrectiveObligationView[];
+  /** Bound cap applied to all corrective obligations (read from
+   *  ruleCorrectiveObligations so the panel can show the same number). */
+  correctiveObligationCap: number;
   /** Things this visibility surface cannot show (no scraping, only persisted). */
   visibilityLimitations: string[];
 }
@@ -329,7 +363,7 @@ export function buildSelfRuleEnforcementVisibility(
             `Ratio rule ${r.id} (insight ${r.insightId}) most recently logged a deficit of +${deficit ?? "?"} ${outputNoun ?? "items"}` +
             (detail ? ` (${detail})` : "") +
             ` at ${lastAt ?? "unknown time"}. ` +
-            `Rule fired; deficit observed; no corrective obligation queued yet — diagnostic / observable only.`,
+            `Rule fired; deficit observed; a bounded corrective obligation has been queued for the next cycle (cap=${OBLIGATION_BOUND_CAP}). This is not a hard block — KB writes are not gated by the obligation today.`,
         } as RatioRuleDeficit;
       }
       // Fallback: parse lastOutcome only (legacy / pre-event firings).
@@ -343,7 +377,7 @@ export function buildSelfRuleEnforcementVisibility(
         fromStructuredEvent: false,
         summary:
           `Ratio rule ${r.id} (insight ${r.insightId}) most recently logged a deficit of +${parsedOutcome!.deficit} ${parsedOutcome!.outputNoun ?? "items"} at ${lastAt ?? "unknown time"}. ` +
-          `Rule fired; deficit observed; no corrective obligation queued yet — diagnostic / observable only.`,
+          `Rule fired; deficit observed; a bounded corrective obligation has been queued for the next cycle (cap=${OBLIGATION_BOUND_CAP}). This is not a hard block — KB writes are not gated by the obligation today.`,
       } as RatioRuleDeficit;
     })
     .filter((x): x is RatioRuleDeficit => x !== null);
@@ -382,6 +416,40 @@ export function buildSelfRuleEnforcementVisibility(
     break;
   }
 
+  // Open corrective obligations (read-only projection of the JSONL ledger).
+  let openObligations: OpenObligationProjection[] = [];
+  try {
+    openObligations = getOpenObligations();
+  } catch {
+    openObligations = [];
+  }
+  const correctiveObligations: CorrectiveObligationView[] = openObligations.map(o => ({
+    obligationId: o.obligationId,
+    ruleId: o.ruleId,
+    insightId: o.insightId,
+    sourceInsightId: o.sourceInsightId,
+    primitive: o.primitive,
+    outputNoun: o.outputNoun,
+    inputNoun: o.inputNoun,
+    status: "open" as const,
+    createdAt: o.createdAt,
+    updatedAt: o.updatedAt,
+    deficitCount: o.deficitCount,
+    requiredActionCount: o.requiredActionCount,
+    cap: OBLIGATION_BOUND_CAP,
+    expectedCount: o.expectedCount,
+    actualCount: o.actualCount,
+    inputCount: o.inputCount,
+    refreshCount: o.refreshCount,
+    deadlineNote: o.deadlineNote,
+    summary:
+      `A corrective obligation has been queued: archive or merge up to ${o.requiredActionCount} ` +
+      `${o.outputNoun} before further expansion is considered healthy ` +
+      `(raw deficit ${o.deficitCount}, ratio probe ${o.actualCount}/${o.expectedCount} for ${o.inputCount} ${o.inputNoun}). ` +
+      `Deadline: ${o.deadlineNote || "next cycle"}. Refreshed ${o.refreshCount} time${o.refreshCount === 1 ? "" : "s"}. ` +
+      `This is NOT a hard block — KB writes are not gated by this obligation.`,
+  }));
+
   // Headlines and notes
   const headline = (() => {
     if (rules.length === 0 && latestRegistrations.length === 0) {
@@ -396,17 +464,22 @@ export function buildSelfRuleEnforcementVisibility(
     const deficitPhrase = ratioDeficits.length > 0
       ? ` ${ratioDeficits.length} ratio rule${ratioDeficits.length === 1 ? "" : "s"} currently log a deficit on the most recent tick.`
       : "";
-    return `${rules.length} active executable self-rule${rules.length === 1 ? "" : "s"} (${primSummary || "none"}). ${regPhrase}${deficitPhrase}`;
+    const obligationPhrase = correctiveObligations.length > 0
+      ? ` ${correctiveObligations.length} corrective obligation${correctiveObligations.length === 1 ? "" : "s"} currently queued (cap=${OBLIGATION_BOUND_CAP} per cycle, non-blocking).`
+      : "";
+    return `${rules.length} active executable self-rule${rules.length === 1 ? "" : "s"} (${primSummary || "none"}). ${regPhrase}${deficitPhrase}${obligationPhrase}`;
   })();
 
   const enforcementSemanticsNote =
-    "This panel reports observation only. A registered self-rule fires once per DailyCycle tick and may log a structured deficit, but the runtime does NOT yet queue a corrective obligation from a deficit. Rule registration and firing are visibility-only signals on top of the existing approve → apply path (Pin 7 / Pin 11 preserved). No control on this page registers, mutates, or disables a rule.";
+    `This panel reports observation only. A registered self-rule fires once per DailyCycle tick and may log a structured deficit. A ratio_rule deficit now creates or refreshes a bounded corrective obligation (cap=${OBLIGATION_BOUND_CAP} per cycle) — a visible, finite work-item the next cycle is asked to satisfy. The obligation does NOT block KB writes, does NOT auto-archive, and does NOT schedule anything; it is recorded and surfaced only. Rule registration, firing, and obligation queueing are visibility-only signals on top of the existing approve → apply path (Pin 7 / Pin 11 preserved). No control on this page registers, mutates, or disables a rule or obligation.`;
 
   const visibilityLimitations: string[] = [
     "ActionEnforcer per-tick summary (rulesFired / sideEffects / byPrimitive) is now persisted as a structured engine_events row (engine=actionEnforcer, event=tick); rules whose last tick predates this PR will not have a tick event yet.",
     "Ratio_rule deficits are sourced from a structured ratioRuleDeficit engine_events row when available, with fallback to parsing each rule's lastOutcome field for legacy / pre-event firings.",
     "Disabled / superseded rules are not included — only the active registry (getAllActiveRules) is read.",
     "Rule registration events older than the most recent 200 selfRecommendation rows, and ActionEnforcer events older than the most recent 200 actionEnforcer rows, are not surfaced here.",
+    `Corrective obligations are stored append-only in data/rule_corrective_obligations.jsonl and bounded per cycle (cap=${OBLIGATION_BOUND_CAP}). The obligation is a visible work-item only — it does NOT block KB writes, archive entries, schedule anything, or post / publish.`,
+    "Obligation satisfaction is reported when a later tick of the same ratio_rule observes deficit <= 0; obligations that go stale without a satisfying tick remain open until then.",
   ];
 
   return {
@@ -424,6 +497,8 @@ export function buildSelfRuleEnforcementVisibility(
     latestFirings,
     ratioDeficits,
     latestTick,
+    correctiveObligations,
+    correctiveObligationCap: OBLIGATION_BOUND_CAP,
     visibilityLimitations,
   };
 }
