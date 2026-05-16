@@ -8,9 +8,10 @@
  * `/api/autonomy/monitor` snapshot's `selfRuleEnforcement` block.
  *
  * Nothing in this component registers, mutates, disables, or schedules an
- * executable self-rule. A reported ratio_rule deficit is shown as a
- * diagnostic / observable signal only; this PR does not queue a
- * corrective obligation in response.
+ * executable self-rule or corrective obligation. A ratio_rule deficit is
+ * shown alongside the bounded, non-blocking corrective obligation it
+ * produced; rendering the obligation does not give the user any control
+ * surface to satisfy / cancel / archive it from this panel.
  */
 
 import * as React from "react";
@@ -61,6 +62,28 @@ export interface RatioRuleDeficit {
   summary: string;
 }
 
+export interface CorrectiveObligationView {
+  obligationId: string;
+  ruleId: string;
+  insightId: string;
+  sourceInsightId: string;
+  primitive: "ratio_rule";
+  outputNoun: string;
+  inputNoun: string;
+  status: "open";
+  createdAt: string;
+  updatedAt: string;
+  deficitCount: number;
+  requiredActionCount: number;
+  cap: number;
+  expectedCount: number;
+  actualCount: number;
+  inputCount: number;
+  refreshCount: number;
+  deadlineNote: string;
+  summary: string;
+}
+
 export interface LatestActionEnforcerTick {
   emittedAt: string;
   tickedAt: number | null;
@@ -81,6 +104,8 @@ export interface SelfRuleEnforcementVisibility {
   latestFirings: LatestRuleFiring[];
   ratioDeficits: RatioRuleDeficit[];
   latestTick?: LatestActionEnforcerTick | null;
+  correctiveObligations?: CorrectiveObligationView[];
+  correctiveObligationCap?: number;
   visibilityLimitations: string[];
 }
 
@@ -269,12 +294,52 @@ export function SelfRuleEnforcementPanel({ data }: PanelProps): JSX.Element {
                   </div>
                 )}
                 <div style={{ color: DIM, fontSize: "0.74rem" }}>
-                  Rule fired; deficit observed; no corrective obligation queued
-                  yet.
+                  Rule fired; deficit observed; a bounded corrective
+                  obligation has been queued for the next cycle (see below).
+                  This is not a hard block.
                 </div>
               </li>
             );
           })}
+        </ul>
+      )}
+
+      <Subhead label="Open corrective obligations (bounded, non-blocking)" />
+      {(!data.correctiveObligations || data.correctiveObligations.length === 0) ? (
+        <Empty text="No open corrective obligations are currently queued from ratio_rule deficits." />
+      ) : (
+        <ul
+          data-testid="self-rule-enforcement-corrective-obligations"
+          style={listStyle()}
+        >
+          {data.correctiveObligations.map((o) => (
+            <li
+              key={o.obligationId}
+              data-testid={`corrective-obligation-${o.obligationId}`}
+              style={{ marginBottom: "0.5rem" }}
+            >
+              <div style={{ color: YELLOW, fontSize: "0.84rem" }}>
+                {o.summary}
+              </div>
+              <div style={{ color: DIM, fontSize: "0.74rem" }}>
+                obligationId={o.obligationId}
+                {" · "}ruleId={o.ruleId}
+                {" · "}required={o.requiredActionCount} {o.outputNoun}
+                {" · "}cap={o.cap}
+                {" · "}raw deficit={o.deficitCount}
+                {" · "}refreshed {o.refreshCount}×
+              </div>
+              <div style={{ color: DIM, fontSize: "0.74rem" }}>
+                opened={o.createdAt}
+                {" · "}updated={o.updatedAt}
+                {o.deadlineNote ? ` · deadline=${o.deadlineNote}` : ""}
+              </div>
+              <div style={{ color: DIM, fontSize: "0.74rem" }}>
+                Not a hard block. Read-only on this panel — no control here
+                satisfies, cancels, or auto-archives this obligation.
+              </div>
+            </li>
+          ))}
         </ul>
       )}
 

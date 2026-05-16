@@ -123,6 +123,45 @@ async function fireRatioRule(rule: EnforcementRule): Promise<{ sideEffect: boole
       const expectedSynthesis = Math.floor(kbCount / (inputCount as number)) * (outputCount as number);
       const deficit = expectedSynthesis - synthesisCount;
       if (deficit <= 0) {
+        // Best-effort: if an open corrective obligation exists for this rule,
+        // close it on the satisfied tick. Failures are swallowed — the tick
+        // path must never fault on obligation bookkeeping.
+        try {
+          const { recordRatioSatisfied } = await import("./ruleCorrectiveObligations.js");
+          const satisfied = recordRatioSatisfied({
+            ruleId: rule.id,
+            insightId: rule.insightId,
+            outputNoun: String(outputNoun),
+            inputNoun: String(inputNoun),
+            expectedCount: expectedSynthesis,
+            actualCount: synthesisCount,
+            inputCount: kbCount,
+            tickedAt: Date.now(),
+          });
+          if (satisfied.ok) {
+            try {
+              const { logEvent } = await import("./observability/structuredLog.js");
+              logEvent({
+                engine: "actionEnforcer",
+                event: "correctiveObligationSatisfied",
+                level: "info",
+                data: {
+                  ruleId: rule.id,
+                  insightId: rule.insightId,
+                  obligationId: satisfied.event.obligationId,
+                  outputNoun: String(outputNoun),
+                  inputNoun: String(inputNoun),
+                  expectedCount: expectedSynthesis,
+                  actualCount: synthesisCount,
+                  inputCount: kbCount,
+                  tickedAt: satisfied.event.tickedAt,
+                },
+              });
+            } catch {}
+          }
+        } catch (e: any) {
+          console.warn(`[ActionEnforcer] corrective obligation satisfy hook failed (ignored): ${e?.message}`);
+        }
         return { sideEffect: false, outcome: `ratio met: ${synthesisCount} ${outputNoun} vs ${expectedSynthesis} expected` };
       }
       // Log deficit as a structured event that synthesisEngine/blogEngine can observe
@@ -154,6 +193,54 @@ async function fireRatioRule(rule: EnforcementRule): Promise<{ sideEffect: boole
         });
       } catch (e: any) {
         console.warn(`[ActionEnforcer] ratioRuleDeficit event log failed (ignored): ${e?.message}`);
+      }
+      // Best-effort: turn the diagnostic deficit into a bounded corrective
+      // obligation row. Idempotent — repeated ticks refresh the same row
+      // rather than duplicating it. Pure record; no KB write, no archive,
+      // no scheduler. Failures here must not affect the tick.
+      try {
+        const { recordRatioDeficit, OBLIGATION_BOUND_CAP } = await import("./ruleCorrectiveObligations.js");
+        const oblResult = recordRatioDeficit({
+          ruleId: rule.id,
+          insightId: rule.insightId,
+          sourceInsightId: rule.insightId,
+          outputNoun: String(outputNoun),
+          inputNoun: String(inputNoun),
+          deficitCount: deficit,
+          expectedCount: expectedSynthesis,
+          actualCount: synthesisCount,
+          inputCount: kbCount,
+          tickedAt: Date.now(),
+        });
+        if (oblResult.ok) {
+          try {
+            const { logEvent } = await import("./observability/structuredLog.js");
+            logEvent({
+              engine: "actionEnforcer",
+              event:
+                oblResult.event.type === "opened"
+                  ? "correctiveObligationOpened"
+                  : "correctiveObligationRefreshed",
+              level: "info",
+              data: {
+                ruleId: rule.id,
+                insightId: rule.insightId,
+                obligationId: oblResult.event.obligationId,
+                outputNoun: String(outputNoun),
+                inputNoun: String(inputNoun),
+                deficitCount: deficit,
+                requiredActionCount: oblResult.event.requiredActionCount,
+                cap: OBLIGATION_BOUND_CAP,
+                expectedCount: expectedSynthesis,
+                actualCount: synthesisCount,
+                inputCount: kbCount,
+                tickedAt: oblResult.event.tickedAt,
+              },
+            });
+          } catch {}
+        }
+      } catch (e: any) {
+        console.warn(`[ActionEnforcer] corrective obligation hook failed (ignored): ${e?.message}`);
       }
       return { sideEffect: true, outcome: `deficit_logged:+${deficit}_${outputNoun}` };
     }
