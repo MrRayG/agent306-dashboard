@@ -53,6 +53,22 @@ export interface RatioRuleDeficit {
   deficit: number | null;
   lastFiredAt: string | null;
   rawOutcome: string;
+  expectedCount?: number | null;
+  actualCount?: number | null;
+  inputCount?: number | null;
+  inputNoun?: string | null;
+  fromStructuredEvent?: boolean;
+  summary: string;
+}
+
+export interface LatestActionEnforcerTick {
+  emittedAt: string;
+  tickedAt: number | null;
+  totalRules: number;
+  rulesChecked: number;
+  firedRules: number;
+  sideEffects: number;
+  byPrimitive: Record<string, number>;
   summary: string;
 }
 
@@ -64,6 +80,7 @@ export interface SelfRuleEnforcementVisibility {
   latestRegistrations: LatestRegistration[];
   latestFirings: LatestRuleFiring[];
   ratioDeficits: RatioRuleDeficit[];
+  latestTick?: LatestActionEnforcerTick | null;
   visibilityLimitations: string[];
 }
 
@@ -158,6 +175,29 @@ export function SelfRuleEnforcementPanel({ data }: PanelProps): JSX.Element {
         </li>
       </ul>
 
+      <Subhead label="Latest ActionEnforcer tick" />
+      {!data.latestTick ? (
+        <Empty text="No ActionEnforcer tick event has been persisted yet." />
+      ) : (
+        <ul data-testid="self-rule-enforcement-latest-tick" style={listStyle()}>
+          <li style={{ marginBottom: "0.5rem" }}>
+            <div style={{ color: BLUE, fontSize: "0.84rem" }}>
+              {data.latestTick.summary}
+            </div>
+            <div style={{ color: DIM, fontSize: "0.74rem" }}>
+              tickedAt=
+              {data.latestTick.tickedAt
+                ? new Date(data.latestTick.tickedAt).toISOString()
+                : "unknown"}
+              {" · "}registered={data.latestTick.totalRules}
+              {" · "}checked={data.latestTick.rulesChecked}
+              {" · "}fired={data.latestTick.firedRules}
+              {" · "}sideEffects={data.latestTick.sideEffects}
+            </div>
+          </li>
+        </ul>
+      )}
+
       <Subhead label="Latest rule registrations from the apply path" />
       {data.latestRegistrations.length === 0 ? (
         <Empty text="No ruleRegistrationOnApply events have been persisted yet." />
@@ -209,17 +249,32 @@ export function SelfRuleEnforcementPanel({ data }: PanelProps): JSX.Element {
         <Empty text="No ratio_rule currently logs a deficit on its most recent firing." />
       ) : (
         <ul data-testid="self-rule-enforcement-deficits" style={listStyle()}>
-          {data.ratioDeficits.map((d) => (
-            <li key={d.ruleId} style={{ marginBottom: "0.5rem" }}>
-              <div style={{ color: RED, fontSize: "0.84rem" }}>
-                {d.summary}
-              </div>
-              <div style={{ color: DIM, fontSize: "0.74rem" }}>
-                rule registered and fired, but deficit is not yet operationally
-                satisfied
-              </div>
-            </li>
-          ))}
+          {data.ratioDeficits.map((d) => {
+            const showStructured =
+              d.fromStructuredEvent === true &&
+              d.actualCount != null &&
+              d.expectedCount != null &&
+              d.inputCount != null &&
+              d.inputNoun;
+            return (
+              <li key={d.ruleId} style={{ marginBottom: "0.5rem" }}>
+                <div style={{ color: RED, fontSize: "0.84rem" }}>
+                  {d.summary}
+                </div>
+                {showStructured && (
+                  <div style={{ color: DIM, fontSize: "0.74rem" }}>
+                    have={d.actualCount}
+                    {" · "}expected={d.expectedCount}
+                    {" · "}for {d.inputCount} {d.inputNoun}
+                  </div>
+                )}
+                <div style={{ color: DIM, fontSize: "0.74rem" }}>
+                  Rule fired; deficit observed; no corrective obligation queued
+                  yet.
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
 

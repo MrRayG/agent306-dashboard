@@ -46,9 +46,10 @@ function emptySnap(): SelfRuleEnforcementVisibility {
     latestRegistrations: [],
     latestFirings: [],
     ratioDeficits: [],
+    latestTick: null,
     visibilityLimitations: [
-      "ActionEnforcer per-tick summary (rulesFired / sideEffects / byPrimitive) is currently emitted only as a console log line; this snapshot does not scrape stdout.",
-      "Ratio_rule deficits are parsed from each rule's lastOutcome field.",
+      "ActionEnforcer per-tick summary is now persisted as a structured engine_events row.",
+      "Ratio_rule deficits are sourced from structured events when available with fallback to lastOutcome.",
     ],
   };
 }
@@ -111,13 +112,29 @@ function richSnap(): SelfRuleEnforcementVisibility {
         deficit: 174,
         lastFiredAt: "2026-05-16T11:00:00.000Z",
         rawOutcome: "deficit_logged:+174_archived",
+        expectedCount: 226,
+        actualCount: 52,
+        inputCount: 1131,
+        inputNoun: "kb_entries",
+        fromStructuredEvent: true,
         summary:
-          "Ratio rule rule_evo_1778846172013_1ces_mp71w3i2 (insight evo_1778846172013_1ces) most recently logged a deficit of +174 archived at 2026-05-16T11:00:00.000Z. The rule registered and fired, but the deficit is not yet operationally satisfied — this is diagnostic / observable only; no corrective obligation has been queued in this PR.",
+          "Ratio rule rule_evo_1778846172013_1ces_mp71w3i2 (insight evo_1778846172013_1ces) most recently logged a deficit of +174 archived (have 52, expected 226 for 1131 kb_entries) at 2026-05-16T11:00:00.000Z. Rule fired; deficit observed; no corrective obligation queued yet — diagnostic / observable only.",
       },
     ],
+    latestTick: {
+      emittedAt: "2026-05-16T11:00:01.000Z",
+      tickedAt: Date.parse("2026-05-16T11:00:00.000Z"),
+      totalRules: 36,
+      rulesChecked: 36,
+      firedRules: 36,
+      sideEffects: 10,
+      byPrimitive: { ratio_rule: 8, ttl_rule: 4, archive_rule: 24 },
+      summary:
+        "Latest ActionEnforcer tick at 2026-05-16T11:00:01.000Z: fired 36/36 rules (36 registered), 10 side effects — by primitive: ratio_rule=8, ttl_rule=4, archive_rule=24.",
+    },
     visibilityLimitations: [
-      "ActionEnforcer per-tick summary not yet persisted.",
-      "Ratio_rule deficit full log line is not yet persisted.",
+      "ActionEnforcer per-tick summary is now persisted as a structured engine_events row.",
+      "Ratio_rule deficits prefer structured events when available.",
     ],
   };
 }
@@ -140,10 +157,11 @@ describe("SelfRuleEnforcementPanel — empty state", () => {
     assert.match(html, /No executable self-rules are registered/i);
   });
 
-  it("renders zero-state messages for the three subsections", () => {
+  it("renders zero-state messages for the subsections", () => {
     assert.match(html, /No ruleRegistrationOnApply events have been persisted yet/);
     assert.match(html, /No registered rule has fired yet/);
     assert.match(html, /No ratio_rule currently logs a deficit/);
+    assert.match(html, /No ActionEnforcer tick event has been persisted yet/);
   });
 
   it("renders the visibility-limitations disclosure", () => {
@@ -184,8 +202,27 @@ describe("SelfRuleEnforcementPanel — populated state", () => {
     assert.match(html, /most recently logged a deficit of \+174 archived/);
     assert.match(
       html,
-      /rule registered and fired, but deficit is not yet operationally satisfied/,
+      /Rule fired; deficit observed; no corrective obligation queued yet\./,
     );
+  });
+
+  it("renders exact deficit details when structured event is present", () => {
+    assert.match(html, /have=<!-- -->52/);
+    assert.match(html, /expected=<!-- -->226/);
+    assert.match(html, /for <!-- -->1131<!-- --> <!-- -->kb_entries/);
+    // Also surfaced inline in the summary string
+    assert.match(html, /have 52, expected 226 for 1131 kb_entries/);
+  });
+
+  it("renders the latest ActionEnforcer tick block", () => {
+    assert.match(html, /data-testid="self-rule-enforcement-latest-tick"/);
+    assert.match(html, /Latest ActionEnforcer tick at/);
+    assert.match(html, /fired 36\/36 rules/);
+    assert.match(html, /10 side effects/);
+    assert.match(html, /ratio_rule=8, ttl_rule=4, archive_rule=24/);
+    assert.match(html, /registered=<!-- -->36/);
+    assert.match(html, /fired=<!-- -->36/);
+    assert.match(html, /sideEffects=<!-- -->10/);
   });
 });
 

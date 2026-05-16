@@ -106,6 +106,7 @@ describe("buildSelfRuleEnforcementVisibility", () => {
     assert.deepEqual(snap.latestRegistrations, []);
     assert.deepEqual(snap.latestFirings, []);
     assert.deepEqual(snap.ratioDeficits, []);
+    assert.equal(snap.latestTick, null);
     assert.match(
       snap.headline,
       /No executable self-rules are registered/i,
@@ -128,7 +129,7 @@ describe("buildSelfRuleEnforcementVisibility", () => {
     assert.equal(snap.counts.byPrimitive.ttl_rule, 2);
   });
 
-  it("surfaces a ratio_rule deficit when lastOutcome is deficit_logged form", () => {
+  it("surfaces a ratio_rule deficit when lastOutcome is deficit_logged form (legacy fallback path)", () => {
     const ruleId = "rule_test_deficit";
     const insightId = "insight_test_deficit";
     const firedAt = Date.parse("2026-05-15T10:00:00Z");
@@ -152,16 +153,110 @@ describe("buildSelfRuleEnforcementVisibility", () => {
     assert.equal(d.outputNoun, "archived");
     assert.equal(d.lastFiredAt, "2026-05-15T10:00:00.000Z");
     assert.equal(d.rawOutcome, "deficit_logged:+174_archived");
+    assert.equal(d.fromStructuredEvent, false);
     assert.match(d.summary, /\+174 archived/);
     assert.match(
       d.summary,
-      /diagnostic \/ observable only|no corrective obligation/i,
+      /no corrective obligation queued yet|diagnostic \/ observable only/i,
     );
     // Latest firings includes the rule
     assert.equal(snap.latestFirings.length, 1);
     assert.equal(snap.latestFirings[0].ruleId, ruleId);
     assert.equal(snap.latestFirings[0].fireCount, 3);
     assert.equal(snap.latestFirings[0].sideEffectCount, 3);
+  });
+
+  it("prefers a structured ratioRuleDeficit event over parsing lastOutcome", () => {
+    const ruleId = "rule_struct_deficit";
+    const insightId = "insight_struct";
+    const firedAt = Date.parse("2026-05-15T10:00:00Z");
+    writeStoreDirect([
+      makeRule({
+        id: ruleId,
+        insightId,
+        primitive: "ratio_rule",
+        fireCount: 4,
+        lastFiredAt: firedAt,
+        lastOutcome: "deficit_logged:+174_archived",
+        sideEffectCount: 4,
+      }),
+    ]);
+    logEvent({
+      engine: "actionEnforcer",
+      event: "ratioRuleDeficit",
+      level: "info",
+      data: {
+        ruleId,
+        insightId,
+        sourceInsightId: insightId,
+        expectedCount: 226,
+        actualCount: 52,
+        deficitCount: 174,
+        outputNoun: "archived",
+        inputCount: 1131,
+        inputNoun: "kb_entry",
+        tickedAt: firedAt,
+      },
+    });
+    const snap = buildSelfRuleEnforcementVisibility();
+    assert.equal(snap.ratioDeficits.length, 1);
+    const d = snap.ratioDeficits[0];
+    assert.equal(d.fromStructuredEvent, true);
+    assert.equal(d.deficit, 174);
+    assert.equal(d.outputNoun, "archived");
+    assert.equal(d.expectedCount, 226);
+    assert.equal(d.actualCount, 52);
+    assert.equal(d.inputCount, 1131);
+    assert.equal(d.inputNoun, "kb_entry");
+    assert.match(d.summary, /have 52, expected 226 for 1131 kb_entry/);
+    assert.match(d.summary, /Rule fired; deficit observed; no corrective obligation queued yet/);
+  });
+
+  it("surfaces a structured actionEnforcer.tick event as latestTick", () => {
+    logEvent({
+      engine: "actionEnforcer",
+      event: "tick",
+      level: "info",
+      data: {
+        tickedAt: Date.parse("2026-05-15T11:00:00Z"),
+        totalRules: 36,
+        rulesChecked: 36,
+        firedRules: 36,
+        sideEffects: 10,
+        byPrimitive: { ratio_rule: 8, ttl_rule: 4, archive_rule: 24 },
+      },
+    });
+    const snap = buildSelfRuleEnforcementVisibility();
+    assert.ok(snap.latestTick);
+    const t = snap.latestTick!;
+    assert.equal(t.totalRules, 36);
+    assert.equal(t.rulesChecked, 36);
+    assert.equal(t.firedRules, 36);
+    assert.equal(t.sideEffects, 10);
+    assert.deepEqual(t.byPrimitive, { ratio_rule: 8, ttl_rule: 4, archive_rule: 24 });
+    assert.match(t.summary, /fired 36\/36 rules/);
+    assert.match(t.summary, /10 side effects/);
+    assert.match(t.summary, /ratio_rule=8/);
+  });
+
+  it("returns the newest tick event when multiple exist", () => {
+    logEvent({
+      engine: "actionEnforcer",
+      event: "tick",
+      level: "info",
+      data: { tickedAt: 1, totalRules: 1, rulesChecked: 1, firedRules: 1, sideEffects: 0, byPrimitive: { ttl_rule: 1 } },
+    });
+    logEvent({
+      engine: "actionEnforcer",
+      event: "tick",
+      level: "info",
+      data: { tickedAt: 2, totalRules: 2, rulesChecked: 2, firedRules: 2, sideEffects: 1, byPrimitive: { ratio_rule: 2 } },
+    });
+    const snap = buildSelfRuleEnforcementVisibility();
+    assert.ok(snap.latestTick);
+    assert.equal(snap.latestTick!.firedRules, 2);
+    assert.equal(snap.latestTick!.totalRules, 2);
+    assert.deepEqual(snap.latestTick!.byPrimitive, { ratio_rule: 2 });
   });
 
   it("does NOT surface a deficit when ratio rule is satisfied", () => {
@@ -275,5 +370,10 @@ describe("buildAutonomyMonitorSnapshot wires selfRuleEnforcement", () => {
     assert.ok(Array.isArray(snap.selfRuleEnforcement.latestFirings));
     assert.ok(Array.isArray(snap.selfRuleEnforcement.ratioDeficits));
     assert.ok(Array.isArray(snap.selfRuleEnforcement.visibilityLimitations));
+    // latestTick is part of the new schema — null is acceptable in zero-state.
+    assert.ok(
+      snap.selfRuleEnforcement.latestTick === null ||
+      typeof snap.selfRuleEnforcement.latestTick === "object",
+    );
   });
 });

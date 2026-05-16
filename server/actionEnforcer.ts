@@ -129,6 +129,32 @@ async function fireRatioRule(rule: EnforcementRule): Promise<{ sideEffect: boole
       console.log(
         `[ActionEnforcer] ratio_rule deficit: need +${deficit} ${outputNoun} (have ${synthesisCount}, expected ${expectedSynthesis} for ${kbCount} ${inputNoun})`,
       );
+      // Best-effort structured event persistence for the dashboard. Must
+      // never throw or change tick semantics.
+      try {
+        const { logEvent } = await import("./observability/structuredLog.js");
+        logEvent({
+          engine: "actionEnforcer",
+          event: "ratioRuleDeficit",
+          level: "info",
+          data: {
+            ruleId: rule.id,
+            insightId: rule.insightId,
+            sourceInsightId: rule.insightId,
+            expectedCount: expectedSynthesis,
+            actualCount: synthesisCount,
+            deficitCount: deficit,
+            outputNoun: String(outputNoun),
+            inputCount: kbCount,
+            inputNoun: String(inputNoun),
+            ratioInputCount: Number(inputCount),
+            ratioOutputCount: Number(outputCount),
+            tickedAt: Date.now(),
+          },
+        });
+      } catch (e: any) {
+        console.warn(`[ActionEnforcer] ratioRuleDeficit event log failed (ignored): ${e?.message}`);
+      }
       return { sideEffect: true, outcome: `deficit_logged:+${deficit}_${outputNoun}` };
     }
   } catch (e: any) {
@@ -421,6 +447,26 @@ export async function tickEnforcer(): Promise<TickResult> {
     console.log(
       `[ActionEnforcer] Tick: fired ${result.rulesFired}/${result.rulesChecked} rules, ${result.sideEffects} side effects (${JSON.stringify(result.byPrimitive)})`,
     );
+  }
+  // Best-effort structured event for the Self-Rule Enforcement visibility
+  // panel. Must never throw — observability only, cannot change tick result.
+  try {
+    const { logEvent } = await import("./observability/structuredLog.js");
+    logEvent({
+      engine: "actionEnforcer",
+      event: "tick",
+      level: "info",
+      data: {
+        tickedAt: result.tickedAt,
+        totalRules: store.rules.length,
+        rulesChecked: result.rulesChecked,
+        firedRules: result.rulesFired,
+        sideEffects: result.sideEffects,
+        byPrimitive: result.byPrimitive,
+      },
+    });
+  } catch (e: any) {
+    console.warn(`[ActionEnforcer] tick event log failed (ignored): ${e?.message}`);
   }
   return result;
 }

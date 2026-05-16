@@ -84,14 +84,35 @@ export interface LatestRuleFiring {
 export interface RatioRuleDeficit {
   ruleId: string;
   insightId: string;
-  /** Output noun parsed from lastOutcome ("deficit_logged:+N_<noun>"). */
+  /** Output noun (preferred: from structured event; fallback: parsed from lastOutcome). */
   outputNoun: string | null;
-  /** Deficit count parsed from lastOutcome ("deficit_logged:+N_..."). */
+  /** Deficit count (preferred: from structured event; fallback: parsed from lastOutcome). */
   deficit: number | null;
   lastFiredAt: string | null;
   /** Raw lastOutcome string. */
   rawOutcome: string;
+  /** When a structured ratioRuleDeficit event was found, these are populated from it. */
+  expectedCount?: number | null;
+  actualCount?: number | null;
+  inputCount?: number | null;
+  inputNoun?: string | null;
+  /** True when fields are sourced from a structured event rather than from parsing lastOutcome. */
+  fromStructuredEvent: boolean;
   /** Human-readable explanation. */
+  summary: string;
+}
+
+export interface LatestActionEnforcerTick {
+  /** ISO timestamp of the tick event (engine_events emittedAt). */
+  emittedAt: string;
+  /** ms-since-epoch tickedAt recorded by the runtime. */
+  tickedAt: number | null;
+  totalRules: number;
+  rulesChecked: number;
+  firedRules: number;
+  sideEffects: number;
+  byPrimitive: Record<string, number>;
+  /** Human-readable summary for the panel. */
   summary: string;
 }
 
@@ -107,8 +128,10 @@ export interface SelfRuleEnforcementVisibility {
   latestRegistrations: LatestRegistration[];
   /** Per-rule view of which rules most recently fired. */
   latestFirings: LatestRuleFiring[];
-  /** Ratio rules currently logging a deficit on their lastOutcome. */
+  /** Ratio rules currently logging a deficit (preferring structured events). */
   ratioDeficits: RatioRuleDeficit[];
+  /** Latest structured ActionEnforcer tick event (null when none has been persisted). */
+  latestTick: LatestActionEnforcerTick | null;
   /** Things this visibility surface cannot show (no scraping, only persisted). */
   visibilityLimitations: string[];
 }
@@ -246,26 +269,118 @@ export function buildSelfRuleEnforcementVisibility(
     summary: summarizeFiring(r),
   }));
 
-  // Ratio rule deficits — parse lastOutcome
+  // Look up structured ActionEnforcer events. Best-effort — empty array on
+  // any read failure. Newest first (recentEvents already orders desc by id).
+  let actionEnforcerRows: Array<{ id: number; event: string; emittedAt: string; data: string; level: string }> = [];
+  try {
+    actionEnforcerRows = (recentEvents({ engine: "actionEnforcer", limit: 200 }) ?? []) as any[];
+  } catch {
+    actionEnforcerRows = [];
+  }
+
+  // Index the most recent ratioRuleDeficit event per ruleId. Because rows are
+  // already newest-first, the first occurrence wins.
+  const latestDeficitByRuleId = new Map<string, { row: any; payload: Record<string, any> }>();
+  for (const row of actionEnforcerRows) {
+    if (row.event !== "ratioRuleDeficit") continue;
+    const payload = safeParseJson(row.data) ?? {};
+    const rid = typeof payload.ruleId === "string" ? payload.ruleId : null;
+    if (!rid) continue;
+    if (!latestDeficitByRuleId.has(rid)) {
+      latestDeficitByRuleId.set(rid, { row, payload });
+    }
+  }
+
+  // Ratio rule deficits — prefer structured event for exact details; fall back
+  // to parsing lastOutcome for backward compatibility with rules whose tick
+  // happened before this event was wired up.
   const ratioDeficits: RatioRuleDeficit[] = rules
     .filter(r => r.primitive === "ratio_rule")
     .map(r => {
-      const parsed = parseRatioDeficit(r.lastOutcome);
-      if (!parsed) return null;
+      const structured = latestDeficitByRuleId.get(r.id);
+      const parsedOutcome = parseRatioDeficit(r.lastOutcome);
+      if (!structured && !parsedOutcome) return null;
       const lastAt = fmtTs(r.lastFiredAt);
+      if (structured) {
+        const p = structured.payload;
+        const deficit = Number.isFinite(p.deficitCount) ? Number(p.deficitCount) : (parsedOutcome?.deficit ?? null);
+        const outputNoun = typeof p.outputNoun === "string" ? p.outputNoun : (parsedOutcome?.outputNoun ?? null);
+        const expectedCount = Number.isFinite(p.expectedCount) ? Number(p.expectedCount) : null;
+        const actualCount = Number.isFinite(p.actualCount) ? Number(p.actualCount) : null;
+        const inputCount = Number.isFinite(p.inputCount) ? Number(p.inputCount) : null;
+        const inputNoun = typeof p.inputNoun === "string" ? p.inputNoun : null;
+        const detail =
+          (actualCount !== null && expectedCount !== null && inputCount !== null && inputNoun)
+            ? `have ${actualCount}, expected ${expectedCount} for ${inputCount} ${inputNoun}`
+            : null;
+        return {
+          ruleId: r.id,
+          insightId: r.insightId,
+          outputNoun,
+          deficit,
+          lastFiredAt: lastAt,
+          rawOutcome: r.lastOutcome ?? "",
+          expectedCount,
+          actualCount,
+          inputCount,
+          inputNoun,
+          fromStructuredEvent: true,
+          summary:
+            `Ratio rule ${r.id} (insight ${r.insightId}) most recently logged a deficit of +${deficit ?? "?"} ${outputNoun ?? "items"}` +
+            (detail ? ` (${detail})` : "") +
+            ` at ${lastAt ?? "unknown time"}. ` +
+            `Rule fired; deficit observed; no corrective obligation queued yet — diagnostic / observable only.`,
+        } as RatioRuleDeficit;
+      }
+      // Fallback: parse lastOutcome only (legacy / pre-event firings).
       return {
         ruleId: r.id,
         insightId: r.insightId,
-        outputNoun: parsed.outputNoun,
-        deficit: parsed.deficit,
+        outputNoun: parsedOutcome!.outputNoun,
+        deficit: parsedOutcome!.deficit,
         lastFiredAt: lastAt,
         rawOutcome: r.lastOutcome ?? "",
+        fromStructuredEvent: false,
         summary:
-          `Ratio rule ${r.id} (insight ${r.insightId}) most recently logged a deficit of +${parsed.deficit} ${parsed.outputNoun ?? "items"} at ${lastAt ?? "unknown time"}. ` +
-          `The rule registered and fired, but the deficit is not yet operationally satisfied — this is diagnostic / observable only; no corrective obligation has been queued in this PR.`,
+          `Ratio rule ${r.id} (insight ${r.insightId}) most recently logged a deficit of +${parsedOutcome!.deficit} ${parsedOutcome!.outputNoun ?? "items"} at ${lastAt ?? "unknown time"}. ` +
+          `Rule fired; deficit observed; no corrective obligation queued yet — diagnostic / observable only.`,
       } as RatioRuleDeficit;
     })
     .filter((x): x is RatioRuleDeficit => x !== null);
+
+  // Latest ActionEnforcer tick event — the persisted equivalent of the
+  // "[ActionEnforcer] Tick: fired N/M rules ..." console line.
+  let latestTick: LatestActionEnforcerTick | null = null;
+  for (const row of actionEnforcerRows) {
+    if (row.event !== "tick") continue;
+    const p = safeParseJson(row.data) ?? {};
+    const byPrim: Record<string, number> =
+      p.byPrimitive && typeof p.byPrimitive === "object" && !Array.isArray(p.byPrimitive)
+        ? Object.fromEntries(
+            Object.entries(p.byPrimitive)
+              .filter(([, v]) => Number.isFinite(v as number))
+              .map(([k, v]) => [k, Number(v)]),
+          )
+        : {};
+    const fired = Number.isFinite(p.firedRules) ? Number(p.firedRules) : 0;
+    const checked = Number.isFinite(p.rulesChecked) ? Number(p.rulesChecked) : 0;
+    const sideFx = Number.isFinite(p.sideEffects) ? Number(p.sideEffects) : 0;
+    const total = Number.isFinite(p.totalRules) ? Number(p.totalRules) : checked;
+    const primSummary = Object.entries(byPrim).map(([k, v]) => `${k}=${v}`).join(", ") || "none";
+    latestTick = {
+      emittedAt: row.emittedAt,
+      tickedAt: Number.isFinite(p.tickedAt) ? Number(p.tickedAt) : null,
+      totalRules: total,
+      rulesChecked: checked,
+      firedRules: fired,
+      sideEffects: sideFx,
+      byPrimitive: byPrim,
+      summary:
+        `Latest ActionEnforcer tick at ${row.emittedAt}: fired ${fired}/${checked} rules ` +
+        `(${total} registered), ${sideFx} side effect${sideFx === 1 ? "" : "s"} — by primitive: ${primSummary}.`,
+    };
+    break;
+  }
 
   // Headlines and notes
   const headline = (() => {
@@ -288,10 +403,10 @@ export function buildSelfRuleEnforcementVisibility(
     "This panel reports observation only. A registered self-rule fires once per DailyCycle tick and may log a structured deficit, but the runtime does NOT yet queue a corrective obligation from a deficit. Rule registration and firing are visibility-only signals on top of the existing approve → apply path (Pin 7 / Pin 11 preserved). No control on this page registers, mutates, or disables a rule.";
 
   const visibilityLimitations: string[] = [
-    "ActionEnforcer per-tick summary (rulesFired / sideEffects / byPrimitive) is currently emitted only as a console log line; this snapshot does not scrape stdout. The per-rule fireCount / sideEffectCount / lastOutcome below is the persisted view of the same tick.",
-    "Ratio_rule deficits are parsed from each rule's lastOutcome field; the full deficit log line (e.g. \"need +174 archived (have 52, expected 226 for 1131 kb_entries)\") is not yet persisted to engine_events, so the noun pair and the input count are not shown here.",
+    "ActionEnforcer per-tick summary (rulesFired / sideEffects / byPrimitive) is now persisted as a structured engine_events row (engine=actionEnforcer, event=tick); rules whose last tick predates this PR will not have a tick event yet.",
+    "Ratio_rule deficits are sourced from a structured ratioRuleDeficit engine_events row when available, with fallback to parsing each rule's lastOutcome field for legacy / pre-event firings.",
     "Disabled / superseded rules are not included — only the active registry (getAllActiveRules) is read.",
-    "Rule registration events older than the most recent 200 selfRecommendation rows are not surfaced here.",
+    "Rule registration events older than the most recent 200 selfRecommendation rows, and ActionEnforcer events older than the most recent 200 actionEnforcer rows, are not surfaced here.",
   ];
 
   return {
@@ -308,6 +423,7 @@ export function buildSelfRuleEnforcementVisibility(
     latestRegistrations,
     latestFirings,
     ratioDeficits,
+    latestTick,
     visibilityLimitations,
   };
 }
