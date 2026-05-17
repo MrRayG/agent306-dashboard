@@ -84,6 +84,10 @@ import {
   type MemoryKnowledgeEntry,
   type MemoryKnowledgeFile,
 } from "./memoryHypothesisHygiene.js";
+import {
+  describeSourceDiagnostics,
+  type SourceDiscoveryDiagnostics,
+} from "./hypothesisSourceDiscovery.js";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -258,6 +262,12 @@ export interface HypothesisIntakeAuditVisibility {
 
   /** Any source that was unreadable on this snapshot — informational. */
   dataMissingNotes: string[];
+
+  /** Shared source-discovery diagnostics: which formal paths were tried,
+   *  which existed, how many records each held, and the operator's next
+   *  safe action. Identical to the diagnostics on the reset report so the
+   *  dashboard and CLI cannot disagree. */
+  sourceDiagnostics: SourceDiscoveryDiagnostics;
 
   /** Hard invariants this block satisfies. Mirrored to the UI for transparency. */
   invariants: {
@@ -963,6 +973,14 @@ export function buildHypothesisIntakeAuditVisibility(
 
   const nextSafeActions = buildNextSafeActions(capPolicy, resetBuckets, memoryOrigin, intakeQuality);
 
+  const sourceDiagnostics = describeSourceDiagnostics();
+  // Surface the discovery's next-safe-action at the top of the panel's
+  // own action list when the formal store is empty. The CLI surfaces the
+  // same text, so the dashboard and the operator console agree.
+  if (sourceDiagnostics.formalRecords === 0) {
+    nextSafeActions.unshift(`Source diagnostics: ${sourceDiagnostics.nextSafeAction}`);
+  }
+
   return {
     schemaVersion: "phase-intake-audit-1",
     label:         "hypothesis-intake-audit-visibility",
@@ -974,6 +992,7 @@ export function buildHypothesisIntakeAuditVisibility(
     intakeQuality,
     nextSafeActions,
     dataMissingNotes,
+    sourceDiagnostics,
     invariants: {
       readOnly:     "no write, no insert, no scheduler, no apply path",
       dryRunOnly:   "reset/classification returns a proposal; no archive or update is called",

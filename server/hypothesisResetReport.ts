@@ -17,19 +17,23 @@
  *   - READ-ONLY. No write paths are imported. `archiveHypotheses.ts`,
  *     `researchEngine.ts:saveLab`, `selfRecommendationEngine.applyRecommendation`
  *     are all out of scope here.
- *   - DETERMINISTIC. Given the same `research_lab.json` snapshot and the same
- *     `now` instant, two calls return byte-identical output. Tests pin this.
+ *   - DETERMINISTIC. Given the same source snapshot and the same `now`
+ *     instant, two calls return byte-identical output. Tests pin this.
  *   - NON-WIDENING. No new API endpoint, no new auth, no new primitive. The
  *     CLI is operator-only and uses the same reader as the panel.
  *   - PROPOSE-ONLY. The report exposes a `bucket` per id, an aggregate of the
  *     intake-quality verdict on the same record, and an "operator should…"
  *     `recommendedAction` per bucket. Nothing here decides anything; the
  *     final apply step lives behind an explicit operator flag in the CLI.
+ *   - MEMORY COVERAGE. When the formal store is missing or empty, the report
+ *     ALSO classifies memory-origin hypothesis-titled entries from
+ *     `memory_knowledge.json` into the `promote_later_memory_origin` bucket
+ *     so the operator can see promotion candidates instead of "all zero".
+ *     These entries are NEVER eligible for CLI archive (the bucket's
+ *     `safeToArchiveFromCli` stays false). Promotion is operator-only.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import * as fs from "fs";
-import { dataPath, DATA_DIR } from "./dataPaths.js";
 import {
   classifyReset,
   gateIntake,
@@ -40,6 +44,13 @@ import {
   type IntakeCandidate,
 } from "./hypothesisIntakeAuditVisibility.js";
 import type { HygieneAwareHypothesis } from "./hypothesisHygiene.js";
+import type { MemoryKnowledgeEntry } from "./memoryHypothesisHygiene.js";
+import {
+  discoverHypothesisSources,
+  type DiscoverSourcesOptions,
+  type SourceDiscoveryDiagnostics,
+  formatSourceDiagnostics,
+} from "./hypothesisSourceDiscovery.js";
 
 // ── Public types ────────────────────────────────────────────────────────────
 
@@ -55,6 +66,11 @@ export interface ResetReportEntry {
   /** Re-run intake gate over the existing record so the report shows both
    *  the lifecycle bucket and the gate verdict on the same row. */
   intakeVerdict:   IntakeGateVerdict;
+  /** "formal" for rows from research_lab.json, "memory" for memory-origin
+   *  hypothesis-titled entries that the report surfaces under
+   *  `promote_later_memory_origin`. Operators can use this to keep the two
+   *  populations distinct on the panel. */
+  origin:          "formal" | "memory";
 }
 
 export interface ResetReportBucketSection {
@@ -68,8 +84,8 @@ export interface ResetReportBucketSection {
   recommendedAction: string;
   /** True when this bucket is safe to apply via the CLI as an archive
    *  (status → archived, hygieneTag preserved). `keep_active`,
-   *  `needs_operator_review`, and the `rewrite_*` buckets are NOT safe to
-   *  archive blindly. */
+   *  `needs_operator_review`, `promote_later_memory_origin`, and the
+   *  `rewrite_*` buckets are NOT safe to archive blindly. */
   safeToArchiveFromCli: boolean;
 }
 
@@ -79,6 +95,11 @@ export interface ResetReportMeta {
   researchLabPath:    string;
   researchLabExists:  boolean;
   totalRecords:       number;
+  /** Total formal records loaded (research_lab.json or --source override). */
+  formalRecords:      number;
+  /** Total memory-origin hypothesis-titled entries classified into the
+   *  promote_later_memory_origin bucket. */
+  memoryOriginRecords: number;
   /** Snapshot inputs used to compute the report. */
   inputs: {
     now:              string;
@@ -86,10 +107,13 @@ export interface ResetReportMeta {
     maxActive:        number;
     maxNewPerDailyCycle: number;
   };
+  /** Full source-discovery diagnostics. Surfaces attempted paths,
+   *  existence, parse errors, and the operator's next safe action. */
+  sourceDiagnostics: SourceDiscoveryDiagnostics;
 }
 
 export interface HypothesisResetReport {
-  schemaVersion: "hypothesis-reset-report-1";
+  schemaVersion: "hypothesis-reset-report-2";
   meta:          ResetReportMeta;
   /** Ordered list of bucket sections. Empty buckets are included so the
    *  consumer can render a stable layout. */
@@ -120,7 +144,7 @@ const BUCKET_RECOMMENDED_ACTION: Readonly<Record<ResetBucket, string>> = Object.
   archive_duplicate:             "Operator may run `tsx scripts/hypothesisReset.ts --bucket=archive_duplicate --apply` after review. aliasOf is preserved.",
   rewrite_positional_debate:     "Manual rewrite required. Reframe as a research-gap claim (metric + dataset + deadline). Do NOT bulk-archive — these are recoverable.",
   rewrite_missing_evidence_path: "Manual rewrite required. Fill measurementPath / metric / basis or archive individually.",
-  promote_later_memory_origin:   "Operator-only promotion via existing memory→formal path. Do NOT apply this bucket from this CLI.",
+  promote_later_memory_origin:   "Operator-only promotion via existing memory→formal path. Do NOT apply this bucket from this CLI. See server/memoryHypothesisHygiene.ts.",
   needs_operator_review:         "Conservative bucket — review individually before any action.",
 });
 
@@ -129,22 +153,6 @@ const SAFE_TO_ARCHIVE_BUCKETS: Readonly<Set<ResetBucket>> = new Set<ResetBucket>
   "archive_data_unavailable",
   "archive_duplicate",
 ]);
-
-interface ResearchLabBlob {
-  hypotheses?: HygieneAwareHypothesis[];
-}
-
-function readResearchLabSafe(): { blob: ResearchLabBlob | null; exists: boolean } {
-  const p = dataPath("research_lab.json");
-  if (!fs.existsSync(p)) return { blob: null, exists: false };
-  try {
-    const parsed = JSON.parse(fs.readFileSync(p, "utf8"));
-    if (parsed && typeof parsed === "object") return { blob: parsed as ResearchLabBlob, exists: true };
-    return { blob: null, exists: true };
-  } catch {
-    return { blob: null, exists: true };
-  }
-}
 
 function previewClaim(claim: string | undefined): string {
   if (typeof claim !== "string") return "";
@@ -160,7 +168,7 @@ function intakeVerdictFor(h: HygieneAwareHypothesis): IntakeGateVerdict {
     metric:          h.metric,
     prediction:      h.prediction,
     timeframe:       h.timeframe,
-    source:          h.source,
+    source:           h.source,
     measurementPath: h.measurementPath,
     evidenceRef:     looksLikeEvidenceRef(h.basis) ? h.basis : undefined,
     useCase:         undefined,
@@ -178,6 +186,27 @@ function looksLikeEvidenceRef(s: string | undefined): boolean {
   return false;
 }
 
+function memoryEntryToReportEntry(e: MemoryKnowledgeEntry): ResetReportEntry {
+  const promoted = typeof e.promotedToHypothesisId === "string" && e.promotedToHypothesisId.length > 0;
+  const claim = (typeof e.title === "string" ? e.title : "").replace(/^Hypothesis:\s*/i, "").trim();
+  const reasons: string[] = [
+    "memory-origin entry — title starts with 'Hypothesis:'",
+    promoted
+      ? `already promoted to formal hypothesis ${e.promotedToHypothesisId} — listed for visibility only`
+      : "no promotedToHypothesisId — formal promotion is operator-only and out of scope for this CLI",
+  ];
+  return {
+    id:            `memory:${e.id}`,
+    bucket:        "promote_later_memory_origin",
+    reasons,
+    claimPreview:  previewClaim(claim),
+    status:        typeof e.status === "string" ? e.status : "(unset)",
+    formedAt:      typeof e.learnedAt === "string" ? e.learnedAt : null,
+    intakeVerdict: "missing_evidence_path",
+    origin:        "memory",
+  };
+}
+
 // ── Public entry points ─────────────────────────────────────────────────────
 
 export interface BuildResetReportOptions {
@@ -185,9 +214,20 @@ export interface BuildResetReportOptions {
   staleDays?:            number;
   maxActive?:            number;
   maxNewPerDailyCycle?:  number;
-  /** Allow injecting hypothesis list (tests); defaults to reading
-   *  `research_lab.json`. */
+  /** Allow injecting hypothesis list (tests); defaults to reading the
+   *  discovered formal source. */
   hypotheses?:           HygieneAwareHypothesis[];
+  /** Allow injecting memory-origin entries (tests); defaults to reading the
+   *  discovered memory source. */
+  memoryEntries?:        MemoryKnowledgeEntry[];
+  /** Operator override for the formal store path (CLI: `--source=…`). */
+  sourcePath?:           string;
+  /** Operator override for DATA_DIR (CLI: `--data-dir=…`). */
+  dataDir?:              string;
+  /** Suppress memory-origin coverage even when formal store is empty. The
+   *  apply path uses this so freshness comparisons run only over the formal
+   *  rows that can actually be archived. */
+  includeMemoryOrigin?:  boolean;
 }
 
 /**
@@ -202,22 +242,34 @@ export function buildResetReport(opts: BuildResetReportOptions = {}): Hypothesis
   const staleDays = opts.staleDays ?? DEFAULT_ACTIVE_CAP.staleDays;
   const maxActive = opts.maxActive ?? DEFAULT_ACTIVE_CAP.maxActive;
   const maxNewPerDailyCycle = opts.maxNewPerDailyCycle ?? DEFAULT_ACTIVE_CAP.maxNewPerDailyCycle;
+  const includeMemoryOrigin = opts.includeMemoryOrigin !== false; // default true
 
-  let hyps: HygieneAwareHypothesis[];
-  let exists: boolean;
+  // Source discovery (or test injection).
+  const discOpts: DiscoverSourcesOptions = {};
+  if (opts.sourcePath) discOpts.sourcePath = opts.sourcePath;
+  if (opts.dataDir) discOpts.dataDir = opts.dataDir;
+  const discovered = discoverHypothesisSources(discOpts);
+  const diagnostics = discovered.diagnostics;
+
+  let formalHyps: HygieneAwareHypothesis[];
   if (Array.isArray(opts.hypotheses)) {
-    hyps = opts.hypotheses;
-    exists = true;
+    formalHyps = opts.hypotheses;
   } else {
-    const { blob, exists: e } = readResearchLabSafe();
-    hyps = Array.isArray(blob?.hypotheses) ? (blob!.hypotheses as HygieneAwareHypothesis[]) : [];
-    exists = e;
+    formalHyps = discovered.formalHypotheses;
+  }
+
+  let memoryEntries: MemoryKnowledgeEntry[];
+  if (Array.isArray(opts.memoryEntries)) {
+    memoryEntries = opts.memoryEntries;
+  } else {
+    memoryEntries = discovered.memoryHypothesisEntries;
   }
 
   // Group entries by bucket.
   const byBucket: Record<ResetBucket, ResetReportEntry[]> = Object.create(null);
   for (const b of RESET_BUCKETS) byBucket[b] = [];
-  for (const h of hyps) {
+
+  for (const h of formalHyps) {
     const cls = classifyReset(h, { now, staleDays });
     byBucket[cls.bucket].push({
       id:            h.id,
@@ -227,8 +279,23 @@ export function buildResetReport(opts: BuildResetReportOptions = {}): Hypothesis
       status:        typeof h.status === "string" ? h.status : "(unset)",
       formedAt:      typeof h.formedAt === "string" ? h.formedAt : null,
       intakeVerdict: intakeVerdictFor(h),
+      origin:        "formal",
     });
   }
+
+  // Memory-origin coverage. We add memory entries to
+  // `promote_later_memory_origin` ONLY when the formal store is empty OR the
+  // entry has not been promoted. Already-promoted entries surface for
+  // visibility because the operator may otherwise mistake them for stale
+  // candidates. The bucket stays NOT safe-to-archive regardless.
+  let memoryOriginRecords = 0;
+  if (includeMemoryOrigin) {
+    for (const e of memoryEntries) {
+      byBucket["promote_later_memory_origin"].push(memoryEntryToReportEntry(e));
+      memoryOriginRecords++;
+    }
+  }
+
   for (const b of RESET_BUCKETS) {
     byBucket[b].sort((a, b2) => a.id.localeCompare(b2.id));
   }
@@ -249,22 +316,37 @@ export function buildResetReport(opts: BuildResetReportOptions = {}): Hypothesis
     "Read-only report. The CLI in scripts/hypothesisReset.ts is dry-run by default and requires --apply for any write.",
     "The CLI ARCHIVES (sets status='archived' + hygieneTag) — it never deletes. The full pre-apply snapshot is also backed up before any write.",
     "rewrite_* and needs_operator_review buckets are NOT applied by the CLI; they require manual operator review.",
+    "promote_later_memory_origin entries (origin=memory) are NEVER applied by the CLI; memory→formal promotion is operator-only.",
   ];
+  if (diagnostics.formalRecords === 0 && memoryOriginRecords > 0) {
+    notes.push(
+      `Formal research_lab.json is missing or empty under DATA_DIR=${diagnostics.dataDir}. ` +
+      `${memoryOriginRecords} memory-origin hypothesis-titled entries surfaced from ${diagnostics.memoryAttempt.path}; ` +
+      `the CLI will REFUSE --apply until a non-empty formal source is loaded.`,
+    );
+  }
+
+  const researchLabPath = diagnostics.formalChosen
+    ?? (diagnostics.formalAttempts.length > 0 ? diagnostics.formalAttempts[0].path : "(unknown)");
+  const researchLabExists = diagnostics.formalAttempts.some(a => a.exists && a.role !== "memory");
 
   return {
-    schemaVersion: "hypothesis-reset-report-1",
+    schemaVersion: "hypothesis-reset-report-2",
     meta: {
-      generatedAt:       now.toISOString(),
-      dataDir:           DATA_DIR,
-      researchLabPath:   dataPath("research_lab.json"),
-      researchLabExists: exists,
-      totalRecords:      hyps.length,
+      generatedAt:         now.toISOString(),
+      dataDir:             diagnostics.dataDir,
+      researchLabPath,
+      researchLabExists,
+      totalRecords:        formalHyps.length + memoryOriginRecords,
+      formalRecords:       formalHyps.length,
+      memoryOriginRecords,
       inputs: {
         now:                 now.toISOString(),
         staleDays,
         maxActive,
         maxNewPerDailyCycle,
       },
+      sourceDiagnostics: diagnostics,
     },
     buckets,
     counts,
@@ -278,9 +360,10 @@ export function formatResetReport(rep: HypothesisResetReport): string {
   lines.push(`# Hypothesis Reset Report`);
   lines.push(``);
   lines.push(`Generated: ${rep.meta.generatedAt}`);
-  lines.push(`DATA_DIR:  ${rep.meta.dataDir}`);
-  lines.push(`Source:    ${rep.meta.researchLabPath} (exists=${rep.meta.researchLabExists})`);
-  lines.push(`Records:   ${rep.meta.totalRecords}`);
+  lines.push(`Records:   ${rep.meta.totalRecords} (formal=${rep.meta.formalRecords}, memory-origin=${rep.meta.memoryOriginRecords})`);
+  lines.push(``);
+  lines.push(`## Source diagnostics`);
+  for (const ln of formatSourceDiagnostics(rep.meta.sourceDiagnostics)) lines.push(`  ${ln}`);
   lines.push(``);
   lines.push(`## Bucket counts`);
   for (const b of RESET_BUCKETS) {
@@ -297,7 +380,7 @@ export function formatResetReport(rep: HypothesisResetReport): string {
     } else {
       for (const e of section.entries.slice(0, 25)) {
         lines.push(
-          `  - ${e.id} [status=${e.status}, intakeVerdict=${e.intakeVerdict}] ${e.claimPreview}`,
+          `  - ${e.id} [origin=${e.origin}, status=${e.status}, intakeVerdict=${e.intakeVerdict}] ${e.claimPreview}`,
         );
         for (const r of e.reasons) lines.push(`      · ${r}`);
       }
@@ -317,7 +400,8 @@ export function formatResetReport(rep: HypothesisResetReport): string {
 /**
  * Convenience: filter a report down to only the entries an operator marked
  * for an "apply" pass via the CLI. Excludes any bucket whose
- * `safeToArchiveFromCli` is false. Read-only.
+ * `safeToArchiveFromCli` is false. Memory-origin entries are excluded by
+ * construction (their bucket is never safe). Read-only.
  */
 export function selectApplicableEntries(
   rep: HypothesisResetReport,
@@ -331,7 +415,12 @@ export function selectApplicableEntries(
   const out: ResetReportEntry[] = [];
   for (const section of rep.buckets) {
     if (!allowed.has(section.bucket)) continue;
-    for (const e of section.entries) out.push(e);
+    for (const e of section.entries) {
+      // Defense in depth: even if a future buggy classifier put a memory
+      // entry in an archive_* bucket, refuse to surface it here.
+      if (e.origin !== "formal") continue;
+      out.push(e);
+    }
   }
   return out;
 }
