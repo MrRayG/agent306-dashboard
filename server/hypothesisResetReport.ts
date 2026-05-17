@@ -325,6 +325,22 @@ export function buildResetReport(opts: BuildResetReportOptions = {}): Hypothesis
       `the CLI will REFUSE --apply until a non-empty formal source is loaded.`,
     );
   }
+  // Count-mismatch reconciliation: when other non-memory sources observed
+  // hypothesis records but formal-chosen is empty, surface a precise line so
+  // the operator can see *why* Research Lab / Agent HQ panels report a
+  // larger count than this report's formal=0.
+  const mismatched = diagnostics.otherSources.filter(s =>
+    s.origin !== "memory_knowledge_hypothesis_entries" && s.count > 0,
+  );
+  if (diagnostics.formalRecords === 0 && mismatched.length > 0) {
+    const detail = mismatched.map(s => `${s.label}=${s.count}`).join("; ");
+    notes.push(
+      `Source count mismatch — formal-chosen reports 0 but: ${detail}. ` +
+      `This is the Research Lab / Agent HQ vs Phase 2 disagreement. ` +
+      `These sources are read-only observations; the reset CLI will NOT apply against them. ` +
+      `Operator can re-run with --source=<absolute path> if they want to classify one of them.`,
+    );
+  }
 
   const researchLabPath = diagnostics.formalChosen
     ?? (diagnostics.formalAttempts.length > 0 ? diagnostics.formalAttempts[0].path : "(unknown)");

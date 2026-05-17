@@ -980,6 +980,31 @@ export function buildHypothesisIntakeAuditVisibility(
   if (sourceDiagnostics.formalRecords === 0) {
     nextSafeActions.unshift(`Source diagnostics: ${sourceDiagnostics.nextSafeAction}`);
   }
+  // Mismatch banner. When another source observes records (DB row, .bak,
+  // .backup.json) and the formal-chosen source observes none, the operator
+  // is looking at the production "Research Lab reports 400+, reset says 0"
+  // gap. Surface the count split as a dataMissingNotes line and prepend a
+  // reconciliation entry to nextSafeActions so it appears at the top.
+  const otherWithRecords = sourceDiagnostics.otherSources.filter(s =>
+    s.origin !== "memory_knowledge_hypothesis_entries" && s.count > 0,
+  );
+  if (sourceDiagnostics.formalRecords === 0 && otherWithRecords.length > 0) {
+    const summary = otherWithRecords
+      .map(s => `${s.label}=${s.count}`)
+      .join(", ");
+    dataMissingNotes.push(
+      `Hypothesis-count mismatch: formal-chosen store reports 0, but ${summary}. ` +
+      `Phase 2 / reset CLI operate on the formal-chosen source. Research Lab / Agent HQ panels read via getResearchLab() ` +
+      `→ readResearchBlob() which prefers the DB row, then research_lab.json, then research_lab.json.bak. ` +
+      `Reset apply is REFUSED until the operator reconciles the sources (re-point --source, run the migration, ` +
+      `or accept that the apply path will use the DB which differs from what the CLI just classified).`,
+    );
+    nextSafeActions.unshift(
+      `Source reconciliation: ${otherWithRecords.length} non-formal source(s) report hypothesis records ` +
+      `(${summary}). The reset CLI cannot apply until the formal-chosen source and the runtime apply path agree. ` +
+      `See sourceDiagnostics.countReconciliation for the per-source counts.`,
+    );
+  }
 
   return {
     schemaVersion: "phase-intake-audit-1",
