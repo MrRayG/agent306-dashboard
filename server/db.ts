@@ -9,8 +9,41 @@ const DB_PATH = process.env.DB_PATH ?? dataPath("agent306.db");
 
 const sqlite = new Database(DB_PATH);
 
-// Enable WAL mode for better concurrent performance
-sqlite.pragma("journal_mode = WAL");
+// Tell SQLite to wait briefly when it sees the database locked, rather than
+// failing immediately. Aggregate test runs (npm test) and CI execute every
+// `*.test.ts` file in parallel under one tsx --test invocation; each worker
+// imports this module and races to set WAL mode on the same DB file. Without
+// a busy_timeout the second-to-Nth racer gets `SqliteError: database is
+// locked` from the WAL pragma below. 5s is well under the per-test timeout
+// and only takes effect if there is genuine contention.
+sqlite.pragma("busy_timeout = 5000");
+
+// Enable WAL mode for better concurrent performance. If another connection
+// already set WAL (or is mid-checkpoint), retry a few times instead of
+// crashing the whole worker — the pragma is idempotent and the second call
+// is a no-op once the lock clears. We never silently swallow a *persistent*
+// failure: if every retry trips the lock we surface the last error.
+function setWalWithRetry(maxAttempts = 6, baseDelayMs = 50): void {
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      sqlite.pragma("journal_mode = WAL");
+      return;
+    } catch (err: any) {
+      lastErr = err;
+      const msg = String(err?.message ?? err ?? "");
+      if (!msg.toLowerCase().includes("database is locked")) throw err;
+      // Synchronous sleep so the import stays serial — short and bounded.
+      const until = Date.now() + baseDelayMs * (attempt + 1);
+      // eslint-disable-next-line no-empty
+      while (Date.now() < until) {}
+    }
+  }
+  throw lastErr instanceof Error
+    ? lastErr
+    : new Error("setWalWithRetry: exhausted retries on `journal_mode = WAL`");
+}
+setWalWithRetry();
 
 export const db = drizzle(sqlite, { schema });
 
