@@ -50,6 +50,7 @@ const {
   buildWorkloadBudgetVisibility,
   DEFAULT_WORKLOAD_BUDGET_THRESHOLDS,
   WORKLOAD_BUDGET_COST_DRIVER_EVENT_NAMES,
+  EXTERNAL_COST_REPORT_OPENROUTER_2026_05_17,
 } = await import("../workloadBudgetVisibility.ts");
 
 const {
@@ -309,6 +310,67 @@ describe("workloadBudgetVisibility — projection shape", () => {
     assert.equal(v.counts.memoryOriginHypotheses, 3);
     assert.equal(v.counts.memoryHypothesesBlocked, 2);
     assert.equal(v.counts.kbEntries, 4);
+  });
+});
+
+describe("workloadBudgetVisibility — external cost report (OpenRouter CSV)", () => {
+  it("pins the 2026-05-17 OpenRouter CSV totals on the default snapshot", () => {
+    const v = buildWorkloadBudgetVisibility({ now: new Date("2026-05-17T00:00:00Z") });
+    const r = v.externalCostReport;
+    assert.equal(r.source, "openrouter_activity_csv");
+    assert.equal(r.rangeStart, "2026-04-18");
+    assert.equal(r.rangeEnd,   "2026-05-17");
+    assert.equal(r.rowCount,   25112);
+    assert.equal(r.totalUsd,   134.6701);
+    assert.deepEqual([...r.filteredTotalsUsd].sort((a, b) => a - b), [67.4851, 84.17]);
+    const byModel = Object.fromEntries(r.byModelUsd.map(m => [m.model, m.costUsd]));
+    assert.equal(byModel["Claude Sonnet"], 72.4882);
+    assert.equal(byModel["Claude Opus"],   40.2073);
+    assert.equal(byModel["Gemini Flash"],  21.8511);
+    assert.equal(byModel["Embeddings"],    0.0534);
+    assert.equal(r.dailyCycleBurstUtcWindow.startHour, 10);
+    assert.equal(r.dailyCycleBurstUtcWindow.endHour,   11);
+  });
+
+  it("emits CSV-derived soft recommendations referencing top model + burst window + finish_reason", () => {
+    const v = buildWorkloadBudgetVisibility({ now: new Date("2026-05-17T00:00:00Z") });
+    const joined = v.softRecommendations.join("\n");
+    assert.match(joined, /Claude Sonnet/i);
+    assert.match(joined, /\$72\.49/);
+    assert.match(joined, /\$134\.67/);
+    assert.match(joined, /finish_reason=length/);
+    assert.match(joined, /10:00–11:00 UTC/);
+    // Advisory banner still present.
+    assert.ok(v.softRecommendations.some(r => /advisory text only/i.test(r)));
+  });
+
+  it("accepts an injected externalCostReport override", () => {
+    const v = buildWorkloadBudgetVisibility({
+      now: new Date("2026-05-17T00:00:00Z"),
+      externalCostReport: {
+        source: "openrouter_activity_csv",
+        label:  "synthetic-test",
+        rangeStart: "2026-05-10",
+        rangeEnd:   "2026-05-17",
+        rowCount:   1,
+        totalUsd:   0.01,
+        filteredTotalsUsd: [],
+        byModelUsd: [{ model: "TestModel", costUsd: 0.01 }],
+        notes: [],
+        dailyCycleBurstUtcWindow: { startHour: 0, endHour: 1 },
+        asOf: "2026-05-17",
+      },
+    });
+    assert.equal(v.externalCostReport.label, "synthetic-test");
+    assert.equal(v.externalCostReport.totalUsd, 0.01);
+  });
+
+  it("pinned constant is unaffected by builder calls (no mutation)", () => {
+    const before = JSON.stringify(EXTERNAL_COST_REPORT_OPENROUTER_2026_05_17);
+    buildWorkloadBudgetVisibility({ now: new Date("2026-05-17T00:00:00Z") });
+    buildWorkloadBudgetVisibility({ now: new Date("2026-05-17T00:00:00Z") });
+    const after = JSON.stringify(EXTERNAL_COST_REPORT_OPENROUTER_2026_05_17);
+    assert.equal(after, before);
   });
 });
 

@@ -121,6 +121,73 @@ export interface WorkloadBudgetThresholds {
   obligationsBumpAt: number;
 }
 
+// ── External cost report (static, observational) ───────────────────────────
+//
+// Snapshot of the OpenRouter activity export shared with the operator on
+// 2026-05-17. We pin this here so the dashboard can show one concrete dollar
+// number — billing truth lives in OpenRouter, not in this codebase. When a
+// fresher export lands, update this object; we do NOT auto-fetch.
+
+export interface ExternalCostReportModelLine {
+  model:    string;
+  costUsd:  number;
+}
+
+export interface ExternalCostReport {
+  source:        "openrouter_activity_csv";
+  label:         string;
+  /** YYYY-MM-DD inclusive. */
+  rangeStart:    string;
+  rangeEnd:      string;
+  rowCount:      number;
+  /** Total cost in the unfiltered CSV. */
+  totalUsd:      number;
+  /**
+   * Other totals the operator reported from filtered views of the same data
+   * (different report / filter combinations). Kept verbatim so the panel can
+   * say "exact billing differs by filter" without hiding the discrepancy.
+   */
+  filteredTotalsUsd: number[];
+  /** Top spend by model in descending order. */
+  byModelUsd:    ExternalCostReportModelLine[];
+  /** Free-form notes the operator surfaced alongside the export. */
+  notes:         string[];
+  /**
+   * Hint at when daily-cycle bursts cluster in the recent activity, in
+   * UTC ranges. Used to colour the soft recommendation copy only.
+   */
+  dailyCycleBurstUtcWindow: { startHour: number; endHour: number };
+  /**
+   * Generation timestamp of the underlying export (operator-provided).
+   * Not a live ping — the dashboard never reaches out to OpenRouter.
+   */
+  asOf:          string;
+}
+
+export const EXTERNAL_COST_REPORT_OPENROUTER_2026_05_17: Readonly<ExternalCostReport> = Object.freeze({
+  source:     "openrouter_activity_csv",
+  label:      "OpenRouter activity export, 2026-04-18 → 2026-05-17",
+  rangeStart: "2026-04-18",
+  rangeEnd:   "2026-05-17",
+  rowCount:   25112,
+  totalUsd:   134.6701,
+  filteredTotalsUsd: Object.freeze([67.4851, 84.17]) as unknown as number[],
+  byModelUsd: Object.freeze([
+    { model: "Claude Sonnet",  costUsd: 72.4882 },
+    { model: "Claude Opus",    costUsd: 40.2073 },
+    { model: "Gemini Flash",   costUsd: 21.8511 },
+    { model: "Embeddings",     costUsd: 0.0534 },
+  ]) as unknown as ExternalCostReportModelLine[],
+  notes: Object.freeze([
+    "Non-embedding LLM calls drive nearly all cost",
+    "Top single calls often hit finish_reason=length (output truncation)",
+    "Daily-cycle bursts cluster around 10:00–11:00 UTC in the last 48h",
+    "Exact billing differs by report / filter — treat as observational",
+  ]) as unknown as string[],
+  dailyCycleBurstUtcWindow: Object.freeze({ startHour: 10, endHour: 11 }) as { startHour: number; endHour: number },
+  asOf: "2026-05-17",
+});
+
 export const DEFAULT_WORKLOAD_BUDGET_THRESHOLDS: Readonly<WorkloadBudgetThresholds> = Object.freeze({
   cycleDurationHighMs:   60 * 60 * 1000,
   cycleDurationMediumMs: 20 * 60 * 1000,
@@ -152,6 +219,15 @@ export interface WorkloadBudgetVisibility {
   softRecommendations:   string[];
   /** Any source that was unreadable on this snapshot — informational. */
   dataMissingNotes:      string[];
+  /**
+   * Static, observational reference to the most recently shared external
+   * OpenRouter activity export. Snapshot-in-time, not live billing — the
+   * exact total varies by report/filter, so we expose the unfiltered CSV
+   * total alongside the operator-confirmed filtered totals. Surfaced so the
+   * panel has at least one concrete dollar number an operator can sanity-
+   * check against, without claiming a live cost integration.
+   */
+  externalCostReport:    ExternalCostReport;
   /** Hard invariants this block satisfies. Mirrored to the UI for transparency. */
   invariants: {
     readOnly:           "no write, no insert, no scheduler, no apply path";
@@ -352,6 +428,7 @@ function buildSoftRecommendations(
   band: WorkloadCostPressureBand,
   counts: WorkloadBudgetCounts,
   t: WorkloadBudgetThresholds,
+  ext: ExternalCostReport,
 ): string[] {
   const recs: string[] = [];
 
@@ -393,6 +470,26 @@ function buildSoftRecommendations(
       `${counts.engineRunsNonOkLast24h} engine run(s) finished non-ok in the last 24h — investigate before scaling cycle work`,
     );
   }
+
+  // CSV-derived observational advisories. The figures here come from the
+  // pinned external cost report — they are NOT live billing, so we phrase the
+  // recommendations as observations the operator can act on outside this UI.
+  const topModel = ext.byModelUsd.length > 0 ? ext.byModelUsd[0] : null;
+  if (topModel && topModel.costUsd > 0) {
+    recs.push(
+      `External cost report (${ext.label}): top spend is ${topModel.model} ` +
+      `at $${topModel.costUsd.toFixed(2)} of $${ext.totalUsd.toFixed(2)} unfiltered total — ` +
+      `consider whether the next cycle plan needs Sonnet/Opus output volume or can lean on a cheaper model`,
+    );
+  }
+  recs.push(
+    `Top external calls often hit finish_reason=length — consider tighter prompts / lower max_tokens before scaling output-heavy cycles ` +
+    `(observed in ${ext.label})`,
+  );
+  recs.push(
+    `Daily-cycle bursts cluster around ${String(ext.dailyCycleBurstUtcWindow.startHour).padStart(2, "0")}:00–` +
+    `${String(ext.dailyCycleBurstUtcWindow.endHour).padStart(2, "0")}:00 UTC — operator review during that window is the highest-leverage moment to throttle plans`,
+  );
 
   // Always include the propose-only banner so the operator never reads these
   // as enforced gates.
@@ -495,6 +592,11 @@ export interface BuildWorkloadBudgetVisibilityInput {
     openCorrectiveObligations:   number;
     mergedCorrectiveObligations: number;
   };
+  /**
+   * Optional override for the static external cost report. Tests inject this
+   * to assert projection without leaning on the pinned 2026-05-17 snapshot.
+   */
+  externalCostReport?: ExternalCostReport;
 }
 
 /**
@@ -569,7 +671,8 @@ export function buildWorkloadBudgetVisibility(
     memory: memory !== null,
   });
 
-  const softRecommendations = buildSoftRecommendations(band, counts, thresholds);
+  const externalCostReport = input.externalCostReport ?? EXTERNAL_COST_REPORT_OPENROUTER_2026_05_17;
+  const softRecommendations = buildSoftRecommendations(band, counts, thresholds, externalCostReport);
 
   return {
     schemaVersion: "phase-budget-vis-1",
@@ -582,6 +685,7 @@ export function buildWorkloadBudgetVisibility(
     topDrivers,
     softRecommendations,
     dataMissingNotes,
+    externalCostReport,
     invariants: {
       readOnly:     "no write, no insert, no scheduler, no apply path",
       proxyOnly:    "no token / currency cost is invented; counts are derived from existing logs / ledgers / state only",

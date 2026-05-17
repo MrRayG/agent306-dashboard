@@ -61,6 +61,29 @@ function lowSnap(): WorkloadBudgetVisibility {
     dataMissingNotes: [
       "research_lab.json missing or unreadable",
     ],
+    externalCostReport: {
+      source:     "openrouter_activity_csv",
+      label:      "OpenRouter activity export, 2026-04-18 → 2026-05-17",
+      rangeStart: "2026-04-18",
+      rangeEnd:   "2026-05-17",
+      rowCount:   25112,
+      totalUsd:   134.6701,
+      filteredTotalsUsd: [67.4851, 84.17],
+      byModelUsd: [
+        { model: "Claude Sonnet", costUsd: 72.4882 },
+        { model: "Claude Opus",   costUsd: 40.2073 },
+        { model: "Gemini Flash",  costUsd: 21.8511 },
+        { model: "Embeddings",    costUsd: 0.0534 },
+      ],
+      notes: [
+        "Non-embedding LLM calls drive nearly all cost",
+        "Top single calls often hit finish_reason=length (output truncation)",
+        "Daily-cycle bursts cluster around 10:00–11:00 UTC in the last 48h",
+        "Exact billing differs by report / filter — treat as observational",
+      ],
+      dailyCycleBurstUtcWindow: { startHour: 10, endHour: 11 },
+      asOf: "2026-05-17",
+    },
     invariants: {
       readOnly:     "no write, no insert, no scheduler, no apply path",
       proxyOnly:    "no token / currency cost is invented; counts are derived from existing logs / ledgers / state only",
@@ -153,6 +176,39 @@ describe("WorkloadBudgetPanel — low / empty render", () => {
     for (const key of ["readOnly", "proxyOnly", "advisoryOnly", "nonWidening"]) {
       assert.ok(html.includes(key), `invariant key "${key}" must appear`);
     }
+  });
+});
+
+describe("WorkloadBudgetPanel — external cost report render", () => {
+  it("renders the OpenRouter export label, unfiltered total, and filtered totals", () => {
+    const html = renderToString(<WorkloadBudgetPanel data={lowSnap()} />);
+    assert.ok(html.includes("OpenRouter activity export"));
+    assert.ok(html.includes("25,112"));
+    assert.ok(html.includes("$134.6701"));
+    assert.ok(html.includes("$67.4851"));
+    assert.ok(html.includes("$84.1700"));
+  });
+
+  it("renders the per-model spend rows", () => {
+    const html = renderToString(<WorkloadBudgetPanel data={lowSnap()} />);
+    assert.ok(html.includes("Claude Sonnet"));
+    assert.ok(html.includes("$72.4882"));
+    assert.ok(html.includes("Claude Opus"));
+    assert.ok(html.includes("$40.2073"));
+    assert.ok(html.includes("Gemini Flash"));
+    assert.ok(html.includes("$21.8511"));
+    assert.ok(html.includes("Embeddings"));
+  });
+
+  it("marks the cost report as snapshot-in-time / observational only", () => {
+    const html = renderToString(<WorkloadBudgetPanel data={lowSnap()} />);
+    assert.ok(html.toLowerCase().includes("snapshot-in-time"));
+    assert.ok(html.toLowerCase().includes("not a live billing"));
+  });
+
+  it("has no action affordances when rendering the cost report", () => {
+    const html = renderToString(<WorkloadBudgetPanel data={lowSnap()} />);
+    assertNoActionAffordances(html);
   });
 });
 

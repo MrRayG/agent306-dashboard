@@ -51,6 +51,25 @@ export interface WorkloadBudgetThresholds {
   obligationsBumpAt:     number;
 }
 
+export interface ExternalCostReportModelLine {
+  model:    string;
+  costUsd:  number;
+}
+
+export interface ExternalCostReport {
+  source:        string;
+  label:         string;
+  rangeStart:    string;
+  rangeEnd:      string;
+  rowCount:      number;
+  totalUsd:      number;
+  filteredTotalsUsd: number[];
+  byModelUsd:    ExternalCostReportModelLine[];
+  notes:         string[];
+  dailyCycleBurstUtcWindow: { startHour: number; endHour: number };
+  asOf:          string;
+}
+
 export interface WorkloadBudgetVisibility {
   schemaVersion:        string;
   label:                string;
@@ -62,6 +81,7 @@ export interface WorkloadBudgetVisibility {
   topDrivers:           WorkloadCostDriver[];
   softRecommendations:  string[];
   dataMissingNotes:     string[];
+  externalCostReport:   ExternalCostReport;
   invariants: {
     readOnly:     string;
     proxyOnly:    string;
@@ -274,6 +294,68 @@ export function WorkloadBudgetPanel({ data }: PanelProps): JSX.Element {
           <li key={i} style={{ marginBottom: "0.25rem" }}>{r}</li>
         ))}
       </ul>
+
+      <Subhead label="External cost report (snapshot-in-time, observational)" />
+      <div
+        data-testid="workload-budget-external-cost-report"
+        style={{
+          ...mono,
+          fontSize: "0.78rem",
+          color: FG,
+          marginBottom: "0.7rem",
+          padding: "0.55rem 0.7rem",
+          border: `1px solid ${BORDER}`,
+          borderRadius: 4,
+          background: "rgba(227,229,228,0.02)",
+          lineHeight: 1.5,
+        }}
+      >
+        <div style={{ color: DIM, fontSize: "0.72rem", marginBottom: "0.3rem" }}>
+          {data.externalCostReport.label} · {data.externalCostReport.rowCount.toLocaleString()} rows ·
+          {" "}as of {data.externalCostReport.asOf}
+        </div>
+        <div style={{ marginBottom: "0.35rem" }}>
+          unfiltered total{" "}
+          <span style={{ color: YELLOW }}>
+            {`$${data.externalCostReport.totalUsd.toFixed(4)}`}
+          </span>
+          {data.externalCostReport.filteredTotalsUsd.length > 0 && (
+            <span style={{ color: DIM, marginLeft: "0.5rem" }}>
+              {`(operator-reported filtered totals: ${data.externalCostReport.filteredTotalsUsd
+                .map((v) => `$${v.toFixed(4)}`)
+                .join(", ")})`}
+            </span>
+          )}
+        </div>
+        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+          {data.externalCostReport.byModelUsd.map((m) => (
+            <li
+              key={m.model}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: "0.6rem",
+                padding: "0.16rem 0",
+                borderBottom: `1px solid ${BORDER}`,
+              }}
+            >
+              <span>{m.model}</span>
+              <span>{`$${m.costUsd.toFixed(4)}`}</span>
+            </li>
+          ))}
+        </ul>
+        {data.externalCostReport.notes.length > 0 && (
+          <ul style={{ paddingLeft: "1.1rem", margin: "0.4rem 0 0", color: DIM, fontSize: "0.74rem" }}>
+            {data.externalCostReport.notes.map((n, i) => (
+              <li key={i}>{n}</li>
+            ))}
+          </ul>
+        )}
+        <div style={{ color: ORANGE, fontSize: "0.72rem", marginTop: "0.4rem" }}>
+          Snapshot-in-time, not a live billing integration. Exact totals
+          differ by report / filter — treat as observational only.
+        </div>
+      </div>
 
       {data.dataMissingNotes.length > 0 && (
         <>
