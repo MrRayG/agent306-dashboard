@@ -34,9 +34,16 @@
  *     refusal; the caller (ActionEnforcer) MUST be able to swallow that
  *     refusal and still emit its tick. Reading a corrupt line skips it,
  *     never throws. The reader also tolerates a missing file.
- *   - DETERMINISTIC IDS: `obligationId = oblg_<sha1(ruleId|outputNoun|insightId)>`
- *     so a follow-up cycle can find and refresh the same row without an
- *     extra index.
+ *   - DETERMINISTIC IDS: `obligationId = oblg_<sha1(primitive|outputNounFamily|inputNounFamily)>`
+ *     — the identity is the actionable WORK ITEM, not the source rule. Two
+ *     ratio rules that fire for the same normalized (output, input) family
+ *     (e.g. both want "archived kb_entry" for the same KB-entry denominator)
+ *     collapse to ONE obligation. Source rule ids and insight ids accumulate
+ *     into `sourceRuleIds` / `sourceInsightIds` on the projection so the
+ *     contributing rules remain auditable. A distinct work item (e.g.
+ *     output=`draft_output_artifact`) stays a separate obligation. A legacy
+ *     `obligationIdFor(ruleId, outputNoun, insightId)` helper is kept as a
+ *     compatibility export but is no longer used in the write path.
  *
  * Out of scope (deferred follow-ups):
  *   - Hard blocking of KB writes when an open obligation exists.
@@ -81,21 +88,33 @@ export type ObligationStatus = "open" | "satisfied";
 export interface RuleCorrectiveObligationEvent {
   /** evt_<unix-ms>_<6-base36> — unique per process, sortable by time. */
   eventId: string;
-  /** "opened" on first observation of a deficit for a triple,
-   *  "refreshed" on subsequent observations with the obligation still open,
-   *  "satisfied" when a later tick reports deficit <= 0. */
+  /** "opened" on first observation of a deficit for a normalized work item,
+   *  "refreshed" on subsequent observations with the obligation still open
+   *  (including observations from a DIFFERENT source rule that normalizes
+   *  to the same work item), "satisfied" when a later tick reports deficit
+   *  <= 0 for the same work item. */
   type: ObligationEventType;
   /** ISO timestamp the event was appended to the ledger. */
   recordedAt: string;
-  /** Stable, content-addressed obligation id. Repeated observations of the
-   *  same (ruleId, outputNoun, insightId) triple share this id. */
+  /** Stable, content-addressed obligation id derived from the normalized
+   *  (primitive, outputNounFamily, inputNounFamily) work-item key. Two
+   *  different source rules that normalize to the same work item share this
+   *  id and collapse to one obligation. */
   obligationId: string;
-  /** Source rule and insight metadata. */
+  /** Normalized work-item identity (the dedupe key). Same shape as the
+   *  hash input — exposed for the visibility panel so operators can see
+   *  which work item this obligation represents. */
+  normalizedKey: string;
+  /** Source rule and insight metadata for THIS event. The projection
+   *  collects these across events into `sourceRuleIds` / `sourceInsightIds`
+   *  arrays so the contributing rules remain auditable after merge. */
   ruleId: string;
   insightId: string;
   sourceInsightId: string;
   primitive: "ratio_rule";
-  /** Output / input noun pair from the ratio_rule that fired. */
+  /** Output / input noun pair from the ratio_rule that fired (as observed
+   *  on this tick — may vary by spelling between source rules; the
+   *  normalized family is the dedupe identity). */
   outputNoun: string;
   inputNoun: string;
   /** Raw deficit observed by the ratio rule on this tick. */
@@ -118,12 +137,27 @@ export interface RuleCorrectiveObligationEvent {
 
 export interface OpenObligationProjection {
   obligationId: string;
+  /** Most-recently observed rule id (carried for backwards compatibility
+   *  with consumers that read a single ruleId). The full set of contributing
+   *  rules lives in `sourceRuleIds`. */
   ruleId: string;
+  /** Most-recently observed insight id (same compatibility note). */
   insightId: string;
   sourceInsightId: string;
   primitive: "ratio_rule";
   outputNoun: string;
   inputNoun: string;
+  /** Normalized work-item key — the dedupe identity. */
+  normalizedKey: string;
+  /** All source rule ids whose deficits have rolled up into this
+   *  obligation (deduped, ordered by first appearance). */
+  sourceRuleIds: string[];
+  /** All source insight ids whose deficits have rolled up into this
+   *  obligation (deduped, ordered by first appearance). */
+  sourceInsightIds: string[];
+  /** Convenience count for the panel: sourceRuleIds.length. >1 means
+   *  the obligation merged duplicate deficits from distinct rules. */
+  mergedFromCount: number;
   status: ObligationStatus;
   createdAt: string;
   updatedAt: string;
@@ -136,7 +170,8 @@ export interface OpenObligationProjection {
   inputCount: number;
   reason: string;
   deadlineNote: string;
-  /** Number of "refreshed" events seen since "opened". */
+  /** Number of "refreshed" events seen since "opened". Counts every
+   *  refresh including those from a different source rule. */
   refreshCount: number;
 }
 
@@ -149,20 +184,98 @@ function nextEventId(): string {
 }
 
 /**
- * Stable, content-addressed obligation id. Same triple → same id across ticks
- * and across process restarts.
+ * Normalize a free-text noun to its work-item family.
+ *
+ * Two ratio rules can describe the same actionable work with different
+ * tokens (`kb_entry` vs `kb_entries`, `archived` vs `archive`). The
+ * normalized family is the dedupe identity for an obligation — distinct
+ * spellings of the same work item collapse to one obligation, while a
+ * genuinely different target (e.g. `draft_output_artifact`) keeps its own
+ * family.
+ *
+ * Conservative rules only: lowercase, trim, drop trailing punctuation, and
+ * fold a small set of explicit synonyms. We do NOT do stemming or
+ * Levenshtein matching — staying strict here keeps false-positive merges
+ * out of the obligation surface.
  */
-export function obligationIdFor(
-  ruleId: string,
+export function normalizeNounFamily(noun: string): string {
+  if (typeof noun !== "string") return "";
+  const cleaned = noun
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  if (!cleaned) return "";
+  // Explicit family folding — order matters: more specific matches first.
+  const SYNONYMS: Array<[RegExp, string]> = [
+    [/^(kb|knowledge)(_?(entry|entries|item|items|record|records))?$/, "kb_entry"],
+    [/^(archive|archived|archiving)$/, "archived"],
+    [/^(draft|drafted)(_?(output|artifact|outputs|artifacts))?$/, "draft_output_artifact"],
+    [/^(draft_?output_?artifact|draft_?artifact)s?$/, "draft_output_artifact"],
+    [/^(synthesi[sz]ed?|synthesi[sz]e)$/, "synthesis"],
+  ];
+  for (const [re, fam] of SYNONYMS) {
+    if (re.test(cleaned)) return fam;
+  }
+  // Drop a trailing pluralizing "s" only when the singular still looks like
+  // an identifier (>2 chars, not already ending in "ss").
+  if (cleaned.length > 3 && cleaned.endsWith("s") && !cleaned.endsWith("ss")) {
+    return cleaned.slice(0, -1);
+  }
+  return cleaned;
+}
+
+/**
+ * Stable, content-addressed obligation id built from the normalized work
+ * item (primitive, outputNoun family, inputNoun family). Two ratio rules
+ * whose deficits describe the same work item produce the same id and
+ * therefore the same obligation row — that is the dedupe.
+ */
+export function normalizedWorkItemKey(
+  primitive: "ratio_rule",
   outputNoun: string,
-  insightId: string,
+  inputNoun: string,
 ): string {
+  const outFam = normalizeNounFamily(outputNoun);
+  const inFam = normalizeNounFamily(inputNoun);
+  return `${primitive}|out:${outFam}|in:${inFam}`;
+}
+
+function hashObligationId(normalizedKey: string): string {
   const h = crypto
     .createHash("sha1")
-    .update(`${ruleId}|${outputNoun}|${insightId}`)
+    .update(normalizedKey)
     .digest("hex")
     .slice(0, 16);
   return `oblg_${h}`;
+}
+
+/**
+ * @deprecated Kept for backward compatibility with consumers that called
+ * `obligationIdFor(ruleId, outputNoun, insightId)` directly. The dedupe
+ * identity no longer includes ruleId or insightId — use
+ * {@link normalizedWorkItemKey} + {@link obligationIdForWorkItem} for new
+ * code. This shim ignores ruleId/insightId and returns the work-item id.
+ */
+export function obligationIdFor(
+  _ruleId: string,
+  outputNoun: string,
+  _insightId: string,
+): string {
+  return hashObligationId(normalizedWorkItemKey("ratio_rule", outputNoun, /* inputNoun */ ""));
+}
+
+/**
+ * Stable obligation id for a normalized work item. Same (primitive,
+ * outputNounFamily, inputNounFamily) → same id across ticks, processes,
+ * and contributing source rules.
+ */
+export function obligationIdForWorkItem(
+  primitive: "ratio_rule",
+  outputNoun: string,
+  inputNoun: string,
+): string {
+  return hashObligationId(normalizedWorkItemKey(primitive, outputNoun, inputNoun));
 }
 
 function clampToCap(n: number): number {
@@ -277,16 +390,26 @@ export function recordRatioDeficit(
     return { ok: false, reason: "deficitCount must be a positive number" };
   }
 
-  const obligationId = obligationIdFor(ruleId, outputNoun, insightId);
+  const normalizedKey = normalizedWorkItemKey("ratio_rule", outputNoun, inputNoun);
+  const obligationId = hashObligationId(normalizedKey);
   const required = clampToCap(deficitCount);
   const existing = getOpenObligationById(obligationId);
   const isRefresh = Boolean(existing);
   const type: ObligationEventType = isRefresh ? "refreshed" : "opened";
+  const isMergeFromDifferentRule = Boolean(
+    existing && !existing.sourceRuleIds.includes(ruleId),
+  );
+
+  const mergeNote = isMergeFromDifferentRule
+    ? ` (merged with ${existing!.sourceRuleIds.length} prior source rule${
+        existing!.sourceRuleIds.length === 1 ? "" : "s"
+      } for the same normalized work item ${normalizedKey})`
+    : "";
 
   const reason =
     `Ratio rule ${ruleId} observed a deficit of +${deficitCount} ${outputNoun} ` +
     `(have ${actualCount}, expected ${expectedCount} for ${inputCount} ${inputNoun}). ` +
-    `A corrective obligation has been ${isRefresh ? "refreshed" : "queued"}: ` +
+    `A corrective obligation has been ${isRefresh ? "refreshed" : "queued"}${mergeNote}: ` +
     `archive or merge up to ${required} ${outputNoun} before further expansion is ` +
     `considered healthy. This is not a hard block — KB writes are not gated by this ` +
     `obligation today.`;
@@ -296,6 +419,7 @@ export function recordRatioDeficit(
     type,
     recordedAt: new Date().toISOString(),
     obligationId,
+    normalizedKey,
     ruleId,
     insightId,
     sourceInsightId: sourceInsightId ?? insightId,
@@ -337,7 +461,8 @@ export function recordRatioSatisfied(args: {
   inputCount: number;
   tickedAt: number;
 }): RecordRatioDeficitResult {
-  const obligationId = obligationIdFor(args.ruleId, args.outputNoun, args.insightId);
+  const normalizedKey = normalizedWorkItemKey("ratio_rule", args.outputNoun, args.inputNoun);
+  const obligationId = hashObligationId(normalizedKey);
   const existing = getOpenObligationById(obligationId);
   if (!existing) {
     return { ok: false, reason: "no open obligation to satisfy" };
@@ -347,6 +472,7 @@ export function recordRatioSatisfied(args: {
     type: "satisfied",
     recordedAt: new Date().toISOString(),
     obligationId,
+    normalizedKey,
     ruleId: args.ruleId,
     insightId: args.insightId,
     sourceInsightId: args.insightId,
@@ -396,6 +522,19 @@ export function projectObligations(): OpenObligationProjection[] {
     const latest = list[list.length - 1];
     const refreshCount = list.filter(e => e.type === "refreshed").length;
     const status: ObligationStatus = latest.type === "satisfied" ? "satisfied" : "open";
+    // Collect contributing source rule / insight ids in first-seen order
+    // so the merged obligation remains auditable. Legacy events that
+    // predate the normalizedKey field still contribute their ruleId /
+    // insightId — the (primitive, outputNoun, inputNoun) hash matches.
+    const sourceRuleIds: string[] = [];
+    const sourceInsightIds: string[] = [];
+    for (const ev of list) {
+      if (ev.ruleId && !sourceRuleIds.includes(ev.ruleId)) sourceRuleIds.push(ev.ruleId);
+      if (ev.insightId && !sourceInsightIds.includes(ev.insightId)) sourceInsightIds.push(ev.insightId);
+    }
+    const normalizedKey =
+      (typeof (latest as any).normalizedKey === "string" && (latest as any).normalizedKey) ||
+      normalizedWorkItemKey("ratio_rule", latest.outputNoun, latest.inputNoun);
     out.push({
       obligationId,
       ruleId: latest.ruleId,
@@ -404,6 +543,10 @@ export function projectObligations(): OpenObligationProjection[] {
       primitive: "ratio_rule",
       outputNoun: latest.outputNoun,
       inputNoun: latest.inputNoun,
+      normalizedKey,
+      sourceRuleIds,
+      sourceInsightIds,
+      mergedFromCount: sourceRuleIds.length,
       status,
       createdAt: opened ? opened.recordedAt : latest.recordedAt,
       updatedAt: latest.recordedAt,

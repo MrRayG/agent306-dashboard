@@ -174,6 +174,86 @@ describe("Self-Rule Enforcement visibility — corrective obligations", () => {
     assert.equal(buildSelfRuleEnforcementVisibility().correctiveObligations.length, 0);
   });
 
+  it("surfaces merged-from dedupe metadata on the obligation view and counts", () => {
+    // Register a rule so the headline branch is the "active rules" one.
+    registerRule({
+      id: "rule_dedupe_a",
+      insightId: "insight_dedupe_a",
+      primitive: "ratio_rule",
+      params: { inputCount: 5, inputNoun: "kb_entry", outputCount: 1, outputNoun: "archived" },
+      criterion: "test",
+      createdAt: Date.now(),
+      enabled: true,
+      fireCount: 0,
+      lastFiredAt: null,
+    });
+    // Two distinct rules with the same normalized work item should produce
+    // one obligation with mergedFromCount=2.
+    recordRatioDeficit({
+      ruleId: "rule_dedupe_a",
+      insightId: "insight_dedupe_a",
+      outputNoun: "archived",
+      inputNoun: "kb_entry",
+      deficitCount: 166,
+      expectedCount: 218,
+      actualCount: 52,
+      inputCount: 1090,
+      tickedAt: Date.parse("2026-05-16T12:00:00Z"),
+    });
+    recordRatioDeficit({
+      ruleId: "rule_dedupe_b",
+      insightId: "insight_dedupe_b",
+      outputNoun: "archived",
+      inputNoun: "kb_entries", // synonym → same family
+      deficitCount: 166,
+      expectedCount: 218,
+      actualCount: 52,
+      inputCount: 1090,
+      tickedAt: Date.parse("2026-05-16T12:01:00Z"),
+    });
+    // A distinct work item should stay separate.
+    recordRatioDeficit({
+      ruleId: "rule_distinct",
+      insightId: "insight_distinct",
+      outputNoun: "draft_output_artifact",
+      inputNoun: "kb_entry",
+      deficitCount: 311,
+      expectedCount: 311,
+      actualCount: 0,
+      inputCount: 1090,
+      tickedAt: Date.parse("2026-05-16T12:02:00Z"),
+    });
+    const snap = buildSelfRuleEnforcementVisibility();
+    assert.equal(snap.correctiveObligations.length, 2);
+    assert.equal(snap.counts.openCorrectiveObligations, 2);
+    assert.equal(snap.counts.mergedCorrectiveObligations, 1);
+    // Source rule count across all open obligations: 2 (merged) + 1 (distinct) = 3.
+    assert.equal(snap.counts.correctiveObligationSourceRuleCount, 3);
+    const archive = snap.correctiveObligations.find(o => o.outputNoun === "archived");
+    const draft = snap.correctiveObligations.find(o => o.outputNoun === "draft_output_artifact");
+    assert.ok(archive, "archive obligation present");
+    assert.ok(draft, "draft_output_artifact obligation present");
+    assert.equal(archive!.merged, true);
+    assert.equal(archive!.mergedFromCount, 2);
+    assert.deepEqual(
+      archive!.sourceRuleIds.slice().sort(),
+      ["rule_dedupe_a", "rule_dedupe_b"].sort(),
+    );
+    assert.deepEqual(
+      archive!.sourceInsightIds.slice().sort(),
+      ["insight_dedupe_a", "insight_dedupe_b"].sort(),
+    );
+    assert.match(archive!.dedupeSummary, /merged 2 source rules/);
+    assert.match(archive!.summary, /Dedupe: merged 2 source rules/);
+    assert.equal(draft!.merged, false);
+    assert.equal(draft!.mergedFromCount, 1);
+    assert.match(draft!.dedupeSummary, /1 source rule/);
+    // Headline notes the dedupe.
+    assert.match(snap.headline, /1 merged from 3 source rules/);
+    // Semantics note explains the dedupe identity.
+    assert.match(snap.enforcementSemanticsNote, /normalized work item/i);
+  });
+
   it("the snapshot is read-only — calling it does not mutate the obligation ledger", () => {
     recordRatioDeficit({
       ruleId: "rule_readonly",
