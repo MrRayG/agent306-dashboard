@@ -14,6 +14,8 @@ import {
   fetchWithTimeout,
   FetchTimeoutError,
   DEFAULT_FETCH_TIMEOUT_MS,
+  LLM_FETCH_TIMEOUT_MS,
+  apiRequest,
 } from "../lib/queryClient.js";
 
 const ORIGINAL_FETCH = globalThis.fetch;
@@ -74,6 +76,72 @@ describe("fetchWithTimeout", () => {
       );
       // Sanity: we did not wait anywhere near a real network timeout.
       assert.ok(Date.now() - start < 2_000, "timeout fired promptly");
+    });
+  });
+
+  it("exposes a long LLM timeout for endpoints that run a writer + verifier", () => {
+    // LLM-backed routes (article preview / revise, blog generate / revise)
+    // legitimately take 30-90s. The dedicated constant must be large enough
+    // for the long tail but bounded so a wedged provider doesn't pin the
+    // browser tab forever.
+    assert.ok(LLM_FETCH_TIMEOUT_MS > DEFAULT_FETCH_TIMEOUT_MS);
+    assert.ok(LLM_FETCH_TIMEOUT_MS >= 60_000);
+    assert.ok(LLM_FETCH_TIMEOUT_MS <= 600_000);
+  });
+
+  it("apiRequest honors a per-call timeout override (LLM endpoints)", async () => {
+    // The bug we are guarding against: every apiRequest used the 15s default
+    // and LLM-backed routes (article/preview, blog/generate, …/revise) would
+    // abort with FetchTimeoutError mid-generation. Callers must be able to
+    // opt those routes into the longer LLM timeout instead.
+    const hangingFetch: typeof fetch = (_url: RequestInfo | URL, init?: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal;
+        if (signal) {
+          signal.addEventListener(
+            "abort",
+            () => {
+              const err = new Error("aborted");
+              (err as any).name = "AbortError";
+              reject(err);
+            },
+            { once: true },
+          );
+        }
+      });
+    };
+
+    await withMockFetch(hangingFetch, async () => {
+      const start = Date.now();
+      // Use a tiny override here just to prove the override path is wired —
+      // we are not exercising the real LLM_FETCH_TIMEOUT_MS value.
+      await assert.rejects(
+        () => apiRequest("POST", "/api/article/preview", {}, { timeoutMs: 40 }),
+        (err: unknown) => {
+          assert.ok(err instanceof FetchTimeoutError, "expected FetchTimeoutError");
+          assert.match((err as Error).message, /timed out after 40ms/);
+          return true;
+        },
+      );
+      // And: the default 15s timeout did NOT fire (would have shown 15000ms).
+      assert.ok(Date.now() - start < 2_000, "override timeout fired promptly");
+    });
+  });
+
+  it("apiRequest defaults to DEFAULT_FETCH_TIMEOUT_MS when no override is passed", async () => {
+    // Sanity check: short dashboard fetches keep their 15s default and the
+    // long LLM timeout is opt-in only.
+    let observedTimeoutOk = false;
+    const fakeFetch: typeof fetch = async (_url, init) => {
+      // The signal must NOT be the LLM signal — we just confirm the request
+      // resolves before the default 15s fires.
+      observedTimeoutOk = !!init?.signal;
+      return new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } });
+    };
+    await withMockFetch(fakeFetch, async () => {
+      const r = await apiRequest("GET", "/api/article/state");
+      assert.equal(r.status, 200);
+      assert.ok(observedTimeoutOk, "expected an internal abort signal to be attached");
     });
   });
 

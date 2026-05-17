@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, LLM_FETCH_TIMEOUT_MS } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { PostCard, type BlogPostForCard } from "@/components/BlogPostCard";
 
@@ -62,7 +62,7 @@ export default function BlogStudio() {
 
   const generateMutation = useMutation({
     mutationFn: async (body: { topic: string; sourceContent: string; source: string; autoPublish: boolean }) => {
-      const r = await apiRequest("POST", "/api/blog/generate", body);
+      const r = await apiRequest("POST", "/api/blog/generate", body, { timeoutMs: LLM_FETCH_TIMEOUT_MS });
       return await r.json();
     },
     onSuccess: () => {
@@ -104,7 +104,7 @@ export default function BlogStudio() {
   // updated_draft vs. no_action vs. error).
   const reviseMutation = useMutation({
     mutationFn: async (id: string) => {
-      const r = await apiRequest("POST", `/api/blog/posts/${id}/revise`);
+      const r = await apiRequest("POST", `/api/blog/posts/${id}/revise`, undefined, { timeoutMs: LLM_FETCH_TIMEOUT_MS });
       return await r.json();
     },
     onSuccess: (result: any) => {

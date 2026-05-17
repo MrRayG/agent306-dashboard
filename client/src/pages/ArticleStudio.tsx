@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, LLM_FETCH_TIMEOUT_MS } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { VerifierReport, type VerifierReportData } from "@/components/VerifierReport";
 
@@ -287,7 +287,7 @@ function ResourcesPanel({
     if (!draftId) return;
     setBusy("revise");
     try {
-      const r = await apiRequest("POST", `/api/article/drafts/${draftId}/revise`, { operatorNote: note || undefined });
+      const r = await apiRequest("POST", `/api/article/drafts/${draftId}/revise`, { operatorNote: note || undefined }, { timeoutMs: LLM_FETCH_TIMEOUT_MS });
       const out = await r.json();
       if (!r.ok) throw new Error(out.error ?? "Failed");
       const passed = out.draft?.verifierReport?.severity === "PASS";
@@ -421,7 +421,7 @@ export default function ArticleStudio() {
         .map(s => s.trim())
         .filter(s => /^https?:\/\//i.test(s));
       if (groundingSources.length > 0) body.groundingSources = groundingSources;
-      const r = await apiRequest("POST", "/api/article/preview", body);
+      const r = await apiRequest("POST", "/api/article/preview", body, { timeoutMs: LLM_FETCH_TIMEOUT_MS });
       const data = await r.json();
       return data as ArticlePreview;
     },
