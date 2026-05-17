@@ -128,7 +128,7 @@ describe("hypothesisSourceDiscovery — DB row fallback", () => {
     assert.equal(dbAttempt!.readable, true);
     assert.equal(dbAttempt!.records, 451);
     assert.match(r.diagnostics.nextSafeAction, /DB row.*451/);
-    assert.match(r.diagnostics.nextSafeAction, /--apply is REFUSED/);
+    assert.match(r.diagnostics.nextSafeAction, /--confirm-source=db/);
   });
 
   it("surfaces the DB row under otherSources whether or not it is the formal-chosen", () => {
@@ -300,25 +300,14 @@ const { runResetApply } = await import("../hypothesisResetApply.ts");
 describe("hypothesisResetApply — DB-discovered formal source", () => {
   beforeEach(() => clearAll());
 
-  it("refuses --apply with formal_source_not_applyable when formal-chosen.role === 'db'", () => {
+  it("refuses --apply with db_source_confirmation_required when confirmDbSource is omitted", () => {
     seedDb(5);
-    // No research_lab.json on disk — discovery falls back to DB.
-    // Discovery must observe the DB as the formal-chosen source.
     const rep = buildResetReport({ now: new Date("2026-05-17T00:00:00Z") });
     assert.equal(rep.meta.formalRecords, 5);
     const dbChosen = rep.meta.sourceDiagnostics.formalAttempts.find(
       a => a.path === rep.meta.sourceDiagnostics.formalChosen,
     );
     assert.equal(dbChosen?.role, "db");
-
-    // Seed a research_lab.json so the apply path's `research_lab_missing`
-    // guard doesn't trip before our new guard does. The JSON must match the
-    // disk-records the freshness guard expects — we use the same hyp ids the
-    // DB has, so the freshness check passes and our new guard is the one
-    // that refuses.
-    const sameAsDb = (rep.meta.sourceDiagnostics.formalAttempts.find(a => a.role === "db")
-      ? makeHyps(5, "db") : []);
-    fs.writeFileSync(LAB, JSON.stringify({ hypotheses: sameAsDb }));
 
     const result = runResetApply({
       report: rep,
@@ -328,15 +317,13 @@ describe("hypothesisResetApply — DB-discovered formal source", () => {
     });
     assert.equal(result.ok, false);
     if (!result.ok) {
-      assert.equal(result.reason, "formal_source_not_applyable");
-      assert.match(result.detail, /SQLite DB row/);
-      assert.match(result.detail, /follow-up PR/);
+      assert.equal(result.reason, "db_source_confirmation_required");
+      assert.match(result.detail, /--confirm-source=db/);
     }
   });
 
   it("allows dry-run against a DB-discovered formal source (read-only)", () => {
     seedDb(5);
-    fs.writeFileSync(LAB, JSON.stringify({ hypotheses: makeHyps(5, "db") }));
     const rep = buildResetReport({ now: new Date("2026-05-17T00:00:00Z") });
     const result = runResetApply({
       report: rep,
@@ -346,8 +333,9 @@ describe("hypothesisResetApply — DB-discovered formal source", () => {
     });
     // The dry-run may legitimately return ok: true with 0 changes (the seeded
     // hypotheses do not match the archive_stale bucket criteria); we only
-    // pin that the new guard does NOT trip in dry-run mode.
+    // pin that no DB-apply guard trips in dry-run mode.
     if (!result.ok) {
+      assert.notEqual(result.reason, "db_source_confirmation_required");
       assert.notEqual(result.reason, "formal_source_not_applyable");
     }
   });
