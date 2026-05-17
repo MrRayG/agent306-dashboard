@@ -97,6 +97,7 @@ export type ResetBucket =
   | "archive_stale"
   | "archive_data_unavailable"
   | "archive_duplicate"
+  | "already_archived"
   | "rewrite_positional_debate"
   | "rewrite_missing_evidence_path"
   | "promote_later_memory_origin"
@@ -107,6 +108,7 @@ export const RESET_BUCKETS: readonly ResetBucket[] = [
   "archive_stale",
   "archive_data_unavailable",
   "archive_duplicate",
+  "already_archived",
   "rewrite_positional_debate",
   "rewrite_missing_evidence_path",
   "promote_later_memory_origin",
@@ -512,6 +514,27 @@ export function classifyReset(
   const staleDays = opts.staleDays ?? DEFAULT_ACTIVE_CAP.staleDays;
   const reasons: string[] = [];
 
+  // Already-archived short-circuit. A record that has been carried through the
+  // reset-apply pipeline (or any equivalent operator archive write) ends up
+  // with status='stale-retired' AND an archived_* hygieneTag. Without this
+  // gate, the lifecycle switch below would re-route those records into
+  // archive_stale on every subsequent dry-run — making applied
+  // archive_data_unavailable rows re-appear as actionable archive_stale
+  // candidates and inflating the next archive_stale apply with already-
+  // archived ids. Idempotency tests pin this. See
+  // hypothesisResetReportIdempotency.test.ts.
+  const _archivedTag = hyp.hygieneTag;
+  if (
+    hyp.status === "stale-retired" &&
+    _archivedTag != null &&
+    isArchivedTag(_archivedTag)
+  ) {
+    reasons.push(
+      `already archived (status=stale-retired, hygieneTag=${_archivedTag}) — no further reset action`,
+    );
+    return { id: hyp.id, bucket: "already_archived", reasons };
+  }
+
   // Lifecycle resolutions.
   switch (hyp.status) {
     case "data-unavailable":
@@ -599,6 +622,7 @@ const BUCKET_DESCRIPTIONS: Readonly<Record<ResetBucket, string>> = Object.freeze
   archive_stale:                 "Already resolved, expired, or forming/testing for more than staleDays — operator may archive.",
   archive_data_unavailable:      "Marked data-unavailable or archived_unsolvable — measurement path will not exist.",
   archive_duplicate:             "Consolidator pointed this record at a canonical via aliasOf — operator may archive.",
+  already_archived:              "Record was previously archived by a prior reset apply (status=stale-retired with archived_* hygieneTag) — listed for audit only, NOT eligible for any further CLI archive.",
   rewrite_positional_debate:     "Claim shaped like 'Position A vs Position B' with no evidence path on either side. Rewrite as a research-gap claim with a metric and deadline.",
   rewrite_missing_evidence_path: "Required field missing (measurementPath, metric, or basis). Operator must fill before re-entering the loop.",
   promote_later_memory_origin:   "Memory-origin (Hypothesis: …) entry that has NOT been promoted to a formal record. Promotion is operator-only.",
