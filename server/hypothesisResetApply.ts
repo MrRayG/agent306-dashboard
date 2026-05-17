@@ -75,7 +75,8 @@ export type ApplyRefusalReason =
   | "backup_failed"
   | "research_lab_missing"
   | "no_formal_records_loaded"
-  | "memory_origin_not_appliable";
+  | "memory_origin_not_appliable"
+  | "formal_source_not_applyable";
 
 export interface ApplyChange {
   id:            string;
@@ -335,6 +336,26 @@ export function runResetApply(opts: RunResetApplyOptions): ApplyResult {
       ok: false,
       reason: "research_lab_missing",
       detail: `research_lab.json does not exist at ${dataPath("research_lab.json")}`,
+    };
+  }
+
+  // Hard refusal: when the discovery fell back to the SQLite DB row (or any
+  // non-formal role) as the report's formal-chosen source, the apply path
+  // cannot operate. A safe DB-aware archive mapping is out of scope for the
+  // PR that introduced DB discovery — apply must be implemented + tested
+  // separately. Dry-run remains supported.
+  const chosenAttempt = report.meta.sourceDiagnostics.formalAttempts.find(
+    a => a.path === report.meta.sourceDiagnostics.formalChosen,
+  );
+  if (apply && chosenAttempt && chosenAttempt.role === "db") {
+    return {
+      ok: false,
+      reason: "formal_source_not_applyable",
+      detail:
+        `Report's formal-chosen source is the SQLite DB row at ${chosenAttempt.path}. ` +
+        `--apply is REFUSED for this source until a DB-aware archive mapping is implemented + tested in a follow-up PR. ` +
+        `Read-only classification (dry-run) is supported. Operator may pass --source pointed at a JSON file ` +
+        `if they want to apply against a JSON store.`,
     };
   }
 
