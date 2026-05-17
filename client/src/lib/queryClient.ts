@@ -2,6 +2,22 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
 
+// Per-request timeout for dashboard fetches. Without this, a single hung
+// connection (slow ISP, intercepting proxy, dropped keep-alive) leaves
+// React-Query stuck in isLoading: true forever, so every panel that does
+// `if (isLoading) return <Skeleton/>` spins indefinitely instead of falling
+// back to its "could not load" state. The matching error handlers already
+// exist on every Mission Control panel; the bug was that they were never
+// reached because the fetch never settled.
+export const DEFAULT_FETCH_TIMEOUT_MS = 15_000;
+
+export class FetchTimeoutError extends Error {
+  constructor(url: string, timeoutMs: number) {
+    super(`request timed out after ${timeoutMs}ms: ${url}`);
+    this.name = "FetchTimeoutError";
+  }
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -12,6 +28,42 @@ async function throwIfResNotOk(res: Response) {
 // Dashboard auth secret — injected at build time from VITE_DASHBOARD_SECRET env var
 const DASH_SECRET = (import.meta as any).env?.VITE_DASHBOARD_SECRET ?? "";
 
+// Wrap fetch with an AbortController-backed timeout. Caller-supplied signals
+// (e.g. React-Query's internal abort) compose with the timeout: whichever
+// fires first wins. Returns a FetchTimeoutError on timeout so callers can
+// distinguish it from a network/HTTP error.
+export async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  timeoutMs: number = DEFAULT_FETCH_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  // Compose with any caller-provided signal so we don't drop their cancel.
+  const externalSignal = init.signal;
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      controller.abort();
+    } else {
+      externalSignal.addEventListener("abort", () => controller.abort(), { once: true });
+    }
+  }
+
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (err) {
+    if ((err as any)?.name === "AbortError") {
+      // Distinguish timeout-driven aborts from caller-driven ones.
+      if (externalSignal?.aborted) throw err;
+      throw new FetchTimeoutError(String(input), timeoutMs);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function apiRequest(
   method: string,
   url: string,
@@ -21,7 +73,7 @@ export async function apiRequest(
   if (data) headers["Content-Type"] = "application/json";
   if (DASH_SECRET) headers["x-dashboard-secret"] = DASH_SECRET;
 
-  const res = await fetch(`${API_BASE}${url}`, {
+  const res = await fetchWithTimeout(`${API_BASE}${url}`, {
     method,
     headers,
     body: data ? JSON.stringify(data) : undefined,
@@ -36,11 +88,11 @@ export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey }) => {
+  async ({ queryKey, signal }) => {
     const headers: Record<string, string> = {};
     if (DASH_SECRET) headers["x-dashboard-secret"] = DASH_SECRET;
 
-    const res = await fetch(`${API_BASE}${queryKey.join("/")}`, { headers });
+    const res = await fetchWithTimeout(`${API_BASE}${queryKey.join("/")}`, { headers, signal });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
       return null;
