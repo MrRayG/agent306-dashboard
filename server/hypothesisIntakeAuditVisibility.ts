@@ -72,7 +72,7 @@
  */
 
 import * as fs from "fs";
-import { dataPath } from "./dataPaths.js";
+import { dataPath, DATA_DIR } from "./dataPaths.js";
 import {
   classifyHypothesis,
   readinessBlockers,
@@ -942,8 +942,24 @@ export function buildHypothesisIntakeAuditVisibility(
   const intakeQuality = buildIntakeQualityProjection(hyps);
 
   const dataMissingNotes: string[] = [];
-  if (labMissing) dataMissingNotes.push("research_lab.json missing or unreadable — formal hypothesis counts are 0");
-  if (memoryMissing) dataMissingNotes.push("memory_knowledge.json missing or unreadable — memory-origin counts are 0");
+  if (labMissing) {
+    const labP = dataPath("research_lab.json");
+    dataMissingNotes.push(
+      `research_lab.json missing or unreadable at ${labP} (DATA_DIR=${DATA_DIR}). ` +
+      `Formal hypothesis counts are 0. If the operator expected ~451 records, check: ` +
+      `(a) DATA_DIR env var points at the right mounted volume, ` +
+      `(b) the file exists at that absolute path, ` +
+      `(c) the JSON is well-formed (try \`node -e 'JSON.parse(require("fs").readFileSync("<path>","utf8"))'\`). ` +
+      `Memory-origin counts still surface from memory_knowledge.json if that file is present.`,
+    );
+  }
+  if (memoryMissing) {
+    const memP = dataPath("memory_knowledge.json");
+    dataMissingNotes.push(
+      `memory_knowledge.json missing or unreadable at ${memP} (DATA_DIR=${DATA_DIR}). ` +
+      `Memory-origin hypothesis-entry counts are 0.`,
+    );
+  }
 
   const nextSafeActions = buildNextSafeActions(capPolicy, resetBuckets, memoryOrigin, intakeQuality);
 
