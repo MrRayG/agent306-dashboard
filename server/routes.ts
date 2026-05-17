@@ -3140,15 +3140,50 @@ export function registerRoutes(httpServer: Server, app: Express) {
       .filter((u: string) => /^https?:\/\//i.test(u))
       .slice(0, 25);
     const skipReviseLoop = req.body?.skipReviseLoop === true;
+    // Server-side deadline. The preview path can run 30-90s under normal
+    // load (discover + fetch + writer + verifier + revise). If the LLM
+    // provider hangs we still want a clean 504 with an actionable hint
+    // instead of a dangling socket the client kills at its own timeout.
+    // Default is large enough to cover the long tail; ARTICLE_PREVIEW_TIMEOUT_MS
+    // can be tuned per environment. Must be < the client's LLM timeout
+    // (180s) so the operator sees the server's specific reason.
+    const previewDeadlineMs = Math.max(
+      30_000,
+      Number(process.env.ARTICLE_PREVIEW_TIMEOUT_MS) || 170_000,
+    );
+    let timer: NodeJS.Timeout | undefined;
     try {
-      const preview = await previewDeepRead(apiKey, { overrideUrl, groundingSources, skipReviseLoop });
+      const deadline = new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`preview deadline exceeded after ${previewDeadlineMs}ms`));
+        }, previewDeadlineMs);
+      });
+      const preview = await Promise.race([
+        previewDeepRead(apiKey, { overrideUrl, groundingSources, skipReviseLoop }),
+        deadline,
+      ]);
       if (!preview.body || preview.body.length < 100) {
         return res.status(500).json({ error: "Article generation produced insufficient content — try again or use a different URL" });
       }
       res.json(preview);
     } catch (e: any) {
-      console.error("[Article] Preview failed:", e.message);
-      res.status(500).json({ error: e.message ?? "Preview generation failed" });
+      const msg = String(e?.message ?? "Preview generation failed");
+      const isDeadline = /preview deadline exceeded/.test(msg);
+      console.error("[Article] Preview failed:", msg);
+      // 504 surfaces deadline distinctly so the UI can give a targeted hint
+      // (try a direct URL, retry, or skip the revise loop). The legacy 500
+      // path stays for non-timeout failures.
+      if (isDeadline) {
+        return res.status(504).json({
+          error: overrideUrl
+            ? `Preview timed out after ${Math.round(previewDeadlineMs / 1000)}s while generating from ${overrideUrl}. Retry, or try a different URL.`
+            : `Preview timed out after ${Math.round(previewDeadlineMs / 1000)}s during auto-discovery. Paste a direct URL above to skip auto-discovery.`,
+          code: "preview_deadline",
+        });
+      }
+      res.status(500).json({ error: msg });
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   });
 

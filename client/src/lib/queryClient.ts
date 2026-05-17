@@ -11,6 +11,13 @@ const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
 // reached because the fetch never settled.
 export const DEFAULT_FETCH_TIMEOUT_MS = 15_000;
 
+// LLM-backed endpoints (article preview / revise, blog generate / revise)
+// can legitimately take 30-90s: discovery + source fetch + writer + verifier
+// + revise loop. The 15s default aborts them mid-flight and surfaces as
+// "request timed out after 15000ms" in the UI. Long timeout matches the
+// upper bound of a normal preview run with margin.
+export const LLM_FETCH_TIMEOUT_MS = 180_000;
+
 export class FetchTimeoutError extends Error {
   constructor(url: string, timeoutMs: number) {
     super(`request timed out after ${timeoutMs}ms: ${url}`);
@@ -64,20 +71,32 @@ export async function fetchWithTimeout(
   }
 }
 
+export interface ApiRequestOptions {
+  /** Override the per-request timeout in milliseconds. Defaults to
+   *  DEFAULT_FETCH_TIMEOUT_MS. Use LLM_FETCH_TIMEOUT_MS for LLM-backed
+   *  endpoints that legitimately take 30-90s. */
+  timeoutMs?: number;
+}
+
 export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
+  options: ApiRequestOptions = {},
 ): Promise<Response> {
   const headers: Record<string, string> = {};
   if (data) headers["Content-Type"] = "application/json";
   if (DASH_SECRET) headers["x-dashboard-secret"] = DASH_SECRET;
 
-  const res = await fetchWithTimeout(`${API_BASE}${url}`, {
-    method,
-    headers,
-    body: data ? JSON.stringify(data) : undefined,
-  });
+  const res = await fetchWithTimeout(
+    `${API_BASE}${url}`,
+    {
+      method,
+      headers,
+      body: data ? JSON.stringify(data) : undefined,
+    },
+    options.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS,
+  );
 
   await throwIfResNotOk(res);
   return res;
