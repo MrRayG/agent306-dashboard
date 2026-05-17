@@ -284,6 +284,8 @@ describe("hypothesisIntakeAuditVisibility — intake quality gate", () => {
     const r = gateIntake({
       claim:           "Citation count for paper X will exceed 1000 by Q4 2026.",
       prediction:      "Citation count will exceed 1000 by 2026-12-31.",
+      metric:          "OpenAlex citation count",
+      basis:           "Prior trend ~+200/yr; current count ~600.",
       measurementPath: "OpenAlex citation count for paper X",
       evidenceRef:     "https://openalex.org/W12345",
       useCase:         "calibration of citation-velocity prediction",
@@ -323,6 +325,8 @@ describe("hypothesisIntakeAuditVisibility — intake quality gate", () => {
     const r = gateIntake({
       claim:      "Citation count will exceed 1000 by Q4 2026.",
       prediction: "exceed 1000 by Q4 2026",
+      metric:     "OpenAlex citation count",
+      basis:      "Prior trend",
       evidenceRef: "https://example.com",
       useCase:    "x",
     });
@@ -334,6 +338,8 @@ describe("hypothesisIntakeAuditVisibility — intake quality gate", () => {
     const r = gateIntake({
       claim:           "Citation count will exceed 1000 by Q4 2026.",
       prediction:      "exceed 1000 by Q4 2026",
+      metric:          "OpenAlex citation count",
+      basis:           "Prior trend",
       measurementPath: "OpenAlex",
       useCase:         "x",
     });
@@ -345,6 +351,8 @@ describe("hypothesisIntakeAuditVisibility — intake quality gate", () => {
     const r = gateIntake({
       claim:           "Citation count will exceed 1000 by Q4 2026.",
       prediction:      "exceed 1000 by Q4 2026",
+      metric:          "OpenAlex citation count",
+      basis:           "Prior trend",
       measurementPath: "OpenAlex",
       evidenceRef:     "https://openalex.org/x",
     });
