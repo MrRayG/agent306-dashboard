@@ -183,7 +183,7 @@ export interface ActiveCapPolicy {
 }
 
 /** Verdict returned by the intake quality gate. */
-export type IntakeGateVerdict = "pass" | "rewrite_positional_debate" | "missing_evidence_path" | "missing_evidence_ref" | "missing_use_case" | "stub_claim" | "unfalsifiable";
+export type IntakeGateVerdict = "pass" | "rewrite_positional_debate" | "missing_evidence_path" | "missing_evidence_ref" | "missing_use_case" | "missing_deadline" | "missing_metric" | "missing_basis" | "stub_claim" | "unfalsifiable";
 
 export interface IntakeGateResult {
   verdict:  IntakeGateVerdict;
@@ -236,6 +236,74 @@ export interface MemoryOriginProjection {
   dataMissing:                   boolean;
 }
 
+/**
+ * Verdict on whether the manual-action backlog is growing past the
+ * operator's preferred threshold. Counts records routed to manual buckets:
+ * rewrite_positional_debate + rewrite_missing_evidence_path +
+ * needs_operator_review + unpromoted memory-origin entries.
+ *
+ * READ-ONLY. The gate is visibility/advice — it never refuses a write on
+ * its own. Soft-mode enforcement in `researchEngine.addHypothesis`
+ * (INTAKE_GATE_SOFT=1 + HYPOTHESIS_BLOCK_ON_BACKLOG=1) routes new
+ * candidates to `needs_review` when the backlog is over threshold; the
+ * hard cap (`MAX_HYPOTHESIS_QUEUE`) remains the only refusal point.
+ */
+export interface ManualBacklogGate {
+  /** Count of records currently flagged for manual operator action. */
+  manualBacklog:        number;
+  /** Per-bucket counts that fed `manualBacklog`. */
+  breakdown: {
+    rewrite_positional_debate:     number;
+    rewrite_missing_evidence_path: number;
+    needs_operator_review:         number;
+    unpromoted_memory_origin:      number;
+  };
+  /** Threshold the manual backlog is being compared against. */
+  threshold:            number;
+  /** Cap-pressure-style verdict for the backlog. */
+  pressure:             CapPressure;
+  /** How many records must be cleared from the manual backlog before the
+   *  gate falls back to `under`. Zero when not `over`. */
+  overBy:               number;
+  /** Text-only operator recommendation. Empty when `pressure === "under"`. */
+  recommendedAction:    string;
+  /** Env-var name and resolved value so the operator can see how the
+   *  threshold was configured. */
+  configuration: {
+    envVar:    string;
+    resolved:  number;
+    fallback:  number;
+  };
+}
+
+/**
+ * Snapshot of the runtime soft-gate configuration in `researchEngine.addHypothesis`.
+ * Read-only. Operators can confirm what is actually wired without grepping the
+ * server logs.
+ */
+export interface IntakeGateConfig {
+  /** True iff INTAKE_GATE_SOFT in the environment is "1" / "true". */
+  softGateEnabled:               boolean;
+  /** Soft active-cap value from INTAKE_SOFT_MAX_ACTIVE (null when unset). */
+  softMaxActive:                 number | null;
+  /** True iff HYPOTHESIS_BLOCK_ON_BACKLOG=1, which couples the soft gate to
+   *  the manual-backlog gate. */
+  blockOnBacklog:                boolean;
+  /** Resolved cap defaults (env-aware). */
+  activeCapDefaults:             ActiveCapDefaults;
+  /** Env vars consulted by this panel; advisory only. */
+  envVars: {
+    HYPOTHESIS_MAX_ACTIVE:               number | null;
+    HYPOTHESIS_MAX_NEW_PER_CYCLE:        number | null;
+    HYPOTHESIS_STALE_DAYS:               number | null;
+    HYPOTHESIS_MANUAL_BACKLOG_THRESHOLD: number | null;
+    INTAKE_GATE_SOFT:                    boolean;
+    INTAKE_SOFT_MAX_ACTIVE:              number | null;
+    HYPOTHESIS_BLOCK_ON_BACKLOG:         boolean;
+    MAX_HYPOTHESIS_QUEUE:                number | null;
+  };
+}
+
 export interface HypothesisIntakeAuditVisibility {
   /** Schema version — bump when the shape changes. */
   schemaVersion: "phase-intake-audit-1";
@@ -258,6 +326,12 @@ export interface HypothesisIntakeAuditVisibility {
 
   /** Intake quality projection across the backlog. */
   intakeQuality: IntakeQualityProjection;
+
+  /** Manual-backlog gate verdict — advisory only. */
+  manualBacklogGate: ManualBacklogGate;
+
+  /** Snapshot of the runtime soft-gate configuration. */
+  intakeGateConfig: IntakeGateConfig;
 
   /** Short, advisory-only operator next-step list. Text only. */
   nextSafeActions: string[];
@@ -296,6 +370,40 @@ export const DEFAULT_ACTIVE_CAP: Readonly<ActiveCapDefaults> = Object.freeze({
   maxNewPerDailyCycle: 5,
   staleDays:           30,
 });
+
+/** Default manual-backlog threshold. When the count of records routed to a
+ *  manual-action bucket (rewrite_positional_debate + rewrite_missing_evidence_path
+ *  + needs_operator_review + unpromoted memory-origin) is at or above this
+ *  threshold, the panel surfaces a "backlog over threshold" recommendation
+ *  and (if INTAKE_GATE_SOFT=1 + HYPOTHESIS_BLOCK_ON_BACKLOG=1) the soft
+ *  intake routing in researchEngine.addHypothesis tags new candidates with
+ *  hygieneTag='needs_review'. */
+export const DEFAULT_MANUAL_BACKLOG_THRESHOLD = 50;
+
+/** Parse a positive integer env var. Returns null when unset / invalid. */
+function parsePositiveInt(raw: string | undefined): number | null {
+  if (raw == null || raw === "") return null;
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
+
+/** Resolve the active-cap defaults from env vars at call time. Env vars are
+ *  read on every call so tests can mutate process.env between invocations.
+ *  Returns the configured values, falling back to DEFAULT_ACTIVE_CAP. */
+export function resolveActiveCapDefaults(): ActiveCapDefaults {
+  const env = process.env;
+  return {
+    maxActive:           parsePositiveInt(env.HYPOTHESIS_MAX_ACTIVE)         ?? DEFAULT_ACTIVE_CAP.maxActive,
+    maxNewPerDailyCycle: parsePositiveInt(env.HYPOTHESIS_MAX_NEW_PER_CYCLE)  ?? DEFAULT_ACTIVE_CAP.maxNewPerDailyCycle,
+    staleDays:           parsePositiveInt(env.HYPOTHESIS_STALE_DAYS)         ?? DEFAULT_ACTIVE_CAP.staleDays,
+  };
+}
+
+/** Resolve the manual-backlog threshold from env at call time. */
+export function resolveManualBacklogThreshold(): number {
+  return parsePositiveInt(process.env.HYPOTHESIS_MANUAL_BACKLOG_THRESHOLD) ?? DEFAULT_MANUAL_BACKLOG_THRESHOLD;
+}
 
 /** Reference to the existing enforcement site so the UI can show provenance. */
 const ENFORCEMENT_SITE = Object.freeze({
@@ -419,6 +527,36 @@ function looksUnfalsifiable(claim: string | undefined, prediction: string | unde
   return aspirational && !quantified;
 }
 
+/**
+ * A hypothesis must name a deadline or review horizon so that the operator
+ * can decide when to resolve it. Acceptable shapes:
+ *   - Calendar year: "by 2026", "before 2027"
+ *   - Quarter / half: "Q4 2026", "H1 2027"
+ *   - ISO date: "2026-12-31"
+ *   - Relative horizon: "within 30 days", "in 2 weeks", "next 3 months"
+ *   - `timeframe` field set to any of the above
+ * This is checked over claim, prediction, AND the explicit `timeframe`
+ * field so existing callers with a structured timeframe keep passing.
+ */
+function hasDeadlineOrHorizon(
+  claim: string | undefined,
+  prediction: string | undefined,
+  timeframe: string | undefined,
+): boolean {
+  const text = `${claim ?? ""} ${prediction ?? ""} ${timeframe ?? ""}`.toLowerCase();
+  if (text.trim().length === 0) return false;
+  if (/\b(?:q[1-4]|h[12])\b/i.test(text)) return true;
+  if (/\b(?:by|before|after|in|until)\s+(?:q[1-4]\s+)?\d{4}\b/i.test(text)) return true;
+  if (/\b\d{4}-\d{2}-\d{2}\b/.test(text)) return true;
+  if (/\b(?:within|in|next|over|in\s+the\s+next)\s+\d+\s+(?:hours?|days?|weeks?|months?|quarters?|years?)\b/i.test(text)) return true;
+  if (/\bby\s+\d{4}-\d{2}\b/.test(text)) return true;
+  // `timeframe` field — if it is a non-trivial string, accept it even when
+  // claim/prediction don't contain an explicit horizon. Operators commonly
+  // store the deadline in the structured field.
+  if (typeof timeframe === "string" && timeframe.trim().length >= 3) return true;
+  return false;
+}
+
 // ── Intake quality gate ─────────────────────────────────────────────────────
 
 /**
@@ -427,13 +565,19 @@ function looksUnfalsifiable(claim: string | undefined, prediction: string | unde
  *
  *   1. As a *dry-run* projection over the existing backlog, so the operator
  *      can see how many records would have been refused at intake.
- *   2. As a building block a future PR can opt the actual intake call sites
- *      into (researchEngine.addHypothesis, daily-cycle seeders, research-
- *      analysis emitters). This PR does NOT wire it into those paths.
+ *   2. As a building block researchEngine.addHypothesis already opts into
+ *      via the INTAKE_GATE_SOFT env flag (soft mode — store + annotate
+ *      with hygieneTag='needs_review' rather than drop).
  *
- * Resolution order: stub → unfalsifiable → positional-debate → missing
- * measurement / evidence path → missing evidence ref → missing use case.
- * The first failing rule wins. Pass requires all of them to clear.
+ * Resolution order (first failing rule wins):
+ *   stub → unfalsifiable → positional-debate → missing metric → missing
+ *   basis → missing measurement / evidence path → missing deadline /
+ *   horizon → missing evidence ref → missing use case.
+ *
+ * Pass requires every rule to clear. `missing_metric` and `missing_basis`
+ * are listed explicitly so a future operator UI can show which exact field
+ * is blocking; `hypothesisHygiene.computeReadinessFields` is the
+ * single-source-of-truth for the readiness-field gate and is reused here.
  */
 export function gateIntake(candidate: IntakeCandidate): IntakeGateResult {
   const reasons: string[] = [];
@@ -454,10 +598,27 @@ export function gateIntake(candidate: IntakeCandidate): IntakeGateResult {
     return { verdict: "rewrite_positional_debate", ok: false, reasons };
   }
 
+  const metric = (candidate.metric ?? "").trim();
+  if (metric.length < 3) {
+    reasons.push("no metric — operator must name a measurable indicator (≥3 chars)");
+    return { verdict: "missing_metric", ok: false, reasons };
+  }
+
+  const basis = (candidate.basis ?? "").trim();
+  if (basis.length === 0) {
+    reasons.push("no basis — operator must name the evidence the hypothesis rests on");
+    return { verdict: "missing_basis", ok: false, reasons };
+  }
+
   const path = (candidate.measurementPath ?? candidate.evidencePath ?? "").trim();
   if (path.length === 0) {
     reasons.push("no measurementPath / evidencePath — operator must name where evidence will come from within 2 cycles");
     return { verdict: "missing_evidence_path", ok: false, reasons };
+  }
+
+  if (!hasDeadlineOrHorizon(candidate.claim, candidate.prediction, candidate.timeframe)) {
+    reasons.push("no deadline / review horizon — claim, prediction, or timeframe must name when this resolves (Q4 2026, 2026-12-31, within 30 days, …)");
+    return { verdict: "missing_deadline", ok: false, reasons };
   }
 
   const ref = (candidate.evidenceRef ?? "").trim();
@@ -475,7 +636,7 @@ export function gateIntake(candidate: IntakeCandidate): IntakeGateResult {
     return { verdict: "missing_use_case", ok: false, reasons };
   }
 
-  reasons.push("claim is specific, falsifiable, has a named evidence path / ref / use case");
+  reasons.push("claim is specific, falsifiable, has a metric / basis / evidence path / deadline / evidence ref / use case");
   return { verdict: "pass", ok: true, reasons };
 }
 
@@ -776,7 +937,10 @@ const INTAKE_GATE_RULES: readonly string[] = Object.freeze([
   "Claim must be ≥ 12 chars and not a placeholder.",
   "Claim/prediction must be falsifiable in a fixed timeframe (avoid 'may / might / could / tends to' without quantification).",
   "Claim must NOT be a positional debate ('Position A is more accurate than Position B') unless both sides cite evidence.",
+  "Must include a metric — a measurable indicator named on the record (≥3 chars).",
+  "Must include a basis — the evidence the hypothesis rests on.",
   "Must include a measurementPath (or evidencePath) — where evidence would come from within 2 cycles.",
+  "Must include a deadline or review horizon — claim, prediction, or timeframe names when the hypothesis resolves (Q4 2026, 2026-12-31, within 30 days, …).",
   "Must include an evidenceRef (URL / doc id / dataset id) pointing at the originating evidence.",
   "Must include a useCase — what this hypothesis is *for* (content, calibration, decision rule, …).",
 ]);
@@ -788,6 +952,9 @@ function emptyVerdictCounts(): Record<IntakeGateVerdict, number> {
     missing_evidence_path:           0,
     missing_evidence_ref:            0,
     missing_use_case:                0,
+    missing_deadline:                0,
+    missing_metric:                  0,
+    missing_basis:                   0,
     stub_claim:                      0,
     unfalsifiable:                   0,
   };
@@ -877,6 +1044,87 @@ function buildResetBuckets(
   }));
 }
 
+// ── Manual-backlog gate ─────────────────────────────────────────────────────
+
+const MANUAL_BACKLOG_ENV = "HYPOTHESIS_MANUAL_BACKLOG_THRESHOLD";
+
+function buildManualBacklogGate(
+  buckets: ResetBucketSummary[],
+  memoryOrigin: MemoryOriginProjection,
+  threshold: number,
+): ManualBacklogGate {
+  const get = (b: ResetBucket) => buckets.find(x => x.bucket === b)?.count ?? 0;
+  const breakdown = {
+    rewrite_positional_debate:     get("rewrite_positional_debate"),
+    rewrite_missing_evidence_path: get("rewrite_missing_evidence_path"),
+    needs_operator_review:         get("needs_operator_review"),
+    unpromoted_memory_origin:      memoryOrigin.unpromoted,
+  };
+  const manualBacklog =
+    breakdown.rewrite_positional_debate +
+    breakdown.rewrite_missing_evidence_path +
+    breakdown.needs_operator_review +
+    breakdown.unpromoted_memory_origin;
+  let pressure: CapPressure;
+  if (manualBacklog >= threshold) {
+    pressure = manualBacklog === threshold ? "at" : "over";
+  } else {
+    pressure = "under";
+  }
+  const overBy = pressure === "over" ? manualBacklog - threshold : 0;
+  let recommendedAction = "";
+  if (pressure === "over") {
+    recommendedAction =
+      `Manual backlog exceeds the threshold by ${overBy} record(s) ` +
+      `(${manualBacklog} >= ${threshold}). Operator-only: clear ${overBy + 1} record(s) from ` +
+      `rewrite_* / needs_operator_review / unpromoted memory-origin before allowing new intake. ` +
+      `Set INTAKE_GATE_SOFT=1 + HYPOTHESIS_BLOCK_ON_BACKLOG=1 to route new candidates to needs_review until the backlog clears.`;
+  } else if (pressure === "at") {
+    recommendedAction =
+      `Manual backlog is at the threshold (${manualBacklog} == ${threshold}). ` +
+      `Operator-only one-in-one-out: clear one manual record before approving the next intake.`;
+  }
+  return {
+    manualBacklog,
+    breakdown,
+    threshold,
+    pressure,
+    overBy,
+    recommendedAction,
+    configuration: {
+      envVar:   MANUAL_BACKLOG_ENV,
+      resolved: threshold,
+      fallback: DEFAULT_MANUAL_BACKLOG_THRESHOLD,
+    },
+  };
+}
+
+// ── Intake-gate runtime config ──────────────────────────────────────────────
+
+function readBoolEnv(name: string): boolean {
+  const v = process.env[name];
+  return v === "1" || v === "true" || v === "TRUE";
+}
+
+function buildIntakeGateConfig(activeCapDefaults: ActiveCapDefaults): IntakeGateConfig {
+  return {
+    softGateEnabled:    readBoolEnv("INTAKE_GATE_SOFT"),
+    softMaxActive:      parsePositiveInt(process.env.INTAKE_SOFT_MAX_ACTIVE),
+    blockOnBacklog:     readBoolEnv("HYPOTHESIS_BLOCK_ON_BACKLOG"),
+    activeCapDefaults,
+    envVars: {
+      HYPOTHESIS_MAX_ACTIVE:               parsePositiveInt(process.env.HYPOTHESIS_MAX_ACTIVE),
+      HYPOTHESIS_MAX_NEW_PER_CYCLE:        parsePositiveInt(process.env.HYPOTHESIS_MAX_NEW_PER_CYCLE),
+      HYPOTHESIS_STALE_DAYS:               parsePositiveInt(process.env.HYPOTHESIS_STALE_DAYS),
+      HYPOTHESIS_MANUAL_BACKLOG_THRESHOLD: parsePositiveInt(process.env.HYPOTHESIS_MANUAL_BACKLOG_THRESHOLD),
+      INTAKE_GATE_SOFT:                    readBoolEnv("INTAKE_GATE_SOFT"),
+      INTAKE_SOFT_MAX_ACTIVE:              parsePositiveInt(process.env.INTAKE_SOFT_MAX_ACTIVE),
+      HYPOTHESIS_BLOCK_ON_BACKLOG:         readBoolEnv("HYPOTHESIS_BLOCK_ON_BACKLOG"),
+      MAX_HYPOTHESIS_QUEUE:                parsePositiveInt(process.env.MAX_HYPOTHESIS_QUEUE),
+    },
+  };
+}
+
 // ── Next safe actions ───────────────────────────────────────────────────────
 
 function buildNextSafeActions(
@@ -884,6 +1132,8 @@ function buildNextSafeActions(
   buckets: ResetBucketSummary[],
   memoryOrigin: MemoryOriginProjection,
   quality: IntakeQualityProjection,
+  manualBacklogGate: ManualBacklogGate,
+  intakeGateConfig: IntakeGateConfig,
 ): string[] {
   const out: string[] = [];
 
@@ -894,6 +1144,32 @@ function buildNextSafeActions(
 
   if (capPolicy.pressure === "over" || capPolicy.pressure === "at") {
     out.push(capPolicy.recommendedAction);
+  }
+
+  if (manualBacklogGate.pressure === "over" || manualBacklogGate.pressure === "at") {
+    out.push(manualBacklogGate.recommendedAction);
+  }
+
+  // Surface the runtime gate configuration so operators can confirm what's
+  // actually wired without reading the server logs. Text only.
+  if (intakeGateConfig.softGateEnabled) {
+    out.push(
+      `Soft intake gate ENABLED (INTAKE_GATE_SOFT=1). Failing candidates are stored with hygieneTag='needs_review' rather than dropped.`,
+    );
+  } else {
+    out.push(
+      `Soft intake gate is OFF by default. Set INTAKE_GATE_SOFT=1 to route failing candidates to needs_review without breaking existing seeders.`,
+    );
+  }
+  if (intakeGateConfig.softMaxActive != null) {
+    out.push(
+      `Soft active-cap ENABLED (INTAKE_SOFT_MAX_ACTIVE=${intakeGateConfig.softMaxActive}). New candidates beyond the cap are stored with hygieneTag='needs_review'.`,
+    );
+  }
+  if (intakeGateConfig.blockOnBacklog) {
+    out.push(
+      `HYPOTHESIS_BLOCK_ON_BACKLOG=1: when the manual backlog gate is at-or-over its threshold AND INTAKE_GATE_SOFT=1, new candidates are routed to needs_review.`,
+    );
   }
 
   const positional = buckets.find(b => b.bucket === "rewrite_positional_debate")?.count ?? 0;
@@ -935,10 +1211,13 @@ function buildNextSafeActions(
 // ── Public entry point ──────────────────────────────────────────────────────
 
 export interface BuildIntakeAuditOptions {
-  now?:                Date;
-  staleDays?:          number;
-  maxActive?:          number;
-  maxNewPerDailyCycle?: number;
+  now?:                     Date;
+  staleDays?:               number;
+  maxActive?:               number;
+  maxNewPerDailyCycle?:     number;
+  /** Override the manual-backlog threshold. Defaults to env, then to
+   *  DEFAULT_MANUAL_BACKLOG_THRESHOLD. */
+  manualBacklogThreshold?:  number;
 }
 
 /**
@@ -953,12 +1232,17 @@ export function buildHypothesisIntakeAuditVisibility(
   opts: BuildIntakeAuditOptions = {},
 ): HypothesisIntakeAuditVisibility {
   const now = opts.now ?? new Date();
-  const staleDays = opts.staleDays ?? DEFAULT_ACTIVE_CAP.staleDays;
+  // Env-aware defaults. Per-call options override env, and env overrides
+  // the hard-coded fallback. This is the single source of truth for the
+  // cap defaults this snapshot is built against.
+  const envDefaults = resolveActiveCapDefaults();
+  const staleDays = opts.staleDays ?? envDefaults.staleDays;
   const defaults: ActiveCapDefaults = {
-    maxActive:           opts.maxActive ?? DEFAULT_ACTIVE_CAP.maxActive,
-    maxNewPerDailyCycle: opts.maxNewPerDailyCycle ?? DEFAULT_ACTIVE_CAP.maxNewPerDailyCycle,
+    maxActive:           opts.maxActive ?? envDefaults.maxActive,
+    maxNewPerDailyCycle: opts.maxNewPerDailyCycle ?? envDefaults.maxNewPerDailyCycle,
     staleDays,
   };
+  const manualBacklogThreshold = opts.manualBacklogThreshold ?? resolveManualBacklogThreshold();
 
   const { blob: lab, available: labAvail } = readResearchLabSafe();
   const { blob: memory, available: memAvail } = readMemoryKnowledgeSafe();
@@ -974,6 +1258,8 @@ export function buildHypothesisIntakeAuditVisibility(
   const resetBuckets = buildResetBuckets(hyps, now, staleDays);
   const memoryOrigin = buildMemoryOriginProjection(memory, memoryMissing);
   const intakeQuality = buildIntakeQualityProjection(hyps);
+  const manualBacklogGate = buildManualBacklogGate(resetBuckets, memoryOrigin, manualBacklogThreshold);
+  const intakeGateConfig = buildIntakeGateConfig(defaults);
 
   const dataMissingNotes: string[] = [];
   if (labMissing) {
@@ -995,7 +1281,7 @@ export function buildHypothesisIntakeAuditVisibility(
     );
   }
 
-  const nextSafeActions = buildNextSafeActions(capPolicy, resetBuckets, memoryOrigin, intakeQuality);
+  const nextSafeActions = buildNextSafeActions(capPolicy, resetBuckets, memoryOrigin, intakeQuality, manualBacklogGate, intakeGateConfig);
 
   const sourceDiagnostics = describeSourceDiagnostics();
   // Surface the discovery's next-safe-action at the top of the panel's
@@ -1061,6 +1347,8 @@ export function buildHypothesisIntakeAuditVisibility(
     resetBuckets,
     memoryOrigin,
     intakeQuality,
+    manualBacklogGate,
+    intakeGateConfig,
     nextSafeActions,
     dataMissingNotes,
     sourceDiagnostics,

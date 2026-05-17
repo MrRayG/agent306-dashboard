@@ -20,7 +20,24 @@ import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { gateHypothesisForTesting } from "./hypothesisFeasibilityGate.js";
 import { gateHypothesisDataSource, type DataSourceGateOutcome } from "./hypothesisDataSourceGate.js";
-import { gateIntake, DEFAULT_ACTIVE_CAP, type IntakeCandidate } from "./hypothesisIntakeAuditVisibility.js";
+import {
+  gateIntake,
+  DEFAULT_ACTIVE_CAP,
+  buildHypothesisIntakeAuditVisibility,
+  type IntakeCandidate,
+  type ManualBacklogGate,
+} from "./hypothesisIntakeAuditVisibility.js";
+
+/**
+ * Read-only adapter so addHypothesis can consult the manual-backlog gate
+ * without re-implementing the bucket math. Kept as a function so a test
+ * can stub it via module mocking if needed. The visibility builder is
+ * defensive — missing data files surface as zeros, never throws.
+ */
+function readManualBacklogGateSnapshot(): { manualBacklogGate: ManualBacklogGate } {
+  const snap = buildHypothesisIntakeAuditVisibility();
+  return { manualBacklogGate: snap.manualBacklogGate };
+}
 import { evaluateHypothesisForFocus } from "./researchFocusGate.js";
 import type { SelfExperimentProtocol, RubricVerdict } from "./researchFocusRubric.js";
 import { addKnowledge } from "./memoryEngine.js";
@@ -659,13 +676,26 @@ export function addHypothesis(input: Omit<Hypothesis, "id" | "formedAt" | "statu
   // candidate that would push the active count past the cap is annotated
   // with hygieneTag='needs_review' instead of being silently dropped. The
   // existing hard cap (MAX_HYPOTHESIS_QUEUE) remains the only refusal point.
-  const softMaxActive = (() => {
-    const raw = process.env.INTAKE_SOFT_MAX_ACTIVE;
-    if (!raw) return null;
-    const n = parseInt(raw, 10);
-    if (!Number.isFinite(n) || n <= 0) return null;
-    return n;
-  })();
+  //
+  // When INTAKE_SOFT_MAX_ACTIVE is unset BUT INTAKE_GATE_SOFT=1, fall back
+  // to HYPOTHESIS_MAX_ACTIVE (or DEFAULT_ACTIVE_CAP.maxActive when that is
+  // also unset) so the soft cap is on-by-default once an operator opts into
+  // soft mode. Without the soft-gate opt-in, behavior is unchanged.
+  const parseSoftActiveCap = (): number | null => {
+    const explicit = process.env.INTAKE_SOFT_MAX_ACTIVE;
+    if (explicit) {
+      const n = parseInt(explicit, 10);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    if (!softIntakeGateEnabled) return null;
+    const envCap = process.env.HYPOTHESIS_MAX_ACTIVE;
+    if (envCap) {
+      const n = parseInt(envCap, 10);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    return DEFAULT_ACTIVE_CAP.maxActive;
+  };
+  const softMaxActive = parseSoftActiveCap();
   let softCapRouteToReview = false;
   let softCapReason = "";
   if (softMaxActive !== null && activeCount >= softMaxActive) {
@@ -673,11 +703,34 @@ export function addHypothesis(input: Omit<Hypothesis, "id" | "formedAt" | "statu
     softCapReason =
       `soft active cap (${activeCount} >= ${softMaxActive}) — one-in-one-out: archive or resolve one record before forming a new active one`;
     console.log(`[ResearchLab] Soft active cap routed candidate to needs_review (active=${activeCount}, cap=${softMaxActive})`);
-  } else if (softMaxActive === null) {
-    // Even without an explicit env override, surface DEFAULT_ACTIVE_CAP
-    // breaches in the panel only — DO NOT mutate behavior here. The
-    // visibility module already reports cap pressure.
-    void DEFAULT_ACTIVE_CAP;
+  }
+
+  // Soft manual-backlog gate (opt-in via INTAKE_GATE_SOFT=1 + HYPOTHESIS_BLOCK_ON_BACKLOG=1).
+  // When the manual backlog (rewrite_* + needs_operator_review + unpromoted
+  // memory-origin entries) is at or over its threshold and both opt-ins are
+  // set, route the new candidate to needs_review. Reads the visibility block
+  // so the gate uses identical counts to the panel — single source of truth.
+  let softBacklogRouteToReview = false;
+  let softBacklogReason = "";
+  const blockOnBacklog =
+    process.env.HYPOTHESIS_BLOCK_ON_BACKLOG === "1" ||
+    process.env.HYPOTHESIS_BLOCK_ON_BACKLOG === "true";
+  if (softIntakeGateEnabled && blockOnBacklog) {
+    try {
+      const { manualBacklogGate } = readManualBacklogGateSnapshot();
+      if (manualBacklogGate.pressure === "over" || manualBacklogGate.pressure === "at") {
+        softBacklogRouteToReview = true;
+        softBacklogReason =
+          `manual backlog over threshold (${manualBacklogGate.manualBacklog} >= ${manualBacklogGate.threshold}) — ` +
+          `clear rewrite_* / needs_operator_review / unpromoted memory-origin records before approving new intake`;
+        console.log(`[ResearchLab] Soft backlog gate routed candidate to needs_review (backlog=${manualBacklogGate.manualBacklog}, threshold=${manualBacklogGate.threshold})`);
+      }
+    } catch (e: any) {
+      // Non-fatal: if the visibility build fails, fall through. The hard
+      // cap (MAX_HYPOTHESIS_QUEUE) still applies, and the soft intake/cap
+      // routing above is independent.
+      console.warn("[ResearchLab] Soft backlog gate check failed (non-fatal):", e?.message ?? e);
+    }
   }
 
   // Similarity gate: skip if a similar active hypothesis already exists
@@ -733,8 +786,8 @@ export function addHypothesis(input: Omit<Hypothesis, "id" | "formedAt" | "statu
     status:   "forming",
     formedAt: new Date().toISOString(),
   };
-  if (intakeRouteToReview || softCapRouteToReview) {
-    const reasons = [intakeReviewReason, softCapReason].filter(Boolean).join("; ");
+  if (intakeRouteToReview || softCapRouteToReview || softBacklogRouteToReview) {
+    const reasons = [intakeReviewReason, softCapReason, softBacklogReason].filter(Boolean).join("; ");
     (hyp as any).hygieneTag = "needs_review";
     (hyp as any).hygieneReason = reasons;
     (hyp as any).hygieneTaggedAt = hyp.formedAt;
