@@ -17,6 +17,7 @@
 import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import type { EnforcementPrimitive } from "./insightLedger.js";
+import { isMalformedRule } from "./selfRuleHygiene.js";
 
 // -- Types -------------------------------------------------------------------
 
@@ -97,6 +98,20 @@ export function getRulesByInsight(insightId: string): EnforcementRule[] {
 
 export function getAllActiveRules(): EnforcementRule[] {
   return loadStore().rules.filter(r => r.enabled);
+}
+
+/**
+ * Return active rules that are also hygiene-clean — i.e. not quarantined
+ * by selfRuleHygiene. Used by the tick path so malformed legacy rules
+ * (parser-fragment targets like `or` / `at` / `timer` / `all`) no longer
+ * fire and produce repeated no-op side effects.
+ *
+ * Quarantine is read-side only: the underlying store is unchanged, the
+ * historical row is preserved, and the visibility panel can still see
+ * how many rules were filtered out and why.
+ */
+export function getEnforceableActiveRules(): EnforcementRule[] {
+  return getAllActiveRules().filter(r => !isMalformedRule(r).malformed);
 }
 
 // -- Primitive implementations ----------------------------------------------
@@ -487,6 +502,9 @@ export interface TickResult {
   rulesFired: number;
   sideEffects: number;
   byPrimitive: Record<string, number>;
+  /** Count of enabled rules skipped by the read-side hygiene filter
+   *  (malformed legacy rules — parser-fragment targets etc.). */
+  rulesQuarantined?: number;
 }
 
 /**
@@ -500,9 +518,18 @@ export async function tickEnforcer(): Promise<TickResult> {
     rulesFired: 0,
     sideEffects: 0,
     byPrimitive: {},
+    rulesQuarantined: 0,
   };
   for (const rule of store.rules) {
     if (!rule.enabled) continue;
+    // Read-side quarantine: skip malformed legacy rules so they don't fire
+    // and produce repeated no-op side effects every tick. The historical
+    // row is preserved on disk; the rule is filtered only at evaluation
+    // time. The visibility panel counts and surfaces quarantined rules.
+    if (isMalformedRule(rule).malformed) {
+      result.rulesQuarantined = (result.rulesQuarantined ?? 0) + 1;
+      continue;
+    }
     result.rulesChecked++;
     let outcome: { sideEffect: boolean; outcome: string };
     try {
@@ -550,6 +577,7 @@ export async function tickEnforcer(): Promise<TickResult> {
         firedRules: result.rulesFired,
         sideEffects: result.sideEffects,
         byPrimitive: result.byPrimitive,
+        rulesQuarantined: result.rulesQuarantined ?? 0,
       },
     });
   } catch (e: any) {

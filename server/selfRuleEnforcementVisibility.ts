@@ -31,6 +31,7 @@
 import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { getAllActiveRules, type EnforcementRule } from "./actionEnforcer.js";
+import { isMalformedRule } from "./selfRuleHygiene.js";
 import { recentEvents } from "./observability/structuredLog.js";
 import {
   getOpenObligations,
@@ -41,16 +42,42 @@ import {
 // ── Types ───────────────────────────────────────────────────────────────────
 
 export interface SelfRuleEnforcementCounts {
-  /** Active executable rules total. */
+  /** Active executable rules total (enabled rows on disk, includes
+   *  quarantined). */
   activeRules: number;
   /** Active executable rules broken down by primitive. */
   byPrimitive: Record<string, number>;
+  /** Subset of activeRules that the read-side hygiene filter quarantines
+   *  (malformed / parser-fragment targets). These rules remain on disk
+   *  for audit but no longer fire at tick time. */
+  quarantinedRules: number;
+  /** Enforceable rules = activeRules - quarantinedRules. */
+  enforceableRules: number;
   /** Recently registered rules from the engine_events stream (capped). */
   recentRegistrationEvents: number;
   /** How many of the recent registration events were successful (registered=true). */
   recentRegistrationsSucceeded: number;
   /** How many of the recent registration events were refused/errored. */
   recentRegistrationsRefused: number;
+}
+
+export interface QuarantinedRuleView {
+  ruleId: string;
+  insightId: string;
+  primitive: string;
+  /** First captured target field, when present — typically the diagnostic
+   *  value (`or`, `at`, `timer`, `all`, `orphaned`). */
+  target: string | null;
+  /** Reasons returned by isMalformedRule, joined with ';'. */
+  reason: string;
+  /** Tick fire-count carried over from the historical record. */
+  fireCount: number;
+  /** ISO of the rule's last firing before quarantine (or null). */
+  lastFiredAt: string | null;
+  /** Last recorded outcome string from the rule's pre-quarantine firings. */
+  lastOutcome: string | null;
+  /** Human-readable line for the panel. */
+  summary: string;
 }
 
 export interface LatestRegistration {
@@ -166,6 +193,10 @@ export interface SelfRuleEnforcementVisibility {
   /** Bound cap applied to all corrective obligations (read from
    *  ruleCorrectiveObligations so the panel can show the same number). */
   correctiveObligationCap: number;
+  /** Read-side quarantine view: rules whose target/noun is a parser
+   *  fragment / stopword and which the ActionEnforcer tick now skips.
+   *  Newest first; capped for display. Diagnostic only — no controls. */
+  quarantinedRules: QuarantinedRuleView[];
   /** Things this visibility surface cannot show (no scraping, only persisted). */
   visibilityLimitations: string[];
 }
@@ -174,6 +205,7 @@ export interface SelfRuleEnforcementVisibility {
 
 const RECENT_REGISTRATION_EVENT_LIMIT = 25;
 const LATEST_FIRINGS_LIMIT = 8;
+const QUARANTINED_RULES_DISPLAY_LIMIT = 12;
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -246,10 +278,25 @@ function summarizeFiring(r: EnforcementRule): string {
 export function buildSelfRuleEnforcementVisibility(
   now: Date = new Date(),
 ): SelfRuleEnforcementVisibility {
-  // Active rule registry view
+  // Active rule registry view. We partition into enforceable vs
+  // quarantined (read-side hygiene filter) so the panel reflects what
+  // actually fires at tick time, not the historical-row count.
   const rules = readEnforcementRules();
-  const byPrimitive: Record<string, number> = {};
+  const quarantinedDiagnoses: Array<{ rule: EnforcementRule; reasons: string[] }> = [];
+  const enforceableRules: EnforcementRule[] = [];
   for (const r of rules) {
+    const diag = isMalformedRule(r);
+    if (diag.malformed) {
+      quarantinedDiagnoses.push({ rule: r, reasons: diag.reasons });
+    } else {
+      enforceableRules.push(r);
+    }
+  }
+  // byPrimitive counts ENFORCEABLE rules — what the tick will actually
+  // check. Quarantined rules are surfaced separately so the panel can
+  // show "12 quarantined, 24 enforceable" rather than conflating them.
+  const byPrimitive: Record<string, number> = {};
+  for (const r of enforceableRules) {
     byPrimitive[r.primitive] = (byPrimitive[r.primitive] ?? 0) + 1;
   }
 
@@ -327,8 +374,9 @@ export function buildSelfRuleEnforcementVisibility(
 
   // Ratio rule deficits — prefer structured event for exact details; fall back
   // to parsing lastOutcome for backward compatibility with rules whose tick
-  // happened before this event was wired up.
-  const ratioDeficits: RatioRuleDeficit[] = rules
+  // happened before this event was wired up. Quarantined rules are excluded
+  // because they no longer fire — their last recorded deficit is stale.
+  const ratioDeficits: RatioRuleDeficit[] = enforceableRules
     .filter(r => r.primitive === "ratio_rule")
     .map(r => {
       const structured = latestDeficitByRuleId.get(r.id);
@@ -450,6 +498,33 @@ export function buildSelfRuleEnforcementVisibility(
       `This is NOT a hard block — KB writes are not gated by this obligation.`,
   }));
 
+  // Build the quarantined-rule view (newest first by createdAt). The full
+  // count is preserved in counts.quarantinedRules; the array is capped
+  // for display.
+  const sortedQuarantined = quarantinedDiagnoses
+    .slice()
+    .sort((a, b) => (b.rule.createdAt ?? 0) - (a.rule.createdAt ?? 0));
+  const quarantinedRulesView: QuarantinedRuleView[] = sortedQuarantined
+    .slice(0, QUARANTINED_RULES_DISPLAY_LIMIT)
+    .map(({ rule, reasons }) => {
+      const rawTarget = (rule.params as any)?.target;
+      const target = typeof rawTarget === "string" ? rawTarget : null;
+      const reasonStr = reasons.join("; ");
+      return {
+        ruleId: rule.id,
+        insightId: rule.insightId,
+        primitive: rule.primitive,
+        target,
+        reason: reasonStr,
+        fireCount: rule.fireCount ?? 0,
+        lastFiredAt: fmtTs(rule.lastFiredAt),
+        lastOutcome: rule.lastOutcome ?? null,
+        summary:
+          `${rule.primitive} rule ${rule.id} (insight ${rule.insightId}) is quarantined: ${reasonStr}. ` +
+          `Historical fireCount=${rule.fireCount ?? 0}. The rule remains on disk for audit but is skipped at tick time.`,
+      };
+    });
+
   // Headlines and notes
   const headline = (() => {
     if (rules.length === 0 && latestRegistrations.length === 0) {
@@ -467,11 +542,14 @@ export function buildSelfRuleEnforcementVisibility(
     const obligationPhrase = correctiveObligations.length > 0
       ? ` ${correctiveObligations.length} corrective obligation${correctiveObligations.length === 1 ? "" : "s"} currently queued (cap=${OBLIGATION_BOUND_CAP} per cycle, non-blocking).`
       : "";
-    return `${rules.length} active executable self-rule${rules.length === 1 ? "" : "s"} (${primSummary || "none"}). ${regPhrase}${deficitPhrase}${obligationPhrase}`;
+    const quarantinePhrase = quarantinedDiagnoses.length > 0
+      ? ` ${quarantinedDiagnoses.length} malformed legacy rule${quarantinedDiagnoses.length === 1 ? "" : "s"} quarantined from tick (parser-fragment targets such as "or"/"at"/"timer"/"all"); rules preserved on disk for audit.`
+      : "";
+    return `${enforceableRules.length} enforceable self-rule${enforceableRules.length === 1 ? "" : "s"} of ${rules.length} active (${primSummary || "none"}).${quarantinePhrase} ${regPhrase}${deficitPhrase}${obligationPhrase}`;
   })();
 
   const enforcementSemanticsNote =
-    `This panel reports observation only. A registered self-rule fires once per DailyCycle tick and may log a structured deficit. A ratio_rule deficit now creates or refreshes a bounded corrective obligation (cap=${OBLIGATION_BOUND_CAP} per cycle) — a visible, finite work-item the next cycle is asked to satisfy. The obligation does NOT block KB writes, does NOT auto-archive, and does NOT schedule anything; it is recorded and surfaced only. Rule registration, firing, and obligation queueing are visibility-only signals on top of the existing approve → apply path (Pin 7 / Pin 11 preserved). No control on this page registers, mutates, or disables a rule or obligation.`;
+    `This panel reports observation only. A registered self-rule fires once per DailyCycle tick and may log a structured deficit. A ratio_rule deficit now creates or refreshes a bounded corrective obligation (cap=${OBLIGATION_BOUND_CAP} per cycle) — a visible, finite work-item the next cycle is asked to satisfy. The obligation does NOT block KB writes, does NOT auto-archive, and does NOT schedule anything; it is recorded and surfaced only. A read-side hygiene filter quarantines malformed legacy rules — rules whose target/noun is a parser fragment or stopword (e.g. archive_rule with target="or"/"at"/"timer"/"all"/"orphaned") — so they no longer fire and produce repeated no-op side effects; the historical rows are preserved on disk for audit. Rule registration, firing, obligation queueing, and quarantine are visibility-only signals on top of the existing approve → apply path (Pin 7 / Pin 11 preserved). No control on this page registers, mutates, disables, or un-quarantines a rule or obligation.`;
 
   const visibilityLimitations: string[] = [
     "ActionEnforcer per-tick summary (rulesFired / sideEffects / byPrimitive) is now persisted as a structured engine_events row (engine=actionEnforcer, event=tick); rules whose last tick predates this PR will not have a tick event yet.",
@@ -480,6 +558,7 @@ export function buildSelfRuleEnforcementVisibility(
     "Rule registration events older than the most recent 200 selfRecommendation rows, and ActionEnforcer events older than the most recent 200 actionEnforcer rows, are not surfaced here.",
     `Corrective obligations are stored append-only in data/rule_corrective_obligations.jsonl and bounded per cycle (cap=${OBLIGATION_BOUND_CAP}). The obligation is a visible work-item only — it does NOT block KB writes, archive entries, schedule anything, or post / publish.`,
     "Obligation satisfaction is reported when a later tick of the same ratio_rule observes deficit <= 0; obligations that go stale without a satisfying tick remain open until then.",
+    "Quarantined rules are detected by a conservative syntactic check on the rule's target / noun field; they remain on disk for audit and are not deleted. The detector is read-only — there is no control on this page to un-quarantine, edit, or remove a rule.",
   ];
 
   return {
@@ -489,6 +568,8 @@ export function buildSelfRuleEnforcementVisibility(
     counts: {
       activeRules: rules.length,
       byPrimitive,
+      quarantinedRules: quarantinedDiagnoses.length,
+      enforceableRules: enforceableRules.length,
       recentRegistrationEvents: latestRegistrations.length,
       recentRegistrationsSucceeded,
       recentRegistrationsRefused,
@@ -499,6 +580,7 @@ export function buildSelfRuleEnforcementVisibility(
     latestTick,
     correctiveObligations,
     correctiveObligationCap: OBLIGATION_BOUND_CAP,
+    quarantinedRules: quarantinedRulesView,
     visibilityLimitations,
   };
 }
