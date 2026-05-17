@@ -24,6 +24,7 @@ export type ResetBucket =
   | "archive_stale"
   | "archive_data_unavailable"
   | "archive_duplicate"
+  | "already_archived"
   | "rewrite_positional_debate"
   | "rewrite_missing_evidence_path"
   | "promote_later_memory_origin"

@@ -128,7 +128,16 @@ describe("hypothesisResetApply — change list", () => {
     }
   });
 
-  it("skips records already archived with the same tag (no-op)", () => {
+  it("already-archived rows (status=stale-retired + archived_stale tag) are routed to already_archived and never reach an actionable plan", () => {
+    // Post-fix classifier short-circuit: a record carrying both
+    // status='stale-retired' AND an archived_* hygieneTag has been archived
+    // by a prior reset apply. classifyReset puts it in `already_archived`,
+    // so when the operator asks to apply `archive_stale`, the bucket is
+    // empty and computeApplyPlan returns `no_records_to_change`. This is
+    // stronger than the legacy "skipped as no-op" path because the row
+    // never enters the change list at all. See
+    // hypothesisResetReportIdempotency.test.ts for the full re-classification
+    // pin.
     const already = makeHyp({
       id: "h_done",
       status: "stale-retired",
@@ -136,12 +145,15 @@ describe("hypothesisResetApply — change list", () => {
     });
     const rep = buildResetReport({ hypotheses: [already] });
     const plan = computeApplyPlan(rep, [already] as any, { selectedBuckets: ["archive_stale" as any] });
-    assert.equal(plan.ok, true);
-    if (plan.ok) {
-      assert.equal(plan.plan.changes.length, 0);
-      assert.equal(plan.plan.skipped.length, 1);
-      assert.ok(plan.plan.skipped[0].reason.includes("already archived"));
+    assert.equal(plan.ok, false);
+    if (!plan.ok) {
+      assert.equal(plan.reason, "no_records_to_change");
     }
+    // And the entry must be visible in the report under already_archived.
+    const aa = rep.buckets.find(b => b.bucket === "already_archived")!;
+    assert.equal(aa.count, 1);
+    assert.equal(aa.entries[0].id, "h_done");
+    assert.equal(aa.safeToArchiveFromCli, false);
   });
 
   it("returns no_records_to_change when the bucket is empty", () => {
