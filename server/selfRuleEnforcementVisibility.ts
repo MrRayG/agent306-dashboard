@@ -59,6 +59,16 @@ export interface SelfRuleEnforcementCounts {
   recentRegistrationsSucceeded: number;
   /** How many of the recent registration events were refused/errored. */
   recentRegistrationsRefused: number;
+  /** Count of currently open corrective obligations (post-dedupe). */
+  openCorrectiveObligations: number;
+  /** Count of currently open obligations that merged contributions from
+   *  more than one source rule (mergedFromCount > 1). Surfacing this in
+   *  counts makes the dedupe effect visible at a glance. */
+  mergedCorrectiveObligations: number;
+  /** Sum of `mergedFromCount` across all open obligations — i.e. total
+   *  number of source rules currently rolled up into open obligations.
+   *  Useful for spotting cases where many rules collapse into few. */
+  correctiveObligationSourceRuleCount: number;
 }
 
 export interface QuarantinedRuleView {
@@ -154,8 +164,23 @@ export interface CorrectiveObligationView {
   inputCount: number;
   refreshCount: number;
   deadlineNote: string;
-  /** Natural-language line for the panel. */
-  summary: string;
+  /** Normalized work-item key — the dedupe identity used to collapse
+   *  deficits from different source rules into a single obligation. */
+  normalizedKey: string;
+  /** All contributing source rule ids (deduped, first-seen order). */
+  sourceRuleIds: string[];
+  /** All contributing source insight ids (deduped, first-seen order). */
+  sourceInsightIds: string[];
+  /** sourceRuleIds.length — `>1` means the obligation merged deficits
+   *  from distinct rules. Surfaced separately so the panel can render a
+   *  "merged from N rules" indicator without scanning the arrays. */
+  mergedFromCount: number;
+  /** True when this obligation merged contributions from more than one
+   *  source rule. Equivalent to `mergedFromCount > 1`. */
+  merged: boolean;
+  /** Summary of dedupe state for the panel (e.g. "1 source rule" or
+   *  "merged 2 source rules into one obligation"). */
+  dedupeSummary: string;
 }
 
 export interface LatestActionEnforcerTick {
@@ -471,32 +496,50 @@ export function buildSelfRuleEnforcementVisibility(
   } catch {
     openObligations = [];
   }
-  const correctiveObligations: CorrectiveObligationView[] = openObligations.map(o => ({
-    obligationId: o.obligationId,
-    ruleId: o.ruleId,
-    insightId: o.insightId,
-    sourceInsightId: o.sourceInsightId,
-    primitive: o.primitive,
-    outputNoun: o.outputNoun,
-    inputNoun: o.inputNoun,
-    status: "open" as const,
-    createdAt: o.createdAt,
-    updatedAt: o.updatedAt,
-    deficitCount: o.deficitCount,
-    requiredActionCount: o.requiredActionCount,
-    cap: OBLIGATION_BOUND_CAP,
-    expectedCount: o.expectedCount,
-    actualCount: o.actualCount,
-    inputCount: o.inputCount,
-    refreshCount: o.refreshCount,
-    deadlineNote: o.deadlineNote,
-    summary:
-      `A corrective obligation has been queued: archive or merge up to ${o.requiredActionCount} ` +
-      `${o.outputNoun} before further expansion is considered healthy ` +
-      `(raw deficit ${o.deficitCount}, ratio probe ${o.actualCount}/${o.expectedCount} for ${o.inputCount} ${o.inputNoun}). ` +
-      `Deadline: ${o.deadlineNote || "next cycle"}. Refreshed ${o.refreshCount} time${o.refreshCount === 1 ? "" : "s"}. ` +
-      `This is NOT a hard block — KB writes are not gated by this obligation.`,
-  }));
+  const correctiveObligations: CorrectiveObligationView[] = openObligations.map(o => {
+    const merged = o.mergedFromCount > 1;
+    const dedupeSummary = merged
+      ? `merged ${o.mergedFromCount} source rules (${o.sourceRuleIds.join(", ")}) into one obligation for normalized work item ${o.normalizedKey}`
+      : `1 source rule (${o.sourceRuleIds[0] ?? o.ruleId})`;
+    return {
+      obligationId: o.obligationId,
+      ruleId: o.ruleId,
+      insightId: o.insightId,
+      sourceInsightId: o.sourceInsightId,
+      primitive: o.primitive,
+      outputNoun: o.outputNoun,
+      inputNoun: o.inputNoun,
+      status: "open" as const,
+      createdAt: o.createdAt,
+      updatedAt: o.updatedAt,
+      deficitCount: o.deficitCount,
+      requiredActionCount: o.requiredActionCount,
+      cap: OBLIGATION_BOUND_CAP,
+      expectedCount: o.expectedCount,
+      actualCount: o.actualCount,
+      inputCount: o.inputCount,
+      refreshCount: o.refreshCount,
+      deadlineNote: o.deadlineNote,
+      normalizedKey: o.normalizedKey,
+      sourceRuleIds: o.sourceRuleIds,
+      sourceInsightIds: o.sourceInsightIds,
+      mergedFromCount: o.mergedFromCount,
+      merged,
+      dedupeSummary,
+      summary:
+        `A corrective obligation has been queued: archive or merge up to ${o.requiredActionCount} ` +
+        `${o.outputNoun} before further expansion is considered healthy ` +
+        `(raw deficit ${o.deficitCount}, ratio probe ${o.actualCount}/${o.expectedCount} for ${o.inputCount} ${o.inputNoun}). ` +
+        `Deadline: ${o.deadlineNote || "next cycle"}. Refreshed ${o.refreshCount} time${o.refreshCount === 1 ? "" : "s"}. ` +
+        `Dedupe: ${dedupeSummary}. ` +
+        `This is NOT a hard block — KB writes are not gated by this obligation.`,
+    };
+  });
+  const mergedCorrectiveObligationsCount = correctiveObligations.filter(o => o.merged).length;
+  const correctiveObligationSourceRuleCount = correctiveObligations.reduce(
+    (s, o) => s + o.mergedFromCount,
+    0,
+  );
 
   // Build the quarantined-rule view (newest first by createdAt). The full
   // count is preserved in counts.quarantinedRules; the array is capped
@@ -540,7 +583,10 @@ export function buildSelfRuleEnforcementVisibility(
       ? ` ${ratioDeficits.length} ratio rule${ratioDeficits.length === 1 ? "" : "s"} currently log a deficit on the most recent tick.`
       : "";
     const obligationPhrase = correctiveObligations.length > 0
-      ? ` ${correctiveObligations.length} corrective obligation${correctiveObligations.length === 1 ? "" : "s"} currently queued (cap=${OBLIGATION_BOUND_CAP} per cycle, non-blocking).`
+      ? ` ${correctiveObligations.length} corrective obligation${correctiveObligations.length === 1 ? "" : "s"} currently queued (cap=${OBLIGATION_BOUND_CAP} per cycle, non-blocking)` +
+        (mergedCorrectiveObligationsCount > 0
+          ? `; ${mergedCorrectiveObligationsCount} merged from ${correctiveObligationSourceRuleCount} source rule${correctiveObligationSourceRuleCount === 1 ? "" : "s"} after normalization.`
+          : ".")
       : "";
     const quarantinePhrase = quarantinedDiagnoses.length > 0
       ? ` ${quarantinedDiagnoses.length} malformed legacy rule${quarantinedDiagnoses.length === 1 ? "" : "s"} quarantined from tick (parser-fragment targets such as "or"/"at"/"timer"/"all"); rules preserved on disk for audit.`
@@ -549,7 +595,7 @@ export function buildSelfRuleEnforcementVisibility(
   })();
 
   const enforcementSemanticsNote =
-    `This panel reports observation only. A registered self-rule fires once per DailyCycle tick and may log a structured deficit. A ratio_rule deficit now creates or refreshes a bounded corrective obligation (cap=${OBLIGATION_BOUND_CAP} per cycle) — a visible, finite work-item the next cycle is asked to satisfy. The obligation does NOT block KB writes, does NOT auto-archive, and does NOT schedule anything; it is recorded and surfaced only. A read-side hygiene filter quarantines malformed legacy rules — rules whose target/noun is a parser fragment or stopword (e.g. archive_rule with target="or"/"at"/"timer"/"all"/"orphaned") — so they no longer fire and produce repeated no-op side effects; the historical rows are preserved on disk for audit. Rule registration, firing, obligation queueing, and quarantine are visibility-only signals on top of the existing approve → apply path (Pin 7 / Pin 11 preserved). No control on this page registers, mutates, disables, or un-quarantines a rule or obligation.`;
+    `This panel reports observation only. A registered self-rule fires once per DailyCycle tick and may log a structured deficit. A ratio_rule deficit now creates or refreshes a bounded corrective obligation (cap=${OBLIGATION_BOUND_CAP} per cycle) — a visible, finite work-item the next cycle is asked to satisfy. Obligations are deduped by NORMALIZED WORK ITEM (primitive, output-noun family, input-noun family), so distinct rules that describe the same actionable work collapse into a single obligation; contributing rule and insight ids are retained in sourceRuleIds / sourceInsightIds for audit. A distinct work item (e.g. output="draft_output_artifact" vs "archived") stays a separate obligation. The obligation does NOT block KB writes, does NOT auto-archive, and does NOT schedule anything; it is recorded and surfaced only. A read-side hygiene filter quarantines malformed legacy rules — rules whose target/noun is a parser fragment or stopword (e.g. archive_rule with target="or"/"at"/"timer"/"all"/"orphaned") — so they no longer fire and produce repeated no-op side effects; the historical rows are preserved on disk for audit. Rule registration, firing, obligation queueing, dedupe, and quarantine are visibility-only signals on top of the existing approve → apply path (Pin 7 / Pin 11 preserved). No control on this page registers, mutates, disables, merges, or un-quarantines a rule or obligation.`;
 
   const visibilityLimitations: string[] = [
     "ActionEnforcer per-tick summary (rulesFired / sideEffects / byPrimitive) is now persisted as a structured engine_events row (engine=actionEnforcer, event=tick); rules whose last tick predates this PR will not have a tick event yet.",
@@ -557,6 +603,7 @@ export function buildSelfRuleEnforcementVisibility(
     "Disabled / superseded rules are not included — only the active registry (getAllActiveRules) is read.",
     "Rule registration events older than the most recent 200 selfRecommendation rows, and ActionEnforcer events older than the most recent 200 actionEnforcer rows, are not surfaced here.",
     `Corrective obligations are stored append-only in data/rule_corrective_obligations.jsonl and bounded per cycle (cap=${OBLIGATION_BOUND_CAP}). The obligation is a visible work-item only — it does NOT block KB writes, archive entries, schedule anything, or post / publish.`,
+    "Corrective obligations are deduped by normalized work item (primitive, output-noun family, input-noun family); contributing source rule ids and insight ids are retained in sourceRuleIds / sourceInsightIds. Dedupe is conservative — it folds explicit synonyms (e.g. kb_entry / kb_entries / knowledge) and a trailing plural 's', but never does fuzzy matching across genuinely different work items.",
     "Obligation satisfaction is reported when a later tick of the same ratio_rule observes deficit <= 0; obligations that go stale without a satisfying tick remain open until then.",
     "Quarantined rules are detected by a conservative syntactic check on the rule's target / noun field; they remain on disk for audit and are not deleted. The detector is read-only — there is no control on this page to un-quarantine, edit, or remove a rule.",
   ];
@@ -573,6 +620,9 @@ export function buildSelfRuleEnforcementVisibility(
       recentRegistrationEvents: latestRegistrations.length,
       recentRegistrationsSucceeded,
       recentRegistrationsRefused,
+      openCorrectiveObligations: correctiveObligations.length,
+      mergedCorrectiveObligations: mergedCorrectiveObligationsCount,
+      correctiveObligationSourceRuleCount,
     },
     latestRegistrations,
     latestFirings,

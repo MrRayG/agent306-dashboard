@@ -6,12 +6,15 @@
  *      the projection surfaces one open obligation with status=open.
  *   2. The obligation is bounded — a 174-deficit yields requiredActionCount
  *      == OBLIGATION_BOUND_CAP, never the raw 174.
- *   3. Repeated deficit observations for the same (ruleId, outputNoun,
- *      insightId) triple are IDEMPOTENT: they append `refreshed` events
- *      on the SAME obligationId; the projection still reports exactly one
- *      open obligation.
- *   4. A different ruleId / outputNoun / insightId yields a SEPARATE
- *      obligation (no false collapsing).
+ *   3. Repeated deficit observations for the same normalized work item
+ *      (primitive, outputNoun family, inputNoun family) are IDEMPOTENT
+ *      and DEDUPE across distinct ruleIds / insightIds: they append
+ *      `refreshed` events on the SAME obligationId; the projection still
+ *      reports exactly one open obligation. See ruleCorrectiveObligationDedupe
+ *      for the multi-source-rule merge invariants.
+ *   4. A different outputNoun / inputNoun FAMILY yields a SEPARATE
+ *      obligation (no false collapsing across genuinely different work
+ *      items). ruleId / insightId no longer differentiate identity.
  *   5. `recordRatioSatisfied` closes the obligation; the projection now
  *      reports status=satisfied (so getOpenObligations returns []).
  *   6. The append-only file format tolerates corrupt lines.
@@ -135,30 +138,42 @@ describe("ruleCorrectiveObligations — bounded, idempotent, propose-only", () =
     assert.equal(open[0].refreshCount, 2);
   });
 
-  it("uses a different obligationId for a different rule / output / insight triple", () => {
+  it("uses a different obligationId only for a different normalized work item (not for different ruleId / insightId)", () => {
+    // Different ruleId, same normalized (outputNoun, inputNoun) family →
+    // SAME obligation (dedupe). Different insightId, same families → also
+    // same obligation. Only a different outputNoun family differentiates.
     const a = recordRatioDeficit(makeDeficit({ ruleId: "rule_A" }));
     const b = recordRatioDeficit(makeDeficit({ ruleId: "rule_B" }));
-    const c = recordRatioDeficit(makeDeficit({ outputNoun: "merged" }));
+    const c = recordRatioDeficit(makeDeficit({ outputNoun: "merged_record" }));
     const d = recordRatioDeficit(makeDeficit({ insightId: "insight_other" }));
     for (const r of [a, b, c, d]) assert.ok(r.ok);
     if (!a.ok || !b.ok || !c.ok || !d.ok) return;
+    // a, b, d normalize to ("archived" × "kb_entry") — share one id.
+    // c normalizes to ("merged_record" × "kb_entry") — distinct id.
     const ids = new Set([
       a.event.obligationId,
       b.event.obligationId,
       c.event.obligationId,
       d.event.obligationId,
     ]);
-    assert.equal(ids.size, 4, "each unique triple gets its own obligationId");
-    assert.equal(getOpenObligations().length, 4);
+    assert.equal(ids.size, 2, "normalized identity dedupes ruleId/insightId variation");
+    assert.equal(a.event.obligationId, b.event.obligationId);
+    assert.equal(a.event.obligationId, d.event.obligationId);
+    assert.notEqual(a.event.obligationId, c.event.obligationId);
+    assert.equal(getOpenObligations().length, 2);
   });
 
-  it("obligationIdFor is deterministic — same triple → same id across calls", () => {
+  it("obligationIdFor (legacy shim) is deterministic and depends only on outputNoun family", () => {
     const id1 = obligationIdFor("rule_X", "archived", "insight_X");
     const id2 = obligationIdFor("rule_X", "archived", "insight_X");
     assert.equal(id1, id2);
     assert.match(id1, /^oblg_[0-9a-f]{16}$/);
-    const id3 = obligationIdFor("rule_X", "merged", "insight_X");
+    const id3 = obligationIdFor("rule_X", "merged_record", "insight_X");
     assert.notEqual(id1, id3);
+    // ruleId / insightId no longer differentiate — legacy callers that
+    // varied them still get a stable id for the same outputNoun family.
+    const id4 = obligationIdFor("rule_Y", "archived", "insight_Y");
+    assert.equal(id1, id4);
   });
 
   it("recordRatioSatisfied closes the open obligation and projects status=satisfied", () => {

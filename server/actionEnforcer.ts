@@ -230,6 +230,19 @@ async function fireRatioRule(rule: EnforcementRule): Promise<{ sideEffect: boole
         if (oblResult.ok) {
           try {
             const { logEvent } = await import("./observability/structuredLog.js");
+            // Project after the write so we can include merge metadata
+            // (sourceRuleIds, mergedFromCount). Best-effort — falls back
+            // to event-level data if the projection lookup fails.
+            let mergedFromCount = 1;
+            let sourceRuleIds: string[] = [rule.id];
+            try {
+              const { getOpenObligationById } = await import("./ruleCorrectiveObligations.js");
+              const o = getOpenObligationById(oblResult.event.obligationId);
+              if (o) {
+                mergedFromCount = o.mergedFromCount;
+                sourceRuleIds = o.sourceRuleIds;
+              }
+            } catch {}
             logEvent({
               engine: "actionEnforcer",
               event:
@@ -241,6 +254,7 @@ async function fireRatioRule(rule: EnforcementRule): Promise<{ sideEffect: boole
                 ruleId: rule.id,
                 insightId: rule.insightId,
                 obligationId: oblResult.event.obligationId,
+                normalizedKey: oblResult.event.normalizedKey,
                 outputNoun: String(outputNoun),
                 inputNoun: String(inputNoun),
                 deficitCount: deficit,
@@ -249,6 +263,8 @@ async function fireRatioRule(rule: EnforcementRule): Promise<{ sideEffect: boole
                 expectedCount: expectedSynthesis,
                 actualCount: synthesisCount,
                 inputCount: kbCount,
+                mergedFromCount,
+                sourceRuleIds,
                 tickedAt: oblResult.event.tickedAt,
               },
             });
