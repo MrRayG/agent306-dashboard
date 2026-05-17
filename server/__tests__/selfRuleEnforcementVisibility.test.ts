@@ -120,9 +120,18 @@ describe("buildSelfRuleEnforcementVisibility", () => {
   });
 
   it("counts active rules by primitive after registerRule", () => {
+    // ttl_rule needs a real target param so the hygiene filter does not
+    // quarantine it; the default fixture is shaped for ratio_rule and has
+    // no target.
     registerRule(makeRule({ primitive: "ratio_rule" }));
-    registerRule(makeRule({ primitive: "ttl_rule" }));
-    registerRule(makeRule({ primitive: "ttl_rule" }));
+    registerRule(makeRule({
+      primitive: "ttl_rule",
+      params: { days: 14, target: "testing_hypothesis" },
+    }));
+    registerRule(makeRule({
+      primitive: "ttl_rule",
+      params: { days: 30, target: "kb_entry" },
+    }));
     const snap = buildSelfRuleEnforcementVisibility();
     assert.equal(snap.counts.activeRules, 3);
     assert.equal(snap.counts.byPrimitive.ratio_rule, 1);
