@@ -500,6 +500,16 @@ export function recordRatioSatisfied(args: {
 
 /**
  * Project the append-only event log into the current set of obligations.
+ *
+ * Grouping key: events are grouped by the RECOMPUTED normalized work-item id
+ * (hash of primitive + outputNounFamily + inputNounFamily), NOT by the
+ * `event.obligationId` field as written at append time. This matters for
+ * legacy events written BEFORE PR #384, which carried a per-rule
+ * obligationId (`sha1(ruleId|outputNoun|insightId)`); two such legacy events
+ * for the same normalized work item used to project as TWO separate
+ * obligations on the dashboard. Re-grouping by recomputed id collapses them
+ * into one in the read-only projection without rewriting the ledger.
+ *
  * Each obligation collapses to its latest event:
  *   - opened / refreshed (latest) → status: open, deficit / required counts
  *     from the latest event.
@@ -510,9 +520,18 @@ export function projectObligations(): OpenObligationProjection[] {
   const events = readAllEvents();
   const byId = new Map<string, RuleCorrectiveObligationEvent[]>();
   for (const ev of events) {
-    const list = byId.get(ev.obligationId) ?? [];
+    // Recompute the canonical work-item id for this event. Legacy events
+    // (pre-#384) carry a per-rule `obligationId`; we ignore it for the
+    // grouping key and instead derive the work-item id from the noun
+    // family pair. New events already use the work-item id, so the
+    // result is identical for them. The append-only ledger is unchanged —
+    // this is a read-side collapse only.
+    const workItemId = hashObligationId(
+      normalizedWorkItemKey("ratio_rule", ev.outputNoun, ev.inputNoun),
+    );
+    const list = byId.get(workItemId) ?? [];
     list.push(ev);
-    byId.set(ev.obligationId, list);
+    byId.set(workItemId, list);
   }
   const out: OpenObligationProjection[] = [];
   for (const [obligationId, list] of byId) {

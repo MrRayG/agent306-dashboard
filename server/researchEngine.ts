@@ -20,6 +20,7 @@ import * as fs from "fs";
 import { dataPath } from "./dataPaths.js";
 import { gateHypothesisForTesting } from "./hypothesisFeasibilityGate.js";
 import { gateHypothesisDataSource, type DataSourceGateOutcome } from "./hypothesisDataSourceGate.js";
+import { gateIntake, DEFAULT_ACTIVE_CAP, type IntakeCandidate } from "./hypothesisIntakeAuditVisibility.js";
 import { evaluateHypothesisForFocus } from "./researchFocusGate.js";
 import type { SelfExperimentProtocol, RubricVerdict } from "./researchFocusRubric.js";
 import { addKnowledge } from "./memoryEngine.js";
@@ -623,6 +624,62 @@ export function addHypothesis(input: Omit<Hypothesis, "id" | "formedAt" | "statu
     return null as any;
   }
 
+  // Soft intake quality gate (opt-in via env). When INTAKE_GATE_SOFT=1, a
+  // candidate that fails gateIntake() is still stored (so callers don't
+  // silently break) but is annotated with hygieneTag='needs_review' so the
+  // reset-report / audit visibility surface routes it to
+  // `needs_operator_review` rather than the active loop. Default behavior
+  // (no env var, or value other than "1"/"true") is the legacy path —
+  // identical to pre-PR. Failing closed would break dailyCycle seeders that
+  // pre-date the evidenceRef / useCase fields; we prefer a visible review
+  // queue over an invisible refusal.
+  const softIntakeGateEnabled =
+    process.env.INTAKE_GATE_SOFT === "1" || process.env.INTAKE_GATE_SOFT === "true";
+  const candidate: IntakeCandidate = {
+    claim:           input.claim,
+    basis:           input.basis,
+    metric:          input.metric,
+    prediction:      input.prediction,
+    timeframe:       input.timeframe,
+    source:          input.source,
+    measurementPath: (input as any).measurementPath,
+    evidenceRef:     undefined,
+    useCase:         undefined,
+  };
+  const intakeVerdict = gateIntake(candidate);
+  let intakeRouteToReview = false;
+  let intakeReviewReason = "";
+  if (softIntakeGateEnabled && !intakeVerdict.ok) {
+    intakeRouteToReview = true;
+    intakeReviewReason = `soft intake gate: ${intakeVerdict.verdict}: ${intakeVerdict.reasons.join(" / ")}`;
+    console.log(`[ResearchLab] Soft intake gate routed candidate to needs_review (${intakeVerdict.verdict})`);
+  }
+
+  // Soft active cap (opt-in via env). When INTAKE_SOFT_MAX_ACTIVE is set, a
+  // candidate that would push the active count past the cap is annotated
+  // with hygieneTag='needs_review' instead of being silently dropped. The
+  // existing hard cap (MAX_HYPOTHESIS_QUEUE) remains the only refusal point.
+  const softMaxActive = (() => {
+    const raw = process.env.INTAKE_SOFT_MAX_ACTIVE;
+    if (!raw) return null;
+    const n = parseInt(raw, 10);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return n;
+  })();
+  let softCapRouteToReview = false;
+  let softCapReason = "";
+  if (softMaxActive !== null && activeCount >= softMaxActive) {
+    softCapRouteToReview = true;
+    softCapReason =
+      `soft active cap (${activeCount} >= ${softMaxActive}) — one-in-one-out: archive or resolve one record before forming a new active one`;
+    console.log(`[ResearchLab] Soft active cap routed candidate to needs_review (active=${activeCount}, cap=${softMaxActive})`);
+  } else if (softMaxActive === null) {
+    // Even without an explicit env override, surface DEFAULT_ACTIVE_CAP
+    // breaches in the panel only — DO NOT mutate behavior here. The
+    // visibility module already reports cap pressure.
+    void DEFAULT_ACTIVE_CAP;
+  }
+
   // Similarity gate: skip if a similar active hypothesis already exists
   try {
     const active = lab.hypotheses.filter(h => h.status === 'forming' || h.status === 'testing');
@@ -676,6 +733,13 @@ export function addHypothesis(input: Omit<Hypothesis, "id" | "formedAt" | "statu
     status:   "forming",
     formedAt: new Date().toISOString(),
   };
+  if (intakeRouteToReview || softCapRouteToReview) {
+    const reasons = [intakeReviewReason, softCapReason].filter(Boolean).join("; ");
+    (hyp as any).hygieneTag = "needs_review";
+    (hyp as any).hygieneReason = reasons;
+    (hyp as any).hygieneTaggedAt = hyp.formedAt;
+    (hyp as any).hygieneTaggedBy = "intake_gate";
+  }
   lab.hypotheses.unshift(hyp);
   lab.stats.hypothesesFormed++;
   saveLab(lab);
