@@ -99,6 +99,10 @@ import {
   type SelfRuleEnforcementVisibility,
 } from "./selfRuleEnforcementVisibility.js";
 import {
+  buildWorkloadBudgetVisibility,
+  type WorkloadBudgetVisibility,
+} from "./workloadBudgetVisibility.js";
+import {
   scoreHypothesisRiskImpactBatch,
   summarizeRiskImpactScores,
   NEUTRAL_REASON_CODES,
@@ -191,6 +195,15 @@ export interface AutonomyMonitorSnapshot {
    * is queued from a reported deficit in this snapshot.
    */
   selfRuleEnforcement: SelfRuleEnforcementVisibility;
+  /**
+   * Read-only API / workload budget projection. Pure proxy telemetry — no
+   * billing truth is computed here, no scheduler is touched, no apply path is
+   * opened. Renders as an advisory panel: cost-pressure band, top driver
+   * counts, soft recommendations text. See workloadBudgetVisibility.ts for
+   * the full invariant list. Always present; degrades to zero counts when
+   * underlying sources are missing.
+   */
+  workloadBudget: WorkloadBudgetVisibility;
   stages:         AutonomyStage[];
   /** Summary of "what is visible now / what remains" — text only. */
   pipelineSummary: {
@@ -1120,12 +1133,22 @@ export function buildAutonomyMonitorSnapshot(now: Date = new Date()): AutonomyMo
   const planned = stages.filter(s => s.status === "planned" || s.status === "not_implemented").length;
   const implemented = stages.length - planned;
 
+  const selfRuleEnforcement = buildSelfRuleEnforcementVisibility(now);
+  const workloadBudget = buildWorkloadBudgetVisibility({
+    now,
+    selfRule: {
+      openCorrectiveObligations:   selfRuleEnforcement.counts.openCorrectiveObligations,
+      mergedCorrectiveObligations: selfRuleEnforcement.counts.mergedCorrectiveObligations,
+    },
+  });
+
   return {
     generatedAt:    now.toISOString(),
     safetyBoundary: buildSafetyBoundary(),
     runtime:        buildAutonomyRuntimeVisibility(now),
     promotionGateAuthority: buildPromotionGateAuthorityVisibility(),
-    selfRuleEnforcement:    buildSelfRuleEnforcementVisibility(now),
+    selfRuleEnforcement,
+    workloadBudget,
     stages,
     pipelineSummary: {
       implementedStageCount: implemented,
