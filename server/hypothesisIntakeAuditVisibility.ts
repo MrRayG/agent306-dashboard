@@ -1005,6 +1005,28 @@ export function buildHypothesisIntakeAuditVisibility(
       `See sourceDiagnostics.countReconciliation for the per-source counts.`,
     );
   }
+  // DB-aware apply advisory: when the formal-chosen IS the DB row, the reset
+  // CLI now supports --apply but requires an explicit operator confirmation
+  // flag. Surface this so operators reading the Autonomy Monitor know the
+  // safe archive buckets are eligible against the DB blob (after the
+  // follow-up DB-aware apply PR).
+  const formalChosenAttempt = sourceDiagnostics.formalAttempts.find(
+    a => a.path === sourceDiagnostics.formalChosen,
+  );
+  if (
+    formalChosenAttempt &&
+    formalChosenAttempt.role === "db" &&
+    sourceDiagnostics.formalRecords > 0
+  ) {
+    nextSafeActions.unshift(
+      `DB-aware reset apply: formal-chosen source is the SQLite DB row ` +
+      `(${formalChosenAttempt.records} hypotheses). The reset CLI supports --apply for the safe ` +
+      `archive buckets (archive_stale, archive_data_unavailable, archive_duplicate) but REQUIRES ` +
+      `--confirm-source=db on the CLI. The DB blob is snapshotted to ` +
+      `data/hypothesis_reset_db_backup_<iso>.json before any write. rewrite_* / ` +
+      `promote_later_memory_origin / needs_operator_review remain hard-refused.`,
+    );
+  }
 
   return {
     schemaVersion: "phase-intake-audit-1",

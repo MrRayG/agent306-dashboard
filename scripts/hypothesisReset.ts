@@ -50,6 +50,7 @@ interface ParsedArgs {
   showHelp: boolean;
   sourcePath: string | null;
   dataDir:    string | null;
+  confirmSource: string | null;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -60,6 +61,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     showHelp: false,
     sourcePath: null,
     dataDir: null,
+    confirmSource: null,
   };
   for (const a of argv) {
     if (a === "--apply") out.apply = true;
@@ -78,6 +80,8 @@ function parseArgs(argv: string[]): ParsedArgs {
       out.sourcePath = a.slice("--source=".length).trim() || null;
     } else if (a.startsWith("--data-dir=")) {
       out.dataDir = a.slice("--data-dir=".length).trim() || null;
+    } else if (a.startsWith("--confirm-source=")) {
+      out.confirmSource = a.slice("--confirm-source=".length).trim().toLowerCase() || null;
     }
   }
   return out;
@@ -92,6 +96,8 @@ usage:
   tsx scripts/hypothesisReset.ts --bucket=A --bucket=B # multiple buckets
   tsx scripts/hypothesisReset.ts --buckets=A,B,C       # CSV form
   tsx scripts/hypothesisReset.ts --bucket=A --apply    # WRITE (archive, not delete)
+  tsx scripts/hypothesisReset.ts --bucket=A --apply --confirm-source=db
+                                                       # WRITE against the SQLite DB row
   tsx scripts/hypothesisReset.ts --source=/abs/path/research_lab.json
   tsx scripts/hypothesisReset.ts --data-dir=/abs/path/to/data
 
@@ -102,19 +108,39 @@ flags:
                   ${SAFE_APPLY_BUCKETS.join(", ")}.
                   promote_later_memory_origin is hard-refused — memory→formal
                   promotion is operator-only and out of scope for this CLI.
+                  rewrite_* and needs_operator_review are hard-refused too.
   --buckets=…     Same as --bucket but takes a comma-separated list.
   --json          Render the report in JSON instead of text.
   --source=PATH   Absolute path to a formal research_lab.json. Bypasses the
                   default DATA_DIR/research_lab.json discovery. Operator-only.
   --data-dir=DIR  Re-root the source discovery (relocates BOTH research_lab.json
                   AND memory_knowledge.json under DIR). Operator-only.
+  --confirm-source=db
+                  REQUIRED for --apply when the report's formal-chosen source is
+                  the SQLite DB row (post-migration deployments). Acknowledges
+                  that the archive write will go through getResearchLab() →
+                  saveResearchLab() and mutate the DB blob. Only the safe
+                  archive buckets are eligible. A pre-apply DB-blob snapshot is
+                  written to data/hypothesis_reset_db_backup_<iso>.json before
+                  any write. Refusal codes: db_source_confirmation_required,
+                  source_changed_between_report_and_apply.
   --help          Show this message.
 
 archive vs delete:
   Apply ARCHIVES rows by setting status='stale-retired' and hygieneTag to
   archived_stale / archived_unsolvable / archived_irrelevant. Rows are NEVER
-  removed from research_lab.json. A full pre-apply snapshot is written to
-  data/hypothesis_reset_backup_<ISO>.json before any change.
+  removed from research_lab.json (or the DB blob). A full pre-apply snapshot
+  is written to data/hypothesis_reset_backup_<ISO>.json (JSON source) or
+  data/hypothesis_reset_db_backup_<ISO>.json (DB source) before any change.
+
+DB-aware apply (post-migration):
+  After scripts/migrate_json_to_db.ts runs, research_lab.json is renamed to
+  .bak and the canonical store lives in the SQLite row
+  research_lab[id='main'].blob.hypotheses[]. The CLI detects this via source
+  discovery and switches its backup format + write path to the DB. --apply
+  still requires --confirm-source=db so the operator explicitly confirms the
+  write target. Only safe archive buckets are eligible; the rewrite_* /
+  promote_later_memory_origin / needs_operator_review buckets stay refused.
 
 memory-origin coverage:
   When the formal store is missing or empty, the report ALSO classifies
@@ -125,8 +151,10 @@ memory-origin coverage:
 
 freshness guard:
   Apply refuses if the on-disk record count or per-id classification has
-  drifted from the underlying report, or if the report is > 24h old. Re-run
-  the report before applying in that case.
+  drifted from the underlying report, or if the report is > 24h old, or if
+  the discovered formal-chosen source has moved between the report and the
+  apply (source_changed_between_report_and_apply). Re-run the report before
+  applying in that case.
 `;
 
 function main() {
@@ -173,10 +201,21 @@ function main() {
     process.exit(1);
   }
 
+  const confirmDbSource = args.confirmSource === "db";
+  if (args.confirmSource !== null && args.confirmSource !== "db") {
+    console.error(
+      `--confirm-source=${args.confirmSource} is not recognized. ` +
+      `Only --confirm-source=db is currently supported (it confirms the operator wants the apply to ` +
+      `write through the SQLite DB blob).`,
+    );
+    process.exit(1);
+  }
+
   const result = runResetApply({
     selectedBuckets: args.buckets,
     apply:           args.apply,
     report,
+    confirmDbSource,
   });
 
   if (!result.ok) {
@@ -190,10 +229,12 @@ function main() {
   console.log(result.summary);
   console.log("");
   console.log(`Selected buckets: [${result.plan.selectedBuckets.join(", ")}]`);
+  console.log(`Source role:      ${result.sourceRole}`);
   console.log(`Changes by bucket:`);
   for (const [b, n] of Object.entries(result.plan.countsByBucket)) {
     console.log(`  ${b}: ${n}`);
   }
+  console.log(`Changed IDs: ${result.plan.changes.length}`);
   if (result.plan.skipped.length > 0) {
     console.log(`Skipped (${result.plan.skipped.length}):`);
     for (const s of result.plan.skipped.slice(0, 20)) {
@@ -206,6 +247,9 @@ function main() {
   if (result.mode === "dry_run") {
     console.log("");
     console.log("DRY-RUN — no changes written. Pass --apply to perform the archive.");
+    if (result.sourceRole === "db") {
+      console.log("Source is the SQLite DB blob — --apply will also require --confirm-source=db.");
+    }
   } else {
     console.log("");
     console.log(`APPLIED. Backup written to: ${result.backupPath ?? "(missing)"}`);

@@ -7,7 +7,18 @@
  * performs the safe archive write — annotating each selected record with a
  * hygieneTag drawn from {@link ARCHIVE_TAG_FOR_BUCKET} and flipping the
  * lifecycle status to `stale-retired`. Source claim / metric / basis are
- * preserved verbatim. NOTHING is deleted from research_lab.json.
+ * preserved verbatim. NOTHING is deleted from research_lab.json (or the DB
+ * blob).
+ *
+ * Source modes:
+ *   - JSON: report's formal-chosen source is research_lab.json (or a
+ *     --source override). Backup = JSON snapshot, write via saveResearchLab.
+ *   - DB: report's formal-chosen source is the SQLite research_lab[id=main]
+ *     row (post-migration deployments). Apply requires `confirmDbSource`
+ *     (CLI: --confirm-source=db). Backup = DB-blob JSON snapshot at
+ *     data/hypothesis_reset_db_backup_<iso>.json. Write via saveResearchLab,
+ *     which writes through to the DB blob (and mirrors to JSON if the
+ *     research_lab.json file still exists on disk).
  *
  * Hard invariants:
  *   - ARCHIVE NOT DELETE. Every selected row stays in `lab.hypotheses`. We
@@ -49,6 +60,10 @@ import type { ResetBucket } from "./hypothesisIntakeAuditVisibility.js";
 import type { HygieneAwareHypothesis } from "./hypothesisHygiene.js";
 import type { HygieneTag } from "./hypothesisHygiene.js";
 import { getResearchLab, saveResearchLab } from "./researchEngine.js";
+import {
+  discoverHypothesisSources,
+  type AttemptedPath,
+} from "./hypothesisSourceDiscovery.js";
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -76,7 +91,9 @@ export type ApplyRefusalReason =
   | "research_lab_missing"
   | "no_formal_records_loaded"
   | "memory_origin_not_appliable"
-  | "formal_source_not_applyable";
+  | "formal_source_not_applyable"
+  | "db_source_confirmation_required"
+  | "source_changed_between_report_and_apply";
 
 export interface ApplyChange {
   id:            string;
@@ -110,6 +127,10 @@ export type ApplyResult =
       countsAfter:  { total: number };
       backupPath:   string | null;
       summary:      string;
+      /** Source role used for the apply ('json' for research_lab.json, 'db'
+       *  for the SQLite research_lab row). Surfaced so callers can render
+       *  source-aware operator output. */
+      sourceRole:   "json" | "db";
     }
   | {
       ok: false;
@@ -130,6 +151,32 @@ function readLabForCompare(): { hypotheses: HygieneAwareHypothesis[]; exists: bo
   } catch {
     return { hypotheses: [], exists: true };
   }
+}
+
+/**
+ * DB-aware reader: when the report's formal-chosen source is the SQLite DB
+ * row, re-discover at apply time and return the current DB-row hypotheses as
+ * `diskHyps`. This is the source the freshness guard compares against and the
+ * source the writer transforms. Read-only.
+ */
+function readDbBackedFormalForCompare(): {
+  hypotheses:  HygieneAwareHypothesis[];
+  exists:      boolean;
+  chosenPath:  string | null;
+  chosenRole:  AttemptedPath["role"] | null;
+} {
+  const d = discoverHypothesisSources();
+  const chosen = d.diagnostics.formalChosen;
+  const chosenAttempt = chosen
+    ? d.diagnostics.formalAttempts.find(a => a.path === chosen)
+    : undefined;
+  const chosenRole = chosenAttempt?.role ?? null;
+  return {
+    hypotheses: d.formalHypotheses,
+    exists:     chosen !== null,
+    chosenPath: chosen,
+    chosenRole,
+  };
 }
 
 /**
@@ -302,13 +349,31 @@ export interface RunResetApplyOptions {
   /** When apply=true, override backup side effect (tests). Returns the
    *  written backup path, or throws on failure. */
   writeBackup?:    (snapshot: unknown, ts: Date) => string;
+  /** Required when the report's formal-chosen source is the SQLite DB row.
+   *  Operator-only confirmation that they intend to write through the DB
+   *  blob rather than research_lab.json. Without this, --apply against a
+   *  DB-chosen report is refused with `db_source_confirmation_required`. */
+  confirmDbSource?: boolean;
+  /** Override the DB-backed disk loader (tests). Same shape as
+   *  `readDbBackedFormalForCompare`. */
+  readDbBacked?:   () => ReturnType<typeof readDbBackedFormalForCompare>;
 }
 
 const DEFAULT_BACKUP_DIR_FILENAME = (ts: Date): string =>
   `hypothesis_reset_backup_${ts.toISOString().replace(/[:.]/g, "-")}.json`;
 
+const DEFAULT_DB_BACKUP_DIR_FILENAME = (ts: Date): string =>
+  `hypothesis_reset_db_backup_${ts.toISOString().replace(/[:.]/g, "-")}.json`;
+
 function defaultWriteBackup(snapshot: unknown, ts: Date): string {
   const filename = DEFAULT_BACKUP_DIR_FILENAME(ts);
+  const path = dataPath(filename);
+  fs.writeFileSync(path, JSON.stringify(snapshot, null, 2));
+  return path;
+}
+
+function defaultWriteDbBackup(snapshot: unknown, ts: Date): string {
+  const filename = DEFAULT_DB_BACKUP_DIR_FILENAME(ts);
   const path = dataPath(filename);
   fs.writeFileSync(path, JSON.stringify(snapshot, null, 2));
   return path;
@@ -322,16 +387,72 @@ function defaultWriteBackup(snapshot: unknown, ts: Date): string {
  * - With `apply=true`, writes a backup file to `data/`, then calls
  *   saveResearchLab with the transformed lab. Returns `ok: false` with the
  *   refusal reason if any step fails.
+ *
+ * Source modes:
+ *   - JSON: the report's formal-chosen source is `research_lab.json` (or a
+ *     `--source` JSON override). Backup is the JSON snapshot, freshness reads
+ *     research_lab.json, write goes through saveResearchLab (which mirrors
+ *     to DB if enabled).
+ *   - DB: the report's formal-chosen source is the SQLite `research_lab` row.
+ *     Apply requires `confirmDbSource: true` (the CLI surfaces this as the
+ *     operator-only `--confirm-source=db` flag). Backup snapshots the DB
+ *     blob to `data/hypothesis_reset_db_backup_<iso>.json`. Freshness reads
+ *     the live DB blob via `discoverHypothesisSources()` so the comparison
+ *     matches the source that powered the report. Source-change detection:
+ *     the apply re-discovers and refuses if the formal-chosen path or role
+ *     has moved between report time and apply time.
  */
 export function runResetApply(opts: RunResetApplyOptions): ApplyResult {
   const now = opts.now ?? new Date();
   const apply = Boolean(opts.apply);
   const report =
     opts.report ?? buildResetReport({ now });
-  const { hypotheses: diskHyps, exists } =
-    opts.diskHyps ? { hypotheses: opts.diskHyps, exists: true } : readLabForCompare();
+
+  // Identify the report's formal-chosen source role. The report carries the
+  // diagnostics so we can decide JSON vs DB up-front without re-discovering.
+  const reportChosenPath = report.meta.sourceDiagnostics.formalChosen;
+  const reportChosenAttempt = report.meta.sourceDiagnostics.formalAttempts.find(
+    a => a.path === reportChosenPath,
+  );
+  const reportChosenRole: AttemptedPath["role"] | null = reportChosenAttempt?.role ?? null;
+  const isDbSource = reportChosenRole === "db";
+  const sourceRole: "json" | "db" = isDbSource ? "db" : "json";
+
+  // Load disk-side hypotheses for freshness + plan comparison. DB-chosen
+  // reports read the live DB blob; JSON-chosen reports read
+  // research_lab.json. Tests can inject either via opts.diskHyps.
+  let diskHyps: HygieneAwareHypothesis[];
+  let exists: boolean;
+  let liveChosenPath: string | null = reportChosenPath;
+  let liveChosenRole: AttemptedPath["role"] | null = reportChosenRole;
+
+  if (opts.diskHyps) {
+    diskHyps = opts.diskHyps;
+    exists = true;
+  } else if (isDbSource) {
+    const dbLoader = opts.readDbBacked ?? readDbBackedFormalForCompare;
+    const r = dbLoader();
+    diskHyps      = r.hypotheses;
+    exists        = r.exists;
+    liveChosenPath = r.chosenPath;
+    liveChosenRole = r.chosenRole;
+  } else {
+    const r = readLabForCompare();
+    diskHyps = r.hypotheses;
+    exists   = r.exists;
+  }
 
   if (!exists) {
+    if (isDbSource) {
+      return {
+        ok: false,
+        reason: "research_lab_missing",
+        detail:
+          `Report's formal-chosen source was the SQLite DB row (${reportChosenPath}) ` +
+          `but no formal store could be re-discovered at apply time. ` +
+          `Re-run the report and confirm the DB is reachable before re-applying.`,
+      };
+    }
     return {
       ok: false,
       reason: "research_lab_missing",
@@ -339,23 +460,36 @@ export function runResetApply(opts: RunResetApplyOptions): ApplyResult {
     };
   }
 
-  // Hard refusal: when the discovery fell back to the SQLite DB row (or any
-  // non-formal role) as the report's formal-chosen source, the apply path
-  // cannot operate. A safe DB-aware archive mapping is out of scope for the
-  // PR that introduced DB discovery — apply must be implemented + tested
-  // separately. Dry-run remains supported.
-  const chosenAttempt = report.meta.sourceDiagnostics.formalAttempts.find(
-    a => a.path === report.meta.sourceDiagnostics.formalChosen,
-  );
-  if (apply && chosenAttempt && chosenAttempt.role === "db") {
+  // Source-change detection between report and apply. If the live discovery
+  // resolves a different formal-chosen path or role from the one the report
+  // was generated against, refuse — the apply would silently re-target a
+  // different store.
+  if (apply && (liveChosenPath !== reportChosenPath || liveChosenRole !== reportChosenRole)) {
     return {
       ok: false,
-      reason: "formal_source_not_applyable",
+      reason: "source_changed_between_report_and_apply",
       detail:
-        `Report's formal-chosen source is the SQLite DB row at ${chosenAttempt.path}. ` +
-        `--apply is REFUSED for this source until a DB-aware archive mapping is implemented + tested in a follow-up PR. ` +
-        `Read-only classification (dry-run) is supported. Operator may pass --source pointed at a JSON file ` +
-        `if they want to apply against a JSON store.`,
+        `Report's formal-chosen source was ${reportChosenRole ?? "(null)"}=${reportChosenPath ?? "(null)"} ` +
+        `but live discovery resolves to ${liveChosenRole ?? "(null)"}=${liveChosenPath ?? "(null)"} now. ` +
+        `Re-run the report before re-applying so the operator confirms the new source.`,
+    };
+  }
+
+  // Hard refusal: when the report's formal-chosen source is the SQLite DB row,
+  // require explicit operator confirmation. The CLI surfaces this as
+  // --confirm-source=db. Without it, --apply against a DB-chosen report is
+  // refused. This prevents a JSON-trained operator habit from inadvertently
+  // writing through the DB blob.
+  if (apply && isDbSource && !opts.confirmDbSource) {
+    return {
+      ok: false,
+      reason: "db_source_confirmation_required",
+      detail:
+        `Report's formal-chosen source is the SQLite DB row at ${reportChosenPath}. ` +
+        `--apply against a DB-chosen report requires explicit operator confirmation ` +
+        `(--confirm-source=db on the CLI). Only the safe archive buckets ` +
+        `(${SAFE_APPLY_BUCKETS.join(", ")}) are eligible. Re-run with --confirm-source=db ` +
+        `to proceed.`,
     };
   }
 
@@ -368,9 +502,11 @@ export function runResetApply(opts: RunResetApplyOptions): ApplyResult {
       ok: false,
       reason: "no_formal_records_loaded",
       detail:
-        `0 formal records loaded from ${dataPath("research_lab.json")} — refusing --apply. ` +
-        `Either re-run with --source=<absolute path to a populated research_lab.json> ` +
-        `or fix DATA_DIR before retrying. Memory-origin entries are never applied by this CLI.`,
+        `0 formal records loaded from ${isDbSource ? reportChosenPath : dataPath("research_lab.json")} — refusing --apply. ` +
+        (isDbSource
+          ? `Confirm the SQLite DB at ${reportChosenPath} still holds the research_lab row before retrying.`
+          : `Either re-run with --source=<absolute path to a populated research_lab.json> ` +
+            `or fix DATA_DIR before retrying. Memory-origin entries are never applied by this CLI.`),
     };
   }
 
@@ -388,6 +524,7 @@ export function runResetApply(opts: RunResetApplyOptions): ApplyResult {
   const countsBefore = { total: diskHyps.length };
   const summary =
     `Hypothesis reset apply: mode=${apply ? "applied" : "dry_run"}, ` +
+    `source=${sourceRole}, ` +
     `selectedBuckets=[${plan.selectedBuckets.join(", ")}], ` +
     `${plan.changes.length} record(s) would be archived (archive-not-delete), ` +
     `${plan.skipped.length} skipped. ` +
@@ -402,15 +539,27 @@ export function runResetApply(opts: RunResetApplyOptions): ApplyResult {
       countsAfter: { total: countsBefore.total },
       backupPath: null,
       summary,
+      sourceRole,
     };
   }
 
   // Apply: backup → transform → save.
-  const writeBackup = opts.writeBackup ?? defaultWriteBackup;
+  const writeBackup = opts.writeBackup
+    ?? (isDbSource ? defaultWriteDbBackup : defaultWriteBackup);
   let backupPath: string;
   try {
     backupPath = writeBackup(
-      { archivedAt: now.toISOString(), hypotheses: diskHyps },
+      isDbSource
+        ? {
+            archivedAt: now.toISOString(),
+            sourceRole: "db",
+            dbPath:     reportChosenPath,
+            // Snapshot the FULL lab blob (not just hypotheses) so an operator
+            // restoring from this backup can re-create the DB row's blob
+            // verbatim.
+            lab:        getResearchLab(),
+          }
+        : { archivedAt: now.toISOString(), sourceRole: "json", hypotheses: diskHyps },
       now,
     );
   } catch (e: any) {
@@ -423,7 +572,8 @@ export function runResetApply(opts: RunResetApplyOptions): ApplyResult {
   }
 
   // Load full lab via the existing loader so we don't accidentally drop
-  // topics/stats. Apply changes by id.
+  // topics/stats. The loader reads through readResearchBlob → DB-then-JSON,
+  // so DB-source and JSON-source paths converge here. Apply changes by id.
   const lab = getResearchLab();
   const changeById = new Map<string, ApplyChange>();
   for (const c of plan.changes) changeById.set(c.id, c);
@@ -438,6 +588,7 @@ export function runResetApply(opts: RunResetApplyOptions): ApplyResult {
       hygieneReason:   `applied via hypothesisResetApply: ${change.bucket}`,
       hygieneTaggedAt: now.toISOString(),
       hygieneTaggedBy: "operator-cli",
+      archivedAt:      now.toISOString(),
     } as any;
   });
 
@@ -461,5 +612,6 @@ export function runResetApply(opts: RunResetApplyOptions): ApplyResult {
     countsAfter: { total: lab.hypotheses.length },
     backupPath,
     summary,
+    sourceRole,
   };
 }

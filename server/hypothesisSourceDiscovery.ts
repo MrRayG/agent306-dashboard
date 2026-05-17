@@ -339,10 +339,11 @@ function nextSafeActionFor(
       return (
         `Formal store was DISCOVERED from the SQLite DB row (${diagnostics.formalChosen}) — ` +
         `${diagnostics.formalRecords} hypotheses. This matches what Research Lab / Agent HQ panels read. ` +
-        `--apply is REFUSED for this source today: the apply path's freshness guard reads research_lab.json, ` +
-        `not the DB row. Operator may export the DB blob to a JSON file and re-run with --source=<that path> ` +
-        `once a safe archive mapping for the DB row is implemented in a follow-up PR. Read-only classification ` +
-        `(dry-run) is supported now.`
+        `--apply is supported for this source but ONLY for the safe archive buckets ` +
+        `(archive_stale, archive_data_unavailable, archive_duplicate) and ONLY when the operator passes ` +
+        `--confirm-source=db on the CLI. The DB blob is snapshotted to ` +
+        `data/hypothesis_reset_db_backup_<iso>.json before any write. Promotion (memory→formal) and the ` +
+        `rewrite_* / needs_operator_review buckets remain hard-refused.`
       );
     }
     return "Formal hypothesis store loaded — operator may review buckets and apply archive-safe buckets via --apply.";
