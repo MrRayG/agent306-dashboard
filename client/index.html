@@ -20,10 +20,80 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Architects+Daughter&family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Fira+Code:wght@300..700&family=Geist+Mono:wght@100..900&family=Geist:wght@100..900&family=IBM+Plex+Mono:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&family=IBM+Plex+Sans:ital,wght@0,100..700;1,100..700&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Lora:ital,wght@0,400..700;1,400..700&family=Merriweather:ital,opsz,wght@0,18..144,300..900;1,18..144,300..900&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Outfit:wght@100..900&family=Oxanium:wght@200..800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Roboto+Mono:ital,wght@0,100..700;1,100..700&family=Roboto:ital,wght@0,100..900;1,100..900&family=Source+Code+Pro:ital,wght@0,200..900;1,200..900&family=Source+Serif+4:ital,opsz,wght@0,8..60,200..900;1,8..60,200..900&family=Space+Grotesk:wght@300..700&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+    <!--
+      Google Fonts stylesheet loaded NON-blocking. A vanilla
+      `<link rel="stylesheet">` in <head> is a render-blocking resource by
+      HTML spec: if the request hangs (corporate DNS rewrites, ad-blocking
+      DNS like NextDNS/Pi-hole, an intercepting proxy, or any environment
+      that black-holes `fonts.googleapis.com`) the browser will not paint
+      the page at all and the dashboard "spins forever" on first load.
+      That failure mode was independent of, and unreachable by, the
+      React-Query fetch timeout (#381) — by the time React-Query runs the
+      page has already been waiting on the stylesheet for minutes.
+
+      Pattern: load as a non-render-blocking print stylesheet, then swap
+      `media` to `all` once it resolves. If it never resolves the app
+      still boots (using the local fallback stack defined per-style and
+      in tailwind.config.ts), so worst case is "fonts look plain" instead
+      of "page is blank." The <noscript> fallback restores the original
+      blocking behavior for the rare no-JS visitor.
+    -->
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Architects+Daughter&family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Fira+Code:wght@300..700&family=Geist+Mono:wght@100..900&family=Geist:wght@100..900&family=IBM+Plex+Mono:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&family=IBM+Plex+Sans:ital,wght@0,100..700;1,100..700&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Lora:ital,wght@0,400..700;1,400..700&family=Merriweather:ital,opsz,wght@0,18..144,300..900;1,18..144,300..900&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Outfit:wght@100..900&family=Oxanium:wght@200..800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Roboto+Mono:ital,wght@0,100..700;1,100..700&family=Roboto:ital,wght@0,100..900;1,100..900&family=Source+Code+Pro:ital,wght@0,200..900;1,200..900&family=Source+Serif+4:ital,opsz,wght@0,8..60,200..900;1,8..60,200..900&family=Space+Grotesk:wght@300..700&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap"
+      media="print"
+      onload="this.media='all'; this.onload=null;"
+    >
+    <noscript>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Architects+Daughter&family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Fira+Code:wght@300..700&family=Geist+Mono:wght@100..900&family=Geist:wght@100..900&family=IBM+Plex+Mono:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&family=IBM+Plex+Sans:ital,wght@0,100..700;1,100..700&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Lora:ital,wght@0,400..700;1,400..700&family=Merriweather:ital,opsz,wght@0,18..144,300..900;1,18..144,300..900&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Outfit:wght@100..900&family=Oxanium:wght@200..800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Roboto+Mono:ital,wght@0,100..700;1,100..700&family=Roboto:ital,wght@0,100..900;1,100..900&family=Source+Code+Pro:ital,wght@0,200..900;1,200..900&family=Source+Serif+4:ital,opsz,wght@0,8..60,200..900;1,8..60,200..900&family=Space+Grotesk:wght@300..700&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap">
+    </noscript>
   </head>
   <body>
-    <div id="root"></div>
+    <!--
+      Pre-React boot marker. If JS fails to load, hangs on a render-
+      blocked asset, or the bundle errors during evaluation, the user
+      still sees something instead of a blank tab. React replaces this
+      content as soon as createRoot().render() runs.
+
+      The deferred "diagnostic" line surfaces after 30s and tells the
+      user exactly what to check — far more useful than a forever-
+      spinning blank tab when the failure is a network/DNS/proxy issue
+      that React-Query timeouts cannot reach (those only run after JS
+      has executed).
+    -->
+    <div id="root">
+      <div style="
+        position: fixed; inset: 0;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        background: #0e0f10; color: #e3e5e4;
+        font-family: 'Courier New', monospace;
+        text-align: center; padding: 1.5rem;
+      ">
+        <div style="font-size: 0.95rem; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.85;">
+          loading agent 306 …
+        </div>
+        <div id="boot-diagnostic" style="
+          margin-top: 1.25rem; max-width: 36rem;
+          font-size: 0.78rem; line-height: 1.5; color: rgba(227,229,228,0.55);
+          opacity: 0; transition: opacity 0.4s;
+        ">
+          still loading after 30s. The page may be stuck on a blocked asset.
+          Open DevTools → Network and look for a request to
+          <code>fonts.googleapis.com</code>, the app bundle, or
+          <code>/api/public/eval</code> that is pending or failed.
+          Try a different network (cellular hotspot) to rule out a DNS/proxy block.
+        </div>
+      </div>
+    </div>
+    <script>
+      // Surface the diagnostic if React hasn't mounted in 30s. React's
+      // createRoot().render() replaces #root's children, which will remove
+      // this element before the timer fires on a healthy boot.
+      setTimeout(function () {
+        var el = document.getElementById('boot-diagnostic');
+        if (el) el.style.opacity = '1';
+      }, 30000);
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
