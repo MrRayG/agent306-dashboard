@@ -7,6 +7,8 @@
  *   tsx scripts/hypothesisReset.ts --report=json   # JSON form (machine-readable)
  *   tsx scripts/hypothesisReset.ts --bucket=archive_stale          # dry-run apply plan
  *   tsx scripts/hypothesisReset.ts --bucket=archive_stale --apply  # ACTUAL archive
+ *   tsx scripts/hypothesisReset.ts --source=/abs/path/research_lab.json
+ *   tsx scripts/hypothesisReset.ts --data-dir=/abs/path/to/data
  *
  * Hard rules:
  *   - Default mode is dry-run (no `--apply`). Even with `--bucket=…`, the
@@ -16,10 +18,17 @@
  *     never a delete. The full snapshot is backed up to
  *     `data/hypothesis_reset_backup_<ISO>.json` first; if the backup fails
  *     the apply refuses.
+ *   - `--apply` is REFUSED when 0 formal records were loaded from the source
+ *     (typical when DATA_DIR points at the wrong volume in production).
  *   - Only the SAFE_APPLY_BUCKETS set (archive_stale, archive_data_unavailable,
- *     archive_duplicate) is eligible. rewrite_* / needs_operator_review /
- *     keep_active / promote_later_memory_origin require manual review and
- *     are hard-refused by `computeApplyPlan`.
+ *     archive_duplicate) is eligible. promote_later_memory_origin is HARD-
+ *     REFUSED — memory→formal promotion is operator-only and out of scope
+ *     for this CLI. rewrite_* / needs_operator_review / keep_active also
+ *     require manual review and are hard-refused.
+ *   - `--source=<abs path>` overrides the formal-store path entirely.
+ *     `--data-dir=<abs path>` re-roots the discovery (also relocates
+ *     memory_knowledge.json). Both are operator-only knobs; nothing in the
+ *     runtime passes them.
  *   - The CLI is OUT of the runtime / scheduler / autonomous loop. It is a
  *     foreground operator action.
  *
@@ -39,10 +48,19 @@ interface ParsedArgs {
   reportFmt: "text" | "json";
   buckets:  ResetBucket[];
   showHelp: boolean;
+  sourcePath: string | null;
+  dataDir:    string | null;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
-  const out: ParsedArgs = { apply: false, reportFmt: "text", buckets: [], showHelp: false };
+  const out: ParsedArgs = {
+    apply: false,
+    reportFmt: "text",
+    buckets: [],
+    showHelp: false,
+    sourcePath: null,
+    dataDir: null,
+  };
   for (const a of argv) {
     if (a === "--apply") out.apply = true;
     else if (a === "--help" || a === "-h") out.showHelp = true;
@@ -56,6 +74,10 @@ function parseArgs(argv: string[]): ParsedArgs {
         const t = b.trim();
         if (t) out.buckets.push(t as ResetBucket);
       }
+    } else if (a.startsWith("--source=")) {
+      out.sourcePath = a.slice("--source=".length).trim() || null;
+    } else if (a.startsWith("--data-dir=")) {
+      out.dataDir = a.slice("--data-dir=".length).trim() || null;
     }
   }
   return out;
@@ -70,13 +92,22 @@ usage:
   tsx scripts/hypothesisReset.ts --bucket=A --bucket=B # multiple buckets
   tsx scripts/hypothesisReset.ts --buckets=A,B,C       # CSV form
   tsx scripts/hypothesisReset.ts --bucket=A --apply    # WRITE (archive, not delete)
+  tsx scripts/hypothesisReset.ts --source=/abs/path/research_lab.json
+  tsx scripts/hypothesisReset.ts --data-dir=/abs/path/to/data
 
 flags:
   --apply         Write the archive. Without this flag the CLI is dry-run only.
+                  REFUSED when 0 formal records are loaded from the source.
   --bucket=…      Bucket to apply. Repeatable. Must be in:
                   ${SAFE_APPLY_BUCKETS.join(", ")}.
+                  promote_later_memory_origin is hard-refused — memory→formal
+                  promotion is operator-only and out of scope for this CLI.
   --buckets=…     Same as --bucket but takes a comma-separated list.
   --json          Render the report in JSON instead of text.
+  --source=PATH   Absolute path to a formal research_lab.json. Bypasses the
+                  default DATA_DIR/research_lab.json discovery. Operator-only.
+  --data-dir=DIR  Re-root the source discovery (relocates BOTH research_lab.json
+                  AND memory_knowledge.json under DIR). Operator-only.
   --help          Show this message.
 
 archive vs delete:
@@ -84,6 +115,13 @@ archive vs delete:
   archived_stale / archived_unsolvable / archived_irrelevant. Rows are NEVER
   removed from research_lab.json. A full pre-apply snapshot is written to
   data/hypothesis_reset_backup_<ISO>.json before any change.
+
+memory-origin coverage:
+  When the formal store is missing or empty, the report ALSO classifies
+  memory-origin hypothesis-titled entries from memory_knowledge.json into the
+  promote_later_memory_origin bucket so the operator can see promotion
+  candidates instead of "all zero". These entries are NEVER applied by the
+  CLI — promotion is operator-only.
 
 freshness guard:
   Apply refuses if the on-disk record count or per-id classification has
@@ -98,9 +136,13 @@ function main() {
     process.exit(0);
   }
 
+  const buildOpts: Parameters<typeof buildResetReport>[0] = {};
+  if (args.sourcePath) buildOpts.sourcePath = args.sourcePath;
+  if (args.dataDir) buildOpts.dataDir = args.dataDir;
+
   if (args.buckets.length === 0 && !args.apply) {
     // Plain report mode.
-    const report = buildResetReport();
+    const report = buildResetReport(buildOpts);
     if (args.reportFmt === "json") {
       console.log(JSON.stringify(report, null, 2));
     } else {
@@ -110,9 +152,24 @@ function main() {
   }
 
   // Apply (dry-run by default unless --apply).
-  const report = buildResetReport();
+  const report = buildResetReport(buildOpts);
   if (args.apply && args.buckets.length === 0) {
     console.error("--apply requires at least one --bucket=… selection.");
+    process.exit(1);
+  }
+
+  // Build the apply options. The apply path reads the formal store on its
+  // own, but must honour the same overrides — we don't currently thread
+  // overrides into runResetApply's lab loader because the production CLI
+  // always operates on the real DATA_DIR. Surface a clear refusal if the
+  // operator combined --apply with a --source override so they don't
+  // accidentally apply against the wrong store.
+  if (args.apply && (args.sourcePath || args.dataDir)) {
+    console.error(
+      "--apply combined with --source/--data-dir is not supported. " +
+      "Run the report with the override first, validate it, then re-run --apply " +
+      "after pointing the runtime DATA_DIR at the same store.",
+    );
     process.exit(1);
   }
 

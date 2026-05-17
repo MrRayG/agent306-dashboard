@@ -73,7 +73,9 @@ export type ApplyRefusalReason =
   | "no_records_to_change"
   | "save_lab_failed"
   | "backup_failed"
-  | "research_lab_missing";
+  | "research_lab_missing"
+  | "no_formal_records_loaded"
+  | "memory_origin_not_appliable";
 
 export interface ApplyChange {
   id:            string;
@@ -143,16 +145,27 @@ function reportIsFresh(
   diskHyps: HygieneAwareHypothesis[],
   now: Date,
 ): { ok: true } | { ok: false; reason: string } {
-  if (rep.meta.totalRecords !== diskHyps.length) {
+  // Compare ONLY the formal (research_lab.json) population. Memory-origin
+  // entries are listed for visibility but are not part of the on-disk
+  // formal store and must not influence freshness comparisons.
+  const formalCount = typeof rep.meta.formalRecords === "number"
+    ? rep.meta.formalRecords
+    : rep.meta.totalRecords;
+  if (formalCount !== diskHyps.length) {
     return {
       ok: false,
-      reason: `report has ${rep.meta.totalRecords} records but research_lab.json has ${diskHyps.length} on disk now — re-run the report before applying`,
+      reason: `report has ${formalCount} formal records but research_lab.json has ${diskHyps.length} on disk now — re-run the report before applying`,
     };
   }
   const diskIds = new Set(diskHyps.map(h => h.id));
   const reportIds: string[] = [];
   for (const section of rep.buckets) {
-    for (const e of section.entries) reportIds.push(e.id);
+    for (const e of section.entries) {
+      // Memory-origin ids carry the synthetic `memory:` prefix and never
+      // exist in the on-disk formal store. Skip them from the comparison.
+      if ((e as { origin?: string }).origin === "memory") continue;
+      reportIds.push(e.id);
+    }
   }
   for (const id of reportIds) {
     if (!diskIds.has(id)) {
@@ -192,6 +205,13 @@ export function computeApplyPlan(
     return { ok: false, reason: "no_buckets_selected", detail: "selectedBuckets is empty" };
   }
   for (const b of requested) {
+    if (b === "promote_later_memory_origin") {
+      return {
+        ok: false,
+        reason: "memory_origin_not_appliable",
+        detail: "bucket 'promote_later_memory_origin' is memory-origin and never applied by this CLI — promotion is operator-only via server/memoryHypothesisHygiene.ts",
+      };
+    }
     if (!SAFE_APPLY_BUCKETS.includes(b)) {
       return {
         ok: false,
@@ -207,6 +227,9 @@ export function computeApplyPlan(
   for (const section of rep.buckets) {
     if (!allowed.has(section.bucket)) continue;
     for (const e of section.entries) {
+      // Defense in depth: memory-origin entries never reach the apply path
+      // — even if a future buggy classifier put one in an archive_* bucket.
+      if ((e as { origin?: string }).origin === "memory") continue;
       entriesById.set(e.id, e);
       bucketById.set(e.id, section.bucket);
     }
@@ -312,6 +335,21 @@ export function runResetApply(opts: RunResetApplyOptions): ApplyResult {
       ok: false,
       reason: "research_lab_missing",
       detail: `research_lab.json does not exist at ${dataPath("research_lab.json")}`,
+    };
+  }
+
+  // Hard refusal: --apply is only meaningful when there are formal records
+  // to archive. With zero formal records loaded, the operator is most likely
+  // pointed at the wrong DATA_DIR / --source — pushing an apply would write
+  // a no-op backup and confuse triage.
+  if (apply && diskHyps.length === 0) {
+    return {
+      ok: false,
+      reason: "no_formal_records_loaded",
+      detail:
+        `0 formal records loaded from ${dataPath("research_lab.json")} — refusing --apply. ` +
+        `Either re-run with --source=<absolute path to a populated research_lab.json> ` +
+        `or fix DATA_DIR before retrying. Memory-origin entries are never applied by this CLI.`,
     };
   }
 

@@ -72,7 +72,7 @@ describe("hypothesisResetReport — empty input", () => {
 
   it("returns a well-shaped report when hypotheses is empty", () => {
     const r = buildResetReport({ now: new Date("2026-05-17T00:00:00Z"), hypotheses: [] });
-    assert.equal(r.schemaVersion, "hypothesis-reset-report-1");
+    assert.equal(r.schemaVersion, "hypothesis-reset-report-2");
     assert.equal(r.meta.totalRecords, 0);
     assert.equal(r.buckets.length, RESET_BUCKETS.length);
     for (const b of r.buckets) assert.equal(b.count, 0);

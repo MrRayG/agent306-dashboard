@@ -94,7 +94,6 @@ describe("hypothesisResetApply — computeApplyPlan refusals", () => {
     "rewrite_missing_evidence_path",
     "needs_operator_review",
     "keep_active",
-    "promote_later_memory_origin",
   ]) {
     it(`refuses '${unsafe}' as not safe to apply`, () => {
       const rep = buildResetReport({ hypotheses: [] });
@@ -103,6 +102,13 @@ describe("hypothesisResetApply — computeApplyPlan refusals", () => {
       if (!result.ok) assert.equal(result.reason, "bucket_not_safe");
     });
   }
+
+  it("hard-refuses 'promote_later_memory_origin' with a dedicated reason", () => {
+    const rep = buildResetReport({ hypotheses: [] });
+    const result = computeApplyPlan(rep, [], { selectedBuckets: ["promote_later_memory_origin" as any] });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.reason, "memory_origin_not_appliable");
+  });
 });
 
 describe("hypothesisResetApply — change list", () => {
