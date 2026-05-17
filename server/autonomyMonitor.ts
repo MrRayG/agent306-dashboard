@@ -103,6 +103,10 @@ import {
   type WorkloadBudgetVisibility,
 } from "./workloadBudgetVisibility.js";
 import {
+  buildHypothesisIntakeAuditVisibility,
+  type HypothesisIntakeAuditVisibility,
+} from "./hypothesisIntakeAuditVisibility.js";
+import {
   scoreHypothesisRiskImpactBatch,
   summarizeRiskImpactScores,
   NEUTRAL_REASON_CODES,
@@ -204,6 +208,15 @@ export interface AutonomyMonitorSnapshot {
    * underlying sources are missing.
    */
   workloadBudget: WorkloadBudgetVisibility;
+  /**
+   * Read-only hypothesis intake audit: formation-source counts, dry-run
+   * reset/classification buckets, active cap pressure, intake-quality gate
+   * projection, and operator-only next safe actions. Pure proposal — no
+   * archive or apply path runs from this block. See
+   * `server/hypothesisIntakeAuditVisibility.ts` for the full invariant list.
+   * Always present; degrades to zero counts when source files are missing.
+   */
+  hypothesisIntakeAudit: HypothesisIntakeAuditVisibility;
   stages:         AutonomyStage[];
   /** Summary of "what is visible now / what remains" — text only. */
   pipelineSummary: {
@@ -1141,6 +1154,7 @@ export function buildAutonomyMonitorSnapshot(now: Date = new Date()): AutonomyMo
       mergedCorrectiveObligations: selfRuleEnforcement.counts.mergedCorrectiveObligations,
     },
   });
+  const hypothesisIntakeAudit = buildHypothesisIntakeAuditVisibility({ now });
 
   return {
     generatedAt:    now.toISOString(),
@@ -1149,6 +1163,7 @@ export function buildAutonomyMonitorSnapshot(now: Date = new Date()): AutonomyMo
     promotionGateAuthority: buildPromotionGateAuthorityVisibility(),
     selfRuleEnforcement,
     workloadBudget,
+    hypothesisIntakeAudit,
     stages,
     pipelineSummary: {
       implementedStageCount: implemented,
