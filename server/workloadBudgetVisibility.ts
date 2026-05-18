@@ -50,10 +50,12 @@
  */
 
 import * as fs from "fs";
+import * as path from "path";
 import { db } from "./db.js";
 import { engineEvents, engineRuns } from "@shared/schema";
 import { desc, gte, sql } from "drizzle-orm";
 import { dataPath } from "./dataPaths.js";
+import { discoverHypothesisSources } from "./hypothesisSourceDiscovery.js";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -74,7 +76,7 @@ export interface WorkloadCostDriver {
   /** Coarse grouping. */
   kind:   "cycle_duration" | "engine_run" | "engine_event" | "queue" | "kb" | "memory" | "self_rule";
   /** Origin source — for the provenance tag. */
-  source: "engine_runs" | "engine_events" | "research_lab.json" | "memory_knowledge.json" | "self_rule_enforcement";
+  source: "engine_runs" | "engine_events" | "research_lab.json" | "sqlite:research_lab" | "memory_knowledge.json" | "self_rule_enforcement";
   /** True iff the source was unreadable / missing when this counter was built. */
   dataMissing: boolean;
 }
@@ -239,14 +241,63 @@ export interface WorkloadBudgetVisibility {
 
 // ── Defensive readers ───────────────────────────────────────────────────────
 
-function readResearchLabSafe(): { hypotheses?: unknown[]; topics?: unknown[] } | null {
+/**
+ * Discover the formal hypothesis store via the shared DB-aware helper.
+ * Mirrors the lookup order used by getResearchLab() / readResearchBlob() and
+ * the Hypothesis Intake Audit / reset CLI: research_lab.json first, then the
+ * SQLite research_lab row, then the .bak sibling. The dashboard, Autonomy
+ * Monitor, and CLI all share this so the API / Workload Budget headline
+ * cannot disagree with the Hypothesis Intake Audit and pipeline counts about
+ * which store powers the formal hypothesis backlog.
+ *
+ * Returns null only when the discovery helper itself throws — every other
+ * "no source found" path surfaces as a structured diagnostics object with a
+ * formalRecords of 0 and a non-null `formalChosen` or detailed otherSources
+ * note, which we translate into a dataMissing message that distinguishes
+ * "DB canonical store unavailable" from "JSON fallback missing".
+ */
+function readFormalHypothesesDiscovered(): {
+  records:           number;
+  formalChosen:      string | null;
+  formalChosenRole:  "formal" | "memory" | "legacy-candidate" | "db" | null;
+  jsonExists:        boolean;
+  jsonReadable:      boolean;
+  dbAvailable:       boolean;
+  dbRecords:         number;
+  dbLocator:         string | null;
+  dbError?:          string;
+  available:         boolean;
+} {
   try {
-    const p = dataPath("research_lab.json");
-    if (!fs.existsSync(p)) return null;
-    const parsed = JSON.parse(fs.readFileSync(p, "utf8"));
-    return parsed && typeof parsed === "object" ? parsed : null;
+    const d = discoverHypothesisSources();
+    const diag = d.diagnostics;
+    const chosen = diag.formalAttempts.find(a => a.path === diag.formalChosen) ?? null;
+    const jsonAttempt = diag.formalAttempts.find(a => a.role === "formal") ?? null;
+    const dbObs = diag.otherSources.find(s => s.origin === "db_research_lab");
+    return {
+      records:          d.formalHypotheses.length,
+      formalChosen:     diag.formalChosen,
+      formalChosenRole: chosen ? chosen.role : null,
+      jsonExists:       !!jsonAttempt?.exists,
+      jsonReadable:     !!jsonAttempt?.readable,
+      dbAvailable:      !!dbObs?.available,
+      dbRecords:        dbObs?.count ?? 0,
+      dbLocator:        dbObs?.locator ?? null,
+      dbError:          dbObs?.error,
+      available:        true,
+    };
   } catch {
-    return null;
+    return {
+      records:          0,
+      formalChosen:     null,
+      formalChosenRole: null,
+      jsonExists:       false,
+      jsonReadable:     false,
+      dbAvailable:      false,
+      dbRecords:        0,
+      dbLocator:        null,
+      available:        false,
+    };
   }
 }
 
@@ -510,6 +561,8 @@ function buildTopDrivers(
     events: boolean;
     lab: boolean;
     memory: boolean;
+    /** Which store actually backed the formal hypothesis count. */
+    formalSource: "db" | "json";
   },
 ): WorkloadCostDriver[] {
   const drivers: WorkloadCostDriver[] = [];
@@ -551,7 +604,7 @@ function buildTopDrivers(
     label:  "formal hypotheses backlog",
     count:  counts.formalHypotheses,
     kind:   "queue",
-    source: "research_lab.json",
+    source: sources.formalSource === "db" ? "sqlite:research_lab" : "research_lab.json",
     dataMissing: !sources.lab,
   });
   drivers.push({
@@ -632,9 +685,43 @@ export function buildWorkloadBudgetVisibility(
   const eventByName = countEngineEventsByNameSinceSafe(eventNames, sinceIso);
   if (!eventByName.available) dataMissingNotes.push("engine_events per-name aggregation failed");
 
-  const lab = readResearchLabSafe();
-  if (lab === null) dataMissingNotes.push("research_lab.json missing or unreadable");
-  const formalHypotheses = Array.isArray(lab?.hypotheses) ? lab!.hypotheses!.length : 0;
+  // DB-aware formal hypothesis discovery. Post-migration the canonical store
+  // is the SQLite research_lab row, not research_lab.json. The headline count
+  // and the data-source notes both reflect whichever source the runtime would
+  // read — never "0 because the JSON file is missing" when the DB row has
+  // records.
+  const lab = readFormalHypothesesDiscovered();
+  if (!lab.available) {
+    dataMissingNotes.push("formal hypothesis discovery failed");
+  } else if (lab.formalChosen === null) {
+    // No source yielded a parseable formal store at all.
+    if (!lab.dbAvailable) {
+      dataMissingNotes.push(
+        `formal hypothesis store unavailable: SQLite research_lab row unreadable` +
+        (lab.dbLocator ? ` at ${lab.dbLocator}` : ``) +
+        (lab.dbError ? ` (${lab.dbError})` : ``) +
+        ` and research_lab.json missing or unreadable`,
+      );
+    } else {
+      dataMissingNotes.push(
+        `formal hypothesis store empty: SQLite research_lab row reachable at ${lab.dbLocator} but reports 0 records; research_lab.json fallback also missing`,
+      );
+    }
+  } else if (lab.formalChosenRole === "db") {
+    // DB row is serving the formal count. Note JSON fallback state for
+    // operator visibility, but don't warn that the JSON is "missing" — the
+    // canonical DB store is present and the count is non-zero.
+    if (!lab.jsonExists) {
+      dataMissingNotes.push(
+        `research_lab.json fallback not present (DATA_DIR=${path.dirname(dataPath("research_lab.json"))}); SQLite research_lab row is the canonical store and reports ${lab.records} record(s)`,
+      );
+    } else if (!lab.jsonReadable) {
+      dataMissingNotes.push(
+        `research_lab.json fallback present but unreadable; SQLite research_lab row is the canonical store and reports ${lab.records} record(s)`,
+      );
+    }
+  }
+  const formalHypotheses = lab.records;
 
   const memory = readMemoryKnowledgeSafe();
   if (memory === null) dataMissingNotes.push("memory_knowledge.json missing or unreadable");
@@ -664,11 +751,16 @@ export function buildWorkloadBudgetVisibility(
 
   const { band, reason } = classifyPressure(counts, thresholds);
 
+  // "lab" is reachable when EITHER the formal-chosen source resolved (JSON or
+  // DB) OR the DB row is reachable (even empty). Only "no source at all" lights
+  // up the dataMissing tag on the formal_hypotheses driver.
+  const labReachable = lab.available && (lab.formalChosen !== null || lab.dbAvailable);
   const topDrivers = buildTopDrivers(counts, eventByName.counts, {
-    runs:   latest.available && runs.available,
-    events: events.available && eventByName.available,
-    lab:    lab !== null,
-    memory: memory !== null,
+    runs:        latest.available && runs.available,
+    events:      events.available && eventByName.available,
+    lab:         labReachable,
+    memory:      memory !== null,
+    formalSource: lab.formalChosenRole === "db" ? "db" : "json",
   });
 
   const externalCostReport = input.externalCostReport ?? EXTERNAL_COST_REPORT_OPENROUTER_2026_05_17;

@@ -28,6 +28,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import * as crypto from "crypto";
+import Database from "better-sqlite3";
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "phase-budget-vis-test-"));
 process.env.DATA_DIR = TMP;
@@ -106,8 +107,24 @@ describe("workloadBudgetVisibility — empty / missing-data behaviour", () => {
     assert.equal(v.counts.formalHypotheses, 0);
     assert.equal(v.counts.kbEntries, 0);
     assert.equal(v.counts.memoryHypothesesBlocked, 0);
-    // Both JSON data sources are missing — must be noted, not thrown.
-    assert.ok(v.dataMissingNotes.includes("research_lab.json missing or unreadable"));
+    // Both data sources are missing — must be noted, not thrown. The formal
+    // store note is DB-aware: it mentions both the SQLite research_lab row
+    // and the JSON fallback, since post-migration the DB row is canonical.
+    // Depending on whether the test DB was pre-created (the harness opens it
+    // for engine_runs / engine_events), the row may be reachable-but-empty OR
+    // unreachable entirely. Either is acceptable; the legacy single-line
+    // warning must be gone, and the new note must reference both sources.
+    assert.ok(
+      v.dataMissingNotes.some(n =>
+        /sqlite research_lab/i.test(n) &&
+        /research_lab\.json/i.test(n),
+      ),
+      `expected DB-aware formal-store note referencing both sources, got: ${JSON.stringify(v.dataMissingNotes)}`,
+    );
+    assert.ok(
+      !v.dataMissingNotes.includes("research_lab.json missing or unreadable"),
+      "legacy JSON-only warning must not appear",
+    );
     assert.ok(v.dataMissingNotes.includes("memory_knowledge.json missing or unreadable"));
   });
 
@@ -399,5 +416,172 @@ describe("workloadBudgetVisibility — wired into autonomy monitor snapshot", ()
     buildAutonomyMonitorSnapshot();
     const after = new Set(fs.readdirSync(TMP));
     assert.deepEqual([...after].sort(), [...before].sort());
+  });
+});
+
+// ── DB-aware formal hypothesis count ────────────────────────────────────────
+//
+// Production-incident pin: when research_lab.json is missing or absent (post-
+// migration the canonical store moves into the SQLite research_lab row), the
+// Workload Budget headline previously showed `formal hypotheses 0` and noted
+// `research_lab.json missing or unreadable`. The dashboard's Hypothesis
+// Intake Audit and Pipeline already read the DB row via the shared discovery
+// helper (PR #394). This test pins that the Workload Budget block uses the
+// same path: when the DB row holds N records and the JSON file is absent,
+// counts.formalHypotheses === N, the formal_hypotheses driver tags its source
+// as "sqlite:research_lab", and dataMissingNotes does NOT warn about the JSON
+// being missing — it notes the JSON fallback is absent while the DB canonical
+// store is present.
+
+const DB_PATH = process.env.DB_PATH!;
+
+function seedResearchLabDbRow(hypCount: number): void {
+  const seed = new Database(DB_PATH);
+  try {
+    seed.exec(`
+      CREATE TABLE IF NOT EXISTS research_lab (
+        id TEXT PRIMARY KEY,
+        blob TEXT NOT NULL,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+    `);
+    const hyps: Array<Record<string, unknown>> = [];
+    for (let i = 0; i < hypCount; i++) {
+      hyps.push({
+        id:    `db_${i}`,
+        claim: `db hypothesis ${i}`,
+        status: "forming",
+      });
+    }
+    const blob = {
+      topics:      [],
+      hypotheses:  hyps,
+      stats:       {},
+      lastUpdated: "2026-05-17T00:00:00Z",
+    };
+    seed.prepare("INSERT OR REPLACE INTO research_lab (id, blob) VALUES (?, ?)").run("main", JSON.stringify(blob));
+  } finally {
+    seed.close();
+  }
+}
+
+function clearResearchLabDbRow(): void {
+  if (!fs.existsSync(DB_PATH)) return;
+  const seed = new Database(DB_PATH);
+  try {
+    const tbl = seed.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='research_lab'").get();
+    if (tbl) seed.prepare("DELETE FROM research_lab").run();
+  } finally {
+    seed.close();
+  }
+}
+
+describe("workloadBudgetVisibility — DB-aware formal hypothesis count", () => {
+  before(() => {
+    wipeDb();
+    clearLab();
+    clearMemory();
+    clearResearchLabDbRow();
+  });
+
+  after(() => {
+    clearResearchLabDbRow();
+    assert.equal(hash(REAL_RESEARCH_LAB), PRE_RESEARCH, "real research_lab.json must not be touched");
+    assert.equal(hash(REAL_MEMORY_KB),    PRE_MEMORY,   "real memory_knowledge.json must not be touched");
+  });
+
+  it("reads formal count from the SQLite research_lab row when research_lab.json is missing", () => {
+    clearLab();
+    clearResearchLabDbRow();
+    seedResearchLabDbRow(434);
+
+    const v = buildWorkloadBudgetVisibility({ now: new Date("2026-05-17T00:00:00Z") });
+
+    assert.equal(v.counts.formalHypotheses, 434, "headline must reflect the DB-backed formal count, not 0");
+
+    // dataMissingNotes MUST NOT warn that research_lab.json is "missing or
+    // unreadable" when the SQLite canonical store has records — it may note
+    // the JSON fallback is absent, but only alongside the DB-present claim.
+    const noteJoined = v.dataMissingNotes.join("\n");
+    assert.ok(
+      !/^research_lab\.json missing or unreadable$/m.test(noteJoined),
+      `dataMissingNotes should not include the legacy JSON-only warning when DB has records: ${JSON.stringify(v.dataMissingNotes)}`,
+    );
+    // It should explicitly acknowledge the DB row is canonical.
+    const dbNote = v.dataMissingNotes.find(n =>
+      /sqlite research_lab row is the canonical store/i.test(n) &&
+      /434 record/.test(n),
+    );
+    // The note is informational (JSON fallback missing) — only present when
+    // research_lab.json is absent. In this test that file IS absent, so we
+    // expect the note.
+    assert.ok(dbNote, `expected DB-canonical note in dataMissingNotes, got: ${JSON.stringify(v.dataMissingNotes)}`);
+  });
+
+  it("formal_hypotheses driver tags provenance as sqlite:research_lab when DB-backed", () => {
+    clearLab();
+    clearResearchLabDbRow();
+    seedResearchLabDbRow(434);
+
+    const v = buildWorkloadBudgetVisibility({ now: new Date("2026-05-17T00:00:00Z") });
+    const formalDriver = v.topDrivers.find(d => d.key === "formal_hypotheses");
+    assert.ok(formalDriver, "formal_hypotheses driver should appear in topDrivers when count is large");
+    assert.equal(formalDriver!.source, "sqlite:research_lab");
+    assert.equal(formalDriver!.count, 434);
+    assert.equal(formalDriver!.dataMissing, false, "DB row is present and parseable — dataMissing must be false");
+  });
+
+  it("research_lab.json wins as canonical formal-chosen when present (DB row not chosen)", () => {
+    clearResearchLabDbRow();
+    seedResearchLabDbRow(434);
+    fs.writeFileSync(path.join(TMP, "research_lab.json"), JSON.stringify({
+      hypotheses: Array.from({ length: 5 }, (_, i) => ({ id: `j${i}` })),
+    }));
+
+    const v = buildWorkloadBudgetVisibility({ now: new Date("2026-05-17T00:00:00Z") });
+
+    // The discovery helper prefers research_lab.json as the formal-chosen
+    // source when it is parseable and non-empty. The Workload Budget headline
+    // must mirror that — it shows 5 (JSON), not 434 (DB). The DB row is
+    // surfaced via the source-discovery `otherSources` reconciliation; the
+    // workload-budget headline intentionally tracks the formal-chosen count.
+    assert.equal(v.counts.formalHypotheses, 5);
+    const formalDriver = v.topDrivers.find(d => d.key === "formal_hypotheses");
+    assert.ok(formalDriver);
+    assert.equal(formalDriver!.source, "research_lab.json");
+
+    clearLab();
+  });
+
+  it("notes only DB-row failure (not 'JSON missing') when DB is unreachable but JSON also absent", () => {
+    clearLab();
+    clearResearchLabDbRow();
+    // Don't seed anything — neither JSON nor a populated DB row exists.
+
+    const v = buildWorkloadBudgetVisibility({ now: new Date("2026-05-17T00:00:00Z") });
+    assert.equal(v.counts.formalHypotheses, 0);
+
+    // The note must mention BOTH sources, not just the JSON file. Crucially,
+    // the legacy single-line warning is gone.
+    const note = v.dataMissingNotes.find(n =>
+      /sqlite research_lab/i.test(n) && /research_lab\.json/i.test(n),
+    );
+    assert.ok(note, `expected DB-aware combined note, got: ${JSON.stringify(v.dataMissingNotes)}`);
+    assert.ok(
+      !v.dataMissingNotes.includes("research_lab.json missing or unreadable"),
+      "legacy JSON-only warning must not appear",
+    );
+  });
+
+  it("autonomy monitor snapshot surfaces the DB-backed formal count too", () => {
+    clearLab();
+    clearResearchLabDbRow();
+    seedResearchLabDbRow(434);
+
+    const snap = buildAutonomyMonitorSnapshot(new Date("2026-05-17T00:00:00Z"));
+    assert.equal(snap.workloadBudget.counts.formalHypotheses, 434);
+    // Should not regress the pipeline / hypothesis-intake-audit count that
+    // already reads via discovery.
+    assert.equal(snap.stages.length, 11);
   });
 });
