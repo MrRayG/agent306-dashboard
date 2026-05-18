@@ -120,7 +120,10 @@ describe("hypothesisIntakeAuditVisibility — empty / missing-data behaviour", (
     assert.equal(v.memoryOrigin.unpromoted, 0);
     assert.equal(v.intakeQuality.totalExamined, 0);
     assert.equal(v.intakeQuality.wouldFailCount, 0);
-    assert.ok(v.dataMissingNotes.some(n => n.includes("research_lab.json missing")));
+    assert.ok(
+      v.dataMissingNotes.some(n => n.includes("No formal hypothesis store discovered")),
+      "expected dataMissingNotes to mention the missing formal store",
+    );
     assert.ok(v.dataMissingNotes.some(n => n.includes("memory_knowledge.json missing")));
     // Reset buckets all present, all 0.
     assert.equal(v.resetBuckets.length, RESET_BUCKETS.length);

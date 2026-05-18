@@ -85,7 +85,7 @@ import {
   type MemoryKnowledgeFile,
 } from "./memoryHypothesisHygiene.js";
 import {
-  describeSourceDiagnostics,
+  discoverHypothesisSources,
   type SourceDiscoveryDiagnostics,
 } from "./hypothesisSourceDiscovery.js";
 
@@ -123,8 +123,11 @@ export interface FormationSource {
   key:    string;
   /** Human-readable label. */
   label:  string;
-  /** Where the records live. */
-  store:  "research_lab.json" | "memory_knowledge.json";
+  /** Where the records live. Post-migration, the canonical formal store is
+   *  the SQLite `research_lab` row; `research_lab.json` remains the
+   *  pre-migration / fallback path. `(none)` is reported when no formal
+   *  store was discovered at all. */
+  store:  "research_lab.json" | "memory_knowledge.json" | "sqlite:research_lab" | "(none)";
   /** What kind of intake it is. */
   kind:   "formal" | "memory_origin" | "daily_cycle_seed" | "cold_start_seed" | "research_analysis" | "research_thread" | "manual" | "other";
   /** Count of records in this source. */
@@ -413,23 +416,8 @@ const ENFORCEMENT_SITE = Object.freeze({
 });
 
 // ── Defensive readers ───────────────────────────────────────────────────────
-
-interface ResearchLabBlob {
-  hypotheses?: HygieneAwareHypothesis[];
-  topics?:     Array<{ id?: string; status?: string }>;
-}
-
-function readResearchLabSafe(): { blob: ResearchLabBlob | null; available: boolean } {
-  try {
-    const p = dataPath("research_lab.json");
-    if (!fs.existsSync(p)) return { blob: null, available: false };
-    const parsed = JSON.parse(fs.readFileSync(p, "utf8"));
-    if (parsed && typeof parsed === "object") return { blob: parsed as ResearchLabBlob, available: true };
-    return { blob: null, available: false };
-  } catch {
-    return { blob: null, available: false };
-  }
-}
+// Formal hypotheses are read via hypothesisSourceDiscovery (DB-aware).
+// Only memory_knowledge.json is still read directly here.
 
 function readMemoryKnowledgeSafe(): { blob: MemoryKnowledgeFile | null; available: boolean } {
   try {
@@ -833,25 +821,31 @@ function buildActiveCapPolicy(
 // ── Formation-source audit ──────────────────────────────────────────────────
 
 function buildFormationSources(
-  lab: ResearchLabBlob | null,
-  labMissing: boolean,
+  hyps: HygieneAwareHypothesis[],
+  formalStoreLabel: FormationSource["store"],
+  formalDataMissing: boolean,
   memory: MemoryKnowledgeFile | null,
   memoryMissing: boolean,
 ): FormationSource[] {
   const sources: FormationSource[] = [];
 
-  // 1. Formal research_lab.json hypotheses.
-  const hyps: HygieneAwareHypothesis[] = Array.isArray(lab?.hypotheses)
-    ? (lab!.hypotheses as HygieneAwareHypothesis[])
-    : [];
+  // 1. Formal hypotheses (post-migration canonical store is the SQLite
+  //    research_lab row; pre-migration callers see research_lab.json). The
+  //    label here mirrors the discovery diagnostics so the dashboard and
+  //    CLI cannot disagree about which source was read.
+  const storeIsDb = formalStoreLabel === "sqlite:research_lab";
   sources.push({
     key:   "formal",
-    label: "Formal research-lab hypotheses",
-    store: "research_lab.json",
+    label: storeIsDb
+      ? "Formal research-lab hypotheses (SQLite research_lab[id=main].blob.hypotheses[])"
+      : "Formal research-lab hypotheses",
+    store: formalStoreLabel,
     kind:  "formal",
     count: hyps.length,
-    dataMissing: labMissing,
-    codePathHint: "server/researchEngine.ts:addHypothesis (called from researchAnalysisEngine, dailyCycleEngine, research-agenda, routes)",
+    dataMissing: formalDataMissing,
+    codePathHint: storeIsDb
+      ? "server/researchEngine.ts:addHypothesis → readResearchBlob/writeResearchBlob (SQLite); JSON fallback when DB row absent"
+      : "server/researchEngine.ts:addHypothesis (called from researchAnalysisEngine, dailyCycleEngine, research-agenda, routes); post-migration this content lives in the SQLite research_lab row",
   });
 
   // 2. Memory-origin hypothesis-titled entries.
@@ -888,10 +882,10 @@ function buildFormationSources(
     sources.push({
       key:   `formal_source:${src}`,
       label: `Formal records with source='${src}'`,
-      store: "research_lab.json",
+      store: formalStoreLabel,
       kind,
       count,
-      dataMissing: labMissing,
+      dataMissing: formalDataMissing,
       codePathHint: src === "daily_cycle"
         ? "server/dailyCycleEngine.ts (briefing + cold-start seeders)"
         : src === "cold_start_seed"
@@ -1244,16 +1238,35 @@ export function buildHypothesisIntakeAuditVisibility(
   };
   const manualBacklogThreshold = opts.manualBacklogThreshold ?? resolveManualBacklogThreshold();
 
-  const { blob: lab, available: labAvail } = readResearchLabSafe();
+  // DB-aware discovery: the formal-chosen source is the SQLite research_lab
+  // row when research_lab.json is missing, mirroring readResearchBlob() and
+  // the reset CLI. The dashboard, Autonomy Monitor, and CLI all share this
+  // helper so they cannot disagree about what powers the formal count.
+  const discovered = discoverHypothesisSources();
+  const sourceDiagnostics = discovered.diagnostics;
+  const hyps: HygieneAwareHypothesis[] = discovered.formalHypotheses;
+
+  // Identify what kind of store the formal-chosen source represents so the
+  // formationSources rows can label themselves correctly and so the
+  // dataMissingNotes don't say "research_lab.json missing" when the DB row
+  // is in fact serving the same content.
+  const formalChosenAttempt = sourceDiagnostics.formalAttempts.find(
+    a => a.path === sourceDiagnostics.formalChosen,
+  );
+  const formalStoreLabel: FormationSource["store"] =
+    !formalChosenAttempt
+      ? "(none)"
+      : formalChosenAttempt.role === "db"
+        ? "sqlite:research_lab"
+        : "research_lab.json";
+  // "formal data missing" for the formationSources row is true only when
+  // NEITHER the JSON file NOR the DB row yielded a parseable formal store.
+  const formalDataMissing = sourceDiagnostics.formalChosen === null;
+
   const { blob: memory, available: memAvail } = readMemoryKnowledgeSafe();
-  const labMissing = !labAvail;
   const memoryMissing = !memAvail;
 
-  const hyps: HygieneAwareHypothesis[] = Array.isArray(lab?.hypotheses)
-    ? (lab!.hypotheses as HygieneAwareHypothesis[])
-    : [];
-
-  const formationSources = buildFormationSources(lab, labMissing, memory, memoryMissing);
+  const formationSources = buildFormationSources(hyps, formalStoreLabel, formalDataMissing, memory, memoryMissing);
   const capPolicy = buildActiveCapPolicy(hyps, defaults);
   const resetBuckets = buildResetBuckets(hyps, now, staleDays);
   const memoryOrigin = buildMemoryOriginProjection(memory, memoryMissing);
@@ -1262,14 +1275,22 @@ export function buildHypothesisIntakeAuditVisibility(
   const intakeGateConfig = buildIntakeGateConfig(defaults);
 
   const dataMissingNotes: string[] = [];
-  if (labMissing) {
+  if (formalDataMissing) {
     const labP = dataPath("research_lab.json");
+    const dbObs = sourceDiagnostics.otherSources.find(s => s.origin === "db_research_lab");
+    const dbDetail = dbObs && dbObs.available === false
+      ? ` SQLite research_lab row also unavailable at ${dbObs.locator} (${dbObs.error ?? "unknown"}).`
+      : dbObs && dbObs.count === 0
+        ? ` SQLite research_lab row is reachable but empty at ${dbObs.locator}.`
+        : "";
     dataMissingNotes.push(
-      `research_lab.json missing or unreadable at ${labP} (DATA_DIR=${DATA_DIR}). ` +
+      `No formal hypothesis store discovered. Post-migration the canonical store is the SQLite ` +
+      `research_lab row (read by getResearchLab → readResearchBlob); the pre-migration fallback path ` +
+      `is ${labP} (DATA_DIR=${DATA_DIR}).${dbDetail} ` +
       `Formal hypothesis counts are 0. If the operator expected ~451 records, check: ` +
       `(a) DATA_DIR env var points at the right mounted volume, ` +
-      `(b) the file exists at that absolute path, ` +
-      `(c) the JSON is well-formed (try \`node -e 'JSON.parse(require("fs").readFileSync("<path>","utf8"))'\`). ` +
+      `(b) DB_PATH (if set) points at the right SQLite file, ` +
+      `(c) the JSON file (if used) is well-formed (try \`node -e 'JSON.parse(require("fs").readFileSync("<path>","utf8"))'\`). ` +
       `Memory-origin counts still surface from memory_knowledge.json if that file is present.`,
     );
   }
@@ -1283,7 +1304,6 @@ export function buildHypothesisIntakeAuditVisibility(
 
   const nextSafeActions = buildNextSafeActions(capPolicy, resetBuckets, memoryOrigin, intakeQuality, manualBacklogGate, intakeGateConfig);
 
-  const sourceDiagnostics = describeSourceDiagnostics();
   // Surface the discovery's next-safe-action at the top of the panel's
   // own action list when the formal store is empty. The CLI surfaces the
   // same text, so the dashboard and the operator console agree.
@@ -1320,9 +1340,6 @@ export function buildHypothesisIntakeAuditVisibility(
   // flag. Surface this so operators reading the Autonomy Monitor know the
   // safe archive buckets are eligible against the DB blob (after the
   // follow-up DB-aware apply PR).
-  const formalChosenAttempt = sourceDiagnostics.formalAttempts.find(
-    a => a.path === sourceDiagnostics.formalChosen,
-  );
   if (
     formalChosenAttempt &&
     formalChosenAttempt.role === "db" &&
