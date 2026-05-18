@@ -61,6 +61,8 @@ export interface HypothesisIntakeAuditVisibility {
     count:       number;
     exampleIds:  string[];
     description: string;
+    relatedCount?: number;
+    relatedCountLabel?: string;
   }>;
   memoryOrigin: {
     totalMemoryHypothesisEntries: number;
@@ -209,6 +211,14 @@ export function HypothesisIntakeAuditPanel({ data }: PanelProps): JSX.Element {
               {b.exampleIds.length > 0 && (
                 <div style={{ ...mono, fontSize: "0.66rem", color: DIM, marginTop: 4, wordBreak: "break-all" }}>
                   e.g. {b.exampleIds.slice(0, 3).join(", ")}
+                </div>
+              )}
+              {typeof b.relatedCount === "number" && b.relatedCountLabel && (
+                <div
+                  data-testid={`intake-audit-bucket-${b.bucket}-related`}
+                  style={{ ...mono, fontSize: "0.66rem", color: DIM, marginTop: 4, lineHeight: 1.35 }}
+                >
+                  related: {b.relatedCount} — {b.relatedCountLabel}
                 </div>
               )}
             </div>

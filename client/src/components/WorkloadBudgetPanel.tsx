@@ -34,6 +34,8 @@ export interface WorkloadBudgetCounts {
   engineEventsLast24h:       number;
   engineEventsNonInfoLast24h: number;
   formalHypotheses:          number;
+  actionableFormalHypotheses?: number;
+  alreadyArchivedFormalHypotheses?: number;
   kbEntries:                 number;
   memoryOriginHypotheses:    number;
   memoryHypothesesBlocked:   number;
@@ -226,7 +228,16 @@ export function WorkloadBudgetPanel({ data }: PanelProps): JSX.Element {
           color={c.engineRunsNonOkLast24h > 0 ? YELLOW : FG}
         />
         <Kv label="engine events (24h)" value={String(c.engineEventsLast24h)} />
-        <Kv label="formal hypotheses" value={String(c.formalHypotheses)} />
+        <Kv
+          label="formal hypotheses"
+          value={
+            typeof c.alreadyArchivedFormalHypotheses === "number" &&
+            c.alreadyArchivedFormalHypotheses > 0 &&
+            typeof c.actionableFormalHypotheses === "number"
+              ? `${c.actionableFormalHypotheses} actionable (+${c.alreadyArchivedFormalHypotheses} already_archived = ${c.formalHypotheses} total)`
+              : String(c.formalHypotheses)
+          }
+        />
         <Kv label="kb entries" value={String(c.kbEntries)} />
         <Kv
           label="memory blocked"

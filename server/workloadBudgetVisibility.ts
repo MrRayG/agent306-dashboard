@@ -56,6 +56,7 @@ import { engineEvents, engineRuns } from "@shared/schema";
 import { desc, gte, sql } from "drizzle-orm";
 import { dataPath } from "./dataPaths.js";
 import { discoverHypothesisSources } from "./hypothesisSourceDiscovery.js";
+import { isArchivedTag, type HygieneAwareHypothesis } from "./hypothesisHygiene.js";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -92,8 +93,20 @@ export interface WorkloadBudgetCounts {
   engineEventsLast24h:       number;
   /** Subset of engineEventsLast24h with level !== "info". */
   engineEventsNonInfoLast24h: number;
-  /** research_lab.hypotheses.length — current backlog of formal hypotheses. */
+  /** research_lab.hypotheses.length — total formal-hypothesis inventory
+   *  (includes already-archived records carried for audit). NOT used directly
+   *  for backlog pressure — see `actionableFormalHypotheses`. */
   formalHypotheses:          number;
+  /** Subset of `formalHypotheses` that is NOT already archived
+   *  (status='stale-retired' + archived_* hygieneTag → excluded). This is the
+   *  count that backlog pressure / cost-driver / soft-recommendation logic
+   *  uses, so the Workload Budget cannot recommend "archive 338 records"
+   *  when those 338 are already in the audit-only `already_archived` bucket. */
+  actionableFormalHypotheses: number;
+  /** Subset of `formalHypotheses` already routed to the audit-only
+   *  `already_archived` bucket (status='stale-retired' + archived_* hygieneTag).
+   *  `formalHypotheses === actionableFormalHypotheses + alreadyArchivedFormalHypotheses`. */
+  alreadyArchivedFormalHypotheses: number;
   /** memory_knowledge.entries.length — total KB entries. */
   kbEntries:                 number;
   /** Memory-origin hypothesis entries (title starts with "Hypothesis:"). */
@@ -258,6 +271,7 @@ export interface WorkloadBudgetVisibility {
  */
 function readFormalHypothesesDiscovered(): {
   records:           number;
+  hypotheses:        HygieneAwareHypothesis[];
   formalChosen:      string | null;
   formalChosenRole:  "formal" | "memory" | "legacy-candidate" | "db" | null;
   jsonExists:        boolean;
@@ -276,6 +290,7 @@ function readFormalHypothesesDiscovered(): {
     const dbObs = diag.otherSources.find(s => s.origin === "db_research_lab");
     return {
       records:          d.formalHypotheses.length,
+      hypotheses:       d.formalHypotheses,
       formalChosen:     diag.formalChosen,
       formalChosenRole: chosen ? chosen.role : null,
       jsonExists:       !!jsonAttempt?.exists,
@@ -289,6 +304,7 @@ function readFormalHypothesesDiscovered(): {
   } catch {
     return {
       records:          0,
+      hypotheses:       [],
       formalChosen:     null,
       formalChosenRole: null,
       jsonExists:       false,
@@ -299,6 +315,28 @@ function readFormalHypothesesDiscovered(): {
       available:        false,
     };
   }
+}
+
+/**
+ * Count formal records that have already been archived in a prior reset apply
+ * (status='stale-retired' AND archived_* hygieneTag). These records remain in
+ * the formal store for audit but MUST NOT count as actionable backlog
+ * pressure — the operator has already done the archive work.
+ *
+ * Mirrors the `already_archived` short-circuit in
+ * hypothesisIntakeAuditVisibility.classifyReset so the Workload Budget
+ * headline and the Hypothesis Intake Audit reset bucket cannot disagree
+ * about which records are still on the operator's plate.
+ */
+function countAlreadyArchivedFormal(hyps: readonly HygieneAwareHypothesis[]): number {
+  let n = 0;
+  for (const h of hyps) {
+    const tag = h.hygieneTag;
+    if (h.status === "stale-retired" && tag != null && isArchivedTag(tag)) {
+      n++;
+    }
+  }
+  return n;
 }
 
 function readMemoryKnowledgeSafe(): {
@@ -443,7 +481,10 @@ function classifyPressure(
     }
   }
 
-  const backlog = counts.formalHypotheses + counts.memoryHypothesesBlocked;
+  // Backlog pressure uses ACTIONABLE formal records (already-archived rows are
+  // audit-only and must not inflate cost pressure). `counts.formalHypotheses`
+  // remains exposed for the headline / inventory drivers.
+  const backlog = counts.actionableFormalHypotheses + counts.memoryHypothesesBlocked;
   if (backlog >= t.backlogHigh) {
     level = Math.max(level, 2);
     reasons.push(`backlog ${backlog} ≥ ${t.backlogHigh}`);
@@ -500,10 +541,16 @@ function buildSoftRecommendations(
     );
   }
 
-  const backlog = counts.formalHypotheses + counts.memoryHypothesesBlocked;
+  // Actionable backlog excludes records already routed to the audit-only
+  // already_archived bucket so this recommendation cannot ask the operator to
+  // re-archive 338 records that prior reset-apply runs already archived.
+  const backlog = counts.actionableFormalHypotheses + counts.memoryHypothesesBlocked;
   if (backlog >= t.backlogMedium) {
+    const inventoryNote = counts.alreadyArchivedFormalHypotheses > 0
+      ? ` (formal inventory ${counts.formalHypotheses}, of which ${counts.alreadyArchivedFormalHypotheses} already_archived are excluded from this count)`
+      : ``;
     recs.push(
-      `Hypothesis backlog ${backlog} (formal ${counts.formalHypotheses} + blocked memory-origin ${counts.memoryHypothesesBlocked}) — promote or archive before queuing more`,
+      `Hypothesis backlog ${backlog} (actionable formal ${counts.actionableFormalHypotheses} + blocked memory-origin ${counts.memoryHypothesesBlocked}) — promote or archive before queuing more${inventoryNote}`,
     );
   }
   if (counts.kbEntries >= t.kbMedium) {
@@ -599,14 +646,32 @@ function buildTopDrivers(
     });
   }
 
+  // The primary formal-hypotheses driver tracks the ACTIONABLE backlog (total
+  // formal records minus rows already routed to the audit-only
+  // `already_archived` bucket). The headline `counts.formalHypotheses`
+  // continues to expose the full inventory for transparency, and when any
+  // archived rows are present an additional `formal_hypotheses_inventory`
+  // driver surfaces the total alongside.
   drivers.push({
     key:    "formal_hypotheses",
-    label:  "formal hypotheses backlog",
-    count:  counts.formalHypotheses,
+    label:  counts.alreadyArchivedFormalHypotheses > 0
+      ? "actionable formal hypotheses backlog"
+      : "formal hypotheses backlog",
+    count:  counts.actionableFormalHypotheses,
     kind:   "queue",
     source: sources.formalSource === "db" ? "sqlite:research_lab" : "research_lab.json",
     dataMissing: !sources.lab,
   });
+  if (counts.alreadyArchivedFormalHypotheses > 0) {
+    drivers.push({
+      key:    "formal_hypotheses_inventory",
+      label:  "formal hypotheses inventory (incl. already_archived)",
+      count:  counts.formalHypotheses,
+      kind:   "queue",
+      source: sources.formalSource === "db" ? "sqlite:research_lab" : "research_lab.json",
+      dataMissing: !sources.lab,
+    });
+  }
   drivers.push({
     key:    "memory_hypotheses_blocked",
     label:  "memory-origin hypotheses blocked",
@@ -722,6 +787,12 @@ export function buildWorkloadBudgetVisibility(
     }
   }
   const formalHypotheses = lab.records;
+  // Separate already-archived records (audit-only) from actionable backlog.
+  // Mirrors `hypothesisIntakeAuditVisibility.classifyReset`'s already_archived
+  // short-circuit so the Workload Budget cannot recommend re-archiving rows
+  // the operator has already archived. PR #391 routes post-apply rows here.
+  const alreadyArchivedFormalHypotheses = countAlreadyArchivedFormal(lab.hypotheses);
+  const actionableFormalHypotheses = Math.max(0, formalHypotheses - alreadyArchivedFormalHypotheses);
 
   const memory = readMemoryKnowledgeSafe();
   if (memory === null) dataMissingNotes.push("memory_knowledge.json missing or unreadable");
@@ -742,6 +813,8 @@ export function buildWorkloadBudgetVisibility(
     engineEventsLast24h:        events.total,
     engineEventsNonInfoLast24h: events.nonInfo,
     formalHypotheses,
+    actionableFormalHypotheses,
+    alreadyArchivedFormalHypotheses,
     kbEntries:                  memEntries.length,
     memoryOriginHypotheses:     memHyp.length,
     memoryHypothesesBlocked:    memHypBlocked,
