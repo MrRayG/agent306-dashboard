@@ -1,0 +1,223 @@
+{
+  "schemaVersion": "manual-backlog-export-1",
+  "generatedAt": "2026-05-18T18:00:00.000Z",
+  "dataDir": "/tmp/tmp.bZ9aGmEqHN",
+  "source": "/tmp/tmp.bZ9aGmEqHN/research_lab.json",
+  "gitSha": "c31ac19ba0b8",
+  "bucketsIncluded": [
+    "rewrite_positional_debate",
+    "rewrite_missing_evidence_path",
+    "promote_later_memory_origin"
+  ],
+  "includeArchived": false,
+  "counts": {
+    "rewrite_positional_debate": 3,
+    "rewrite_missing_evidence_path": 4,
+    "promote_later_memory_origin": 2
+  },
+  "items": [
+    {
+      "id": "hyp_mp_001",
+      "bucket": "rewrite_missing_evidence_path",
+      "origin": "formal",
+      "claim": "OpenAlex citation count for paper alpha will pass 1000 by Q4 2026.",
+      "status": "forming",
+      "formedAt": "2026-04-20T00:00:00Z",
+      "source": "daily_cycle",
+      "presentFields": [
+        "claim",
+        "metric",
+        "basis",
+        "prediction",
+        "timeframe"
+      ],
+      "missingFields": [
+        "measurementPath"
+      ],
+      "recommendedAction": "repair evidence path",
+      "classifierReasons": [
+        "missing measurementPath / metric / basis — rewrite needed before re-entering loop"
+      ],
+      "intakeVerdict": "missing_evidence_path"
+    },
+    {
+      "id": "hyp_mp_002",
+      "bucket": "rewrite_missing_evidence_path",
+      "origin": "formal",
+      "claim": "GitHub star count for repo beta will pass 5000 by H1 2027.",
+      "status": "forming",
+      "formedAt": "2026-04-21T00:00:00Z",
+      "source": "daily_cycle",
+      "presentFields": [
+        "claim",
+        "metric",
+        "basis",
+        "prediction",
+        "timeframe"
+      ],
+      "missingFields": [
+        "measurementPath"
+      ],
+      "recommendedAction": "repair evidence path",
+      "classifierReasons": [
+        "missing measurementPath / metric / basis — rewrite needed before re-entering loop"
+      ],
+      "intakeVerdict": "missing_evidence_path"
+    },
+    {
+      "id": "hyp_mp_003",
+      "bucket": "rewrite_missing_evidence_path",
+      "origin": "formal",
+      "claim": "arXiv submission count for category cs.LG will pass 2500/month by Q4 2026.",
+      "status": "forming",
+      "formedAt": "2026-04-22T00:00:00Z",
+      "source": "daily_cycle",
+      "presentFields": [
+        "claim",
+        "metric",
+        "basis",
+        "prediction",
+        "timeframe"
+      ],
+      "missingFields": [
+        "measurementPath"
+      ],
+      "recommendedAction": "repair evidence path",
+      "classifierReasons": [
+        "missing measurementPath / metric / basis — rewrite needed before re-entering loop"
+      ],
+      "intakeVerdict": "missing_evidence_path"
+    },
+    {
+      "id": "hyp_mp_004",
+      "bucket": "rewrite_missing_evidence_path",
+      "origin": "formal",
+      "claim": "HuggingFace model downloads for whisper-large will pass 10M by Q3 2026.",
+      "status": "forming",
+      "formedAt": "2026-04-23T00:00:00Z",
+      "source": "daily_cycle",
+      "presentFields": [
+        "claim",
+        "metric",
+        "basis",
+        "prediction",
+        "timeframe"
+      ],
+      "missingFields": [
+        "measurementPath"
+      ],
+      "recommendedAction": "repair evidence path",
+      "classifierReasons": [
+        "missing measurementPath / metric / basis — rewrite needed before re-entering loop"
+      ],
+      "intakeVerdict": "missing_evidence_path"
+    },
+    {
+      "id": "hyp_pd_001",
+      "bucket": "rewrite_positional_debate",
+      "origin": "formal",
+      "claim": "Position A is more accurate than Position B on alignment research.",
+      "status": "forming",
+      "formedAt": "2026-04-10T00:00:00Z",
+      "source": "research_thread",
+      "presentFields": [
+        "claim",
+        "metric",
+        "basis",
+        "measurementPath",
+        "prediction",
+        "timeframe"
+      ],
+      "missingFields": [],
+      "recommendedAction": "rewrite as research-gap framing",
+      "classifierReasons": [
+        "claim looks like a positional debate — rewrite to research-gap shape"
+      ],
+      "intakeVerdict": "rewrite_positional_debate"
+    },
+    {
+      "id": "hyp_pd_002",
+      "bucket": "rewrite_positional_debate",
+      "origin": "formal",
+      "claim": "Position C is more accurate than Position D on AI regulation.",
+      "status": "forming",
+      "formedAt": "2026-04-12T00:00:00Z",
+      "source": "research_thread",
+      "presentFields": [
+        "claim",
+        "metric",
+        "basis",
+        "measurementPath",
+        "prediction",
+        "timeframe"
+      ],
+      "missingFields": [],
+      "recommendedAction": "rewrite as research-gap framing",
+      "classifierReasons": [
+        "claim looks like a positional debate — rewrite to research-gap shape"
+      ],
+      "intakeVerdict": "rewrite_positional_debate"
+    },
+    {
+      "id": "hyp_pd_003",
+      "bucket": "rewrite_positional_debate",
+      "origin": "formal",
+      "claim": "Position E is more accurate than Position F on safety frameworks.",
+      "status": "forming",
+      "formedAt": "2026-04-13T00:00:00Z",
+      "source": "research_thread",
+      "presentFields": [
+        "claim",
+        "metric",
+        "basis",
+        "measurementPath",
+        "prediction",
+        "timeframe"
+      ],
+      "missingFields": [],
+      "recommendedAction": "rewrite as research-gap framing",
+      "classifierReasons": [
+        "claim looks like a positional debate — rewrite to research-gap shape"
+      ],
+      "intakeVerdict": "rewrite_positional_debate"
+    },
+    {
+      "id": "memory:mem_001",
+      "bucket": "promote_later_memory_origin",
+      "origin": "memory",
+      "claim": "domain-specific scaling laws will outperform generic ones on long-context tasks.",
+      "status": "active",
+      "formedAt": "2026-04-15T00:00:00Z",
+      "source": "memory_knowledge.json",
+      "presentFields": [],
+      "missingFields": [
+        "claim"
+      ],
+      "recommendedAction": "review for operator promotion",
+      "classifierReasons": [
+        "memory-origin entry — title starts with 'Hypothesis:'",
+        "no promotedToHypothesisId — formal promotion is operator-only and out of scope for this CLI"
+      ],
+      "intakeVerdict": "missing_evidence_path"
+    },
+    {
+      "id": "memory:mem_002",
+      "bucket": "promote_later_memory_origin",
+      "origin": "memory",
+      "claim": "open-weight 70B models will close the gap to frontier on benchmarks below 10^25 FLOPS by Q4 2026.",
+      "status": "active",
+      "formedAt": "2026-04-16T00:00:00Z",
+      "source": "memory_knowledge.json",
+      "presentFields": [],
+      "missingFields": [
+        "claim"
+      ],
+      "recommendedAction": "review for operator promotion",
+      "classifierReasons": [
+        "memory-origin entry — title starts with 'Hypothesis:'",
+        "no promotedToHypothesisId — formal promotion is operator-only and out of scope for this CLI"
+      ],
+      "intakeVerdict": "missing_evidence_path"
+    }
+  ]
+}
