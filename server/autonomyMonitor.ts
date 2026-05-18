@@ -29,7 +29,8 @@
  *   - READ-ONLY: every persistence call is a `read*` helper. No file is
  *     written, no in-memory map is mutated, no propose / apply path is
  *     invoked. The aggregation is safe to call on every page render.
- *   - DEFENSIVE: missing or malformed data files (`research_lab.json`,
+ *   - DEFENSIVE: missing or malformed data sources (the SQLite research_lab
+ *     row OR `research_lab.json` as a pre-migration fallback,
  *     `memory_knowledge.json`, the two ledgers) are tolerated — the stage
  *     reports `0` counts and a `data_missing` blocker rather than throwing.
  *   - STAGE-COMPLETE: every full-loop stage is present in the snapshot
@@ -106,6 +107,9 @@ import {
   buildHypothesisIntakeAuditVisibility,
   type HypothesisIntakeAuditVisibility,
 } from "./hypothesisIntakeAuditVisibility.js";
+import {
+  discoverHypothesisSources,
+} from "./hypothesisSourceDiscovery.js";
 import {
   scoreHypothesisRiskImpactBatch,
   summarizeRiskImpactScores,
@@ -235,17 +239,57 @@ interface ResearchLabBlob {
   stats?:      Record<string, unknown>;
 }
 
+/**
+ * Read the formal hypothesis store with DB-aware discovery. Post-migration the
+ * canonical source is the SQLite research_lab[id='main'].blob row; the
+ * pre-migration `research_lab.json` is a fallback. This mirrors
+ * `readResearchBlob()` and the reset CLI so the Autonomy Monitor cannot
+ * disagree with the Research Lab / Agent HQ panels.
+ *
+ * Returns null only when NEITHER the DB row NOR the JSON file yielded a
+ * parseable formal store. `topics` is populated from whichever JSON file is
+ * present (the DB row stores the same blob shape but topics are surfaced
+ * here from the JSON if that's what discovery used).
+ */
 function readResearchLabSafe(): ResearchLabBlob | null {
-  const path = dataPath("research_lab.json");
-  if (!fs.existsSync(path)) return null;
+  // Hypotheses follow DB-aware discovery.
+  let formalHypotheses: Hypothesis[] = [];
+  let hasFormalStore = false;
   try {
-    const raw = fs.readFileSync(path, "utf8");
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object") return parsed as ResearchLabBlob;
-    return null;
+    const d = discoverHypothesisSources();
+    formalHypotheses = d.formalHypotheses as Hypothesis[];
+    hasFormalStore = d.diagnostics.formalChosen !== null;
   } catch {
-    return null;
+    // discovery is read-only and try/catches internally, but guard anyway.
   }
+
+  // Topics / stats are read from the JSON file when present. The DB row
+  // carries the same blob shape post-migration; topics on the Research Topic
+  // stage are an advisory count and degrade to 0 when the JSON file is
+  // absent, consistent with the pre-existing behaviour.
+  const p = dataPath("research_lab.json");
+  if (fs.existsSync(p)) {
+    try {
+      const raw = fs.readFileSync(p, "utf8");
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        const blob = parsed as ResearchLabBlob;
+        return {
+          hypotheses: formalHypotheses.length > 0
+            ? formalHypotheses
+            : (Array.isArray(blob.hypotheses) ? blob.hypotheses : []),
+          topics: blob.topics,
+          stats:  blob.stats,
+        };
+      }
+    } catch {
+      // fall through
+    }
+  }
+
+  if (!hasFormalStore) return null;
+
+  return { hypotheses: formalHypotheses };
 }
 
 interface MemoryKnowledgeBlobShape {
@@ -293,7 +337,7 @@ function buildResearchTopicStage(
 
   const blockers: string[] = [];
   if (lab === null && memory === null) {
-    blockers.push("research_lab.json and memory_knowledge.json are both missing — no hypothesis data to display");
+    blockers.push("no formal hypothesis store discovered (SQLite research_lab row absent AND research_lab.json missing) and memory_knowledge.json is also missing — no hypothesis data to display");
   }
 
   const status: AutonomyStageStatus =
@@ -306,8 +350,8 @@ function buildResearchTopicStage(
     label: "Research Topic / Hypothesis",
     status,
     summary:
-      "Formal hypotheses live in research_lab.json; memory-origin entries (Hypothesis: …) appear in memory_knowledge.json and must be promoted before they can feed Phase 2.",
-    implementedBy: ["server/researchEngine.ts", "server/memoryEngine.ts"],
+      "Formal hypotheses are stored canonically in the SQLite research_lab[id='main'].blob row (with research_lab.json as a pre-migration fallback); memory-origin entries (Hypothesis: …) appear in memory_knowledge.json and must be promoted before they can feed Phase 2.",
+    implementedBy: ["server/researchEngine.ts", "server/memoryEngine.ts", "server/hypothesisSourceDiscovery.ts"],
     counts: {
       formalHypotheses:        formal.length,
       memoryOriginHypotheses:  memHyp.length,
@@ -325,7 +369,7 @@ function buildResearchTopicStage(
     blockers,
     nextActions: [
       "Inspect formal hypotheses on /agenda or /hq",
-      "Promote memory-origin entries to research_lab.hypotheses[] before they can feed experiments",
+      "Promote memory-origin entries to the formal hypothesis store before they can feed experiments",
     ],
   };
 }
@@ -421,7 +465,7 @@ function buildRiskImpactStage(
   }
   if (summary.byReasonCode.memory_origin_blocked > 0) {
     blockers.push(
-      `${summary.byReasonCode.memory_origin_blocked} memory-origin record(s) need promotion to research_lab.hypotheses[]` +
+      `${summary.byReasonCode.memory_origin_blocked} memory-origin record(s) need promotion to the formal hypothesis store` +
         (memAlreadyPromotedCount > 0 ? ` (${memAlreadyPromotedCount} already promoted, deduped from this count)` : ""),
     );
   }
@@ -504,7 +548,7 @@ function buildRiskImpactStage(
     nextActions: [
       "Inspect blocked entries' reasonCodes to see which boundary tripped",
       "Eligible/low-risk records are candidates for the existing hygiene/candidate/binding flow — still approval-gated",
-      "Memory-origin entries must be promoted to research_lab.hypotheses[] before they can score",
+      "Memory-origin entries must be promoted to the formal hypothesis store before they can score",
     ],
   };
 }
@@ -546,7 +590,7 @@ function buildHygieneGateStage(
     },
     extra: {
       memoryRefused:               true,
-      memoryRefusalReason:         "memory-origin entries cannot feed Phase 2 directly; promote to research_lab.hypotheses[] first",
+      memoryRefusalReason:         "memory-origin entries cannot feed Phase 2 directly; promote to the formal hypothesis store first",
     },
     nextActions: [
       "Run scripts/hypothesisAudit.ts for a full hygiene report",
