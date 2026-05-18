@@ -10,7 +10,7 @@ import { db } from "../db.js";
 import { memoryKnowledge } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { dataPath } from "../dataPaths.js";
-import { readThrough, readJsonWithBakFallback } from "./jsonFallback.js";
+import { readThrough, readJsonWithBakFallback, type ImportResult } from "./jsonFallback.js";
 
 const KEY = "main";
 const JSON_PATH = dataPath("memory_knowledge.json");
@@ -43,12 +43,17 @@ export function writeMemoryKnowledgeBlob(blob: unknown): void {
   }
 }
 
-/** Used by the migration script only. */
-export function importMemoryKnowledgeFromJson(): boolean {
+/**
+ * First-run-only JSON→DB import. Used by the migration script. See
+ * researchRepository.importResearchFromJson for the full contract — if the
+ * DB row already has data, we do NOT overwrite it from JSON/.bak.
+ */
+export function importMemoryKnowledgeFromJson(): ImportResult {
+  if (memoryKnowledgeRowExists()) return "skipped-existing-db";
   const body = readJsonWithBakFallback<unknown>(JSON_PATH);
-  if (body == null) return false;
+  if (body == null) return "skipped-no-source";
   writeMemoryKnowledgeBlob(body);
-  return true;
+  return "imported";
 }
 
 /** Migration safety guard — true iff the DB row exists with a non-empty blob. */
