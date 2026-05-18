@@ -1,0 +1,185 @@
+{
+  "schemaVersion": "backlog-rewrite-draft-1",
+  "generatedAt": "2026-05-18T00:00:00.000Z",
+  "reviewDeadline": "2026-06-01",
+  "inputPath": "examples/backlog-export-sample/backlog.json",
+  "inputSha256": "bd642b8670d53f04903f07c0a0060d70c5c0eea749f0cb0a2327af03941c7ea4",
+  "inputSchema": "manual-backlog-export-1",
+  "gitSha": "d8034486b3f1",
+  "bucketsRequested": [
+    "rewrite_positional_debate",
+    "rewrite_missing_evidence_path"
+  ],
+  "counts": {
+    "rewrite_positional_debate": 3,
+    "rewrite_missing_evidence_path": 4,
+    "skipped": 2
+  },
+  "drafts": [
+    {
+      "id": "hyp_mp_001",
+      "bucket": "rewrite_missing_evidence_path",
+      "originalClaim": "OpenAlex citation count for paper alpha will pass 1000 by Q4 2026.",
+      "originalSource": "daily_cycle",
+      "reviewDeadline": "2026-06-01",
+      "presentFields": [
+        "claim",
+        "metric",
+        "basis",
+        "prediction",
+        "timeframe"
+      ],
+      "missingFields": [
+        "evidence_source",
+        "dataset",
+        "measurement_path",
+        "review_deadline"
+      ],
+      "markdown": "### hyp_mp_001\n\n**Original claim:** OpenAlex citation count for paper alpha will pass 1000 by Q4 2026.\n**Source:** daily_cycle\n**Original framing tag:** missing-evidence-path\n\n#### Present fields (per export)\n- `claim`\n- `metric`\n- `basis`\n- `prediction`\n- `timeframe`\n\n#### Missing required fields\n- **Evidence source** — the operator must name a specific primary source so the agent can verify it is accessible and stable.\n- **Dataset** — the operator must point at the row/table/endpoint inside the source so retrieval is reproducible.\n- **Measurement path** — the operator must spell out how the metric is computed from the dataset so two runs of the agent yield the same value.\n- **Review deadline** — every hypothesis must carry an explicit review deadline so it cannot drift indefinitely.\n\nExport-reported missing fields (Hypothesis-shape names): `measurementPath`\n\n#### Proposed repair (DRAFT — operator must edit before applying)\n\n- Evidence source: TODO (operator: name a specific dataset, registry, regulatory filing, or primary source.)\n- Dataset: TODO (operator: identify the dataset row/table/endpoint.)\n- Measurement path: TODO (operator: how the metric is computed end-to-end from the dataset.)\n- Review deadline: 2026-06-01\n\n#### Operator checklist before applying\n- [ ] Fill each TODO with a specific reference\n- [ ] Confirm the evidence source is accessible (not behind a paywall the agent cannot reach)\n- [ ] Confirm the measurement is reproducible\n- [ ] Confirm review deadline\n"
+    },
+    {
+      "id": "hyp_mp_002",
+      "bucket": "rewrite_missing_evidence_path",
+      "originalClaim": "GitHub star count for repo beta will pass 5000 by H1 2027.",
+      "originalSource": "daily_cycle",
+      "reviewDeadline": "2026-06-01",
+      "presentFields": [
+        "claim",
+        "metric",
+        "basis",
+        "prediction",
+        "timeframe"
+      ],
+      "missingFields": [
+        "evidence_source",
+        "dataset",
+        "measurement_path",
+        "review_deadline"
+      ],
+      "markdown": "### hyp_mp_002\n\n**Original claim:** GitHub star count for repo beta will pass 5000 by H1 2027.\n**Source:** daily_cycle\n**Original framing tag:** missing-evidence-path\n\n#### Present fields (per export)\n- `claim`\n- `metric`\n- `basis`\n- `prediction`\n- `timeframe`\n\n#### Missing required fields\n- **Evidence source** — the operator must name a specific primary source so the agent can verify it is accessible and stable.\n- **Dataset** — the operator must point at the row/table/endpoint inside the source so retrieval is reproducible.\n- **Measurement path** — the operator must spell out how the metric is computed from the dataset so two runs of the agent yield the same value.\n- **Review deadline** — every hypothesis must carry an explicit review deadline so it cannot drift indefinitely.\n\nExport-reported missing fields (Hypothesis-shape names): `measurementPath`\n\n#### Proposed repair (DRAFT — operator must edit before applying)\n\n- Evidence source: TODO (operator: name a specific dataset, registry, regulatory filing, or primary source.)\n- Dataset: TODO (operator: identify the dataset row/table/endpoint.)\n- Measurement path: TODO (operator: how the metric is computed end-to-end from the dataset.)\n- Review deadline: 2026-06-01\n\n#### Operator checklist before applying\n- [ ] Fill each TODO with a specific reference\n- [ ] Confirm the evidence source is accessible (not behind a paywall the agent cannot reach)\n- [ ] Confirm the measurement is reproducible\n- [ ] Confirm review deadline\n"
+    },
+    {
+      "id": "hyp_mp_003",
+      "bucket": "rewrite_missing_evidence_path",
+      "originalClaim": "arXiv submission count for category cs.LG will pass 2500/month by Q4 2026.",
+      "originalSource": "daily_cycle",
+      "reviewDeadline": "2026-06-01",
+      "presentFields": [
+        "claim",
+        "metric",
+        "basis",
+        "prediction",
+        "timeframe"
+      ],
+      "missingFields": [
+        "evidence_source",
+        "dataset",
+        "measurement_path",
+        "review_deadline"
+      ],
+      "markdown": "### hyp_mp_003\n\n**Original claim:** arXiv submission count for category cs.LG will pass 2500/month by Q4 2026.\n**Source:** daily_cycle\n**Original framing tag:** missing-evidence-path\n\n#### Present fields (per export)\n- `claim`\n- `metric`\n- `basis`\n- `prediction`\n- `timeframe`\n\n#### Missing required fields\n- **Evidence source** — the operator must name a specific primary source so the agent can verify it is accessible and stable.\n- **Dataset** — the operator must point at the row/table/endpoint inside the source so retrieval is reproducible.\n- **Measurement path** — the operator must spell out how the metric is computed from the dataset so two runs of the agent yield the same value.\n- **Review deadline** — every hypothesis must carry an explicit review deadline so it cannot drift indefinitely.\n\nExport-reported missing fields (Hypothesis-shape names): `measurementPath`\n\n#### Proposed repair (DRAFT — operator must edit before applying)\n\n- Evidence source: TODO (operator: name a specific dataset, registry, regulatory filing, or primary source.)\n- Dataset: TODO (operator: identify the dataset row/table/endpoint.)\n- Measurement path: TODO (operator: how the metric is computed end-to-end from the dataset.)\n- Review deadline: 2026-06-01\n\n#### Operator checklist before applying\n- [ ] Fill each TODO with a specific reference\n- [ ] Confirm the evidence source is accessible (not behind a paywall the agent cannot reach)\n- [ ] Confirm the measurement is reproducible\n- [ ] Confirm review deadline\n"
+    },
+    {
+      "id": "hyp_mp_004",
+      "bucket": "rewrite_missing_evidence_path",
+      "originalClaim": "HuggingFace model downloads for whisper-large will pass 10M by Q3 2026.",
+      "originalSource": "daily_cycle",
+      "reviewDeadline": "2026-06-01",
+      "presentFields": [
+        "claim",
+        "metric",
+        "basis",
+        "prediction",
+        "timeframe"
+      ],
+      "missingFields": [
+        "evidence_source",
+        "dataset",
+        "measurement_path",
+        "review_deadline"
+      ],
+      "markdown": "### hyp_mp_004\n\n**Original claim:** HuggingFace model downloads for whisper-large will pass 10M by Q3 2026.\n**Source:** daily_cycle\n**Original framing tag:** missing-evidence-path\n\n#### Present fields (per export)\n- `claim`\n- `metric`\n- `basis`\n- `prediction`\n- `timeframe`\n\n#### Missing required fields\n- **Evidence source** — the operator must name a specific primary source so the agent can verify it is accessible and stable.\n- **Dataset** — the operator must point at the row/table/endpoint inside the source so retrieval is reproducible.\n- **Measurement path** — the operator must spell out how the metric is computed from the dataset so two runs of the agent yield the same value.\n- **Review deadline** — every hypothesis must carry an explicit review deadline so it cannot drift indefinitely.\n\nExport-reported missing fields (Hypothesis-shape names): `measurementPath`\n\n#### Proposed repair (DRAFT — operator must edit before applying)\n\n- Evidence source: TODO (operator: name a specific dataset, registry, regulatory filing, or primary source.)\n- Dataset: TODO (operator: identify the dataset row/table/endpoint.)\n- Measurement path: TODO (operator: how the metric is computed end-to-end from the dataset.)\n- Review deadline: 2026-06-01\n\n#### Operator checklist before applying\n- [ ] Fill each TODO with a specific reference\n- [ ] Confirm the evidence source is accessible (not behind a paywall the agent cannot reach)\n- [ ] Confirm the measurement is reproducible\n- [ ] Confirm review deadline\n"
+    },
+    {
+      "id": "hyp_pd_001",
+      "bucket": "rewrite_positional_debate",
+      "originalClaim": "Position A is more accurate than Position B on alignment research.",
+      "originalSource": "research_thread",
+      "reviewDeadline": "2026-06-01",
+      "presentFields": [
+        "claim",
+        "metric",
+        "basis",
+        "measurementPath",
+        "prediction",
+        "timeframe"
+      ],
+      "missingFields": [
+        "research_gap",
+        "metric",
+        "evidence_source",
+        "measurement_path",
+        "review_deadline"
+      ],
+      "markdown": "### hyp_pd_001\n\n**Original claim:** Position A is more accurate than Position B on alignment research.\n**Source:** research_thread\n**Original framing tag:** positional-debate\n\n#### Proposed research-gap rewrite (DRAFT — operator must edit before applying)\n\n> Research gap: TODO (operator: convert the positional claim into a falsifiable empirical question.)\n>\n> Metric: TODO (operator: name the quantifiable metric and unit.)\n>\n> Evidence source / dataset: TODO (operator: name a specific dataset or primary source.)\n>\n> Measurement path: TODO (operator: how is the metric computed from the data.)\n>\n> Review deadline: 2026-06-01\n\n#### Why this is in the rewrite queue\n- Original framing is positional/normative rather than empirical\n\n#### Present fields (per export)\n- `claim`\n- `metric`\n- `basis`\n- `measurementPath`\n- `prediction`\n- `timeframe`\n\n> Note: the export does not carry per-field values. Operator opens the lab to inspect originals.\n\n#### Operator checklist before applying\n- [ ] Replace \"Research gap\" stub with a falsifiable empirical question\n- [ ] Replace \"Metric\" stub with a quantifiable measure (with unit)\n- [ ] Name a specific evidence source (dataset, registry, document)\n- [ ] Define the measurement path\n- [ ] Confirm review deadline\n"
+    },
+    {
+      "id": "hyp_pd_002",
+      "bucket": "rewrite_positional_debate",
+      "originalClaim": "Position C is more accurate than Position D on AI regulation.",
+      "originalSource": "research_thread",
+      "reviewDeadline": "2026-06-01",
+      "presentFields": [
+        "claim",
+        "metric",
+        "basis",
+        "measurementPath",
+        "prediction",
+        "timeframe"
+      ],
+      "missingFields": [
+        "research_gap",
+        "metric",
+        "evidence_source",
+        "measurement_path",
+        "review_deadline"
+      ],
+      "markdown": "### hyp_pd_002\n\n**Original claim:** Position C is more accurate than Position D on AI regulation.\n**Source:** research_thread\n**Original framing tag:** positional-debate\n\n#### Proposed research-gap rewrite (DRAFT — operator must edit before applying)\n\n> Research gap: TODO (operator: convert the positional claim into a falsifiable empirical question.)\n>\n> Metric: TODO (operator: name the quantifiable metric and unit.)\n>\n> Evidence source / dataset: TODO (operator: name a specific dataset or primary source.)\n>\n> Measurement path: TODO (operator: how is the metric computed from the data.)\n>\n> Review deadline: 2026-06-01\n\n#### Why this is in the rewrite queue\n- Original framing is positional/normative rather than empirical\n\n#### Present fields (per export)\n- `claim`\n- `metric`\n- `basis`\n- `measurementPath`\n- `prediction`\n- `timeframe`\n\n> Note: the export does not carry per-field values. Operator opens the lab to inspect originals.\n\n#### Operator checklist before applying\n- [ ] Replace \"Research gap\" stub with a falsifiable empirical question\n- [ ] Replace \"Metric\" stub with a quantifiable measure (with unit)\n- [ ] Name a specific evidence source (dataset, registry, document)\n- [ ] Define the measurement path\n- [ ] Confirm review deadline\n"
+    },
+    {
+      "id": "hyp_pd_003",
+      "bucket": "rewrite_positional_debate",
+      "originalClaim": "Position E is more accurate than Position F on safety frameworks.",
+      "originalSource": "research_thread",
+      "reviewDeadline": "2026-06-01",
+      "presentFields": [
+        "claim",
+        "metric",
+        "basis",
+        "measurementPath",
+        "prediction",
+        "timeframe"
+      ],
+      "missingFields": [
+        "research_gap",
+        "metric",
+        "evidence_source",
+        "measurement_path",
+        "review_deadline"
+      ],
+      "markdown": "### hyp_pd_003\n\n**Original claim:** Position E is more accurate than Position F on safety frameworks.\n**Source:** research_thread\n**Original framing tag:** positional-debate\n\n#### Proposed research-gap rewrite (DRAFT — operator must edit before applying)\n\n> Research gap: TODO (operator: convert the positional claim into a falsifiable empirical question.)\n>\n> Metric: TODO (operator: name the quantifiable metric and unit.)\n>\n> Evidence source / dataset: TODO (operator: name a specific dataset or primary source.)\n>\n> Measurement path: TODO (operator: how is the metric computed from the data.)\n>\n> Review deadline: 2026-06-01\n\n#### Why this is in the rewrite queue\n- Original framing is positional/normative rather than empirical\n\n#### Present fields (per export)\n- `claim`\n- `metric`\n- `basis`\n- `measurementPath`\n- `prediction`\n- `timeframe`\n\n> Note: the export does not carry per-field values. Operator opens the lab to inspect originals.\n\n#### Operator checklist before applying\n- [ ] Replace \"Research gap\" stub with a falsifiable empirical question\n- [ ] Replace \"Metric\" stub with a quantifiable measure (with unit)\n- [ ] Name a specific evidence source (dataset, registry, document)\n- [ ] Define the measurement path\n- [ ] Confirm review deadline\n"
+    }
+  ],
+  "skipped": [
+    {
+      "id": "memory:mem_001",
+      "reason": "bucket not in --buckets (promote_later_memory_origin)",
+      "bucket": "promote_later_memory_origin"
+    },
+    {
+      "id": "memory:mem_002",
+      "reason": "bucket not in --buckets (promote_later_memory_origin)",
+      "bucket": "promote_later_memory_origin"
+    }
+  ]
+}
