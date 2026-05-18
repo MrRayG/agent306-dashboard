@@ -1,6 +1,7 @@
 {
   "candidateId": "example-not-ready",
   "kind": "summarizationTemplate",
+  "attestedAt": "2026-05-18T19:00:00.000Z",
   "preconditions": {
     "reversibleLowRiskActionOnly": {
       "high": {
@@ -56,7 +57,7 @@
         "priority": "high",
         "status": "unverified",
         "evidenceRef": "",
-        "rationale": "rollback rehearsal pending — operator has not yet completed the deletion-path drill"
+        "rationale": "rollback rehearsal pending \u2014 operator has not yet completed the deletion-path drill"
       },
       "low": {
         "key": "rollbackProof",

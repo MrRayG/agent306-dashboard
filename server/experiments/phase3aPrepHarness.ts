@@ -169,6 +169,20 @@ export interface Phase3aPrepCandidate {
    *  blocker if it drifts. We re-declare the literal here for the
    *  same isolation reason as the precondition-key array. */
   readonly kind:          "summarizationTemplate";
+  /** Caller-asserted ISO-8601 timestamp recording WHEN the evidence
+   *  payload was computed. Required. The Phase 4-c attestation-freshness
+   *  gate (`isPhase3aAttestationStale` in `server/eval/promotionGate.ts`)
+   *  reads this field to hard-block low-risk promotions whose
+   *  attestation is older than `PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS`.
+   *  The validator (`validateCandidate` in
+   *  `server/eval/phase3aPrepAttestation.ts`) hard-requires this field —
+   *  missing / non-string / unparseable values produce a `parse_error`
+   *  attestation, which the existing Phase 4-b flag already hard-blocks
+   *  on for low-risk promotions when set. The validator does NOT
+   *  range-check against a future date (that would require a clock read
+   *  inside the otherwise-pure validator); the freshness gate handles
+   *  future-dated values separately. */
+  readonly attestedAt:    string;
   /** The 7 × 2 attestation matrix. */
   readonly preconditions: Phase3aPrepCandidatePreconditions;
 }

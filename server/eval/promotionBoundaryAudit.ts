@@ -84,7 +84,7 @@ import * as path from "node:path";
 
 /** Stable schema identifier for the audit payload. Bumped only when the
  *  result shape changes in a backwards-incompatible way. */
-export const PROMOTION_BOUNDARY_AUDIT_SCHEMA_VERSION = "phase2m-b.v1";
+export const PROMOTION_BOUNDARY_AUDIT_SCHEMA_VERSION = "phase2m-c.v1";
 
 /** Stable label embedded so an operator can confirm provenance at a glance. */
 export const PROMOTION_BOUNDARY_AUDIT_LABEL =
@@ -218,6 +218,17 @@ const PROMOTION_GATE_PATH    = "server/eval/promotionGate.ts";
  *  not asserted here — that contract is owned by the gate's tests. */
 const PHASE4B_HARD_BLOCK_FLAG_LITERAL =
   "PROMOTION_GATE_BLOCK_LOW_RISK_ON_PHASE3A_PREP_NOT_READY";
+
+/** Literal name of the Phase 4-c attestation-freshness env var. When
+ *  set to a positive integer AND Phase 4-b is on AND the rec is
+ *  low-risk, the gate hard-blocks low-risk promotions whose
+ *  `phase3aPrepCandidate.attestedAt` is older than that many days. The
+ *  audit confirms the gate source declares this env var so a rename /
+ *  removal that would silently disable the freshness invariant surfaces
+ *  as a failing finding. Default-off (env unset) behaviour is not
+ *  asserted here — that contract is owned by the gate's tests. */
+const PHASE4C_FRESHNESS_FLAG_LITERAL =
+  "PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS";
 
 /**
  * Read a repo-relative source file as UTF-8 text. Returns `null` when the
@@ -581,6 +592,28 @@ export function auditPromotionBoundary(
         "Phase 4-b authoritative-block channel is wired through the existing gate.ok boundary"
       : `Literal '${PHASE4B_HARD_BLOCK_FLAG_LITERAL}' missing from promotion gate source — ` +
         "Phase 4-b authoritative-block channel is not declared (operator-gated authorisation may have been silently removed)",
+    surfaces: [PROMOTION_GATE_PATH],
+  });
+
+  // CHECK 8 (Phase 4-c) — gate source declares the operator-gated
+  // attestation-freshness env var. Additive source-level check that
+  // recognises Phase 4-c as an AUTHORISED authoritative-block source
+  // routed through the existing `gate.ok` boundary via
+  // `derivePhase3aPrepHardBlockFailures`. The check is satisfied by the
+  // presence of the literal env-var name in the gate source; it does
+  // NOT assert the env var is set at runtime (default off).
+  const phase4cFlagWired =
+    gateSource !== null &&
+    gateSource.includes(PHASE4C_FRESHNESS_FLAG_LITERAL);
+  findings.push({
+    id:    "phase4c_freshness_flag_wired",
+    label: "Promotion gate declares the Phase 4-c operator-gated attestation-freshness env var",
+    ok:    phase4cFlagWired,
+    detail: phase4cFlagWired
+      ? `Found literal '${PHASE4C_FRESHNESS_FLAG_LITERAL}' in promotion gate source — ` +
+        "Phase 4-c attestation-freshness authoritative-block channel is wired through the existing gate.ok boundary"
+      : `Literal '${PHASE4C_FRESHNESS_FLAG_LITERAL}' missing from promotion gate source — ` +
+        "Phase 4-c attestation-freshness channel is not declared (operator-gated authorisation may have been silently removed)",
     surfaces: [PROMOTION_GATE_PATH],
   });
 
