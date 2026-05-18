@@ -30,11 +30,12 @@ import { importSoulFromJson, soulRowExists } from "../server/repositories/soulRe
 import { importGoalsFromJson, goalsRowExists } from "../server/repositories/goalRepository.js";
 import { importCompetencyFromJson, competencyRowExists } from "../server/repositories/competencyRepository.js";
 import { importResearchFromJson, researchRowExists } from "../server/repositories/researchRepository.js";
+import { importDidWrite, type ImportResult } from "../server/repositories/jsonFallback.js";
 
 interface Target {
   name: string;
   jsonFile: string;
-  run: () => boolean;
+  run: () => ImportResult;
   verify: () => boolean;
 }
 
@@ -56,7 +57,7 @@ function backupJson(jsonPath: string): string | null {
 
 interface ReportEntry {
   name: string;
-  imported: boolean;
+  result?: ImportResult;
   verified?: boolean;
   backup?: string;
   error?: string;
@@ -69,11 +70,12 @@ function main(): number {
 
   for (const t of TARGETS) {
     try {
-      const imported = t.run();
+      const result = t.run();
+      const wrote = importDidWrite(result);
       let backup: string | undefined;
       let verified: boolean | undefined;
       let guardSkippedRename = false;
-      if (imported) {
+      if (wrote) {
         // Verify the DB row actually landed with a non-empty blob before
         // we destroy the source JSON. This protects against the edge case
         // where a future repo refactor leaves the writer broken — we'd
@@ -84,30 +86,38 @@ function main(): number {
         } else {
           guardSkippedRename = true;
           console.warn(
-            `[migrate]   ${t.name}: import returned true but DB row is empty — leaving ${t.jsonFile} in place`,
+            `[migrate]   ${t.name}: import returned "imported" but DB row is empty — leaving ${t.jsonFile} in place`,
           );
         }
       }
-      report.push({ name: t.name, imported, verified, backup, guardSkippedRename });
+      report.push({ name: t.name, result, verified, backup, guardSkippedRename });
+
+      // Headline status line. The "skipped-existing-db" branch is the new
+      // first-run-only guard (PR fix for the deploy/restart revert bug):
+      // every subsequent boot lands here and is a no-op against the DB.
+      const label =
+        result === "imported"            ? "imported" :
+        result === "skipped-existing-db" ? "skipped (DB already populated — first-run guard)" :
+        result === "skipped-no-source"   ? "skipped (no JSON, no .bak)" :
+                                           `unknown (${String(result)})`;
       const tail =
-        backup ? `(backup=${path.basename(backup)})` :
-        guardSkippedRename ? "(guard: rename skipped, JSON preserved)" :
+        backup ? ` (backup=${path.basename(backup)})` :
+        guardSkippedRename ? " (guard: rename skipped, JSON preserved)" :
         "";
-      console.log(
-        `[migrate]   ${t.name}: ${imported ? "imported" : "skipped (no JSON)"} ${tail}`.trim(),
-      );
+      console.log(`[migrate]   ${t.name}: ${label}${tail}`);
     } catch (e: any) {
-      report.push({ name: t.name, imported: false, error: e?.message });
+      report.push({ name: t.name, error: e?.message });
       console.error(`[migrate]   ${t.name}: FAILED (${e?.message})`);
     }
   }
 
-  const ok = report.filter(r => r.imported && r.verified).length;
+  const imported = report.filter(r => r.result === "imported" && r.verified).length;
   const guardSkipped = report.filter(r => r.guardSkippedRename).length;
+  const dbAlreadyPopulated = report.filter(r => r.result === "skipped-existing-db").length;
+  const noSource = report.filter(r => r.result === "skipped-no-source").length;
   const failed = report.filter(r => r.error).length;
-  const skippedNoJson = report.filter(r => !r.imported && !r.error).length;
   console.log(
-    `[migrate] Complete: ${ok} imported+verified, ${guardSkipped} guard-skipped-rename, ${failed} failed, ${skippedNoJson} skipped`,
+    `[migrate] Complete: ${imported} imported+verified, ${dbAlreadyPopulated} skipped-existing-db, ${noSource} skipped-no-source, ${guardSkipped} guard-skipped-rename, ${failed} failed`,
   );
   // We deliberately do not fail the whole migration when the guard skips a
   // rename — that's recoverable. We only return non-zero on hard errors.

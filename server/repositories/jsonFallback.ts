@@ -17,6 +17,18 @@
 
 import * as fs from "fs";
 
+/**
+ * Result of a first-run-only JSON→DB import. The migration script (and any
+ * future caller) reads this to decide whether to follow up with rename /
+ * verify side effects. Only `"imported"` should trigger those — a skip means
+ * the DB row already has data and we deliberately did NOT touch it.
+ */
+export type ImportResult = "imported" | "skipped-existing-db" | "skipped-no-source";
+
+export function importDidWrite(r: ImportResult): boolean {
+  return r === "imported";
+}
+
 export function isDbStateEnabled(): boolean {
   // Default true per spec. Explicit "false" disables.
   const v = (process.env.USE_DB_STATE ?? "true").toLowerCase();

@@ -10,7 +10,7 @@ import { db } from "../db.js";
 import { memorySoul, memorySoulHistory } from "@shared/schema";
 import { desc, eq } from "drizzle-orm";
 import { dataPath } from "../dataPaths.js";
-import { readThrough, readJsonWithBakFallback } from "./jsonFallback.js";
+import { readThrough, readJsonWithBakFallback, type ImportResult } from "./jsonFallback.js";
 
 const KEY = "current";
 const JSON_PATH = dataPath("memory_soul.json");
@@ -49,11 +49,17 @@ export function getSoulHistory(limit = 20): Array<{ version: number; capturedAt:
   return rows.map(r => ({ version: r.version, capturedAt: r.capturedAt, reason: r.reason, blob: r.blob }));
 }
 
-export function importSoulFromJson(): boolean {
+/**
+ * First-run-only JSON→DB import. If the DB row already has a non-empty
+ * blob, we do NOT overwrite it from JSON/.bak — see
+ * researchRepository.importResearchFromJson for the full contract.
+ */
+export function importSoulFromJson(): ImportResult {
+  if (soulRowExists()) return "skipped-existing-db";
   const body = readJsonWithBakFallback<{ version?: number } & Record<string, unknown>>(JSON_PATH);
-  if (body == null) return false;
+  if (body == null) return "skipped-no-source";
   writeSoulBlob(body, "initial JSON import");
-  return true;
+  return "imported";
 }
 
 /** Migration safety guard — true iff the DB row exists with a non-empty blob. */

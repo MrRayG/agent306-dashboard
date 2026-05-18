@@ -117,6 +117,10 @@ import {
   type ScoreInput,
 } from "./experiments/hypothesisRiskImpactScoring.js";
 import type { Hypothesis } from "./researchEngine.js";
+import {
+  buildStateSourceDiagnostics,
+  type StateSourceDiagnostics,
+} from "./stateSourceDiagnostics.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -221,6 +225,15 @@ export interface AutonomyMonitorSnapshot {
    * Always present; degrades to zero counts when source files are missing.
    */
   hypothesisIntakeAudit: HypothesisIntakeAuditVisibility;
+  /**
+   * Read-only diagnostic showing, per high-churn store, whether the SQLite
+   * row, live JSON, and `.bak` are present, their updatedAt timestamps,
+   * and short hashes — plus which source `readThrough()` would resolve to
+   * right now. Surfaced so operators can confirm the DB row is the live
+   * source after an apply, and that the on-boot JSON→DB migration is no
+   * longer overwriting it from a stale `.bak`. No mutation surface.
+   */
+  stateSourceDiagnostics: StateSourceDiagnostics;
   stages:         AutonomyStage[];
   /** Summary of "what is visible now / what remains" — text only. */
   pipelineSummary: {
@@ -1199,6 +1212,19 @@ export function buildAutonomyMonitorSnapshot(now: Date = new Date()): AutonomyMo
     },
   });
   const hypothesisIntakeAudit = buildHypothesisIntakeAuditVisibility({ now });
+  // Defensive: if the diagnostics builder throws (e.g. a future DB schema
+  // change), the autonomy monitor must still render. Degrade to an empty
+  // block with no rows rather than 500.
+  let stateSourceDiagnostics: StateSourceDiagnostics;
+  try {
+    stateSourceDiagnostics = buildStateSourceDiagnostics(now);
+  } catch (e: any) {
+    stateSourceDiagnostics = {
+      generatedAt: now.toISOString(),
+      rows: [],
+      warnings: [`stateSourceDiagnostics failed: ${e?.message ?? String(e)}`],
+    };
+  }
 
   return {
     generatedAt:    now.toISOString(),
@@ -1208,6 +1234,7 @@ export function buildAutonomyMonitorSnapshot(now: Date = new Date()): AutonomyMo
     selfRuleEnforcement,
     workloadBudget,
     hypothesisIntakeAudit,
+    stateSourceDiagnostics,
     stages,
     pipelineSummary: {
       implementedStageCount: implemented,

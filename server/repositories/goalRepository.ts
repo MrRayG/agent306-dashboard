@@ -10,7 +10,7 @@ import { db } from "../db.js";
 import { agentGoals } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { dataPath } from "../dataPaths.js";
-import { readThrough, readJsonWithBakFallback } from "./jsonFallback.js";
+import { readThrough, readJsonWithBakFallback, type ImportResult } from "./jsonFallback.js";
 
 const KEY = "main";
 const JSON_PATH = dataPath("agent_goals.json");
@@ -39,11 +39,17 @@ export function writeGoalsBlob(blob: unknown): void {
   }
 }
 
-export function importGoalsFromJson(): boolean {
+/**
+ * First-run-only JSON→DB import. If the DB row already has a non-empty
+ * blob, we do NOT overwrite it from JSON/.bak — see
+ * researchRepository.importResearchFromJson for the full contract.
+ */
+export function importGoalsFromJson(): ImportResult {
+  if (goalsRowExists()) return "skipped-existing-db";
   const body = readJsonWithBakFallback<unknown>(JSON_PATH);
-  if (body == null) return false;
+  if (body == null) return "skipped-no-source";
   writeGoalsBlob(body);
-  return true;
+  return "imported";
 }
 
 /** Migration safety guard — true iff the DB row exists with a non-empty blob. */
