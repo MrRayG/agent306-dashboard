@@ -86,6 +86,16 @@ export interface PromotionAttestation {
   /** Echoed candidateId from the parsed candidate. Empty string when
    *  `status === "parse_error"` and no candidate could be reconstructed. */
   readonly candidateId:   string;
+  /** Echoed caller-asserted ISO-8601 timestamp from the parsed candidate
+   *  (`Phase3aPrepCandidate.attestedAt`). Empty string when
+   *  `status === "parse_error"` — the parse_error path is already
+   *  hard-blocked by the existing Phase 4-b logic when the flag is on,
+   *  so this sentinel value is never actually consulted by the freshness
+   *  gate; it exists so the type stays sound and downstream code never
+   *  has to special-case absence. The Phase 4-c freshness gate
+   *  (`isPhase3aAttestationStale` in `promotionGate.ts`) reads this field
+   *  on `evaluated` attestations only. */
+  readonly attestedAt:    string;
   /** Readiness verdict — present iff `status === "evaluated"`. */
   readonly readiness:     Phase3aPrepReadiness | null;
   /** Non-fatal warnings the adapter emitted (e.g. "multiple
@@ -148,7 +158,15 @@ function validateAttestation(
  *  the typed object on success or a string describing the first failed
  *  check. Never throws. The validator is intentionally STRICT — partial
  *  candidates are rejected so the audit trail shows a `parse_error`
- *  rather than a misleading `not_ready` verdict on a hollow object. */
+ *  rather than a misleading `not_ready` verdict on a hollow object.
+ *
+ *  Pin (Phase 4-c): the validator does NOT read the clock. It enforces
+ *  `attestedAt` is a parseable ISO-8601 string but does NOT range-check
+ *  against `now` — the freshness gate (`isPhase3aAttestationStale` in
+ *  `server/eval/promotionGate.ts`) handles staleness AND future-dating
+ *  on `evaluated` attestations only. This keeps the adapter's
+ *  documented purity contract intact (no clock/env/fs/network reads).
+ */
 function validateCandidate(
   raw: unknown,
 ): Phase3aPrepCandidate | string {
@@ -159,6 +177,12 @@ function validateCandidate(
     return "candidate.candidateId: must be a non-empty string";
   if (o.kind !== "summarizationTemplate")
     return `candidate.kind: must equal "summarizationTemplate" (got ${JSON.stringify(o.kind)})`;
+  if (!("attestedAt" in o))
+    return "candidate.attestedAt: required ISO-8601 string is missing";
+  if (typeof o.attestedAt !== "string" || o.attestedAt.length === 0)
+    return "candidate.attestedAt: must be a non-empty ISO-8601 string";
+  if (!Number.isFinite(Date.parse(o.attestedAt)))
+    return `candidate.attestedAt: not a parseable ISO-8601 timestamp (got ${JSON.stringify(o.attestedAt)})`;
   if (o.preconditions === null || typeof o.preconditions !== "object")
     return "candidate.preconditions: must be an object";
   const pre = o.preconditions as Record<string, unknown>;
@@ -179,6 +203,7 @@ function validateCandidate(
   return {
     candidateId: o.candidateId,
     kind:        "summarizationTemplate",
+    attestedAt:  o.attestedAt,
     preconditions: out as Phase3aPrepCandidatePreconditions,
   };
 }
@@ -245,6 +270,7 @@ export function buildPhase3aPrepAttestation(
       harnessVersion: PHASE3A_PREP_HARNESS_VERSION,
       status:         "parse_error" as const,
       candidateId:    "",
+      attestedAt:     "",
       readiness:      null,
       parseWarnings:  Object.freeze(warnings.slice()),
       parseError:     `JSON parse failed: ${msg}`,
@@ -253,6 +279,10 @@ export function buildPhase3aPrepAttestation(
 
   const validated = validateCandidate(parsed);
   if (typeof validated === "string") {
+    // Echo `attestedAt` from the raw parse when it happens to already be
+    // a string — this keeps the audit trail informative even for failed
+    // validations. Anything non-string becomes the empty-string sentinel.
+    const rawAttestedAt = (parsed as { attestedAt?: unknown } | null)?.attestedAt;
     return Object.freeze({
       source:         "phase3aPrep" as const,
       harnessVersion: PHASE3A_PREP_HARNESS_VERSION,
@@ -261,6 +291,7 @@ export function buildPhase3aPrepAttestation(
         typeof (parsed as { candidateId?: unknown })?.candidateId === "string"
           ? ((parsed as { candidateId: string }).candidateId)
           : "",
+      attestedAt:     typeof rawAttestedAt === "string" ? rawAttestedAt : "",
       readiness:      null,
       parseWarnings:  Object.freeze(warnings.slice()),
       parseError:     `shape validation failed: ${validated}`,
@@ -273,6 +304,7 @@ export function buildPhase3aPrepAttestation(
     harnessVersion: PHASE3A_PREP_HARNESS_VERSION,
     status:         "evaluated" as const,
     candidateId:    validated.candidateId,
+    attestedAt:     validated.attestedAt,
     readiness,
     parseWarnings:  Object.freeze(warnings.slice()),
     parseError:     null,

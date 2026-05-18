@@ -75,6 +75,8 @@ function fullySatisfiedCandidate(candidateId = "cand-gate-1") {
   return {
     candidateId,
     kind: "summarizationTemplate",
+    // attestedAt: REQUIRED as of Phase 4-c (PR #401). Fixed default keeps existing tests deterministic.
+    attestedAt: "2026-05-18T19:00:00.000Z",
     preconditions,
   };
 }

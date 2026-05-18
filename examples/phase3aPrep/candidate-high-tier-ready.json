@@ -1,6 +1,7 @@
 {
   "candidateId": "example-high-tier-ready",
   "kind": "summarizationTemplate",
+  "attestedAt": "2026-05-18T19:00:00.000Z",
   "preconditions": {
     "reversibleLowRiskActionOnly": {
       "high": {

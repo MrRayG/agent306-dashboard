@@ -217,6 +217,8 @@ function makeCandidate(
   return {
     candidateId: overrides.candidateId ?? "test-candidate-1",
     kind: (overrides.kind ?? "summarizationTemplate") as "summarizationTemplate",
+    // attestedAt: REQUIRED as of Phase 4-c (PR #401). Fixed default keeps existing tests deterministic.
+    attestedAt: overrides.attestedAt ?? "2026-05-18T19:00:00.000Z",
     preconditions: preconditions as Phase3aPrepCandidate["preconditions"],
   };
 }

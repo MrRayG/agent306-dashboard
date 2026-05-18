@@ -106,7 +106,8 @@ function fullySatisfiedCandidate(candidateId = "cand-p4a-ready") {
       low:  { key, priority: "low",  status: "satisfied", evidenceRef: "ref://l", rationale: "l" },
     };
   }
-  return { candidateId, kind: "summarizationTemplate", preconditions };
+  // attestedAt: REQUIRED as of Phase 4-c (PR #401). Fixed default keeps existing tests deterministic.
+  return { candidateId, kind: "summarizationTemplate", attestedAt: "2026-05-18T19:00:00.000Z", preconditions };
 }
 
 /** A candidate whose first precondition's high-tier is `unverified` so

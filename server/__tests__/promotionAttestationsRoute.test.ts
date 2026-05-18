@@ -86,7 +86,8 @@ function fullySatisfiedCandidate(candidateId: string): Record<string, unknown> {
     }
     preconditions[key] = tiers;
   }
-  return { candidateId, kind: "summarizationTemplate", preconditions };
+  // attestedAt: REQUIRED as of Phase 4-c (PR #401). Fixed default keeps existing tests deterministic.
+  return { candidateId, kind: "summarizationTemplate", attestedAt: "2026-05-18T19:00:00.000Z", preconditions };
 }
 
 describe("phase3b-b — GET /api/self-recommendations/:id/attestations", () => {

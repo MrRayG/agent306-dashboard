@@ -96,8 +96,17 @@ function fullyAttested(status: "satisfied" | "violated" | "unverified"): Record<
   return out;
 }
 
-function candidateWith(preconditions: unknown, candidateId = "cand-1", kind: unknown = "summarizationTemplate") {
-  return { candidateId, kind, preconditions };
+function candidateWith(
+  preconditions: unknown,
+  candidateId = "cand-1",
+  kind: unknown = "summarizationTemplate",
+  attestedAt: unknown = "2026-05-18T19:00:00.000Z",
+) {
+  // `attestedAt` is REQUIRED by validateCandidate as of Phase 4-c
+  // (PR #401). All historical fixtures default to a fixed ISO timestamp
+  // so existing tests remain deterministic; tests that exercise the
+  // attestedAt validation path pass an explicit override.
+  return { candidateId, kind, preconditions, attestedAt };
 }
 
 function evidenceMarker(payload: unknown): string {

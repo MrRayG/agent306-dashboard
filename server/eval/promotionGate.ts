@@ -152,6 +152,96 @@ export function readPhase3aPrepBlockLowRiskFlag(): boolean {
   return v.toLowerCase() === "true";
 }
 
+/** Env-var identifier for the Phase 4-c attestation-freshness gate.
+ *  When this env var is set to a positive integer AND the Phase 4-b
+ *  master switch is on AND the recommendation is `risk === "low"` AND
+ *  the phase3aPrep attestation otherwise passes (status='evaluated',
+ *  verdict='fully_prepared'), the gate hard-blocks promotion when the
+ *  attestation's `attestedAt` timestamp is older than that many days.
+ *  Default behavior (env unset / empty / non-numeric / <= 0) is
+ *  identical to pre-4-c: no freshness check, no behavior change.
+ *  Phase 4-c does NOT touch medium/high-risk gating. */
+export const PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS_ENV =
+  "PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS" as const;
+
+/** Pure helper: parse the Phase 4-c freshness env var. Returns:
+ *    - null when env unset / empty / whitespace-only
+ *    - null when the parsed integer is not finite or <= 0
+ *    - the positive integer otherwise (whole days, max age inclusive)
+ *  Operator-facing: pick the unit so the env var reads naturally as
+ *  "max age in days". The gate translates days → ms internally. */
+export function readPhase3aPrepMaxAgeDays(): number | null {
+  const v = process.env[PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS_ENV];
+  if (typeof v !== "string" || v.trim() === "") return null;
+  const n = Number.parseInt(v, 10);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
+
+/** Pure helper (exported for tests): decide whether a single phase3aPrep
+ *  attestation should be treated as STALE under the Phase 4-c freshness
+ *  rule. Same input → same output. NEVER reads env / clock / fs / db —
+ *  `now` is passed by the caller (milliseconds since epoch).
+ *
+ *  Returns:
+ *    - false when `maxAgeDays === null` (freshness gate disabled)
+ *    - false when `attestation.status === "parse_error"` (the existing
+ *      Phase 4-b parse_error path already hard-blocks; don't double-fire)
+ *    - false when `attestation.attestedAt` is empty / not a parseable
+ *      ISO timestamp (defensive — let the existing parse_error path or
+ *      the verdict-not-fully_prepared path fire instead; we don't want
+ *      this helper to become a second "missing attestation" surface)
+ *    - true  when the parsed timestamp is older than
+ *      `now - maxAgeDays * 86_400_000` ms
+ *    - false otherwise (including future-dated; future-dating is handled
+ *      separately by `isPhase3aAttestationFutureDated`) */
+export function isPhase3aAttestationStale(
+  attestation: PromotionAttestation,
+  maxAgeDays:  number | null,
+  now:         number,
+): boolean {
+  if (maxAgeDays === null) return false;
+  if (attestation.status === "parse_error") return false;
+  if (typeof attestation.attestedAt !== "string" || attestation.attestedAt.length === 0) {
+    return false;
+  }
+  const parsed = Date.parse(attestation.attestedAt);
+  if (!Number.isFinite(parsed)) return false;
+  const maxAgeMs = maxAgeDays * 86_400_000;
+  return now - parsed > maxAgeMs;
+}
+
+/** Pure helper (exported for tests): decide whether a single phase3aPrep
+ *  attestation is future-dated relative to `now`. Future-dated
+ *  attestations are operator-supplied evidence claiming a future
+ *  computation time — they are nonsense and the freshness gate
+ *  authoritatively blocks them, but only when freshness is on (matching
+ *  the existing pattern: a freshness env var is the master switch for
+ *  every freshness-derived decision).
+ *
+ *  Returns:
+ *    - false when `maxAgeDays === null` (freshness gate disabled)
+ *    - false when status is `"parse_error"` (the existing 4-b parse_error
+ *      path already hard-blocks; don't double-fire)
+ *    - false when `attestedAt` is empty / unparseable (same reasoning as
+ *      `isPhase3aAttestationStale`)
+ *    - true  when the parsed timestamp is strictly greater than `now`
+ *    - false otherwise */
+export function isPhase3aAttestationFutureDated(
+  attestation: PromotionAttestation,
+  maxAgeDays:  number | null,
+  now:         number,
+): boolean {
+  if (maxAgeDays === null) return false;
+  if (attestation.status === "parse_error") return false;
+  if (typeof attestation.attestedAt !== "string" || attestation.attestedAt.length === 0) {
+    return false;
+  }
+  const parsed = Date.parse(attestation.attestedAt);
+  if (!Number.isFinite(parsed)) return false;
+  return parsed > now;
+}
+
 /** Pure helper (exported for tests): derive Phase 4-b hard-block
  *  failure strings from the attestation array.
  *
@@ -177,6 +267,8 @@ export function derivePhase3aPrepHardBlockFailures(
   attestations: ReadonlyArray<PromotionAttestation>,
   flagOn: boolean,
   risk: SelfRecommendation["risk"],
+  maxAgeDays: number | null = null,
+  now: number = Date.now(),
 ): string[] {
   if (!flagOn) return [];
   if (risk !== "low") return [];
@@ -211,6 +303,32 @@ export function derivePhase3aPrepHardBlockFailures(
       `(operator opted in via ${PROMOTION_GATE_BLOCK_LOW_RISK_ON_PHASE3A_PREP_NOT_READY_ENV}=true). ` +
       `Hard block — drive the candidate to verdict='fully_prepared' to unblock.`,
     ];
+  }
+
+  // Phase 4-c (this PR): once the existing verdict / parse_error /
+  // missing checks have all passed, optionally enforce attestation
+  // freshness. `maxAgeDays === null` keeps behavior byte-identical to
+  // pre-PR. Future-dating and over-age are evaluated in a deterministic
+  // order — at most one freshness failure is emitted. Determinism is
+  // important: a stale attestation that's also future-dated cannot
+  // exist (mutually exclusive), so the order only matters for emitting
+  // exactly one failure per attestation, never two.
+  if (maxAgeDays !== null) {
+    const candidate = att.candidateId.length > 0 ? att.candidateId : "(unknown)";
+    if (isPhase3aAttestationFutureDated(att, maxAgeDays, now)) {
+      return [
+        `phase3a_prep_attestation_future_dated (candidate '${candidate}', attestedAt='${att.attestedAt}'); ` +
+        `operator opted in via ${PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS_ENV}=${maxAgeDays}. ` +
+        `Hard block — re-compute the phase3aPrepCandidate evidence with a current timestamp.`,
+      ];
+    }
+    if (isPhase3aAttestationStale(att, maxAgeDays, now)) {
+      return [
+        `phase3a_prep_attestation_stale (candidate '${candidate}', attestedAt='${att.attestedAt}', older than ${maxAgeDays} days); ` +
+        `operator opted in via ${PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS_ENV}=${maxAgeDays}. ` +
+        `Hard block — re-attest the phase3aPrepCandidate evidence to refresh attestedAt.`,
+      ];
+    }
   }
 
   return [];
@@ -296,6 +414,14 @@ export async function canPromote(rec: SelfRecommendation): Promise<PromotionResu
   // mirrored by an update to `promotionBoundaryAudit` so the boundary
   // model recognises the new authorised block source.
   const hardBlockFlagOn = readPhase3aPrepBlockLowRiskFlag();
+  // Phase 4-c: env var snapshot taken ONCE. null = freshness check
+  // disabled (default). When set to a positive integer, the low-risk
+  // branch additionally enforces `attestedAt` freshness via
+  // `derivePhase3aPrepHardBlockFailures`. The freshness check ONLY runs
+  // when Phase 4-b is on (hardBlockFlagOn === true); 4-b is the master
+  // switch. Medium-risk and high-risk branches do NOT call the helper
+  // at all and remain untouched by Phase 4-c.
+  const phase3aMaxAgeDays = readPhase3aPrepMaxAgeDays();
 
   // Single helper used by every return path. Computes soft warnings
   // strictly AFTER the gate has decided its own `ok` / `failures` /
@@ -352,6 +478,8 @@ export async function canPromote(rec: SelfRecommendation): Promise<PromotionResu
       attestations,
       hardBlockFlagOn,
       rec.risk,
+      phase3aMaxAgeDays,
+      Date.now(),
     );
     if (hardBlockFailures.length > 0) {
       for (const f of hardBlockFailures) failures.push(f);
