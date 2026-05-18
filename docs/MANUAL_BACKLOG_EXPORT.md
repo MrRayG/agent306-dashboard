@@ -85,3 +85,9 @@ name. Pin `--now` and `--out-dir` to get byte-identical reruns.
 `examples/backlog-export-sample/` carries a synthetic 3 + 4 + 2 export
 showing the file layout. See its README for the fixture and how it was
 produced. The sample is **NOT** production data.
+
+## See also
+
+- `docs/BACKLOG_REWRITE_ASSISTANT.md` — step 2 of the workflow:
+  feed this export's `backlog.json` into the rewrite assistant to get
+  per-item Markdown DRAFT rewrites for operator review.
