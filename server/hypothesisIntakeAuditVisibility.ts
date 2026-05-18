@@ -154,6 +154,17 @@ export interface ResetBucketSummary {
   exampleIds: string[];
   /** Short operator-facing description of the bucket. */
   description: string;
+  /**
+   * Optional related count surfaced alongside the bucket so the dashboard
+   * does not look inconsistent with adjacent projections. For
+   * `promote_later_memory_origin` we surface the live unpromoted memory-origin
+   * count here (from memoryOrigin.unpromoted) — the reset bucket itself stays
+   * formal-only, but the operator sees the memory-origin number in the same
+   * row so it cannot disappear silently. READ-ONLY informational field.
+   */
+  relatedCount?: number;
+  /** Operator-facing label for `relatedCount` when set. */
+  relatedCountLabel?: string;
 }
 
 export interface ActiveCapPolicy {
@@ -774,7 +785,7 @@ const BUCKET_DESCRIPTIONS: Readonly<Record<ResetBucket, string>> = Object.freeze
   already_archived:              "Record was previously archived by a prior reset apply (status=stale-retired with archived_* hygieneTag) — listed for audit only, NOT eligible for any further CLI archive.",
   rewrite_positional_debate:     "Claim shaped like 'Position A vs Position B' with no evidence path on either side. Rewrite as a research-gap claim with a metric and deadline.",
   rewrite_missing_evidence_path: "Required field missing (measurementPath, metric, or basis). Operator must fill before re-entering the loop.",
-  promote_later_memory_origin:   "Memory-origin (Hypothesis: …) entry that has NOT been promoted to a formal record. Promotion is operator-only.",
+  promote_later_memory_origin:   "FORMAL-ONLY bucket: counts formal records that would be deferred to the memory-origin promotion track. Memory-origin entries themselves live in memory_knowledge.json and are NOT counted here — see `memoryOrigin.unpromoted` below for the live unpromoted-memory-origin count, which is operator-only and never applied by the CLI.",
   needs_operator_review:         "Conservative fallback — hygiene classifier flagged needs_data / needs_rewrite / needs_review.",
 });
 
@@ -1018,6 +1029,7 @@ function buildResetBuckets(
   hyps: HygieneAwareHypothesis[],
   now: Date,
   staleDays: number,
+  memoryOriginUnpromoted: number,
 ): ResetBucketSummary[] {
   const examples: Record<ResetBucket, string[]> = Object.create(null);
   const counts: Record<ResetBucket, number> = Object.create(null);
@@ -1030,12 +1042,23 @@ function buildResetBuckets(
     counts[entry.bucket]++;
     if (examples[entry.bucket].length < 5) examples[entry.bucket].push(entry.id);
   }
-  return RESET_BUCKETS.map(b => ({
-    bucket:      b,
-    count:       counts[b],
-    exampleIds:  examples[b],
-    description: BUCKET_DESCRIPTIONS[b],
-  }));
+  return RESET_BUCKETS.map(b => {
+    const base: ResetBucketSummary = {
+      bucket:      b,
+      count:       counts[b],
+      exampleIds:  examples[b],
+      description: BUCKET_DESCRIPTIONS[b],
+    };
+    // promote_later_memory_origin is formal-only by classifier design — the
+    // memory-origin entries themselves live in memory_knowledge.json. Surface
+    // the live unpromoted-memory-origin count alongside the bucket so the
+    // dashboard cannot look inconsistent with the memoryOrigin projection.
+    if (b === "promote_later_memory_origin") {
+      base.relatedCount = memoryOriginUnpromoted;
+      base.relatedCountLabel = "live unpromoted memory-origin entries (operator-only promotion; not applied by CLI)";
+    }
+    return base;
+  });
 }
 
 // ── Manual-backlog gate ─────────────────────────────────────────────────────
@@ -1268,8 +1291,8 @@ export function buildHypothesisIntakeAuditVisibility(
 
   const formationSources = buildFormationSources(hyps, formalStoreLabel, formalDataMissing, memory, memoryMissing);
   const capPolicy = buildActiveCapPolicy(hyps, defaults);
-  const resetBuckets = buildResetBuckets(hyps, now, staleDays);
   const memoryOrigin = buildMemoryOriginProjection(memory, memoryMissing);
+  const resetBuckets = buildResetBuckets(hyps, now, staleDays, memoryOrigin.unpromoted);
   const intakeQuality = buildIntakeQualityProjection(hyps);
   const manualBacklogGate = buildManualBacklogGate(resetBuckets, memoryOrigin, manualBacklogThreshold);
   const intakeGateConfig = buildIntakeGateConfig(defaults);
