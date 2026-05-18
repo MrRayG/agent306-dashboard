@@ -103,3 +103,47 @@ jobs:
         run: bash scripts/checkCoreStateIntegrity.sh
         env:
           NODE_ENV: test
+
+  agent306-safety-gates:
+    # Phase 4-b post-merge safety gates:
+    #   1. Promotion-boundary audit must exit 0 (no second status='applied'
+    #      write site, applyRecommendation still gates on approved +
+    #      canPromote(rec).ok). The script already exits 2 on `status=
+    #      violated`, so adding it here is enough to fail the PR.
+    #   2. Intake-gate enforcement + bypass-guard tests must pass. These
+    #      already run inside the aggregate `npm test` job — running the
+    #      pinned subset here surfaces the failure on its own dedicated
+    #      check line so the operator sees WHICH gate failed at a glance.
+    #
+    # This job intentionally duplicates a small slice of the aggregate
+    # job's coverage. The duplication is the point: the boundary +
+    # intake-gate invariants are load-bearing for the propose-only
+    # contract, and a separate green-check is cheaper than diagnosing a
+    # red aggregate that bundles unrelated failures.
+    name: agent306-safety-gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Promotion-boundary audit (single-write-site invariant)
+        run: npx tsx scripts/auditPromotionBoundary.ts
+        env:
+          NODE_ENV: test
+
+      - name: Intake-gate enforcement + bypass-guard + first-run migration tests
+        run: >-
+          npx tsx --test
+          server/__tests__/intakeGateEnforcement.test.ts
+          server/__tests__/intakeGateBypassGuard.test.ts
+          server/__tests__/migrationFirstRunGuard.test.ts
+        env:
+          NODE_ENV: test
