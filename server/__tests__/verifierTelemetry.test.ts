@@ -80,7 +80,12 @@ describe("verifier telemetry (Roadmap E1)", () => {
     assert.equal(row, undefined, "verifier_result must not emit when engine is unset");
   });
 
-  it("severity HARD_FAIL maps to level=error", async () => {
+  it("severity HARD_FAIL maps to level=info with category=safety_gate (PR #405)", async () => {
+    // PR #405 contract: HARD_FAIL is the safety gate firing correctly, not
+    // a system fault. Demoted to level="info" with a `category: "safety_gate"`
+    // discriminator in `data` so error-rate dashboards can exclude correct
+    // gate firings while a dedicated Verifier Rejections panel can still
+    // count them by querying `data.category = 'safety_gate'`.
     await verifyClaims({
       draftText: "According to the report, the lead said \"we have solved alignment\" entirely.",
       sourceText: "The report describes incremental progress.",
@@ -97,8 +102,9 @@ describe("verifier telemetry (Roadmap E1)", () => {
       .orderBy(desc(engineEvents.id))
       .get();
     assert.ok(row);
-    assert.equal(row!.level, "error");
+    assert.equal(row!.level, "info", "HARD_FAIL should now emit level=info (PR #405)");
     const data = JSON.parse(row!.data);
-    assert.equal(data.severity, "HARD_FAIL");
+    assert.equal(data.severity, "HARD_FAIL", "severity field unchanged");
+    assert.equal(data.category, "safety_gate", "category discriminator for HARD_FAIL");
   });
 });

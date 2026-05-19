@@ -568,11 +568,21 @@ export async function verifyClaims(opts: VerifyClaimsOpts): Promise<ClaimVerdict
   if (opts.engine) {
     try {
       const { summary, severity, judgeOutage, artifactMode } = verdict.verifierReport;
+      // PR #405: HARD_FAIL is the safety gate firing correctly, not a system
+      // fault. Demoting to `info` so error-rate dashboards stop treating
+      // correct verifier rejections as outages. A `category: "safety_gate"`
+      // discriminator is added to `data` so consumers can still surface gate
+      // firings on dedicated panels (Verifier Rejections (24h)) without
+      // polluting error budgets. SOFT_WARN stays at `warn` because it's an
+      // ambiguity signal, not a deterministic gate decision. Genuine engine
+      // failures (LLM timeout, DB write fail, judge outage upstream of the
+      // verifier) continue to emit `level: "error"` from their own emitters.
       logEvent({
         engine: opts.engine,
         event: "verifier_result",
-        level: severity === "HARD_FAIL" ? "error" : severity === "SOFT_WARN" ? "warn" : "info",
+        level: severity === "SOFT_WARN" ? "warn" : "info",
         data: {
+          category: severity === "HARD_FAIL" ? "safety_gate" : "verifier_signal",
           tier: opts.tier ?? null,
           mode: artifactMode ?? null,
           severity,
