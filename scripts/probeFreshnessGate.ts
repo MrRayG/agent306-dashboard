@@ -99,9 +99,11 @@ import {
   canPromote,
   readPhase3aPrepMaxAgeDays,
   readPhase3aPrepBlockLowRiskFlag,
+  readPhase3aPrepBlockMediumRiskFlag,
   readPhase3aPrepReadyRequiredFlag,
   PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS_ENV,
   PROMOTION_GATE_BLOCK_LOW_RISK_ON_PHASE3A_PREP_NOT_READY_ENV,
+  PROMOTION_GATE_BLOCK_MEDIUM_RISK_ON_PHASE3A_PREP_NOT_READY_ENV,
   PROMOTION_GATE_REQUIRE_PHASE3A_PREP_READY_ENV,
   type PromotionResult,
 } from "../server/eval/promotionGate.js";
@@ -453,6 +455,11 @@ export interface ProbeFreshnessGateResult {
      *  the probe payload. */
     requirePhase3aPrepReady:                 boolean;
     blockLowRiskOnPhase3aPrepNotReady:       boolean;
+    /** Whether `PROMOTION_GATE_BLOCK_MEDIUM_RISK_ON_PHASE3A_PREP_NOT_READY`
+     *  is set to `"true"` (Phase 4-c part 2 / PR #403). Surfaced so the
+     *  operator can verify the deployed binary recognises the medium-
+     *  risk hard-block opt-in when probing with `--risk medium`. */
+    blockMediumRiskOnPhase3aPrepNotReady:    boolean;
     /** The parsed numeric value of the freshness env var (or null when
      *  disabled). This IS echoed because the probe's whole purpose is
      *  to verify this value is taking effect. */
@@ -474,8 +481,9 @@ export function buildProbeResult(
   const rec        = buildSyntheticRecommendation(candidate, options.risk, nowIso);
 
   const deployedEnv = {
-    requirePhase3aPrepReady:           readPhase3aPrepReadyRequiredFlag(),
-    blockLowRiskOnPhase3aPrepNotReady: readPhase3aPrepBlockLowRiskFlag(),
+    requirePhase3aPrepReady:              readPhase3aPrepReadyRequiredFlag(),
+    blockLowRiskOnPhase3aPrepNotReady:    readPhase3aPrepBlockLowRiskFlag(),
+    blockMediumRiskOnPhase3aPrepNotReady: readPhase3aPrepBlockMediumRiskFlag(),
     phase3aPrepMaxAgeDays:             readPhase3aPrepMaxAgeDays(),
   } as const;
 

@@ -43,6 +43,7 @@ import {
 import {
   PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS_ENV,
   PROMOTION_GATE_BLOCK_LOW_RISK_ON_PHASE3A_PREP_NOT_READY_ENV,
+  PROMOTION_GATE_BLOCK_MEDIUM_RISK_ON_PHASE3A_PREP_NOT_READY_ENV,
 } from "../eval/promotionGate.js";
 import { PHASE3A_PREP_EVIDENCE_PREFIX } from "../eval/phase3aPrepAttestation.js";
 
@@ -384,6 +385,134 @@ describe("probeFreshnessGate — runProbeFreshnessGateCli end-to-end", () => {
     } finally {
       restoreEnv(PROMOTION_GATE_BLOCK_LOW_RISK_ON_PHASE3A_PREP_NOT_READY_ENV, prevHB);
       restoreEnv(PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS_ENV, prevMA);
+    }
+  });
+});
+
+/* ─── 4b. Phase 4-c part 2 (PR #403): medium-risk hard-block path ──── */
+
+describe("probeFreshnessGate — Phase 4-c part 2 medium-risk", () => {
+  it("--risk medium + medium-risk env true + freshness ENV=1 + stale → exit 2, gate.ok=false, failureClass=phase4c_stale", async () => {
+    const prevMed = setEnv(PROMOTION_GATE_BLOCK_MEDIUM_RISK_ON_PHASE3A_PREP_NOT_READY_ENV, "true");
+    const prevMA  = setEnv(PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS_ENV, "1");
+    try {
+      const { io, out } = captureIo();
+      const r = await runProbeFreshnessGateCli(
+        ["--age-days", "30", "--risk", "medium"],
+        io,
+        FIXED_NOW_MS,
+      );
+      assert.equal(r.exitCode, 2);
+      assert.equal(r.probe!.gateResult.ok, false);
+      assert.equal(r.probe!.inputs.risk, "medium");
+      assert.match(out.join(""), /failureClass=phase4c_stale/);
+      assert.match(
+        r.probe!.gateResult.failures.join(" | "),
+        /phase3a_prep_attestation_stale.*risk=medium/,
+      );
+    } finally {
+      restoreEnv(PROMOTION_GATE_BLOCK_MEDIUM_RISK_ON_PHASE3A_PREP_NOT_READY_ENV, prevMed);
+      restoreEnv(PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS_ENV, prevMA);
+    }
+  });
+
+  it("--risk medium + medium-risk env true + future-dated → exit 2, failureClass=phase4c_future_dated", async () => {
+    const prevMed = setEnv(PROMOTION_GATE_BLOCK_MEDIUM_RISK_ON_PHASE3A_PREP_NOT_READY_ENV, "true");
+    const prevMA  = setEnv(PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS_ENV, "1");
+    try {
+      const { io, out } = captureIo();
+      const r = await runProbeFreshnessGateCli(
+        ["--age-days", "-5", "--risk", "medium"],
+        io,
+        FIXED_NOW_MS,
+      );
+      assert.equal(r.exitCode, 2);
+      assert.match(out.join(""), /failureClass=phase4c_future_dated/);
+      assert.match(
+        r.probe!.gateResult.failures.join(" | "),
+        /phase3a_prep_attestation_future_dated.*risk=medium/,
+      );
+    } finally {
+      restoreEnv(PROMOTION_GATE_BLOCK_MEDIUM_RISK_ON_PHASE3A_PREP_NOT_READY_ENV, prevMed);
+      restoreEnv(PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS_ENV, prevMA);
+    }
+  });
+
+  it("--risk medium + medium-risk env true + verdict=not_ready → exit 2, gate.ok=false", async () => {
+    const prevMed = setEnv(PROMOTION_GATE_BLOCK_MEDIUM_RISK_ON_PHASE3A_PREP_NOT_READY_ENV, "true");
+    try {
+      const { io } = captureIo();
+      const r = await runProbeFreshnessGateCli(
+        ["--age-days", "0", "--risk", "medium", "--verdict", "not_ready"],
+        io,
+        FIXED_NOW_MS,
+      );
+      assert.equal(r.exitCode, 2);
+      assert.equal(r.probe!.gateResult.ok, false);
+      assert.match(
+        r.probe!.gateResult.failures.join(" | "),
+        /not_ready.*risk=medium/,
+      );
+    } finally {
+      restoreEnv(PROMOTION_GATE_BLOCK_MEDIUM_RISK_ON_PHASE3A_PREP_NOT_READY_ENV, prevMed);
+    }
+  });
+
+  it("--risk medium + medium-risk env UNSET + freshness ENV=1 + stale → NO 4-c-pt2 freshness failure (backward compat)", async () => {
+    const prevMed = setEnv(PROMOTION_GATE_BLOCK_MEDIUM_RISK_ON_PHASE3A_PREP_NOT_READY_ENV, undefined);
+    const prevMA  = setEnv(PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS_ENV, "1");
+    try {
+      const { io } = captureIo();
+      const r = await runProbeFreshnessGateCli(
+        ["--age-days", "30", "--risk", "medium"],
+        io,
+        FIXED_NOW_MS,
+      );
+      // The new medium-risk env is off; no Phase 4-c pt2 stale failure
+      // should surface (the existing low-risk freshness helper also
+      // returns [] for risk='medium').
+      assert.equal(
+        r.probe!.gateResult.failures.some(f =>
+          /phase3a_prep_attestation_stale/.test(f) ||
+          /phase3a_prep_attestation_future_dated/.test(f),
+        ),
+        false,
+        `unexpected freshness failure when medium-risk env unset: ${r.probe!.gateResult.failures.join(", ")}`,
+      );
+    } finally {
+      restoreEnv(PROMOTION_GATE_BLOCK_MEDIUM_RISK_ON_PHASE3A_PREP_NOT_READY_ENV, prevMed);
+      restoreEnv(PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS_ENV, prevMA);
+    }
+  });
+
+  it("deployedEnv.blockMediumRiskOnPhase3aPrepNotReady reflects the env var state", async () => {
+    {
+      const prev = setEnv(PROMOTION_GATE_BLOCK_MEDIUM_RISK_ON_PHASE3A_PREP_NOT_READY_ENV, "true");
+      try {
+        const { io } = captureIo();
+        const r = await runProbeFreshnessGateCli(
+          ["--age-days", "0", "--risk", "medium"],
+          io,
+          FIXED_NOW_MS,
+        );
+        assert.equal(r.probe!.deployedEnv.blockMediumRiskOnPhase3aPrepNotReady, true);
+      } finally {
+        restoreEnv(PROMOTION_GATE_BLOCK_MEDIUM_RISK_ON_PHASE3A_PREP_NOT_READY_ENV, prev);
+      }
+    }
+    {
+      const prev = setEnv(PROMOTION_GATE_BLOCK_MEDIUM_RISK_ON_PHASE3A_PREP_NOT_READY_ENV, undefined);
+      try {
+        const { io } = captureIo();
+        const r = await runProbeFreshnessGateCli(
+          ["--age-days", "0", "--risk", "low"],
+          io,
+          FIXED_NOW_MS,
+        );
+        assert.equal(r.probe!.deployedEnv.blockMediumRiskOnPhase3aPrepNotReady, false);
+      } finally {
+        restoreEnv(PROMOTION_GATE_BLOCK_MEDIUM_RISK_ON_PHASE3A_PREP_NOT_READY_ENV, prev);
+      }
     }
   });
 });

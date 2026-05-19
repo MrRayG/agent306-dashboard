@@ -84,7 +84,7 @@ import * as path from "node:path";
 
 /** Stable schema identifier for the audit payload. Bumped only when the
  *  result shape changes in a backwards-incompatible way. */
-export const PROMOTION_BOUNDARY_AUDIT_SCHEMA_VERSION = "phase2m-c.v1";
+export const PROMOTION_BOUNDARY_AUDIT_SCHEMA_VERSION = "phase2m-c.v2";
 
 /** Stable label embedded so an operator can confirm provenance at a glance. */
 export const PROMOTION_BOUNDARY_AUDIT_LABEL =
@@ -229,6 +229,22 @@ const PHASE4B_HARD_BLOCK_FLAG_LITERAL =
  *  asserted here — that contract is owned by the gate's tests. */
 const PHASE4C_FRESHNESS_FLAG_LITERAL =
   "PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS";
+
+/** Literal name of the Phase 4-c part 2 (PR #403) medium-risk
+ *  hard-block env var. When set to `"true"` AND the rec is medium-risk,
+ *  the gate hard-blocks medium-risk promotions whose phase3aPrep
+ *  attestation is missing / parse_error / not `fully_prepared` / stale /
+ *  future-dated. The audit confirms the gate source declares this env
+ *  var so a rename / removal surfaces as a failing finding. Default-off
+ *  (env unset) behaviour is not asserted here. */
+const PHASE4C_MEDIUM_RISK_HARD_BLOCK_FLAG_LITERAL =
+  "PROMOTION_GATE_BLOCK_MEDIUM_RISK_ON_PHASE3A_PREP_NOT_READY";
+
+/** Literal name of the new medium-risk derive helper. The audit's
+ *  CHECK 9 grep asserts the helper exists in the gate source, so a
+ *  rename / accidental deletion is caught at PR time. */
+const PHASE4C_MEDIUM_RISK_DERIVE_HELPER_LITERAL =
+  "deriveMediumRiskPhase3aPrepHardBlockFailures";
 
 /**
  * Read a repo-relative source file as UTF-8 text. Returns `null` when the
@@ -614,6 +630,33 @@ export function auditPromotionBoundary(
         "Phase 4-c attestation-freshness authoritative-block channel is wired through the existing gate.ok boundary"
       : `Literal '${PHASE4C_FRESHNESS_FLAG_LITERAL}' missing from promotion gate source — ` +
         "Phase 4-c attestation-freshness channel is not declared (operator-gated authorisation may have been silently removed)",
+    surfaces: [PROMOTION_GATE_PATH],
+  });
+
+  // CHECK 9 (Phase 4-c part 2, PR #403) — gate source declares the
+  // operator-gated medium-risk hard-block env var AND its derive helper
+  // is wired into the gate's code path. Additive source-level check that
+  // recognises Phase 4-c part 2 as an AUTHORISED authoritative-block
+  // source routed through the existing `gate.ok` boundary via
+  // `deriveMediumRiskPhase3aPrepHardBlockFailures`. The check is
+  // satisfied by the presence of BOTH literal names in the gate source;
+  // it does NOT assert the env var is set at runtime (default off).
+  // Two-literal check catches the "constant declared but never used"
+  // failure mode where a future refactor accidentally removes the
+  // helper call site while leaving the env-var constant in place.
+  const phase4cMediumRiskFlagWired =
+    gateSource !== null &&
+    gateSource.includes(PHASE4C_MEDIUM_RISK_HARD_BLOCK_FLAG_LITERAL) &&
+    gateSource.includes(PHASE4C_MEDIUM_RISK_DERIVE_HELPER_LITERAL);
+  findings.push({
+    id:    "phase4c_medium_risk_hard_block_wired",
+    label: "Promotion gate declares the Phase 4-c part 2 operator-gated medium-risk hard-block flag and its derive helper",
+    ok:    phase4cMediumRiskFlagWired,
+    detail: phase4cMediumRiskFlagWired
+      ? `Found literal '${PHASE4C_MEDIUM_RISK_HARD_BLOCK_FLAG_LITERAL}' and helper '${PHASE4C_MEDIUM_RISK_DERIVE_HELPER_LITERAL}' in promotion gate source — ` +
+        "Phase 4-c part 2 medium-risk authoritative-block channel is wired through the existing gate.ok boundary"
+      : `Literal '${PHASE4C_MEDIUM_RISK_HARD_BLOCK_FLAG_LITERAL}' or helper '${PHASE4C_MEDIUM_RISK_DERIVE_HELPER_LITERAL}' missing from promotion gate source — ` +
+        "Phase 4-c part 2 medium-risk hard-block channel is not declared (operator-gated authorisation may have been silently removed)",
     surfaces: [PROMOTION_GATE_PATH],
   });
 
