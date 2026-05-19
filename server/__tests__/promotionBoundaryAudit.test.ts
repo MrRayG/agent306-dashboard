@@ -201,7 +201,7 @@ describe("Phase 2m-b — constants and identifiers", () => {
   });
 
   it("schema constants are stable", () => {
-    assert.equal(PROMOTION_BOUNDARY_AUDIT_SCHEMA_VERSION, "phase2m-c.v1");
+    assert.equal(PROMOTION_BOUNDARY_AUDIT_SCHEMA_VERSION, "phase2m-c.v2");
     assert.equal(PROMOTION_BOUNDARY_AUDIT_LABEL, "agent306.promotion_boundary_audit");
     assert.ok(PROMOTION_BOUNDARY_AUDIT_SAFETY_DISCLAIMER.length > 0);
   });
@@ -282,6 +282,11 @@ describe("Phase 2m-b — audit helper on the real repo", () => {
       // phase3aPrep attestation is older than
       // PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS days.
       "phase4c_freshness_flag_wired",
+      // Phase 4-c part 2 (PR #403): confirms the gate declares the
+      // operator-gated medium-risk hard-block flag literal AND that
+      // its derive helper (deriveMediumRiskPhase3aPrepHardBlockFailures)
+      // is wired into the gate code path.
+      "phase4c_medium_risk_hard_block_wired",
       "promotion_gate_exports_canPromote",
       "single_write_site_for_status_applied",
     ]);
