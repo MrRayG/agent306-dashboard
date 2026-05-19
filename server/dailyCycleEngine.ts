@@ -507,7 +507,13 @@ async function autoDebateManuscripts(): Promise<number> {
 // ── Auto-reject stale forming hypotheses ────────────────────────────────────
 
 function pruneStaleFormingHypotheses(): number {
-  const STALE_FORMING_DAYS = 14;
+  // Tunable via env. Default lowered 14→7 in PR #406 to double passive
+  // drain rate of stuck `forming` hypotheses. The pre-eval state machine
+  // still classifies these into archive buckets first; this is the fallback.
+  const STALE_FORMING_DAYS = parseInt(
+    process.env.STALE_FORMING_DAYS ?? "7",
+    10,
+  );
   const now = Date.now();
   const { getResearchLab: getLabForPruning, saveResearchLab: saveLabForPruning } = require("./researchEngine.js");
   const lab = getLabForPruning();
@@ -528,7 +534,7 @@ function pruneStaleFormingHypotheses(): number {
 
   if (pruned > 0) {
     saveLabForPruning(lab);
-    console.log(`[DailyCycle] Pruned ${pruned} stale forming hypotheses (>14 days with no progress)`);
+    console.log(`[DailyCycle] Pruned ${pruned} stale forming hypotheses (>${STALE_FORMING_DAYS} days with no progress)`);
   }
   return pruned;
 }
@@ -540,6 +546,34 @@ async function autoResolveHypotheses(): Promise<number> {
   const fourHoursAgo = Date.now() - 4 * 60 * 60 * 1000;
   const now = new Date();
 
+  // PR #406: hard ceiling on active queue. If the `forming + testing`
+  // population exceeds MAX_ACTIVE_HYPOTHESES (default 50), skip the
+  // LLM-spend path for this cycle and let the state-machine + STALE_FORMING
+  // pruner drain naturally. Self-healing without operator intervention.
+  const MAX_ACTIVE_HYPOTHESES = parseInt(
+    process.env.MAX_ACTIVE_HYPOTHESES ?? "50",
+    10,
+  );
+  const activeCount = lab.hypotheses.filter(
+    h => h.status === "forming" || h.status === "testing",
+  ).length;
+  if (activeCount > MAX_ACTIVE_HYPOTHESES) {
+    console.log(
+      `[DailyCycle] Active queue (${activeCount}) above hard cap ` +
+      `(${MAX_ACTIVE_HYPOTHESES}); skipping LLM resolution this cycle ` +
+      `to let state machine drain. Set MAX_ACTIVE_HYPOTHESES env to tune.`,
+    );
+    return 0;
+  }
+
+  // PR #406: batch size lowered 50→20 to cap worst-case cycle wall-clock
+  // at ~45 min (was ~2h). Tunable via env. Leftover mature hypotheses get
+  // picked up next cycle — no records are lost, only deferred.
+  const MATURE_BATCH_SIZE = parseInt(
+    process.env.MATURE_BATCH_SIZE ?? "20",
+    10,
+  );
+
   // Include awaiting-deadline hypotheses whose deadline has passed (or whose
   // daily re-check is due) so they can transition forward when data arrives.
   const mature = lab.hypotheses
@@ -548,7 +582,7 @@ async function autoResolveHypotheses(): Promise<number> {
       const isDue    = h.status === "awaiting-deadline" && shouldRecheckDeadline(h, now);
       return (isActive || isDue) && new Date(h.formedAt).getTime() < fourHoursAgo;
     })
-    .slice(0, 50);
+    .slice(0, MATURE_BATCH_SIZE);
 
   // Collect transitions to emit a per-cycle summary log.
   const transitions: Array<{ to: HypothesisState }> = [];
