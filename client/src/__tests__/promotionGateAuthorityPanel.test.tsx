@@ -53,6 +53,25 @@ function mkSnap(opts: { softOn: boolean; hardOn: boolean }): PromotionGateAuthor
         currentEffect: opts.hardOn ? "ENABLED. Low-risk hard block active." : "DEFAULT OFF.",
         changeOnEnable: "Makes phase3aPrep authoritative for low-risk only.",
       },
+      // v2 (PR #406): the two Phase 4-c flag blocks. This existing
+      // fixture exercises the default-off path; Phase 4-c-specific
+      // states are covered by promotionGateAuthorityPanel.phase4c.test.tsx.
+      phase4cFreshnessGate: {
+        envVar:        "PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS",
+        enabled:       false,
+        phase:         "phase4-c-freshness",
+        description:   "Phase 4-c freshness threshold.",
+        currentEffect: "DEFAULT OFF.",
+        changeOnEnable: "Arms the freshness gate.",
+      },
+      phase4cMediumRiskBlock: {
+        envVar:        "PROMOTION_GATE_BLOCK_MEDIUM_RISK_ON_PHASE3A_PREP_NOT_READY",
+        enabled:       false,
+        phase:         "phase4-c-medium-block",
+        description:   "Phase 4-c part 2 medium-risk hard block.",
+        currentEffect: "DEFAULT OFF.",
+        changeOnEnable: "Makes phase3aPrep authoritative for medium-risk.",
+      },
     },
     riskClassVerdicts: [
       {
