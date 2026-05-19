@@ -12,7 +12,8 @@ import * as React from "react";
 export interface PromotionGateAuthorityFlag {
   envVar:        string;
   enabled:       boolean;
-  phase:         "phase4-a" | "phase4-b";
+  // v2 (PR #406): extended to include the two Phase 4-c phases.
+  phase:         "phase4-a" | "phase4-b" | "phase4-c-freshness" | "phase4-c-medium-block";
   description:   string;
   currentEffect: string;
   changeOnEnable: string;
@@ -40,7 +41,10 @@ export type PromotionGateAuthorityLevel =
   | "advisory_only"
   | "soft_warning_enabled"
   | "low_risk_hard_block_enabled"
-  | "soft_warning_and_low_risk_hard_block_enabled";
+  | "soft_warning_and_low_risk_hard_block_enabled"
+  // v2 (PR #406)
+  | "phase4c_freshness_active"
+  | "phase4c_medium_risk_hard_block_enabled";
 
 export interface PromotionGateAuthorityVisibility {
   schemaVersion:  string;
@@ -48,9 +52,15 @@ export interface PromotionGateAuthorityVisibility {
   authorityLevel: PromotionGateAuthorityLevel;
   headline:       string;
   summary:        string;
+  // v2 (PR #406) — the two Phase 4-c flag blocks are required. They are
+  // typed as required (not optional) so a stale snapshot served from a
+  // v1 backend fails at type-check time rather than silently rendering
+  // an empty placeholder.
   flags: {
-    phase4aSoftWarning:  PromotionGateAuthorityFlag;
-    phase4bLowRiskBlock: PromotionGateAuthorityFlag;
+    phase4aSoftWarning:     PromotionGateAuthorityFlag;
+    phase4bLowRiskBlock:    PromotionGateAuthorityFlag;
+    phase4cFreshnessGate:   PromotionGateAuthorityFlag;
+    phase4cMediumRiskBlock: PromotionGateAuthorityFlag;
   };
   riskClassVerdicts:      PromotionGateRiskClassVerdict[];
   boundaryAuditReference: PromotionGateAuthorityAuditReference;
@@ -73,11 +83,15 @@ const BLUE = "#60a5fa";
 
 function authorityLevelColor(level: PromotionGateAuthorityLevel): string {
   switch (level) {
-    case "advisory_only":                              return BLUE;
-    case "soft_warning_enabled":                       return YELLOW;
-    case "low_risk_hard_block_enabled":                return ORANGE;
-    case "soft_warning_and_low_risk_hard_block_enabled": return ORANGE;
-    default:                                           return DIM;
+    case "advisory_only":                                  return BLUE;
+    case "soft_warning_enabled":                           return YELLOW;
+    case "low_risk_hard_block_enabled":                    return ORANGE;
+    case "soft_warning_and_low_risk_hard_block_enabled":   return ORANGE;
+    // v2 (PR #406): both Phase 4-c states are rendered in orange
+    // because they represent an authoritative block surface (per-tier).
+    case "phase4c_freshness_active":                       return ORANGE;
+    case "phase4c_medium_risk_hard_block_enabled":         return ORANGE;
+    default:                                               return DIM;
   }
 }
 
@@ -143,7 +157,12 @@ export function PromotionGateAuthorityPanel({ p }: { p: PromotionGateAuthorityVi
           marginTop: "0.5rem",
         }}
       >
-        {[p.flags.phase4aSoftWarning, p.flags.phase4bLowRiskBlock].map(flag => {
+        {[
+          p.flags.phase4aSoftWarning,
+          p.flags.phase4bLowRiskBlock,
+          p.flags.phase4cFreshnessGate,
+          p.flags.phase4cMediumRiskBlock,
+        ].map(flag => {
           const flagColor = flag.enabled ? GREEN : DIM;
           return (
             <div

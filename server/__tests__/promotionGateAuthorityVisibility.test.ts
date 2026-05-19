@@ -29,6 +29,11 @@ import {
 
 const PHASE_4A_ENV = "PROMOTION_GATE_REQUIRE_PHASE3A_PREP_READY";
 const PHASE_4B_ENV = "PROMOTION_GATE_BLOCK_LOW_RISK_ON_PHASE3A_PREP_NOT_READY";
+// v2 (PR #406) env-var literals — pin them here so a rename in
+// server/eval/promotionGate.ts surfaces as a failing test rather than
+// a silent drift on the dashboard.
+const PHASE_4C_FRESHNESS_ENV   = "PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS";
+const PHASE_4C_MEDIUM_BLOCK_ENV = "PROMOTION_GATE_BLOCK_MEDIUM_RISK_ON_PHASE3A_PREP_NOT_READY";
 
 describe("promotionGateAuthorityVisibility — deriveAuthorityLevel", () => {
   it("returns advisory_only when both flags are off", () => {
@@ -208,7 +213,15 @@ describe("promotionGateAuthorityVisibility — buildPromotionGateAuthorityVisibi
     assert.match(snap.invariants.visibilityOnly, /read-only/i);
     assert.match(snap.invariants.singleWriteSiteIntact, /Pin 11/);
     assert.match(snap.invariants.singleWriteSiteIntact, /canPromote/);
-    assert.match(snap.invariants.phaseScope, /Medium-risk and high-risk/);
+    // v2 (PR #406): phaseScope now describes that Phase 4-c IS implemented
+    // for low-risk freshness AND medium-risk hard block, while Phase 4-d
+    // (high-risk) remains explicitly UNAFFECTED. Pin the accurate wording.
+    assert.match(snap.invariants.phaseScope, /Phase 4-c/);
+    assert.match(snap.invariants.phaseScope, /low-risk freshness/);
+    assert.match(snap.invariants.phaseScope, /medium-risk hard block/);
+    assert.match(snap.invariants.phaseScope, /Phase 4-d/);
+    assert.match(snap.invariants.phaseScope, /UNAFFECTED/);
+    assert.match(snap.invariants.phaseScope, /high-risk/);
   });
 
   it("is pure: calling it does not mutate process.env", () => {
@@ -276,5 +289,223 @@ describe("promotionGateAuthorityVisibility — buildPromotionGateAuthorityVisibi
     assert.match(snap.summary, /High-risk/);
     assert.match(snap.flags.phase4bLowRiskBlock.currentEffect, /ENABLED/);
     assert.match(snap.flags.phase4aSoftWarning.currentEffect, /DEFAULT OFF/);
+  });
+});
+
+/* ─── v2 (PR #406) — Phase 4-c flag visibility ──────────────────────── */
+
+describe("promotionGateAuthorityVisibility v2 — schema bump", () => {
+  it("schemaVersion is phase4-visibility.v2", () => {
+    assert.equal(PROMOTION_GATE_AUTHORITY_VISIBILITY_SCHEMA_VERSION, "phase4-visibility.v2");
+  });
+
+  it("snapshot reports the v2 schemaVersion literally", () => {
+    const snap = buildPromotionGateAuthorityVisibility({
+      softWarningFlagOn:           false,
+      lowRiskHardBlockFlagOn:      false,
+      phase4cFreshnessMaxAgeDays:  null,
+      phase4cMediumRiskBlockOn:    false,
+    });
+    assert.equal(snap.schemaVersion, "phase4-visibility.v2");
+  });
+});
+
+describe("promotionGateAuthorityVisibility v2 — Phase 4-c flag blocks", () => {
+  it("default (all four flags off): new flag blocks are present and disabled", () => {
+    const snap = buildPromotionGateAuthorityVisibility({
+      softWarningFlagOn:           false,
+      lowRiskHardBlockFlagOn:      false,
+      phase4cFreshnessMaxAgeDays:  null,
+      phase4cMediumRiskBlockOn:    false,
+    });
+    assert.ok(snap.flags.phase4cFreshnessGate, "phase4cFreshnessGate flag block missing");
+    assert.ok(snap.flags.phase4cMediumRiskBlock, "phase4cMediumRiskBlock flag block missing");
+    assert.equal(snap.flags.phase4cFreshnessGate.enabled, false);
+    assert.equal(snap.flags.phase4cMediumRiskBlock.enabled, false);
+    assert.equal(snap.flags.phase4cFreshnessGate.envVar, PHASE_4C_FRESHNESS_ENV);
+    assert.equal(snap.flags.phase4cMediumRiskBlock.envVar, PHASE_4C_MEDIUM_BLOCK_ENV);
+    assert.equal(snap.flags.phase4cFreshnessGate.phase, "phase4-c-freshness");
+    assert.equal(snap.flags.phase4cMediumRiskBlock.phase, "phase4-c-medium-block");
+    assert.match(snap.flags.phase4cFreshnessGate.currentEffect, /DEFAULT OFF/);
+    assert.match(snap.flags.phase4cMediumRiskBlock.currentEffect, /DEFAULT OFF/);
+  });
+
+  it("freshness gate enabled: numeric value appears in description / currentEffect", () => {
+    const snap = buildPromotionGateAuthorityVisibility({
+      softWarningFlagOn:           false,
+      lowRiskHardBlockFlagOn:      false,
+      phase4cFreshnessMaxAgeDays:  14,
+      phase4cMediumRiskBlockOn:    false,
+    });
+    assert.equal(snap.flags.phase4cFreshnessGate.enabled, true);
+    assert.match(snap.flags.phase4cFreshnessGate.currentEffect, /ENABLED at 14 day/);
+    // The numeric value is surfaced — option (a) per PR #406 spec, no
+    // new `numericValue` field on the flag interface.
+    assert.match(snap.flags.phase4cFreshnessGate.currentEffect, /\b14\b/);
+  });
+
+  it("medium-risk block enabled (default off freshness): authority level reports phase4c medium-risk", () => {
+    const snap = buildPromotionGateAuthorityVisibility({
+      softWarningFlagOn:           false,
+      lowRiskHardBlockFlagOn:      false,
+      phase4cFreshnessMaxAgeDays:  null,
+      phase4cMediumRiskBlockOn:    true,
+    });
+    assert.equal(snap.flags.phase4cMediumRiskBlock.enabled, true);
+    assert.match(snap.flags.phase4cMediumRiskBlock.currentEffect, /ENABLED/);
+    assert.equal(snap.authorityLevel, "phase4c_medium_risk_hard_block_enabled");
+  });
+
+  it("freshness gate ON + medium-risk block OFF: authority level is phase4c_freshness_active", () => {
+    const snap = buildPromotionGateAuthorityVisibility({
+      softWarningFlagOn:           false,
+      lowRiskHardBlockFlagOn:      false,
+      phase4cFreshnessMaxAgeDays:  7,
+      phase4cMediumRiskBlockOn:    false,
+    });
+    assert.equal(snap.authorityLevel, "phase4c_freshness_active");
+  });
+
+  it("medium-risk block ON wins over low-risk + soft-warning combos in authority level", () => {
+    const snap = buildPromotionGateAuthorityVisibility({
+      softWarningFlagOn:           true,
+      lowRiskHardBlockFlagOn:      true,
+      phase4cFreshnessMaxAgeDays:  14,
+      phase4cMediumRiskBlockOn:    true,
+    });
+    // The medium-risk-block state is the most restrictive in our union;
+    // when it's on, the headline must mention medium-risk explicitly.
+    assert.equal(snap.authorityLevel, "phase4c_medium_risk_hard_block_enabled");
+    assert.match(snap.headline, /medium-risk/);
+  });
+
+  it("medium-risk verdict reflects hard-block ON; high-risk remains untouched", () => {
+    const snap = buildPromotionGateAuthorityVisibility({
+      softWarningFlagOn:           false,
+      lowRiskHardBlockFlagOn:      false,
+      phase4cFreshnessMaxAgeDays:  14,
+      phase4cMediumRiskBlockOn:    true,
+    });
+    const med = snap.riskClassVerdicts.find(v => v.riskClass === "medium")!;
+    const high = snap.riskClassVerdicts.find(v => v.riskClass === "high")!;
+    assert.equal(med.hardBlocked, true);
+    assert.match(med.posture, /Phase 4-c part 2/);
+    assert.match(med.posture, /14 day/);
+    assert.equal(high.hardBlocked, false);
+    assert.match(high.posture, /UNAFFECTED|Unaffected/);
+  });
+
+  it("low-risk verdict surfaces freshness clause when Phase 4-b is ON and freshness is configured", () => {
+    const snap = buildPromotionGateAuthorityVisibility({
+      softWarningFlagOn:           false,
+      lowRiskHardBlockFlagOn:      true,
+      phase4cFreshnessMaxAgeDays:  7,
+      phase4cMediumRiskBlockOn:    false,
+    });
+    const low = snap.riskClassVerdicts.find(v => v.riskClass === "low")!;
+    assert.equal(low.hardBlocked, true);
+    assert.match(low.posture, /7 day/);
+    assert.match(low.posture, /Phase 4-c/);
+  });
+
+  it("low-risk verdict does NOT surface freshness clause when Phase 4-b is OFF (no double-fire)", () => {
+    const snap = buildPromotionGateAuthorityVisibility({
+      softWarningFlagOn:           false,
+      lowRiskHardBlockFlagOn:      false,
+      phase4cFreshnessMaxAgeDays:  7,
+      phase4cMediumRiskBlockOn:    false,
+    });
+    const low = snap.riskClassVerdicts.find(v => v.riskClass === "low")!;
+    // Phase 4-b is off — freshness has nothing to enforce on low-risk
+    // today. The verdict must not falsely claim a freshness gate.
+    assert.equal(low.hardBlocked, false);
+    assert.doesNotMatch(low.posture, /7 day/);
+  });
+
+  it("Phase 4-c freshness gate reads from process.env when override is undefined", () => {
+    const prev = process.env[PHASE_4C_FRESHNESS_ENV];
+    try {
+      process.env[PHASE_4C_FRESHNESS_ENV] = "30";
+      const snap = buildPromotionGateAuthorityVisibility();
+      assert.equal(snap.flags.phase4cFreshnessGate.enabled, true);
+      assert.match(snap.flags.phase4cFreshnessGate.currentEffect, /30 day/);
+    } finally {
+      if (prev === undefined) delete process.env[PHASE_4C_FRESHNESS_ENV];
+      else process.env[PHASE_4C_FRESHNESS_ENV] = prev;
+    }
+  });
+
+  it("Phase 4-c medium-risk block reads from process.env when override is undefined", () => {
+    const prev = process.env[PHASE_4C_MEDIUM_BLOCK_ENV];
+    try {
+      process.env[PHASE_4C_MEDIUM_BLOCK_ENV] = "true";
+      const snap = buildPromotionGateAuthorityVisibility();
+      assert.equal(snap.flags.phase4cMediumRiskBlock.enabled, true);
+    } finally {
+      if (prev === undefined) delete process.env[PHASE_4C_MEDIUM_BLOCK_ENV];
+      else process.env[PHASE_4C_MEDIUM_BLOCK_ENV] = prev;
+    }
+  });
+
+  it("backward-compat: a v1 caller that passes only 2 booleans still gets a valid v2 snapshot", () => {
+    // Old code path: omits the two new override fields. The snapshot
+    // must still build, with phase4cFreshness off and phase4cMediumRisk
+    // off — derived from the live env, which is also unset.
+    const prevF = process.env[PHASE_4C_FRESHNESS_ENV];
+    const prevM = process.env[PHASE_4C_MEDIUM_BLOCK_ENV];
+    try {
+      delete process.env[PHASE_4C_FRESHNESS_ENV];
+      delete process.env[PHASE_4C_MEDIUM_BLOCK_ENV];
+      const snap = buildPromotionGateAuthorityVisibility({
+        softWarningFlagOn:      false,
+        lowRiskHardBlockFlagOn: false,
+      });
+      assert.equal(snap.flags.phase4cFreshnessGate.enabled, false);
+      assert.equal(snap.flags.phase4cMediumRiskBlock.enabled, false);
+      assert.equal(snap.authorityLevel, "advisory_only");
+    } finally {
+      if (prevF !== undefined) process.env[PHASE_4C_FRESHNESS_ENV] = prevF;
+      if (prevM !== undefined) process.env[PHASE_4C_MEDIUM_BLOCK_ENV] = prevM;
+    }
+  });
+
+  it("deriveAuthorityLevel: all four-input combinatorics", () => {
+    // (softWarn, lowBlock, freshness, medBlock) → expected level
+    type Row = [boolean, boolean, boolean, boolean, PromotionGateAuthorityLevel];
+    const rows: Row[] = [
+      // Phase 4-c medium-risk block dominates whenever it's on.
+      [false, false, false, true,  "phase4c_medium_risk_hard_block_enabled"],
+      [true,  false, false, true,  "phase4c_medium_risk_hard_block_enabled"],
+      [false, true,  true,  true,  "phase4c_medium_risk_hard_block_enabled"],
+      [true,  true,  true,  true,  "phase4c_medium_risk_hard_block_enabled"],
+      // Both 4-a + 4-b on (no medium-risk) keeps the v1 string.
+      [true,  true,  false, false, "soft_warning_and_low_risk_hard_block_enabled"],
+      [true,  true,  true,  false, "soft_warning_and_low_risk_hard_block_enabled"],
+      // 4-b only.
+      [false, true,  false, false, "low_risk_hard_block_enabled"],
+      [false, true,  true,  false, "low_risk_hard_block_enabled"],
+      // Freshness without 4-b reports phase4c_freshness_active.
+      [false, false, true,  false, "phase4c_freshness_active"],
+      // 4-a only (no freshness).
+      [true,  false, false, false, "soft_warning_enabled"],
+      // All off.
+      [false, false, false, false, "advisory_only"],
+    ];
+    for (const [a, b, f, m, expected] of rows) {
+      assert.equal(
+        deriveAuthorityLevel(a, b, f, m),
+        expected,
+        `a=${a} b=${b} f=${f} m=${m}`,
+      );
+    }
+  });
+
+  it("renderRiskClassVerdicts v1 signature still works (default freshness/medium-block off)", () => {
+    // Existing v1 callers pass only 2 args. The medium-risk verdict
+    // must remain "Unaffected by Phase 4 flags" — byte-identical to v1.
+    const v = renderRiskClassVerdicts(false, false);
+    const med = v.find(x => x.riskClass === "medium")!;
+    assert.equal(med.hardBlocked, false);
+    assert.match(med.posture, /Unaffected by Phase 4 flags/);
   });
 });
