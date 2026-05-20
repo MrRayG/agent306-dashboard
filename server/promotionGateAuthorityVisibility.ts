@@ -52,10 +52,12 @@ import {
   PROMOTION_GATE_REQUIRE_PHASE3A_PREP_READY_ENV,
   PROMOTION_GATE_BLOCK_LOW_RISK_ON_PHASE3A_PREP_NOT_READY_ENV,
   PROMOTION_GATE_BLOCK_MEDIUM_RISK_ON_PHASE3A_PREP_NOT_READY_ENV,
+  PROMOTION_GATE_BLOCK_HIGH_RISK_ON_PHASE3A_PREP_NOT_READY_ENV,
   PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS_ENV,
   readPhase3aPrepReadyRequiredFlag,
   readPhase3aPrepBlockLowRiskFlag,
   readPhase3aPrepBlockMediumRiskFlag,
+  readPhase3aPrepBlockHighRiskFlag,
   readPhase3aPrepMaxAgeDays,
 } from "./eval/promotionGate.js";
 import {
@@ -77,7 +79,7 @@ import {
  *  still parse the v2 payload; only consumers that opt into the new
  *  fields need to know about v2. */
 export const PROMOTION_GATE_AUTHORITY_VISIBILITY_SCHEMA_VERSION =
-  "phase4-visibility.v2";
+  "phase4-visibility.v3";
 
 /** Stable label embedded so an operator can confirm provenance. */
 export const PROMOTION_GATE_AUTHORITY_VISIBILITY_LABEL =
@@ -87,8 +89,10 @@ export const PROMOTION_GATE_AUTHORITY_VISIBILITY_LABEL =
  *  v2 adds `phase4c_freshness_active` (PR #401 freshness gate without
  *  medium-risk block) and `phase4c_medium_risk_hard_block_enabled` (PR
  *  #403 medium-risk block, which implies the freshness gate is also
- *  active when MAX_AGE_DAYS is set). The four v1 levels are preserved
- *  unchanged. */
+ *  active when MAX_AGE_DAYS is set). v3 (PR #408) adds
+ *  `phase4d_high_risk_hard_block_enabled` (PR #408 high-risk block,
+ *  the most restrictive level). The earlier v1 / v2 levels are
+ *  preserved unchanged. */
 export type PromotionGateAuthorityLevel =
   /** Default. None of the Phase 4 operator flags is on. The gate
    *  behaves as it has historically: golden-set policy for medium/high
@@ -122,7 +126,18 @@ export type PromotionGateAuthorityLevel =
    *  shared MAX_AGE_DAYS env). High-risk recommendations remain
    *  unaffected. This level is reported regardless of whether the
    *  low-risk Phase 4-b flag is also on. */
-  | "phase4c_medium_risk_hard_block_enabled";
+  | "phase4c_medium_risk_hard_block_enabled"
+  /** v3 (PR #408): Phase 4-d high-risk hard block is enabled. When this
+   *  is on, high-risk recommendations are authoritatively blocked on
+   *  attestation readiness AND freshness (using the same shared
+   *  MAX_AGE_DAYS env). Phase 4-d STACKS on top of the existing
+   *  `PROMOTION_GATE_ALLOW_HIGH_RISK` operator override — it does NOT
+   *  replace it. When the flag is on AND the attestation passes, the
+   *  rec STILL needs `PROMOTION_GATE_ALLOW_HIGH_RISK=true` to clear.
+   *  This level is reported as the most restrictive whenever it is
+   *  active, regardless of whether the low-risk Phase 4-b and/or
+   *  medium-risk Phase 4-c flags are also on. */
+  | "phase4d_high_risk_hard_block_enabled";
 
 /** Per-flag rendered state. */
 export interface PromotionGateAuthorityFlag {
@@ -136,7 +151,7 @@ export interface PromotionGateAuthorityFlag {
   enabled:       boolean;
   /** Phase identifier for the operator. v2 (PR #406) adds the two
    *  Phase 4-c phases. */
-  phase:         "phase4-a" | "phase4-b" | "phase4-c-freshness" | "phase4-c-medium-block";
+  phase:         "phase4-a" | "phase4-b" | "phase4-c-freshness" | "phase4-c-medium-block" | "phase4-d-high-block";
   /** Natural-language description of what this flag controls today. */
   description:   string;
   /** Natural-language statement of the flag's CURRENT effect (enabled vs
@@ -198,6 +213,7 @@ export interface PromotionGateAuthorityVisibility {
     phase4bLowRiskBlock:    PromotionGateAuthorityFlag;
     phase4cFreshnessGate:   PromotionGateAuthorityFlag;
     phase4cMediumRiskBlock: PromotionGateAuthorityFlag;
+    phase4dHighRiskBlock:   PromotionGateAuthorityFlag;
   };
   /** Per-risk-class natural-language verdicts. */
   riskClassVerdicts: PromotionGateRiskClassVerdict[];
@@ -218,23 +234,30 @@ export interface PromotionGateAuthorityVisibility {
  *  iff `PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS` parses to a positive
  *  integer) and `phase4cMediumRiskBlockOn` (true iff
  *  `PROMOTION_GATE_BLOCK_MEDIUM_RISK_ON_PHASE3A_PREP_NOT_READY === "true"`).
+ *  v3 (PR #408) extends the signature with `phase4dHighRiskBlockOn`
+ *  (true iff `PROMOTION_GATE_BLOCK_HIGH_RISK_ON_PHASE3A_PREP_NOT_READY === "true"`).
  *
  *  Priority order (most restrictive wins):
- *    1. phase4cMediumRiskBlockOn → `phase4c_medium_risk_hard_block_enabled`
- *    2. lowRiskHardBlockFlagOn + softWarningFlagOn → `soft_warning_and_low_risk_hard_block_enabled`
- *    3. lowRiskHardBlockFlagOn → `low_risk_hard_block_enabled`
- *    4. phase4cFreshnessOn → `phase4c_freshness_active`
- *    5. softWarningFlagOn → `soft_warning_enabled`
- *    6. otherwise → `advisory_only`
+ *    1. phase4dHighRiskBlockOn → `phase4d_high_risk_hard_block_enabled`
+ *    2. phase4cMediumRiskBlockOn → `phase4c_medium_risk_hard_block_enabled`
+ *    3. lowRiskHardBlockFlagOn + softWarningFlagOn → `soft_warning_and_low_risk_hard_block_enabled`
+ *    4. lowRiskHardBlockFlagOn → `low_risk_hard_block_enabled`
+ *    5. phase4cFreshnessOn → `phase4c_freshness_active`
+ *    6. softWarningFlagOn → `soft_warning_enabled`
+ *    7. otherwise → `advisory_only`
  *
- *  Defaulting the two new args preserves byte-identical behaviour for
- *  any v1 caller that still passes only two booleans. */
+ *  Defaulting the new args preserves byte-identical behaviour for any
+ *  v1 / v2 caller. */
 export function deriveAuthorityLevel(
   softWarningFlagOn: boolean,
   lowRiskHardBlockFlagOn: boolean,
   phase4cFreshnessOn:        boolean = false,
   phase4cMediumRiskBlockOn:  boolean = false,
+  phase4dHighRiskBlockOn:    boolean = false,
 ): PromotionGateAuthorityLevel {
+  if (phase4dHighRiskBlockOn) {
+    return "phase4d_high_risk_hard_block_enabled";
+  }
   if (phase4cMediumRiskBlockOn) {
     return "phase4c_medium_risk_hard_block_enabled";
   }
@@ -262,6 +285,8 @@ export function renderAuthorityHeadline(level: PromotionGateAuthorityLevel): str
       return "Phase 4-c freshness gate is configured (PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS > 0) — when paired with the Phase 4-b low-risk hard block, low-risk attestations older than the configured window are hard-blocked. The Phase 4-c medium-risk hard block remains off, so medium-risk and high-risk recommendations are not affected by Phase 4-c.";
     case "phase4c_medium_risk_hard_block_enabled":
       return "Phase 4-c part 2 medium-risk hard block is enabled — medium-risk recommendations are authoritatively blocked when their phase3aPrep attestation is missing, parse_error, not fully_prepared, or (when the freshness threshold is set) stale or future-dated. Low-risk gating follows its own Phase 4-b flag; high-risk recommendations remain unaffected.";
+    case "phase4d_high_risk_hard_block_enabled":
+      return "Phase 4-d high-risk hard block is enabled — high-risk recommendations are authoritatively blocked when their phase3aPrep attestation is missing, parse_error, not fully_prepared, or (when the freshness threshold is set) stale or future-dated. Phase 4-d STACKS on top of the existing PROMOTION_GATE_ALLOW_HIGH_RISK operator override — even when the attestation passes, the rec still requires PROMOTION_GATE_ALLOW_HIGH_RISK=true to clear. Low-risk and medium-risk gating follow their own Phase 4-b / Phase 4-c flags.";
   }
 }
 
@@ -275,6 +300,7 @@ export function renderAuthoritySummary(
   lowRiskHardBlockFlagOn: boolean,
   phase4cFreshnessMaxAgeDays: number | null = null,
   phase4cMediumRiskBlockOn:    boolean      = false,
+  phase4dHighRiskBlockOn:      boolean      = false,
 ): string {
   const phase4cFreshnessOn = phase4cFreshnessMaxAgeDays !== null;
   const parts: string[] = [];
@@ -307,9 +333,18 @@ export function renderAuthoritySummary(
       "Medium-risk recommendations are unaffected by these Phase 4 flags. They continue to follow the existing golden-set policy: any failing case blocks promotion.",
     );
   }
-  parts.push(
-    "High-risk recommendations are unaffected by these Phase 4 flags. They additionally require the explicit operator override PROMOTION_GATE_ALLOW_HIGH_RISK=true on top of golden-set success.",
-  );
+  if (phase4dHighRiskBlockOn) {
+    const freshnessClause = phase4cFreshnessMaxAgeDays !== null
+      ? `, or is older than ${phase4cFreshnessMaxAgeDays} day(s)`
+      : "";
+    parts.push(
+      `High-risk recommendations are currently blocked when the Phase 3a-prep readiness attestation is missing, fails to parse, reports a verdict other than 'fully_prepared'${freshnessClause}. The block is authoritative — it routes through the existing canPromote(rec).ok boundary, with no new write site. Golden-set policy continues to apply on top, and Phase 4-d STACKS on top of PROMOTION_GATE_ALLOW_HIGH_RISK=true — even when the attestation passes, high-risk still requires that operator override to clear.`,
+    );
+  } else {
+    parts.push(
+      "High-risk recommendations are unaffected by these Phase 4 flags. They additionally require the explicit operator override PROMOTION_GATE_ALLOW_HIGH_RISK=true on top of golden-set success.",
+    );
+  }
 
   if (softWarningFlagOn) {
     parts.push(
@@ -353,6 +388,7 @@ export function renderRiskClassVerdicts(
   lowRiskHardBlockFlagOn: boolean,
   phase4cFreshnessMaxAgeDays: number | null = null,
   phase4cMediumRiskBlockOn:    boolean      = false,
+  phase4dHighRiskBlockOn:      boolean      = false,
 ): PromotionGateRiskClassVerdict[] {
   const lowHardBlocked = lowRiskHardBlockFlagOn;
   const lowSoftWarned = softWarningFlagOn;
@@ -387,8 +423,10 @@ export function renderRiskClassVerdicts(
     },
     {
       riskClass:   "high",
-      posture:     "Unaffected by Phase 4 flags. Promotion is blocked on any failing golden-set case AND additionally requires the explicit operator override PROMOTION_GATE_ALLOW_HIGH_RISK=true. The phase3aPrep readiness flags (Phase 4-b and Phase 4-c) do not extend to high-risk.",
-      hardBlocked: false,
+      posture:     phase4dHighRiskBlockOn
+        ? `When Phase 4-d high-risk hard block is ON, the phase3aPrep readiness attestation is ALSO an authoritative authorisation signal for high-risk — promotion is hard-blocked when the attestation is missing, parse_error, not fully_prepared${phase4cFreshnessMaxAgeDays !== null ? `, or older than ${phase4cFreshnessMaxAgeDays} day(s) (shared freshness window)` : ""}. PROMOTION_GATE_ALLOW_HIGH_RISK=true continues to be required ON TOP of attestation success — Phase 4-d stacks, it does not replace. The block routes through canPromote(rec).ok=false; there is no new write site.`
+        : "When Phase 4-d high-risk hard block is OFF (default), high-risk recommendations are unaffected by Phase 4 flags and continue to require the explicit operator override PROMOTION_GATE_ALLOW_HIGH_RISK=true on top of golden-set success. When Phase 4-d is ON, the phase3aPrep readiness attestation is ALSO an authoritative authorisation signal for high-risk — promotion is hard-blocked when the attestation is missing / parse_error / not 'fully_prepared' / stale / future-dated (shared freshness window). PROMOTION_GATE_ALLOW_HIGH_RISK=true continues to be required ON TOP of attestation success — Phase 4-d stacks, it does not replace.",
+      hardBlocked: phase4dHighRiskBlockOn,
       softWarned:  false,
     },
   ];
@@ -458,6 +496,20 @@ export function buildPhase4cMediumRiskBlockFlag(flagOn: boolean): PromotionGateA
   };
 }
 
+/** Build the Phase 4-d high-risk hard-block flag block (PR #408). */
+export function buildPhase4dHighRiskBlockFlag(flagOn: boolean): PromotionGateAuthorityFlag {
+  return {
+    envVar:      PROMOTION_GATE_BLOCK_HIGH_RISK_ON_PHASE3A_PREP_NOT_READY_ENV,
+    enabled:     flagOn,
+    phase:       "phase4-d-high-block",
+    description: "Phase 4-d operator-gated authoritative hard block on HIGH-RISK promotions. Mirrors the Phase 4-c part 2 medium-risk hard block: when enabled, the promotion gate flips ok=false whenever a high-risk recommendation lacks a fully_prepared phase3aPrep readiness attestation, or its attestation is stale/future-dated against the shared PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS threshold. Phase 4-d STACKS on top of PROMOTION_GATE_ALLOW_HIGH_RISK — it does NOT replace that operator override.",
+    currentEffect: flagOn
+      ? "ENABLED. High-risk recommendations are authoritatively blocked when the phase3aPrep readiness attestation is missing, parse_error, not 'fully_prepared', or (when the freshness threshold is set) stale or future-dated. PROMOTION_GATE_ALLOW_HIGH_RISK=true continues to be required ON TOP of attestation success — Phase 4-d stacks, it does not replace. The block routes through canPromote(rec).ok=false; there is no new write site."
+      : "DEFAULT OFF. The flag is not enabled, so the existing high-risk policy applies: golden-set failures block promotion AND PROMOTION_GATE_ALLOW_HIGH_RISK=true is required on top — the phase3aPrep readiness attestation is not consulted as an authorisation signal for high-risk.",
+    changeOnEnable: "Flipping this flag to 'true' makes the phase3aPrep readiness attestation an authoritative authorisation signal for HIGH-RISK recommendations — in addition to (not instead of) PROMOTION_GATE_ALLOW_HIGH_RISK=true. The check reuses the same helpers and threshold env var as Phase 4-c for low-risk and medium-risk — there is exactly one freshness window across all three tiers.",
+  };
+}
+
 /** Build the static boundary-audit reference block. */
 function buildBoundaryAuditReference(): PromotionGateAuthorityAuditReference {
   return {
@@ -488,6 +540,7 @@ export function buildPromotionGateAuthorityVisibility(
     lowRiskHardBlockFlagOn?:      boolean;
     phase4cFreshnessMaxAgeDays?:  number | null;
     phase4cMediumRiskBlockOn?:    boolean;
+    phase4dHighRiskBlockOn?:      boolean;
   } = {},
 ): PromotionGateAuthorityVisibility {
   const softWarningFlagOn = overrides.softWarningFlagOn ?? readPhase3aPrepReadyRequiredFlag();
@@ -502,6 +555,7 @@ export function buildPromotionGateAuthorityVisibility(
     ? readPhase3aPrepMaxAgeDays()
     : overrides.phase4cFreshnessMaxAgeDays;
   const phase4cMediumRiskBlockOn = overrides.phase4cMediumRiskBlockOn ?? readPhase3aPrepBlockMediumRiskFlag();
+  const phase4dHighRiskBlockOn = overrides.phase4dHighRiskBlockOn ?? readPhase3aPrepBlockHighRiskFlag();
   const phase4cFreshnessOn = phase4cFreshnessMaxAgeDays !== null;
 
   const authorityLevel = deriveAuthorityLevel(
@@ -509,6 +563,7 @@ export function buildPromotionGateAuthorityVisibility(
     lowRiskHardBlockFlagOn,
     phase4cFreshnessOn,
     phase4cMediumRiskBlockOn,
+    phase4dHighRiskBlockOn,
   );
   return {
     schemaVersion:  PROMOTION_GATE_AUTHORITY_VISIBILITY_SCHEMA_VERSION,
@@ -521,18 +576,21 @@ export function buildPromotionGateAuthorityVisibility(
       lowRiskHardBlockFlagOn,
       phase4cFreshnessMaxAgeDays,
       phase4cMediumRiskBlockOn,
+      phase4dHighRiskBlockOn,
     ),
     flags: {
       phase4aSoftWarning:     buildPhase4aFlag(softWarningFlagOn),
       phase4bLowRiskBlock:    buildPhase4bFlag(lowRiskHardBlockFlagOn),
       phase4cFreshnessGate:   buildPhase4cFreshnessFlag(phase4cFreshnessMaxAgeDays),
       phase4cMediumRiskBlock: buildPhase4cMediumRiskBlockFlag(phase4cMediumRiskBlockOn),
+      phase4dHighRiskBlock:   buildPhase4dHighRiskBlockFlag(phase4dHighRiskBlockOn),
     },
     riskClassVerdicts: renderRiskClassVerdicts(
       softWarningFlagOn,
       lowRiskHardBlockFlagOn,
       phase4cFreshnessMaxAgeDays,
       phase4cMediumRiskBlockOn,
+      phase4dHighRiskBlockOn,
     ),
     boundaryAuditReference: buildBoundaryAuditReference(),
     invariants: {
@@ -541,9 +599,9 @@ export function buildPromotionGateAuthorityVisibility(
       singleWriteSiteIntact:
         "Pin 11 (single-write-site promotion boundary) is preserved. The only authorisation signal consumed by applyRecommendation is canPromote(rec).ok. This visibility snapshot is non-authoritative — its consumers must not read it into ok.",
       propogateOnlyChannel:
-        "The Phase 4-a soft-warning channel is and remains advisory only. Phase 4-b and Phase 4-c are authoritative uses of the attestation channel and are opt-in / default-off / per-tier. This module describes that state; it does not extend it.",
+        "The Phase 4-a soft-warning channel is and remains advisory only. Phase 4-b, Phase 4-c, and Phase 4-d are authoritative uses of the attestation channel and are opt-in / default-off / per-tier. This module describes that state; it does not extend it.",
       phaseScope:
-        "Phase 4-c is implemented for low-risk freshness (PR #401) AND medium-risk hard block (PR #403); their effect depends on the operator-gated env flags surfaced above. Phase 4-d (high-risk authoritative block) is NOT implemented — high-risk recommendations remain explicitly UNAFFECTED by every Phase 4 flag and continue to require the PROMOTION_GATE_ALLOW_HIGH_RISK operator override on top of golden-set success.",
+        "Phase 4-c is implemented for low-risk freshness (PR #401) AND medium-risk hard block (PR #403); their effect depends on the operator-gated env flags surfaced above. Phase 4-d (high-risk authoritative attestation block) is implemented (PR #408); its effect depends on the operator-gated env flag `PROMOTION_GATE_BLOCK_HIGH_RISK_ON_PHASE3A_PREP_NOT_READY`. High-risk recommendations still ALSO require the explicit `PROMOTION_GATE_ALLOW_HIGH_RISK=true` operator override on top of golden-set success — Phase 4-d does NOT replace that override, it stacks on top of it.",
     },
   };
 }

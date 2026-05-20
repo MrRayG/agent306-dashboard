@@ -176,6 +176,36 @@ export function readPhase3aPrepBlockMediumRiskFlag(): boolean {
   return v.toLowerCase() === "true";
 }
 
+/** Env-flag identifier for the Phase 4-d (PR #408) operator-gated
+ *  authoritative hard block on HIGH-RISK promotions when the phase3aPrep
+ *  readiness attestation is missing / parse_error / not `fully_prepared`
+ *  / stale / future-dated. Mirrors the Phase 4-c part 2 medium-risk
+ *  flag (PR #403) exactly: case-insensitive literal `"true"` enables;
+ *  any other value (including unset / empty / `"1"` / `"yes"`) disables.
+ *
+ *  Stacks on top of `PROMOTION_GATE_ALLOW_HIGH_RISK` — it does NOT
+ *  replace that operator override. When Phase 4-d is on AND the
+ *  attestation passes, the recommendation STILL needs
+ *  `PROMOTION_GATE_ALLOW_HIGH_RISK=true` to clear. When Phase 4-d is
+ *  off, high-risk behavior is exactly the pre-PR baseline (i.e.
+ *  requires `PROMOTION_GATE_ALLOW_HIGH_RISK=true`).
+ *
+ *  Freshness threshold env var `PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS`
+ *  is shared with the low-risk and medium-risk paths — there is ONE
+ *  freshness window governing all three tiers. */
+export const PROMOTION_GATE_BLOCK_HIGH_RISK_ON_PHASE3A_PREP_NOT_READY_ENV =
+  "PROMOTION_GATE_BLOCK_HIGH_RISK_ON_PHASE3A_PREP_NOT_READY" as const;
+
+/** Pure helper: read the Phase 4-d high-risk flag from `process.env`.
+ *  Same case-insensitive `"true"`-only contract as
+ *  `readPhase3aPrepBlockMediumRiskFlag`. Independent of the low-risk
+ *  and medium-risk flags — enabling one does not enable the others. */
+export function readPhase3aPrepBlockHighRiskFlag(): boolean {
+  const v = process.env[PROMOTION_GATE_BLOCK_HIGH_RISK_ON_PHASE3A_PREP_NOT_READY_ENV];
+  if (typeof v !== "string") return false;
+  return v.toLowerCase() === "true";
+}
+
 /** Env-var identifier for the Phase 4-c attestation-freshness gate.
  *  When this env var is set to a positive integer AND the Phase 4-b
  *  master switch is on AND the recommendation is `risk === "low"` AND
@@ -450,6 +480,102 @@ export function deriveMediumRiskPhase3aPrepHardBlockFailures(
   return [];
 }
 
+/** Pure helper (exported for tests): derive Phase 4-d (PR #408)
+ *  hard-block failure strings for HIGH-RISK promotions. Mirrors
+ *  `deriveMediumRiskPhase3aPrepHardBlockFailures` byte-for-byte in
+ *  shape, returning an array with 0 or 1 entries.
+ *
+ *  Fires only when:
+ *    - `flagOn === true` (operator set
+ *      `PROMOTION_GATE_BLOCK_HIGH_RISK_ON_PHASE3A_PREP_NOT_READY=true`)
+ *    - AND `risk === "high"`.
+ *
+ *  When it fires, the helper enforces the SAME contract as the
+ *  medium-risk variant: missing attestation / parse_error / verdict !==
+ *  fully_prepared block first; freshness (future-dated or stale) blocks
+ *  after, gated by the SHARED `PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS`
+ *  env var (no third freshness threshold — one window governs all
+ *  three tiers).
+ *
+ *  Each failure string references RISK=HIGH and the high-risk env var
+ *  name so operators can tell at a glance which branch fired.
+ *
+ *  Helpers reused (not duplicated):
+ *    - `isPhase3aAttestationFutureDated` (from PR #401)
+ *    - `isPhase3aAttestationStale` (from PR #401)
+ *
+ *  Pin 11: returns FAILURE STRINGS only. The caller routes them through
+ *  the existing `failures` array and `failures.length === 0` gate. No
+ *  new write site, no new mutation route, no new public surface.
+ *
+ *  STACKING SEMANTICS: Phase 4-d does NOT replace the existing
+ *  `PROMOTION_GATE_ALLOW_HIGH_RISK=true` operator override. When the
+ *  flag is on AND the attestation passes, the rec STILL needs the
+ *  high-risk override to clear. The caller in `canPromote` keeps the
+ *  legacy override check intact and unconditionally below this block. */
+export function deriveHighRiskPhase3aPrepHardBlockFailures(
+  attestations: ReadonlyArray<PromotionAttestation>,
+  flagOn: boolean,
+  risk: SelfRecommendation["risk"],
+  maxAgeDays: number | null = null,
+  now: number = Date.now(),
+): string[] {
+  if (!flagOn) return [];
+  if (risk !== "high") return [];
+
+  const att = attestations.find(a => a.source === "phase3aPrep");
+
+  if (att === undefined) {
+    return [
+      `phase3aPrep readiness attestation missing on high-risk promotion ` +
+      `(operator opted in via ${PROMOTION_GATE_BLOCK_HIGH_RISK_ON_PHASE3A_PREP_NOT_READY_ENV}=true, risk=high). ` +
+      `Hard block — attach a phase3aPrepCandidate evidence marker with verdict='fully_prepared' to unblock.`,
+    ];
+  }
+
+  if (att.status === "parse_error") {
+    return [
+      `phase3aPrep readiness attestation could not be parsed (parseError: ${att.parseError ?? "unknown"}); ` +
+      `operator opted in via ${PROMOTION_GATE_BLOCK_HIGH_RISK_ON_PHASE3A_PREP_NOT_READY_ENV}=true, risk=high. ` +
+      `Hard block — fix the phase3aPrepCandidate evidence payload to unblock.`,
+    ];
+  }
+
+  const verdict = att.readiness?.verdict;
+  if (verdict !== "fully_prepared") {
+    const candidate = att.candidateId.length > 0 ? att.candidateId : "(unknown)";
+    const verdictStr = verdict ?? "(missing)";
+    return [
+      `phase3aPrep readiness for candidate '${candidate}' is '${verdictStr}' ` +
+      `(operator opted in via ${PROMOTION_GATE_BLOCK_HIGH_RISK_ON_PHASE3A_PREP_NOT_READY_ENV}=true, risk=high). ` +
+      `Hard block — drive the candidate to verdict='fully_prepared' to unblock.`,
+    ];
+  }
+
+  // Freshness layer — shared threshold env (PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS).
+  // Determinism: a stale attestation cannot also be future-dated; at most
+  // one failure is emitted per attestation.
+  if (maxAgeDays !== null) {
+    const candidate = att.candidateId.length > 0 ? att.candidateId : "(unknown)";
+    if (isPhase3aAttestationFutureDated(att, maxAgeDays, now)) {
+      return [
+        `phase3a_prep_attestation_future_dated (candidate '${candidate}', attestedAt='${att.attestedAt}', risk=high); ` +
+        `operator opted in via ${PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS_ENV}=${maxAgeDays}. ` +
+        `Hard block — re-compute the phase3aPrepCandidate evidence with a current timestamp.`,
+      ];
+    }
+    if (isPhase3aAttestationStale(att, maxAgeDays, now)) {
+      return [
+        `phase3a_prep_attestation_stale (candidate '${candidate}', attestedAt='${att.attestedAt}', older than ${maxAgeDays} days, risk=high); ` +
+        `operator opted in via ${PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS_ENV}=${maxAgeDays}. ` +
+        `Hard block — re-attest the phase3aPrepCandidate evidence to refresh attestedAt.`,
+      ];
+    }
+  }
+
+  return [];
+}
+
 /** Pure helper (exported for tests): derive Phase 4-a soft warnings from
  *  the attestation array. Returns an empty array when the flag is off,
  *  when no attestations are present, or when every attestation reports
@@ -537,6 +663,14 @@ export async function canPromote(rec: SelfRecommendation): Promise<PromotionResu
   // threshold env (`PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS`) as the
   // low-risk branch — one window governs both tiers.
   const hardBlockMediumRiskFlagOn = readPhase3aPrepBlockMediumRiskFlag();
+  // Phase 4-d (PR #408): independent env-var snapshot for the operator-
+  // gated HIGH-RISK hard block. Default off — a deploy of this PR is a
+  // no-op until the operator flips this flag. Stacks on top of the
+  // existing `PROMOTION_GATE_ALLOW_HIGH_RISK` operator override (does
+  // NOT replace it). The high-risk branch consumes the SAME freshness
+  // threshold env (`PROMOTION_GATE_PHASE3A_PREP_MAX_AGE_DAYS`) as the
+  // low-risk and medium-risk branches — one window governs all tiers.
+  const hardBlockHighRiskFlagOn = readPhase3aPrepBlockHighRiskFlag();
   // Phase 4-c: env var snapshot taken ONCE. null = freshness check
   // disabled (default). When set to a positive integer, both the
   // low-risk and (PR #403) medium-risk branches additionally enforce
@@ -615,10 +749,9 @@ export async function canPromote(rec: SelfRecommendation): Promise<PromotionResu
   // when the phase3aPrep readiness attestation is missing / parse_error /
   // not `fully_prepared` / stale / future-dated. Default off; when off,
   // this is a no-op and the legacy medium/high branch below decides the
-  // verdict. High-risk gating is UNTOUCHED — that path stays exclusively
-  // owned by `PROMOTION_GATE_ALLOW_HIGH_RISK`. Failures are routed
-  // through the existing `failures` / `ok` machinery — no new write
-  // site, no new mutation endpoint, no new public surface.
+  // verdict. Failures are routed through the existing `failures` / `ok`
+  // machinery — no new write site, no new mutation endpoint, no new
+  // public surface.
   if (rec.risk === "medium") {
     const mediumRiskHardBlockFailures = deriveMediumRiskPhase3aPrepHardBlockFailures(
       attestations,
@@ -628,6 +761,28 @@ export async function canPromote(rec: SelfRecommendation): Promise<PromotionResu
       Date.now(),
     );
     for (const f of mediumRiskHardBlockFailures) failures.push(f);
+  }
+
+  // Phase 4-d (PR #408): operator-gated hard block on high-risk when the
+  // phase3aPrep readiness attestation is missing / parse_error / not
+  // `fully_prepared` / stale / future-dated. Default off; when off, this
+  // is a no-op and high-risk behavior is exactly the pre-PR baseline.
+  // STACKING SEMANTICS: this block adds failures on TOP of the existing
+  // `PROMOTION_GATE_ALLOW_HIGH_RISK` override check below — it does NOT
+  // replace that override. When Phase 4-d is on AND the attestation
+  // passes, the rec STILL needs `PROMOTION_GATE_ALLOW_HIGH_RISK=true` to
+  // clear. Failures are routed through the existing `failures` / `ok`
+  // machinery — no new write site, no new mutation endpoint, no new
+  // public surface.
+  if (rec.risk === "high") {
+    const highRiskHardBlockFailures = deriveHighRiskPhase3aPrepHardBlockFailures(
+      attestations,
+      hardBlockHighRiskFlagOn,
+      rec.risk,
+      phase3aMaxAgeDays,
+      Date.now(),
+    );
+    for (const f of highRiskHardBlockFailures) failures.push(f);
   }
 
   // medium / high: block on any failure.

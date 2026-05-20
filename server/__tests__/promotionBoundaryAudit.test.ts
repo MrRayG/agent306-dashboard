@@ -287,9 +287,59 @@ describe("Phase 2m-b — audit helper on the real repo", () => {
       // its derive helper (deriveMediumRiskPhase3aPrepHardBlockFailures)
       // is wired into the gate code path.
       "phase4c_medium_risk_hard_block_wired",
+      // Phase 4-d (PR #408): confirms the gate declares the
+      // operator-gated high-risk hard-block flag literal AND that
+      // its derive helper (deriveHighRiskPhase3aPrepHardBlockFailures)
+      // is wired into the gate code path.
+      "phase4d_hard_block_flag_wired",
       "promotion_gate_exports_canPromote",
       "single_write_site_for_status_applied",
     ]);
+  });
+
+  // Phase 4-d (PR #408): the audit acknowledges the new authoritative
+  // high-risk attestation-block channel by asserting the gate source
+  // declares the flag literal AND the derive helper. Source-level
+  // handshake only; the audit must continue to satisfy
+  // violationCount=0 on the real repo.
+  it("Phase 4-d: phase4d_hard_block_flag_wired finding passes on real repo", () => {
+    const r = auditPromotionBoundary({ repoRoot: REPO_ROOT });
+    const f = r.findings.find(x => x.id === "phase4d_hard_block_flag_wired");
+    assert.ok(f, "expected phase4d_hard_block_flag_wired finding");
+    assert.equal(f!.ok, true, `detail: ${f!.detail}`);
+    assert.match(f!.detail, /PROMOTION_GATE_BLOCK_HIGH_RISK_ON_PHASE3A_PREP_NOT_READY/);
+    assert.match(f!.detail, /deriveHighRiskPhase3aPrepHardBlockFailures/);
+  });
+
+  it("Phase 4-d: audit fixture without the high-risk flag literal flags the finding", () => {
+    // Build a tiny fixture repo with a gate source that lacks the
+    // Phase 4-d authoritative high-risk-block flag literal. Other gate
+    // checks (canPromote export, etc.) still pass; only the Phase 4-d
+    // finding should fail.
+    const fakeRoot = path.join(TMP, "fake-repo-no-phase4d-flag");
+    fs.mkdirSync(path.join(fakeRoot, "server", "eval"), { recursive: true });
+    fs.writeFileSync(
+      path.join(fakeRoot, "server", "selfRecommendationEngine.ts"),
+      fs.readFileSync(REAL_ENGINE, "utf8"),
+    );
+    // Minimal gate source: still exports canPromote async function,
+    // but does NOT declare the Phase 4-d flag literal or derive helper.
+    fs.writeFileSync(
+      path.join(fakeRoot, "server", "eval", "promotionGate.ts"),
+      [
+        "export interface PromotionResult { ok: boolean; failures: string[]; ranSets: string[]; }",
+        "export async function canPromote(_rec: any): Promise<PromotionResult> {",
+        "  return { ok: true, failures: [], ranSets: [] };",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    const r = auditPromotionBoundary({ repoRoot: fakeRoot });
+    const f = r.findings.find(x => x.id === "phase4d_hard_block_flag_wired");
+    assert.ok(f);
+    assert.equal(f!.ok, false);
+    assert.match(f!.detail, /missing from promotion gate source/);
+    assert.equal(r.status, "violated");
   });
 
   // Phase 4-b: the audit acknowledges the new authoritative-block
