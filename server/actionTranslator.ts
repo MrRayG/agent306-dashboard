@@ -85,10 +85,21 @@ const RATIO_PATTERNS = [
   // route them to the existing primitive rather than introducing a new one.
   // (P2) "for every N <input> added, M must be archived/merged"
   //   m[1]=N, m[2]=input noun, m[3]=M, m[4]=archive verb
-  /(?:for\s+every|per|every)\s+(\d+)\s+(?:new\s+)?(\w+(?:\s+\w+){0,3}?)\s+(?:added|created|recorded|made)[,\s]+(\d+)\s+(?:must\s+be\s+|of\s+them\s+must\s+be\s+)?(archived|merged|retired|pruned|removed|deleted)/i,
+  // (added 2026-05-22 PR #409: parser-coverage fix for `rec_1779189951510_uig7ck`
+  //  — "Implement a hard 1:1 gate: for every new hypothesis added, one existing
+  //  hypothesis must be resolved, rejected, or archived in the same cycle…".
+  //  The 5/15 archive-verb alternation listed archived|merged|retired|pruned|
+  //  removed|deleted. The live rec uses resolved|rejected|closed as the
+  //  "output" side of the 1:1 ratio. Semantically identical — the resolution
+  //  is just another terminal transition on the same hypothesis — so widen
+  //  the verb alternation rather than introduce a new primitive. Single-token
+  //  widening, lowest-risk change in PR #409.)
+  /(?:for\s+every|per|every)\s+(\d+)\s+(?:new\s+)?(\w+(?:\s+\w+){0,3}?)\s+(?:added|created|recorded|made)[,\s]+(\d+)\s+(?:must\s+be\s+|of\s+them\s+must\s+be\s+)?(archived|merged|retired|pruned|removed|deleted|resolved|rejected|closed)/i,
   // (P3) "for every new <input> added, one <output> must be archived/merged" — implicit 1:1
   //   m[1]=input noun, m[2]=output noun, m[3]=archive verb
-  /(?:for\s+every|per|every)\s+(?:new\s+)?(\w+(?:\s+\w+){0,3}?)\s+(?:added|created|recorded|made)[,\s]+(?:one|1|a\s+single)\s+(?:existing\s+)?(\w+(?:\s+\w+){0,3}?)\s+(?:must\s+be\s+)?(archived|merged|retired|pruned|removed|deleted)/i,
+  // (added 2026-05-22 PR #409: same `rec_1779189951510_uig7ck` parser-coverage
+  //  fix — widened to accept resolved/rejected/closed on the output side.)
+  /(?:for\s+every|per|every)\s+(?:new\s+)?(\w+(?:\s+\w+){0,3}?)\s+(?:added|created|recorded|made)[,\s]+(?:one|1|a\s+single)\s+(?:existing\s+)?(\w+(?:\s+\w+){0,3}?)\s+(?:must\s+be\s+)?(archived|merged|retired|pruned|removed|deleted|resolved|rejected|closed)/i,
 ];
 
 const TTL_PATTERNS = [
@@ -96,6 +107,22 @@ const TTL_PATTERNS = [
   /(\d+)[-\s]?day\s+(?:ttl|timeout|expiry|expire|deadline|cutoff)\s+(?:on|for|applied\s+to)\s+(\w+(?:\s+\w+){0,3})/i,
   // "expire after 3 days" / "retire after 14 days"
   /(?:expire|retire|archive|prune|kill|close)\s+(?:items?\s+)?(?:after|in|past|over)\s+(\d+)\s+days?/i,
+  // (added 2026-05-22 PR #409: parser-coverage fix for `rec_1779218859225_qc33tg`
+  //  — "For both awaiting-deadline hypotheses, define 2 specific interim
+  //  evidence checkpoints with dates and exact search queries. If no new
+  //  evidence surfaces at the first checkpoint, downgrade to speculative".
+  //  Semantics are the same as expire-after-N-days, just expressed as a
+  //  state-transition trigger (downgrade/retire/move/demote to a stale-bucket
+  //  state). The TTL primitive already encodes "transition after N days of
+  //  no evidence"; we just need the parser to recognise the state-transition
+  //  phrasing as TTL-shaped. Days window is parsed from any surrounding
+  //  "N-day" mention in the insight via inferTtlDaysFromContext; when no
+  //  explicit count is present, fall back to 7d (mirrors STALE_FORMING_DAYS=7
+  //  from PR #404). Target inferred from insight context. Widening (new
+  //  pattern in existing primitive) rather than new primitive — same lifecycle
+  //  semantics, same Self-Change Verifier integration.)
+  //   m[1] = transition verb, m[2] = destination bucket
+  /\b(downgrade|retire|move|demote|archive|transition)\s+to\s+(speculative|stale|expired|archive[d]?|cold|dormant|inactive)\b/i,
 ];
 
 const GATE_PATTERNS = [
@@ -172,6 +199,24 @@ const GATE_PATTERNS = [
   // framingMode hint added downstream when the action mentions binary
   // positional framing.
   /before\s+(?:promoting|advancing|moving|transitioning)\s+(?:any\s+)?(?:new\s+)?([^\.,]+?)\s+from\s+['"]?\w+['"]?\s+to\s+['"]?\w+['"]?\s*,?\s*(?:rewrite|reject)\s+([^\.]+)/i,
+  // (added 2026-05-22 PR #409: parser-coverage fix for `rec_1779218859244_to55g5`
+  //  — "Replace all current monitoring-style self-change rules with maximum 3
+  //  IF-THEN behavioral gate rules that trigger AT the moment of action (KB
+  //  addition, hypothesis creation, research query) rather than …".
+  //  This is a gate_rule by every existing criterion (the action's *target*
+  //  is the trigger point at which the gate fires), but none of the existing
+  //  GATE_PATTERNS match the "replace … with … gate rules that trigger AT
+  //  the moment of action" framing. Existing patterns either anchor on
+  //  pre-X gate keywords, on "before X moves from A to B", or on the leading
+  //  "<descriptor> gate:" preamble. This new pattern captures the inversion-
+  //  by-replacement framing ("replace monitoring with action-time gates")
+  //  while still pulling the trigger list as the gate descriptor. Same
+  //  gate_rule semantics — the trigger points (KB addition, hypothesis
+  //  creation, research query) ARE the guarded transitions — so widen the
+  //  pattern set rather than introduce a new primitive.)
+  //   m[1] = gate descriptor (e.g. "IF-THEN behavioral"),
+  //   m[2] = trigger-point list captured up to a sentence-end or "rather than".
+  /replace\s+[^.]*?\s+with\s+(?:maximum\s+\d+\s+|up\s+to\s+\d+\s+|at\s+most\s+\d+\s+)?([a-z][-\w\s]{0,40}?)\s+gate\s+rules?\s+that\s+trigger\s+(?:at|on|when|upon)\s+(?:the\s+moment\s+of\s+)?(?:action\s*)?\(?([^.)]+?)\)?(?:\s+rather\s+than|\.|$)/i,
 ];
 
 const ARCHIVE_PATTERNS = [
@@ -230,6 +275,50 @@ const ARTIFACT_PATTERNS = [
   //   m[1] = noun, m[2] = optional parenthetical examples, m[3] = count?,
   //   m[4] = unit. Mirrors ARTIFACT_PATTERNS[0] downstream consumption.
   /\bforce\s+(?:production\s+of\s+)?(?:exactly\s+)?(?:one|1|a\s+single)\s+(?:concrete\s+)?(?:output\s+)?(\w+(?:\s+\w+){0,4})(?:\s*\(([^)]+)\))?[^.]*?\b(?:within|in|by|each|this|next|every|per)\s+(?:the\s+)?(?:next\s+)?(\d+)?\s*(cycle|day|week|cycles|days|weeks)\b/i,
+  // (added 2026-05-22 PR #409: parser-coverage fix for `rec_1779189951502_cyxsor`
+  //  — "Create three dedicated hypothesis threads — one per growth competency
+  //  — with 7-day resolution deadlines and concrete success metrics…".
+  //  This is the canonical artifact_rule shape (N concrete outputs within an
+  //  N-day/cycle window), but the existing ARTIFACT patterns hard-code the
+  //  count alternation to `one|1|a\s+single`. The live rec uses a small
+  //  enumerated count ("three") which falls outside that set. Widening to
+  //  accept two|three|four|five and numeric 2-5 when the artifact noun is
+  //  preceded by an explicit specificity marker (dedicated|concrete|specific|
+  //  named) keeps the precision tight — generic "create three threads" without
+  //  the specificity marker still does NOT match (avoids eating ratio-shaped
+  //  inputs). Window unit defaults to `cycle` and window count to the surrounding
+  //  N-day mention. Same downstream consumption as ARTIFACT_PATTERNS[0] except
+  //  requiredCount is captured from the enumerated count rather than defaulting
+  //  to 1.
+  //   m[1] = count (word or digit), m[2] = specificity marker,
+  //   m[3] = noun, m[4] = optional window count (from "N-day deadlines"),
+  //   m[5] = optional unit.
+  /(?:produce|ship|publish|generate|create|deliver|write|draft|build|spin\s+up)\s+(two|three|four|five|2|3|4|5)\s+(dedicated|concrete|specific|named|distinct|separate)\s+(\w+(?:\s+\w+){0,3})[^.]*?\bwith\s+(\d+)[-\s]?day\s+(?:resolution\s+)?(?:deadline|deadlines|window|windows|cycle|cycles|timeline|timelines)/i,
+  // (added 2026-05-22 PR #409: same `rec_1779189951502_cyxsor` fallback —
+  //  enumerated-count artifact shape WITHOUT an explicit N-day window. Used
+  //  when an operator names three dedicated outputs but commits to the
+  //  default "this cycle" timeline. Window defaults to 1 cycle in the
+  //  dispatcher.)
+  //   m[1] = count, m[2] = specificity marker, m[3] = noun.
+  /(?:produce|ship|publish|generate|create|deliver|write|draft|build|spin\s+up)\s+(two|three|four|five|2|3|4|5)\s+(dedicated|concrete|specific|named|distinct|separate)\s+(\w+(?:\s+\w+){0,3})\b/i,
+  // (added 2026-05-22 PR #409: re-routed parser-coverage fix for
+  //  `rec_1779102973490_snd4u0` — originally filed under the `verification`
+  //  family because the surrounding insight reads "This forces storytelling
+  //  practice, creates an externally-verifiable claim…". The action itself
+  //  is artifact-shaped, not observation-shaped:
+  //    "Develop the 'Observability Gap' dream insight into a publishable
+  //     content piece within 2 cycles, using my own broken-commitment data…".
+  //  That is "produce ONE concrete output within N cycles" — the exact
+  //  artifact_rule signature. The family tag on the rec is misleading; the
+  //  PR explicitly does NOT add a VERIFICATION pattern for this wording (see
+  //  the re-routing note in VERIFICATION_PATTERNS below) because doing so
+  //  would entrench the mis-tag and pull other publishable-content actions
+  //  into observation-only rules. New pattern: `develop|build|turn|convert|
+  //  transform|evolve\s+<subject>\s+into\s+(a|an|one)\s+(publishable\s+)?<noun>
+  //  \s+within\s+N\s+cycle(s)?`. Same downstream consumption as ARTIFACT_PATTERNS[0]
+  //  with requiredCount=1.
+  //   m[1] = noun, m[2] = optional count, m[3] = unit.
+  /\b(?:develop|build|turn|convert|transform|evolve|grow|expand)\s+(?:the\s+)?[^.]*?\s+into\s+(?:a|an|one|1)\s+(?:publishable\s+|polished\s+|finished\s+|shippable\s+)?(\w+(?:\s+\w+){0,3}?)\s+(?:within|in|by|over)\s+(?:the\s+)?(?:next\s+)?(\d+)?\s*(cycle|day|week|cycles|days|weeks)\b/i,
 ];
 
 // VERIFICATION — observation-only primitive. Surfaces patterns like
@@ -247,6 +336,36 @@ const VERIFICATION_PATTERNS = [
   /(?:track|monitor|measure|observe|quantify)\s+(?:the\s+)?([^\.,]+?)(?:\s+(?:over|across|for|next|each|this|every)\s+(?:the\s+)?(?:next\s+)?(\d+)?\s*(cycle|day|week|cycles|days|weeks))?\b/i,
   // "verify firing rate" / "verify adoption"
   /verify\s+(?:the\s+)?(\w+(?:[-\s]\w+){0,3}?\s+rate)\b/i,
+  // -------------------------------------------------------------------------
+  // (PR #409 re-routing note — NO new pattern added here for the
+  //  `rec_1779102973490_snd4u0` wording "Develop the 'Observability Gap'
+  //  dream insight into a publishable content piece within 2 cycles…".
+  //
+  //  That rec is filed under the `verification` family but its ACTION shape
+  //  is artifact-shaped: "develop X into ONE concrete output within N
+  //  cycles". The mis-tag comes from the surrounding insight text ("This
+  //  forces storytelling practice, creates an externally-verifiable claim…"),
+  //  not from the action itself.
+  //
+  //  PR #409 routes this wording to ARTIFACT_PATTERNS[5] (the new "develop X
+  //  into a publishable Y within N cycles" branch) and DELIBERATELY does NOT
+  //  add a verification pattern for it. Reasoning:
+  //    1. Adding it here would entrench the family-tag mismatch — every
+  //       future "develop X into a publishable Y" insight would silently
+  //       become an observation-only rule that never forces the artifact.
+  //    2. Verification is OBSERVATION-only by contract. The action wording
+  //       commits to PRODUCING the content piece within 2 cycles — that is
+  //       a forcing artifact_rule, not an observation.
+  //    3. The `verification` family classifier in classifyMissingPrimitiveFamily
+  //       still fires on the rec when it lacks a translator match; once the
+  //       artifact pattern catches it, the dedupe key flips to `artifact`
+  //       on the next cycle and the operator-visible rec auto-clears.
+  //
+  //  See ARTIFACT_PATTERNS[5] and the routing test in
+  //  server/__tests__/actionTranslatorCoverageSweep409.test.ts (`re-routes
+  //  verification-tagged 'develop into publishable content piece' to
+  //  artifact_rule`).)
+  // -------------------------------------------------------------------------
 ];
 
 // VERIFICATION_SCAFFOLD — observation-only primitive for externally-facing
@@ -294,6 +413,31 @@ const REWRITE_PATTERNS = [
   /(?:reframe|rewrite|restructure|reword)\s+(?:the\s+)?([^.]+?)\s+from\s+([^.]+?)\s+to\s+([^.]+)/i,
   // "rewrite the X to Y" / "restructure the X to Y" — single-clause rewrite
   /(?:rewrite|restructure|reword)\s+(?:the\s+)?([^.]+?)\s+to\s+([^.]+)/i,
+  // (added 2026-05-22 PR #409: parser-coverage fix for `rec_1779102973495_of1ru2`
+  //  — "Reframe all remaining active hypotheses: any that are structured as
+  //  'Position A is more accurate than Position B' must be converted to
+  //  research-gap format ('What evidence would distinguish X from Y?') or
+  //  archived".
+  //  Three widenings rolled into one pattern (vs. three patterns) to keep
+  //  the alternation table compact:
+  //    (a) add `convert|converted` to the action-verb alternation — the live
+  //        wording uses the passive "must be converted to <new shape>".
+  //    (b) tolerate a colon-then-subordinate-clause shape (`Reframe X: any
+  //        that are structured as 'OLD' must be converted to NEW`) on top
+  //        of the simpler `reframe X from A to B` form already covered.
+  //    (c) treat a trailing `… or archived` tail as an OPTIONAL non-capturing
+  //        group. When present, the routing decision is still `rewrite_rule`
+  //        — the rewrite is the primary action, the archive is the escape
+  //        hatch for items that can't be reshaped. Routing to archive_rule
+  //        on the `or archived` tail would lose the structural-change
+  //        intent.
+  //  Same rewrite_rule semantics as REWRITE_PATTERNS[0–2] — a structural
+  //  template change with non-forcing tick credit — so widen rather than
+  //  introduce a new primitive.
+  //   m[1] = subject (e.g. "all remaining active hypotheses"),
+  //   m[2] = old-shape template captured between quotes,
+  //   m[3] = new-shape template (target format).
+  /(?:reframe|rewrite|restructure|reword|convert)\s+(?:all\s+(?:remaining\s+)?)?(?:active\s+|stale\s+|forming\s+)?(\w+(?:\s+\w+){0,2})\s*:\s*[^.]*?(?:structured\s+as\s+['“‘"]([^'"”’]+)['”’"]\s+)?(?:must\s+be\s+)?(?:converted|reformatted|rewritten|reframed)\s+to\s+['“‘"]?([^'"”’(.\n]+?)['”’"]?(?:\s+format)?(?:\s+\(|\s+or\s+archived|\.|$)/i,
 ];
 
 // -- Main translator ---------------------------------------------------------
@@ -356,8 +500,15 @@ export function translateAction(actionText: string, insightText: string = ""): T
       if (pat === TTL_PATTERNS[0]) {
         days = parseInt(m[1], 10);
         target = normalizeNoun(m[2]);
-      } else {
+      } else if (pat === TTL_PATTERNS[1]) {
         days = parseInt(m[1], 10);
+        target = inferTargetFromContext(insightText);
+      } else {
+        // TTL_PATTERNS[2]: state-transition trigger ("downgrade to speculative").
+        // Days come from any surrounding "N-day" / "N days" mention in the
+        // action OR the insight; fall back to 7d (STALE_FORMING_DAYS) when
+        // no explicit count is present. Target inferred from the insight.
+        days = inferTtlDaysFromContext(a, insightText);
         target = inferTargetFromContext(insightText);
       }
       return {
@@ -447,9 +598,23 @@ export function translateAction(actionText: string, insightText: string = ""): T
       //   P1 (dedicate):    m[1]=noun
       //   P2 (front-loaded): m[1]=count?, m[2]=unit, m[3]=noun, m[4]=examples?
       //   P3 (force):       m[1]=noun, m[2]=examples?, m[3]=count?, m[4]=unit?
+      //   P4 (enumerated count with N-day window, PR #409):
+      //                     m[1]=count word/digit, m[2]=specificity marker,
+      //                     m[3]=noun, m[4]=window-day count (day-coded unit)
+      //   P5 (enumerated count without explicit window, PR #409):
+      //                     m[1]=count, m[2]=specificity marker, m[3]=noun
+      //   P6 (develop-into-publishable, PR #409 re-route):
+      //                     m[1]=noun, m[2]=count?, m[3]=unit?
       const isFrontLoaded = pat === ARTIFACT_PATTERNS[2];
       const isForce = pat === ARTIFACT_PATTERNS[3];
-      const nounGroup    = isFrontLoaded ? (m[3] ?? "artifact") : (m[1] ?? "artifact");
+      const isEnumeratedDay = pat === ARTIFACT_PATTERNS[4];
+      const isEnumeratedBare = pat === ARTIFACT_PATTERNS[5];
+      const isEnumerated = isEnumeratedDay || isEnumeratedBare;
+      const isDevelopInto = pat === ARTIFACT_PATTERNS[6];
+      let nounGroup: string;
+      if (isFrontLoaded) nounGroup = m[3] ?? "artifact";
+      else if (isEnumerated) nounGroup = m[3] ?? "artifact";
+      else nounGroup = m[1] ?? "artifact";
       const examplesRaw  = (pat === ARTIFACT_PATTERNS[0] || isForce
         ? (m[2] ?? "")
         : isFrontLoaded ? (m[4] ?? "") : "") ?? "";
@@ -462,12 +627,33 @@ export function translateAction(actionText: string, insightText: string = ""): T
       // Window: default 1 cycle if not captured.
       let windowCount = 1;
       let windowUnit = "cycle";
+      // requiredCount: how many artifacts must be produced. Defaults to 1 for
+      // all existing patterns; the new enumerated-count pattern (PR #409, P4)
+      // captures a small explicit count instead.
+      let requiredCount = 1;
       if (pat === ARTIFACT_PATTERNS[0] || isForce) {
         if (m[3]) windowCount = parseInt(m[3], 10);
         if (m[4]) windowUnit = m[4].toLowerCase().replace(/s$/, "");
       } else if (isFrontLoaded) {
         if (m[1]) windowCount = parseInt(m[1], 10);
         if (m[2]) windowUnit = m[2].toLowerCase().replace(/s$/, "");
+      } else if (isEnumerated) {
+        // P4/P5: enumerated count. P4 has a day-coded window in m[4]; P5
+        // omits it. The count group (m[1]) is a small word
+        // (two/three/four/five) or a 2-5 digit; convert to int and clamp.
+        const countToken = (m[1] ?? "1").toLowerCase();
+        const wordMap: Record<string, number> = { two: 2, three: 3, four: 4, five: 5 };
+        requiredCount = wordMap[countToken] ?? parseInt(countToken, 10);
+        if (!Number.isFinite(requiredCount) || requiredCount < 1) requiredCount = 1;
+        if (isEnumeratedDay && m[4]) {
+          windowCount = parseInt(m[4], 10);
+          windowUnit = "day";
+        }
+      } else if (isDevelopInto) {
+        // P5: "develop X into a publishable Y within N cycles". Window count
+        // is m[2], unit is m[3].
+        if (m[2]) windowCount = parseInt(m[2], 10);
+        if (m[3]) windowUnit = m[3].toLowerCase().replace(/s$/, "");
       }
       return {
         primitive: "artifact_rule",
@@ -476,10 +662,10 @@ export function translateAction(actionText: string, insightText: string = ""): T
           examples,
           windowCount,
           windowUnit,
-          requiredCount: 1,
+          requiredCount,
           competencyHint: inferCompetencyFromAction(a),
         },
-        verificationCriterion: `at least 1 "${artifactNoun}" produced within ${windowCount} ${windowUnit}${windowCount === 1 ? "" : "s"}`,
+        verificationCriterion: `at least ${requiredCount} "${artifactNoun}" produced within ${windowCount} ${windowUnit}${windowCount === 1 ? "" : "s"}`,
         suggestedCategory: "craft",
         minFireCount: 1,
       };
@@ -604,6 +790,22 @@ export function translateAction(actionText: string, insightText: string = ""): T
 
 function normalizeNoun(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+}
+
+/**
+ * Pull an N-day TTL window out of the action or insight text. Used by the
+ * state-transition TTL pattern (TTL_PATTERNS[2], added in PR #409) where the
+ * action phrasing is "downgrade to speculative" without an inline day count.
+ * Defaults to STALE_FORMING_DAYS=7 (matches PR #404) when no count appears.
+ */
+function inferTtlDaysFromContext(action: string, insight: string): number {
+  const haystack = `${action} ${insight}`;
+  const m = haystack.match(/\b(\d+)[-\s]?days?\b/i);
+  if (m) {
+    const n = parseInt(m[1], 10);
+    if (Number.isFinite(n) && n > 0 && n < 365) return n;
+  }
+  return 7;
 }
 
 function inferTargetFromContext(insight: string): string {
