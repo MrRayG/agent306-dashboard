@@ -1217,9 +1217,23 @@ function buildNextSafeActions(
   }
 
   if (quality.wouldFailCount > 0) {
-    out.push(
-      `Intake gate dry-run: ${quality.wouldFailCount} of ${quality.totalExamined} formal records would fail today's intake quality rules. The gate is NOT wired into addHypothesis in this PR — see gateRules for the criteria.`,
-    );
+    if (intakeGateConfig.softGateEnabled) {
+      // Gate IS wired via INTAKE_GATE_SOFT=1: addHypothesis routes failing
+      // candidates to hygieneTag='needs_review' rather than dropping them.
+      // The wouldFailCount here is computed over the EXISTING backlog (records
+      // formed before the gate was active, or records seeded by paths that
+      // bypass addHypothesis if any remain), so it does NOT represent future
+      // intake — it represents legacy debt the operator still needs to clear.
+      out.push(
+        `Intake gate is WIRED (INTAKE_GATE_SOFT=1): new candidates failing gateIntake are routed to hygieneTag='needs_review' via addHypothesis. The ${quality.wouldFailCount} of ${quality.totalExamined} formal record(s) shown above are legacy backlog formed before the gate was active — operator must clear them by rewrite or archive; the gate does not retroactively re-classify existing records.`,
+      );
+    } else {
+      // Gate code exists but is OFF: the dry-run count is the projection of
+      // what would happen if the operator flipped INTAKE_GATE_SOFT=1.
+      out.push(
+        `Intake gate dry-run: ${quality.wouldFailCount} of ${quality.totalExamined} formal records would fail today's intake quality rules. The gate code exists in addHypothesis but is OFF — set INTAKE_GATE_SOFT=1 to activate (failing candidates are stored with hygieneTag='needs_review', NOT dropped). See gateRules for the criteria.`,
+      );
+    }
   }
 
   return out;

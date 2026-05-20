@@ -365,6 +365,62 @@ describe("intake policy — manual backlog gate", () => {
     assert.equal(v.intakeGateConfig.envVars.HYPOTHESIS_MAX_ACTIVE, 11);
     assert.equal(v.intakeGateConfig.activeCapDefaults.maxActive, 11);
   });
+
+  // ── Phase 2m-d: nextSafeActions accurately reflects whether the gate is
+  // wired vs. dry-run. The stale "NOT wired" string is regression-pinned
+  // out: when INTAKE_GATE_SOFT=1 the panel must state the gate IS wired and
+  // call the would-fail count legacy backlog; when the env var is off, the
+  // panel must say the gate code exists but is OFF (NOT the old "not wired
+  // in this PR" string).
+  it("nextSafeActions: gate-wired message when INTAKE_GATE_SOFT=1", () => {
+    delete process.env.INTAKE_GATE_SOFT;
+    delete process.env.HYPOTHESIS_BLOCK_ON_BACKLOG;
+    clearLab(); clearMemory();
+    // Seed two records that would fail gateIntake (missing evidenceRef /
+    // useCase) so wouldFailCount > 0 and the gated-message branch fires.
+    writeLab({
+      topics: [],
+      hypotheses: [
+        makeHyp({ id: "hyp_legacy_1", basis: "" }),
+        makeHyp({ id: "hyp_legacy_2", measurementPath: "" }),
+      ],
+      lastUpdated: new Date().toISOString(),
+      stats: { totalResearched: 0, totalPublished: 0, totalDeclined: 0, hypothesesFormed: 0, hypothesesConfirmed: 0 },
+    });
+    process.env.INTAKE_GATE_SOFT = "1";
+    const v = buildHypothesisIntakeAuditVisibility({ now: new Date("2026-05-20T00:00:00Z") });
+    const joined = v.nextSafeActions.join("\n");
+    assert.ok(
+      v.intakeQuality.wouldFailCount > 0,
+      "precondition: seeded records must fail gateIntake so the message fires",
+    );
+    assert.match(joined, /Intake gate is WIRED \(INTAKE_GATE_SOFT=1\)/);
+    assert.match(joined, /legacy backlog formed before the gate was active/);
+    // Regression: the stale "NOT wired in this PR" copy must NEVER appear
+    // when the gate is on.
+    assert.doesNotMatch(joined, /NOT wired into addHypothesis/);
+  });
+
+  it("nextSafeActions: gate-off dry-run message when INTAKE_GATE_SOFT is unset", () => {
+    delete process.env.INTAKE_GATE_SOFT;
+    delete process.env.HYPOTHESIS_BLOCK_ON_BACKLOG;
+    clearLab(); clearMemory();
+    writeLab({
+      topics: [],
+      hypotheses: [
+        makeHyp({ id: "hyp_legacy_1", basis: "" }),
+      ],
+      lastUpdated: new Date().toISOString(),
+      stats: { totalResearched: 0, totalPublished: 0, totalDeclined: 0, hypothesesFormed: 0, hypothesesConfirmed: 0 },
+    });
+    const v = buildHypothesisIntakeAuditVisibility({ now: new Date("2026-05-20T00:00:00Z") });
+    const joined = v.nextSafeActions.join("\n");
+    assert.match(joined, /Intake gate dry-run:/);
+    assert.match(joined, /gate code exists in addHypothesis but is OFF/);
+    // Regression: the stale phrasing implying the gate was never wired
+    // anywhere must not return on the OFF branch either.
+    assert.doesNotMatch(joined, /NOT wired into addHypothesis in this PR/);
+  });
 });
 
 // ── addHypothesis soft routing on cap & backlog ──────────────────────────
