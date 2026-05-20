@@ -140,7 +140,11 @@ describe("promotionGateAuthorityVisibility — renderRiskClassVerdicts", () => {
     const med = v.find(x => x.riskClass === "medium")!;
     const high = v.find(x => x.riskClass === "high")!;
     assert.match(med.posture, /Unaffected by Phase 4/);
-    assert.match(high.posture, /Unaffected by Phase 4/);
+    // v3 (PR #408): when Phase 4-d is off (default for this v1-signature
+    // call), the high-risk posture still describes high-risk as
+    // unaffected by the Phase 4 flags but additionally explains what
+    // happens when Phase 4-d is ON. Pin both halves of that contract.
+    assert.match(high.posture, /unaffected by Phase 4/i);
     assert.match(high.posture, /PROMOTION_GATE_ALLOW_HIGH_RISK/);
   });
 });
@@ -213,15 +217,22 @@ describe("promotionGateAuthorityVisibility — buildPromotionGateAuthorityVisibi
     assert.match(snap.invariants.visibilityOnly, /read-only/i);
     assert.match(snap.invariants.singleWriteSiteIntact, /Pin 11/);
     assert.match(snap.invariants.singleWriteSiteIntact, /canPromote/);
-    // v2 (PR #406): phaseScope now describes that Phase 4-c IS implemented
-    // for low-risk freshness AND medium-risk hard block, while Phase 4-d
-    // (high-risk) remains explicitly UNAFFECTED. Pin the accurate wording.
+    // v3 (PR #408): phaseScope now describes that Phase 4-c IS implemented
+    // for low-risk freshness AND medium-risk hard block, AND Phase 4-d
+    // (high-risk authoritative attestation block) is implemented (PR #408).
+    // High-risk recommendations still ALSO require the explicit
+    // PROMOTION_GATE_ALLOW_HIGH_RISK=true override on top — Phase 4-d
+    // STACKS, it does not replace that override. Pin that wording here.
     assert.match(snap.invariants.phaseScope, /Phase 4-c/);
     assert.match(snap.invariants.phaseScope, /low-risk freshness/);
     assert.match(snap.invariants.phaseScope, /medium-risk hard block/);
     assert.match(snap.invariants.phaseScope, /Phase 4-d/);
-    assert.match(snap.invariants.phaseScope, /UNAFFECTED/);
-    assert.match(snap.invariants.phaseScope, /high-risk/);
+    assert.match(snap.invariants.phaseScope, /PR #408/);
+    assert.match(snap.invariants.phaseScope, /PROMOTION_GATE_ALLOW_HIGH_RISK/);
+    assert.match(snap.invariants.phaseScope, /stacks|STACK/i);
+    // Phase 4-d is no longer described as "NOT implemented" / "UNAFFECTED".
+    assert.doesNotMatch(snap.invariants.phaseScope, /Phase 4-d[^.]*not implemented/i);
+    assert.doesNotMatch(snap.invariants.phaseScope, /Phase 4-d[^.]*UNAFFECTED/);
   });
 
   it("is pure: calling it does not mutate process.env", () => {
@@ -294,19 +305,20 @@ describe("promotionGateAuthorityVisibility — buildPromotionGateAuthorityVisibi
 
 /* ─── v2 (PR #406) — Phase 4-c flag visibility ──────────────────────── */
 
-describe("promotionGateAuthorityVisibility v2 — schema bump", () => {
-  it("schemaVersion is phase4-visibility.v2", () => {
-    assert.equal(PROMOTION_GATE_AUTHORITY_VISIBILITY_SCHEMA_VERSION, "phase4-visibility.v2");
+describe("promotionGateAuthorityVisibility v3 — schema bump (PR #408)", () => {
+  it("schemaVersion is phase4-visibility.v3", () => {
+    assert.equal(PROMOTION_GATE_AUTHORITY_VISIBILITY_SCHEMA_VERSION, "phase4-visibility.v3");
   });
 
-  it("snapshot reports the v2 schemaVersion literally", () => {
+  it("snapshot reports the v3 schemaVersion literally", () => {
     const snap = buildPromotionGateAuthorityVisibility({
       softWarningFlagOn:           false,
       lowRiskHardBlockFlagOn:      false,
       phase4cFreshnessMaxAgeDays:  null,
       phase4cMediumRiskBlockOn:    false,
+      phase4dHighRiskBlockOn:      false,
     });
-    assert.equal(snap.schemaVersion, "phase4-visibility.v2");
+    assert.equal(snap.schemaVersion, "phase4-visibility.v3");
   });
 });
 
@@ -392,7 +404,10 @@ describe("promotionGateAuthorityVisibility v2 — Phase 4-c flag blocks", () => 
     assert.match(med.posture, /Phase 4-c part 2/);
     assert.match(med.posture, /14 day/);
     assert.equal(high.hardBlocked, false);
-    assert.match(high.posture, /UNAFFECTED|Unaffected/);
+    // v3 (PR #408): the high-risk posture line was rewritten. With
+    // Phase 4-d off (this test's posture), it still expresses
+    // "unaffected" semantics for the current configuration.
+    assert.match(high.posture, /unaffected/i);
   });
 
   it("low-risk verdict surfaces freshness clause when Phase 4-b is ON and freshness is configured", () => {
@@ -507,5 +522,188 @@ describe("promotionGateAuthorityVisibility v2 — Phase 4-c flag blocks", () => 
     const med = v.find(x => x.riskClass === "medium")!;
     assert.equal(med.hardBlocked, false);
     assert.match(med.posture, /Unaffected by Phase 4 flags/);
+  });
+});
+
+/* ─── v3 (PR #408) — Phase 4-d high-risk hard block flag visibility ──── */
+
+import { buildPhase4dHighRiskBlockFlag } from "../promotionGateAuthorityVisibility.ts";
+
+const PHASE_4D_HIGH_BLOCK_ENV =
+  "PROMOTION_GATE_BLOCK_HIGH_RISK_ON_PHASE3A_PREP_NOT_READY";
+
+describe("promotionGateAuthorityVisibility v3 — Phase 4-d flag block", () => {
+  it("default (all five flags off): phase4dHighRiskBlock card is present and disabled", () => {
+    const snap = buildPromotionGateAuthorityVisibility({
+      softWarningFlagOn:           false,
+      lowRiskHardBlockFlagOn:      false,
+      phase4cFreshnessMaxAgeDays:  null,
+      phase4cMediumRiskBlockOn:    false,
+      phase4dHighRiskBlockOn:      false,
+    });
+    assert.ok(snap.flags.phase4dHighRiskBlock, "phase4dHighRiskBlock flag block missing");
+    assert.equal(snap.flags.phase4dHighRiskBlock.enabled, false);
+    assert.equal(snap.flags.phase4dHighRiskBlock.envVar, PHASE_4D_HIGH_BLOCK_ENV);
+    assert.equal(snap.flags.phase4dHighRiskBlock.phase, "phase4-d-high-block");
+    assert.match(snap.flags.phase4dHighRiskBlock.currentEffect, /DEFAULT OFF/);
+  });
+
+  it("phase4dHighRiskBlock enabled: authority level reports phase4d_high_risk_hard_block_enabled", () => {
+    const snap = buildPromotionGateAuthorityVisibility({
+      softWarningFlagOn:           false,
+      lowRiskHardBlockFlagOn:      false,
+      phase4cFreshnessMaxAgeDays:  null,
+      phase4cMediumRiskBlockOn:    false,
+      phase4dHighRiskBlockOn:      true,
+    });
+    assert.equal(snap.flags.phase4dHighRiskBlock.enabled, true);
+    assert.match(snap.flags.phase4dHighRiskBlock.currentEffect, /ENABLED/);
+    assert.equal(snap.authorityLevel, "phase4d_high_risk_hard_block_enabled");
+  });
+
+  it("phase4d ON wins over every other combo in authority level", () => {
+    const snap = buildPromotionGateAuthorityVisibility({
+      softWarningFlagOn:           true,
+      lowRiskHardBlockFlagOn:      true,
+      phase4cFreshnessMaxAgeDays:  14,
+      phase4cMediumRiskBlockOn:    true,
+      phase4dHighRiskBlockOn:      true,
+    });
+    assert.equal(snap.authorityLevel, "phase4d_high_risk_hard_block_enabled");
+    assert.match(snap.headline, /high-risk/i);
+    // Headline must call out the stacking requirement explicitly.
+    assert.match(snap.headline, /PROMOTION_GATE_ALLOW_HIGH_RISK/);
+    assert.match(snap.headline, /stack|STACK/i);
+  });
+
+  it("phase4d ON: high-risk verdict reflects hard-block ON and mentions stacking requirement", () => {
+    const snap = buildPromotionGateAuthorityVisibility({
+      softWarningFlagOn:           false,
+      lowRiskHardBlockFlagOn:      false,
+      phase4cFreshnessMaxAgeDays:  14,
+      phase4cMediumRiskBlockOn:    false,
+      phase4dHighRiskBlockOn:      true,
+    });
+    const high = snap.riskClassVerdicts.find(v => v.riskClass === "high")!;
+    assert.equal(high.hardBlocked, true);
+    assert.match(high.posture, /Phase 4-d/);
+    assert.match(high.posture, /14 day/);
+    assert.match(high.posture, /PROMOTION_GATE_ALLOW_HIGH_RISK/);
+    assert.match(high.posture, /stacks|STACK/i);
+  });
+
+  it("phase4d OFF: high-risk verdict still mentions PROMOTION_GATE_ALLOW_HIGH_RISK as the active gate", () => {
+    const snap = buildPromotionGateAuthorityVisibility({
+      softWarningFlagOn:           false,
+      lowRiskHardBlockFlagOn:      false,
+      phase4cFreshnessMaxAgeDays:  null,
+      phase4cMediumRiskBlockOn:    false,
+      phase4dHighRiskBlockOn:      false,
+    });
+    const high = snap.riskClassVerdicts.find(v => v.riskClass === "high")!;
+    assert.equal(high.hardBlocked, false);
+    assert.match(high.posture, /PROMOTION_GATE_ALLOW_HIGH_RISK/);
+  });
+
+  it("phase4d block reads from process.env when override is undefined", () => {
+    const prev = process.env[PHASE_4D_HIGH_BLOCK_ENV];
+    try {
+      process.env[PHASE_4D_HIGH_BLOCK_ENV] = "true";
+      const snap = buildPromotionGateAuthorityVisibility();
+      assert.equal(snap.flags.phase4dHighRiskBlock.enabled, true);
+      assert.equal(snap.authorityLevel, "phase4d_high_risk_hard_block_enabled");
+    } finally {
+      if (prev === undefined) delete process.env[PHASE_4D_HIGH_BLOCK_ENV];
+      else process.env[PHASE_4D_HIGH_BLOCK_ENV] = prev;
+    }
+  });
+
+  it("phase4d block treats non-'true' env values as off (case-insensitive 'true' is the only on-value)", () => {
+    const prev = process.env[PHASE_4D_HIGH_BLOCK_ENV];
+    try {
+      process.env[PHASE_4D_HIGH_BLOCK_ENV] = "1";
+      assert.equal(
+        buildPromotionGateAuthorityVisibility().flags.phase4dHighRiskBlock.enabled,
+        false,
+      );
+      process.env[PHASE_4D_HIGH_BLOCK_ENV] = "yes";
+      assert.equal(
+        buildPromotionGateAuthorityVisibility().flags.phase4dHighRiskBlock.enabled,
+        false,
+      );
+      process.env[PHASE_4D_HIGH_BLOCK_ENV] = "TRUE";
+      assert.equal(
+        buildPromotionGateAuthorityVisibility().flags.phase4dHighRiskBlock.enabled,
+        true,
+      );
+    } finally {
+      if (prev === undefined) delete process.env[PHASE_4D_HIGH_BLOCK_ENV];
+      else process.env[PHASE_4D_HIGH_BLOCK_ENV] = prev;
+    }
+  });
+
+  it("backward-compat: a v1/v2 caller that omits phase4dHighRiskBlockOn still gets a valid v3 snapshot", () => {
+    const prev = process.env[PHASE_4D_HIGH_BLOCK_ENV];
+    try {
+      delete process.env[PHASE_4D_HIGH_BLOCK_ENV];
+      const snap = buildPromotionGateAuthorityVisibility({
+        softWarningFlagOn:      false,
+        lowRiskHardBlockFlagOn: false,
+      });
+      assert.equal(snap.flags.phase4dHighRiskBlock.enabled, false);
+      assert.notEqual(snap.authorityLevel, "phase4d_high_risk_hard_block_enabled");
+    } finally {
+      if (prev !== undefined) process.env[PHASE_4D_HIGH_BLOCK_ENV] = prev;
+    }
+  });
+
+  it("buildPhase4dHighRiskBlockFlag exposes envVar, phase literal, and description text", () => {
+    const flagOff = buildPhase4dHighRiskBlockFlag(false);
+    assert.equal(flagOff.envVar, PHASE_4D_HIGH_BLOCK_ENV);
+    assert.equal(flagOff.phase, "phase4-d-high-block");
+    assert.equal(flagOff.enabled, false);
+    assert.match(flagOff.currentEffect, /DEFAULT OFF/);
+
+    const flagOn = buildPhase4dHighRiskBlockFlag(true);
+    assert.equal(flagOn.enabled, true);
+    assert.match(flagOn.currentEffect, /ENABLED/);
+    // Stacking semantics must be explicit in the on-state description.
+    assert.match(flagOn.currentEffect, /PROMOTION_GATE_ALLOW_HIGH_RISK/);
+  });
+
+  it("phaseScope invariant now describes Phase 4-d as implemented (PR #408)", () => {
+    const snap = buildPromotionGateAuthorityVisibility({
+      softWarningFlagOn:      false,
+      lowRiskHardBlockFlagOn: false,
+      phase4dHighRiskBlockOn: false,
+    });
+    assert.match(snap.invariants.phaseScope, /Phase 4-d/);
+    assert.match(snap.invariants.phaseScope, /PR #408/);
+    // The pre-PR-#408 wording ("Phase 4-d (high-risk authoritative ...
+    // block) is NOT implemented") must be gone.
+    assert.doesNotMatch(snap.invariants.phaseScope, /Phase 4-d[^.]*not implemented/i);
+  });
+
+  it("propogateOnlyChannel invariant mentions Phase 4-d alongside 4-b and 4-c", () => {
+    const snap = buildPromotionGateAuthorityVisibility({
+      softWarningFlagOn:      false,
+      lowRiskHardBlockFlagOn: false,
+    });
+    assert.match(snap.invariants.propogateOnlyChannel, /Phase 4-d/);
+    assert.match(snap.invariants.propogateOnlyChannel, /Phase 4-b/);
+    assert.match(snap.invariants.propogateOnlyChannel, /Phase 4-c/);
+  });
+
+  it("summary mentions the Phase 4-d + PROMOTION_GATE_ALLOW_HIGH_RISK stacking requirement when phase4d is ON", () => {
+    const snap = buildPromotionGateAuthorityVisibility({
+      softWarningFlagOn:           false,
+      lowRiskHardBlockFlagOn:      false,
+      phase4cFreshnessMaxAgeDays:  null,
+      phase4cMediumRiskBlockOn:    false,
+      phase4dHighRiskBlockOn:      true,
+    });
+    assert.match(snap.summary, /High-risk/);
+    assert.match(snap.summary, /PROMOTION_GATE_ALLOW_HIGH_RISK/);
+    assert.match(snap.summary, /stacks|STACK/i);
   });
 });

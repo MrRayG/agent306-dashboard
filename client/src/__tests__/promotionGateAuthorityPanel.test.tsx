@@ -72,6 +72,17 @@ function mkSnap(opts: { softOn: boolean; hardOn: boolean }): PromotionGateAuthor
         currentEffect: "DEFAULT OFF.",
         changeOnEnable: "Makes phase3aPrep authoritative for medium-risk.",
       },
+      // v3 (PR #408): the Phase 4-d high-risk hard-block flag block.
+      // This default fixture exercises the off path; Phase 4-d-specific
+      // states are covered by promotionGateAuthorityPanel.phase4d.test.tsx.
+      phase4dHighRiskBlock: {
+        envVar:        "PROMOTION_GATE_BLOCK_HIGH_RISK_ON_PHASE3A_PREP_NOT_READY",
+        enabled:       false,
+        phase:         "phase4-d-high-block",
+        description:   "Phase 4-d high-risk hard block. Stacks on top of PROMOTION_GATE_ALLOW_HIGH_RISK.",
+        currentEffect: "DEFAULT OFF.",
+        changeOnEnable: "Makes phase3aPrep authoritative for high-risk (in addition to PROMOTION_GATE_ALLOW_HIGH_RISK).",
+      },
     },
     riskClassVerdicts: [
       {

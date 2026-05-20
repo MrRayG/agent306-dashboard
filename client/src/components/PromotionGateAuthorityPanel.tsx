@@ -13,7 +13,7 @@ export interface PromotionGateAuthorityFlag {
   envVar:        string;
   enabled:       boolean;
   // v2 (PR #406): extended to include the two Phase 4-c phases.
-  phase:         "phase4-a" | "phase4-b" | "phase4-c-freshness" | "phase4-c-medium-block";
+  phase:         "phase4-a" | "phase4-b" | "phase4-c-freshness" | "phase4-c-medium-block" | "phase4-d-high-block";
   description:   string;
   currentEffect: string;
   changeOnEnable: string;
@@ -44,7 +44,9 @@ export type PromotionGateAuthorityLevel =
   | "soft_warning_and_low_risk_hard_block_enabled"
   // v2 (PR #406)
   | "phase4c_freshness_active"
-  | "phase4c_medium_risk_hard_block_enabled";
+  | "phase4c_medium_risk_hard_block_enabled"
+  // v3 (PR #408)
+  | "phase4d_high_risk_hard_block_enabled";
 
 export interface PromotionGateAuthorityVisibility {
   schemaVersion:  string;
@@ -56,11 +58,16 @@ export interface PromotionGateAuthorityVisibility {
   // typed as required (not optional) so a stale snapshot served from a
   // v1 backend fails at type-check time rather than silently rendering
   // an empty placeholder.
+  // v3 (PR #408) — phase4dHighRiskBlock flag is required. Same posture
+  // as v2: a stale v1/v2 snapshot served from a backend that does not
+  // emit this field fails at type-check time rather than silently
+  // rendering an empty placeholder.
   flags: {
     phase4aSoftWarning:     PromotionGateAuthorityFlag;
     phase4bLowRiskBlock:    PromotionGateAuthorityFlag;
     phase4cFreshnessGate:   PromotionGateAuthorityFlag;
     phase4cMediumRiskBlock: PromotionGateAuthorityFlag;
+    phase4dHighRiskBlock:   PromotionGateAuthorityFlag;
   };
   riskClassVerdicts:      PromotionGateRiskClassVerdict[];
   boundaryAuditReference: PromotionGateAuthorityAuditReference;
@@ -91,6 +98,10 @@ function authorityLevelColor(level: PromotionGateAuthorityLevel): string {
     // because they represent an authoritative block surface (per-tier).
     case "phase4c_freshness_active":                       return ORANGE;
     case "phase4c_medium_risk_hard_block_enabled":         return ORANGE;
+    // v3 (PR #408): the high-risk hard-block level is the most
+    // restrictive; render in orange consistent with other hard-block
+    // states.
+    case "phase4d_high_risk_hard_block_enabled":           return ORANGE;
     default:                                               return DIM;
   }
 }
@@ -162,6 +173,7 @@ export function PromotionGateAuthorityPanel({ p }: { p: PromotionGateAuthorityVi
           p.flags.phase4bLowRiskBlock,
           p.flags.phase4cFreshnessGate,
           p.flags.phase4cMediumRiskBlock,
+          p.flags.phase4dHighRiskBlock,
         ].map(flag => {
           const flagColor = flag.enabled ? GREEN : DIM;
           return (
