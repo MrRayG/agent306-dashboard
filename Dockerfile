@@ -39,6 +39,20 @@ RUN npx esbuild scripts/migrate_json_to_db.ts \
       --external:better-sqlite3 \
       --outfile=dist/migrate.cjs
 
+# Bundle the hypothesis-reset operator CLI into dist/hypothesisReset.cjs so
+# operators can run `node dist/hypothesisReset.cjs --bucket=archive_stale
+# --apply` from a Railway SSH session. Without this bundle, `tsx` is missing
+# from the production image (devDep, pruned below) and the CLI cannot run.
+# Mirrors the migrate.cjs pattern — better-sqlite3 stays external because it
+# remains a runtime dependency and survives the prune below.
+RUN npx esbuild scripts/hypothesisReset.ts \
+      --bundle \
+      --platform=node \
+      --target=node20 \
+      --format=cjs \
+      --external:better-sqlite3 \
+      --outfile=dist/hypothesisReset.cjs
+
 # Remove dev dependencies after build
 RUN npm prune --production
 

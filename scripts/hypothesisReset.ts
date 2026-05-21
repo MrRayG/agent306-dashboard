@@ -3,12 +3,19 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * 306 — HYPOTHESIS RESET CLI (operator-only, dry-run by default)
  *
+ * LOCAL DEV (tsx available):
  *   tsx scripts/hypothesisReset.ts                 # full report, no writes
  *   tsx scripts/hypothesisReset.ts --report=json   # JSON form (machine-readable)
  *   tsx scripts/hypothesisReset.ts --bucket=archive_stale          # dry-run apply plan
  *   tsx scripts/hypothesisReset.ts --bucket=archive_stale --apply  # ACTUAL archive
  *   tsx scripts/hypothesisReset.ts --source=/abs/path/research_lab.json
  *   tsx scripts/hypothesisReset.ts --data-dir=/abs/path/to/data
+ *
+ * PRODUCTION (Railway SSH — tsx is pruned, use the bundled CJS):
+ *   node dist/hypothesisReset.cjs                                  # full report
+ *   node dist/hypothesisReset.cjs --bucket=archive_stale           # dry-run apply plan
+ *   node dist/hypothesisReset.cjs --bucket=archive_stale --apply   # ACTUAL archive
+ *   (The bundle is produced by the Dockerfile via esbuild; see PR #411.)
  *
  * Hard rules:
  *   - Default mode is dry-run (no `--apply`). Even with `--bucket=…`, the
@@ -89,7 +96,7 @@ function parseArgs(argv: string[]): ParsedArgs {
 
 const HELP = `Hypothesis Reset CLI (operator-only)
 
-usage:
+usage (local dev, tsx available):
   tsx scripts/hypothesisReset.ts                       # print full reset report
   tsx scripts/hypothesisReset.ts --json                # JSON form of the report
   tsx scripts/hypothesisReset.ts --bucket=BUCKET       # dry-run apply for one bucket
@@ -100,6 +107,13 @@ usage:
                                                        # WRITE against the SQLite DB row
   tsx scripts/hypothesisReset.ts --source=/abs/path/research_lab.json
   tsx scripts/hypothesisReset.ts --data-dir=/abs/path/to/data
+
+usage (Railway SSH, tsx pruned — use the bundled CJS):
+  node dist/hypothesisReset.cjs                        # print full reset report
+  node dist/hypothesisReset.cjs --bucket=archive_stale # dry-run apply plan
+  node dist/hypothesisReset.cjs --bucket=archive_stale --apply
+                                                       # ACTUAL archive write
+  (Same flags as the tsx invocation. Bundle built by Dockerfile, PR #411.)
 
 flags:
   --apply         Write the archive. Without this flag the CLI is dry-run only.
