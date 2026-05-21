@@ -160,24 +160,26 @@ describe("runResearchCycleMetaImprovement — observational scoring", () => {
   before(() => { wipeStoreFile(); wipeRecs(); });
   beforeEach(() => { wipeStoreFile(); wipeRecs(); });
 
-  it("persists exactly one scorecard per cycle when scoring enabled, and never autoApply=true", () => {
-    const records = [
-      recOverridden({ verdict: "pursue" }),
-      recOverridden({ verdict: "pursue" }),
-      recOverridden({ verdict: "review", hadProtocol: false }),
-    ];
+  it("persists exactly one scorecard per cycle when scoring enabled AND proposals exist, and never autoApply=true (PR #412)", () => {
+    // PR #412: a scorecard is now only emitted when there is real reasoning
+    // to score (i.e. proposals.length > 0). Use an anomalous cycle so that
+    // deriveProcedureChangeProposals fires — the scored input is the
+    // proposal rationale+proposedChange text, not the cycle-stats line.
+    const records = Array.from({ length: 10 }, () =>
+      recOverridden({ verdict: "reject", overall: 4, hadProtocol: true, reason: "below threshold" }));
     const before = readReasoningQualityEntries().length;
     const out = runResearchCycleMetaImprovement({
       cycleId: "rq-cycle-1",
       recordsOverride: records,
     })!;
     assert.ok(out, "result returned");
-    assert.ok(out.reasoningScorecard, "scorecard exposed on result");
+    assert.ok(out.recommendations.length >= 1, "anomalous cycle must produce proposals");
+    assert.ok(out.reasoningScorecard, "scorecard exposed on result when proposals exist");
     assert.equal(out.reasoningScorecard!.autoApply, false);
     assert.equal(out.reasoningScorecard!.provisional, true);
 
     const after = readReasoningQualityEntries();
-    assert.equal(after.length, before + 1, "one append per cycle");
+    assert.equal(after.length, before + 1, "one append per cycle with proposals");
     assert.equal(after[after.length - 1].cycleId, "rq-cycle-1");
     assert.equal(after[after.length - 1].engineStep, "research-cycle/meta-improvement");
   });
@@ -193,9 +195,11 @@ describe("runResearchCycleMetaImprovement — observational scoring", () => {
     assert.equal(readReasoningQualityEntries().length, before, "no append when disabled");
   });
 
-  it("malformed / empty cycle records are safely scored — never throws", () => {
-    // Force-empty records: meta-improvement still appends an archive record
-    // and emits a degenerate but well-formed scorecard.
+  it("malformed / empty cycle records are safely handled — never throws, no scorecard for empty reasoning (PR #412)", () => {
+    // Force-empty records: meta-improvement still appends an archive record,
+    // but per PR #412 we do NOT emit a scorecard when proposals.length === 0.
+    // Empty input is not real reasoning to measure; scoring it was the very
+    // measurement artifact PR #412 fixes.
     let threw = false;
     let out: any;
     try {
@@ -208,11 +212,10 @@ describe("runResearchCycleMetaImprovement — observational scoring", () => {
     }
     assert.equal(threw, false, "must not throw on empty cycle");
     assert.ok(out, "result returned");
-    assert.equal(out.reasoningScorecard.autoApply, false);
-    assert.equal(out.reasoningScorecard.provisional, true);
-    // Limitations field present so downstream cannot misread.
-    assert.ok(Array.isArray(out.reasoningScorecard.limitations));
-    assert.ok(out.reasoningScorecard.limitations.length > 0);
+    assert.equal(out.reasoningScorecard, null,
+      "empty cycle must not emit a scorecard (no reasoning to score)");
+    // Archive record IS still written — lessonText archive path unchanged.
+    assert.ok(out.archiveRecord, "archive record still written for empty cycle");
   });
 
   it("meta-improvement scorecard never sets recommendations to depend on the band", () => {
