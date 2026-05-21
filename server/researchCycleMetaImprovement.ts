@@ -286,13 +286,30 @@ export function runResearchCycleMetaImprovement(opts: RunMetaOptions = {}): Meta
     selfRecommendationId: filed[0]?.id,
   });
 
-  // PR #288 — observational reasoning-quality score over the cycle's lesson
-  // trace. Scoring is pure / deterministic / cheap and the harness pins
+  // PR #288 / PR #412 — observational reasoning-quality score over the
+  // cycle's *real* reasoning trace. Previously this scored `lessonText`
+  // (a cycle-stats status line: "total=N pursued=N | passRate=X.XXX..."),
+  // which has no reasoning markers and produced a constant 3-condition
+  // self-obviation pattern across cycles regardless of agent behavior.
+  // The Grammar v2.6 scorer expects reasoning — multi-branch causal
+  // claims, explicit alternatives, calibrated uncertainty, productive
+  // stress. `deriveProcedureChangeProposals` produces exactly that in
+  // each proposal's (rationale + proposedChange); concatenating those
+  // is the actual reasoning trace for this cycle.
+  //
+  // When `proposals.length === 0` (clean cycle / nothing to propose),
+  // there is no reasoning to score. Emitting a low-band scorecard for an
+  // empty input is itself a measurement artifact, so we skip the append.
+  // Scoring remains pure / deterministic / cheap and the harness pins
   // autoApply=false. The store rejects any tampered scorecard at the
   // boundary. Nothing here gates publishing or modifies engine state.
   let reasoningScorecard: ReasoningQualityScorecard | null = null;
-  if (doScore) {
+  if (doScore && proposals.length > 0) {
     try {
+      const reasoningText = proposals
+        .map(p => `${p.rationale}\n${p.proposedChange}`)
+        .join("\n\n");
+
       // Use prior cycle scorecards' flourishingProxy as recent history so
       // the harness can compute a delta and (if persistently low) raise the
       // self-obviation recommendation. Recommendation is observational —
@@ -303,8 +320,8 @@ export function runResearchCycleMetaImprovement(opts: RunMetaOptions = {}): Meta
         .filter((n): n is number => typeof n === "number" && Number.isFinite(n));
 
       reasoningScorecard = scoreReasoningTrace({
-        text: lessonText,
-        prompt: `cycle ${cycleId} meta-improvement summary`,
+        text: reasoningText,
+        prompt: `cycle ${cycleId} meta-improvement reasoning`,
         reportedConfidence: stats.passRate,
         irreversibleCommit: false, // archive append is reversible-by-policy
         alternativesConsidered: proposals.map(p => p.title),
