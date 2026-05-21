@@ -46,6 +46,7 @@ import {
 import { logEvent } from "./observability/structuredLog.js";
 import { writeGoalsBlob } from "./repositories/goalRepository.js";
 import { isDbStateEnabled } from "./repositories/jsonFallback.js";
+import { reconcileMissingPrimitiveRecs } from "./missingPrimitiveReconciler.js";
 // ── Types ──────────────────────────────────────────────────────
 
 export interface MilestoneSpec {
@@ -117,6 +118,15 @@ const SAFETY = {
   // from flooding the goals queue.
   INSIGHT_PROMOTION_ENABLED: true,
   MAX_INSIGHTS_PROMOTED_PER_RUN: 3,
+  // PR #410 — missing-primitive reconciler. After each insight-promotion pass
+  // (STEP 3.5), walk open `missing-primitive:` recs and auto-reject any whose
+  // underlying insight now translates to a real primitive. Closes the
+  // "persisted-rec-after-parser-fix" gap that left 6 stale recs in the queue
+  // for days after PR #409 shipped. Cap matches MAX_INSIGHTS_PROMOTED_PER_RUN's
+  // bounded-work style; bumped higher (20) because reconciliation is read-
+  // mostly and we want one cycle to drain a parser-coverage backlog cleanly.
+  MISSING_PRIMITIVE_RECONCILER_ENABLED: true,
+  MAX_RECS_RECONCILED_PER_RUN: 20,
 };
 
 const CATEGORY_COMPETENCY_MAP: Record<GoalCategory, string[]> = {
@@ -609,6 +619,35 @@ export async function runGoalEngine(evalResult?: EvalResult, grokKey?: string): 
       }
     } catch (e: any) {
       console.warn("[GoalEngine] Step 3.5 (insight promotion) failed:", e.message);
+    }
+  }
+
+  // ── STEP 3.6: Reconcile stale missing-primitive recs (PR #410) ───────
+  //
+  // Once the translator gains a new pattern (e.g. PR #409 coverage sweep),
+  // the OLD `missing-primitive: <family>` recs that triggered the fix sit in
+  // the operator queue indefinitely — they're persisted ledger rows, not
+  // derived views, and the dedupe key only protects future emissions of the
+  // same wording. This pass closes the loop: re-translate each open
+  // missing-primitive rec's source insight and auto-reject if it now resolves
+  // to a real primitive.
+  if (SAFETY.MISSING_PRIMITIVE_RECONCILER_ENABLED) {
+    try {
+      const reconciled = reconcileMissingPrimitiveRecs({
+        maxReconciledPerRun: SAFETY.MAX_RECS_RECONCILED_PER_RUN,
+      });
+      if (reconciled.reconciled > 0) {
+        console.log(
+          `[GoalEngine] Reconciler cleared ${reconciled.reconciled} stale missing-primitive rec(s) ` +
+            `(scanned=${reconciled.scanned}, stillUnparseable=${reconciled.stillUnparseable}, ` +
+            `missingLedger=${reconciled.missingLedgerEntry}, errors=${reconciled.errors})`,
+        );
+        result.brainEvolutionEvents.push(
+          `Auto-rejected ${reconciled.reconciled} stale missing-primitive rec(s) — translator now covers them`,
+        );
+      }
+    } catch (e: any) {
+      console.warn("[GoalEngine] Step 3.6 (missing-primitive reconciler) failed:", e.message);
     }
   }
 
