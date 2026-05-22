@@ -1,5 +1,9 @@
 version: 1
 skills:
+  - id: kb-accumulation-gate
+    path: skills/kb-accumulation-gate/SKILLCARD.yaml
+    status: registered
+    registered_at: 2026-05-22
   - id: promotion-boundary-audit
     path: skills/promotion-boundary-audit/SKILLCARD.yaml
     status: registered

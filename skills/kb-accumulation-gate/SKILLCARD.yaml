@@ -1,0 +1,52 @@
+id: kb-accumulation-gate
+version: v1.0
+title: KB Accumulation Self-Healing Gate
+owner: agent306-safety
+summary: >
+  Wires the ratio_rule corrective obligation for KB accumulation into a
+  self-healing pre-write gate. When the kb_added/archived ratio exceeds the
+  configured threshold, the gate auto-archives N oldest qualifying stale
+  entries (via the existing archiveKnowledge write path, single-write-site
+  preserved) then allows the write. Default OFF (KB_ACCUMULATION_GATE_ENABLED).
+  Reversible via per-tick backup files at /data/kb_auto_archive_backup_<iso>.json.
+policy:
+  propose_only: true
+  expands_autonomy: true
+  autonomy_expansion:
+    env_flag: KB_ACCUMULATION_GATE_ENABLED
+    default_enabled: false
+    write_site: server/memoryEngine.ts:addKnowledge -> server/kbAccumulationGate.ts -> server/kbAutoArchive.ts -> server/memoryEngine.ts:archiveKnowledge (existing)
+    reversibility_proof: /data/kb_auto_archive_backup_<iso>.json snapshots written before any tick's first archive; unset KB_ACCUMULATION_GATE_ENABLED to disable
+    blast_radius: single-class
+    operator_escape_hatch: unset KB_ACCUMULATION_GATE_ENABLED env var; existing operator CLI archive paths (server/memoryEngine.ts:archiveKnowledge) remain available and untouched
+read_only: false
+writes:
+  production: true
+  public_post: false
+  public_publish: false
+  bulk_promotion: false
+  archive_delete: false
+  fs: true
+  db: true
+  network: false
+writes_justification:
+  production: "Status mutation on existing KB entries only — no new entity creation, no schema change, no public surface change"
+  fs: "Single backup file per tick to /data/kb_auto_archive_backup_<iso>.json for reversibility (read-rolled-back-by-operator if needed)"
+  db: "Routes through existing server/memoryEngine.ts:archiveKnowledge write boundary — single-write-site invariant preserved; no parallel mutation site"
+io_surfaces:
+  inputs:
+    - server/memoryEngine.ts
+    - server/ruleCorrectiveObligations.ts
+  outputs:
+    - stdout summary log
+    - data/rule_corrective_obligations.jsonl (kb_ratio_satisfaction events, append-only)
+    - data/kb_auto_archive_backup_<iso>.json (one per tick, reversibility backup)
+promotion_authority: none
+evidence:
+  - server/__tests__/kbAccumulationGate.test.ts
+  - server/__tests__/skillCardKbAccumulationGate.test.ts
+  - server/__tests__/skillCardAutonomyExpansion.test.ts
+  - server/__tests__/actionTranslator.gateRatioTtl.test.ts
+tests:
+  - server/__tests__/kbAccumulationGate.test.ts
+  - server/__tests__/skillCardKbAccumulationGate.test.ts

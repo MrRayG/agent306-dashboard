@@ -85,6 +85,36 @@ function ledgerPath(): string {
 export type ObligationEventType = "opened" | "refreshed" | "satisfied";
 export type ObligationStatus = "open" | "satisfied";
 
+/**
+ * PR #414 — additional telemetry event for the KB accumulation self-healing
+ * gate. Emitted by `server/kbAccumulationGate.ts` once per auto-archive
+ * routed through the existing `archiveKnowledge` write site. Distinct from
+ * the obligation event family — it does NOT open/refresh/satisfy an
+ * obligation by itself; it is a side-effect telemetry row showing the
+ * gate fired.
+ */
+export interface KbRatioSatisfactionEvent {
+  /** evt_<unix-ms>_<6-base36> — same format as the obligation events. */
+  eventId: string;
+  /** Literal discriminator. */
+  type: "kb_ratio_satisfaction";
+  /** ISO timestamp the event was appended. */
+  recordedAt: string;
+  /** KB entry id that was auto-archived. */
+  archivedEntryId: string;
+  /** Free-text reason for the auto-archive (e.g. ratio violation
+   *  parameters). */
+  reason: string;
+  /** Whether the auto-archive cleared the deficit completely on this
+   *  tick. */
+  deficitCleared: boolean;
+  /** When false (deficit not cleared) we annotate the related obligation
+   *  with `partialSatisfaction = true` on the next projection read. */
+  partialSatisfaction: boolean;
+  /** ms-since-epoch the gate fired. */
+  tickedAt: number;
+}
+
 export interface RuleCorrectiveObligationEvent {
   /** evt_<unix-ms>_<6-base36> — unique per process, sortable by time. */
   eventId: string;
@@ -290,6 +320,21 @@ function appendLine(event: RuleCorrectiveObligationEvent): { ok: true } | { ok: 
     return { ok: true };
   } catch (e: any) {
     return { ok: false, reason: `obligation ledger write failed: ${e?.message ?? e}` };
+  }
+}
+
+/**
+ * Append a `kb_ratio_satisfaction` telemetry row to the existing obligation
+ * ledger (PR #414). Append-only; never rewrites prior lines. Caller is the
+ * KB accumulation gate; this function is the single ledger boundary for
+ * that event family.
+ */
+export function recordKbRatioSatisfaction(event: KbRatioSatisfactionEvent): { ok: true } | { ok: false; reason: string } {
+  try {
+    fs.appendFileSync(ledgerPath(), JSON.stringify(event) + "\n", "utf8");
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, reason: `kb_ratio_satisfaction ledger write failed: ${e?.message ?? e}` };
   }
 }
 

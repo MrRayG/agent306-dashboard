@@ -23,6 +23,12 @@ import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { reflectOnPost } from "./soulEvolution.js";
 
 import { postChatCompletions } from "./llmCall.js";
+// PR #414 — KB accumulation self-healing gate (default OFF, env-gated).
+// Re-exported through a renamed local binding to make the cycle obvious to
+// readers (this module exports `knowledge` and `archiveKnowledge`, both
+// consumed by the gate; ESM partial-init handles it because the gate
+// function executes at addKnowledge call-time, not at module-init time).
+import { maybeRunKbAccumulationGate as maybeRunKbAccumulationGateRef } from "./kbAccumulationGate.js";
 // ── File paths (all on Railway /data volume) ──────────────────
 const SOUL_FILE        = dataPath("memory_soul.json");
 const KNOWLEDGE_FILE   = dataPath("memory_knowledge.json");
@@ -723,6 +729,26 @@ export function addKnowledge(entry: Omit<KnowledgeEntry, "id" | "learnedAt">): v
 
   // Guard: skip entries with no usable title
   if (!entry.title) return;
+
+  // ── PR #414 KB accumulation self-healing gate ──────────────────────────
+  // Default OFF (env-gated). When KB_ACCUMULATION_GATE_ENABLED=true the
+  // gate may auto-archive up to N oldest qualifying stale entries via
+  // the existing `archiveKnowledge` write site (single-write-site
+  // preserved) before this write proceeds. The gate NEVER blocks the
+  // write: failure paths return a structured outcome and we fall
+  // through to the regular addKnowledge logic.
+  //
+  // ESM partial-init: kbAccumulationGate.ts statically imports `knowledge`
+  // and `archiveKnowledge` from this file. The cycle is safe because the
+  // gate function executes at call-time (not at module-init time) and
+  // both bindings are live by then.
+  try {
+    maybeRunKbAccumulationGateRef();
+  } catch (e: any) {
+    if (process.env.KB_ACCUMULATION_GATE_ENABLED === "true") {
+      console.warn(`[Memory] kbAccumulationGate dispatch failed: ${e?.message ?? e}`);
+    }
+  }
 
   // ── Prompt injection scan — strip dangerous content before storing ─────────
   const titleScan = scanForInjection(entry.title);
