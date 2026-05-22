@@ -37,6 +37,7 @@ import {
   RegistrySchema,
   SkillCardSchema,
   SUPPORTED_REGISTRY_VERSIONS,
+  WRITE_SURFACE_FIELDS,
   type Registry,
   type RegistryEntry,
   type SkillCard,
@@ -70,6 +71,9 @@ export interface ValidationFinding {
     | "card_promotion_authority"
     | "card_expands_autonomy"
     | "card_propose_only"
+    | "card_read_only_mismatch"
+    | "card_writes_justification_missing"
+    | "card_writes_justification_extraneous"
     | "pilot_evidence_missing";
   path: string;
   message: string;
@@ -252,30 +256,68 @@ export function validateSkillRegistry(options: ValidateOptions): ValidationResul
       });
     }
 
-    // Defense-in-depth: the Zod schema already enforces these, but if
-    // someone widens the schema later, these checks remain as belt-and-
-    // suspenders signal lines.
-    for (const [key, value] of Object.entries(card.writes)) {
-      if (value !== false) {
-        findings.push({
-          kind: "card_writes_widening",
-          path: entry.path,
-          message: `card "${card.id}" widens writes.${key}: ${String(value)}`,
-        });
+    // Defense-in-depth: the Zod schema already enforces the propose-only
+    // contract and the writes envelope, but these belt-and-suspenders
+    // checks remain so a future schema widening doesn't silently strip
+    // the audit trail.
+
+    // Writes-widening check: when policy.expands_autonomy === false,
+    // EVERY write surface must still be false. When expands_autonomy ===
+    // true, individual writes MAY be true but each true write MUST have
+    // a writes_justification entry. (PR #414.)
+    const expandsAutonomy = card.policy.expands_autonomy === true;
+    if (!expandsAutonomy) {
+      for (const [key, value] of Object.entries(card.writes)) {
+        if (value !== false) {
+          findings.push({
+            kind: "card_writes_widening",
+            path: entry.path,
+            message: `card "${card.id}" widens writes.${key}: ${String(value)} but policy.expands_autonomy is false`,
+          });
+        }
+      }
+    } else {
+      // expands_autonomy === true: per-true-write justification required.
+      const j = card.writes_justification ?? {};
+      for (const field of WRITE_SURFACE_FIELDS) {
+        const writeOn = (card.writes as Record<string, boolean>)[field] === true;
+        const justificationOn =
+          typeof j[field] === "string" && (j[field] as string).trim().length > 0;
+        if (writeOn && !justificationOn) {
+          findings.push({
+            kind: "card_writes_justification_missing",
+            path: entry.path,
+            message: `card "${card.id}" writes.${field}=true but writes_justification.${field} is missing or empty`,
+          });
+        }
+        if (!writeOn && justificationOn) {
+          findings.push({
+            kind: "card_writes_justification_extraneous",
+            path: entry.path,
+            message: `card "${card.id}" writes_justification.${field} is set but writes.${field} is not true`,
+          });
+        }
       }
     }
+
+    // read_only invariant: when expands_autonomy === false, read_only
+    // MUST be true. When expands_autonomy === true, read_only MAY be
+    // false (the gate writes status mutations) but the propose-only
+    // policy still applies via the env flag / default-off invariant
+    // captured in policy.autonomy_expansion.
+    if (!expandsAutonomy && card.read_only !== true) {
+      findings.push({
+        kind: "card_read_only_mismatch",
+        path: entry.path,
+        message: `card "${card.id}" has policy.expands_autonomy=false but read_only=${String(card.read_only)} (legacy invariant)`,
+      });
+    }
+
     if (card.promotion_authority !== "none") {
       findings.push({
         kind: "card_promotion_authority",
         path: entry.path,
         message: `card "${card.id}" promotion_authority must be "none", got "${String(card.promotion_authority)}"`,
-      });
-    }
-    if (card.policy.expands_autonomy !== false) {
-      findings.push({
-        kind: "card_expands_autonomy",
-        path: entry.path,
-        message: `card "${card.id}" policy.expands_autonomy must be false`,
       });
     }
     if (card.policy.propose_only !== true) {

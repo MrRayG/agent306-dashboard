@@ -100,6 +100,19 @@ const RATIO_PATTERNS = [
   // (added 2026-05-22 PR #409: same `rec_1779189951510_uig7ck` parser-coverage
   //  fix — widened to accept resolved/rejected/closed on the output side.)
   /(?:for\s+every|per|every)\s+(?:new\s+)?(\w+(?:\s+\w+){0,3}?)\s+(?:added|created|recorded|made)[,\s]+(?:one|1|a\s+single)\s+(?:existing\s+)?(\w+(?:\s+\w+){0,3}?)\s+(?:must\s+be\s+)?(archived|merged|retired|pruned|removed|deleted|resolved|rejected|closed)/i,
+  // (P4) (added PR #414: parser-coverage fix for self-rec `_3o2kxo` —
+  //  "For every 10 new KB entries added, archive at least 3 existing
+  //  entries." Existing P2 required passive voice ("must be archived/
+  //  merged"); this rec uses active voice with the archive verb as a
+  //  command ("archive at least M"). Semantically identical: an output-
+  //  per-input ratio commitment. Without this pattern the rec falls
+  //  through to ARCHIVE_PATTERNS[1] (the loose "archive the N items"
+  //  shape) which mis-parses target="at" with junk criteria. Active-voice
+  //  variant added as a sibling to P2 rather than introducing a new
+  //  primitive — same ratio_rule semantics downstream.)
+  //   m[1]=N (input count), m[2]=input noun, m[3]=archive verb,
+  //   m[4]=M (output count).
+  /(?:for\s+every|per|every)\s+(\d+)\s+(?:new\s+)?(\w+(?:\s+\w+){0,3}?)\s+(?:added|created|recorded|made)\s*,?\s+(archive|merge|retire|prune|remove|delete|resolve|reject|close)\s+(?:at\s+least\s+)?(\d+)/i,
 ];
 
 const TTL_PATTERNS = [
@@ -217,6 +230,21 @@ const GATE_PATTERNS = [
   //   m[1] = gate descriptor (e.g. "IF-THEN behavioral"),
   //   m[2] = trigger-point list captured up to a sentence-end or "rather than".
   /replace\s+[^.]*?\s+with\s+(?:maximum\s+\d+\s+|up\s+to\s+\d+\s+|at\s+most\s+\d+\s+)?([a-z][-\w\s]{0,40}?)\s+gate\s+rules?\s+that\s+trigger\s+(?:at|on|when|upon)\s+(?:the\s+moment\s+of\s+)?(?:action\s*)?\(?([^.)]+?)\)?(?:\s+rather\s+than|\.|$)/i,
+  // (added PR #414: parser-coverage fix for self-rec `_vqh06n` —
+  //  "Cap new KB entries at 10 per cycle unless at least 3 are
+  //  archived." This is a conditional-cap gate: it BLOCKS new KB entries
+  //  past a threshold UNLESS a precondition (M archived) holds. Existing
+  //  GATE patterns anchor on "pre-X gate", "before X moves...", or
+  //  "<descriptor> gate:" — none capture the "cap N per cycle unless
+  //  M archived" shape, so it falls through to `none`. Same gate_rule
+  //  semantics — the cap IS the guarded transition, the unless-clause IS
+  //  the precondition — so widen the pattern set rather than introduce a
+  //  new primitive.
+  //   m[1] = cap count (N),
+  //   m[2] = target noun ("KB entries" / "hypotheses"),
+  //   m[3] = precondition count (M),
+  //   m[4] = precondition verb (archived/merged/retired/...).
+  /\bcap\s+(?:new\s+)?(?:[a-z][-\w\s]{0,40}?)\s+at\s+(\d+)\s+per\s+(?:cycle|day|week)\b[^.]*?\bunless\s+(?:at\s+least\s+)?(\d+)\s+(?:are\s+)?(archived|merged|retired|pruned|removed|deleted|resolved|rejected|closed)/i,
 ];
 
 const ARCHIVE_PATTERNS = [
@@ -473,13 +501,34 @@ export function translateAction(actionText: string, insightText: string = ""): T
         inputNoun = normalizeNoun(m[2]);
         outputCount = parseInt(m[3], 10);
         outputNoun = normalizeNoun(m[4]);
-      } else {
+      } else if (pat === RATIO_PATTERNS[3]) {
         // RATIO_PATTERNS[3]: implicit 1:1
         // "for every new <input> added, one <output> must be archived/merged"
         inputCount = 1;
         inputNoun = normalizeNoun(m[1]);
         outputCount = 1;
         outputNoun = normalizeNoun(m[3]);
+      } else {
+        // RATIO_PATTERNS[4]: active-voice imperative (PR #414)
+        // "for every N <input> added, archive at least M"
+        //   m[1]=N, m[2]=input noun, m[3]=archive verb, m[4]=M
+        inputCount = parseInt(m[1], 10);
+        inputNoun = normalizeNoun(m[2]);
+        outputCount = parseInt(m[4], 10);
+        // Normalize the archive verb to its noun family ("archive" → "archived").
+        const verb = m[3].toLowerCase();
+        const verbToNoun: Record<string, string> = {
+          archive: "archived",
+          merge: "merged",
+          retire: "retired",
+          prune: "pruned",
+          remove: "removed",
+          delete: "deleted",
+          resolve: "resolved",
+          reject: "rejected",
+          close: "closed",
+        };
+        outputNoun = normalizeNoun(verbToNoun[verb] ?? verb);
       }
       const params = { inputCount, inputNoun, outputCount, outputNoun };
       return {
