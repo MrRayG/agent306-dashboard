@@ -1,0 +1,37 @@
+id: self-recs-dump
+version: v1.0
+title: Self-Recommendations Read-Only Dump CLI
+owner: agent306-safety
+summary: >
+  Bundled operator CLI for dumping arbitrary self-recommendation rows from
+  the production SQLite DB. Read-only, stdout-only, parameterized queries,
+  source-check safety banner. Mirrors the hypothesisReset bundle pattern.
+  The CLI exposes no write flag of any kind and opens better-sqlite3 with
+  { readonly: true }; it cannot mutate state.
+policy:
+  propose_only: true
+  expands_autonomy: false
+read_only: true
+writes:
+  production: false
+  public_post: false
+  public_publish: false
+  bulk_promotion: false
+  archive_delete: false
+  fs: false
+  db: false
+  network: false
+io_surfaces:
+  inputs:
+    - /data/research_lab.db (read-only)
+    - scripts/dumpSelfRecs.ts
+  outputs:
+    - stdout JSON payload
+    - stderr source-check banner
+promotion_authority: none
+evidence:
+  - scripts/dumpSelfRecs.ts
+  - Dockerfile
+  - server/__tests__/dumpSelfRecs.test.ts
+tests:
+  - server/__tests__/dumpSelfRecs.test.ts

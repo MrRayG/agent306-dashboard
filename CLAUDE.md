@@ -64,6 +64,31 @@ The validator (`scripts/validateSkillCards.ts`) is manual-only, read-only,
 deterministic, stdout-only, and exits non-zero on any widening. CI runs it
 inside the existing `agent306-safety-gates` job.
 
+## Bundled Operator CLIs (Railway SSH)
+
+The production image deliberately omits `sqlite3`, `curl`, `jq`, `tsx`, and
+the `railway` CLI. For one-shot operator inspection the Dockerfile bundles
+a small set of read-only / dry-run-by-default CLIs into `dist/*.cjs`
+before `npm prune --production`, so they survive the prune:
+
+- `node dist/hypothesisReset.cjs` — hypothesis-reset report + dry-run /
+  archive-write apply (PR #411). Dry-run by default; `--apply` REQUIRED
+  to write, and refused without a fresh report / safe bucket.
+- `node dist/dumpSelfRecs.cjs` — read-only self-recommendations dump
+  (PR #415). Cannot mutate (`better-sqlite3` opened with
+  `{ readonly: true }`, no `.exec` / `.run` / `.transaction`, no
+  `--apply` flag accepted).
+
+Example (operator wants to inspect specific recs from prod):
+
+```bash
+node dist/dumpSelfRecs.cjs --ids=rec_a,rec_b,rec_c --pretty
+```
+
+The skill cards under `skills/<id>/` declare the safety envelope; the
+validator (`npm run skills:validate`) enforces propose-only +
+`expands_autonomy: false` + every `writes.* === false`.
+
 ## Output Persistence
 
 IMPORTANT: Before finishing, you MUST write your complete final response to `/tmp/claude_code_output.md` using the Write tool. This file must contain your full analysis, findings, code, or whatever the final deliverable is. This is a hard requirement — do not skip it.

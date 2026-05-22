@@ -53,6 +53,22 @@ RUN npx esbuild scripts/hypothesisReset.ts \
       --external:better-sqlite3 \
       --outfile=dist/hypothesisReset.cjs
 
+# Bundle the self-recommendations dump CLI into dist/dumpSelfRecs.cjs so
+# operators can run `node dist/dumpSelfRecs.cjs --ids=rec_a,rec_b --pretty`
+# from a Railway SSH session. The CLI is read-only (opens better-sqlite3
+# with { readonly: true }, uses only Database#prepare, never .exec/.run/
+# .transaction) and is the operator path for inspecting prod self-rec rows
+# without needing a sqlite3 CLI in the image. Mirrors the hypothesisReset.cjs
+# pattern — better-sqlite3 stays external because it remains a runtime
+# dependency and survives the prune below. See PR #415.
+RUN npx esbuild scripts/dumpSelfRecs.ts \
+      --bundle \
+      --platform=node \
+      --target=node20 \
+      --format=cjs \
+      --external:better-sqlite3 \
+      --outfile=dist/dumpSelfRecs.cjs
+
 # Remove dev dependencies after build
 RUN npm prune --production
 
