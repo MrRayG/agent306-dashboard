@@ -1,0 +1,119 @@
+{
+  "candidateId": "rec_1779105380940_e2rb5i",
+  "kind": "summarizationTemplate",
+  "attestedAt": "2026-05-22T19:30:00.000Z",
+  "preconditions": {
+    "reversibleLowRiskActionOnly": {
+      "high": {
+        "key": "reversibleLowRiskActionOnly",
+        "priority": "high",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "Rec's proposed action is a 'confirmed-to-output pipeline' that converts confirmed research-gap hypotheses into publishable frameworks / content outlines. The output side of that pipeline is public publication, not an internal-only mutation."
+      },
+      "low": {
+        "key": "reversibleLowRiskActionOnly",
+        "priority": "low",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "Rec's proposed action is a 'confirmed-to-output pipeline' that converts confirmed research-gap hypotheses into publishable frameworks / content outlines. The output side of that pipeline is public publication, not an internal-only mutation."
+      }
+    },
+    "explicitKillSwitchAndResourceLimits": {
+      "high": {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "priority": "high",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "No env flag / kill switch documented for the confirmed-to-output pipeline. Rec explicitly notes the pipeline 'doesn't exist' \u2014 no isolation contract has been written."
+      },
+      "low": {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "priority": "low",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "No env flag / kill switch documented for the confirmed-to-output pipeline. Rec explicitly notes the pipeline 'doesn't exist' \u2014 no isolation contract has been written."
+      }
+    },
+    "anomalyAndDriftDetectionPlaceholder": {
+      "high": {
+        "key": "anomalyAndDriftDetectionPlaceholder",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "daily_cycle_2026-05-18#71-added-0-archived",
+        "rationale": "Drift signal: 71 KB entries added, 0 archived in one cycle, 46/71 in research category. Drift detection is wired."
+      },
+      "low": {
+        "key": "anomalyAndDriftDetectionPlaceholder",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "daily_cycle_2026-05-18#71-added-0-archived",
+        "rationale": "Drift signal: 71 KB entries added, 0 archived in one cycle, 46/71 in research category. Drift detection is wired."
+      }
+    },
+    "rollbackProof": {
+      "high": {
+        "key": "rollbackProof",
+        "priority": "high",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "Publishing artifacts (frameworks, content outlines) is a public action; once published, rollback is not a clean flag-flip \u2014 the content has already been emitted."
+      },
+      "low": {
+        "key": "rollbackProof",
+        "priority": "low",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "Publishing artifacts (frameworks, content outlines) is a public action; once published, rollback is not a clean flag-flip \u2014 the content has already been emitted."
+      }
+    },
+    "humanApprovalBoundary": {
+      "high": {
+        "key": "humanApprovalBoundary",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "self_recommendations.status='approved'",
+        "rationale": "Approved by operator."
+      },
+      "low": {
+        "key": "humanApprovalBoundary",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "self_recommendations.status='approved'",
+        "rationale": "Approved by operator."
+      }
+    },
+    "metricsClockReadiness": {
+      "high": {
+        "key": "metricsClockReadiness",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779105380887_pasm#added-vs-output-ratio",
+        "rationale": "Metric: confirmed-hypotheses-converted-to-output ratio per daily cycle. Cadence: daily."
+      },
+      "low": {
+        "key": "metricsClockReadiness",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779105380887_pasm#added-vs-output-ratio",
+        "rationale": "Metric: confirmed-hypotheses-converted-to-output ratio per daily cycle. Cadence: daily."
+      }
+    },
+    "noPublicAction": {
+      "high": {
+        "key": "noPublicAction",
+        "priority": "high",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "Output conversion produces frameworks / content outlines that are explicitly intended for publication \u2014 this is a PUBLIC action. Rec cannot satisfy noPublicAction without a separate isolation boundary."
+      },
+      "low": {
+        "key": "noPublicAction",
+        "priority": "low",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "Output conversion produces frameworks / content outlines that are explicitly intended for publication \u2014 this is a PUBLIC action. Rec cannot satisfy noPublicAction without a separate isolation boundary."
+      }
+    }
+  }
+}

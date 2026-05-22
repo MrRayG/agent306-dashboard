@@ -1,0 +1,119 @@
+{
+  "candidateId": "rec_1779102973278_duqbvt",
+  "kind": "summarizationTemplate",
+  "attestedAt": "2026-05-22T19:30:00.000Z",
+  "preconditions": {
+    "reversibleLowRiskActionOnly": {
+      "high": {
+        "key": "reversibleLowRiskActionOnly",
+        "priority": "high",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "Rec's action surface is the PUBLISHED EPISODE SCRIPT \u2014 script-truncation enforcement, AudFit shaping, intro-budget rule, historical-analogy prohibition. These edits are not isolated from public publication and have no documented dry-run / sandbox path."
+      },
+      "low": {
+        "key": "reversibleLowRiskActionOnly",
+        "priority": "low",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "Rec's action surface is the PUBLISHED EPISODE SCRIPT \u2014 script-truncation enforcement, AudFit shaping, intro-budget rule, historical-analogy prohibition. These edits are not isolated from public publication and have no documented dry-run / sandbox path."
+      }
+    },
+    "explicitKillSwitchAndResourceLimits": {
+      "high": {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "priority": "high",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "No env flag documented for this plan. The '15% intro budget rule' and 'two-pass submission gate' from prior plans were marked completed but the rec itself reports they were never enforced \u2014 no kill switch surface."
+      },
+      "low": {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "priority": "low",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "No env flag documented for this plan. The '15% intro budget rule' and 'two-pass submission gate' from prior plans were marked completed but the rec itself reports they were never enforced \u2014 no kill switch surface."
+      }
+    },
+    "anomalyAndDriftDetectionPlaceholder": {
+      "high": {
+        "key": "anomalyAndDriftDetectionPlaceholder",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "plan:plan_1779102973264#audfit-band-monitor",
+        "rationale": "Drift signal: AudFit 0.60-0.75 band lock, depth plateau at 0.12-0.14, script truncation on every episode for 12 consecutive weeks. Drift is being measured."
+      },
+      "low": {
+        "key": "anomalyAndDriftDetectionPlaceholder",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "plan:plan_1779102973264#audfit-band-monitor",
+        "rationale": "Drift signal: AudFit 0.60-0.75 band lock, depth plateau at 0.12-0.14, script truncation on every episode for 12 consecutive weeks. Drift is being measured."
+      }
+    },
+    "rollbackProof": {
+      "high": {
+        "key": "rollbackProof",
+        "priority": "high",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "Plan does not ship behind a flag \u2014 historical record (prior plans marked completed with zero compliant closings) shows enforcement does not reliably reach scripts, so rollback semantics are undefined."
+      },
+      "low": {
+        "key": "rollbackProof",
+        "priority": "low",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "Plan does not ship behind a flag \u2014 historical record (prior plans marked completed with zero compliant closings) shows enforcement does not reliably reach scripts, so rollback semantics are undefined."
+      }
+    },
+    "humanApprovalBoundary": {
+      "high": {
+        "key": "humanApprovalBoundary",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "self_recommendations.status='approved'",
+        "rationale": "Approved by operator."
+      },
+      "low": {
+        "key": "humanApprovalBoundary",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "self_recommendations.status='approved'",
+        "rationale": "Approved by operator."
+      }
+    },
+    "metricsClockReadiness": {
+      "high": {
+        "key": "metricsClockReadiness",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "plan:plan_1779102973264#weekly-cadence",
+        "rationale": "Metric: AudFit per episode, intro-budget fraction, depth score. Cadence: weekly plan cycle."
+      },
+      "low": {
+        "key": "metricsClockReadiness",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "plan:plan_1779102973264#weekly-cadence",
+        "rationale": "Metric: AudFit per episode, intro-budget fraction, depth score. Cadence: weekly plan cycle."
+      }
+    },
+    "noPublicAction": {
+      "high": {
+        "key": "noPublicAction",
+        "priority": "high",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "Rec produces public-facing script output (the episodes are published). No isolation boundary documented between plan-application and public publication."
+      },
+      "low": {
+        "key": "noPublicAction",
+        "priority": "low",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "Rec produces public-facing script output (the episodes are published). No isolation boundary documented between plan-application and public publication."
+      }
+    }
+  }
+}

@@ -1,0 +1,139 @@
+{
+  "harnessVersion": "phase3aPrep.v1",
+  "source": "manual:cli",
+  "runLabel": null,
+  "operator": null,
+  "candidatePath": "scripts/phase3aPrepCandidates/rec_1779105380940_e2rb5i.json",
+  "candidateId": "rec_1779105380940_e2rb5i",
+  "kind": "summarizationTemplate",
+  "preconditionKeys": [
+    "reversibleLowRiskActionOnly",
+    "explicitKillSwitchAndResourceLimits",
+    "anomalyAndDriftDetectionPlaceholder",
+    "rollbackProof",
+    "humanApprovalBoundary",
+    "metricsClockReadiness",
+    "noPublicAction"
+  ],
+  "priorityTiers": [
+    "high",
+    "low"
+  ],
+  "readiness": {
+    "highTierAllSatisfied": false,
+    "lowTierAllSatisfied": false,
+    "verdict": "not_ready",
+    "blockers": [
+      "high-tier precondition 'reversibleLowRiskActionOnly' is 'unverified' (must be 'satisfied' to enter Phase 3a)",
+      "high-tier precondition 'explicitKillSwitchAndResourceLimits' is 'unverified' (must be 'satisfied' to enter Phase 3a)",
+      "high-tier precondition 'rollbackProof' is 'unverified' (must be 'satisfied' to enter Phase 3a)",
+      "high-tier precondition 'noPublicAction' is 'unverified' (must be 'satisfied' to enter Phase 3a)",
+      "low-tier precondition 'reversibleLowRiskActionOnly' is 'unverified' (must be 'satisfied' to be fully prepared)",
+      "low-tier precondition 'explicitKillSwitchAndResourceLimits' is 'unverified' (must be 'satisfied' to be fully prepared)",
+      "low-tier precondition 'rollbackProof' is 'unverified' (must be 'satisfied' to be fully prepared)",
+      "low-tier precondition 'noPublicAction' is 'unverified' (must be 'satisfied' to be fully prepared)"
+    ]
+  },
+  "explanation": {
+    "kindParity": {
+      "ok": true,
+      "blocker": null
+    },
+    "byPrecondition": [
+      {
+        "key": "reversibleLowRiskActionOnly",
+        "high": {
+          "satisfied": false,
+          "blockers": [
+            "high-tier precondition 'reversibleLowRiskActionOnly' is 'unverified' (must be 'satisfied' to enter Phase 3a)"
+          ]
+        },
+        "low": {
+          "satisfied": false,
+          "blockers": [
+            "low-tier precondition 'reversibleLowRiskActionOnly' is 'unverified' (must be 'satisfied' to be fully prepared)"
+          ]
+        }
+      },
+      {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "high": {
+          "satisfied": false,
+          "blockers": [
+            "high-tier precondition 'explicitKillSwitchAndResourceLimits' is 'unverified' (must be 'satisfied' to enter Phase 3a)"
+          ]
+        },
+        "low": {
+          "satisfied": false,
+          "blockers": [
+            "low-tier precondition 'explicitKillSwitchAndResourceLimits' is 'unverified' (must be 'satisfied' to be fully prepared)"
+          ]
+        }
+      },
+      {
+        "key": "anomalyAndDriftDetectionPlaceholder",
+        "high": {
+          "satisfied": true,
+          "blockers": []
+        },
+        "low": {
+          "satisfied": true,
+          "blockers": []
+        }
+      },
+      {
+        "key": "rollbackProof",
+        "high": {
+          "satisfied": false,
+          "blockers": [
+            "high-tier precondition 'rollbackProof' is 'unverified' (must be 'satisfied' to enter Phase 3a)"
+          ]
+        },
+        "low": {
+          "satisfied": false,
+          "blockers": [
+            "low-tier precondition 'rollbackProof' is 'unverified' (must be 'satisfied' to be fully prepared)"
+          ]
+        }
+      },
+      {
+        "key": "humanApprovalBoundary",
+        "high": {
+          "satisfied": true,
+          "blockers": []
+        },
+        "low": {
+          "satisfied": true,
+          "blockers": []
+        }
+      },
+      {
+        "key": "metricsClockReadiness",
+        "high": {
+          "satisfied": true,
+          "blockers": []
+        },
+        "low": {
+          "satisfied": true,
+          "blockers": []
+        }
+      },
+      {
+        "key": "noPublicAction",
+        "high": {
+          "satisfied": false,
+          "blockers": [
+            "high-tier precondition 'noPublicAction' is 'unverified' (must be 'satisfied' to enter Phase 3a)"
+          ]
+        },
+        "low": {
+          "satisfied": false,
+          "blockers": [
+            "low-tier precondition 'noPublicAction' is 'unverified' (must be 'satisfied' to be fully prepared)"
+          ]
+        }
+      }
+    ],
+    "unclassifiedBlockers": []
+  }
+}

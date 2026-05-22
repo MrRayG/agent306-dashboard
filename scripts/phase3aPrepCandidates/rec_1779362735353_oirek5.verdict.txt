@@ -1,0 +1,114 @@
+{
+  "harnessVersion": "phase3aPrep.v1",
+  "source": "manual:cli",
+  "runLabel": null,
+  "operator": null,
+  "candidatePath": "scripts/phase3aPrepCandidates/rec_1779362735353_oirek5.json",
+  "candidateId": "rec_1779362735353_oirek5",
+  "kind": "summarizationTemplate",
+  "preconditionKeys": [
+    "reversibleLowRiskActionOnly",
+    "explicitKillSwitchAndResourceLimits",
+    "anomalyAndDriftDetectionPlaceholder",
+    "rollbackProof",
+    "humanApprovalBoundary",
+    "metricsClockReadiness",
+    "noPublicAction"
+  ],
+  "priorityTiers": [
+    "high",
+    "low"
+  ],
+  "readiness": {
+    "highTierAllSatisfied": true,
+    "lowTierAllSatisfied": true,
+    "verdict": "fully_prepared",
+    "blockers": []
+  },
+  "explanation": {
+    "kindParity": {
+      "ok": true,
+      "blocker": null
+    },
+    "byPrecondition": [
+      {
+        "key": "reversibleLowRiskActionOnly",
+        "high": {
+          "satisfied": true,
+          "blockers": []
+        },
+        "low": {
+          "satisfied": true,
+          "blockers": []
+        }
+      },
+      {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "high": {
+          "satisfied": true,
+          "blockers": []
+        },
+        "low": {
+          "satisfied": true,
+          "blockers": []
+        }
+      },
+      {
+        "key": "anomalyAndDriftDetectionPlaceholder",
+        "high": {
+          "satisfied": true,
+          "blockers": []
+        },
+        "low": {
+          "satisfied": true,
+          "blockers": []
+        }
+      },
+      {
+        "key": "rollbackProof",
+        "high": {
+          "satisfied": true,
+          "blockers": []
+        },
+        "low": {
+          "satisfied": true,
+          "blockers": []
+        }
+      },
+      {
+        "key": "humanApprovalBoundary",
+        "high": {
+          "satisfied": true,
+          "blockers": []
+        },
+        "low": {
+          "satisfied": true,
+          "blockers": []
+        }
+      },
+      {
+        "key": "metricsClockReadiness",
+        "high": {
+          "satisfied": true,
+          "blockers": []
+        },
+        "low": {
+          "satisfied": true,
+          "blockers": []
+        }
+      },
+      {
+        "key": "noPublicAction",
+        "high": {
+          "satisfied": true,
+          "blockers": []
+        },
+        "low": {
+          "satisfied": true,
+          "blockers": []
+        }
+      }
+    ],
+    "unclassifiedBlockers": []
+  }
+}

@@ -1,0 +1,119 @@
+{
+  "candidateId": "rec_1778497998125_lrk836",
+  "kind": "summarizationTemplate",
+  "attestedAt": "2026-05-22T19:30:00.000Z",
+  "preconditions": {
+    "reversibleLowRiskActionOnly": {
+      "high": {
+        "key": "reversibleLowRiskActionOnly",
+        "priority": "high",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "Same shape as W21 plan: rec's action surface is the PUBLISHED EPISODE SCRIPT (script-truncation, intro-budget, depth-score enforcement). No isolation from public publication."
+      },
+      "low": {
+        "key": "reversibleLowRiskActionOnly",
+        "priority": "low",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "Same shape as W21 plan: rec's action surface is the PUBLISHED EPISODE SCRIPT (script-truncation, intro-budget, depth-score enforcement). No isolation from public publication."
+      }
+    },
+    "explicitKillSwitchAndResourceLimits": {
+      "high": {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "priority": "high",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "Prior plans marked the CLOSE_[episode_title].txt enforcement mechanism completed but produced zero compliant closings. No env flag / kill switch documented."
+      },
+      "low": {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "priority": "low",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "Prior plans marked the CLOSE_[episode_title].txt enforcement mechanism completed but produced zero compliant closings. No env flag / kill switch documented."
+      }
+    },
+    "anomalyAndDriftDetectionPlaceholder": {
+      "high": {
+        "key": "anomalyAndDriftDetectionPlaceholder",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "plan:plan_1778497998123#audfit-depth-monitor",
+        "rationale": "Drift signals: AudFit 0.60-0.85 band lock, depth plateau 0.12-0.14 for 7 consecutive days, script truncation for 11 consecutive weeks. Drift is being measured."
+      },
+      "low": {
+        "key": "anomalyAndDriftDetectionPlaceholder",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "plan:plan_1778497998123#audfit-depth-monitor",
+        "rationale": "Drift signals: AudFit 0.60-0.85 band lock, depth plateau 0.12-0.14 for 7 consecutive days, script truncation for 11 consecutive weeks. Drift is being measured."
+      }
+    },
+    "rollbackProof": {
+      "high": {
+        "key": "rollbackProof",
+        "priority": "high",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "Plan does not ship behind a flag \u2014 historical record shows enforcement does not reliably reach scripts; rollback semantics undefined."
+      },
+      "low": {
+        "key": "rollbackProof",
+        "priority": "low",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "Plan does not ship behind a flag \u2014 historical record shows enforcement does not reliably reach scripts; rollback semantics undefined."
+      }
+    },
+    "humanApprovalBoundary": {
+      "high": {
+        "key": "humanApprovalBoundary",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "self_recommendations.status='approved'",
+        "rationale": "Approved by operator."
+      },
+      "low": {
+        "key": "humanApprovalBoundary",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "self_recommendations.status='approved'",
+        "rationale": "Approved by operator."
+      }
+    },
+    "metricsClockReadiness": {
+      "high": {
+        "key": "metricsClockReadiness",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "plan:plan_1778497998123#weekly-cadence",
+        "rationale": "Metric: AudFit per episode, intro-budget fraction, depth score, mechanism-explained ratio. Cadence: weekly plan cycle."
+      },
+      "low": {
+        "key": "metricsClockReadiness",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "plan:plan_1778497998123#weekly-cadence",
+        "rationale": "Metric: AudFit per episode, intro-budget fraction, depth score, mechanism-explained ratio. Cadence: weekly plan cycle."
+      }
+    },
+    "noPublicAction": {
+      "high": {
+        "key": "noPublicAction",
+        "priority": "high",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "Rec produces public-facing script output (the episodes are published). No isolation boundary documented between plan-application and public publication."
+      },
+      "low": {
+        "key": "noPublicAction",
+        "priority": "low",
+        "status": "unverified",
+        "evidenceRef": "",
+        "rationale": "Rec produces public-facing script output (the episodes are published). No isolation boundary documented between plan-application and public publication."
+      }
+    }
+  }
+}

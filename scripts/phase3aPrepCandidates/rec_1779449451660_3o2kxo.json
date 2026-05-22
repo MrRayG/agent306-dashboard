@@ -1,0 +1,119 @@
+{
+  "candidateId": "rec_1779449451660_3o2kxo",
+  "kind": "summarizationTemplate",
+  "attestedAt": "2026-05-22T19:30:00.000Z",
+  "preconditions": {
+    "reversibleLowRiskActionOnly": {
+      "high": {
+        "key": "reversibleLowRiskActionOnly",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "daily_cycle_2026-05-22#kb-accumulation",
+        "rationale": "Proposes archival quota / hypothesis cap / pruning trigger \u2014 all internal KB operations. No public surface."
+      },
+      "low": {
+        "key": "reversibleLowRiskActionOnly",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "daily_cycle_2026-05-22#kb-accumulation",
+        "rationale": "Proposes archival quota / hypothesis cap / pruning trigger \u2014 all internal KB operations. No public surface."
+      }
+    },
+    "explicitKillSwitchAndResourceLimits": {
+      "high": {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779449451630_mdex#KB_ACCUMULATION_GATE_ENABLED",
+        "rationale": "Action ships behind KB_ACCUMULATION_GATE_ENABLED env flag (proposed). Resource limits are the quota / cap themselves."
+      },
+      "low": {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779449451630_mdex#KB_ACCUMULATION_GATE_ENABLED",
+        "rationale": "Action ships behind KB_ACCUMULATION_GATE_ENABLED env flag (proposed). Resource limits are the quota / cap themselves."
+      }
+    },
+    "anomalyAndDriftDetectionPlaceholder": {
+      "high": {
+        "key": "anomalyAndDriftDetectionPlaceholder",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779449451630_mdex#drift-rule-firing-count",
+        "rationale": "Rec explicitly cites '11-15x rule firings with zero side effects' as the drift signal it addresses. Drift detection is already wired."
+      },
+      "low": {
+        "key": "anomalyAndDriftDetectionPlaceholder",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779449451630_mdex#drift-rule-firing-count",
+        "rationale": "Rec explicitly cites '11-15x rule firings with zero side effects' as the drift signal it addresses. Drift detection is already wired."
+      }
+    },
+    "rollbackProof": {
+      "high": {
+        "key": "rollbackProof",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779449451630_mdex#env-flag-rollback",
+        "rationale": "Single env flag flip disables the gate; archived KB entries are NOT destroyed (archival is move-to-bucket, reversible)."
+      },
+      "low": {
+        "key": "rollbackProof",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779449451630_mdex#env-flag-rollback",
+        "rationale": "Single env flag flip disables the gate; archived KB entries are NOT destroyed (archival is move-to-bucket, reversible)."
+      }
+    },
+    "humanApprovalBoundary": {
+      "high": {
+        "key": "humanApprovalBoundary",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "self_recommendations.status='approved'",
+        "rationale": "Recommendation went through the approval workflow."
+      },
+      "low": {
+        "key": "humanApprovalBoundary",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "self_recommendations.status='approved'",
+        "rationale": "Recommendation went through the approval workflow."
+      }
+    },
+    "metricsClockReadiness": {
+      "high": {
+        "key": "metricsClockReadiness",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779449451630_mdex#added-vs-archived-ratio",
+        "rationale": "Metric: added-vs-archived KB-entry ratio per daily cycle. Cadence: daily evolution cycle clock."
+      },
+      "low": {
+        "key": "metricsClockReadiness",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779449451630_mdex#added-vs-archived-ratio",
+        "rationale": "Metric: added-vs-archived KB-entry ratio per daily cycle. Cadence: daily evolution cycle clock."
+      }
+    },
+    "noPublicAction": {
+      "high": {
+        "key": "noPublicAction",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779449451630_mdex#internal-only",
+        "rationale": "Operates only on the internal KB store \u2014 no public action."
+      },
+      "low": {
+        "key": "noPublicAction",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779449451630_mdex#internal-only",
+        "rationale": "Operates only on the internal KB store \u2014 no public action."
+      }
+    }
+  }
+}

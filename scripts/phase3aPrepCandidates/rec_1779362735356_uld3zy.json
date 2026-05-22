@@ -1,0 +1,119 @@
+{
+  "candidateId": "rec_1779362735356_uld3zy",
+  "kind": "summarizationTemplate",
+  "attestedAt": "2026-05-22T19:30:00.000Z",
+  "preconditions": {
+    "reversibleLowRiskActionOnly": {
+      "high": {
+        "key": "reversibleLowRiskActionOnly",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "daily_cycle_2026-05-21#speculative-watchlist-ttl",
+        "rationale": "Proposes a TTL on speculative-watchlist entries \u2014 internal hypothesis bucket operation only."
+      },
+      "low": {
+        "key": "reversibleLowRiskActionOnly",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "daily_cycle_2026-05-21#speculative-watchlist-ttl",
+        "rationale": "Proposes a TTL on speculative-watchlist entries \u2014 internal hypothesis bucket operation only."
+      }
+    },
+    "explicitKillSwitchAndResourceLimits": {
+      "high": {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779362735301_kihp#SPECULATIVE_WATCHLIST_TTL_ENABLED",
+        "rationale": "Action ships behind a proposed SPECULATIVE_WATCHLIST_TTL_ENABLED env flag. TTL itself is the resource limit."
+      },
+      "low": {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779362735301_kihp#SPECULATIVE_WATCHLIST_TTL_ENABLED",
+        "rationale": "Action ships behind a proposed SPECULATIVE_WATCHLIST_TTL_ENABLED env flag. TTL itself is the resource limit."
+      }
+    },
+    "anomalyAndDriftDetectionPlaceholder": {
+      "high": {
+        "key": "anomalyAndDriftDetectionPlaceholder",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779362735301_kihp#unrevisited-entry-detection",
+        "rationale": "Drift signal: 'parking lot' pattern \u2014 speculative-watchlist entries that haven't been revisited within TTL window."
+      },
+      "low": {
+        "key": "anomalyAndDriftDetectionPlaceholder",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779362735301_kihp#unrevisited-entry-detection",
+        "rationale": "Drift signal: 'parking lot' pattern \u2014 speculative-watchlist entries that haven't been revisited within TTL window."
+      }
+    },
+    "rollbackProof": {
+      "high": {
+        "key": "rollbackProof",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779362735301_kihp#env-flag-rollback",
+        "rationale": "Single env flag flip disables TTL expiry \u2014 expired entries are moved-to-archive, not deleted, so rollback restores them."
+      },
+      "low": {
+        "key": "rollbackProof",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779362735301_kihp#env-flag-rollback",
+        "rationale": "Single env flag flip disables TTL expiry \u2014 expired entries are moved-to-archive, not deleted, so rollback restores them."
+      }
+    },
+    "humanApprovalBoundary": {
+      "high": {
+        "key": "humanApprovalBoundary",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "self_recommendations.status='approved'",
+        "rationale": "Approved by operator."
+      },
+      "low": {
+        "key": "humanApprovalBoundary",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "self_recommendations.status='approved'",
+        "rationale": "Approved by operator."
+      }
+    },
+    "metricsClockReadiness": {
+      "high": {
+        "key": "metricsClockReadiness",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779362735301_kihp#unrevisited-count",
+        "rationale": "Metric: count of unrevisited speculative-watchlist entries per daily cycle. Cadence: daily."
+      },
+      "low": {
+        "key": "metricsClockReadiness",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779362735301_kihp#unrevisited-count",
+        "rationale": "Metric: count of unrevisited speculative-watchlist entries per daily cycle. Cadence: daily."
+      }
+    },
+    "noPublicAction": {
+      "high": {
+        "key": "noPublicAction",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779362735301_kihp#internal-only",
+        "rationale": "Speculative-watchlist is an internal hypothesis bucket \u2014 no public action."
+      },
+      "low": {
+        "key": "noPublicAction",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779362735301_kihp#internal-only",
+        "rationale": "Speculative-watchlist is an internal hypothesis bucket \u2014 no public action."
+      }
+    }
+  }
+}

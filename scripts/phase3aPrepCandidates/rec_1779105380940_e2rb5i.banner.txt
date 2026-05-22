@@ -1,0 +1,6 @@
+[phase3aprep-c] manual Phase 3a-prep readiness runner
+[phase3aprep-c] read-only, manual-only, stdout-only
+[phase3aprep-c] no scheduler, no auto-apply, no promotion, no public action
+[phase3aprep-c] no file / database / ledger / env / monitor writes
+[phase3aprep-c] candidate JSON is read-only; harness is pure
+[phase3aprep-c] highest possible verdict: fully_prepared (CANDIDATE only)
