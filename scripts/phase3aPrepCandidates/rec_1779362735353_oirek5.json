@@ -1,0 +1,119 @@
+{
+  "candidateId": "rec_1779362735353_oirek5",
+  "kind": "summarizationTemplate",
+  "attestedAt": "2026-05-22T19:30:00.000Z",
+  "preconditions": {
+    "reversibleLowRiskActionOnly": {
+      "high": {
+        "key": "reversibleLowRiskActionOnly",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "daily_cycle_2026-05-21#commitment-shape",
+        "rationale": "Rec proposes a structural change to how self-change commitments are SHAPED (executable actions vs diagnostic observations). No public action surface."
+      },
+      "low": {
+        "key": "reversibleLowRiskActionOnly",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "daily_cycle_2026-05-21#commitment-shape",
+        "rationale": "Rec proposes a structural change to how self-change commitments are SHAPED (executable actions vs diagnostic observations). No public action surface."
+      }
+    },
+    "explicitKillSwitchAndResourceLimits": {
+      "high": {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779362735301_ebcw#commitment-validator-flag",
+        "rationale": "Proposed COMMITMENT_VALIDATOR_ENABLED env flag (executable-shape check). Resource limit: rejects commitments that don't specify a measurable trigger."
+      },
+      "low": {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779362735301_ebcw#commitment-validator-flag",
+        "rationale": "Proposed COMMITMENT_VALIDATOR_ENABLED env flag (executable-shape check). Resource limit: rejects commitments that don't specify a measurable trigger."
+      }
+    },
+    "anomalyAndDriftDetectionPlaceholder": {
+      "high": {
+        "key": "anomalyAndDriftDetectionPlaceholder",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779362735301_ebcw#fire-without-effect",
+        "rationale": "Drift signal: a commitment fires N times with zero observable side effect (the very pattern the rec diagnoses)."
+      },
+      "low": {
+        "key": "anomalyAndDriftDetectionPlaceholder",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779362735301_ebcw#fire-without-effect",
+        "rationale": "Drift signal: a commitment fires N times with zero observable side effect (the very pattern the rec diagnoses)."
+      }
+    },
+    "rollbackProof": {
+      "high": {
+        "key": "rollbackProof",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779362735301_ebcw#env-flag-rollback",
+        "rationale": "Single env flag flip disables the validator \u2014 existing commitments unaffected."
+      },
+      "low": {
+        "key": "rollbackProof",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779362735301_ebcw#env-flag-rollback",
+        "rationale": "Single env flag flip disables the validator \u2014 existing commitments unaffected."
+      }
+    },
+    "humanApprovalBoundary": {
+      "high": {
+        "key": "humanApprovalBoundary",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "self_recommendations.status='approved'",
+        "rationale": "Approved by operator."
+      },
+      "low": {
+        "key": "humanApprovalBoundary",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "self_recommendations.status='approved'",
+        "rationale": "Approved by operator."
+      }
+    },
+    "metricsClockReadiness": {
+      "high": {
+        "key": "metricsClockReadiness",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779362735301_ebcw#fire-effect-ratio",
+        "rationale": "Metric: fire-effect ratio (commitments fired vs commitments with observable side effect). Daily cadence."
+      },
+      "low": {
+        "key": "metricsClockReadiness",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779362735301_ebcw#fire-effect-ratio",
+        "rationale": "Metric: fire-effect ratio (commitments fired vs commitments with observable side effect). Daily cadence."
+      }
+    },
+    "noPublicAction": {
+      "high": {
+        "key": "noPublicAction",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779362735301_ebcw#internal-only",
+        "rationale": "Validator only inspects internal commitment records \u2014 no public surface."
+      },
+      "low": {
+        "key": "noPublicAction",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779362735301_ebcw#internal-only",
+        "rationale": "Validator only inspects internal commitment records \u2014 no public surface."
+      }
+    }
+  }
+}

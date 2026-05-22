@@ -1,0 +1,119 @@
+{
+  "candidateId": "rec_1779447024953_tzdxk0",
+  "kind": "summarizationTemplate",
+  "attestedAt": "2026-05-22T19:30:00.000Z",
+  "preconditions": {
+    "reversibleLowRiskActionOnly": {
+      "high": {
+        "key": "reversibleLowRiskActionOnly",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "server/insightLayer/translateInsightToAction.ts#ttl-family",
+        "rationale": "ttl family is an internal autonomy primitive; it only annotates hypothesis records with a 14-day TTL and a trigger-event tag \u2014 no external API call, no public publication."
+      },
+      "low": {
+        "key": "reversibleLowRiskActionOnly",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "server/insightLayer/translateInsightToAction.ts#ttl-family",
+        "rationale": "ttl family is an internal autonomy primitive; it only annotates hypothesis records with a 14-day TTL and a trigger-event tag \u2014 no external API call, no public publication."
+      }
+    },
+    "explicitKillSwitchAndResourceLimits": {
+      "high": {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "il_1779362735348_vbh8#trigger-event",
+        "rationale": "The translator is gated by HYPOTHESIS_TTL_FAMILY_ENABLED (proposed env flag); resource limit is the 14-day TTL itself which bounds storage."
+      },
+      "low": {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "il_1779362735348_vbh8#trigger-event",
+        "rationale": "The translator is gated by HYPOTHESIS_TTL_FAMILY_ENABLED (proposed env flag); resource limit is the 14-day TTL itself which bounds storage."
+      }
+    },
+    "anomalyAndDriftDetectionPlaceholder": {
+      "high": {
+        "key": "anomalyAndDriftDetectionPlaceholder",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "il_1779362735348_vbh8#trigger-fire-monitor",
+        "rationale": "Each TTL record requires a named 'trigger event' (specific publication / regulatory action / data release) \u2014 this IS the drift signal the rec proposes monitoring."
+      },
+      "low": {
+        "key": "anomalyAndDriftDetectionPlaceholder",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "il_1779362735348_vbh8#trigger-fire-monitor",
+        "rationale": "Each TTL record requires a named 'trigger event' (specific publication / regulatory action / data release) \u2014 this IS the drift signal the rec proposes monitoring."
+      }
+    },
+    "rollbackProof": {
+      "high": {
+        "key": "rollbackProof",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "il_1779362735348_vbh8#flag-flip-rollback",
+        "rationale": "Single env flag flip disables the family; existing speculative-watchlist entries are unaffected (no destructive migration)."
+      },
+      "low": {
+        "key": "rollbackProof",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "il_1779362735348_vbh8#flag-flip-rollback",
+        "rationale": "Single env flag flip disables the family; existing speculative-watchlist entries are unaffected (no destructive migration)."
+      }
+    },
+    "humanApprovalBoundary": {
+      "high": {
+        "key": "humanApprovalBoundary",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "self_recommendations.status='approved'",
+        "rationale": "Recommendation went through the existing approval workflow \u2014 operator approved on 2026-05-22."
+      },
+      "low": {
+        "key": "humanApprovalBoundary",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "self_recommendations.status='approved'",
+        "rationale": "Recommendation went through the existing approval workflow \u2014 operator approved on 2026-05-22."
+      }
+    },
+    "metricsClockReadiness": {
+      "high": {
+        "key": "metricsClockReadiness",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779362735301_kihp#cadence",
+        "rationale": "Metric: count of TTL-expired hypotheses per daily cycle; cadence: daily (existing evolution cycle clock)."
+      },
+      "low": {
+        "key": "metricsClockReadiness",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779362735301_kihp#cadence",
+        "rationale": "Metric: count of TTL-expired hypotheses per daily cycle; cadence: daily (existing evolution cycle clock)."
+      }
+    },
+    "noPublicAction": {
+      "high": {
+        "key": "noPublicAction",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "family:ttl#internal-only",
+        "rationale": "Family operates only on the internal hypothesis store \u2014 never produces a tweet, post, script, or publication artifact."
+      },
+      "low": {
+        "key": "noPublicAction",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "family:ttl#internal-only",
+        "rationale": "Family operates only on the internal hypothesis store \u2014 never produces a tweet, post, script, or publication artifact."
+      }
+    }
+  }
+}

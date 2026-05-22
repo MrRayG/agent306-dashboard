@@ -1,0 +1,119 @@
+{
+  "candidateId": "rec_1779447024967_vqh06n",
+  "kind": "summarizationTemplate",
+  "attestedAt": "2026-05-22T19:30:00.000Z",
+  "preconditions": {
+    "reversibleLowRiskActionOnly": {
+      "high": {
+        "key": "reversibleLowRiskActionOnly",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "server/insightLayer/translateInsightToAction.ts#gate-family",
+        "rationale": "Gate family is an internal autonomy primitive \u2014 caps KB entries at 20/cycle, caps active hypothesis count at 50, etc. No external action."
+      },
+      "low": {
+        "key": "reversibleLowRiskActionOnly",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "server/insightLayer/translateInsightToAction.ts#gate-family",
+        "rationale": "Gate family is an internal autonomy primitive \u2014 caps KB entries at 20/cycle, caps active hypothesis count at 50, etc. No external action."
+      }
+    },
+    "explicitKillSwitchAndResourceLimits": {
+      "high": {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "il_1779362735348_p7du#cap-rules",
+        "rationale": "Each gate is itself a resource limit (cap of 20, cap of 50). Kill switch: GATE_FAMILY_ENABLED env flag flips entire family off."
+      },
+      "low": {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "il_1779362735348_p7du#cap-rules",
+        "rationale": "Each gate is itself a resource limit (cap of 20, cap of 50). Kill switch: GATE_FAMILY_ENABLED env flag flips entire family off."
+      }
+    },
+    "anomalyAndDriftDetectionPlaceholder": {
+      "high": {
+        "key": "anomalyAndDriftDetectionPlaceholder",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "il_1779362735348_p7du#gate-trip-event",
+        "rationale": "Each gate-trip is a drift signal \u2014 anomaly is 'cap reached, no archival within 1 cycle'."
+      },
+      "low": {
+        "key": "anomalyAndDriftDetectionPlaceholder",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "il_1779362735348_p7du#gate-trip-event",
+        "rationale": "Each gate-trip is a drift signal \u2014 anomaly is 'cap reached, no archival within 1 cycle'."
+      }
+    },
+    "rollbackProof": {
+      "high": {
+        "key": "rollbackProof",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "il_1779362735348_p7du#flag-flip-rollback",
+        "rationale": "Single env flag disables gates; existing KB / hypothesis state is not mutated by enabling the family \u2014 gates only block FUTURE additions."
+      },
+      "low": {
+        "key": "rollbackProof",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "il_1779362735348_p7du#flag-flip-rollback",
+        "rationale": "Single env flag disables gates; existing KB / hypothesis state is not mutated by enabling the family \u2014 gates only block FUTURE additions."
+      }
+    },
+    "humanApprovalBoundary": {
+      "high": {
+        "key": "humanApprovalBoundary",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "self_recommendations.status='approved'",
+        "rationale": "Recommendation went through the existing approval workflow."
+      },
+      "low": {
+        "key": "humanApprovalBoundary",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "self_recommendations.status='approved'",
+        "rationale": "Recommendation went through the existing approval workflow."
+      }
+    },
+    "metricsClockReadiness": {
+      "high": {
+        "key": "metricsClockReadiness",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779362735301_ebcw#cadence",
+        "rationale": "Metric: gate-trip count per daily cycle, KB-add ratio (added vs archived). Cadence: daily evolution cycle."
+      },
+      "low": {
+        "key": "metricsClockReadiness",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "evo_1779362735301_ebcw#cadence",
+        "rationale": "Metric: gate-trip count per daily cycle, KB-add ratio (added vs archived). Cadence: daily evolution cycle."
+      }
+    },
+    "noPublicAction": {
+      "high": {
+        "key": "noPublicAction",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "family:gate#internal-only",
+        "rationale": "Gate family operates only on internal KB and hypothesis stores \u2014 no public surface."
+      },
+      "low": {
+        "key": "noPublicAction",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "family:gate#internal-only",
+        "rationale": "Gate family operates only on internal KB and hypothesis stores \u2014 no public surface."
+      }
+    }
+  }
+}

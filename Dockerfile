@@ -69,6 +69,24 @@ RUN npx esbuild scripts/dumpSelfRecs.ts \
       --external:better-sqlite3 \
       --outfile=dist/dumpSelfRecs.cjs
 
+# Bundle the Phase 3a-prep attestation attachment CLI into
+# dist/attachPhase3aPrepAttestations.cjs so operators can run
+# `node dist/attachPhase3aPrepAttestations.cjs --apply` from a Railway SSH
+# session after reviewing the per-rec candidate JSONs. The CLI is DRY-RUN
+# by default; --apply is the only switch that performs writes. It mutates
+# ONLY the `evidence` column on matching `self_recommendations` rows and
+# backups every affected row to /tmp/self_recs_backup_<ts>.json before any
+# UPDATE runs. Mirrors the dumpSelfRecs.cjs pattern — better-sqlite3 stays
+# external because it remains a runtime dependency and survives the prune
+# below.
+RUN npx esbuild scripts/attachPhase3aPrepAttestations.ts \
+      --bundle \
+      --platform=node \
+      --target=node20 \
+      --format=cjs \
+      --external:better-sqlite3 \
+      --outfile=dist/attachPhase3aPrepAttestations.cjs
+
 # Remove dev dependencies after build
 RUN npm prune --production
 
