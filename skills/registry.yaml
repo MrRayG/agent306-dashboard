@@ -8,3 +8,7 @@ skills:
     path: skills/promotion-boundary-audit/SKILLCARD.yaml
     status: registered
     registered_at: 2026-05-22
+  - id: self-recs-dump
+    path: skills/self-recs-dump/SKILLCARD.yaml
+    status: registered
+    registered_at: 2026-05-22
