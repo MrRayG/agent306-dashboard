@@ -147,3 +147,22 @@ jobs:
           server/__tests__/migrationFirstRunGuard.test.ts
         env:
           NODE_ENV: test
+
+      # Skill governance: validate skills/registry.yaml + every SKILLCARD.yaml.
+      # Read-only, manual-only, stdout-only CLI. Exits non-zero on any card
+      # widening (writes.* != false, promotion_authority != none,
+      # policy.expands_autonomy != false, policy.propose_only != true) or on
+      # any structural / append-only violation.
+      - name: Skill governance card + registry validator
+        run: npm run skills:validate
+        env:
+          NODE_ENV: test
+
+      - name: Skill governance unit + pilot-card tests
+        run: >-
+          npx tsx --test
+          server/__tests__/skillCardValidator.test.ts
+          server/__tests__/skillCardRegistryAppendOnly.test.ts
+          server/__tests__/skillCardPromotionBoundaryAudit.test.ts
+        env:
+          NODE_ENV: test

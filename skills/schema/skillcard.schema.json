@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent306.local/schemas/skillcard.schema.json",
+  "title": "Agent 306 Skill Card",
+  "description": "Canonical machine-readable safety envelope for a registered Agent 306 internal skill. The propose-only contract REQUIRES that every registered card sets policy.propose_only=true, policy.expands_autonomy=false, read_only=true, every writes.* false, and promotion_authority=\"none\". The validator (scripts/validateSkillCards.ts) refuses to accept any other shape. This document is the documented shape; the runtime authority is the Zod schema at server/skillGovernance/skillCardSchema.ts.",
+  "type": "object",
+  "required": [
+    "id",
+    "version",
+    "title",
+    "owner",
+    "summary",
+    "policy",
+    "read_only",
+    "writes",
+    "io_surfaces",
+    "promotion_authority",
+    "evidence",
+    "tests"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Slug-style identifier. Must match the parent directory name (skills/<id>/SKILLCARD.yaml) and the matching registry entry.",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "description": "Semver-ish version pin. Free-form string at this layer; CI is the source of truth.",
+      "minLength": 1
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable title.",
+      "minLength": 1
+    },
+    "owner": {
+      "type": "string",
+      "description": "Owning team or surface (e.g. 'agent306-safety').",
+      "minLength": 1
+    },
+    "summary": {
+      "type": "string",
+      "description": "One-paragraph description of what the skill does and what it explicitly does NOT do.",
+      "minLength": 1
+    },
+    "policy": {
+      "type": "object",
+      "description": "Declared policy envelope. The validator REQUIRES propose_only=true and expands_autonomy=false.",
+      "required": ["propose_only", "expands_autonomy"],
+      "additionalProperties": false,
+      "properties": {
+        "propose_only": { "const": true },
+        "expands_autonomy": { "const": false }
+      }
+    },
+    "read_only": {
+      "description": "MUST be true. Registered skills do not mutate state.",
+      "const": true
+    },
+    "writes": {
+      "type": "object",
+      "description": "Declared write surfaces. EVERY field MUST be false. Adding new write keys is also rejected by the validator.",
+      "required": [
+        "production",
+        "public_post",
+        "public_publish",
+        "bulk_promotion",
+        "archive_delete",
+        "fs",
+        "db",
+        "network"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "production":     { "const": false },
+        "public_post":    { "const": false },
+        "public_publish": { "const": false },
+        "bulk_promotion": { "const": false },
+        "archive_delete": { "const": false },
+        "fs":             { "const": false },
+        "db":             { "const": false },
+        "network":        { "const": false }
+      }
+    },
+    "io_surfaces": {
+      "type": "object",
+      "description": "Declared input/output surfaces. Informational; not used to grant authority.",
+      "required": ["inputs", "outputs"],
+      "additionalProperties": false,
+      "properties": {
+        "inputs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "outputs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        }
+      }
+    },
+    "promotion_authority": {
+      "description": "MUST be the literal string \"none\". No registered skill is allowed to drive promotion.",
+      "const": "none"
+    },
+    "evidence": {
+      "type": "array",
+      "description": "Repo-relative paths to evidence files (tests, workflow steps). The validator resolves each path against repo-root; entries containing a '#anchor' suffix have the suffix stripped before resolution (e.g. '.github/workflows/ci.yml#agent306-safety-gates').",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    },
+    "tests": {
+      "type": "array",
+      "description": "Repo-relative paths to test files that pin this skill's invariants. Every path MUST exist.",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    }
+  }
+}

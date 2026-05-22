@@ -1,0 +1,36 @@
+id: promotion-boundary-audit
+version: v1.0
+title: Promotion Boundary Audit
+owner: agent306-safety
+summary: >
+  Wraps server/eval/promotionBoundaryAudit and scripts/auditPromotionBoundary.ts
+  as a registered internal Agent 306 skill. Read-only static source audit of
+  promotion-boundary invariants and the single status:"applied" write-site rule.
+policy:
+  propose_only: true
+  expands_autonomy: false
+read_only: true
+writes:
+  production: false
+  public_post: false
+  public_publish: false
+  bulk_promotion: false
+  archive_delete: false
+  fs: false
+  db: false
+  network: false
+io_surfaces:
+  inputs:
+    - server/selfRecommendationEngine.ts
+    - server/eval/promotionGate.ts
+  outputs:
+    - stdout JSON payload
+promotion_authority: none
+evidence:
+  - server/__tests__/promotionBoundaryAudit.test.ts
+  - server/__tests__/phase3BoundaryRegression.test.ts
+  - .github/workflows/ci.yml#agent306-safety-gates
+tests:
+  - server/__tests__/promotionBoundaryAudit.test.ts
+  - server/__tests__/phase3BoundaryRegression.test.ts
+  - server/__tests__/skillCardPromotionBoundaryAudit.test.ts

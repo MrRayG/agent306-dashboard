@@ -45,6 +45,25 @@ may transition a row to `status: applied` ONLY when `status === 'approved'`
 AND `canPromote(rec).ok`. There is no bypass path. Grep for the single
 write site before you change anything here.
 
+## Skill Governance
+
+Agent 306 has a registry + validation layer at `skills/` that records each
+registered internal skill's declared safety envelope. The layer is
+**registry + validation only** — it does not add runtime behavior. See
+[`docs/SKILL_GOVERNANCE.md`](docs/SKILL_GOVERNANCE.md) for the full design.
+
+Non-widening guarantees for any skill card registered under this layer:
+
+- `policy.propose_only: true` and `policy.expands_autonomy: false`
+- `read_only: true`
+- Every `writes.*` field MUST be `false`
+- `promotion_authority: "none"`
+
+Run `npm run skills:validate` before opening a PR that touches `skills/`.
+The validator (`scripts/validateSkillCards.ts`) is manual-only, read-only,
+deterministic, stdout-only, and exits non-zero on any widening. CI runs it
+inside the existing `agent306-safety-gates` job.
+
 ## Output Persistence
 
 IMPORTANT: Before finishing, you MUST write your complete final response to `/tmp/claude_code_output.md` using the Write tool. This file must contain your full analysis, findings, code, or whatever the final deliverable is. This is a hard requirement — do not skip it.
