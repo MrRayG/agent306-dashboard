@@ -13,7 +13,8 @@
     "hypothesis:audit": "tsx scripts/hypothesisAudit.ts",
     "test": "tsx scripts/runTests.ts",
     "test:guarded": "tsx scripts/runTests.ts --exclude-quarantined",
-    "test:safety": "tsx --test server/__tests__/dashboardAuth.test.ts server/__tests__/promotionGate.test.ts server/__tests__/regressionRunnerCoverage.test.ts server/__tests__/claimVerifier.golden.test.ts"
+    "test:safety": "tsx --test server/__tests__/dashboardAuth.test.ts server/__tests__/promotionGate.test.ts server/__tests__/regressionRunnerCoverage.test.ts server/__tests__/claimVerifier.golden.test.ts",
+    "skills:validate": "tsx scripts/validateSkillCards.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -107,7 +108,8 @@
     "tailwindcss": "^3.4.17",
     "tsx": "^4.20.5",
     "typescript": "5.6.3",
-    "vite": "^7.3.0"
+    "vite": "^7.3.0",
+    "yaml": "^2.4.2"
   },
   "overrides": {
     "drizzle-kit": {
