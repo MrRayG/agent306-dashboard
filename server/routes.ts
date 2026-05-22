@@ -80,6 +80,7 @@ import {
 import {
   saveTweetDraft,
   listTweetDrafts,
+  getTweetDraft,
   markTweetDraftPosted,
   deleteTweetDraft,
   type TweetDraftEngine,
@@ -3434,6 +3435,81 @@ export function registerRoutes(httpServer: Server, app: Express) {
     res.json({ ok: true });
   });
 
+  // ── Reflection video preview (PR #417) ──────────────────────────────────
+  // Read-only path. Serves a single MP4 from the data-dir reflection_videos/
+  // subdir. resolveReflectionVideoPath() rejects traversal and any non-.mp4
+  // filename, so the route can never read outside that folder.
+  app.get("/api/reflection-videos/:file", (req, res) => {
+    const { resolveReflectionVideoPath } = require("./videoEngine.js");
+    try {
+      const abs = resolveReflectionVideoPath(req.params.file);
+      if (!fs.existsSync(abs)) {
+        return res.status(404).json({ error: "video not found" });
+      }
+      res.setHeader("Content-Type", "video/mp4");
+      res.setHeader("Cache-Control", "private, max-age=3600");
+      return res.sendFile(abs);
+    } catch (e: any) {
+      return res.status(400).json({ error: e.message ?? "invalid filename" });
+    }
+  });
+
+  // ── Reflection video status (UI uses this to gate the toggle) ───────────
+  app.get("/api/reflection-videos/_status", (_req, res) => {
+    const { getReflectionVideoCapStatus } = require("./videoEngine.js");
+    try { res.json(getReflectionVideoCapStatus()); }
+    catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  // ── Publish a reflection draft with attached video to X ─────────────────
+  // Manual-only. Uploads the persisted mp4 via xWrite.v1.uploadMedia
+  // ({ mimeType: "video/mp4" }) and tweets the draft text. If the video file
+  // is missing this endpoint returns 409 — it never silently falls back to
+  // text-only. The draft is then marked-posted with the tweet URL.
+  app.post("/api/tweet-drafts/:id/publish-with-video", requireDashAuth, async (req, res) => {
+    try {
+      const draft = getTweetDraft(req.params.id);
+      if (!draft) return res.status(404).json({ error: "draft not found" });
+      if (draft.markedPostedAt) return res.status(409).json({ error: "draft already posted" });
+      if (draft.engine !== "reflection") {
+        return res.status(400).json({ error: "publish-with-video only supports reflection drafts (v1)" });
+      }
+      if (!draft.videoPath || !draft.videoFile) {
+        return res.status(409).json({ error: "draft has no attached video" });
+      }
+      if (!fs.existsSync(draft.videoPath)) {
+        return res.status(409).json({ error: "video file missing on disk — re-generate the draft" });
+      }
+      if (!xWrite) {
+        return res.status(503).json({ error: "X client not initialized" });
+      }
+
+      const compliance = validateXPost(draft.content);
+      if (!compliance.allowed) {
+        return res.status(429).json({ error: `Compliance guard: ${compliance.reason}` });
+      }
+      const safeText = enforcePostFormat(compliance.sanitizedContent ?? draft.content, "reflection");
+
+      const videoBuf = fs.readFileSync(draft.videoPath);
+      const mediaId = await xWrite.v1.uploadMedia(videoBuf, { mimeType: "video/mp4" as any });
+      console.log(`[ReflectionVideo] Uploaded mp4 to X media_id=${mediaId}`);
+
+      const tweet = await xWrite.v2.tweet({
+        text: safeText,
+        media: { media_ids: [mediaId] },
+      });
+      const tweetId = tweet.data?.id;
+      const tweetUrl = tweetId ? `https://x.com/306Agent/status/${tweetId}` : undefined;
+      recordXPost(safeText);
+      markTweetDraftPosted(draft.draftId, tweetUrl);
+
+      res.json({ ok: true, tweetId, tweetUrl, mediaId });
+    } catch (e: any) {
+      console.error("[ReflectionVideo] publish-with-video failed:", e.message);
+      res.status(500).json({ ok: false, error: e.message });
+    }
+  });
+
   // ── Unified drafts inbox ─────────────────────────────────────
   // Aggregates Deep Read (long-form article) drafts and short-form tweet
   // drafts into a single list the dashboard /drafts page can render.
@@ -3467,6 +3543,15 @@ export function registerRoutes(httpServer: Server, app: Express) {
         content:     d.content,
         platforms:   d.platforms,
         metadata:    d.metadata,
+        // Reflection-video lane fields (PR #417). All optional — non-video
+        // drafts read back exactly as before.
+        ...(d.mediaType        ? { mediaType: d.mediaType }               : {}),
+        ...(d.videoFile        ? {
+          videoFile: d.videoFile,
+          videoPreviewUrl: `/api/reflection-videos/${d.videoFile}`,
+        } : {}),
+        ...(d.videoDurationSec ? { videoDurationSec: d.videoDurationSec } : {}),
+        ...(d.videoWarning     ? { videoWarning: d.videoWarning }         : {}),
       }));
       // PR #283 — review-only quarantines for short-form post engines whose
       // verifier hard-fail path used to silently drop the draft. These never
@@ -6353,10 +6438,36 @@ needsHelp: true only when you genuinely need his direction or information`,
         }
 
         case "reflection": {
-          const { generateReflectionPostContent } = await import("./reflectionPostEngine.js");
-          const result = await generateReflectionPostContent();
+          // Reflection lane supports an optional video attachment (PR #417).
+          // Feature is OFF by default and only kicks in when both
+          // `includeVideo=true` is sent AND REFLECTION_VIDEO_ENABLED=true.
+          // Text reflection is always returned — a video failure attaches a
+          // warning to the draft rather than nuking the text path.
+          const includeVideo = req.body?.includeVideo === true;
+          const visualPrompt = typeof req.body?.visualPrompt === "string"
+            ? req.body.visualPrompt
+            : undefined;
+          // Pre-allocate the draftId so the persisted mp4 basename matches the
+          // saved draft record one-to-one (no rename step, no race).
+          const reflectionDraftId = `tdraft_${Date.now()}`;
+          const { generateReflectionPostWithVideo } = await import("./reflectionPostEngine.js");
+          const result = await generateReflectionPostWithVideo({
+            draftId: reflectionDraftId,
+            includeVideo,
+            visualPrompt,
+          });
           content = result.post;
           type = "reflection";
+          // Stash for the draft-save step below.
+          (req as any)._reflectionDraftId  = reflectionDraftId;
+          (req as any)._reflectionVideo    = {
+            videoPath:        result.videoPath,
+            videoFile:        result.videoFile,
+            videoRequestId:   result.videoRequestId,
+            videoDurationSec: result.videoDurationSec,
+            videoWarning:     result.videoWarning,
+            includeVideo,
+          };
           break;
         }
       }
@@ -6430,13 +6541,26 @@ needsHelp: true only when you genuinely need his direction or information`,
         }
       } else if (!autoPost && isTweetDraftEngine) {
         // Save to tweet drafts instead of posting.
+        const reflectionVideo = engineId === "reflection" ? (req as any)._reflectionVideo : null;
+        const reflectionDraftId = engineId === "reflection" ? (req as any)._reflectionDraftId : undefined;
         const draft = saveTweetDraft({
           engine: engineId as TweetDraftEngine,
           content: trimmed,
           platforms,
+          ...(reflectionDraftId ? { draftId: reflectionDraftId } : {}),
+          ...(reflectionVideo && reflectionVideo.videoPath ? {
+            mediaType:        "video" as const,
+            videoPath:        reflectionVideo.videoPath,
+            videoFile:        reflectionVideo.videoFile,
+            videoRequestId:   reflectionVideo.videoRequestId,
+            videoDurationSec: reflectionVideo.videoDurationSec,
+          } : {}),
+          ...(reflectionVideo && reflectionVideo.videoWarning ? {
+            videoWarning: reflectionVideo.videoWarning,
+          } : {}),
         });
         savedDraftId = draft.draftId;
-        console.log(`[GenerateNow] autoPost=false — saved ${engineId} draft ${draft.draftId} (${trimmed.length} chars)`);
+        console.log(`[GenerateNow] autoPost=false — saved ${engineId} draft ${draft.draftId} (${trimmed.length} chars)${reflectionVideo?.videoPath ? " +video" : ""}`);
       } else if (!autoPost && !isTweetDraftEngine) {
         // Non-draftable engine with autoPost off. Rare (the main
         // always-post engines default to on) but honour the flag —
@@ -6464,6 +6588,7 @@ needsHelp: true only when you genuinely need his direction or information`,
         }
       }
 
+      const reflectionVideo = engineId === "reflection" ? (req as any)._reflectionVideo : null;
       res.json({
         success: true,
         content: trimmed,  // Return full content for preview
@@ -6472,6 +6597,16 @@ needsHelp: true only when you genuinely need his direction or information`,
         contentLength: trimmed.length,
         savedAsDraft: isArticle || (!autoPost && isTweetDraftEngine),
         draftId: savedDraftId,
+        ...(reflectionVideo ? {
+          includeVideo:     reflectionVideo.includeVideo === true,
+          videoAttached:    !!reflectionVideo.videoPath,
+          videoFile:        reflectionVideo.videoFile ?? null,
+          videoPreviewUrl:  reflectionVideo.videoFile
+            ? `/api/reflection-videos/${reflectionVideo.videoFile}`
+            : null,
+          videoDurationSec: reflectionVideo.videoDurationSec ?? null,
+          videoWarning:     reflectionVideo.videoWarning ?? null,
+        } : {}),
       });
 
     } catch (e: any) {

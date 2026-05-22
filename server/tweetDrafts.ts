@@ -48,6 +48,18 @@ export interface TweetDraft {
   markedPostedAt?: string | null;
   /** Optional URL of the published post on X/Farcaster. */
   postedUrl?: string;
+  /**
+   * Optional reflection-video lane fields (PR #417). Set only when a draft
+   * was generated with `includeVideo=true` AND the video produced. JSON-backed
+   * — no migration needed. All fields are optional so existing drafts read
+   * back unchanged.
+   */
+  mediaType?: "image" | "video";
+  videoPath?: string;              // absolute path to mp4 on disk
+  videoFile?: string;              // basename for /api/reflection-videos/:file
+  videoRequestId?: string;
+  videoDurationSec?: number;
+  videoWarning?: string;           // non-null when generation failed; text-only fallback
 }
 
 interface TweetDraftsState {
@@ -88,16 +100,29 @@ export function saveTweetDraft(input: {
   content: string;
   platforms?: string[];
   metadata?: TweetDraft["metadata"];
+  draftId?: string;
+  mediaType?: TweetDraft["mediaType"];
+  videoPath?: string;
+  videoFile?: string;
+  videoRequestId?: string;
+  videoDurationSec?: number;
+  videoWarning?: string;
 }): TweetDraft {
   const state = loadState();
   const draft: TweetDraft = {
-    draftId:        `tdraft_${Date.now()}`,
+    draftId:        input.draftId ?? `tdraft_${Date.now()}`,
     engine:         input.engine,
     generatedAt:    new Date().toISOString(),
     content:        input.content,
     platforms:      input.platforms,
     metadata:       input.metadata,
     markedPostedAt: null,
+    ...(input.mediaType        ? { mediaType: input.mediaType }               : {}),
+    ...(input.videoPath        ? { videoPath: input.videoPath }               : {}),
+    ...(input.videoFile        ? { videoFile: input.videoFile }               : {}),
+    ...(input.videoRequestId   ? { videoRequestId: input.videoRequestId }     : {}),
+    ...(input.videoDurationSec ? { videoDurationSec: input.videoDurationSec } : {}),
+    ...(input.videoWarning     ? { videoWarning: input.videoWarning }         : {}),
   };
   state.drafts.unshift(draft);
   if (state.drafts.length > 50) state.drafts = state.drafts.slice(0, 50);
