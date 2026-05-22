@@ -6,7 +6,7 @@ import { VerifierReport, type VerifierReportData } from "@/components/VerifierRe
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type DraftEngine = "article" | "podcast" | "breakthrough" | "blog";
+type DraftEngine = "article" | "podcast" | "breakthrough" | "blog" | "reflection" | "research";
 type QuarantineEngine = "news" | "signal" | "academy";
 type Filter = "all" | DraftEngine | QuarantineEngine;
 
@@ -33,7 +33,7 @@ interface TweetDraft {
   // engine="article" identifies the long-form [306 ARTICLE] top-card
   // manuscript draft (no 280-char limit). Other values are short-form
   // tweet promos.
-  engine: "podcast" | "breakthrough" | "blog" | "article";
+  engine: "podcast" | "breakthrough" | "blog" | "article" | "reflection" | "research";
   generatedAt: string;
   content: string;
   platforms?: string[];
@@ -43,6 +43,13 @@ interface TweetDraft {
     episodeUrl?: string;
     blogSlug?: string;
   };
+  // Reflection-video lane (PR #417). Optional — only set for reflection
+  // drafts generated with includeVideo=true and a successful xAI response.
+  mediaType?: "image" | "video";
+  videoFile?: string;
+  videoPreviewUrl?: string;
+  videoDurationSec?: number;
+  videoWarning?: string;
 }
 
 // PR #283 — review-only quarantine record for short-form post engines whose
@@ -96,6 +103,8 @@ const ENGINE_ACCENT: Record<DraftEngine | QuarantineEngine, string> = {
   podcast:      "#a78bfa",
   breakthrough: "#f97316",
   blog:         "#60a5fa",
+  reflection:   "#c084fc",
+  research:     "#818cf8",
   news:         "#fbbf24",
   signal:       "#34d399",
   academy:      "#f472b6",
@@ -106,6 +115,8 @@ const ENGINE_LABEL: Record<DraftEngine | QuarantineEngine, string> = {
   podcast:      "PODCAST",
   breakthrough: "BREAKTHROUGH",
   blog:         "BLOG",
+  reflection:   "REFLECTION",
+  research:     "RESEARCH",
   news:         "NEWS",
   signal:       "SIGNAL",
   academy:      "ACADEMY",
@@ -486,6 +497,26 @@ function DraftCard({
       {wordCount !== null && (
         <div style={{ fontSize: "12px", color: "rgba(227,229,228,0.48)", fontFamily: "monospace", marginBottom: "10px" }}>
           {wordCount} words · long-form manuscript
+        </div>
+      )}
+
+      {/* Reflection video preview (PR #417) */}
+      {draft.source === "tweet" && draft.engine === "reflection" && draft.videoPreviewUrl && (
+        <div style={{ marginBottom: "12px" }}>
+          <div style={{ fontSize: "11px", fontFamily: "monospace", color: accent, marginBottom: 4, letterSpacing: "0.08em" }}>
+            ATTACHED VIDEO {draft.videoDurationSec ? `· ${draft.videoDurationSec}s` : ""} · 9:16
+          </div>
+          <video
+            src={draft.videoPreviewUrl}
+            controls
+            preload="metadata"
+            style={{ maxWidth: 260, maxHeight: 360, background: "#000", border: `1px solid ${accent}40` }}
+          />
+        </div>
+      )}
+      {draft.source === "tweet" && draft.engine === "reflection" && draft.videoWarning && (
+        <div style={{ fontSize: "12px", fontFamily: "monospace", color: "#facc15", marginBottom: "10px" }}>
+          Video warning: {draft.videoWarning}
         </div>
       )}
 

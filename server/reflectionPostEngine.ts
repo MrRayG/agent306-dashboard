@@ -225,6 +225,93 @@ export async function generateReflectionPostContent(): Promise<ReflectionPostRes
   };
 }
 
+// ── Reflection + optional video lane ─────────────────────────────────────────
+// Draft-only. The text reflection is generated first via the existing
+// generateReflectionPostContent (claim-verified, format-guarded). When
+// includeVideo=true AND the feature flag REFLECTION_VIDEO_ENABLED=true is set,
+// a 9:16 grok-imagine-video clip is generated and persisted under
+// DATA_DIR/reflection_videos. If video generation fails for any reason, the
+// text draft is still returned with a `videoWarning` set so the operator can
+// see what happened in the dashboard.
+
+export interface ReflectionPostWithVideoResult extends ReflectionPostResult {
+  videoPath: string | null;       // absolute path on disk
+  videoFile: string | null;       // basename used by /api/reflection-videos/:file
+  videoRequestId: string | null;
+  videoDurationSec: number | null;
+  videoWarning: string | null;    // non-null when video was requested but not produced
+}
+
+export async function generateReflectionPostWithVideo(opts: {
+  draftId: string;                // basename used to scope the persisted mp4
+  includeVideo?: boolean;
+  visualPrompt?: string;
+} = { draftId: `tdraft_${Date.now()}` }): Promise<ReflectionPostWithVideoResult> {
+  const base = await generateReflectionPostContent();
+
+  if (!opts.includeVideo) {
+    return {
+      ...base,
+      videoPath: null,
+      videoFile: null,
+      videoRequestId: null,
+      videoDurationSec: null,
+      videoWarning: null,
+    };
+  }
+
+  // Lazy import to keep cold-start surface area small for text-only callers.
+  const { generateReflectionVideo, isReflectionVideoEnabled } = await import("./videoEngine.js");
+
+  if (!isReflectionVideoEnabled()) {
+    return {
+      ...base,
+      videoPath: null,
+      videoFile: null,
+      videoRequestId: null,
+      videoDurationSec: null,
+      videoWarning: "REFLECTION_VIDEO_ENABLED=false — video lane disabled. Text draft still saved.",
+    };
+  }
+
+  const result = await generateReflectionVideo({
+    draftId: opts.draftId,
+    reflectionText: base.post,
+    visualPrompt: opts.visualPrompt,
+  });
+
+  if (!result) {
+    return {
+      ...base,
+      videoPath: null,
+      videoFile: null,
+      videoRequestId: null,
+      videoDurationSec: null,
+      videoWarning: "Video generation returned no result. Text draft still saved.",
+    };
+  }
+
+  if ("warning" in result) {
+    return {
+      ...base,
+      videoPath: null,
+      videoFile: null,
+      videoRequestId: null,
+      videoDurationSec: null,
+      videoWarning: result.warning,
+    };
+  }
+
+  return {
+    ...base,
+    videoPath: result.videoPath,
+    videoFile: result.videoFile,
+    videoRequestId: result.requestId,
+    videoDurationSec: result.durationSec,
+    videoWarning: null,
+  };
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function safeCtx(fn: () => string | undefined | null): string {

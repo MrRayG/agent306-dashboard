@@ -479,9 +479,31 @@ function EngineCards() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [generating, setGenerating] = useState<string | null>(null);
-  const [lastResult, setLastResult] = useState<Record<string, { success: boolean; content?: string; error?: string }>>({});
+  const [lastResult, setLastResult] = useState<Record<string, {
+    success: boolean;
+    content?: string;
+    error?: string;
+    videoAttached?: boolean;
+    videoPreviewUrl?: string | null;
+    videoWarning?: string | null;
+    videoDurationSec?: number | null;
+  }>>({});
   const [editingSchedule, setEditingSchedule] = useState<string | null>(null);
   const [selectedPodcastEpisodeId, setSelectedPodcastEpisodeId] = useState<string>("");
+  // Reflection video lane (PR #417) — opt-in. The server returns
+  // `{ enabled, capacity, remaining }` from /api/reflection-videos/_status so
+  // we can hide / explain the toggle when REFLECTION_VIDEO_ENABLED=false.
+  const [reflectionIncludeVideo, setReflectionIncludeVideo] = useState(false);
+  const { data: reflectionVideoStatus } = useQuery<{
+    enabled: boolean;
+    capacity: number;
+    usedToday: number;
+    remaining: number;
+  }>({
+    queryKey: ["/api/reflection-videos/_status"],
+    queryFn: () => fetch("/api/reflection-videos/_status").then(r => r.json()),
+    refetchInterval: 60_000,
+  });
 
   const { data: engineData, isLoading } = useQuery<{ engines: EngineInfo[] }>({
     queryKey: ["/api/engines/status"],
@@ -514,11 +536,32 @@ function EngineCards() {
       if (engineId === "podcast" && selectedPodcastEpisodeId) {
         body.episodeId = selectedPodcastEpisodeId;
       }
+      if (engineId === "reflection" && reflectionIncludeVideo) {
+        body.includeVideo = true;
+      }
       const res = await apiRequest("POST", `/api/engines/${engineId}/generate`, body);
       const data = await res.json();
 
       if (data.success) {
-        setLastResult(prev => ({ ...prev, [engineId]: { success: true, content: data.content } }));
+        setLastResult(prev => ({
+          ...prev,
+          [engineId]: {
+            success: true,
+            content: data.content,
+            videoAttached:    !!data.videoAttached,
+            videoPreviewUrl:  data.videoPreviewUrl ?? null,
+            videoWarning:     data.videoWarning ?? null,
+            videoDurationSec: data.videoDurationSec ?? null,
+          },
+        }));
+        if (data.videoWarning) {
+          toast({
+            title: "Video lane warning",
+            description: data.videoWarning,
+          });
+        }
+        qc.invalidateQueries({ queryKey: ["/api/drafts"] });
+        qc.invalidateQueries({ queryKey: ["/api/reflection-videos/_status"] });
         toast({
           title: `${engineName} generated`,
           description: `Queued to ${data.queuedTo.join(" + ")} (${data.contentLength} chars)`,
@@ -671,6 +714,28 @@ function EngineCards() {
                 />
               )}
 
+              {/* Reflection Video Toggle (PR #417) — opt-in, draft-only */}
+              {eng.id === "reflection" && (
+                <div style={{ marginTop: 10, padding: "8px 10px", background: "rgba(192,132,252,0.06)", border: "1px solid rgba(192,132,252,0.18)" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: reflectionVideoStatus?.enabled ? "pointer" : "not-allowed", opacity: reflectionVideoStatus?.enabled ? 1 : 0.55 }}>
+                    <input
+                      type="checkbox"
+                      checked={reflectionIncludeVideo}
+                      disabled={!reflectionVideoStatus?.enabled || (reflectionVideoStatus?.remaining ?? 0) <= 0}
+                      onChange={(e) => setReflectionIncludeVideo(e.target.checked)}
+                    />
+                    <span style={{ ...mono, fontSize: "0.72rem", color: "#c084fc", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                      Include reflection video (9:16, ~8s)
+                    </span>
+                  </label>
+                  <div style={{ ...mono, fontSize: "0.65rem", color: "rgba(227,229,228,0.45)", marginTop: 4 }}>
+                    {reflectionVideoStatus?.enabled
+                      ? `Daily cap: ${reflectionVideoStatus.usedToday}/${reflectionVideoStatus.capacity} used today (${reflectionVideoStatus.remaining} remaining). Draft-only — manual publish required.`
+                      : "Disabled. Set REFLECTION_VIDEO_ENABLED=true to enable the video lane."}
+                  </div>
+                </div>
+              )}
+
               {/* Podcast Episode Picker — only on the podcast card */}
               {eng.id === "podcast" && (publishedEpisodes?.episodes?.length ?? 0) > 0 && (
                 <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }}>
@@ -745,6 +810,24 @@ function EngineCards() {
                           whiteSpace: "pre-wrap",
                         }}>
                           {result.content.slice(0, 200)}{result.content.length > 200 ? "..." : ""}
+                        </div>
+                      )}
+                      {result.videoAttached && result.videoPreviewUrl && (
+                        <div style={{ marginTop: 8 }}>
+                          <div style={{ ...mono, fontSize: "0.65rem", color: "#c084fc", marginBottom: 4 }}>
+                            Reflection video attached ({result.videoDurationSec ?? "~8"}s) — manual publish required
+                          </div>
+                          <video
+                            src={result.videoPreviewUrl}
+                            controls
+                            preload="metadata"
+                            style={{ maxWidth: 240, maxHeight: 320, background: "#000", border: "1px solid rgba(192,132,252,0.25)" }}
+                          />
+                        </div>
+                      )}
+                      {result.videoWarning && (
+                        <div style={{ ...mono, marginTop: 6, fontSize: "0.65rem", color: "#facc15" }}>
+                          Video warning: {result.videoWarning}
                         </div>
                       )}
                     </>

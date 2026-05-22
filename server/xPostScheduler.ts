@@ -29,8 +29,28 @@ import { generatePostImage } from "./imageEngine.js";
  * If `post.includeImage === true` and no pre-uploaded mediaId exists,
  * generate an image via imageEngine and upload it via the X v1 media endpoint.
  * Returns a media ID on success, or null on any failure (post continues text-only).
+ *
+ * (PR #417) — If `post.videoPath` is set, the mp4 takes priority and is
+ * uploaded with mimeType `video/mp4`; image generation is skipped. A missing
+ * mp4 file fails fast and returns null (caller posts text-only with a
+ * console warning rather than silently dropping the video).
  */
 async function prepareMediaForPost(xWrite: any, post: QueuedPost, text: string): Promise<string | null> {
+  // Video lane has priority over image lane when both are populated.
+  if (post.videoPath) {
+    try {
+      if (!fs.existsSync(post.videoPath)) {
+        console.error(`[XScheduler] Video missing on disk (${post.videoPath}) — falling back to text-only`);
+        return null;
+      }
+      const buf = fs.readFileSync(post.videoPath);
+      const mediaId = await xWrite.v1.uploadMedia(buf, { mimeType: "video/mp4" });
+      return mediaId ?? null;
+    } catch (e: any) {
+      console.warn(`[XScheduler] Video upload failed (posting text-only): ${e.message}`);
+      return null;
+    }
+  }
   if (!post.includeImage || post.mediaId) return post.mediaId ?? null;
   try {
     const { buffer } = await generatePostImage({
@@ -116,6 +136,13 @@ export interface QueuedPost {
   mediaId?: string; // optional pre-uploaded media ID
   includeImage?: boolean; // if true, generate + attach image at post time
   imagePrompt?: string;   // optional override; auto-generated if omitted
+  /**
+   * (PR #417) Optional absolute path to an mp4. Manual publish paths can set
+   * this so prepareMediaForPost uploads the video and skips image generation.
+   * The auto-post scheduler never reads this — reflection-video remains a
+   * draft-only/manual lane.
+   */
+  videoPath?: string;
   skipped?: boolean;
   skippedReason?: string;
 }
