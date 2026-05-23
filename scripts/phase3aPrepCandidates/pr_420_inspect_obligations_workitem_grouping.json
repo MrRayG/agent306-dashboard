@@ -1,0 +1,122 @@
+{
+  "candidateId": "pr_420_inspect_obligations_workitem_grouping",
+  "kind": "summarizationTemplate",
+  "attestedAt": "2026-05-23T14:32:00.000Z",
+  "preconditions": {
+    "reversibleLowRiskActionOnly": {
+      "high": {
+        "key": "reversibleLowRiskActionOnly",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "scripts/inspectObligations.ts#projectInspected,shared/obligationKeys.ts#obligationIdForWorkItem",
+        "rationale": "PR is a READ-ONLY operator CLI fix + a pure-function extraction. The inspect CLI carries the same hard guarantee documented at scripts/inspectObligations.ts#L15-L25: READ-ONLY (no write flag), DETERMINISTIC (no Date.now, no Math.random, no env reads beyond DATA_DIR), NO DB (better-sqlite3 not loaded). Behaviour change is limited to the projection's grouping key \u2014 same denominator (events) and same projection logic; only the bucket-id derivation changed to match the runtime. Reversal: revert the commit. No data is written, no schema changes, no env flag introduced."
+      },
+      "low": {
+        "key": "reversibleLowRiskActionOnly",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "scripts/inspectObligations.ts#projectInspected,shared/obligationKeys.ts#obligationIdForWorkItem",
+        "rationale": "Same as high tier: read-only operator tooling fix + pure-function extraction; revert-the-commit reversal; no runtime data path touched."
+      }
+    },
+    "explicitKillSwitchAndResourceLimits": {
+      "high": {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "scripts/inspectObligations.ts#L15-L33,shared/obligationKeys.ts#L26-L37",
+        "rationale": "Kill switch for this PR is trivial: the inspect CLI is OPERATOR-ONLY and read-only; the operator simply does not invoke it, or reverts the commit. The pure module shared/obligationKeys.ts carries an explicit no-side-effect contract in its file header (no fs, no env reads, no global state) so it cannot be silently weaponized to introduce a side-channel. Resource limit: the CLI bounds memory by reading the JSONL ledger once and projecting in O(events); a corrupt or oversized ledger fails the JSON.parse on a single line and skips that line (existing readLedger contract, unchanged)."
+      },
+      "low": {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "scripts/inspectObligations.ts#L15-L33,shared/obligationKeys.ts#L26-L37",
+        "rationale": "Same as high tier: operator-only invocation, file-level no-side-effect contract, existing readLedger bounds preserved."
+      }
+    },
+    "explicitOperatorConsent": {
+      "high": {
+        "key": "explicitOperatorConsent",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "session_2026-05-23_phase_a_inspect_correction",
+        "rationale": "Operator explicitly directed this PR after Phase A inspect output revealed the CLI was reporting 5 obligations while the runtime collapses to 2. The operator chose option (1) of three offered paths: 'open a small PR fixing inspectObligations grouping so we get an honest read before flipping flags, then proceed with Phase B'. Consent is for: extract pure key functions to shared/, make CLI use the runtime projection's grouping, add regression tests. No autonomy expansion is requested or implied."
+      },
+      "low": {
+        "key": "explicitOperatorConsent",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "session_2026-05-23_phase_a_inspect_correction",
+        "rationale": "Same as high tier: operator explicitly chose option (1) of the offered paths."
+      }
+    },
+    "noAutonomyExpansion": {
+      "high": {
+        "key": "noAutonomyExpansion",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "scripts/inspectObligations.ts,shared/obligationKeys.ts,server/ruleCorrectiveObligations.ts",
+        "rationale": "ZERO new agent action surfaces. The PR is read-tool plumbing: one pure-function extraction (same byte-for-byte hashing) and one read-only CLI bug-fix. No new env flags, no new endpoints, no new ratio_rule primitives, no new escalation states, no new event types, no new write call sites. The agent's autonomous action set is unchanged."
+      },
+      "low": {
+        "key": "noAutonomyExpansion",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "scripts/inspectObligations.ts,shared/obligationKeys.ts,server/ruleCorrectiveObligations.ts",
+        "rationale": "Same as high tier: zero new autonomous action surfaces."
+      }
+    },
+    "safetyTestCoverage": {
+      "high": {
+        "key": "safetyTestCoverage",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "scripts/__tests__/inspectObligations.test.ts,server/__tests__/ruleCorrectiveObligationDedupe.test.ts",
+        "rationale": "5 new regression tests added in scripts/__tests__/inspectObligations.test.ts cover the four scenarios that matter for honest inspect output: (1) legacy + new events sharing noun family collapse to one row, (2) different noun families remain separate rows, (3) synonym variants (archive/archiving/archived) fold correctly, (4) --ids resolves both canonical work-item id AND legacy raw obligationId, (5) events do not leak into payload unless --include-events is passed. The pre-existing dedupe test (7/7) continues to pass against the server module which now re-exports from the shared module \u2014 confirming byte-for-byte identity preservation of the hashing functions."
+      },
+      "low": {
+        "key": "safetyTestCoverage",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "scripts/__tests__/inspectObligations.test.ts,server/__tests__/ruleCorrectiveObligationDedupe.test.ts",
+        "rationale": "Same as high tier: 5 new tests + 7 preserved dedupe tests = 12 directly relevant tests, all passing locally."
+      }
+    },
+    "rollbackPlanDocumented": {
+      "high": {
+        "key": "rollbackPlanDocumented",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "pr_420_description,scripts/__tests__/inspectObligations.test.ts",
+        "rationale": "Rollback is a single `git revert <pr_420_merge_commit>` followed by a redeploy. There are no schema changes, no migration to undo, no env flags to unset, no data to rewrite. The pre-#420 inspect CLI continues to be runnable from the dist/inspectObligations.cjs bundle on any earlier deploy. Because shared/obligationKeys.ts is a new file, the revert cleanly removes it; the server module rewrite is reverted to its inline definitions, which are byte-for-byte the same as the extracted versions (same regex tables, same SYNONYMS, same crypto.sha1).slice(0,16)."
+      },
+      "low": {
+        "key": "rollbackPlanDocumented",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "pr_420_description,scripts/__tests__/inspectObligations.test.ts",
+        "rationale": "Same as high tier: single-commit revert is sufficient and safe."
+      }
+    },
+    "observabilityWiredIn": {
+      "high": {
+        "key": "observabilityWiredIn",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "scripts/inspectObligations.ts#L268-L304",
+        "rationale": "The inspect CLI IS the observability surface for the obligation system; this PR is what makes it observe honestly. The CLI already prints a stderr banner with ledger path + size + total events (existing behaviour, unchanged), and the JSON payload now correctly reports counts.openObligations matching the runtime projection. No new logging is needed because the projection's correctness is verified by the regression tests."
+      },
+      "low": {
+        "key": "observabilityWiredIn",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "scripts/inspectObligations.ts#L268-L304",
+        "rationale": "Same as high tier: CLI banner + correctness tests are the observability."
+      }
+    }
+  },
+  "verdict": "fully_prepared",
+  "violationCount": 0,
+  "narrative": "PR #420 is a read-only operator-tooling correction discovered during the Phase A inspection that followed PR #419's deploy. The inspect CLI was grouping events by the raw stored ev.obligationId, while the runtime projection groups by the recomputed canonical work-item id \u2014 so the CLI showed N legacy rows where the runtime sees ONE collapsed obligation. To fix this without dragging server-side filesystem side effects into the CLI's NO-DB / DETERMINISTIC contract, the three pure key-derivation functions (normalizeNounFamily, normalizedWorkItemKey, obligationIdForWorkItem) are extracted to shared/obligationKeys.ts; the server module re-exports them so its public API is unchanged. 5 regression tests verify the legacy-collapse, family-separation, synonym-fold, --ids resolution, and event-leak-prevention paths. The pre-existing dedupe test (7/7) continues to pass against the re-exported names, confirming hashing identity is preserved. The fix unblocks the operator from honestly observing pre-flip state before flipping OBLIGATION_ESCALATION_ENABLED \u2014 critical for the careful N=5 rollout cadence."
+}

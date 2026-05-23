@@ -42,6 +42,9 @@ import {
   DEFAULT_OBLIGATION_ESCALATION_REFRESH_THRESHOLD,
   type ObligationEnforcementLevel,
 } from "../shared/schema.js";
+import {
+  obligationIdForWorkItem,
+} from "../shared/obligationKeys.js";
 
 const LEDGER_FILENAME = "rule_corrective_obligations.jsonl";
 
@@ -206,12 +209,31 @@ export interface InspectedObligation {
 }
 
 export function projectInspected(events: AnyEvent[], includeEvents: boolean): InspectedObligation[] {
+  // PR #420 — group events by the RECOMPUTED canonical work-item id, not
+  // the raw `ev.obligationId` field. The runtime projection
+  // (`server/ruleCorrectiveObligations.ts :: projectObligations`) does the
+  // same recomputation so that legacy pre-#384 events (which carry per-
+  // rule obligationIds) collapse into the same bucket as post-#384 events
+  // sharing the same (outputNoun, inputNoun) family. Without this, the
+  // inspect CLI shows N separate rows for what the runtime treats as ONE
+  // obligation — misleading the operator about pre-flip state.
   const byId = new Map<string, AnyEvent[]>();
   for (const ev of events) {
-    if (typeof ev.obligationId !== "string") continue;
-    const list = byId.get(ev.obligationId) ?? [];
+    if (
+      typeof ev.outputNoun !== "string" ||
+      typeof ev.inputNoun !== "string" ||
+      typeof ev.obligationId !== "string"
+    ) {
+      continue;
+    }
+    const workItemId = obligationIdForWorkItem(
+      "ratio_rule",
+      ev.outputNoun,
+      ev.inputNoun,
+    );
+    const list = byId.get(workItemId) ?? [];
     list.push(ev);
-    byId.set(ev.obligationId, list);
+    byId.set(workItemId, list);
   }
   const out: InspectedObligation[] = [];
   for (const [obligationId, list] of byId) {
@@ -310,14 +332,43 @@ export function runMain(argv: string[]): { exitCode: number; stdout: string; std
     };
   }
   const events = readLedger(args.ledgerPath);
-  const projection = projectInspected(events, args.includeEvents);
+  // PR #420 — always include events so legacy-id matching below can
+  // inspect each row's underlying raw event ids. The `includeEvents` flag
+  // still controls whether events appear in the final JSON output.
+  const projection = projectInspected(events, true);
   let filtered = projection;
   let notFound: string[] = [];
   if (args.ids.length > 0) {
     const want = new Set(args.ids);
-    filtered = projection.filter(o => want.has(o.obligationId));
-    const found = new Set(filtered.map(o => o.obligationId));
+    // Match either the canonical work-item id (post-#384) OR any legacy
+    // raw obligationId carried on a contributing event (pre-#384). This
+    // keeps operator muscle memory working: pasting any obligationId
+    // ever observed in prod resolves to the correct collapsed row.
+    filtered = projection.filter(o => {
+      if (want.has(o.obligationId)) return true;
+      const evs = o.events ?? [];
+      for (const ev of evs) {
+        if (typeof ev.obligationId === "string" && want.has(ev.obligationId)) {
+          return true;
+        }
+      }
+      return false;
+    });
+    const found = new Set<string>();
+    for (const o of filtered) {
+      if (want.has(o.obligationId)) found.add(o.obligationId);
+      for (const ev of o.events ?? []) {
+        if (typeof ev.obligationId === "string" && want.has(ev.obligationId)) {
+          found.add(ev.obligationId);
+        }
+      }
+    }
     notFound = args.ids.filter(id => !found.has(id));
+  }
+  // Respect the operator's --include-events / default choice on the
+  // emitted payload — we only forced events ON for the matching pass.
+  if (!args.includeEvents) {
+    for (const o of filtered) delete o.events;
   }
   const counts = {
     totalEvents: events.length,
@@ -354,9 +405,19 @@ function isMain(): boolean {
     if (typeof process !== "undefined" && Array.isArray(process.argv) && process.argv[1]) {
       const here = (typeof __filename !== "undefined" && __filename) || "";
       if (here && process.argv[1] === here) return true;
-      // Fallback: match basename
+      // Fallback: match basename. Must be EXACTLY the CLI entrypoint
+      // file — NOT a test file that imports the module (PR #420 bug:
+      // `startsWith` matched `inspectObligations.test.ts` and fired the
+      // CLI during test runs).
       const basename = (process.argv[1] || "").split(/[/\\]/).pop() || "";
-      if (basename.startsWith("inspectObligations")) return true;
+      if (
+        basename === "inspectObligations.ts" ||
+        basename === "inspectObligations.js" ||
+        basename === "inspectObligations.cjs" ||
+        basename === "inspectObligations.mjs"
+      ) {
+        return true;
+      }
     }
   } catch {}
   return false;
