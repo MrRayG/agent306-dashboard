@@ -273,6 +273,13 @@ describe("Phase 2m-b — audit helper on the real repo", () => {
       "applyRecommendation_requires_approved_status",
       "apply_recommendation_function_exists",
       "engine_applied_writes_inside_applyRecommendation",
+      // PR #419: confirms the new corrective-obligation escalation
+      // path (advisory → gating_proposed → enforcing) is declared in
+      // ruleCorrectiveObligations.ts AND ALSO gated by the master env
+      // flag OBLIGATION_ESCALATION_ENABLED (default false). Source-
+      // level handshake only; default-off keeps prod byte-for-byte
+      // identical until the operator flips the flag.
+      "obligation_escalation_env_gated",
       // Phase 4-b: confirms the gate declares the operator-gated
       // authoritative-block flag literal for low-risk recs.
       "phase4b_hard_block_flag_wired",
