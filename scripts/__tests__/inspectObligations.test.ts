@@ -259,6 +259,35 @@ test("runMain --ids resolves both canonical work-item id AND legacy raw obligati
   assert.equal(r3.exitCode, 3, "unknown id must still exit 3");
 });
 
+test("runMain — masterEnvFlagObserved is emitted as a boolean (PR #421)", () => {
+  // jq / CI scripts parse this field as a boolean — emitting the raw string
+  // "true" broke `jq '.masterEnvFlagObserved == true'` consumers. PR #421
+  // coerces to a strict tri-state: undefined → null; "true" → true; else → false.
+  const ledger = writeLedger([] as never[]);
+
+  const saved = process.env.OBLIGATION_ESCALATION_ENABLED;
+  try {
+    delete process.env.OBLIGATION_ESCALATION_ENABLED;
+    const rUnset = JSON.parse(runMain(["--ledger=" + ledger, "--no-source-check"]).stdout);
+    assert.equal(rUnset.masterEnvFlagObserved, null, "unset → null");
+
+    process.env.OBLIGATION_ESCALATION_ENABLED = "true";
+    const rTrue = JSON.parse(runMain(["--ledger=" + ledger, "--no-source-check"]).stdout);
+    assert.strictEqual(rTrue.masterEnvFlagObserved, true, "'true' → boolean true");
+
+    process.env.OBLIGATION_ESCALATION_ENABLED = "false";
+    const rFalse = JSON.parse(runMain(["--ledger=" + ledger, "--no-source-check"]).stdout);
+    assert.strictEqual(rFalse.masterEnvFlagObserved, false, "'false' → boolean false");
+
+    process.env.OBLIGATION_ESCALATION_ENABLED = "1";
+    const rOne = JSON.parse(runMain(["--ledger=" + ledger, "--no-source-check"]).stdout);
+    assert.strictEqual(rOne.masterEnvFlagObserved, false, "any non-'true' value → boolean false");
+  } finally {
+    if (saved === undefined) delete process.env.OBLIGATION_ESCALATION_ENABLED;
+    else process.env.OBLIGATION_ESCALATION_ENABLED = saved;
+  }
+});
+
 test("projectInspected — does not include events in payload by default", () => {
   const newId = obligationIdForWorkItem("ratio_rule", "archived", "kb_entry");
   const events = [
