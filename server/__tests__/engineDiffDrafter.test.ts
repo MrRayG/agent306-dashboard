@@ -9,14 +9,12 @@
  * Run: npx tsx --test server/__tests__/engineDiffDrafter.test.ts
  */
 
-import { describe, it, beforeEach, afterEach } from "node:test";
+import { describe, it, beforeEach, afterEach, before } from "node:test";
 import assert from "node:assert/strict";
-import * as fs from "fs";
-import * as path from "path";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 
-const TMP_DIR = fs.mkdtempSync(path.join(process.cwd(), "tmp-edd-"));
-process.env.DB_PATH = path.join(TMP_DIR, "test.db");
-process.env.DATA_DIR = TMP_DIR;
 process.env.NODE_ENV = "test";
 
 // LLM keys removed so any accidental call would fail loudly.
@@ -35,15 +33,25 @@ import {
   approveRecommendation,
   getRecommendation,
 } from "../selfRecommendationEngine.js";
-import { db } from "../db.js";
-import { selfRecommendations } from "@shared/schema";
+import { setTestDb } from "../db.js";
 
-// The TMP_DIR / DB_PATH dance above is a no-op in practice because ESM imports
-// hoist past the env-var assignments, so every run lands in the shared dev DB.
-// Wipe between runs so dedupeKey collisions from prior runs don't surface as
-// "Cannot approve recommendation in status 'approved'".
-function wipeRecs() {
-  try { db.delete(selfRecommendations).run(); } catch {}
+// Per-test DB isolation via setTestDb(). Replaces the pre-#421 env-var dance
+// at module top, which was a no-op in practice because ESM imports hoisted
+// past the assignments and every run landed in the shared dev DB. That
+// caused intermittent "insert did not persist" failures under `test:guarded`
+// parallelism (cost a CI rerun on PR #420).
+let tmpDir = "";
+
+function freshTempDb(): void {
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "edd-"));
+  setTestDb(path.join(tmpDir, "test.db"));
+}
+
+function cleanupTempDb(): void {
+  if (tmpDir) {
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+    tmpDir = "";
+  }
 }
 
 describe("autoDraftEnabled", () => {
@@ -64,7 +72,9 @@ describe("autoDraftEnabled", () => {
 });
 
 describe("draftDiffForRecommendation — early exits", () => {
-  beforeEach(wipeRecs);
+  beforeEach(freshTempDb);
+  afterEach(cleanupTempDb);
+
   it("returns false when category is not engine", async () => {
     const rec = proposeRecommendation({
       category: "prompt",
@@ -103,8 +113,8 @@ describe("draftDiffForRecommendation — early exits", () => {
 });
 
 describe("maybeQueueDraftForRec — gating", () => {
-  beforeEach(() => { wipeRecs(); delete process.env.AUTO_DRAFT_ENGINE_DIFFS; });
-  afterEach(() => { delete process.env.AUTO_DRAFT_ENGINE_DIFFS; });
+  beforeEach(() => { freshTempDb(); delete process.env.AUTO_DRAFT_ENGINE_DIFFS; });
+  afterEach(() => { cleanupTempDb(); delete process.env.AUTO_DRAFT_ENGINE_DIFFS; });
 
   it("is a no-op when AUTO_DRAFT_ENGINE_DIFFS is unset", () => {
     const rec = proposeRecommendation({

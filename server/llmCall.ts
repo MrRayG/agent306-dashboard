@@ -23,6 +23,29 @@ import { logRoute, inferTier } from "./routeLog.js";
 
 const PERPLEXITY_CHAT_URL = process.env.PERPLEXITY_CHAT_URL ?? "https://api.perplexity.ai/chat/completions";
 
+// PR #421 — Grok-direct reasoning timeout floor. See needsReasoningTimeoutFloor()
+// + the call-site in postChatCompletions() for the rationale.
+const REASONING_TIMEOUT_FLOOR_MS = 60_000;
+
+/**
+ * Returns true when the dispatched route is xAI-direct AND the model name
+ * contains "reasoning" (case-insensitive). Used to bump the per-call timeout
+ * floor for slow reasoning-tier calls without widening the timeout for
+ * non-reasoning xai-direct or any OpenRouter route.
+ *
+ * Exported for unit tests; callers in production should not need to inspect
+ * this directly.
+ */
+export function needsReasoningTimeoutFloor(route: { provider: string; model: string }): boolean {
+  if (route.provider !== "xai-direct") return false;
+  // Match "reasoning" but NOT "non-reasoning". xAI's model names use both —
+  // e.g. grok-4.20-0309-reasoning vs grok-4.20-0309-non-reasoning. Only the
+  // reasoning variants need the 60s floor; the non-reasoning ones complete
+  // well within the caller's 20s budget.
+  if (/non[- _]?reasoning/i.test(route.model)) return false;
+  return /reasoning/i.test(route.model);
+}
+
 // PR #251 — xAI empty-body recovery (gated; default ON).
 // Background: api.x.ai has been observed returning HTTP 200 OK with an
 // empty assistant message (choices[0].message.content === "") on Grok 4.20
@@ -118,6 +141,19 @@ export async function postChatCompletions(
   // Substitute the provider-native model name without mutating the caller's object.
   const outgoing = route.model === payload.model ? payload : { ...payload, model: route.model };
 
+  // PR #421 — Grok-direct reasoning timeout floor. xAI's reasoning models
+  // routinely take 30–50s for non-trivial prompts; many call sites still
+  // pass AbortSignal.timeout(20_000) inherited from non-reasoning defaults,
+  // which produced ~20 spurious aborts in yesterday's cycle (non-fatal —
+  // empty-body fallback recovers them — but pollutes logs and degrades
+  // quality). When the resolved route is xai-direct AND the dispatched
+  // model name contains "reasoning" (case-insensitive), use a 60s floor
+  // signal instead of the caller's. Narrow scope: non-reasoning xai-direct
+  // calls keep their existing tighter timeout.
+  const effectiveSignal = needsReasoningTimeoutFloor(route)
+    ? AbortSignal.timeout(REASONING_TIMEOUT_FLOOR_MS)
+    : signal;
+
   const startedAt = Date.now();
   let res: Response;
   try {
@@ -125,7 +161,7 @@ export async function postChatCompletions(
       method: "POST",
       headers: route.headers,
       body: JSON.stringify(outgoing),
-      signal,
+      signal: effectiveSignal,
     });
   } catch (err: any) {
     logRoute({
@@ -201,7 +237,7 @@ export async function postChatCompletions(
         method: "POST",
         headers: route.headers,
         body: JSON.stringify(outgoing),
-        signal,
+        signal: effectiveSignal,
       });
       if (retryRes.ok) {
         const retryText = await retryRes.text();

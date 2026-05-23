@@ -378,11 +378,21 @@ export function runMain(argv: string[]): { exitCode: number; stdout: string; std
     gatingProposed: projection.filter(o => o.enforcement === "gating_proposed" && o.status === "open").length,
     gatingActive: projection.filter(o => o.enforcement === "gating_active" && o.status === "open").length,
   };
+  // PR #421 — emit masterEnvFlagObserved as a strict tri-state boolean (true |
+  // false | null) instead of the raw env-var string. `jq` consumers and CI
+  // scripts were tripping over the string-"true" coercion ambiguity. The flag
+  // NAME (masterEnvFlagName) stays a string — only the OBSERVED VALUE is
+  // coerced. Note: only the literal string "true" maps to boolean true; every
+  // other defined value maps to false (matches the runtime gating policy in
+  // server/ruleCorrectiveObligations.ts).
+  const masterEnvRaw = process.env.OBLIGATION_ESCALATION_ENABLED;
+  const masterEnvFlagObserved: boolean | null =
+    masterEnvRaw === undefined ? null : masterEnvRaw === "true";
   const payload = {
     generatedAt: args.now,
     ledgerPath: args.ledgerPath,
     masterEnvFlagName: "OBLIGATION_ESCALATION_ENABLED",
-    masterEnvFlagObserved: process.env.OBLIGATION_ESCALATION_ENABLED ?? null,
+    masterEnvFlagObserved,
     counts,
     obligations: filtered,
     notFound,

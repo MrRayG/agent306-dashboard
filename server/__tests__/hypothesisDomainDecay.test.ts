@@ -249,9 +249,13 @@ describe("classifyDomain() — LLM call", () => {
 // ── Router wiring ────────────────────────────────────────────────────────────
 
 describe("modelRouter — hypothesis-domain-classification wiring", () => {
-  test("routes to frontier-factual tier (xai-direct)", () => {
+  test("routes to standard-voice tier (xai-direct non-reasoning, PR #421)", () => {
+    // PR #421 — moved off frontier-factual (grok-4.20-reasoning) because the
+    // 4-class label decision doesn't benefit from chain-of-thought, and
+    // yesterday's cycle showed ~20 reasoning-route timeouts. Stays on
+    // xai-direct via standard-voice → x-ai/grok-4.20-non-reasoning.
     const route = resolveTask("hypothesis-domain-classification");
-    assert.equal(route.tier, "frontier-factual");
+    assert.equal(route.tier, "standard-voice");
     assert.equal(route.provider, "xai-direct");
   });
 });

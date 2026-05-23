@@ -7,7 +7,7 @@ import { dataPath } from "./dataPaths.js";
 // DB_PATH env var overrides everything (Railway volume: /data/agent306.db)
 const DB_PATH = process.env.DB_PATH ?? dataPath("agent306.db");
 
-const sqlite = new Database(DB_PATH);
+let sqlite = new Database(DB_PATH);
 
 // Tell SQLite to wait briefly when it sees the database locked, rather than
 // failing immediately. Aggregate test runs (npm test) and CI execute every
@@ -23,11 +23,11 @@ sqlite.pragma("busy_timeout = 5000");
 // crashing the whole worker — the pragma is idempotent and the second call
 // is a no-op once the lock clears. We never silently swallow a *persistent*
 // failure: if every retry trips the lock we surface the last error.
-function setWalWithRetry(maxAttempts = 6, baseDelayMs = 50): void {
+function setWalWithRetry(db: Database.Database, maxAttempts = 6, baseDelayMs = 50): void {
   let lastErr: unknown = null;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      sqlite.pragma("journal_mode = WAL");
+      db.pragma("journal_mode = WAL");
       return;
     } catch (err: any) {
       lastErr = err;
@@ -43,12 +43,28 @@ function setWalWithRetry(maxAttempts = 6, baseDelayMs = 50): void {
     ? lastErr
     : new Error("setWalWithRetry: exhausted retries on `journal_mode = WAL`");
 }
-setWalWithRetry();
+setWalWithRetry(sqlite);
 
-export const db = drizzle(sqlite, { schema });
+let drizzleDb = drizzle(sqlite, { schema });
 
-// Auto-create tables if they don't exist (run-time migration)
-sqlite.exec(`
+// `db` is exposed as a Proxy so test code can swap the underlying drizzle
+// instance via setTestDb() without breaking the 40+ existing call sites that
+// import { db } at module top. The Proxy forwards every property access to
+// the current drizzle instance, which `setTestDb()` reassigns in-place.
+export const db = new Proxy({} as typeof drizzleDb, {
+  get(_t, prop, receiver) {
+    return Reflect.get(drizzleDb as any, prop, receiver);
+  },
+  has(_t, prop) {
+    return Reflect.has(drizzleDb as any, prop);
+  },
+}) as typeof drizzleDb;
+
+// Bootstrap schema (CREATE TABLE IF NOT EXISTS + additive migrations).
+// Extracted so setTestDb() can re-run the same bootstrap against a fresh
+// temp DB. All statements are idempotent; safe to call repeatedly.
+function bootstrapSchema(db: Database.Database): void {
+  db.exec(`
   CREATE TABLE IF NOT EXISTS episodes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     token_id INTEGER,
@@ -319,34 +335,58 @@ sqlite.exec(`
     ON claim_map_items(claim_map_id, item_key);
 `);
 
-// PR-G — additive migration for pre-existing databases. The CREATE TABLE
-// IF NOT EXISTS above only adds `is_probe` for fresh DBs; on Railway and
-// any operator-deployed DB the table already exists without the column.
-// Add it idempotently here by checking PRAGMA table_info first so the
-// ALTER TABLE doesn't error on second boot. NULL on legacy rows = "not a
-// probe" (reads treat NULL as false).
-try {
-  const cols = sqlite.prepare("PRAGMA table_info(experiment_trials)").all() as Array<{ name: string }>;
-  if (!cols.some(c => c.name === "is_probe")) {
-    sqlite.exec("ALTER TABLE experiment_trials ADD COLUMN is_probe INTEGER");
+  // PR-G — additive migration for pre-existing databases. The CREATE TABLE
+  // IF NOT EXISTS above only adds `is_probe` for fresh DBs; on Railway and
+  // any operator-deployed DB the table already exists without the column.
+  // Add it idempotently here by checking PRAGMA table_info first so the
+  // ALTER TABLE doesn't error on second boot. NULL on legacy rows = "not a
+  // probe" (reads treat NULL as false).
+  try {
+    const cols = db.prepare("PRAGMA table_info(experiment_trials)").all() as Array<{ name: string }>;
+    if (!cols.some(c => c.name === "is_probe")) {
+      db.exec("ALTER TABLE experiment_trials ADD COLUMN is_probe INTEGER");
+    }
+  } catch (e) {
+    // Don't crash boot if the migration fails on a non-standard DB; the
+    // probe feature will fail loudly at write time instead.
+    console.warn("[db] experiment_trials.is_probe migration check failed:", e);
   }
-} catch (e) {
-  // Don't crash boot if the migration fails on a non-standard DB; the
-  // probe feature will fail loudly at write time instead.
-  console.warn("[db] experiment_trials.is_probe migration check failed:", e);
+
+  // Additive migration: dedupe_key on self_recommendations. Same shape as
+  // experiment_trials.is_probe above — fresh DBs already get the column from
+  // the CREATE TABLE block; existing DBs need the ALTER. NULL on legacy rows
+  // means "not fingerprinted yet"; the dedupe check treats NULL as no-match,
+  // so legacy rows are unaffected.
+  try {
+    const cols = db.prepare("PRAGMA table_info(self_recommendations)").all() as Array<{ name: string }>;
+    if (!cols.some(c => c.name === "dedupe_key")) {
+      db.exec("ALTER TABLE self_recommendations ADD COLUMN dedupe_key TEXT");
+    }
+    db.exec("CREATE INDEX IF NOT EXISTS idx_self_rec_dedupe_key ON self_recommendations(dedupe_key)");
+  } catch (e) {
+    console.warn("[db] self_recommendations.dedupe_key migration check failed:", e);
+  }
 }
 
-// Additive migration: dedupe_key on self_recommendations. Same shape as
-// experiment_trials.is_probe above — fresh DBs already get the column from
-// the CREATE TABLE block; existing DBs need the ALTER. NULL on legacy rows
-// means "not fingerprinted yet"; the dedupe check treats NULL as no-match,
-// so legacy rows are unaffected.
-try {
-  const cols = sqlite.prepare("PRAGMA table_info(self_recommendations)").all() as Array<{ name: string }>;
-  if (!cols.some(c => c.name === "dedupe_key")) {
-    sqlite.exec("ALTER TABLE self_recommendations ADD COLUMN dedupe_key TEXT");
-  }
-  sqlite.exec("CREATE INDEX IF NOT EXISTS idx_self_rec_dedupe_key ON self_recommendations(dedupe_key)");
-} catch (e) {
-  console.warn("[db] self_recommendations.dedupe_key migration check failed:", e);
+bootstrapSchema(sqlite);
+
+/**
+ * Test-only hook: swap the underlying sqlite + drizzle bindings to point at
+ * a fresh DB file. Closes the previous connection, opens a new one, applies
+ * the same WAL + schema bootstrap, and rebinds the module-level `drizzleDb`
+ * so the exported `db` Proxy starts forwarding to the new instance.
+ *
+ * Test files that need DB isolation (e.g. server/__tests__/engineDiffDrafter
+ * .test.ts) call this in `beforeEach` to get a per-test temp DB instead of
+ * sharing the dev DB. Production code never calls this — there is no
+ * production path that needs to swap DBs at runtime.
+ */
+export function setTestDb(newPath: string): Database.Database {
+  try { sqlite.close(); } catch { /* ignore close errors */ }
+  sqlite = new Database(newPath);
+  sqlite.pragma("busy_timeout = 5000");
+  setWalWithRetry(sqlite);
+  bootstrapSchema(sqlite);
+  drizzleDb = drizzle(sqlite, { schema });
+  return sqlite;
 }
