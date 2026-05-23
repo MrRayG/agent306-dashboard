@@ -82,6 +82,13 @@ export interface CorrectiveObligationView {
   refreshCount: number;
   deadlineNote: string;
   summary: string;
+  // PR #419 — read-only escalation surface. Optional for backward-compat
+  // with any cached payload predating the field rollout.
+  enforcement?: "advisory" | "gating_proposed" | "gating_active";
+  escalationRefreshThreshold?: number;
+  escalatedAt?: string | null;
+  gateEnvFlag?: string | null;
+  gatingProposedAdvisory?: string | null;
 }
 
 export interface LatestActionEnforcerTick {
@@ -334,9 +341,36 @@ export function SelfRuleEnforcementPanel({ data }: PanelProps): JSX.Element {
                 {" · "}updated={o.updatedAt}
                 {o.deadlineNote ? ` · deadline=${o.deadlineNote}` : ""}
               </div>
+              <div
+                data-testid={`corrective-obligation-${o.obligationId}-escalation`}
+                style={{
+                  color:
+                    o.enforcement === "gating_active"
+                      ? RED
+                      : o.enforcement === "gating_proposed"
+                        ? YELLOW
+                        : DIM,
+                  fontSize: "0.74rem",
+                }}
+              >
+                enforcement={o.enforcement ?? "advisory"}
+                {" · "}escalationRefreshThreshold={o.escalationRefreshThreshold ?? 5}
+                {" · "}escalatedAt={o.escalatedAt ?? "(not escalated)"}
+                {" · "}gateEnvFlag={o.gateEnvFlag ?? "(not assigned)"}
+              </div>
+              {o.gatingProposedAdvisory ? (
+                <div
+                  data-testid={`corrective-obligation-${o.obligationId}-gating-proposed-advisory`}
+                  style={{ color: YELLOW, fontSize: "0.74rem" }}
+                >
+                  {o.gatingProposedAdvisory}
+                </div>
+              ) : null}
               <div style={{ color: DIM, fontSize: "0.74rem" }}>
-                Not a hard block. Read-only on this panel — no control here
-                satisfies, cancels, or auto-archives this obligation.
+                Read-only on this panel — no control here satisfies, cancels,
+                or auto-archives this obligation. With
+                {" "}<code>OBLIGATION_ESCALATION_ENABLED=false</code> (default)
+                the obligation stays advisory regardless of refresh count.
               </div>
             </li>
           ))}

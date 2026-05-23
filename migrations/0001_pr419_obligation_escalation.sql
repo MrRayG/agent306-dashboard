@@ -1,0 +1,37 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- PR #419 — corrective obligation escalation (env-gated, default-off)
+--
+-- Storage note: the corrective_obligations row shape lives in an append-only
+-- JSONL ledger (data/rule_corrective_obligations.jsonl), not a SQLite table.
+-- This migration file is intentionally a documented NO-OP — it carries the
+-- canonical record of the four additive fields introduced in PR #419 so that
+-- if the obligation surface is ever migrated to a SQL table in a follow-up
+-- PR, the column shape is already on disk. The runtime "migration" is the
+-- read-side projection in server/ruleCorrectiveObligations.ts which defaults
+-- absent fields to the values shown below.
+--
+-- The fields added by PR #419 are:
+--
+--   enforcement                 TEXT     NOT NULL DEFAULT 'advisory'
+--                               -- advisory | gating_proposed | gating_active
+--   escalation_refresh_threshold INTEGER NOT NULL DEFAULT 5
+--                               -- per-obligation; refreshCount at which
+--                               -- advisory upgrades to gating_proposed
+--   escalated_at                TEXT              DEFAULT NULL
+--                               -- ISO timestamp of first non-advisory state;
+--                               -- NULL when never escalated
+--   gate_env_flag               TEXT              DEFAULT NULL
+--                               -- auto-generated env-flag name; NULL on
+--                               -- freshly-opened obligations
+--
+-- Reversibility: every field is additive with a default. Reverting this PR
+-- means flipping OBLIGATION_ESCALATION_ENABLED=false (the default) — the
+-- columns / projection fields remain but are no-op'd.
+--
+-- Idempotency: the future ALTER TABLE statements (when/if a SQL table is
+-- introduced) would be guarded by `IF NOT EXISTS` style probes; this NO-OP
+-- migration is itself safe to apply any number of times.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- No-op. Schema additions for PR #419 are projection-layer only.
+SELECT 1;

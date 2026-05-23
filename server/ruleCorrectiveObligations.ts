@@ -60,6 +60,12 @@
 import * as fs from "fs";
 import * as crypto from "crypto";
 import { dataPath } from "./dataPaths.js";
+import {
+  DEFAULT_OBLIGATION_ESCALATION_REFRESH_THRESHOLD,
+  OBLIGATION_ESCALATION_ENABLED_ENV,
+  obligationIdToGateEnvFlag,
+  type ObligationEnforcementLevel,
+} from "../shared/schema.js";
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -82,7 +88,18 @@ function ledgerPath(): string {
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
-export type ObligationEventType = "opened" | "refreshed" | "satisfied";
+/**
+ * PR #419 — `escalated` and `promoted_to_gating_active` are additive event
+ * types used by the env-gated obligation-escalation policy. With the master
+ * env flag `OBLIGATION_ESCALATION_ENABLED` OFF (default), neither event is
+ * ever written — the runtime behaviour reduces to the pre-#419 surface.
+ */
+export type ObligationEventType =
+  | "opened"
+  | "refreshed"
+  | "satisfied"
+  | "escalated"
+  | "promoted_to_gating_active";
 export type ObligationStatus = "open" | "satisfied";
 
 /**
@@ -163,6 +180,18 @@ export interface RuleCorrectiveObligationEvent {
   /** Natural-language deadline hint. The runtime has no real cycle scheduler,
    *  so this is intentionally textual. */
   deadlineNote: string;
+  /**
+   * PR #419 — OPTIONAL on the wire shape. Set only on events emitted by
+   * the escalation policy (event types `escalated` /
+   * `promoted_to_gating_active`). Legacy events that predate PR #419 do
+   * not carry these fields; the projection layer defaults them to
+   * advisory / 5 / null / null. With OBLIGATION_ESCALATION_ENABLED off
+   * (default), these are never written.
+   */
+  enforcement?: ObligationEnforcementLevel;
+  escalationRefreshThreshold?: number;
+  escalatedAt?: string | null;
+  gateEnvFlag?: string | null;
 }
 
 export interface OpenObligationProjection {
@@ -203,6 +232,25 @@ export interface OpenObligationProjection {
   /** Number of "refreshed" events seen since "opened". Counts every
    *  refresh including those from a different source rule. */
   refreshCount: number;
+  /**
+   * PR #419 — enforcement level for this obligation. Always present on
+   * the projection. Defaults to "advisory" for legacy events and for
+   * obligations that have not yet been escalated. Transitions are strictly
+   *   advisory → gating_proposed → gating_active
+   * and are recorded as additive events on the append-only ledger.
+   */
+  enforcement: ObligationEnforcementLevel;
+  /** Per-obligation refresh threshold at which advisory upgrades to
+   *  gating_proposed. Defaults to
+   *  DEFAULT_OBLIGATION_ESCALATION_REFRESH_THRESHOLD (5). */
+  escalationRefreshThreshold: number;
+  /** ISO timestamp of first non-advisory transition; null when never
+   *  escalated (the legacy / default case). */
+  escalatedAt: string | null;
+  /** Auto-generated env-flag name the operator must add to env to
+   *  promote this obligation to gating_active; null on freshly-opened
+   *  obligations that have not yet been escalated. */
+  gateEnvFlag: string | null;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -358,7 +406,13 @@ function readAllEvents(): RuleCorrectiveObligationEvent[] {
         typeof obj === "object" &&
         typeof obj.obligationId === "string" &&
         typeof obj.eventId === "string" &&
-        (obj.type === "opened" || obj.type === "refreshed" || obj.type === "satisfied")
+        (
+          obj.type === "opened" ||
+          obj.type === "refreshed" ||
+          obj.type === "satisfied" ||
+          obj.type === "escalated" ||
+          obj.type === "promoted_to_gating_active"
+        )
       ) {
         out.push(obj as RuleCorrectiveObligationEvent);
       }
@@ -583,9 +637,57 @@ export function projectObligations(): OpenObligationProjection[] {
     if (list.length === 0) continue;
     list.sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
     const opened = list.find(e => e.type === "opened");
-    const latest = list[list.length - 1];
+    // The "latest" event used for counters / reason text is the most recent
+    // opened|refreshed|satisfied event — the escalation events
+    // (escalated, promoted_to_gating_active) are projection-side state
+    // transitions and intentionally do NOT overwrite deficit / required /
+    // reason fields.
+    const counterEvents = list.filter(e =>
+      e.type === "opened" ||
+      e.type === "refreshed" ||
+      e.type === "satisfied",
+    );
+    const latest = counterEvents[counterEvents.length - 1] ?? list[list.length - 1];
     const refreshCount = list.filter(e => e.type === "refreshed").length;
-    const status: ObligationStatus = latest.type === "satisfied" ? "satisfied" : "open";
+    const status: ObligationStatus =
+      counterEvents[counterEvents.length - 1]?.type === "satisfied"
+        ? "satisfied"
+        : "open";
+    // PR #419 — derive escalation state from the most recent
+    // escalation-type event for this obligation. Legacy obligations with
+    // no such events default to advisory / threshold=5 / nulls.
+    const lastEscalationEvent = [...list]
+      .reverse()
+      .find(e => e.type === "escalated" || e.type === "promoted_to_gating_active");
+    let enforcement: ObligationEnforcementLevel = "advisory";
+    let escalatedAt: string | null = null;
+    let gateEnvFlag: string | null = null;
+    let escalationRefreshThreshold =
+      DEFAULT_OBLIGATION_ESCALATION_REFRESH_THRESHOLD;
+    if (lastEscalationEvent) {
+      // Promoted state strictly outranks the escalated state on the same
+      // obligation — if a promoted_to_gating_active event exists anywhere
+      // in this obligation's history, the projection reports gating_active.
+      const promoted = list.find(e => e.type === "promoted_to_gating_active");
+      enforcement = promoted ? "gating_active" : "gating_proposed";
+      // Earliest escalation timestamp — represents "when we first put
+      // teeth visibility on this obligation".
+      const firstEsc = list.find(
+        e => e.type === "escalated" || e.type === "promoted_to_gating_active",
+      );
+      escalatedAt = firstEsc?.recordedAt ?? lastEscalationEvent.recordedAt ?? null;
+      gateEnvFlag =
+        (typeof lastEscalationEvent.gateEnvFlag === "string" && lastEscalationEvent.gateEnvFlag) ||
+        obligationIdToGateEnvFlag(obligationId);
+      if (
+        typeof lastEscalationEvent.escalationRefreshThreshold === "number" &&
+        Number.isFinite(lastEscalationEvent.escalationRefreshThreshold)
+      ) {
+        escalationRefreshThreshold = Math.floor(
+          lastEscalationEvent.escalationRefreshThreshold,
+        );
+      }
+    }
     // Collect contributing source rule / insight ids in first-seen order
     // so the merged obligation remains auditable. Legacy events that
     // predate the normalizedKey field still contribute their ruleId /
@@ -622,6 +724,10 @@ export function projectObligations(): OpenObligationProjection[] {
       reason: latest.reason,
       deadlineNote: latest.deadlineNote,
       refreshCount,
+      enforcement,
+      escalationRefreshThreshold,
+      escalatedAt,
+      gateEnvFlag,
     });
   }
   out.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -645,4 +751,229 @@ export function getOpenObligationById(
 /** Raw append-only event log (for tests / audit). */
 export function readObligationEvents(): RuleCorrectiveObligationEvent[] {
   return readAllEvents();
+}
+
+// ── PR #419: Obligation refresh-count escalation (env-gated, default-off) ────
+
+/**
+ * Read the master env flag that gates the entire escalation policy. With
+ * this OFF (default), every escalation entry point in this module returns
+ * a no-op refusal and refresh behaviour is byte-for-byte identical to the
+ * pre-#419 surface.
+ */
+function isEscalationEnabled(): boolean {
+  return process.env[OBLIGATION_ESCALATION_ENABLED_ENV] === "true";
+}
+
+export interface EscalationTransitionResult {
+  ok: boolean;
+  /** Set when an `escalated` or `promoted_to_gating_active` event was
+   *  appended on this call. */
+  event?: RuleCorrectiveObligationEvent;
+  /** Resulting enforcement level after the call (regardless of whether
+   *  a state change actually happened). */
+  enforcement: ObligationEnforcementLevel;
+  /** Human-readable reason for the result \u2014 used by structured logs and
+   *  tests. */
+  reason: string;
+}
+
+/**
+ * Refresh-time escalation entry point. Called by `actionEnforcer` AFTER
+ * `recordRatioDeficit()` has appended its refresh event. With the master
+ * env flag OFF, this is a no-op refusal.
+ *
+ * Behaviour when enabled:
+ *   - If the obligation is `advisory` AND `refreshCount >= threshold`,
+ *     append an `escalated` event setting enforcement = "gating_proposed",
+ *     escalatedAt = now, gateEnvFlag = auto-derived per-obligation name.
+ *   - Otherwise, no-op.
+ *
+ * The env flag named in `gateEnvFlag` is INTENTIONALLY not auto-created;
+ * the operator must add it to `.env` (or Railway env config) to grant
+ * write-refusal teeth. This is the second layer of the two-layer kill
+ * switch.
+ */
+export function escalateIfDue(
+  obligationId: string,
+): EscalationTransitionResult {
+  if (!isEscalationEnabled()) {
+    return {
+      ok: false,
+      enforcement: "advisory",
+      reason: "escalation disabled (OBLIGATION_ESCALATION_ENABLED!=true)",
+    };
+  }
+  const o = getOpenObligationById(obligationId);
+  if (!o) {
+    return {
+      ok: false,
+      enforcement: "advisory",
+      reason: "no open obligation",
+    };
+  }
+  if (o.enforcement !== "advisory") {
+    return {
+      ok: false,
+      enforcement: o.enforcement,
+      reason: `already at enforcement=${o.enforcement}`,
+    };
+  }
+  const threshold =
+    o.escalationRefreshThreshold ??
+    DEFAULT_OBLIGATION_ESCALATION_REFRESH_THRESHOLD;
+  if (o.refreshCount < threshold) {
+    return {
+      ok: false,
+      enforcement: "advisory",
+      reason: `refreshCount=${o.refreshCount} below threshold=${threshold}`,
+    };
+  }
+  const gateEnvFlag = obligationIdToGateEnvFlag(obligationId);
+  const now = new Date().toISOString();
+  const event: RuleCorrectiveObligationEvent = {
+    eventId: nextEventId(),
+    type: "escalated",
+    recordedAt: now,
+    obligationId,
+    normalizedKey: o.normalizedKey,
+    ruleId: o.ruleId,
+    insightId: o.insightId,
+    sourceInsightId: o.sourceInsightId,
+    primitive: "ratio_rule",
+    outputNoun: o.outputNoun,
+    inputNoun: o.inputNoun,
+    deficitCount: o.deficitCount,
+    requiredActionCount: o.requiredActionCount,
+    expectedCount: o.expectedCount,
+    actualCount: o.actualCount,
+    inputCount: o.inputCount,
+    reason:
+      `Obligation ${obligationId} has been refreshed ${o.refreshCount} times ` +
+      `(threshold ${threshold}); enforcement upgraded advisory \u2192 gating_proposed. ` +
+      `Operator may add \`${gateEnvFlag}=true\` to env to promote this ` +
+      `obligation to gating_active.`,
+    tickedAt: Date.now(),
+    deadlineNote: o.deadlineNote,
+    enforcement: "gating_proposed",
+    escalationRefreshThreshold: threshold,
+    escalatedAt: now,
+    gateEnvFlag,
+  };
+  const w = appendLine(event);
+  if (!w.ok) {
+    return { ok: false, enforcement: "advisory", reason: w.reason };
+  }
+  return {
+    ok: true,
+    event,
+    enforcement: "gating_proposed",
+    reason: `escalated to gating_proposed (gateEnvFlag=${gateEnvFlag})`,
+  };
+}
+
+/**
+ * Rule-firing escalation entry point. Called by `actionEnforcer` when a
+ * `ratio_rule` (or in a follow-up, a `gate_rule`) fires with a deficit.
+ * With the master env flag OFF, this is a no-op refusal.
+ *
+ * Behaviour when enabled:
+ *   - If the obligation is `gating_proposed` AND the per-obligation env
+ *     flag is observed TRUE in `process.env`, append a
+ *     `promoted_to_gating_active` event. The actual refuse-write semantics
+ *     start the NEXT firing \u2014 see the caller for the cycle-boundary check.
+ *   - Otherwise, no-op (including the `gating_active` case which is
+ *     already terminal).
+ */
+export function promoteToGatingActiveIfFlagged(
+  obligationId: string,
+): EscalationTransitionResult {
+  if (!isEscalationEnabled()) {
+    return {
+      ok: false,
+      enforcement: "advisory",
+      reason: "escalation disabled (OBLIGATION_ESCALATION_ENABLED!=true)",
+    };
+  }
+  const o = getOpenObligationById(obligationId);
+  if (!o) {
+    return {
+      ok: false,
+      enforcement: "advisory",
+      reason: "no open obligation",
+    };
+  }
+  if (o.enforcement === "gating_active") {
+    return {
+      ok: false,
+      enforcement: "gating_active",
+      reason: "already at enforcement=gating_active",
+    };
+  }
+  if (o.enforcement !== "gating_proposed") {
+    return {
+      ok: false,
+      enforcement: o.enforcement,
+      reason: `enforcement=${o.enforcement} cannot promote (must be gating_proposed)`,
+    };
+  }
+  const gateEnvFlag = o.gateEnvFlag ?? obligationIdToGateEnvFlag(obligationId);
+  const flagSet = process.env[gateEnvFlag] === "true";
+  if (!flagSet) {
+    return {
+      ok: false,
+      enforcement: "gating_proposed",
+      reason: `gate env flag ${gateEnvFlag} is not set to \"true\"`,
+    };
+  }
+  const now = new Date().toISOString();
+  const event: RuleCorrectiveObligationEvent = {
+    eventId: nextEventId(),
+    type: "promoted_to_gating_active",
+    recordedAt: now,
+    obligationId,
+    normalizedKey: o.normalizedKey,
+    ruleId: o.ruleId,
+    insightId: o.insightId,
+    sourceInsightId: o.sourceInsightId,
+    primitive: "ratio_rule",
+    outputNoun: o.outputNoun,
+    inputNoun: o.inputNoun,
+    deficitCount: o.deficitCount,
+    requiredActionCount: o.requiredActionCount,
+    expectedCount: o.expectedCount,
+    actualCount: o.actualCount,
+    inputCount: o.inputCount,
+    reason:
+      `Operator-set env flag ${gateEnvFlag}=true observed; obligation ` +
+      `${obligationId} promoted gating_proposed \u2192 gating_active. The actual ` +
+      `refuse-write behaviour starts on the NEXT rule firing (clean cycle-` +
+      `boundary semantics).`,
+    tickedAt: Date.now(),
+    deadlineNote: o.deadlineNote,
+    enforcement: "gating_active",
+    escalationRefreshThreshold: o.escalationRefreshThreshold,
+    escalatedAt: o.escalatedAt,
+    gateEnvFlag,
+  };
+  const w = appendLine(event);
+  if (!w.ok) {
+    return { ok: false, enforcement: "gating_proposed", reason: w.reason };
+  }
+  return {
+    ok: true,
+    event,
+    enforcement: "gating_active",
+    reason: `promoted to gating_active (gateEnvFlag=${gateEnvFlag})`,
+  };
+}
+
+/**
+ * Convenience: returns true IFF the master env flag is set to "true". Used
+ * by callers (actionEnforcer) to gate their entire escalation code path so
+ * that the additional projection / env reads do not run at all when the
+ * policy is off.
+ */
+export function isObligationEscalationEnabled(): boolean {
+  return isEscalationEnabled();
 }
