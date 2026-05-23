@@ -58,8 +58,13 @@
  */
 
 import * as fs from "fs";
-import * as crypto from "crypto";
 import { dataPath } from "./dataPaths.js";
+import {
+  normalizeNounFamily as _normalizeNounFamily,
+  normalizedWorkItemKey as _normalizedWorkItemKey,
+  hashObligationIdFromKey as _hashObligationIdFromKey,
+  obligationIdForWorkItem as _obligationIdForWorkItem,
+} from "../shared/obligationKeys.js";
 import {
   DEFAULT_OBLIGATION_ESCALATION_REFRESH_THRESHOLD,
   OBLIGATION_ESCALATION_ENABLED_ENV,
@@ -276,32 +281,13 @@ function nextEventId(): string {
  * Levenshtein matching — staying strict here keeps false-positive merges
  * out of the obligation surface.
  */
-export function normalizeNounFamily(noun: string): string {
-  if (typeof noun !== "string") return "";
-  const cleaned = noun
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9_]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-  if (!cleaned) return "";
-  // Explicit family folding — order matters: more specific matches first.
-  const SYNONYMS: Array<[RegExp, string]> = [
-    [/^(kb|knowledge)(_?(entry|entries|item|items|record|records))?$/, "kb_entry"],
-    [/^(archive|archived|archiving)$/, "archived"],
-    [/^(draft|drafted)(_?(output|artifact|outputs|artifacts))?$/, "draft_output_artifact"],
-    [/^(draft_?output_?artifact|draft_?artifact)s?$/, "draft_output_artifact"],
-    [/^(synthesi[sz]ed?|synthesi[sz]e)$/, "synthesis"],
-  ];
-  for (const [re, fam] of SYNONYMS) {
-    if (re.test(cleaned)) return fam;
-  }
-  // Drop a trailing pluralizing "s" only when the singular still looks like
-  // an identifier (>2 chars, not already ending in "ss").
-  if (cleaned.length > 3 && cleaned.endsWith("s") && !cleaned.endsWith("ss")) {
-    return cleaned.slice(0, -1);
-  }
-  return cleaned;
-}
+// PR #420 — `normalizeNounFamily`, `normalizedWorkItemKey`, and
+// `obligationIdForWorkItem` now live in `shared/obligationKeys.ts` so
+// that read-only operator tooling (the inspect CLI) can compute the
+// SAME `obligationId` from the SAME triple without dragging in the
+// server-side `dataPaths` side effects. Re-exported here to preserve
+// the public API — every existing import continues to resolve.
+export const normalizeNounFamily = _normalizeNounFamily;
 
 /**
  * Stable, content-addressed obligation id built from the normalized work
@@ -309,24 +295,11 @@ export function normalizeNounFamily(noun: string): string {
  * whose deficits describe the same work item produce the same id and
  * therefore the same obligation row — that is the dedupe.
  */
-export function normalizedWorkItemKey(
-  primitive: "ratio_rule",
-  outputNoun: string,
-  inputNoun: string,
-): string {
-  const outFam = normalizeNounFamily(outputNoun);
-  const inFam = normalizeNounFamily(inputNoun);
-  return `${primitive}|out:${outFam}|in:${inFam}`;
-}
+export const normalizedWorkItemKey = _normalizedWorkItemKey;
 
-function hashObligationId(normalizedKey: string): string {
-  const h = crypto
-    .createHash("sha1")
-    .update(normalizedKey)
-    .digest("hex")
-    .slice(0, 16);
-  return `oblg_${h}`;
-}
+// Local alias kept private to this module — preserves the old internal
+// call sites (`hashObligationId(normalizedKey)`) without renaming them.
+const hashObligationId = _hashObligationIdFromKey;
 
 /**
  * @deprecated Kept for backward compatibility with consumers that called
@@ -348,13 +321,7 @@ export function obligationIdFor(
  * outputNounFamily, inputNounFamily) → same id across ticks, processes,
  * and contributing source rules.
  */
-export function obligationIdForWorkItem(
-  primitive: "ratio_rule",
-  outputNoun: string,
-  inputNoun: string,
-): string {
-  return hashObligationId(normalizedWorkItemKey(primitive, outputNoun, inputNoun));
-}
+export const obligationIdForWorkItem = _obligationIdForWorkItem;
 
 function clampToCap(n: number): number {
   if (!Number.isFinite(n) || n <= 0) return 0;
