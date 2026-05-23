@@ -506,3 +506,91 @@ export type ClaimCitationRequirement = (typeof CLAIM_CITATION_REQUIREMENTS)[numb
 
 export const CLAIM_RISK_LEVELS = ["low", "medium", "high"] as const;
 export type ClaimRisk = (typeof CLAIM_RISK_LEVELS)[number];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PR #419 — CORRECTIVE OBLIGATION ESCALATION (env-gated, default-off)
+//
+// The rule-corrective obligation projection (built from the append-only
+// JSONL ledger at data/rule_corrective_obligations.jsonl by
+// server/ruleCorrectiveObligations.ts) is extended with FOUR additive
+// fields so a refreshed obligation can transition from "advisory" (today's
+// behaviour, no teeth) to "gating_proposed" (operator may add an env flag
+// to upgrade) to "gating_active" (write-refusal teeth, only when the
+// operator has flipped the per-obligation env flag).
+//
+// The persistence layer is JSONL — there is no SQL `corrective_obligations`
+// table. The schema additions therefore live as exported TypeScript /
+// Zod shapes here for cross-package import. The "migration" is the
+// read-side projection: legacy events that lack these fields default to
+//   enforcement = "advisory"
+//   escalationRefreshThreshold = 5
+//   escalatedAt = null
+//   gateEnvFlag = null
+// which is byte-for-byte identical to today's surface when the master env
+// flag OBLIGATION_ESCALATION_ENABLED is OFF (default).
+//
+// Default-off invariants enforced by the runtime:
+//   - OBLIGATION_ESCALATION_ENABLED defaults FALSE; with it off, the
+//     escalation policy is a no-op and projection still emits "advisory".
+//   - OBLIGATION_GATE_<obligationId>_ENABLED defaults FALSE for every
+//     obligation; the operator must explicitly add it to env to grant
+//     write-refusal teeth.
+//   - The promotion from gating_proposed → gating_active happens at rule-
+//     firing time AFTER the env flag is observed TRUE; the actual refuse-
+//     write behaviour starts the NEXT firing (clean cycle-boundary semantics).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const OBLIGATION_ENFORCEMENT_LEVELS = [
+  "advisory",
+  "gating_proposed",
+  "gating_active",
+] as const;
+export type ObligationEnforcementLevel =
+  (typeof OBLIGATION_ENFORCEMENT_LEVELS)[number];
+
+/** Default escalation refresh threshold — advisory escalates to
+ *  gating_proposed when refreshCount >= this. Per-obligation, so it can be
+ *  tuned later, but ships at 5. */
+export const DEFAULT_OBLIGATION_ESCALATION_REFRESH_THRESHOLD = 5;
+
+/** Master env flag — controls whether the escalation policy runs at all.
+ *  Default FALSE. With this off, refresh behaviour is identical to today. */
+export const OBLIGATION_ESCALATION_ENABLED_ENV = "OBLIGATION_ESCALATION_ENABLED";
+
+/** Derive the per-obligation env-flag name from an obligation id.
+ *  Deterministic and stable across processes. Example:
+ *    obligationIdToGateEnvFlag("oblg_9a9f8a52bf8a3bd3") ===
+ *      "OBLIGATION_GATE_OBLG_9A9F8A52BF8A3BD3_ENABLED" */
+export function obligationIdToGateEnvFlag(obligationId: string): string {
+  return `OBLIGATION_GATE_${String(obligationId).toUpperCase().replace(/-/g, "_")}_ENABLED`;
+}
+
+/**
+ * Additive fields the projection layer attaches to every open obligation.
+ * Legacy projections that predate PR #419 (events without these fields)
+ * default to the values shown below — preserving today's "advisory, no
+ * teeth" surface byte-for-byte when OBLIGATION_ESCALATION_ENABLED is OFF.
+ */
+export interface CorrectiveObligationEscalationFields {
+  /** Current enforcement level for this obligation. Default "advisory". */
+  enforcement: ObligationEnforcementLevel;
+  /** refreshCount at which advisory upgrades to gating_proposed. Per-
+   *  obligation so it can be tuned later. Default 5. */
+  escalationRefreshThreshold: number;
+  /** ISO timestamp when enforcement first transitioned away from
+   *  "advisory". null when never escalated. */
+  escalatedAt: string | null;
+  /** Auto-generated per-obligation env-flag name the operator must add to
+   *  the runtime env to promote this obligation to gating_active. Stable
+   *  across processes. null on freshly-opened obligations until the
+   *  refresh-time escalation runs. */
+  gateEnvFlag: string | null;
+}
+
+export const correctiveObligationEscalationFieldsSchema = z.object({
+  enforcement: z.enum(OBLIGATION_ENFORCEMENT_LEVELS),
+  escalationRefreshThreshold: z.number().int().nonnegative(),
+  escalatedAt: z.string().nullable(),
+  gateEnvFlag: z.string().nullable(),
+});
+

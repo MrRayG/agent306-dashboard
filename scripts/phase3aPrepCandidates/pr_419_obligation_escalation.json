@@ -1,0 +1,126 @@
+{
+  "candidateId": "pr_419_obligation_escalation",
+  "kind": "summarizationTemplate",
+  "attestedAt": "2026-05-22T19:30:00.000Z",
+  "preconditions": {
+    "reversibleLowRiskActionOnly": {
+      "high": {
+        "key": "reversibleLowRiskActionOnly",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "server/ruleCorrectiveObligations.ts#isEscalationEnabled,server/actionEnforcer.ts#obligation_gating_active_refused_write,shared/schema.ts#OBLIGATION_ESCALATION_ENABLED_ENV",
+        "rationale": "Entire mechanism is env-gated default-OFF. With OBLIGATION_ESCALATION_ENABLED unset (or any value other than the string \"true\"), every escalation entry point returns a no-op refusal and refresh behaviour is byte-for-byte identical to today. No public action surface: obligations gate INTERNAL ratio_rule write paths only; no external HTTP, no scheduler, no publication."
+      },
+      "low": {
+        "key": "reversibleLowRiskActionOnly",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "server/ruleCorrectiveObligations.ts#isEscalationEnabled,server/actionEnforcer.ts#obligation_gating_active_refused_write,shared/schema.ts#OBLIGATION_ESCALATION_ENABLED_ENV",
+        "rationale": "Same as high tier: env-gated default-OFF; reversal is a single env flag flip; no public action surface."
+      }
+    },
+    "explicitKillSwitchAndResourceLimits": {
+      "high": {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "shared/schema.ts#OBLIGATION_ESCALATION_ENABLED_ENV,shared/schema.ts#obligationIdToGateEnvFlag,server/ruleCorrectiveObligations.ts#OBLIGATION_BOUND_CAP",
+        "rationale": "Two-layer kill switch: (1) master env flag OBLIGATION_ESCALATION_ENABLED defaults FALSE \u2014 with it off, the entire escalation policy is a no-op; (2) per-obligation env flag OBLIGATION_GATE_<obligationId>_ENABLED defaults FALSE \u2014 the operator must explicitly add it to env to grant write-refusal teeth for any specific obligation. Resource limit: refreshCount is bounded by the existing per-event cap (OBLIGATION_BOUND_CAP=10); obligations cannot grow unboundedly. Append-only JSONL storage means a torn write cannot corrupt prior records."
+      },
+      "low": {
+        "key": "explicitKillSwitchAndResourceLimits",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "shared/schema.ts#OBLIGATION_ESCALATION_ENABLED_ENV,shared/schema.ts#obligationIdToGateEnvFlag,server/ruleCorrectiveObligations.ts#OBLIGATION_BOUND_CAP",
+        "rationale": "Same as high tier: two-layer kill switch (master + per-obligation env flags, both default FALSE); refreshCount bounded by existing cap=10 logic."
+      }
+    },
+    "anomalyAndDriftDetectionPlaceholder": {
+      "high": {
+        "key": "anomalyAndDriftDetectionPlaceholder",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "server/actionEnforcer.ts#obligation_escalated_to_gating_proposed,server/actionEnforcer.ts#obligation_promoted_to_gating_active,server/actionEnforcer.ts#obligation_gating_active_refused_write",
+        "rationale": "Every enforcement transition emits a structured-log event countable per cycle: obligation_escalated_to_gating_proposed, obligation_promoted_to_gating_active, obligation_gating_active_refused_write. Drift detection: if the rate of refused-writes diverges from the rate of refreshed events for the same obligation between consecutive cycles, the operator can spot it from existing structured-log infrastructure."
+      },
+      "low": {
+        "key": "anomalyAndDriftDetectionPlaceholder",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "server/actionEnforcer.ts#obligation_escalated_to_gating_proposed,server/actionEnforcer.ts#obligation_promoted_to_gating_active,server/actionEnforcer.ts#obligation_gating_active_refused_write",
+        "rationale": "Same as high tier: three structured-log events cover the three transitions; rates are countable per cycle via existing structured-log infrastructure."
+      }
+    },
+    "rollbackProof": {
+      "high": {
+        "key": "rollbackProof",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "shared/schema.ts#OBLIGATION_ESCALATION_ENABLED_ENV,migrations/0001_pr419_obligation_escalation.sql,server/ruleCorrectiveObligations.ts#projectObligations",
+        "rationale": "Rollback is a single env flag flip: OBLIGATION_ESCALATION_ENABLED=false (the default). With it off, the escalation policy is a no-op and the projection still emits enforcement=\"advisory\" for every obligation. The four new projection fields on existing obligation rows remain but are no-op'd. The migration file is documented as a no-op (storage is JSONL, not SQL); reverting the schema additions is a textual revert of shared/schema.ts. Append-only ledger means earlier records are never rewritten by the escalation code path."
+      },
+      "low": {
+        "key": "rollbackProof",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "shared/schema.ts#OBLIGATION_ESCALATION_ENABLED_ENV,migrations/0001_pr419_obligation_escalation.sql,server/ruleCorrectiveObligations.ts#projectObligations",
+        "rationale": "Same as high tier: single env flag flip restores pre-#419 behaviour; append-only ledger preserves history."
+      }
+    },
+    "humanApprovalBoundary": {
+      "high": {
+        "key": "humanApprovalBoundary",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "shared/schema.ts#OBLIGATION_ESCALATION_ENABLED_ENV,shared/schema.ts#obligationIdToGateEnvFlag,server/ruleCorrectiveObligations.ts#promoteToGatingActiveIfFlagged",
+        "rationale": "Every enforcement transition that grants teeth requires an explicit operator env-flag flip: master flag for the policy to run at all, AND a per-obligation flag for any specific obligation to acquire gating_active. The runtime never auto-grants gating_active; the only code path that emits gating_active reads process.env[gateEnvFlag] === \"true\". Pin 7 / Pin 11 / canPromote(rec).ok boundary are UNTOUCHED \u2014 this PR adds a new write site for corrective_obligations.enforcement, NOT for self_recommendations.status."
+      },
+      "low": {
+        "key": "humanApprovalBoundary",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "shared/schema.ts#OBLIGATION_ESCALATION_ENABLED_ENV,shared/schema.ts#obligationIdToGateEnvFlag,server/ruleCorrectiveObligations.ts#promoteToGatingActiveIfFlagged",
+        "rationale": "Same as high tier: every gate transition requires operator env flag flip."
+      }
+    },
+    "metricsClockReadiness": {
+      "high": {
+        "key": "metricsClockReadiness",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "scripts/inspectObligations.ts#counts,server/actionEnforcer.ts#obligation_escalated_to_gating_proposed",
+        "rationale": "Metric: number of obligations at each enforcement level (advisory, gating_proposed, gating_active) per cycle. Cadence: per DailyCycle tick. Each transition emits a structured-log event with the obligation id and a tickedAt timestamp, allowing per-cycle counts via the existing structured-log infrastructure. The inspect CLI prints the same counts on demand."
+      },
+      "low": {
+        "key": "metricsClockReadiness",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "scripts/inspectObligations.ts#counts,server/actionEnforcer.ts#obligation_escalated_to_gating_proposed",
+        "rationale": "Same as high tier: per-cycle count of obligations at each enforcement level; CLI / structured-log readouts available."
+      }
+    },
+    "noPublicAction": {
+      "high": {
+        "key": "noPublicAction",
+        "priority": "high",
+        "status": "satisfied",
+        "evidenceRef": "server/ruleCorrectiveObligations.ts,server/actionEnforcer.ts#fireRatioRule",
+        "rationale": "Obligation gates affect ONLY internal write paths fired by ratio_rule (KB / hypothesis additions). No external HTTP call, no publication, no scheduler hook, no social post, no API endpoint added by this PR. The actionTranslator, selfRecommendationEngine, promotionGate, promotionBoundaryAudit (existing findings), and phase3aPrepHarness files are EXPLICITLY out of scope and untouched by this PR."
+      },
+      "low": {
+        "key": "noPublicAction",
+        "priority": "low",
+        "status": "satisfied",
+        "evidenceRef": "server/ruleCorrectiveObligations.ts,server/actionEnforcer.ts#fireRatioRule",
+        "rationale": "Same as high tier: internal gating only, no public action surface."
+      }
+    }
+  },
+  "summary": {
+    "totalPreconditions": 7,
+    "totalSlots": 14,
+    "satisfied": 14,
+    "unverified": 0,
+    "verdict": "fully_prepared"
+  }
+}

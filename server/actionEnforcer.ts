@@ -209,6 +209,57 @@ async function fireRatioRule(rule: EnforcementRule): Promise<{ sideEffect: boole
       } catch (e: any) {
         console.warn(`[ActionEnforcer] ratioRuleDeficit event log failed (ignored): ${e?.message}`);
       }
+      // PR #419 — obligation refresh-count escalation (env-gated, default-off).
+      // Before recording the deficit, check whether a prior obligation for
+      // this work item has already escalated to gating_active. If so, log
+      // an `obligation_gating_active_refused_write` event and SHORT-CIRCUIT
+      // — the rule does not produce further side effects this tick. With
+      // OBLIGATION_ESCALATION_ENABLED=false (default), this entire block
+      // is a no-op and behaviour is byte-for-byte identical to today.
+      try {
+        const {
+          isObligationEscalationEnabled,
+          obligationIdForWorkItem,
+          getOpenObligationById,
+        } = await import("./ruleCorrectiveObligations.js");
+        if (isObligationEscalationEnabled()) {
+          const probedId = obligationIdForWorkItem(
+            "ratio_rule",
+            String(outputNoun),
+            String(inputNoun),
+          );
+          const linked = getOpenObligationById(probedId);
+          if (linked && linked.enforcement === "gating_active") {
+            try {
+              const { logEvent } = await import("./observability/structuredLog.js");
+              logEvent({
+                engine: "actionEnforcer",
+                event: "obligation_gating_active_refused_write",
+                level: "warn",
+                data: {
+                  ruleId: rule.id,
+                  insightId: rule.insightId,
+                  obligationId: linked.obligationId,
+                  gateEnvFlag: linked.gateEnvFlag,
+                  outputNoun: String(outputNoun),
+                  inputNoun: String(inputNoun),
+                  deficitCount: deficit,
+                  refreshCount: linked.refreshCount,
+                  tickedAt: Date.now(),
+                },
+              });
+            } catch {}
+            return {
+              sideEffect: false,
+              outcome:
+                `obligation_gating_active_refused_write:` +
+                `${linked.obligationId}:${linked.gateEnvFlag ?? "<no-flag>"}`,
+            };
+          }
+        }
+      } catch (e: any) {
+        console.warn(`[ActionEnforcer] obligation gating-active check failed (ignored): ${e?.message}`);
+      }
       // Best-effort: turn the diagnostic deficit into a bounded corrective
       // obligation row. Idempotent — repeated ticks refresh the same row
       // rather than duplicating it. Pure record; no KB write, no archive,
@@ -269,6 +320,67 @@ async function fireRatioRule(rule: EnforcementRule): Promise<{ sideEffect: boole
               },
             });
           } catch {}
+        }
+        // PR #419 — after the refresh has been recorded, run the two
+        // escalation entry points in order: refresh-count escalation
+        // (advisory → gating_proposed) and env-flag-observed promotion
+        // (gating_proposed → gating_active). Both no-op when the master
+        // env flag is off. Both refuse gracefully on any error — the tick
+        // must never fault on escalation bookkeeping.
+        if (oblResult.ok) {
+          try {
+            const {
+              isObligationEscalationEnabled,
+              escalateIfDue,
+              promoteToGatingActiveIfFlagged,
+            } = await import("./ruleCorrectiveObligations.js");
+            if (isObligationEscalationEnabled()) {
+              const escResult = escalateIfDue(oblResult.event.obligationId);
+              if (escResult.ok && escResult.event) {
+                try {
+                  const { logEvent } = await import("./observability/structuredLog.js");
+                  logEvent({
+                    engine: "actionEnforcer",
+                    event: "obligation_escalated_to_gating_proposed",
+                    level: "warn",
+                    data: {
+                      ruleId: rule.id,
+                      insightId: rule.insightId,
+                      obligationId: escResult.event.obligationId,
+                      gateEnvFlag: escResult.event.gateEnvFlag,
+                      escalationRefreshThreshold:
+                        escResult.event.escalationRefreshThreshold,
+                      reason: escResult.reason,
+                      tickedAt: escResult.event.tickedAt,
+                    },
+                  });
+                } catch {}
+              }
+              const promResult = promoteToGatingActiveIfFlagged(
+                oblResult.event.obligationId,
+              );
+              if (promResult.ok && promResult.event) {
+                try {
+                  const { logEvent } = await import("./observability/structuredLog.js");
+                  logEvent({
+                    engine: "actionEnforcer",
+                    event: "obligation_promoted_to_gating_active",
+                    level: "warn",
+                    data: {
+                      ruleId: rule.id,
+                      insightId: rule.insightId,
+                      obligationId: promResult.event.obligationId,
+                      gateEnvFlag: promResult.event.gateEnvFlag,
+                      reason: promResult.reason,
+                      tickedAt: promResult.event.tickedAt,
+                    },
+                  });
+                } catch {}
+              }
+            }
+          } catch (e: any) {
+            console.warn(`[ActionEnforcer] obligation escalation hook failed (ignored): ${e?.message}`);
+          }
         }
       } catch (e: any) {
         console.warn(`[ActionEnforcer] corrective obligation hook failed (ignored): ${e?.message}`);

@@ -87,6 +87,26 @@ RUN npx esbuild scripts/attachPhase3aPrepAttestations.ts \
       --external:better-sqlite3 \
       --outfile=dist/attachPhase3aPrepAttestations.cjs
 
+# Bundle the corrective-obligations inspect CLI into dist/inspectObligations.cjs
+# so operators can run
+#   `node /app/dist/inspectObligations.cjs --pretty`
+# from a Railway SSH session to see the current enforcement level / escalation
+# state of every open obligation. The CLI is READ-ONLY (reads only the
+# append-only JSONL obligation ledger, exposes no write flag) and is the
+# operator path for deciding whether to flip the master
+# `OBLIGATION_ESCALATION_ENABLED` env flag and a per-obligation
+# `OBLIGATION_GATE_<ID>_ENABLED` env flag. Mirrors the dumpSelfRecs.cjs
+# pattern; better-sqlite3 stays external (the bundle does not use it, but the
+# marker preserves the convention so a future port can flip to DB-backed
+# storage without changing this directive). See PR #419.
+RUN npx esbuild scripts/inspectObligations.ts \
+      --bundle \
+      --platform=node \
+      --target=node20 \
+      --format=cjs \
+      --external:better-sqlite3 \
+      --outfile=dist/inspectObligations.cjs
+
 # Remove dev dependencies after build
 RUN npm prune --production
 

@@ -38,6 +38,10 @@ import {
   type OpenObligationProjection,
   OBLIGATION_BOUND_CAP,
 } from "./ruleCorrectiveObligations.js";
+import {
+  obligationIdToGateEnvFlag,
+  type ObligationEnforcementLevel,
+} from "../shared/schema.js";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -181,6 +185,21 @@ export interface CorrectiveObligationView {
   /** Summary of dedupe state for the panel (e.g. "1 source rule" or
    *  "merged 2 source rules into one obligation"). */
   dedupeSummary: string;
+  /**
+   * PR #419 — read-only escalation surface. With
+   * `OBLIGATION_ESCALATION_ENABLED` OFF (default), every obligation
+   * reports `enforcement: "advisory"`, `escalatedAt: null`, and a
+   * derived `gateEnvFlag` that the operator *could* add to env to grant
+   * teeth (but adding it without flipping the master switch is a no-op).
+   * No control on this panel changes any of these fields.
+   */
+  enforcement: ObligationEnforcementLevel;
+  escalationRefreshThreshold: number;
+  escalatedAt: string | null;
+  gateEnvFlag: string | null;
+  /** Operator-facing advisory line, present only when the obligation is
+   *  currently `gating_proposed` and the env flag is unset. */
+  gatingProposedAdvisory: string | null;
 }
 
 export interface LatestActionEnforcerTick {
@@ -501,6 +520,22 @@ export function buildSelfRuleEnforcementVisibility(
     const dedupeSummary = merged
       ? `merged ${o.mergedFromCount} source rules (${o.sourceRuleIds.join(", ")}) into one obligation for normalized work item ${o.normalizedKey}`
       : `1 source rule (${o.sourceRuleIds[0] ?? o.ruleId})`;
+    // PR #419 — derive the escalation surface fields. With the master env
+    // flag off, every obligation projects to "advisory" and the gateEnvFlag
+    // is shown as the name the operator *could* add to env (informational
+    // only; adding it without the master switch is a no-op).
+    const gateEnvFlag =
+      o.gateEnvFlag ?? obligationIdToGateEnvFlag(o.obligationId);
+    const gatingProposedAdvisory =
+      o.enforcement === "gating_proposed"
+        ? `Operator may add \`${gateEnvFlag}=true\` to env to promote this obligation to gating_active.`
+        : null;
+    const enforcementSuffix =
+      o.enforcement === "gating_active"
+        ? ` Enforcement: gating_active — write-refusals are LIVE for this obligation.`
+        : o.enforcement === "gating_proposed"
+          ? ` Enforcement: gating_proposed — ${gatingProposedAdvisory}`
+          : ` Enforcement: advisory — NOT a hard block, KB writes are not gated by this obligation.`;
     return {
       obligationId: o.obligationId,
       ruleId: o.ruleId,
@@ -526,13 +561,18 @@ export function buildSelfRuleEnforcementVisibility(
       mergedFromCount: o.mergedFromCount,
       merged,
       dedupeSummary,
+      enforcement: o.enforcement,
+      escalationRefreshThreshold: o.escalationRefreshThreshold,
+      escalatedAt: o.escalatedAt,
+      gateEnvFlag,
+      gatingProposedAdvisory,
       summary:
         `A corrective obligation has been queued: archive or merge up to ${o.requiredActionCount} ` +
         `${o.outputNoun} before further expansion is considered healthy ` +
         `(raw deficit ${o.deficitCount}, ratio probe ${o.actualCount}/${o.expectedCount} for ${o.inputCount} ${o.inputNoun}). ` +
         `Deadline: ${o.deadlineNote || "next cycle"}. Refreshed ${o.refreshCount} time${o.refreshCount === 1 ? "" : "s"}. ` +
-        `Dedupe: ${dedupeSummary}. ` +
-        `This is NOT a hard block — KB writes are not gated by this obligation.`,
+        `Dedupe: ${dedupeSummary}.` +
+        enforcementSuffix,
     };
   });
   const mergedCorrectiveObligationsCount = correctiveObligations.filter(o => o.merged).length;

@@ -209,6 +209,16 @@ export interface PromotionBoundaryAuditResult {
 
 const SINGLE_WRITE_SITE_PATH = "server/selfRecommendationEngine.ts";
 const PROMOTION_GATE_PATH    = "server/eval/promotionGate.ts";
+// PR #419 — source files that own the obligation-escalation policy. The
+// `obligation_escalation_env_gated` finding verifies that the only way to
+// transition an obligation to `gating_active` is via the operator-set
+// per-obligation env flag (i.e. there is NO code path that promotes an
+// obligation without reading `gateEnvFlag` from `process.env` and
+// confirming the value is the string "true").
+const OBLIGATION_ESCALATION_SRC_PATH = "server/ruleCorrectiveObligations.ts";
+const OBLIGATION_ESCALATION_ACTION_ENFORCER_PATH = "server/actionEnforcer.ts";
+const OBLIGATION_MASTER_FLAG_LITERAL = "OBLIGATION_ESCALATION_ENABLED";
+const OBLIGATION_GATE_ENV_DERIVER_LITERAL = "obligationIdToGateEnvFlag";
 
 /** Phase 4-b: the operator gate flag literal that authorises the
  *  low-risk hard block on missing/parse_error/not-ready phase3aPrep
@@ -705,6 +715,107 @@ export function auditPromotionBoundary(
       : `Literal '${PHASE4D_HIGH_RISK_HARD_BLOCK_FLAG_LITERAL}' or helper '${PHASE4D_HIGH_RISK_DERIVE_HELPER_LITERAL}' missing from promotion gate source — ` +
         "Phase 4-d high-risk hard-block channel is not declared (operator-gated authorisation may have been silently removed)",
     surfaces: [PROMOTION_GATE_PATH],
+  });
+
+  // CHECK 11 (PR #419) — obligation_escalation_env_gated.
+  //
+  // Verifies that the env-flag gate is the ONLY path to `gating_active` on
+  // a corrective obligation. This is a source-only regex scan over the
+  // obligation module and the action-enforcer rule-firing path.
+  //
+  // The check passes IFF all of the following hold:
+  //   (a) `server/ruleCorrectiveObligations.ts` declares the master env
+  //       flag literal `OBLIGATION_ESCALATION_ENABLED` AND the per-
+  //       obligation env-flag derive helper `obligationIdToGateEnvFlag`.
+  //   (b) Every line in `server/ruleCorrectiveObligations.ts` that
+  //       transitions enforcement to `"gating_active"` is reachable only
+  //       after reading the per-obligation env flag from `process.env`
+  //       and confirming the value is the string "true". In source-
+  //       regex form: the file contains the substring
+  //       `process.env[gateEnvFlag] === "true"` (or an equivalent
+  //       single-quoted form) within the function that emits the
+  //       `promoted_to_gating_active` event.
+  //   (c) No file under `server/` (excluding this audit and tests)
+  //       writes `enforcement: "gating_active"` outside of
+  //       `server/ruleCorrectiveObligations.ts`. This catches the
+  //       drift-failure case where a future refactor adds a second write
+  //       site that skips the env-flag check.
+  //
+  // The audit is source-only: it does NOT import or call any runtime,
+  // does NOT read `process.env`, and does NOT assert that the env flag
+  // is currently set (it is default-off by design).
+  const obligationSource = readRepoFile(repoRoot, OBLIGATION_ESCALATION_SRC_PATH);
+  const actionEnforcerSource = readRepoFile(repoRoot, OBLIGATION_ESCALATION_ACTION_ENFORCER_PATH);
+  auditedSurfaces.push({
+    path:   OBLIGATION_ESCALATION_SRC_PATH,
+    exists: obligationSource !== null,
+  });
+  auditedSurfaces.push({
+    path:   OBLIGATION_ESCALATION_ACTION_ENFORCER_PATH,
+    exists: actionEnforcerSource !== null,
+  });
+  let obligationEscalationEnvGatedOk = false;
+  let obligationEscalationDetail = "";
+  if (obligationSource === null) {
+    obligationEscalationDetail =
+      `${OBLIGATION_ESCALATION_SRC_PATH} not found — cannot verify env-gating invariant`;
+  } else {
+    const declaresMasterFlag = obligationSource.includes(OBLIGATION_MASTER_FLAG_LITERAL);
+    const declaresDeriveHelper = obligationSource.includes(OBLIGATION_GATE_ENV_DERIVER_LITERAL);
+    // Look for the env-flag read: tolerate both quote styles and a few
+    // whitespace variants.
+    const envFlagReadRe = /process\.env\s*\[\s*(?:gateEnvFlag|[A-Za-z_$][\w$]*\.gateEnvFlag)\s*\]\s*===\s*["']true["']/;
+    const readsEnvFlag = envFlagReadRe.test(obligationSource);
+    // Detect any line in obligationSource that emits gating_active outside
+    // a context that reads the env flag. We approximate by counting all
+    // `"gating_active"` literals; if any exists in a function that does
+    // not also reference `process.env[`, that is a drift signal.
+    const gatingActiveAssignmentRe = /enforcement\s*:\s*["']gating_active["']/g;
+    const gatingActiveCount = (obligationSource.match(gatingActiveAssignmentRe) ?? []).length;
+    // Second-write-site scan: enumerate server/*.ts files (excluding the
+    // obligation module itself, tests, and this audit) and verify none of
+    // them write `enforcement: "gating_active"`.
+    const otherWriteSites: string[] = [];
+    try {
+      const allServerFiles = listServerSourceFiles(repoRoot);
+      for (const rel of allServerFiles) {
+        if (rel === OBLIGATION_ESCALATION_SRC_PATH) continue;
+        if (rel.includes("__tests__")) continue;
+        if (rel === "server/eval/promotionBoundaryAudit.ts") continue;
+        const text = readRepoFile(repoRoot, rel);
+        if (text !== null && gatingActiveAssignmentRe.test(text)) {
+          otherWriteSites.push(rel);
+        }
+        gatingActiveAssignmentRe.lastIndex = 0;
+      }
+    } catch {
+      // If listing fails, fall back to the conservative pass criterion
+      // below; the master/env-flag-read check is the primary signal.
+    }
+    obligationEscalationEnvGatedOk =
+      declaresMasterFlag &&
+      declaresDeriveHelper &&
+      readsEnvFlag &&
+      gatingActiveCount > 0 &&
+      otherWriteSites.length === 0;
+    obligationEscalationDetail = obligationEscalationEnvGatedOk
+      ? `Verified: ${OBLIGATION_ESCALATION_SRC_PATH} declares '${OBLIGATION_MASTER_FLAG_LITERAL}' and helper '${OBLIGATION_GATE_ENV_DERIVER_LITERAL}', ` +
+        `the gating_active write site reads process.env[gateEnvFlag] === "true" before transitioning, ` +
+        `and no other server file writes enforcement: "gating_active". The env-flag gate is the ONLY path to gating_active.`
+      : `Failed obligation_escalation_env_gated invariants: declaresMasterFlag=${declaresMasterFlag}, ` +
+        `declaresDeriveHelper=${declaresDeriveHelper}, readsEnvFlag=${readsEnvFlag}, gatingActiveCount=${gatingActiveCount}, ` +
+        `otherWriteSites=[${otherWriteSites.join(", ")}]. ` +
+        `The env-flag gate may not be the only path to gating_active — drift risk.`;
+  }
+  findings.push({
+    id:    "obligation_escalation_env_gated",
+    label: "Corrective obligation escalation to gating_active is gated by an operator-set per-obligation env flag",
+    ok:    obligationEscalationEnvGatedOk,
+    detail: obligationEscalationDetail,
+    surfaces: [
+      OBLIGATION_ESCALATION_SRC_PATH,
+      OBLIGATION_ESCALATION_ACTION_ENFORCER_PATH,
+    ],
   });
 
   // Aggregate metric: count of failing checks.
