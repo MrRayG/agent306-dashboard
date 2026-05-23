@@ -160,11 +160,14 @@ const TASK_COMPLEXITY: Record<string, TaskComplexity> = {
   "hypothesis-evaluation":        "frontier-factual",
   "hypothesis-resolution":        "frontier-factual",
   "hypothesis-disposition":       "frontier-factual",
-  // Wave 2.3 PR-1 — Domain-Aware Decay: classify domain (ai-news / regulatory /
-  // foundational / unknown) at ingestion so half-life replaces the uniform
-  // 7-cycle retirement. Misclassifying a regulatory claim as ai-news would
-  // retire it 10x too fast, so this belongs on Grok 4.20 Reasoning.
-  "hypothesis-domain-classification": "frontier-factual",
+  // PR #421 — reroute off the reasoning model. Domain classification is a
+  // cheap 4-class decision (ai-news / regulatory / foundational / unknown)
+  // that doesn't benefit from chain-of-thought, and yesterday's cycle showed
+  // ~20 timeouts on the reasoning route. Grok 4.20 non-reasoning
+  // (standard-voice tier) is plenty for the 4-class label; the timeout
+  // bump (see needsReasoningTimeoutFloor in server/llmCall.ts) covers the
+  // remaining genuinely-reasoning tasks like hypothesis-evaluation.
+  "hypothesis-domain-classification": "standard-voice",
   "fact-verification":            "frontier-factual",
   "claim-verification":           "frontier-factual",
   "fact-check":                   "frontier-factual",

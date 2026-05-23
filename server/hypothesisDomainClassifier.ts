@@ -9,9 +9,14 @@
 //   foundational  → 13,140 hours (~18 mo, capped at 36 mo) — long-arc science
 //   unknown       →  168 hours  (7 days)  — matches the legacy sentinel
 //
-// Classification runs once at hypothesis creation via the `frontier-factual`
-// tier (Grok 4.20 Reasoning — lowest-hallucination flagship on AA-Omniscience).
-// Misclassifying a regulatory claim as ai-news would retire it 10× too fast.
+// Classification runs once at hypothesis creation via the `standard-voice`
+// tier (Grok 4.20 non-reasoning). The 4-class label doesn't benefit from
+// chain-of-thought, and the reasoning tier was producing ~20 timeouts per
+// cycle. The runtime still falls back to "unknown" on any classifier error
+// (null return → halfLifeFor("unknown")), so a regulatory claim
+// misclassified as ai-news still retires faster than ideal — but the cost
+// of that miss is bounded, while the timeout-induced loss of classification
+// on every reasoning failure was unbounded.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { postChatCompletions } from "./llmCall.js";
