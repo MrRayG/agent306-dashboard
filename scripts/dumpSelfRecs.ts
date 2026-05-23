@@ -70,7 +70,26 @@ export interface DumpArgsParseOk {
 
 export type DumpArgsParseResult = DumpArgsParseOk | DumpArgsParseError;
 
-const DEFAULT_DB_PATH = "/data/research_lab.db";
+/**
+ * Hardcoded fallback when neither --db nor DB_PATH supplies a path.
+ * The Railway production volume mounts at /data and the DB filename is
+ * `agent306.db` (matches server/db.ts's dataPath("agent306.db") and the
+ * Dockerfile volume layout). The historical "/data/research_lab.db"
+ * default was inherited from a pre-PR-#411 layout that never shipped.
+ */
+const DEFAULT_DB_PATH = "/data/agent306.db";
+
+/**
+ * Resolve the effective default DB path. Priority:
+ *   1. process.env.DB_PATH (matches the env-var contract used by server/db.ts
+ *      and other operator CLIs).
+ *   2. DEFAULT_DB_PATH (/data/agent306.db) — production Railway volume.
+ * The --db flag still overrides this at parse time.
+ */
+export function resolveDefaultDumpDbPath(env: NodeJS.ProcessEnv = process.env): string {
+  if (typeof env.DB_PATH === "string" && env.DB_PATH.length > 0) return env.DB_PATH;
+  return DEFAULT_DB_PATH;
+}
 
 /** Curated set of columns emitted by default for readability. */
 export const CURATED_COLUMNS = [
@@ -155,7 +174,7 @@ safety:
 export function parseDumpArgs(argv: readonly string[]): DumpArgsParseResult {
   const args: ParsedDumpArgs = {
     ids: [],
-    dbPath: DEFAULT_DB_PATH,
+    dbPath: resolveDefaultDumpDbPath(),
     pretty: false,
     includeEvidence: true,
     includeAttestations: true,
