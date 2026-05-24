@@ -635,7 +635,14 @@ function collectAttestations(rec: SelfRecommendation): PromotionAttestation[] {
   return out;
 }
 
-export async function canPromote(rec: SelfRecommendation): Promise<PromotionResult> {
+export async function canPromote(
+  rec: SelfRecommendation,
+  nowMs?: number,
+): Promise<PromotionResult> {
+  // When `nowMs` is supplied (probe / tests), every freshness comparison
+  // inside this call uses it. Otherwise we fall back to the real wall
+  // clock at the point of each comparison (preserves prior behavior).
+  const now = nowMs ?? Date.now();
   const failures: string[] = [];
   const ranSets: string[] = [];
   // Advisory attestations are collected ONCE up front so every early-
@@ -736,7 +743,7 @@ export async function canPromote(rec: SelfRecommendation): Promise<PromotionResu
       hardBlockFlagOn,
       rec.risk,
       phase3aMaxAgeDays,
-      Date.now(),
+      now,
     );
     if (hardBlockFailures.length > 0) {
       for (const f of hardBlockFailures) failures.push(f);
@@ -758,7 +765,7 @@ export async function canPromote(rec: SelfRecommendation): Promise<PromotionResu
       hardBlockMediumRiskFlagOn,
       rec.risk,
       phase3aMaxAgeDays,
-      Date.now(),
+      now,
     );
     for (const f of mediumRiskHardBlockFailures) failures.push(f);
   }
@@ -780,7 +787,7 @@ export async function canPromote(rec: SelfRecommendation): Promise<PromotionResu
       hardBlockHighRiskFlagOn,
       rec.risk,
       phase3aMaxAgeDays,
-      Date.now(),
+      now,
     );
     for (const f of highRiskHardBlockFailures) failures.push(f);
   }
