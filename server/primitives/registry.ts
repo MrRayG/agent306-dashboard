@@ -58,6 +58,26 @@ import type { MissingPrimitiveFamily } from "../actionTranslator.js";
 export const PRIMITIVE_REGISTRY_ENABLED_ENV = "PRIMITIVE_REGISTRY_ENABLED";
 
 /**
+ * Dispatch-gate env flag. When `process.env[PRIMITIVE_TRANSLATOR_DISPATCH_ENABLED_ENV]`
+ * is not the literal string `"true"`, the translator MUST treat the registry
+ * lookup result as if it did not exist — `TranslatedAction` shape is
+ * byte-identical to pre-#427 main. When set to `"true"` AND
+ * PRIMITIVE_REGISTRY_ENABLED is also `"true"` AND a primitive is registered
+ * for the family, the translator attaches a `registeredPrimitive` metadata
+ * field on the fall-through return. The `primitive` field stays `"none"`,
+ * so `applyRecommendation` / `maybeRegisterRuleForRecommendation` continue
+ * to treat the rec as `untranslatable`. This is the first controlled
+ * dispatch phase — metadata-only, no executor invocation, no rule
+ * registration impact, no promotion-gate or obligation impact.
+ *
+ * Default: OFF. Independent of PRIMITIVE_REGISTRY_ENABLED — both must be
+ * ON for the dispatch path to surface metadata. With this flag OFF,
+ * translator output is byte-identical regardless of registry state.
+ */
+export const PRIMITIVE_TRANSLATOR_DISPATCH_ENABLED_ENV =
+  "PRIMITIVE_TRANSLATOR_DISPATCH_ENABLED";
+
+/**
  * Telemetry tag for [EVENT] log lines emitted by this module. Mirrors the
  * `engine=<name> event=<...>` convention used elsewhere in the codebase
  * (see ruleCorrectiveObligations, actionEnforcer).
@@ -186,6 +206,19 @@ function logEvent(event: string, extra: Record<string, unknown> = {}): void {
  */
 export function isPrimitiveRegistryEnabled(): boolean {
   return process.env[PRIMITIVE_REGISTRY_ENABLED_ENV] === "true";
+}
+
+/**
+ * Read the dispatch-gate env flag. Not memoized — flip without restart.
+ *
+ * Returning `true` does NOT by itself cause the translator to attach
+ * metadata: the master `PRIMITIVE_REGISTRY_ENABLED` flag must also be
+ * `"true"` and a primitive must be registered for the family. The
+ * dispatch gate is the additional opt-in beyond the registry being
+ * populated.
+ */
+export function isPrimitiveTranslatorDispatchEnabled(): boolean {
+  return process.env[PRIMITIVE_TRANSLATOR_DISPATCH_ENABLED_ENV] === "true";
 }
 
 /**

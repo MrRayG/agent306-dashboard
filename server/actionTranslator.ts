@@ -56,7 +56,38 @@
 import type { EnforcementPrimitive } from "./insightLedger.js";
 import type { GoalCategory } from "./researchEngine.js";
 import { registerRule, type EnforcementRule } from "./actionEnforcer.js";
-import { lookupPrimitiveForFamily } from "./primitives/registry.js";
+import {
+  lookupPrimitiveForFamily,
+  isPrimitiveTranslatorDispatchEnabled,
+} from "./primitives/registry.js";
+
+/**
+ * Telemetry-only metadata attached to a TranslatedAction when the
+ * translator-dispatch gate (PRIMITIVE_TRANSLATOR_DISPATCH_ENABLED) is ON
+ * AND a primitive is registered for the missing-primitive family of an
+ * otherwise-unparseable action.
+ *
+ * IMPORTANT — apply-path invariants:
+ *   - When this field is present, `primitive` is still `"none"`. The
+ *     apply path (`maybeRegisterRuleForRecommendation` in
+ *     server/selfRecommendationEngine.ts) checks `translation.primitive
+ *     === "none"` and skips with reason `"untranslatable"`, so rule
+ *     registration is NOT triggered by the presence of this field.
+ *   - The promotion gate, obligation refresh-count escalation, and
+ *     missingPrimitiveReconciler do not read this field. Pin 7 / Pin 11
+ *     remain untouched.
+ *   - The dispatch gate does NOT invoke the executor. This is the first
+ *     controlled phase: surface metadata only. Executor invocation is a
+ *     follow-up PR once metadata telemetry is stable.
+ */
+export interface RegisteredPrimitiveMetadata {
+  /** Missing-primitive family classification of the action. */
+  family: MissingPrimitiveFamily;
+  /** Stable id of the primitive registered under the family. */
+  id: string;
+  /** Operator-readable description from the registered Primitive. */
+  description: string;
+}
 
 export interface TranslatedAction {
   primitive: EnforcementPrimitive;
@@ -65,6 +96,13 @@ export interface TranslatedAction {
   suggestedCategory?: GoalCategory;
   minFireCount?: number;
   reason?: string;
+  /**
+   * Optional metadata about a registered primitive. Present only on the
+   * fall-through (`primitive === "none"`) path when the dispatch gate
+   * is enabled AND a primitive is registered for the family. Apply path
+   * MUST NOT key behavior off this field — see invariants above.
+   */
+  registeredPrimitive?: RegisteredPrimitiveMetadata;
 }
 
 // -- Parsers -----------------------------------------------------------------
@@ -830,27 +868,51 @@ export function translateAction(actionText: string, insightText: string = ""): T
     }
   }
 
-  // PR #422 — primitive registry lookup (scaffolding only).
+  // PR #422 / dispatch-gate — primitive registry lookup.
   //
   // Before falling through to `{ primitive: "none", ... }`, classify the
   // action into a missing-primitive family and ask the registry whether
   // any executor has been registered under that family. Gated by
   // PRIMITIVE_REGISTRY_ENABLED (default OFF) inside the helper. When the
   // flag is OFF, the helper returns null after a single env read; when
-  // the flag is ON and the registry is empty (today's state), it also
-  // returns null. Behavior here is byte-identical to pre-#422 main
-  // either way — we still fall through. Future PRs #423/#424/#425 will
-  // register executors and extend the return shape; out of scope here.
+  // the flag is ON but no primitive is registered, it also returns null.
+  //
+  // Translator-dispatch gate (this PR):
+  //   PRIMITIVE_TRANSLATOR_DISPATCH_ENABLED (default OFF). When this
+  //   second flag is ALSO `"true"` and the registry returned a primitive,
+  //   we attach a `registeredPrimitive` metadata field to the
+  //   fall-through TranslatedAction. The `primitive` field stays
+  //   `"none"`, so the apply path
+  //   (selfRecommendationEngine.maybeRegisterRuleForRecommendation)
+  //   continues to skip with `untranslatable` — no new rule registration
+  //   widening. Executor invocation is NOT performed here; that is a
+  //   later phase once metadata telemetry is observed stable.
+  //
+  // Default-off contract: with the dispatch flag OFF, output is
+  // byte-identical regardless of registry state, exactly as before this
+  // PR.
   const family = classifyMissingPrimitiveFamily(a);
   const registered = lookupPrimitiveForFamily(family);
-  void registered; // registered executor dispatch lands in PR #423+.
 
-  return {
+  const base: TranslatedAction = {
     primitive: "none",
     params: {},
     verificationCriterion: "",
     reason: `No primitive matched action: "${a.slice(0, 120)}"`,
   };
+
+  if (registered !== null && isPrimitiveTranslatorDispatchEnabled()) {
+    return {
+      ...base,
+      registeredPrimitive: {
+        family: registered.family,
+        id: registered.id,
+        description: registered.description,
+      },
+    };
+  }
+
+  return base;
 }
 
 function normalizeNoun(s: string): string {
