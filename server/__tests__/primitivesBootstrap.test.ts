@@ -89,6 +89,7 @@ describe("primitives-bootstrap", () => {
       synthesisRegistered: false,
       artifactRegistered: false,
       otherRegistered: false,
+      synthesisReadOnlyPlannerInstalled: false,
     });
     assert.equal(listPrimitives().length, 0);
     assert.equal(getPrimitive("synthesis", SYNTHESIS_PRIMITIVE_ID), undefined);

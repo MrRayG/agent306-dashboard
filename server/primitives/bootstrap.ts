@@ -32,6 +32,17 @@
 //     if a future executor's registration throws. Each executor's
 //     registration is isolated in its own try/catch so a failure in one
 //     does not prevent the others from registering.
+//   - The optional read-only synthesis planning adapter install (PR #433)
+//     is gated behind ALL of: the master registry flag, the synthesis-
+//     executor enable flag, the synthesis dry-run flag, AND its own
+//     install flag `PRIMITIVE_SYNTHESIS_READ_ONLY_PLANNER_ENABLED`. The
+//     install only swaps the synthesis-adapter slot — it does NOT alter
+//     translator output, register rules, mutate DB state, refresh
+//     obligations, promote anything, or import the production
+//     `synthesisEngine`. The installed adapter is pure / read-only / dry-
+//     run only; the synthesis executor's non-dry-run branch still
+//     refuses. There is no flag combination reachable today that
+//     bypasses that refusal.
 // ---------------------------------------------------------------------------
 
 import {
@@ -43,6 +54,10 @@ import {
   isSynthesisExecutorEnabled,
   isSynthesisExecutorDryRun,
   SYNTHESIS_PRIMITIVE_ID,
+  isReadOnlySynthesisPlannerInstallEnabled,
+  createReadOnlyPlanningAdapter,
+  setSynthesisAdapter,
+  getSynthesisAdapter,
 } from "./synthesis/index.js";
 import {
   registerArtifactPrimitive,
@@ -83,6 +98,42 @@ export function maybeRegisterSynthesisPrimitive(): boolean {
   registerSynthesisPrimitive();
   logEvent("synthesisPrimitiveRegistered", {
     dryRun: isSynthesisExecutorDryRun(),
+  });
+  return true;
+}
+
+/**
+ * Conditionally install the read-only synthesis planning adapter into
+ * the synthesis adapter slot. Returns `true` iff the install was
+ * performed during this call. Idempotent: if the currently-installed
+ * adapter already has the read-only-planning identity prefix, this is
+ * a no-op.
+ *
+ * Gate stack (ALL must be true for the install to happen):
+ *   - PRIMITIVE_REGISTRY_ENABLED=true (checked by caller)
+ *   - PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED=true
+ *   - PRIMITIVE_SYNTHESIS_EXECUTOR_DRY_RUN=true (default-true via env-absence)
+ *   - PRIMITIVE_SYNTHESIS_READ_ONLY_PLANNER_ENABLED=true
+ *
+ * Safety: this function NEVER imports or calls the production
+ * `synthesisEngine`. It swaps the adapter slot to an adapter built by
+ * `createReadOnlyPlanningAdapter()`, whose default planner is pure. The
+ * synthesis executor's non-dry-run branch is unchanged — it still
+ * refuses. Non-dry-run is an explicit refusal-to-install condition: a
+ * read-only planner is meaningful only inside the dry-run branch, and
+ * installing it when dry-run is OFF would be a wiring bug.
+ */
+export function maybeInstallReadOnlySynthesisPlanner(): boolean {
+  if (!isSynthesisExecutorEnabled()) return false;
+  if (!isSynthesisExecutorDryRun()) return false;
+  if (!isReadOnlySynthesisPlannerInstallEnabled()) return false;
+  const current = getSynthesisAdapter();
+  if (current.name.startsWith("read-only-planning:")) {
+    return false;
+  }
+  setSynthesisAdapter(createReadOnlyPlanningAdapter());
+  logEvent("synthesisReadOnlyPlannerInstalled", {
+    adapterName: getSynthesisAdapter().name,
   });
   return true;
 }
@@ -133,6 +184,7 @@ export interface BootstrapReport {
   synthesisRegistered: boolean;
   artifactRegistered: boolean;
   otherRegistered: boolean;
+  synthesisReadOnlyPlannerInstalled: boolean;
 }
 
 export function bootstrapPrimitives(): BootstrapReport {
@@ -141,12 +193,16 @@ export function bootstrapPrimitives(): BootstrapReport {
   if (!registryEnabled) {
     // Master flag OFF: nothing to do. Don't even attempt per-executor
     // registration — the translator wouldn't consult the registry, so
-    // registering would be dead state.
+    // registering would be dead state. The read-only planner install is
+    // ALSO gated by the master flag for the same reason: an adapter
+    // swap with no executor reachable from the dispatcher would be
+    // dead state.
     return {
       registryEnabled: false,
       synthesisRegistered: false,
       artifactRegistered: false,
       otherRegistered: false,
+      synthesisReadOnlyPlannerInstalled: false,
     };
   }
 
@@ -180,11 +236,24 @@ export function bootstrapPrimitives(): BootstrapReport {
     logEvent("otherPrimitiveRegistrationFailed", { error: msg });
   }
 
+  let synthesisReadOnlyPlannerInstalled = false;
+  try {
+    synthesisReadOnlyPlannerInstalled = maybeInstallReadOnlySynthesisPlanner();
+  } catch (err: unknown) {
+    // Never let bootstrap kill startup. Isolated try/catch so a planner
+    // install failure cannot prevent (or be prevented by) any executor
+    // registration. The synthesis-adapter slot retains whatever value
+    // was there before this attempt (default adapter on fresh process).
+    const msg = err instanceof Error ? err.message : String(err);
+    logEvent("synthesisReadOnlyPlannerInstallFailed", { error: msg });
+  }
+
   logEvent("bootstrapComplete", {
     registryEnabled,
     synthesisRegistered,
     artifactRegistered,
     otherRegistered,
+    synthesisReadOnlyPlannerInstalled,
   });
 
   return {
@@ -192,5 +261,6 @@ export function bootstrapPrimitives(): BootstrapReport {
     synthesisRegistered,
     artifactRegistered,
     otherRegistered,
+    synthesisReadOnlyPlannerInstalled,
   };
 }
