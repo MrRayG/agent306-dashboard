@@ -2,10 +2,11 @@
  * Primitives bootstrap tests.
  *
  * Covers:
- *   - default flags register nothing (master OFF, executor OFF)
- *   - master ON + executor OFF: synthesis is NOT registered
- *   - master OFF + executor ON: synthesis is NOT registered (master gates)
- *   - master ON + executor ON: synthesis IS registered, idempotently
+ *   - default flags register nothing (master OFF, executors OFF)
+ *   - master ON + executors OFF: nothing is registered
+ *   - master OFF + executors ON: nothing is registered (master gates)
+ *   - master ON + per-executor flag ON: that executor IS registered, idempotently
+ *   - combined master ON + synthesis ON + artifact ON registers both
  *   - registry compatibility with PR #423 invariants (translator path
  *     remains byte-identical when bootstrap runs)
  *
@@ -24,24 +25,34 @@ import {
 import {
   bootstrapPrimitives,
   maybeRegisterSynthesisPrimitive,
+  maybeRegisterArtifactPrimitive,
 } from "../primitives/bootstrap.js";
 import {
   SYNTHESIS_PRIMITIVE_ID,
   PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED_ENV,
   PRIMITIVE_SYNTHESIS_EXECUTOR_DRY_RUN_ENV,
 } from "../primitives/synthesis/index.js";
+import {
+  ARTIFACT_PRIMITIVE_ID,
+  PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED_ENV,
+  PRIMITIVE_ARTIFACT_EXECUTOR_DRY_RUN_ENV,
+} from "../primitives/artifact/index.js";
 import { translateAction } from "../actionTranslator.js";
 
 describe("primitives-bootstrap", () => {
   const ORIG_MASTER = process.env[PRIMITIVE_REGISTRY_ENABLED_ENV];
   const ORIG_SYN_ENABLED = process.env[PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED_ENV];
   const ORIG_SYN_DRY = process.env[PRIMITIVE_SYNTHESIS_EXECUTOR_DRY_RUN_ENV];
+  const ORIG_ART_ENABLED = process.env[PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED_ENV];
+  const ORIG_ART_DRY = process.env[PRIMITIVE_ARTIFACT_EXECUTOR_DRY_RUN_ENV];
 
   beforeEach(() => {
     __resetForTests();
     delete process.env[PRIMITIVE_REGISTRY_ENABLED_ENV];
     delete process.env[PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED_ENV];
     delete process.env[PRIMITIVE_SYNTHESIS_EXECUTOR_DRY_RUN_ENV];
+    delete process.env[PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED_ENV];
+    delete process.env[PRIMITIVE_ARTIFACT_EXECUTOR_DRY_RUN_ENV];
   });
 
   afterEach(() => {
@@ -53,51 +64,107 @@ describe("primitives-bootstrap", () => {
     restore(PRIMITIVE_REGISTRY_ENABLED_ENV, ORIG_MASTER);
     restore(PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED_ENV, ORIG_SYN_ENABLED);
     restore(PRIMITIVE_SYNTHESIS_EXECUTOR_DRY_RUN_ENV, ORIG_SYN_DRY);
+    restore(PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED_ENV, ORIG_ART_ENABLED);
+    restore(PRIMITIVE_ARTIFACT_EXECUTOR_DRY_RUN_ENV, ORIG_ART_DRY);
   });
 
   // ── default flags ────────────────────────────────────────────────────────
 
   it("default flags: bootstrapPrimitives registers nothing", () => {
     const report = bootstrapPrimitives();
-    assert.deepEqual(report, { registryEnabled: false, synthesisRegistered: false });
+    assert.deepEqual(report, {
+      registryEnabled: false,
+      synthesisRegistered: false,
+      artifactRegistered: false,
+    });
     assert.equal(listPrimitives().length, 0);
     assert.equal(getPrimitive("synthesis", SYNTHESIS_PRIMITIVE_ID), undefined);
+    assert.equal(getPrimitive("artifact", ARTIFACT_PRIMITIVE_ID), undefined);
   });
 
-  // ── master OFF + executor ON ─────────────────────────────────────────────
+  // ── master OFF + executors ON ────────────────────────────────────────────
 
-  it("master OFF + executor ON: nothing registered (master gates)", () => {
+  it("master OFF + synthesis executor ON: nothing registered (master gates)", () => {
     process.env[PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED_ENV] = "true";
     const report = bootstrapPrimitives();
     assert.equal(report.registryEnabled, false);
     assert.equal(report.synthesisRegistered, false);
+    assert.equal(report.artifactRegistered, false);
     assert.equal(listPrimitives().length, 0);
   });
 
-  // ── master ON + executor OFF ─────────────────────────────────────────────
+  it("master OFF + artifact executor ON: nothing registered (master gates)", () => {
+    process.env[PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED_ENV] = "true";
+    const report = bootstrapPrimitives();
+    assert.equal(report.registryEnabled, false);
+    assert.equal(report.synthesisRegistered, false);
+    assert.equal(report.artifactRegistered, false);
+    assert.equal(listPrimitives().length, 0);
+  });
 
-  it("master ON + executor OFF: nothing registered (per-executor flag still OFF)", () => {
+  it("master OFF + both executors ON: nothing registered (master gates)", () => {
+    process.env[PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED_ENV] = "true";
+    process.env[PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED_ENV] = "true";
+    const report = bootstrapPrimitives();
+    assert.equal(report.registryEnabled, false);
+    assert.equal(report.synthesisRegistered, false);
+    assert.equal(report.artifactRegistered, false);
+    assert.equal(listPrimitives().length, 0);
+  });
+
+  // ── master ON + executors OFF ────────────────────────────────────────────
+
+  it("master ON + executors OFF: nothing registered (per-executor flags still OFF)", () => {
     process.env[PRIMITIVE_REGISTRY_ENABLED_ENV] = "true";
     const report = bootstrapPrimitives();
     assert.equal(report.registryEnabled, true);
     assert.equal(report.synthesisRegistered, false);
+    assert.equal(report.artifactRegistered, false);
     assert.equal(listPrimitives().length, 0);
   });
 
-  // ── master ON + executor ON ──────────────────────────────────────────────
+  // ── master ON + each executor ON ─────────────────────────────────────────
 
-  it("master ON + executor ON: synthesis primitive registered", () => {
+  it("master ON + synthesis ON: synthesis primitive registered, artifact NOT", () => {
     process.env[PRIMITIVE_REGISTRY_ENABLED_ENV] = "true";
     process.env[PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED_ENV] = "true";
     const report = bootstrapPrimitives();
     assert.equal(report.registryEnabled, true);
     assert.equal(report.synthesisRegistered, true);
+    assert.equal(report.artifactRegistered, false);
     const p = getPrimitive("synthesis", SYNTHESIS_PRIMITIVE_ID);
     assert.ok(p, "synthesis primitive should be registered");
     assert.equal(p!.family, "synthesis");
+    assert.equal(getPrimitive("artifact", ARTIFACT_PRIMITIVE_ID), undefined);
   });
 
-  it("bootstrapPrimitives is idempotent — second call does not double-register or throw", () => {
+  it("master ON + artifact ON: artifact primitive registered, synthesis NOT", () => {
+    process.env[PRIMITIVE_REGISTRY_ENABLED_ENV] = "true";
+    process.env[PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED_ENV] = "true";
+    const report = bootstrapPrimitives();
+    assert.equal(report.registryEnabled, true);
+    assert.equal(report.synthesisRegistered, false);
+    assert.equal(report.artifactRegistered, true);
+    const p = getPrimitive("artifact", ARTIFACT_PRIMITIVE_ID);
+    assert.ok(p, "artifact primitive should be registered");
+    assert.equal(p!.family, "artifact");
+    assert.equal(getPrimitive("synthesis", SYNTHESIS_PRIMITIVE_ID), undefined);
+  });
+
+  it("master ON + both ON: both primitives registered", () => {
+    process.env[PRIMITIVE_REGISTRY_ENABLED_ENV] = "true";
+    process.env[PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED_ENV] = "true";
+    process.env[PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED_ENV] = "true";
+    const report = bootstrapPrimitives();
+    assert.equal(report.registryEnabled, true);
+    assert.equal(report.synthesisRegistered, true);
+    assert.equal(report.artifactRegistered, true);
+    assert.ok(getPrimitive("synthesis", SYNTHESIS_PRIMITIVE_ID));
+    assert.ok(getPrimitive("artifact", ARTIFACT_PRIMITIVE_ID));
+    assert.equal(listPrimitives().length, 2);
+  });
+
+  it("bootstrapPrimitives is idempotent — second call does not double-register or throw (synthesis only)", () => {
     process.env[PRIMITIVE_REGISTRY_ENABLED_ENV] = "true";
     process.env[PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED_ENV] = "true";
     const a = bootstrapPrimitives();
@@ -107,10 +174,39 @@ describe("primitives-bootstrap", () => {
     assert.equal(listPrimitives().length, 1);
   });
 
+  it("bootstrapPrimitives is idempotent — second call does not double-register or throw (artifact only)", () => {
+    process.env[PRIMITIVE_REGISTRY_ENABLED_ENV] = "true";
+    process.env[PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED_ENV] = "true";
+    const a = bootstrapPrimitives();
+    const b = bootstrapPrimitives();
+    assert.equal(a.artifactRegistered, true);
+    assert.equal(b.artifactRegistered, false, "second call must report no-op");
+    assert.equal(listPrimitives().length, 1);
+  });
+
+  it("bootstrapPrimitives is idempotent — combined synthesis+artifact registration", () => {
+    process.env[PRIMITIVE_REGISTRY_ENABLED_ENV] = "true";
+    process.env[PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED_ENV] = "true";
+    process.env[PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED_ENV] = "true";
+    const a = bootstrapPrimitives();
+    const b = bootstrapPrimitives();
+    assert.equal(a.synthesisRegistered, true);
+    assert.equal(a.artifactRegistered, true);
+    assert.equal(b.synthesisRegistered, false);
+    assert.equal(b.artifactRegistered, false);
+    assert.equal(listPrimitives().length, 2);
+  });
+
   it("maybeRegisterSynthesisPrimitive returns false when executor flag is OFF", () => {
     const out = maybeRegisterSynthesisPrimitive();
     assert.equal(out, false);
     assert.equal(getPrimitive("synthesis", SYNTHESIS_PRIMITIVE_ID), undefined);
+  });
+
+  it("maybeRegisterArtifactPrimitive returns false when executor flag is OFF", () => {
+    const out = maybeRegisterArtifactPrimitive();
+    assert.equal(out, false);
+    assert.equal(getPrimitive("artifact", ARTIFACT_PRIMITIVE_ID), undefined);
   });
 
   // ── PR #423 byte-identical guarantee preserved ───────────────────────────
@@ -140,6 +236,28 @@ describe("primitives-bootstrap", () => {
     assert.equal(flagsOn.primitive, "none");
   });
 
+  it("translator output for artifact-family fall-through is byte-identical even when bootstrap registered the executor", () => {
+    // An action that classifies under the `artifact` missing-primitive
+    // family BUT falls through the structured-primitive parsers (no
+    // window/count detected), so `primitive: "none"` is the baseline.
+    const actionText = "produce one concrete artifact";
+    const insightText = "artifact backlog accumulating; ship one concrete output";
+
+    const baseline = translateAction(actionText, insightText);
+    assert.equal(baseline.primitive, "none");
+
+    process.env[PRIMITIVE_REGISTRY_ENABLED_ENV] = "true";
+    process.env[PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED_ENV] = "true";
+    bootstrapPrimitives();
+    assert.ok(getPrimitive("artifact", ARTIFACT_PRIMITIVE_ID));
+
+    const flagsOn = translateAction(actionText, insightText);
+    // PR #423 invariant: translator does NOT dispatch — output is still
+    // byte-identical to the flag-OFF baseline.
+    assert.deepEqual(flagsOn, baseline);
+    assert.equal(flagsOn.primitive, "none");
+  });
+
   it("translator output for translatable actions is byte-identical regardless of bootstrap state", () => {
     const baselineRatio = translateAction(
       "For every 10 new knowledge entries, force-generate one synthesis",
@@ -149,6 +267,7 @@ describe("primitives-bootstrap", () => {
 
     process.env[PRIMITIVE_REGISTRY_ENABLED_ENV] = "true";
     process.env[PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED_ENV] = "true";
+    process.env[PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED_ENV] = "true";
     bootstrapPrimitives();
 
     const afterBootstrap = translateAction(
