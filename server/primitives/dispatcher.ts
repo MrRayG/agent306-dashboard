@@ -84,13 +84,21 @@ import {
 } from "./registry.js";
 import {
   PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED_ENV,
+  isSynthesisExecutorDryRun,
 } from "./synthesis/index.js";
 import {
   PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED_ENV,
+  isArtifactExecutorDryRun,
 } from "./artifact/index.js";
 import {
   PRIMITIVE_OTHER_EXECUTOR_ENABLED_ENV,
+  isOtherExecutorDryRun,
 } from "./other/index.js";
+import {
+  recordDispatchTelemetry,
+  hashActionText,
+  type DispatchTelemetryKind,
+} from "./telemetry.js";
 
 /**
  * Master env flag controlling whether the dispatcher will ever call a
@@ -247,9 +255,33 @@ export async function invokeRegisteredPrimitive(
   translation: TranslatedAction,
   ctx: PrimitiveExecutionContext,
 ): Promise<DispatchResult> {
+  const actionHash = hashActionText(ctx.actionText);
+  const captureTelemetry = (
+    kind: DispatchTelemetryKind,
+    extra: {
+      family?: PrimitiveFamily;
+      id?: string;
+      gateReason?: string;
+      resultReason?: string;
+      dryRun?: boolean;
+    } = {},
+  ): void => {
+    recordDispatchTelemetry({
+      kind,
+      family: extra.family,
+      id: extra.id,
+      actionHash,
+      recommendationId: ctx.recommendationId,
+      gateReason: extra.gateReason,
+      resultReason: extra.resultReason,
+      dryRun: extra.dryRun,
+    });
+  };
+
   const gateFail = checkMasterGates();
   if (gateFail) {
     logEvent("invocationDisabled", { reason: gateFail.reason });
+    captureTelemetry("disabled", { gateReason: gateFail.reason });
     return gateFail;
   }
 
@@ -258,6 +290,7 @@ export async function invokeRegisteredPrimitive(
     const reason =
       "no registeredPrimitive metadata on TranslatedAction; nothing to invoke";
     logEvent("invocationSkipped", { reason });
+    captureTelemetry("skipped_missing_metadata", { gateReason: reason });
     return { kind: "skipped", reason };
   }
 
@@ -267,6 +300,11 @@ export async function invokeRegisteredPrimitive(
       ? `${envName} is OFF; family executor disabled`
       : `family executor disabled (no enabled-flag mapping for family=${meta.family})`;
     logEvent("invocationSkipped", { family: meta.family, id: meta.id, reason });
+    captureTelemetry("skipped_family_disabled", {
+      family: meta.family,
+      id: meta.id,
+      gateReason: reason,
+    });
     // Family-level gate intentionally surfaces as `skipped` rather than
     // `disabled` because the *master* gates passed. Callers / telemetry
     // distinguish "all-off" (disabled) from "this family opted-out"
@@ -278,8 +316,15 @@ export async function invokeRegisteredPrimitive(
   if (!primitive) {
     const reason = `no primitive registered under ${meta.family}::${meta.id}`;
     logEvent("invocationSkipped", { family: meta.family, id: meta.id, reason });
+    captureTelemetry("skipped_unknown_primitive", {
+      family: meta.family,
+      id: meta.id,
+      gateReason: reason,
+    });
     return { kind: "skipped", reason, family: meta.family, id: meta.id };
   }
+
+  const dryRun = familyDryRunSnapshot(meta.family);
 
   let result: PrimitiveExecutionResult;
   try {
@@ -291,11 +336,23 @@ export async function invokeRegisteredPrimitive(
       id: meta.id,
       error: msg,
     });
+    captureTelemetry("error", {
+      family: meta.family,
+      id: meta.id,
+      resultReason: msg,
+      dryRun,
+    });
     return { kind: "error", family: meta.family, id: meta.id, error: msg };
   }
 
   if (result.ok) {
     logEvent("invocationOk", { family: meta.family, id: meta.id });
+    captureTelemetry("ok", {
+      family: meta.family,
+      id: meta.id,
+      resultReason: result.reason,
+      dryRun,
+    });
     return { kind: "ok", family: meta.family, id: meta.id, result };
   }
 
@@ -304,5 +361,33 @@ export async function invokeRegisteredPrimitive(
     id: meta.id,
     reason: result.reason ?? "",
   });
+  captureTelemetry("refused", {
+    family: meta.family,
+    id: meta.id,
+    resultReason: result.reason,
+    dryRun,
+  });
   return { kind: "refused", family: meta.family, id: meta.id, result };
+}
+
+/**
+ * Best-effort snapshot of whether the family executor will run under
+ * dry-run semantics. Pure read of env; returns `undefined` for families
+ * without a dry-run flag mapping (today: any future family beyond the
+ * scaffolded three). Used only for telemetry — the executor's own
+ * behavior is unchanged.
+ */
+function familyDryRunSnapshot(
+  family: PrimitiveFamily,
+): boolean | undefined {
+  switch (family) {
+    case "synthesis":
+      return isSynthesisExecutorDryRun();
+    case "artifact":
+      return isArtifactExecutorDryRun();
+    case "other":
+      return isOtherExecutorDryRun();
+    default:
+      return undefined;
+  }
 }

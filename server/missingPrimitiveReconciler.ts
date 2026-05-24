@@ -52,12 +52,23 @@
 // ---------------------------------------------------------------------------
 
 import { loadLedger, type InsightLedgerEntry } from "./insightLedger.js";
-import { translateAction } from "./actionTranslator.js";
+import {
+  classifyMissingPrimitiveFamily,
+  translateAction,
+  type MissingPrimitiveFamily,
+} from "./actionTranslator.js";
 import {
   listRecommendations,
   rejectRecommendation,
 } from "./selfRecommendationEngine.js";
 import { logEvent } from "./observability/structuredLog.js";
+import {
+  classifyPrimitiveCoverageForFamily,
+  isReconcilerAwarenessEnabled,
+  summarizeRegisteredPrimitiveCoverage,
+  type PrimitiveCoverageReport,
+  type PrimitiveCoverageStatus,
+} from "./primitives/coverageDiagnostic.js";
 
 export interface ReconcilerOptions {
   /** Cap on rejections per call. Default 20. */
@@ -67,6 +78,28 @@ export interface ReconcilerOptions {
    * Tests override this to assert the audit trail.
    */
   operator?: string;
+  /**
+   * Force the coverage diagnostic ON or OFF for this call, overriding
+   * the `PRIMITIVE_RECONCILER_AWARENESS_ENABLED` env flag. Tests use
+   * this to exercise the additive code path without leaking env state.
+   */
+  emitCoverageDiagnostic?: boolean;
+}
+
+/**
+ * Per-rec coverage hint surfaced under
+ * {@link ReconcilerResult.primitiveCoverage}.recPredicates.
+ *
+ * The reconciler does NOT use this to mutate the rec's lifecycle. It
+ * is descriptive only: "this rec's family classifies as X under the
+ * current registry/gate state". The translator-change check remains
+ * the sole driver of `reconciled` / `rejectedRecIds`.
+ */
+export interface ReconcilerRecCoverage {
+  readonly recId: string;
+  readonly family: MissingPrimitiveFamily;
+  readonly status: PrimitiveCoverageStatus;
+  readonly primitiveId?: string;
 }
 
 export interface ReconcilerResult {
@@ -76,6 +109,24 @@ export interface ReconcilerResult {
   missingLedgerEntry: number;
   errors: number;
   rejectedRecIds: string[];
+  /**
+   * Additive, optional coverage diagnostic. Populated ONLY when
+   * `PRIMITIVE_RECONCILER_AWARENESS_ENABLED === "true"` (or
+   * `opts.emitCoverageDiagnostic` is `true`). Lifecycle decisions
+   * encoded in the other fields are unchanged by its presence /
+   * absence — adding this field is purely observational.
+   */
+  primitiveCoverage?: PrimitiveCoverageReport & {
+    /**
+     * Per-scanned-rec hint. Entries are added in scan order. A rec
+     * appearing here with `status: "dispatch_capable"` while the
+     * translator still returns `none` is the headline signal: the
+     * primitive registry now claims coverage but the translator
+     * doesn't route to it yet — operator can investigate the wiring
+     * gap without the reconciler touching the rec.
+     */
+    recPredicates: ReconcilerRecCoverage[];
+  };
 }
 
 const DEFAULT_MAX = 20;
@@ -92,6 +143,8 @@ export function reconcileMissingPrimitiveRecs(
 ): ReconcilerResult {
   const cap = Math.max(1, opts.maxReconciledPerRun ?? DEFAULT_MAX);
   const operator = opts.operator ?? "reconciler";
+  const emitCoverage =
+    opts.emitCoverageDiagnostic ?? isReconcilerAwarenessEnabled();
 
   const result: ReconcilerResult = {
     scanned: 0,
@@ -101,6 +154,12 @@ export function reconcileMissingPrimitiveRecs(
     errors: 0,
     rejectedRecIds: [],
   };
+
+  // Coverage diagnostic accumulator. Populated only when the awareness
+  // flag is ON; otherwise this stays `null` and `result.primitiveCoverage`
+  // is never set, preserving the pre-PR result shape.
+  const coverageRecs: ReconcilerRecCoverage[] = [];
+  const familiesObserved = new Set<MissingPrimitiveFamily>();
 
   // Pull all proposed recs; filter to missing-primitive family in-process.
   // listRecommendations is bounded (max 500). We explicitly sort by
@@ -152,6 +211,25 @@ export function reconcileMissingPrimitiveRecs(
     }
 
     const entry = byId.get(insightId);
+
+    // Additive coverage diagnostic: classify the rec's family from the
+    // ledger entry when present, otherwise from the rec title. This block
+    // is purely observational; it never branches the lifecycle logic
+    // below.
+    if (emitCoverage) {
+      const family = familyForRec(rec, entry);
+      if (family !== null) {
+        familiesObserved.add(family);
+        const cov = classifyPrimitiveCoverageForFamily(family);
+        coverageRecs.push({
+          recId: rec.id,
+          family,
+          status: cov.status,
+          primitiveId: cov.primitiveId,
+        });
+      }
+    }
+
     if (!entry) {
       // Ledger entry was rotated out (LEDGER_CAP) or pruned. Without the
       // insight + action text we can't re-translate. Leave the rec alone —
@@ -226,6 +304,16 @@ export function reconcileMissingPrimitiveRecs(
     }
   }
 
+  if (emitCoverage) {
+    const report = summarizeRegisteredPrimitiveCoverage(
+      Array.from(familiesObserved),
+    );
+    result.primitiveCoverage = {
+      ...report,
+      recPredicates: coverageRecs,
+    };
+  }
+
   if (result.reconciled > 0 || result.errors > 0) {
     logEvent({
       engine: "goalEngine",
@@ -237,6 +325,55 @@ export function reconcileMissingPrimitiveRecs(
 
   return result;
 }
+
+/**
+ * Best-effort family extraction for a missing-primitive rec, used for
+ * the additive coverage diagnostic only. Tries the ledger entry's
+ * action text first (most accurate, matches the classifier the
+ * translator uses today); falls back to parsing the title prefix
+ * (`missing-primitive: <family> family — ...`) so we can still
+ * classify recs whose ledger entry was rotated out.
+ *
+ * Returns `null` only when both sources fail to yield a recognizable
+ * family — in that case the rec is simply omitted from the coverage
+ * block. Lifecycle is unaffected.
+ */
+function familyForRec(
+  rec: { title?: string | null },
+  entry: InsightLedgerEntry | undefined,
+): MissingPrimitiveFamily | null {
+  if (entry?.proposedAction) {
+    try {
+      return classifyMissingPrimitiveFamily(entry.proposedAction);
+    } catch {
+      // fall through to title parsing
+    }
+  }
+  const title = rec.title ?? "";
+  // Title format from goalEngine.ts: `missing-primitive: <family> family — ...`
+  const m = title.match(/^missing-primitive:\s+([a-z_]+)\s+family\b/i);
+  if (m) {
+    const candidate = m[1].toLowerCase();
+    if (KNOWN_FAMILIES.has(candidate)) {
+      return candidate as MissingPrimitiveFamily;
+    }
+  }
+  return null;
+}
+
+const KNOWN_FAMILIES: ReadonlySet<string> = new Set([
+  "artifact",
+  "ratio",
+  "ttl",
+  "gate",
+  "archive",
+  "spectrum",
+  "synthesis",
+  "rewrite",
+  "verification",
+  "verification_scaffold",
+  "other",
+]);
 
 function buildRejectionNote(primitive: string, reason?: string): string {
   // Structured, paste-readable note. Operators can grep the audit trail.
