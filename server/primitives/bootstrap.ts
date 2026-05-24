@@ -8,9 +8,10 @@
 //
 // Design contract
 // ---------------
-//   - Default deploy registers nothing. Both the master registry flag
-//     (`PRIMITIVE_REGISTRY_ENABLED`) and the per-executor flag
-//     (`PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED`) default OFF.
+//   - Default deploy registers nothing. The master registry flag
+//     (`PRIMITIVE_REGISTRY_ENABLED`) and every per-executor flag
+//     (`PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED`,
+//     `PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED`) default OFF.
 //   - When the master flag is OFF, this function is a no-op even if
 //     per-executor flags are flipped — the registry would never be
 //     consulted, so registering is wasted work.
@@ -27,7 +28,9 @@
 //     `getPrimitive` calls (i.e. tests, future dispatch wiring).
 //   - Bootstrap failures are swallowed and logged; they never crash the
 //     process or abort startup. The translator path remains intact even
-//     if a future executor's registration throws.
+//     if a future executor's registration throws. Each executor's
+//     registration is isolated in its own try/catch so a failure in one
+//     does not prevent the others from registering.
 // ---------------------------------------------------------------------------
 
 import {
@@ -40,6 +43,12 @@ import {
   isSynthesisExecutorDryRun,
   SYNTHESIS_PRIMITIVE_ID,
 } from "./synthesis/index.js";
+import {
+  registerArtifactPrimitive,
+  isArtifactExecutorEnabled,
+  isArtifactExecutorDryRun,
+  ARTIFACT_PRIMITIVE_ID,
+} from "./artifact/index.js";
 
 const TELEMETRY_ENGINE = "primitives-bootstrap";
 
@@ -72,6 +81,24 @@ export function maybeRegisterSynthesisPrimitive(): boolean {
 }
 
 /**
+ * Conditionally register the artifact primitive. Returns `true` iff
+ * the executor was registered during this call. Idempotent: if the
+ * executor is already registered (from a previous bootstrap call in the
+ * same process, or via a test), this is a no-op.
+ */
+export function maybeRegisterArtifactPrimitive(): boolean {
+  if (!isArtifactExecutorEnabled()) return false;
+  if (getPrimitive("artifact", ARTIFACT_PRIMITIVE_ID) !== undefined) {
+    return false;
+  }
+  registerArtifactPrimitive();
+  logEvent("artifactPrimitiveRegistered", {
+    dryRun: isArtifactExecutorDryRun(),
+  });
+  return true;
+}
+
+/**
  * Bootstrap entrypoint. Safe to call multiple times. Returns a small
  * report describing what was registered — useful for tests and for a
  * future startup-summary log line.
@@ -79,6 +106,7 @@ export function maybeRegisterSynthesisPrimitive(): boolean {
 export interface BootstrapReport {
   registryEnabled: boolean;
   synthesisRegistered: boolean;
+  artifactRegistered: boolean;
 }
 
 export function bootstrapPrimitives(): BootstrapReport {
@@ -88,7 +116,11 @@ export function bootstrapPrimitives(): BootstrapReport {
     // Master flag OFF: nothing to do. Don't even attempt per-executor
     // registration — the translator wouldn't consult the registry, so
     // registering would be dead state.
-    return { registryEnabled: false, synthesisRegistered: false };
+    return {
+      registryEnabled: false,
+      synthesisRegistered: false,
+      artifactRegistered: false,
+    };
   }
 
   let synthesisRegistered = false;
@@ -100,10 +132,21 @@ export function bootstrapPrimitives(): BootstrapReport {
     logEvent("synthesisPrimitiveRegistrationFailed", { error: msg });
   }
 
+  let artifactRegistered = false;
+  try {
+    artifactRegistered = maybeRegisterArtifactPrimitive();
+  } catch (err: unknown) {
+    // Never let bootstrap kill startup. Isolated try/catch so a synthesis
+    // registration failure cannot prevent artifact (or vice versa).
+    const msg = err instanceof Error ? err.message : String(err);
+    logEvent("artifactPrimitiveRegistrationFailed", { error: msg });
+  }
+
   logEvent("bootstrapComplete", {
     registryEnabled,
     synthesisRegistered,
+    artifactRegistered,
   });
 
-  return { registryEnabled, synthesisRegistered };
+  return { registryEnabled, synthesisRegistered, artifactRegistered };
 }
