@@ -54,7 +54,10 @@
 //   - PRIMITIVE_EXECUTOR_INVOCATION_ENABLED=true
 //   - PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED=true
 //   - PRIMITIVE_SYNTHESIS_EXECUTOR_DRY_RUN=true (default-true via env-absence)
-// Plus an explicit `setSynthesisAdapter(createReadOnlyPlanningAdapter(...))`.
+//   - PRIMITIVE_SYNTHESIS_READ_ONLY_PLANNER_ENABLED=true (introduced as
+//     the install gate; see `isReadOnlySynthesisPlannerInstallEnabled`)
+// Plus the bootstrap-time install (when all of the above are set) that
+// swaps the synthesis adapter slot to `createReadOnlyPlanningAdapter()`.
 //
 // Safety guarantees
 // -----------------
@@ -78,6 +81,35 @@ import type {
   SynthesisAdapterInput,
   SynthesisPlan,
 } from "./adapter.js";
+
+/**
+ * Env flag controlling whether the read-only synthesis planning adapter
+ * should be installed into the synthesis-adapter slot at bootstrap.
+ * Default: OFF.
+ *
+ * Independent of the dry-run gate stack (registry / translator-dispatch /
+ * executor-invocation / synthesis-executor / synthesis-dry-run). All of
+ * those must ALSO be ON for the adapter to be consulted via the
+ * dispatcher; this flag only governs whether bootstrap performs the
+ * `setSynthesisAdapter(createReadOnlyPlanningAdapter())` install at all.
+ *
+ * Even with this flag ON, the adapter remains pure / read-only / dry-
+ * run-only. There is no flag combination reachable today that bypasses
+ * the synthesis executor's non-dry-run refusal.
+ */
+export const PRIMITIVE_SYNTHESIS_READ_ONLY_PLANNER_ENABLED_ENV =
+  "PRIMITIVE_SYNTHESIS_READ_ONLY_PLANNER_ENABLED";
+
+/**
+ * Read the install flag. Not memoized so operators can flip without a
+ * process restart (matches PR #419 / PR #423 convention). Returns `true`
+ * only when the env var is the literal string `"true"`.
+ */
+export function isReadOnlySynthesisPlannerInstallEnabled(): boolean {
+  return (
+    process.env[PRIMITIVE_SYNTHESIS_READ_ONLY_PLANNER_ENABLED_ENV] === "true"
+  );
+}
 
 /**
  * Structured output of a read-only synthesis planner. Strict superset of

@@ -33,6 +33,8 @@ import {
 import {
   createReadOnlyPlanningAdapter,
   defaultReadOnlySynthesisPlanner,
+  isReadOnlySynthesisPlannerInstallEnabled,
+  PRIMITIVE_SYNTHESIS_READ_ONLY_PLANNER_ENABLED_ENV,
   type ReadOnlySynthesisPlanner,
   type ReadOnlyPlanningCandidate,
 } from "./readOnlyPlanner.js";
@@ -51,6 +53,8 @@ export {
   resetSynthesisAdapterForTests,
   createReadOnlyPlanningAdapter,
   defaultReadOnlySynthesisPlanner,
+  isReadOnlySynthesisPlannerInstallEnabled,
+  PRIMITIVE_SYNTHESIS_READ_ONLY_PLANNER_ENABLED_ENV,
 };
 export type {
   SynthesisAdapter,
