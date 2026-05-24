@@ -56,6 +56,7 @@
 import type { EnforcementPrimitive } from "./insightLedger.js";
 import type { GoalCategory } from "./researchEngine.js";
 import { registerRule, type EnforcementRule } from "./actionEnforcer.js";
+import { lookupPrimitiveForFamily } from "./primitives/registry.js";
 
 export interface TranslatedAction {
   primitive: EnforcementPrimitive;
@@ -828,6 +829,21 @@ export function translateAction(actionText: string, insightText: string = ""): T
       };
     }
   }
+
+  // PR #422 — primitive registry lookup (scaffolding only).
+  //
+  // Before falling through to `{ primitive: "none", ... }`, classify the
+  // action into a missing-primitive family and ask the registry whether
+  // any executor has been registered under that family. Gated by
+  // PRIMITIVE_REGISTRY_ENABLED (default OFF) inside the helper. When the
+  // flag is OFF, the helper returns null after a single env read; when
+  // the flag is ON and the registry is empty (today's state), it also
+  // returns null. Behavior here is byte-identical to pre-#422 main
+  // either way — we still fall through. Future PRs #423/#424/#425 will
+  // register executors and extend the return shape; out of scope here.
+  const family = classifyMissingPrimitiveFamily(a);
+  const registered = lookupPrimitiveForFamily(family);
+  void registered; // registered executor dispatch lands in PR #423+.
 
   return {
     primitive: "none",
