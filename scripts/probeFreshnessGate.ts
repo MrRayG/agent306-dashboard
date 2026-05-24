@@ -487,7 +487,13 @@ export function buildProbeResult(
     phase3aPrepMaxAgeDays:             readPhase3aPrepMaxAgeDays(),
   } as const;
 
-  const gateResultPromise = canPromote(rec);
+  // Pass `nowMs` so the gate's freshness comparisons use the same
+  // deterministic clock as the probe's synthetic `attestedAt`. Without
+  // this, the gate falls back to real wall-clock `Date.now()` and the
+  // "future-dated" verdict becomes time-dependent (a future-dated probe
+  // built against a pinned `--now` flips to past-dated once real time
+  // catches up).
+  const gateResultPromise = canPromote(rec, nowMs);
 
   // Placeholder gateResult / summary; finalized in `runProbeFreshnessGateCli`
   // after the promise resolves. Splitting the work like this keeps
