@@ -118,10 +118,17 @@ export function isPrimitiveExecutorInvocationEnabled(): boolean {
  * dispatcher rather than inside each family module so the dispatcher can
  * gate without importing the executor body.
  *
- * Keep this exhaustive over `PrimitiveFamily` — TypeScript enforces it
- * via the `Record<PrimitiveFamily, string>` type below.
+ * `PrimitiveFamily` is aliased to `MissingPrimitiveFamily`, which has 11
+ * variants (artifact, ratio, ttl, gate, archive, spectrum, synthesis,
+ * rewrite, verification, verification_scaffold, other) — only three of
+ * those have registered executors today (synthesis / artifact / other,
+ * landed by PRs #425 / #426 / #427). Typing this as a `Partial<...>`
+ * keeps the map honest: only the families with an executor scaffold map
+ * to a flag name. Lookups for families without a registered executor
+ * return `undefined` and `isFamilyExecutorEnabled` returns `false`,
+ * which is the correct "not yet wired" answer.
  */
-export const FAMILY_ENABLED_ENV: Record<PrimitiveFamily, string> = {
+export const FAMILY_ENABLED_ENV: Partial<Record<PrimitiveFamily, string>> = {
   synthesis: PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED_ENV,
   artifact: PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED_ENV,
   other: PRIMITIVE_OTHER_EXECUTOR_ENABLED_ENV,
@@ -198,7 +205,9 @@ function logEvent(event: string, extra: Record<string, unknown> = {}): void {
  *      `registeredPrimitive` populated
  *   3. invocation — the new gate added by this PR
  */
-function checkMasterGates(): DispatchResult | null {
+type DisabledResult = Extract<DispatchResult, { kind: "disabled" }>;
+
+function checkMasterGates(): DisabledResult | null {
   if (!isPrimitiveRegistryEnabled()) {
     return {
       kind: "disabled",
@@ -253,7 +262,10 @@ export async function invokeRegisteredPrimitive(
   }
 
   if (!isFamilyExecutorEnabled(meta.family)) {
-    const reason = `${FAMILY_ENABLED_ENV[meta.family]} is OFF; family executor disabled`;
+    const envName = FAMILY_ENABLED_ENV[meta.family];
+    const reason = envName
+      ? `${envName} is OFF; family executor disabled`
+      : `family executor disabled (no enabled-flag mapping for family=${meta.family})`;
     logEvent("invocationSkipped", { family: meta.family, id: meta.id, reason });
     // Family-level gate intentionally surfaces as `skipped` rather than
     // `disabled` because the *master* gates passed. Callers / telemetry
