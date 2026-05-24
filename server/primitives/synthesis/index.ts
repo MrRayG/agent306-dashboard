@@ -30,6 +30,12 @@ import {
   type SynthesisAdapterInput,
   type SynthesisPlan,
 } from "./adapter.js";
+import {
+  createReadOnlyPlanningAdapter,
+  defaultReadOnlySynthesisPlanner,
+  type ReadOnlySynthesisPlanner,
+  type ReadOnlyPlanningCandidate,
+} from "./readOnlyPlanner.js";
 
 export {
   SYNTHESIS_PRIMITIVE,
@@ -43,8 +49,16 @@ export {
   getSynthesisAdapter,
   setSynthesisAdapter,
   resetSynthesisAdapterForTests,
+  createReadOnlyPlanningAdapter,
+  defaultReadOnlySynthesisPlanner,
 };
-export type { SynthesisAdapter, SynthesisAdapterInput, SynthesisPlan };
+export type {
+  SynthesisAdapter,
+  SynthesisAdapterInput,
+  SynthesisPlan,
+  ReadOnlySynthesisPlanner,
+  ReadOnlyPlanningCandidate,
+};
 
 /**
  * Register the synthesis primitive with the global registry. Idempotent
