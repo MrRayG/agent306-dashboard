@@ -11,7 +11,8 @@
 //   - Default deploy registers nothing. The master registry flag
 //     (`PRIMITIVE_REGISTRY_ENABLED`) and every per-executor flag
 //     (`PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED`,
-//     `PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED`) default OFF.
+//     `PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED`,
+//     `PRIMITIVE_OTHER_EXECUTOR_ENABLED`) default OFF.
 //   - When the master flag is OFF, this function is a no-op even if
 //     per-executor flags are flipped — the registry would never be
 //     consulted, so registering is wasted work.
@@ -49,6 +50,12 @@ import {
   isArtifactExecutorDryRun,
   ARTIFACT_PRIMITIVE_ID,
 } from "./artifact/index.js";
+import {
+  registerOtherPrimitive,
+  isOtherExecutorEnabled,
+  isOtherExecutorDryRun,
+  OTHER_PRIMITIVE_ID,
+} from "./other/index.js";
 
 const TELEMETRY_ENGINE = "primitives-bootstrap";
 
@@ -99,6 +106,24 @@ export function maybeRegisterArtifactPrimitive(): boolean {
 }
 
 /**
+ * Conditionally register the other primitive. Returns `true` iff
+ * the executor was registered during this call. Idempotent: if the
+ * executor is already registered (from a previous bootstrap call in the
+ * same process, or via a test), this is a no-op.
+ */
+export function maybeRegisterOtherPrimitive(): boolean {
+  if (!isOtherExecutorEnabled()) return false;
+  if (getPrimitive("other", OTHER_PRIMITIVE_ID) !== undefined) {
+    return false;
+  }
+  registerOtherPrimitive();
+  logEvent("otherPrimitiveRegistered", {
+    dryRun: isOtherExecutorDryRun(),
+  });
+  return true;
+}
+
+/**
  * Bootstrap entrypoint. Safe to call multiple times. Returns a small
  * report describing what was registered — useful for tests and for a
  * future startup-summary log line.
@@ -107,6 +132,7 @@ export interface BootstrapReport {
   registryEnabled: boolean;
   synthesisRegistered: boolean;
   artifactRegistered: boolean;
+  otherRegistered: boolean;
 }
 
 export function bootstrapPrimitives(): BootstrapReport {
@@ -120,6 +146,7 @@ export function bootstrapPrimitives(): BootstrapReport {
       registryEnabled: false,
       synthesisRegistered: false,
       artifactRegistered: false,
+      otherRegistered: false,
     };
   }
 
@@ -142,11 +169,28 @@ export function bootstrapPrimitives(): BootstrapReport {
     logEvent("artifactPrimitiveRegistrationFailed", { error: msg });
   }
 
+  let otherRegistered = false;
+  try {
+    otherRegistered = maybeRegisterOtherPrimitive();
+  } catch (err: unknown) {
+    // Never let bootstrap kill startup. Isolated try/catch so an other
+    // registration failure cannot prevent synthesis/artifact (or vice
+    // versa).
+    const msg = err instanceof Error ? err.message : String(err);
+    logEvent("otherPrimitiveRegistrationFailed", { error: msg });
+  }
+
   logEvent("bootstrapComplete", {
     registryEnabled,
     synthesisRegistered,
     artifactRegistered,
+    otherRegistered,
   });
 
-  return { registryEnabled, synthesisRegistered, artifactRegistered };
+  return {
+    registryEnabled,
+    synthesisRegistered,
+    artifactRegistered,
+    otherRegistered,
+  };
 }
