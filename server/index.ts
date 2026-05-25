@@ -13,6 +13,7 @@ import { getResearchLab } from "./researchEngine.js";
 import { getAgenda } from "./research-agenda.js";
 import { runHypothesisQueueReset } from "./archiveHypotheses.js";
 import { maybeBootstrapSelfIntegrity } from "./bootstrapSelfIntegrity.js";
+import { bootstrapPrimitives } from "./primitives/bootstrap.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -161,6 +162,24 @@ app.use((req, res, next) => {
         maybeBootstrapSelfIntegrity();
       } catch (e: any) {
         console.warn("[Startup] Self-Integrity bootstrap failed (non-fatal):", e.message);
+      }
+
+      // Primitive registry bootstrap (PRs #423/#424/#425 → #433). Default-OFF
+      // on every gate: with `PRIMITIVE_REGISTRY_ENABLED` unset, this returns
+      // an all-false report and registers nothing. With the gates ON, it
+      // idempotently registers the synthesis / artifact / other executors
+      // and (when its install flag is also ON) swaps the synthesis adapter
+      // to the read-only planning adapter. PR #434 wired this call site;
+      // prior to PR #434 the helper was never invoked at runtime, which is
+      // why the Railway smoke test saw `primitiveLookupMiss family=...`
+      // for every family despite all eight flags being `"true"`. The
+      // function itself isolates each register/install in its own
+      // try/catch and never throws; this outer try/catch is purely a
+      // belt-and-braces guard so a regression here cannot kill startup.
+      try {
+        bootstrapPrimitives();
+      } catch (e: any) {
+        console.warn("[Startup] Primitive bootstrap failed (non-fatal):", e?.message);
       }
 
       // ASI-Evolve: sync embeddings on startup (non-blocking)
