@@ -733,14 +733,38 @@ function projectEntry(e: ReasoningQualityEntry) {
   };
 }
 
+// PR #437 — staleness diagnostic. Surfaces whether the most-recent
+// scorecard is older than the freshness window so the dashboard can flag
+// "scorer hasn't run recently" without manual log inspection. Read-only
+// derived field; does not change any gating behavior (which is none).
+export const REASONING_QUALITY_FRESHNESS_HOURS = 24;
+
+function computeFreshness(lastRecordedAt: string | null, nowMs: number) {
+  if (!lastRecordedAt) {
+    return { ageHours: null as number | null, stale: true, freshnessWindowHours: REASONING_QUALITY_FRESHNESS_HOURS };
+  }
+  const parsed = Date.parse(lastRecordedAt);
+  if (!Number.isFinite(parsed)) {
+    return { ageHours: null as number | null, stale: true, freshnessWindowHours: REASONING_QUALITY_FRESHNESS_HOURS };
+  }
+  const ageHours = Math.max(0, (nowMs - parsed) / (1000 * 60 * 60));
+  return {
+    ageHours: Math.round(ageHours * 100) / 100,
+    stale: ageHours > REASONING_QUALITY_FRESHNESS_HOURS,
+    freshnessWindowHours: REASONING_QUALITY_FRESHNESS_HOURS,
+  };
+}
+
 export function getPublicReasoningQuality(limit = 25) {
   return cached(`reasoning-quality:${limit}`, () => {
     const tail = readReasoningQualityTail(limit);
     const summary = summarizeReasoningQuality(Math.max(10, limit));
+    const freshness = computeFreshness(summary.lastRecordedAt, Date.now());
     return {
       provisional: true,
       autoApply: false,
       summary,
+      freshness,
       entries: tail.map(projectEntry),
       generatedAt: new Date().toISOString(),
     };

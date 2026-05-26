@@ -3582,6 +3582,19 @@ export default function AgentHQ() {
             <span style={{ ...mono, fontSize: "0.60rem", color: "rgba(227,229,228,0.40)" }}>
               No gating · no auto-apply · operator review only
             </span>
+            {/* PR #437 — staleness diagnostic chip. Observational only. */}
+            {reasoningQualityData.freshness?.stale && (
+              <span
+                title={reasoningQualityData.freshness?.ageHours != null
+                  ? `last scorecard ${reasoningQualityData.freshness.ageHours}h old (window ${reasoningQualityData.freshness.freshnessWindowHours}h)`
+                  : "no scorecards on record"}
+                style={{ ...mono, fontSize: "0.60rem", color: YELLOW, border: `1px solid ${YELLOW}55`, padding: "1px 8px" }}
+              >
+                ⚠ stale {reasoningQualityData.freshness?.ageHours != null
+                  ? `· ${reasoningQualityData.freshness.ageHours}h old`
+                  : "· no entries"}
+              </span>
+            )}
           </div>
 
           {/* Summary row */}
