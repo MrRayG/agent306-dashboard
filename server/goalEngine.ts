@@ -47,6 +47,7 @@ import { logEvent } from "./observability/structuredLog.js";
 import { writeGoalsBlob } from "./repositories/goalRepository.js";
 import { isDbStateEnabled } from "./repositories/jsonFallback.js";
 import { reconcileMissingPrimitiveRecs } from "./missingPrimitiveReconciler.js";
+import { bridgeRegisteredPrimitive } from "./primitives/translatorBridge.js";
 // ── Types ──────────────────────────────────────────────────────
 
 export interface MilestoneSpec {
@@ -759,6 +760,31 @@ export async function promoteInsightToGoal(
   try {
     const translation = translateAction(entry.proposedAction, entry.insight);
     if (translation.primitive === "none") {
+      // PR #435 — invoke the guarded primitive dispatcher when the
+      // translator attached `registeredPrimitive` metadata. The dispatcher
+      // is governed by the PR #429 flag stack (registry / dispatch /
+      // invocation + per-family enabled + dry-run) and is fire-and-
+      // forget: its result is diagnostic/telemetry only and does NOT
+      // alter the `primitive: "none"` semantics, the
+      // missing-primitive SelfRecommendation emission, the goal-promotion
+      // decision, rule registration, the promotion gate, obligation
+      // refresh-count escalation, or the missingPrimitiveReconciler
+      // lifecycle decisions. Pin 7 / Pin 11 invariants are preserved.
+      try {
+        await bridgeRegisteredPrimitive(translation, {
+          actionText: entry.proposedAction,
+          insightText: entry.insight,
+          sourceInsightId: entry.id,
+        });
+      } catch (bridgeErr: any) {
+        // bridgeRegisteredPrimitive already catches everything internally,
+        // but defend the cycle anyway. NEVER let a primitive-dispatch
+        // failure abort goal promotion.
+        console.warn(
+          `[GoalEngine] primitive dispatch bridge failed for ${entry.id} (ignored): ${bridgeErr?.message ?? bridgeErr}`,
+        );
+      }
+
       // Keep the warn log so observability isn't lost — but ALSO emit a
       // SelfRecommendation so the gap (a missing action primitive) becomes
       // a tracked, operator-reviewable signal rather than a quiet drop.
