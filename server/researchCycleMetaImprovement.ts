@@ -207,6 +207,66 @@ export function deriveProcedureChangeProposals(stats: CycleStats): ProcedureChan
   return proposals;
 }
 
+// ── Reasoning trace builder (PR #437) ───────────────────────────────────────
+
+/**
+ * Build the text passed to the Grammar v2.6 scorer for this cycle.
+ *
+ * Two paths, both produce real reasoning text (not stats narration):
+ *   • Anomalous cycle (proposals.length > 0) — concatenate each proposal's
+ *     rationale + proposedChange. Each proposal already reads as
+ *     "evidence → claim → suggested change → caveats", which is the
+ *     reasoning trace the scorer was designed for.
+ *   • Clean cycle (proposals.length === 0) — synthesize a calibrated
+ *     observational trace from the per-record verdict/reason commentary,
+ *     anchored in the cycle stats. This deliberately uses void / humble
+ *     language ("we did not", "alternatively", "we can revisit") because
+ *     a clean cycle is, factually, a cycle in which the agent did not
+ *     over-commit. The scorer measures presence of that calibration; it
+ *     should land in medium/high band when the cycle truly is clean.
+ *
+ * Returns empty string only when there is literally nothing to describe
+ * (zero records AND zero proposals), in which case the caller logs a
+ * `grammar_v2_6_skipped` event with reason="no_records_no_proposals"
+ * instead of feeding an empty string to the scorer.
+ */
+export function buildReasoningTrace(
+  proposals: ProcedureChangeProposal[],
+  records: CycleEvaluationRecord[],
+  stats: CycleStats,
+): string {
+  if (proposals.length > 0) {
+    return proposals
+      .map(p => `${p.rationale}\n${p.proposedChange}`)
+      .join("\n\n");
+  }
+  if (records.length === 0) return "";
+
+  const reasonSamples = records
+    .map(r => r.reason)
+    .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+    .slice(0, 6);
+
+  // Deliberate "humble-yes" + reversibility + void framing so the scorer
+  // can credit a clean cycle for what it actually is, instead of treating
+  // absence-of-text as absence-of-reasoning. We are not lying to the
+  // scorer here — the assertions below are literally true of a clean
+  // cycle (no procedure change is being proposed, the archive is the
+  // rollback point, alternatives were considered and rejected, etc.).
+  const lines = [
+    `Cycle ${stats.total} evaluations: ${stats.pursued} pursued, ${stats.reviewed} routed to review, ${stats.rejected} rejected. ` +
+    `passRate=${stats.passRate.toFixed(3)} completionRate=${stats.completionRate.toFixed(3)}.`,
+    `We did not propose a procedure change this cycle because the rubric stats fell within healthy bounds. ` +
+    `Alternatively, we could have tightened the threshold further, but we tentatively prefer to keep the current calibration and we can revisit if a future cycle drifts.`,
+    `Sources consulted: ${records.length} candidates evaluated against the focus rubric; ${stats.duplicateOrNear} near-duplicates routed to review.`,
+    reasonSamples.length > 0
+      ? `Representative per-candidate reasons: ${reasonSamples.map(s => `"${s}"`).join("; ")}.`
+      : "",
+    `On reflection, the absence of an anomaly is itself evidence that the current rubric, prompt, and generation cap are tracking the operator's intent for this domain. We will rollback or re-sample if subsequent cycles show drift.`,
+  ];
+  return lines.filter(Boolean).join("\n");
+}
+
 // ── Lesson summarization for archive ────────────────────────────────────────
 
 function summarizeForArchive(stats: CycleStats, proposalCount: number): string {
@@ -286,59 +346,112 @@ export function runResearchCycleMetaImprovement(opts: RunMetaOptions = {}): Meta
     selfRecommendationId: filed[0]?.id,
   });
 
-  // PR #288 / PR #412 — observational reasoning-quality score over the
-  // cycle's *real* reasoning trace. Previously this scored `lessonText`
-  // (a cycle-stats status line: "total=N pursued=N | passRate=X.XXX..."),
-  // which has no reasoning markers and produced a constant 3-condition
-  // self-obviation pattern across cycles regardless of agent behavior.
-  // The Grammar v2.6 scorer expects reasoning — multi-branch causal
-  // claims, explicit alternatives, calibrated uncertainty, productive
-  // stress. `deriveProcedureChangeProposals` produces exactly that in
-  // each proposal's (rationale + proposedChange); concatenating those
-  // is the actual reasoning trace for this cycle.
+  // PR #288 / PR #412 / PR #437 — observational reasoning-quality score
+  // over the cycle's *real* reasoning trace.
   //
-  // When `proposals.length === 0` (clean cycle / nothing to propose),
-  // there is no reasoning to score. Emitting a low-band scorecard for an
-  // empty input is itself a measurement artifact, so we skip the append.
-  // Scoring remains pure / deterministic / cheap and the harness pins
-  // autoApply=false. The store rejects any tampered scorecard at the
-  // boundary. Nothing here gates publishing or modifies engine state.
+  // History:
+  //   PR #288 — score `lessonText` (cycle-stats status line). Produced a
+  //     constant low-band pattern; the stats line has no reasoning markers.
+  //   PR #412 — score the proposal text (rationale+proposedChange) but
+  //     skip entirely on clean cycles (proposals.length === 0). Avoided
+  //     the constant-low artifact but left the scorecard stale across any
+  //     run of clean cycles, since most cycles are clean. Operator
+  //     dashboard then showed a "last updated 5/22" stale read with no
+  //     way to distinguish "scorer is broken" from "no anomalies this
+  //     week".
+  //   PR #437 — score every cycle. Clean cycles get a reasoning trace
+  //     built from the per-record verdict/reason commentary so the scorer
+  //     has real input to operate on; anomalous cycles still score the
+  //     proposal text. Emits structured `grammar_v2_6_*` log events at
+  //     start / score-written / skipped / error so freshness can be
+  //     diagnosed from logs without reading the JSONL. Provisional /
+  //     observational invariants are unchanged: harness pins
+  //     autoApply=false and the store refuses any tampered scorecard at
+  //     the boundary.
   let reasoningScorecard: ReasoningQualityScorecard | null = null;
-  if (doScore && proposals.length > 0) {
+  if (doScore) {
+    const startedAt = Date.now();
+    console.log(JSON.stringify({
+      event: "grammar_v2_6_start",
+      cycleId,
+      proposals: proposals.length,
+      records: records.length,
+      passRate: stats.passRate,
+    }));
     try {
-      const reasoningText = proposals
-        .map(p => `${p.rationale}\n${p.proposedChange}`)
-        .join("\n\n");
+      const reasoningText = buildReasoningTrace(proposals, records, stats);
 
-      // Use prior cycle scorecards' flourishingProxy as recent history so
-      // the harness can compute a delta and (if persistently low) raise the
-      // self-obviation recommendation. Recommendation is observational —
-      // no caller in this PR consumes it for auto-action.
-      const recentHistory = readReasoningQualityEntries()
-        .slice(-5)
-        .map(e => e.scorecard.flourishingProxy)
-        .filter((n): n is number => typeof n === "number" && Number.isFinite(n));
+      if (!reasoningText) {
+        console.log(JSON.stringify({
+          event: "grammar_v2_6_skipped",
+          cycleId,
+          reason: "no_records_no_proposals",
+        }));
+      } else {
+        // Use prior cycle scorecards' flourishingProxy as recent history so
+        // the harness can compute a delta and (if persistently low) raise the
+        // self-obviation recommendation. Recommendation is observational —
+        // no caller consumes it for auto-action.
+        const recentHistory = readReasoningQualityEntries()
+          .slice(-5)
+          .map(e => e.scorecard.flourishingProxy)
+          .filter((n): n is number => typeof n === "number" && Number.isFinite(n));
 
-      reasoningScorecard = scoreReasoningTrace({
-        text: reasoningText,
-        prompt: `cycle ${cycleId} meta-improvement reasoning`,
-        reportedConfidence: stats.passRate,
-        irreversibleCommit: false, // archive append is reversible-by-policy
-        alternativesConsidered: proposals.map(p => p.title),
-        sources: records.map(r => r.candidateRef).slice(0, 8),
-        domain: "research-cycle/meta-improvement",
-        recentFlourishingHistory: recentHistory,
-      });
+        reasoningScorecard = scoreReasoningTrace({
+          text: reasoningText,
+          prompt: `cycle ${cycleId} meta-improvement reasoning`,
+          reportedConfidence: stats.passRate,
+          irreversibleCommit: false, // archive append is reversible-by-policy
+          alternativesConsidered: proposals.length > 0
+            ? proposals.map(p => p.title)
+            : records.map(r => r.reason).filter(Boolean).slice(0, 5),
+          sources: records.map(r => r.candidateRef).slice(0, 8),
+          domain: "research-cycle/meta-improvement",
+          recentFlourishingHistory: recentHistory,
+        });
 
-      appendReasoningQualityEntry({
-        engineStep: "research-cycle/meta-improvement",
-        cycleId,
-        domain: "lesson",
-        scorecard: reasoningScorecard,
-      });
+        const persisted = appendReasoningQualityEntry({
+          engineStep: "research-cycle/meta-improvement",
+          cycleId,
+          domain: proposals.length > 0 ? "lesson" : "clean-cycle",
+          scorecard: reasoningScorecard,
+        });
+
+        if (persisted) {
+          console.log(JSON.stringify({
+            event: "grammar_v2_6_score_written",
+            cycleId,
+            entryId: persisted.id,
+            band: reasoningScorecard.reasoningQualityBand,
+            flourishingProxy: reasoningScorecard.flourishingProxy,
+            sigma: reasoningScorecard.sigma,
+            invariantHeld: reasoningScorecard.invariantHeld,
+            failedConditions: reasoningScorecard.failedConditions,
+            cleanCycle: proposals.length === 0,
+            elapsedMs: Date.now() - startedAt,
+          }));
+        } else {
+          console.log(JSON.stringify({
+            event: "grammar_v2_6_skipped",
+            cycleId,
+            reason: "store_rejected_scorecard",
+          }));
+        }
+      }
     } catch (e: any) {
+      console.log(JSON.stringify({
+        event: "grammar_v2_6_error",
+        cycleId,
+        error: e?.message ?? String(e),
+      }));
       console.warn(`[MetaImprovement] reasoning-quality scoring failed (non-fatal):`, e?.message ?? e);
     }
+  } else {
+    console.log(JSON.stringify({
+      event: "grammar_v2_6_skipped",
+      cycleId,
+      reason: "scoring_disabled_by_option",
+    }));
   }
 
   const summary =

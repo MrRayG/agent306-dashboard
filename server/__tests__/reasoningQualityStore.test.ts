@@ -195,11 +195,12 @@ describe("runResearchCycleMetaImprovement — observational scoring", () => {
     assert.equal(readReasoningQualityEntries().length, before, "no append when disabled");
   });
 
-  it("malformed / empty cycle records are safely handled — never throws, no scorecard for empty reasoning (PR #412)", () => {
-    // Force-empty records: meta-improvement still appends an archive record,
-    // but per PR #412 we do NOT emit a scorecard when proposals.length === 0.
-    // Empty input is not real reasoning to measure; scoring it was the very
-    // measurement artifact PR #412 fixes.
+  it("malformed / empty cycle records are safely handled — never throws, no scorecard for empty reasoning (PR #412 / PR #437)", () => {
+    // PR #412: empty input is not real reasoning to measure. PR #437 keeps
+    // this contract for the literally-empty cycle (zero records AND zero
+    // proposals) — there is genuinely nothing to score. Clean cycles WITH
+    // records, on the other hand, now do emit a scorecard (covered by the
+    // PR #437 tests in researchCycleMetaImprovement.test.ts).
     let threw = false;
     let out: any;
     try {
@@ -213,7 +214,7 @@ describe("runResearchCycleMetaImprovement — observational scoring", () => {
     assert.equal(threw, false, "must not throw on empty cycle");
     assert.ok(out, "result returned");
     assert.equal(out.reasoningScorecard, null,
-      "empty cycle must not emit a scorecard (no reasoning to score)");
+      "empty cycle (no records, no proposals) must not emit a scorecard");
     // Archive record IS still written — lessonText archive path unchanged.
     assert.ok(out.archiveRecord, "archive record still written for empty cycle");
   });

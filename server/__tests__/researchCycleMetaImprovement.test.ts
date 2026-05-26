@@ -208,17 +208,21 @@ describe("runResearchCycleMetaImprovement", () => {
 });
 
 /**
- * PR #412 — Reasoning Quality v2.6 scores *real reasoning traces*, not
- * the cycle-stats `lessonText` status line. Pins:
- *   - Anomalous cycle with proposals → scorecard is emitted, and the scored
- *     text is derived from proposals (rationale+proposedChange), not from
- *     `lessonText` ("cycle stats: total=… | passRate=…").
- *   - Clean cycle with zero proposals → NO scorecard appended (we don't
- *     measure the empty set).
- *   - scoreReasoning=false opt-out still suppresses scoring even with
- *     proposals present.
+ * PR #412 / PR #437 — Reasoning Quality v2.6 scores *real reasoning
+ * traces*, not the cycle-stats `lessonText` status line. PR #437
+ * extends this so every cycle emits a scorecard (clean cycles get a
+ * synthesized trace from per-record reasons + stats), restoring
+ * dashboard freshness. Pins:
+ *   - Anomalous cycle with proposals → scorecard emitted, text source
+ *     is proposal rationale+proposedChange (PR #412 contract preserved).
+ *   - Clean cycle with zero proposals → scorecard IS emitted now (PR
+ *     #437), text source is the per-record reasoning trace.
+ *   - scoreReasoning=false opt-out still suppresses scoring entirely.
+ *   - Cycle with literally zero records AND zero proposals → no
+ *     scorecard (genuinely nothing to score; logs `grammar_v2_6_skipped`
+ *     with reason=no_records_no_proposals).
  */
-describe("PR #412 — reasoning quality scores real proposal text", () => {
+describe("PR #412 / PR #437 — reasoning quality scores real proposal text", () => {
   beforeEach(wipeRecs);
 
   it("emits a scorecard whose text source is proposal reasoning, not lessonText stats", () => {
@@ -230,9 +234,7 @@ describe("PR #412 — reasoning quality scores real proposal text", () => {
       recordsOverride: recs,
     })!;
 
-    // sanity: anomalous stats produced proposals
     assert.ok(out.recommendations.length >= 1, "anomalous stats must produce proposals");
-    // sanity: scorecard was emitted (proposals.length > 0 path)
     assert.ok(out.reasoningScorecard, "scorecard must be emitted when proposals exist");
 
     const entries = readReasoningQualityEntries();
@@ -240,46 +242,53 @@ describe("PR #412 — reasoning quality scores real proposal text", () => {
     const latest = entries[entries.length - 1];
     assert.equal(latest.cycleId, "pr412-real-trace");
     assert.equal(latest.engineStep, "research-cycle/meta-improvement");
-
-    // The previous (broken) implementation passed `lessonText` which always
-    // starts with "cycle stats:". Confirm we are NOT using that input now
-    // by checking the stored scorecard's input/text-hash surface differs
-    // from what a stats line would produce. We don't store the raw text in
-    // the entry, so we use a behavioral proxy: alternativesConsidered is
-    // derived from proposal titles, which only exist when we actually
-    // sourced the trace from proposals.
+    assert.equal(latest.domain, "lesson",
+      "anomalous cycle domain tag must remain 'lesson' for back-compat with dashboards");
     assert.ok(latest.scorecard, "scorecard must be present");
-    // The scorecard must have been computed against proposal-shaped input.
-    // We can verify this indirectly by the presence of the lesson archive
-    // record alongside the scorecard — lessonText is preserved for archive
-    // (unchanged) while the scorer now reads proposal text.
     assert.equal(out.archiveRecord.proposesChange, true,
       "archive still records that change was proposed (lessonText unchanged for archive)");
   });
 
-  it("does NOT append a scorecard when the cycle is clean (proposals.length === 0)", () => {
+  it("PR #437: DOES emit a scorecard for a clean cycle (proposals.length === 0) to keep dashboard fresh", () => {
     const before = readReasoningQualityEntries().length;
-    // Healthy cycle: 3 records, mostly pursue, no missing-protocol majority,
-    // total < MIN_CYCLE_SIZE_FOR_PROCEDURE_CHANGE keeps proposals at 0.
+    // Healthy cycle: 3 records, mostly pursue, no anomalous stats.
     const records = [
-      recOverridden({ verdict: "pursue", reason: "ok" }),
-      recOverridden({ verdict: "pursue", reason: "ok" }),
-      recOverridden({ verdict: "review", reason: "ok", hadProtocol: true }),
+      recOverridden({ verdict: "pursue", reason: "rubric pass, complete protocol" }),
+      recOverridden({ verdict: "pursue", reason: "rubric pass, complete protocol" }),
+      recOverridden({ verdict: "review", reason: "below threshold but novel", hadProtocol: true }),
     ];
     const out = runResearchCycleMetaImprovement({
-      cycleId: "pr412-clean-cycle",
+      cycleId: "pr437-clean-cycle",
       recordsOverride: records,
     })!;
 
     assert.equal(out.recommendations.length, 0, "clean cycle must produce zero proposals");
-    assert.equal(out.reasoningScorecard, null,
-      "clean cycle must NOT emit a scorecard (empty reasoning is not measured)");
+    assert.ok(out.reasoningScorecard, "PR #437: clean cycle MUST emit a scorecard");
+    // Provisional / observational invariants pinned.
+    assert.equal(out.reasoningScorecard!.autoApply, false);
+    assert.equal(out.reasoningScorecard!.provisional, true);
 
-    const after = readReasoningQualityEntries().length;
-    assert.equal(after, before, "no scorecard appended for empty reasoning");
+    const after = readReasoningQualityEntries();
+    assert.equal(after.length, before + 1, "PR #437: one scorecard appended even on clean cycle");
+    const latest = after[after.length - 1];
+    assert.equal(latest.cycleId, "pr437-clean-cycle");
+    assert.equal(latest.domain, "clean-cycle",
+      "clean cycle scorecards are tagged 'clean-cycle' to distinguish from anomaly traces");
 
     // Critical: archive record IS still written (lessonText path unchanged).
-    assert.match(out.archiveRecord.variantLabel, /pr412-clean-cycle/);
+    assert.match(out.archiveRecord.variantLabel, /pr437-clean-cycle/);
+  });
+
+  it("PR #437: zero records AND zero proposals → no scorecard (genuinely nothing to score)", () => {
+    const before = readReasoningQualityEntries().length;
+    const out = runResearchCycleMetaImprovement({
+      cycleId: "pr437-empty",
+      recordsOverride: [],
+    })!;
+    assert.equal(out.reasoningScorecard, null,
+      "with literally zero records there is no reasoning trace to score");
+    assert.equal(readReasoningQualityEntries().length, before,
+      "no append for empty cycle");
   });
 
   it("scoreReasoning=false suppresses scoring even when proposals exist", () => {
@@ -296,5 +305,32 @@ describe("PR #412 — reasoning quality scores real proposal text", () => {
     assert.equal(out.reasoningScorecard, null, "opt-out must suppress scorecard");
     assert.equal(readReasoningQualityEntries().length, before,
       "opt-out must not append to reasoning-quality store");
+  });
+
+  it("PR #437: emits structured grammar_v2_6_* log events for diagnostic freshness tracing", () => {
+    // Capture console.log lines for this test.
+    const captured: string[] = [];
+    const origLog = console.log;
+    console.log = (...args: any[]) => {
+      try { captured.push(args.map(a => typeof a === "string" ? a : JSON.stringify(a)).join(" ")); }
+      catch { /* ignore */ }
+    };
+    try {
+      // Clean cycle path → expect start + score_written.
+      runResearchCycleMetaImprovement({
+        cycleId: "pr437-logs-clean",
+        recordsOverride: [
+          recOverridden({ verdict: "pursue", reason: "ok" }),
+          recOverridden({ verdict: "pursue", reason: "ok" }),
+        ],
+      });
+    } finally {
+      console.log = origLog;
+    }
+    const startEvent = captured.find(l => l.includes("grammar_v2_6_start"));
+    const writtenEvent = captured.find(l => l.includes("grammar_v2_6_score_written"));
+    assert.ok(startEvent, "must emit grammar_v2_6_start");
+    assert.ok(writtenEvent, "clean cycle must emit grammar_v2_6_score_written");
+    assert.match(writtenEvent!, /"cleanCycle":true/);
   });
 });
