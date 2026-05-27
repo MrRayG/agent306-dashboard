@@ -20,6 +20,11 @@ import { getCorrections } from "./reasoningEngine.js";
 import { get306EvalResults } from "./evalEngine.js";
 import { getLedgerSummary, getSelfChangeMetrics } from "./insightLedger.js";
 import {
+  isSelfIntegrityPrimitiveCoverageEnabled,
+  summarizeSelfIntegrityCoverage,
+  type SelfIntegrityCoverageReport,
+} from "./primitives/selfIntegrityCoverage.js";
+import {
   readReasoningQualityTail,
   summarizeReasoningQuality,
   type ReasoningQualityEntry,
@@ -482,6 +487,26 @@ export function getPublicMetacognition() {
       console.warn("[PublicApi] Ledger summary failed (non-fatal):", e?.message);
     }
 
+    // Additive Self-Integrity primitive-coverage diagnostic. Default-off
+    // via SELF_INTEGRITY_PRIMITIVE_COVERAGE_ENABLED so the response shape
+    // is byte-identical to pre-PR when the flag is unset. With the flag
+    // ON, the block describes which primitive families are unsupported
+    // vs registered vs dispatch-reachable vs already invoked in dry-run.
+    // The block is DESCRIPTIVE ONLY — it never closes / mutates a
+    // self-recommendation; the missing-primitive reconciler still drives
+    // lifecycle via the translator.
+    let primitiveCoverage: SelfIntegrityCoverageReport | null = null;
+    if (isSelfIntegrityPrimitiveCoverageEnabled()) {
+      try {
+        primitiveCoverage = summarizeSelfIntegrityCoverage();
+      } catch (e: any) {
+        console.warn(
+          "[PublicApi] Self-Integrity primitive coverage failed (non-fatal):",
+          e?.message,
+        );
+      }
+    }
+
     return {
       cognition: {
         knowledgeEntries: meta.knowledgeCoverage.totalActive,
@@ -508,6 +533,7 @@ export function getPublicMetacognition() {
         evolutionDay: history.totalDays,
         insightLedger: ledger,
         selfChange,
+        primitiveCoverage,
       },
       generatedAt: new Date().toISOString(),
     };
