@@ -23,6 +23,7 @@ import { verifyClaims } from "./claimVerifier.js";
 import { buildSharedClaimLaneContractBlock } from "./claimLaneContract.js";
 import { extractClaimsAndComments } from "./claimExtractor.js";
 import { buildResearchPack } from "./researchPack.js";
+import { checkTemporal, buildTemporalGroundingBlock } from "./temporalGuard.js";
 // ── Types ───────────────────────────────────────────────────────────────
 
 interface DispatchEpisode {
@@ -173,7 +174,13 @@ export async function generateDispatchContent(): Promise<string | null> {
     // must mark its analytical voice with explicit Lane B boundary phrases
     // so the verifier doesn't confuse it for unsupported source attribution.
     const dispatchLaneContract = buildSharedClaimLaneContractBlock("news");
-    const systemPrompt = `Today is ${new Date().toISOString().slice(0, 10)} (UTC).\n\n${dispatchContext}\n\n${buildVoiceBlock()}\n\n${dispatchLaneContract}\n\n${citationDiscipline}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
+    // Temporal grounding (PR — May 2026 fix). Same block the auto-dispatch
+    // and manual generator use; The Dispatch series is the most prone to
+    // historical-event drift because its episode context references prior
+    // weeks. The block tells the LLM the current year and the rules for
+    // grounding old events vs. far-future projections.
+    const temporalGroundingBlock = buildTemporalGroundingBlock();
+    const systemPrompt = `Today is ${new Date().toISOString().slice(0, 10)} (UTC).\n\n${temporalGroundingBlock}\n\n${dispatchContext}\n\n${buildVoiceBlock()}\n\n${dispatchLaneContract}\n\n${citationDiscipline}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
 
     const grokResp = await postChatCompletions({
         model: getModel("news-dispatch"),
@@ -288,6 +295,27 @@ Return JSON: {"post": "...", "title": "...", "summary": "..."}`
         console.error(`  editor: [${ec.action}] sentence#${ec.sentenceIndex} ${ec.reason}`);
       }
       return null;
+    }
+
+    // Temporal grounding guard (PR — May 2026). Drop the episode entirely
+    // on HARD_FAIL so the episode counter does NOT advance for a temporally
+    // drifted dispatch — same posture as the verifier HARD_FAIL branch
+    // above. Console-logs the findings for operator visibility. SOFT_WARN
+    // is recorded but not blocking.
+    const temporal = checkTemporal(enforced);
+    if (temporal.severity === "HARD_FAIL") {
+      console.error(
+        `[DispatchEngine] TEMPORAL HARD_FAIL episode ${nextEpisode}: ${temporal.findings.length} finding(s); dropping`,
+      );
+      for (const f of temporal.findings) {
+        console.error(`  - [${f.kind}] ${f.reason}: ${f.sentence.slice(0, 180)}`);
+      }
+      return null;
+    }
+    if (temporal.severity === "SOFT_WARN") {
+      console.warn(
+        `[DispatchEngine] TEMPORAL SOFT_WARN episode ${nextEpisode}: ${temporal.findings.length} finding(s); proceeding`,
+      );
     }
 
     // Auto-generate summary from content if LLM didn't provide one

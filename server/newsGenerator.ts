@@ -18,6 +18,7 @@ import { buildSharedClaimLaneContractBlock } from "./claimLaneContract.js";
 import { recordNewsDraft } from "./newsDraftStore.js";
 import { extractClaimsAndComments } from "./claimExtractor.js";
 import { buildResearchPack } from "./researchPack.js";
+import { checkTemporal, buildTemporalGroundingBlock } from "./temporalGuard.js";
 export async function generateNewsContent(): Promise<string | null> {
   const grokKey = LLM_API_KEY;
   if (!grokKey) return null;
@@ -67,7 +68,14 @@ export async function generateNewsContent(): Promise<string | null> {
   Never assert a specific number as fact in agent voice without one of the above. Bare numerics fail the Lane B verifier.
 - Comparative / superlative claims about institutions, markets, or systems ("X responds faster than traditional institutions," "this is the first time," "stablecoin spend is up 100% YoY") are Lane C and follow the same rule. If you cannot point to a source URL, REWRITE the sentence as Lane B framing ("My read — coordination here moves on a different timescale than traditional institutions") OR drop the comparison entirely.
 - When in doubt: drop the number or drop the comparative. The verifier hard-fails on bare Lane C.`;
-    const dispatchSystemPrompt = `${dispatchContext}\n\n${buildVoiceBlock()}\n\n${newsLaneContract}\n\n${citationDiscipline}\n\n${newsBareClaimGuardrail}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
+    // Temporal grounding (PR — May 2026 fix). The manual POST NOW path was
+    // missing the `Today is YYYY-MM-DD (UTC)` anchor that the auto-dispatch
+    // already had, so the LLM lacked a clear current-year reference. Wire
+    // both the bare ISO date AND the temporal grounding block here so the
+    // writer is told the cycle date and the historical-event grounding rules
+    // in one place. Mirrors the auto-dispatch header in routes.ts.
+    const temporalGroundingBlock = buildTemporalGroundingBlock();
+    const dispatchSystemPrompt = `Today is ${new Date().toISOString().slice(0, 10)} (UTC).\n\n${temporalGroundingBlock}\n\n${dispatchContext}\n\n${buildVoiceBlock()}\n\n${newsLaneContract}\n\n${citationDiscipline}\n\n${newsBareClaimGuardrail}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
 
     const grokResp = await postChatCompletions({
         model: getModel("news-dispatch"),
@@ -238,6 +246,63 @@ Return JSON: {"post": "..."}`
         });
       } catch (storeErr: any) {
         console.error(`[NewsGenerator] Failed to write soft-warn audit:`, storeErr?.message ?? String(storeErr));
+      }
+    }
+
+    // Temporal grounding guard (PR — May 2026). Runs AFTER the claim verifier
+    // because the verifier doesn't reason about temporal framing. HARD_FAIL
+    // here means year-drift, wrong-year-current, or stale-event-as-current —
+    // quarantine the draft the same way verifier hard-fails do. SOFT_WARN
+    // (e.g. far-future projection with no source) is recorded but not
+    // blocking. No existing posting gate is loosened.
+    const temporal = checkTemporal(postText);
+    if (temporal.severity === "HARD_FAIL") {
+      console.error(
+        `[NewsGenerator] TEMPORAL HARD_FAIL — ${temporal.findings.length} finding(s); quarantining draft`,
+      );
+      for (const f of temporal.findings) {
+        console.error(`  - [${f.kind}] ${f.reason}: ${f.sentence.slice(0, 180)}`);
+      }
+      try {
+        const draft = recordNewsDraft({
+          status:             "quarantined",
+          severity:           "HARD_FAIL",
+          text:               postText,
+          unsupportedReasons: temporal.findings.map(f => `temporal/${f.kind}: ${f.reason}`),
+          verifierReport:     verdict.verifierReport,
+          source:             "manual-generator",
+          editorComments:     newsExtraction.editorComments,
+          claims:             newsExtraction.claims,
+          references:         newsExtraction.references,
+          manualReviewRequired: true,
+          manualPublishAllowed: false,
+          referenceMetadata:  newsResearchPack.references,
+          quarantineReason:   "temporal_drift",
+          temporalReport:     temporal,
+        });
+        console.error(`[NewsGenerator] Quarantined draft ${draft.id} (temporal_drift)`);
+      } catch (storeErr: any) {
+        console.error(`[NewsGenerator] Failed to write temporal-drift quarantine:`, storeErr?.message ?? String(storeErr));
+      }
+      return null;
+    }
+    if (temporal.severity === "SOFT_WARN") {
+      console.warn(
+        `[NewsGenerator] TEMPORAL SOFT_WARN — ${temporal.findings.length} finding(s); returning anyway`,
+      );
+      try {
+        recordNewsDraft({
+          status:             "published_with_warnings",
+          severity:           "SOFT_WARN",
+          text:               postText,
+          unsupportedReasons: temporal.findings.map(f => `temporal/${f.kind}: ${f.reason}`),
+          verifierReport:     verdict.verifierReport,
+          source:             "manual-generator",
+          temporalReport:     temporal,
+          quarantineReason:   "soft_warn_audit",
+        });
+      } catch (storeErr: any) {
+        console.error(`[NewsGenerator] Failed to write temporal soft-warn audit:`, storeErr?.message ?? String(storeErr));
       }
     }
 

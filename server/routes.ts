@@ -61,6 +61,7 @@ import { fetchSourceContent } from "./sourceFetcher.js";
 import { verifyClaims, type VerifierReport } from "./claimVerifier.js";
 import { buildSharedClaimLaneContractBlock } from "./claimLaneContract.js";
 import { recordNewsDraft, readNewsDrafts, deleteNewsDraft } from "./newsDraftStore.js";
+import { checkTemporal, buildTemporalGroundingBlock } from "./temporalGuard.js";
 import {
   readEngineQuarantines,
   deleteEngineQuarantine,
@@ -476,7 +477,11 @@ async function postDailyNewsDispatch() {
   Never assert a specific number as fact in agent voice without one of the above. Bare numerics fail the Lane B verifier.
 - Comparative / superlative claims about institutions, markets, or systems ("X responds faster than traditional institutions," "this is the first time," "stablecoin spend is up 100% YoY") are Lane C and follow the same rule. If you cannot point to a source URL in today's headline pack, REWRITE the sentence as Lane B framing ("My read — coordination here moves on a different timescale than traditional institutions") OR drop the comparison entirely. Do NOT publish bare comparatives.
 - When in doubt: drop the number or drop the comparative. The verifier hard-fails on bare Lane C; a softer, source-anchored sentence ships, a hard-failed dispatch sits in quarantine all day.`;
-    const dispatchSystemPrompt = `Today is ${new Date().toISOString().slice(0, 10)} (UTC).\n\n${dispatchContext}\n\n${buildVoiceBlock()}\n\n${newsLaneContract}\n\n${citationDiscipline}\n\n${newsBareClaimGuardrail}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
+    // Temporal grounding block (PR — May 2026 fix). Mirrors the manual
+    // generator path so both auto-dispatch and POST NOW give the LLM the
+    // same current-year anchor and historical-event grounding rules.
+    const temporalGroundingBlock = buildTemporalGroundingBlock();
+    const dispatchSystemPrompt = `Today is ${new Date().toISOString().slice(0, 10)} (UTC).\n\n${temporalGroundingBlock}\n\n${dispatchContext}\n\n${buildVoiceBlock()}\n\n${newsLaneContract}\n\n${citationDiscipline}\n\n${newsBareClaimGuardrail}\n${getEvolutionContext()}${todaysSummary ? "\n\n" + todaysSummary : ""}`;
     const grokResp = await postChatCompletions({
         model: getModel("news-dispatch"),
         messages: [
@@ -665,6 +670,59 @@ Return JSON: {"post": "..."}`
         });
       } catch (storeErr: any) {
         console.error(`[Agent306:News] Failed to write soft-warn audit:`, storeErr?.message ?? String(storeErr));
+      }
+    }
+
+    // Temporal grounding guard (PR — May 2026). Runs AFTER the claim
+    // verifier because year-drift / stale-as-current framing slips past the
+    // attribution-lane verifier. HARD_FAIL here matches the verifier's
+    // hard-fail handling: quarantine the draft, reset the daily lock so a
+    // retry is possible, and do NOT queue for X/Farcaster. SOFT_WARN is
+    // logged but not blocking. No existing gate is loosened — this is a
+    // new gate on top.
+    const temporal = checkTemporal(postText);
+    if (temporal.severity === "HARD_FAIL") {
+      console.error(
+        `[Agent306:News] TEMPORAL HARD_FAIL — ${temporal.findings.length} finding(s); quarantining auto-dispatch`,
+      );
+      for (const f of temporal.findings) {
+        console.error(`  - [${f.kind}] ${f.reason}: ${f.sentence.slice(0, 180)}`);
+      }
+      try {
+        const draft = recordNewsDraft({
+          status:             "quarantined",
+          severity:           "HARD_FAIL",
+          text:               postText,
+          unsupportedReasons: temporal.findings.map(f => `temporal/${f.kind}: ${f.reason}`),
+          verifierReport:     verdict.verifierReport,
+          source:             "auto-dispatch",
+          quarantineReason:   "temporal_drift",
+          temporalReport:     temporal,
+        });
+        console.error(`[Agent306:News] Quarantined draft ${draft.id} (temporal_drift)`);
+      } catch (storeErr: any) {
+        console.error(`[Agent306:News] Failed to write temporal-drift quarantine:`, storeErr?.message ?? String(storeErr));
+      }
+      lastNewsDispatchDate = null; // allow retry on next tick
+      return;
+    }
+    if (temporal.severity === "SOFT_WARN") {
+      console.warn(
+        `[Agent306:News] TEMPORAL SOFT_WARN — ${temporal.findings.length} finding(s); publishing anyway`,
+      );
+      try {
+        recordNewsDraft({
+          status:             "published_with_warnings",
+          severity:           "SOFT_WARN",
+          text:               postText,
+          unsupportedReasons: temporal.findings.map(f => `temporal/${f.kind}: ${f.reason}`),
+          verifierReport:     verdict.verifierReport,
+          source:             "auto-dispatch",
+          temporalReport:     temporal,
+          quarantineReason:   "soft_warn_audit",
+        });
+      } catch (storeErr: any) {
+        console.error(`[Agent306:News] Failed to write temporal soft-warn audit:`, storeErr?.message ?? String(storeErr));
       }
     }
 
