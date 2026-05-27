@@ -69,10 +69,20 @@ import {
   PRIMITIVE_OTHER_EXECUTOR_DRY_RUN_ENV,
   OTHER_PRIMITIVE_ID,
 } from "../primitives/other/index.js";
+import {
+  PRIMITIVE_TTL_EXECUTOR_ENABLED_ENV,
+  PRIMITIVE_TTL_EXECUTOR_DRY_RUN_ENV,
+  TTL_PRIMITIVE_ID,
+} from "../primitives/ttl/index.js";
 
 // All eight flag names the Railway smoke test toggled. Kept here as a
 // single canonical list so a future addition to the gate stack surfaces
 // as a test compile error rather than a silent miss.
+// The Railway-smoke-test gate stack. ttl (like archive) is intentionally
+// NOT part of this list — both are destructive-family scaffolds that
+// operators must opt into explicitly, separate from the Railway-smoke
+// "all gates on" baseline. The ttl-opt-in test below sets its own envs
+// and cleans them up in beforeEach via TTL_OPTIN_ENVS.
 const ALL_FLAG_ENVS = [
   PRIMITIVE_REGISTRY_ENABLED_ENV,
   PRIMITIVE_TRANSLATOR_DISPATCH_ENABLED_ENV,
@@ -83,6 +93,15 @@ const ALL_FLAG_ENVS = [
   PRIMITIVE_ARTIFACT_EXECUTOR_DRY_RUN_ENV,
   PRIMITIVE_OTHER_EXECUTOR_ENABLED_ENV,
   PRIMITIVE_OTHER_EXECUTOR_DRY_RUN_ENV,
+] as const;
+
+// Opt-in envs the ttl test toggles. We keep these separate from
+// ALL_FLAG_ENVS so the Railway-smoke baseline above isn't widened, but
+// we still wipe them in beforeEach so a ttl env set during the
+// opt-in test cannot leak into the next test's gate state.
+const TTL_OPTIN_ENVS = [
+  PRIMITIVE_TTL_EXECUTOR_ENABLED_ENV,
+  PRIMITIVE_TTL_EXECUTOR_DRY_RUN_ENV,
 ] as const;
 
 function captureConsole(): { lines: string[]; restore: () => void } {
@@ -107,6 +126,12 @@ describe("primitives-bootstrap startup audit (PR #434)", () => {
       ORIG[k] = process.env[k];
       delete process.env[k];
     }
+    // Also wipe the ttl opt-in envs so a value set by the ttl-opt-in
+    // test below cannot leak into a subsequent test's gate state.
+    for (const k of TTL_OPTIN_ENVS) {
+      ORIG[k] = process.env[k];
+      delete process.env[k];
+    }
     __resetForTests();
     resetSynthesisAdapterForTests();
     __resetBootstrapAuditForTests();
@@ -114,6 +139,11 @@ describe("primitives-bootstrap startup audit (PR #434)", () => {
 
   afterEach(() => {
     for (const k of ALL_FLAG_ENVS) {
+      const v = ORIG[k];
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    for (const k of TTL_OPTIN_ENVS) {
       const v = ORIG[k];
       if (v === undefined) delete process.env[k];
       else process.env[k] = v;
@@ -181,6 +211,11 @@ describe("primitives-bootstrap startup audit (PR #434)", () => {
     assert.match(audit, /synthesisRegistered=false/);
     assert.match(audit, /artifactRegistered=false/);
     assert.match(audit, /otherRegistered=false/);
+    assert.match(audit, /archiveEnabled=false/);
+    assert.match(audit, /archiveRegistered=false/);
+    assert.match(audit, /ttlEnabled=false/);
+    assert.match(audit, /ttlDryRun=true/);
+    assert.match(audit, /ttlRegistered=false/);
     assert.match(audit, /synthesisReadOnlyPlannerInstalled=false/);
     assert.match(audit, /registeredFamilies=\[\]/);
     assert.match(audit, /registeredPrimitives=\[\]/);
@@ -204,18 +239,20 @@ describe("primitives-bootstrap startup audit (PR #434)", () => {
     }
 
     // Report shape — the same shape the audit log surfaces, but
-    // structured for in-process assertions. `archiveRegistered` is
-    // false here because the archive executor flag is NOT part of
-    // `ALL_FLAG_ENVS` in this suite (the archive scaffold opts in
-    // separately and intentionally is NOT included in the Railway-
-    // smoke-test "all gates on" baseline — operators must opt in
-    // explicitly to the destructive-family scaffold).
+    // structured for in-process assertions. `archiveRegistered` and
+    // `ttlRegistered` are false here because the archive/ttl executor
+    // flags are NOT part of `ALL_FLAG_ENVS` in this suite (the
+    // archive and ttl scaffolds opt in separately and intentionally
+    // are NOT included in the Railway-smoke-test "all gates on"
+    // baseline — operators must opt in explicitly to either
+    // destructive-family scaffold).
     assert.deepEqual(report, {
       registryEnabled: true,
       synthesisRegistered: true,
       artifactRegistered: true,
       otherRegistered: true,
       archiveRegistered: false,
+      ttlRegistered: false,
       synthesisReadOnlyPlannerInstalled: true,
     });
 
@@ -258,6 +295,41 @@ describe("primitives-bootstrap startup audit (PR #434)", () => {
     );
   });
 
+  // ── ttl scaffold opt-in: registration observable in audit ────────────────
+
+  it("master + ttl-executor flags ON: ttl primitive registered and reported in audit", () => {
+    process.env[PRIMITIVE_REGISTRY_ENABLED_ENV] = "true";
+    process.env[PRIMITIVE_TTL_EXECUTOR_ENABLED_ENV] = "true";
+
+    const cap = captureConsole();
+    let report;
+    try {
+      report = bootstrapPrimitives();
+    } finally {
+      cap.restore();
+    }
+
+    assert.equal(report.ttlRegistered, true);
+    assert.equal(report.synthesisRegistered, false);
+    assert.equal(report.artifactRegistered, false);
+    assert.equal(report.otherRegistered, false);
+    assert.equal(report.archiveRegistered, false);
+
+    const audit = cap.lines.find((l) => l.includes("event=startupAudit"));
+    assert.ok(audit, "startupAudit log line must be present");
+    assert.match(audit, /ttlEnabled=true/);
+    assert.match(audit, /ttlDryRun=true/);
+    assert.match(audit, /ttlRegistered=true/);
+    assert.match(
+      audit,
+      new RegExp(`registeredPrimitives=\\["ttl::${TTL_PRIMITIVE_ID}"\\]`),
+    );
+
+    // Sanity: registry state matches the audit claim.
+    assert.equal(listPrimitives().length, 1);
+    assert.deepEqual([...listFamilies()], ["ttl"]);
+  });
+
   // ── (4) Master-OFF, every executor flag ON: nothing registered ──────────
 
   it("master OFF + every executor flag ON: audit reports empty registry (per Pin 7 / Pin 11)", () => {
@@ -276,6 +348,8 @@ describe("primitives-bootstrap startup audit (PR #434)", () => {
     assert.match(audit, /synthesisRegistered=false/);
     assert.match(audit, /artifactRegistered=false/);
     assert.match(audit, /otherRegistered=false/);
+    assert.match(audit, /archiveRegistered=false/);
+    assert.match(audit, /ttlRegistered=false/);
     assert.match(audit, /synthesisReadOnlyPlannerInstalled=false/);
     assert.match(audit, /registeredPrimitives=\[\]/);
 
