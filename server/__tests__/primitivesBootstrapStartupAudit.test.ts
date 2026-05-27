@@ -204,12 +204,18 @@ describe("primitives-bootstrap startup audit (PR #434)", () => {
     }
 
     // Report shape — the same shape the audit log surfaces, but
-    // structured for in-process assertions.
+    // structured for in-process assertions. `archiveRegistered` is
+    // false here because the archive executor flag is NOT part of
+    // `ALL_FLAG_ENVS` in this suite (the archive scaffold opts in
+    // separately and intentionally is NOT included in the Railway-
+    // smoke-test "all gates on" baseline — operators must opt in
+    // explicitly to the destructive-family scaffold).
     assert.deepEqual(report, {
       registryEnabled: true,
       synthesisRegistered: true,
       artifactRegistered: true,
       otherRegistered: true,
+      archiveRegistered: false,
       synthesisReadOnlyPlannerInstalled: true,
     });
 
