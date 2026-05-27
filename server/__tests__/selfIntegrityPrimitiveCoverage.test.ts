@@ -87,6 +87,10 @@ const {
   PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED_ENV,
 } = await import("../primitives/archive/index.js");
 const {
+  registerTtlPrimitive,
+  PRIMITIVE_TTL_EXECUTOR_ENABLED_ENV,
+} = await import("../primitives/ttl/index.js");
+const {
   PRIMITIVE_EXECUTOR_INVOCATION_ENABLED_ENV,
 } = await import("../primitives/dispatcher.js");
 const {
@@ -108,6 +112,7 @@ const ALL_ENV_KEYS = [
   PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED_ENV,
   PRIMITIVE_OTHER_EXECUTOR_ENABLED_ENV,
   PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED_ENV,
+  PRIMITIVE_TTL_EXECUTOR_ENABLED_ENV,
   SELF_INTEGRITY_PRIMITIVE_COVERAGE_ENABLED_ENV,
 ];
 
@@ -137,6 +142,7 @@ function enableAllGates(): void {
   process.env[PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED_ENV] = "true";
   process.env[PRIMITIVE_OTHER_EXECUTOR_ENABLED_ENV] = "true";
   process.env[PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED_ENV] = "true";
+  process.env[PRIMITIVE_TTL_EXECUTOR_ENABLED_ENV] = "true";
 }
 
 function wipeRecs() {
@@ -257,6 +263,38 @@ describe("Self-Integrity primitive coverage — 5-state classification", () => {
     assert.equal(res.observedDryRunOk, true);
   });
 
+  it("ttl scaffold flows through the same 5-state classification as archive (PR-ttl-scaffold)", () => {
+    // Default: ttl has no registered primitive → unsupported. This is
+    // the May 27 production state — `primitiveLookupMiss family=ttl`.
+    let res = classifySelfIntegrityCoverageForFamily("ttl", {
+      telemetry: [],
+    });
+    assert.equal(res.status, "unsupported");
+
+    // Register ttl but leave gates off → registered.
+    registerTtlPrimitive();
+    res = classifySelfIntegrityCoverageForFamily("ttl", { telemetry: [] });
+    assert.equal(res.status, "registered");
+    assert.equal(res.gatesAllOn, false);
+
+    // Flip all gates ON, no telemetry yet → lookup_hit.
+    enableAllGates();
+    res = classifySelfIntegrityCoverageForFamily("ttl", { telemetry: [] });
+    assert.equal(res.status, "lookup_hit");
+    assert.equal(res.gatesAllOn, true);
+
+    // Record a dry-run ok in dispatcher telemetry → dry_run_invoked.
+    recordDispatchTelemetry({
+      kind: "ok",
+      family: "ttl",
+      id: "scaffold",
+      dryRun: true,
+    });
+    res = classifySelfIntegrityCoverageForFamily("ttl");
+    assert.equal(res.status, "dry_run_invoked");
+    assert.equal(res.observedDryRunOk, true);
+  });
+
   it("classifies as `real_execution_pending` when executor was reached outside dry-run", () => {
     enableAllGates();
     registerSynthesisPrimitive();
@@ -309,8 +347,10 @@ describe("Self-Integrity primitive coverage — report aggregation", () => {
     }
   });
 
-  it("reports archive and ttl as unsupported regardless of gates", () => {
+  it("reports archive and ttl as unsupported when no archive/ttl primitive is registered", () => {
     enableAllGates();
+    // Only the three pre-existing scaffolds are registered here; archive
+    // and ttl remain unregistered → unsupported.
     registerSynthesisPrimitive();
     registerArtifactPrimitive();
     registerOtherPrimitive();
@@ -322,6 +362,30 @@ describe("Self-Integrity primitive coverage — report aggregation", () => {
     assert.ok(!report.unsupportedFamilies.includes("synthesis"));
     assert.ok(!report.unsupportedFamilies.includes("artifact"));
     assert.ok(!report.unsupportedFamilies.includes("other"));
+  });
+
+  it("ttl leaves the unsupported bucket once registered (PR-ttl-scaffold)", () => {
+    // Even with gates ON, archive/ttl remain unsupported until their
+    // scaffolds register. Registering ttl should pull it out of the
+    // unsupported set without affecting other families' classification.
+    enableAllGates();
+    registerSynthesisPrimitive();
+    registerArtifactPrimitive();
+    registerOtherPrimitive();
+
+    const before = summarizeSelfIntegrityCoverage({ telemetry: [] });
+    assert.ok(before.unsupportedFamilies.includes("ttl"));
+    assert.ok(before.unsupportedFamilies.includes("archive"));
+
+    registerTtlPrimitive();
+    const after = summarizeSelfIntegrityCoverage({ telemetry: [] });
+    assert.ok(!after.unsupportedFamilies.includes("ttl"));
+    // archive still unregistered → unsupported.
+    assert.ok(after.unsupportedFamilies.includes("archive"));
+    // ttl is now in lookup_hit (gates ON but no telemetry observed).
+    const ttlEntry = after.families.find((f) => f.family === "ttl");
+    assert.ok(ttlEntry);
+    assert.equal(ttlEntry!.status, "lookup_hit");
   });
 
   it("counts dry-run-invoked families in coveredFamilies; unsupported untouched", () => {

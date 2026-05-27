@@ -38,15 +38,15 @@
 //                              observed `ok` outcome was under dry-run;
 //                              real (non-dry-run) execution is the next step
 //
-//   ttl has NO executor mapping in `FAMILY_ENABLED_ENV` (dispatcher.ts),
-//   so it classifies as `unsupported` exactly as today. archive now has
-//   a scaffold (PR-archive-scaffold) — when the operator opts in via
-//   PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED + the master/dispatch/invocation
-//   gates, archive can advance from `unsupported` → `registered` →
+//   archive and ttl both have scaffolds now (PR #440 + PR-ttl-scaffold)
+//   — when the operator opts in via PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED
+//   or PRIMITIVE_TTL_EXECUTOR_ENABLED plus the master/dispatch/invocation
+//   gates, each family can advance from `unsupported` → `registered` →
 //   `lookup_hit` → `dry_run_invoked`. The diagnostic logic is unchanged;
 //   the seed-family + registry-keyed reads naturally surface whichever
-//   state archive is in right now. With every flag default-OFF (today's
-//   deploy), archive still classifies as `unsupported`.
+//   state each family is in right now. With every flag default-OFF
+//   (today's deploy), archive and ttl both still classify as
+//   `unsupported`.
 //
 // What this module DOES today
 // ---------------------------
@@ -234,11 +234,12 @@ export function isSelfIntegrityPrimitiveCoverageEnabled(): boolean {
  * snapshot, the diagnostic should still report it (`unsupported` /
  * `registered` / etc.) so the Self-Integrity surface tells the truth.
  *
- * NOTE: archive remains in the seed even though it now has a scaffold,
- * because the seed's job is to keep the report honest about families
- * the operator cares about regardless of whether they're registered
- * yet. Until the operator flips `PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED`,
- * archive continues to classify as `unsupported` — the seed just
+ * NOTE: archive and ttl remain in the seed even though both now have
+ * scaffolds, because the seed's job is to keep the report honest about
+ * families the operator cares about regardless of whether they're
+ * registered yet. Until the operator flips
+ * `PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED` / `PRIMITIVE_TTL_EXECUTOR_ENABLED`,
+ * each family continues to classify as `unsupported` — the seed just
  * guarantees it appears in the report.
  */
 const DEFAULT_SEED_FAMILIES: readonly PrimitiveFamily[] = [

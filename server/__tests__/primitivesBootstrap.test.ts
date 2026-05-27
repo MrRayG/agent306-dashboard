@@ -29,6 +29,7 @@ import {
   maybeRegisterArtifactPrimitive,
   maybeRegisterOtherPrimitive,
   maybeRegisterArchivePrimitive,
+  maybeRegisterTtlPrimitive,
 } from "../primitives/bootstrap.js";
 import {
   SYNTHESIS_PRIMITIVE_ID,
@@ -50,6 +51,11 @@ import {
   PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED_ENV,
   PRIMITIVE_ARCHIVE_EXECUTOR_DRY_RUN_ENV,
 } from "../primitives/archive/index.js";
+import {
+  TTL_PRIMITIVE_ID,
+  PRIMITIVE_TTL_EXECUTOR_ENABLED_ENV,
+  PRIMITIVE_TTL_EXECUTOR_DRY_RUN_ENV,
+} from "../primitives/ttl/index.js";
 import { translateAction } from "../actionTranslator.js";
 
 describe("primitives-bootstrap", () => {
@@ -62,6 +68,8 @@ describe("primitives-bootstrap", () => {
   const ORIG_OTHER_DRY = process.env[PRIMITIVE_OTHER_EXECUTOR_DRY_RUN_ENV];
   const ORIG_ARCH_ENABLED = process.env[PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED_ENV];
   const ORIG_ARCH_DRY = process.env[PRIMITIVE_ARCHIVE_EXECUTOR_DRY_RUN_ENV];
+  const ORIG_TTL_ENABLED = process.env[PRIMITIVE_TTL_EXECUTOR_ENABLED_ENV];
+  const ORIG_TTL_DRY = process.env[PRIMITIVE_TTL_EXECUTOR_DRY_RUN_ENV];
 
   beforeEach(() => {
     __resetForTests();
@@ -74,6 +82,8 @@ describe("primitives-bootstrap", () => {
     delete process.env[PRIMITIVE_OTHER_EXECUTOR_DRY_RUN_ENV];
     delete process.env[PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED_ENV];
     delete process.env[PRIMITIVE_ARCHIVE_EXECUTOR_DRY_RUN_ENV];
+    delete process.env[PRIMITIVE_TTL_EXECUTOR_ENABLED_ENV];
+    delete process.env[PRIMITIVE_TTL_EXECUTOR_DRY_RUN_ENV];
   });
 
   afterEach(() => {
@@ -91,6 +101,8 @@ describe("primitives-bootstrap", () => {
     restore(PRIMITIVE_OTHER_EXECUTOR_DRY_RUN_ENV, ORIG_OTHER_DRY);
     restore(PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED_ENV, ORIG_ARCH_ENABLED);
     restore(PRIMITIVE_ARCHIVE_EXECUTOR_DRY_RUN_ENV, ORIG_ARCH_DRY);
+    restore(PRIMITIVE_TTL_EXECUTOR_ENABLED_ENV, ORIG_TTL_ENABLED);
+    restore(PRIMITIVE_TTL_EXECUTOR_DRY_RUN_ENV, ORIG_TTL_DRY);
   });
 
   // ── default flags ────────────────────────────────────────────────────────
@@ -103,6 +115,7 @@ describe("primitives-bootstrap", () => {
       artifactRegistered: false,
       otherRegistered: false,
       archiveRegistered: false,
+      ttlRegistered: false,
       synthesisReadOnlyPlannerInstalled: false,
     });
     assert.equal(listPrimitives().length, 0);
@@ -110,6 +123,7 @@ describe("primitives-bootstrap", () => {
     assert.equal(getPrimitive("artifact", ARTIFACT_PRIMITIVE_ID), undefined);
     assert.equal(getPrimitive("other", OTHER_PRIMITIVE_ID), undefined);
     assert.equal(getPrimitive("archive", ARCHIVE_PRIMITIVE_ID), undefined);
+    assert.equal(getPrimitive("ttl", TTL_PRIMITIVE_ID), undefined);
   });
 
   // ── master OFF + executors ON ────────────────────────────────────────────
@@ -142,6 +156,7 @@ describe("primitives-bootstrap", () => {
     assert.equal(report.artifactRegistered, false);
     assert.equal(report.otherRegistered, false);
     assert.equal(report.archiveRegistered, false);
+    assert.equal(report.ttlRegistered, false);
     assert.equal(listPrimitives().length, 0);
   });
 
@@ -153,6 +168,7 @@ describe("primitives-bootstrap", () => {
     assert.equal(report.artifactRegistered, false);
     assert.equal(report.otherRegistered, false);
     assert.equal(report.archiveRegistered, false);
+    assert.equal(report.ttlRegistered, false);
     assert.equal(listPrimitives().length, 0);
   });
 
@@ -167,6 +183,7 @@ describe("primitives-bootstrap", () => {
     assert.equal(report.artifactRegistered, false);
     assert.equal(report.otherRegistered, false);
     assert.equal(report.archiveRegistered, false);
+    assert.equal(report.ttlRegistered, false);
     assert.equal(listPrimitives().length, 0);
   });
 
@@ -180,12 +197,13 @@ describe("primitives-bootstrap", () => {
     assert.equal(report.artifactRegistered, false);
     assert.equal(report.otherRegistered, false);
     assert.equal(report.archiveRegistered, false);
+    assert.equal(report.ttlRegistered, false);
     assert.equal(listPrimitives().length, 0);
   });
 
   // ── master ON + each executor ON ─────────────────────────────────────────
 
-  it("master ON + synthesis ON: synthesis primitive registered, artifact/other/archive NOT", () => {
+  it("master ON + synthesis ON: synthesis primitive registered, artifact/other/archive/ttl NOT", () => {
     process.env[PRIMITIVE_REGISTRY_ENABLED_ENV] = "true";
     process.env[PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED_ENV] = "true";
     const report = bootstrapPrimitives();
@@ -194,12 +212,14 @@ describe("primitives-bootstrap", () => {
     assert.equal(report.artifactRegistered, false);
     assert.equal(report.otherRegistered, false);
     assert.equal(report.archiveRegistered, false);
+    assert.equal(report.ttlRegistered, false);
     const p = getPrimitive("synthesis", SYNTHESIS_PRIMITIVE_ID);
     assert.ok(p, "synthesis primitive should be registered");
     assert.equal(p!.family, "synthesis");
     assert.equal(getPrimitive("artifact", ARTIFACT_PRIMITIVE_ID), undefined);
     assert.equal(getPrimitive("other", OTHER_PRIMITIVE_ID), undefined);
     assert.equal(getPrimitive("archive", ARCHIVE_PRIMITIVE_ID), undefined);
+    assert.equal(getPrimitive("ttl", TTL_PRIMITIVE_ID), undefined);
   });
 
   it("master ON + artifact ON: artifact primitive registered, synthesis/other/archive NOT", () => {
@@ -236,7 +256,7 @@ describe("primitives-bootstrap", () => {
     assert.equal(getPrimitive("archive", ARCHIVE_PRIMITIVE_ID), undefined);
   });
 
-  it("master ON + archive ON: archive primitive registered, synthesis/artifact/other NOT", () => {
+  it("master ON + archive ON: archive primitive registered, synthesis/artifact/other/ttl NOT", () => {
     process.env[PRIMITIVE_REGISTRY_ENABLED_ENV] = "true";
     process.env[PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED_ENV] = "true";
     const report = bootstrapPrimitives();
@@ -245,15 +265,48 @@ describe("primitives-bootstrap", () => {
     assert.equal(report.artifactRegistered, false);
     assert.equal(report.otherRegistered, false);
     assert.equal(report.archiveRegistered, true);
+    assert.equal(report.ttlRegistered, false);
     const p = getPrimitive("archive", ARCHIVE_PRIMITIVE_ID);
     assert.ok(p, "archive primitive should be registered");
     assert.equal(p!.family, "archive");
     assert.equal(getPrimitive("synthesis", SYNTHESIS_PRIMITIVE_ID), undefined);
     assert.equal(getPrimitive("artifact", ARTIFACT_PRIMITIVE_ID), undefined);
     assert.equal(getPrimitive("other", OTHER_PRIMITIVE_ID), undefined);
+    assert.equal(getPrimitive("ttl", TTL_PRIMITIVE_ID), undefined);
   });
 
-  it("master ON + all three pre-existing ON: synthesis/artifact/other registered, archive still NOT (opt-in)", () => {
+  it("master ON + ttl ON: ttl primitive registered, synthesis/artifact/other/archive NOT", () => {
+    process.env[PRIMITIVE_REGISTRY_ENABLED_ENV] = "true";
+    process.env[PRIMITIVE_TTL_EXECUTOR_ENABLED_ENV] = "true";
+    const report = bootstrapPrimitives();
+    assert.equal(report.registryEnabled, true);
+    assert.equal(report.synthesisRegistered, false);
+    assert.equal(report.artifactRegistered, false);
+    assert.equal(report.otherRegistered, false);
+    assert.equal(report.archiveRegistered, false);
+    assert.equal(report.ttlRegistered, true);
+    const p = getPrimitive("ttl", TTL_PRIMITIVE_ID);
+    assert.ok(p, "ttl primitive should be registered");
+    assert.equal(p!.family, "ttl");
+    assert.equal(getPrimitive("synthesis", SYNTHESIS_PRIMITIVE_ID), undefined);
+    assert.equal(getPrimitive("artifact", ARTIFACT_PRIMITIVE_ID), undefined);
+    assert.equal(getPrimitive("other", OTHER_PRIMITIVE_ID), undefined);
+    assert.equal(getPrimitive("archive", ARCHIVE_PRIMITIVE_ID), undefined);
+  });
+
+  it("master OFF + ttl executor ON: nothing registered (master gates)", () => {
+    process.env[PRIMITIVE_TTL_EXECUTOR_ENABLED_ENV] = "true";
+    const report = bootstrapPrimitives();
+    assert.equal(report.registryEnabled, false);
+    assert.equal(report.synthesisRegistered, false);
+    assert.equal(report.artifactRegistered, false);
+    assert.equal(report.otherRegistered, false);
+    assert.equal(report.archiveRegistered, false);
+    assert.equal(report.ttlRegistered, false);
+    assert.equal(listPrimitives().length, 0);
+  });
+
+  it("master ON + all three pre-existing ON: synthesis/artifact/other registered, archive/ttl still NOT (opt-in)", () => {
     process.env[PRIMITIVE_REGISTRY_ENABLED_ENV] = "true";
     process.env[PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED_ENV] = "true";
     process.env[PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED_ENV] = "true";
@@ -268,30 +321,56 @@ describe("primitives-bootstrap", () => {
       false,
       "archive must remain unregistered without its explicit flag — the existing three-scaffold deployment is unaffected by this PR",
     );
+    assert.equal(
+      report.ttlRegistered,
+      false,
+      "ttl must remain unregistered without its explicit flag — opt-in to the destructive-family scaffold is separate from the pre-existing three-scaffold deployment",
+    );
     assert.ok(getPrimitive("synthesis", SYNTHESIS_PRIMITIVE_ID));
     assert.ok(getPrimitive("artifact", ARTIFACT_PRIMITIVE_ID));
     assert.ok(getPrimitive("other", OTHER_PRIMITIVE_ID));
     assert.equal(getPrimitive("archive", ARCHIVE_PRIMITIVE_ID), undefined);
+    assert.equal(getPrimitive("ttl", TTL_PRIMITIVE_ID), undefined);
     assert.equal(listPrimitives().length, 3);
   });
 
-  it("master ON + all four ON: all primitives registered", () => {
+  it("master ON + all four pre-existing ON (synthesis/artifact/other/archive): ttl still NOT (opt-in)", () => {
     process.env[PRIMITIVE_REGISTRY_ENABLED_ENV] = "true";
     process.env[PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED_ENV] = "true";
     process.env[PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED_ENV] = "true";
     process.env[PRIMITIVE_OTHER_EXECUTOR_ENABLED_ENV] = "true";
     process.env[PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED_ENV] = "true";
     const report = bootstrapPrimitives();
+    assert.equal(report.synthesisRegistered, true);
+    assert.equal(report.artifactRegistered, true);
+    assert.equal(report.otherRegistered, true);
+    assert.equal(report.archiveRegistered, true);
+    assert.equal(report.ttlRegistered, false);
+    assert.ok(getPrimitive("archive", ARCHIVE_PRIMITIVE_ID));
+    assert.equal(getPrimitive("ttl", TTL_PRIMITIVE_ID), undefined);
+    assert.equal(listPrimitives().length, 4);
+  });
+
+  it("master ON + all five ON: all primitives registered", () => {
+    process.env[PRIMITIVE_REGISTRY_ENABLED_ENV] = "true";
+    process.env[PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED_ENV] = "true";
+    process.env[PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED_ENV] = "true";
+    process.env[PRIMITIVE_OTHER_EXECUTOR_ENABLED_ENV] = "true";
+    process.env[PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED_ENV] = "true";
+    process.env[PRIMITIVE_TTL_EXECUTOR_ENABLED_ENV] = "true";
+    const report = bootstrapPrimitives();
     assert.equal(report.registryEnabled, true);
     assert.equal(report.synthesisRegistered, true);
     assert.equal(report.artifactRegistered, true);
     assert.equal(report.otherRegistered, true);
     assert.equal(report.archiveRegistered, true);
+    assert.equal(report.ttlRegistered, true);
     assert.ok(getPrimitive("synthesis", SYNTHESIS_PRIMITIVE_ID));
     assert.ok(getPrimitive("artifact", ARTIFACT_PRIMITIVE_ID));
     assert.ok(getPrimitive("other", OTHER_PRIMITIVE_ID));
     assert.ok(getPrimitive("archive", ARCHIVE_PRIMITIVE_ID));
-    assert.equal(listPrimitives().length, 4);
+    assert.ok(getPrimitive("ttl", TTL_PRIMITIVE_ID));
+    assert.equal(listPrimitives().length, 5);
   });
 
   it("bootstrapPrimitives is idempotent — second call does not double-register or throw (synthesis only)", () => {
@@ -334,23 +413,36 @@ describe("primitives-bootstrap", () => {
     assert.equal(listPrimitives().length, 1);
   });
 
-  it("bootstrapPrimitives is idempotent — combined synthesis+artifact+other+archive registration", () => {
+  it("bootstrapPrimitives is idempotent — second call does not double-register or throw (ttl only)", () => {
+    process.env[PRIMITIVE_REGISTRY_ENABLED_ENV] = "true";
+    process.env[PRIMITIVE_TTL_EXECUTOR_ENABLED_ENV] = "true";
+    const a = bootstrapPrimitives();
+    const b = bootstrapPrimitives();
+    assert.equal(a.ttlRegistered, true);
+    assert.equal(b.ttlRegistered, false, "second call must report no-op");
+    assert.equal(listPrimitives().length, 1);
+  });
+
+  it("bootstrapPrimitives is idempotent — combined synthesis+artifact+other+archive+ttl registration", () => {
     process.env[PRIMITIVE_REGISTRY_ENABLED_ENV] = "true";
     process.env[PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED_ENV] = "true";
     process.env[PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED_ENV] = "true";
     process.env[PRIMITIVE_OTHER_EXECUTOR_ENABLED_ENV] = "true";
     process.env[PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED_ENV] = "true";
+    process.env[PRIMITIVE_TTL_EXECUTOR_ENABLED_ENV] = "true";
     const a = bootstrapPrimitives();
     const b = bootstrapPrimitives();
     assert.equal(a.synthesisRegistered, true);
     assert.equal(a.artifactRegistered, true);
     assert.equal(a.otherRegistered, true);
     assert.equal(a.archiveRegistered, true);
+    assert.equal(a.ttlRegistered, true);
     assert.equal(b.synthesisRegistered, false);
     assert.equal(b.artifactRegistered, false);
     assert.equal(b.otherRegistered, false);
     assert.equal(b.archiveRegistered, false);
-    assert.equal(listPrimitives().length, 4);
+    assert.equal(b.ttlRegistered, false);
+    assert.equal(listPrimitives().length, 5);
   });
 
   it("maybeRegisterSynthesisPrimitive returns false when executor flag is OFF", () => {
@@ -377,6 +469,12 @@ describe("primitives-bootstrap", () => {
     assert.equal(getPrimitive("archive", ARCHIVE_PRIMITIVE_ID), undefined);
   });
 
+  it("maybeRegisterTtlPrimitive returns false when executor flag is OFF", () => {
+    const out = maybeRegisterTtlPrimitive();
+    assert.equal(out, false);
+    assert.equal(getPrimitive("ttl", TTL_PRIMITIVE_ID), undefined);
+  });
+
   // ── lookupPrimitiveForFamily for archive (registry-integration smoke) ────
 
   it("lookupPrimitiveForFamily('archive') misses by default, hits when bootstrap registers archive", () => {
@@ -393,6 +491,22 @@ describe("primitives-bootstrap", () => {
     assert.ok(hit, "archive lookup must hit once registered");
     assert.equal(hit!.family, "archive");
     assert.equal(hit!.id, ARCHIVE_PRIMITIVE_ID);
+  });
+
+  it("lookupPrimitiveForFamily('ttl') misses by default, hits when bootstrap registers ttl", () => {
+    // This is the load-bearing assertion for the May 27 production
+    // signal: `primitiveLookupMiss family=ttl` was the last unresolved
+    // family. After bootstrap with the master + ttl flags ON, the
+    // lookup must hit.
+    process.env[PRIMITIVE_REGISTRY_ENABLED_ENV] = "true";
+    assert.equal(lookupPrimitiveForFamily("ttl"), null);
+
+    process.env[PRIMITIVE_TTL_EXECUTOR_ENABLED_ENV] = "true";
+    bootstrapPrimitives();
+    const hit = lookupPrimitiveForFamily("ttl");
+    assert.ok(hit, "ttl lookup must hit once registered");
+    assert.equal(hit!.family, "ttl");
+    assert.equal(hit!.id, TTL_PRIMITIVE_ID);
   });
 
   // ── PR #423 byte-identical guarantee preserved ───────────────────────────
@@ -467,6 +581,36 @@ describe("primitives-bootstrap", () => {
     process.env[PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED_ENV] = "true";
     bootstrapPrimitives();
     assert.ok(getPrimitive("archive", ARCHIVE_PRIMITIVE_ID));
+
+    const flagsOn = translateAction(actionText, insightText);
+    // PR #423 invariant: translator does NOT dispatch — output is still
+    // byte-identical to the flag-OFF baseline.
+    assert.deepEqual(flagsOn, baseline);
+    assert.equal(flagsOn.primitive, "none");
+  });
+
+  it("translator output for ttl-family fall-through is byte-identical even when bootstrap registered the executor", () => {
+    // An action that classifies under the `ttl` missing-primitive
+    // family (the classifier's `\bttl\b` cue fires) BUT does NOT match
+    // the structured `ttl_rule` parser in actionTranslator (no
+    // "N-day TTL on X" shape that the structured parser requires), so
+    // the translator falls through to `primitive: "none"`. This is the
+    // shape the dispatcher would later be asked to route — the
+    // baseline must stay byte-identical regardless of bootstrap state.
+    const actionText = "Add TTL discipline across the dream loop.";
+    const insightText = "stale hypotheses accumulating; ttl framing needed";
+
+    const baseline = translateAction(actionText, insightText);
+    assert.equal(
+      baseline.primitive,
+      "none",
+      "expected baseline primitive=none — fix the test input if upstream pattern coverage changed",
+    );
+
+    process.env[PRIMITIVE_REGISTRY_ENABLED_ENV] = "true";
+    process.env[PRIMITIVE_TTL_EXECUTOR_ENABLED_ENV] = "true";
+    bootstrapPrimitives();
+    assert.ok(getPrimitive("ttl", TTL_PRIMITIVE_ID));
 
     const flagsOn = translateAction(actionText, insightText);
     // PR #423 invariant: translator does NOT dispatch — output is still

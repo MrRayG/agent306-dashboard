@@ -13,7 +13,8 @@
 //     (`PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED`,
 //     `PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED`,
 //     `PRIMITIVE_OTHER_EXECUTOR_ENABLED`,
-//     `PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED`) default OFF.
+//     `PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED`,
+//     `PRIMITIVE_TTL_EXECUTOR_ENABLED`) default OFF.
 //   - When the master flag is OFF, this function is a no-op even if
 //     per-executor flags are flipped — the registry would never be
 //     consulted, so registering is wasted work.
@@ -86,6 +87,12 @@ import {
   isArchiveExecutorDryRun,
   ARCHIVE_PRIMITIVE_ID,
 } from "./archive/index.js";
+import {
+  registerTtlPrimitive,
+  isTtlExecutorEnabled,
+  isTtlExecutorDryRun,
+  TTL_PRIMITIVE_ID,
+} from "./ttl/index.js";
 
 const TELEMETRY_ENGINE = "primitives-bootstrap";
 
@@ -208,6 +215,24 @@ export function maybeRegisterArchivePrimitive(): boolean {
 }
 
 /**
+ * Conditionally register the ttl primitive. Returns `true` iff the
+ * executor was registered during this call. Idempotent: if the executor
+ * is already registered (from a previous bootstrap call in the same
+ * process, or via a test), this is a no-op.
+ */
+export function maybeRegisterTtlPrimitive(): boolean {
+  if (!isTtlExecutorEnabled()) return false;
+  if (getPrimitive("ttl", TTL_PRIMITIVE_ID) !== undefined) {
+    return false;
+  }
+  registerTtlPrimitive();
+  logEvent("ttlPrimitiveRegistered", {
+    dryRun: isTtlExecutorDryRun(),
+  });
+  return true;
+}
+
+/**
  * Bootstrap entrypoint. Safe to call multiple times. Returns a small
  * report describing what was registered — useful for tests and for a
  * future startup-summary log line.
@@ -218,6 +243,7 @@ export interface BootstrapReport {
   artifactRegistered: boolean;
   otherRegistered: boolean;
   archiveRegistered: boolean;
+  ttlRegistered: boolean;
   synthesisReadOnlyPlannerInstalled: boolean;
 }
 
@@ -274,11 +300,14 @@ function emitStartupAudit(report: BootstrapReport): void {
     otherDryRun: isOtherExecutorDryRun(),
     archiveEnabled: isArchiveExecutorEnabled(),
     archiveDryRun: isArchiveExecutorDryRun(),
+    ttlEnabled: isTtlExecutorEnabled(),
+    ttlDryRun: isTtlExecutorDryRun(),
     readOnlyPlannerEnabled: isReadOnlySynthesisPlannerInstallEnabled(),
     synthesisRegistered: report.synthesisRegistered,
     artifactRegistered: report.artifactRegistered,
     otherRegistered: report.otherRegistered,
     archiveRegistered: report.archiveRegistered,
+    ttlRegistered: report.ttlRegistered,
     synthesisReadOnlyPlannerInstalled: report.synthesisReadOnlyPlannerInstalled,
     registeredFamilies: families,
     registeredPrimitives: ids,
@@ -302,6 +331,7 @@ export function bootstrapPrimitives(): BootstrapReport {
       artifactRegistered: false,
       otherRegistered: false,
       archiveRegistered: false,
+      ttlRegistered: false,
       synthesisReadOnlyPlannerInstalled: false,
     };
     emitStartupAudit(offReport);
@@ -351,6 +381,20 @@ export function bootstrapPrimitives(): BootstrapReport {
     logEvent("archivePrimitiveRegistrationFailed", { error: msg });
   }
 
+  let ttlRegistered = false;
+  try {
+    ttlRegistered = maybeRegisterTtlPrimitive();
+  } catch (err: unknown) {
+    // Never let bootstrap kill startup. Isolated try/catch so a ttl
+    // registration failure cannot prevent any other executor (or vice
+    // versa). TTL expiry is destructive in its eventual real form
+    // (drives archival / review-due / state-change cascades), so we
+    // surface registration failures loudly via the log line but keep
+    // the rest of bootstrap intact.
+    const msg = err instanceof Error ? err.message : String(err);
+    logEvent("ttlPrimitiveRegistrationFailed", { error: msg });
+  }
+
   let synthesisReadOnlyPlannerInstalled = false;
   try {
     synthesisReadOnlyPlannerInstalled = maybeInstallReadOnlySynthesisPlanner();
@@ -369,6 +413,7 @@ export function bootstrapPrimitives(): BootstrapReport {
     artifactRegistered,
     otherRegistered,
     archiveRegistered,
+    ttlRegistered,
     synthesisReadOnlyPlannerInstalled,
   });
 
@@ -378,6 +423,7 @@ export function bootstrapPrimitives(): BootstrapReport {
     artifactRegistered,
     otherRegistered,
     archiveRegistered,
+    ttlRegistered,
     synthesisReadOnlyPlannerInstalled,
   };
   emitStartupAudit(report);

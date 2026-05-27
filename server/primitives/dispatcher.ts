@@ -99,6 +99,10 @@ import {
   isArchiveExecutorDryRun,
 } from "./archive/index.js";
 import {
+  PRIMITIVE_TTL_EXECUTOR_ENABLED_ENV,
+  isTtlExecutorDryRun,
+} from "./ttl/index.js";
+import {
   recordDispatchTelemetry,
   hashActionText,
   type DispatchTelemetryKind,
@@ -132,19 +136,21 @@ export function isPrimitiveExecutorInvocationEnabled(): boolean {
  *
  * `PrimitiveFamily` is aliased to `MissingPrimitiveFamily`, which has 11
  * variants (artifact, ratio, ttl, gate, archive, spectrum, synthesis,
- * rewrite, verification, verification_scaffold, other) — four of those
- * have registered executors today (synthesis / artifact / other / archive,
- * landed by PRs #425 / #426 / #427 / this PR). Typing this as a
- * `Partial<...>` keeps the map honest: only the families with an executor
- * scaffold map to a flag name. Lookups for families without a registered
- * executor return `undefined` and `isFamilyExecutorEnabled` returns
- * `false`, which is the correct "not yet wired" answer.
+ * rewrite, verification, verification_scaffold, other) — five of those
+ * have registered executors today (synthesis / artifact / other /
+ * archive / ttl, landed by PRs #425 / #426 / #427 / #440 / this PR).
+ * Typing this as a `Partial<...>` keeps the map honest: only the
+ * families with an executor scaffold map to a flag name. Lookups for
+ * families without a registered executor return `undefined` and
+ * `isFamilyExecutorEnabled` returns `false`, which is the correct "not
+ * yet wired" answer.
  */
 export const FAMILY_ENABLED_ENV: Partial<Record<PrimitiveFamily, string>> = {
   synthesis: PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED_ENV,
   artifact: PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED_ENV,
   other: PRIMITIVE_OTHER_EXECUTOR_ENABLED_ENV,
   archive: PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED_ENV,
+  ttl: PRIMITIVE_TTL_EXECUTOR_ENABLED_ENV,
 };
 
 /**
@@ -394,6 +400,8 @@ function familyDryRunSnapshot(
       return isOtherExecutorDryRun();
     case "archive":
       return isArchiveExecutorDryRun();
+    case "ttl":
+      return isTtlExecutorDryRun();
     default:
       return undefined;
   }

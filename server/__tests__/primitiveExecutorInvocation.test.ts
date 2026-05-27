@@ -216,16 +216,19 @@ describe("primitive-executor-invocation — flag defaults & gating", () => {
       PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED_ENV,
     );
     assert.equal(FAMILY_ENABLED_ENV.other, PRIMITIVE_OTHER_EXECUTOR_ENABLED_ENV);
-    // archive scaffold (this PR) — the dispatcher's FAMILY_ENABLED_ENV map
-    // must include archive so an opt-in operator (flipping the master,
-    // dispatch, invocation, AND PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED gates)
-    // gets the dispatcher to reach the registered archive executor. The
-    // executor's own non-dry-run guard remains the destructive-action
-    // backstop.
+    // archive scaffold (PR #440) — the dispatcher's FAMILY_ENABLED_ENV
+    // map must include archive so an opt-in operator (flipping the
+    // master, dispatch, invocation, AND PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED
+    // gates) gets the dispatcher to reach the registered archive
+    // executor. The executor's own non-dry-run guard remains the
+    // destructive-action backstop.
     assert.equal(
       FAMILY_ENABLED_ENV.archive,
       "PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED",
     );
+    // ttl scaffold (this PR) — same posture as archive; the executor's
+    // own non-dry-run guard remains the destructive-action backstop.
+    assert.equal(FAMILY_ENABLED_ENV.ttl, "PRIMITIVE_TTL_EXECUTOR_ENABLED");
   });
 
   it("isFamilyExecutorEnabled honours each family's env flag", () => {
