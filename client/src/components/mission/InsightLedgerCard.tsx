@@ -81,6 +81,9 @@ export default function InsightLedgerCard() {
 
   const ledger = data.cognition?.insightLedger ?? {};
   const selfChange = data.cognition?.selfChange ?? {};
+  const coverage = data.cognition?.primitiveCoverage ?? null;
+  const coveredFamilies = coverage?.coveredFamilies ?? [];
+  const unsupportedFamilies = coverage?.unsupportedFamilies ?? [];
   const open =
     typeof ledger.open === "number"
       ? ledger.open
@@ -124,6 +127,23 @@ export default function InsightLedgerCard() {
       <Row label="Failed (30d)" value={failed30} />
       <Row label="Self-Integrity" value={`${integrity}/10`} accent={integrityColor} />
       <Row label="Last cycle reflected" value={lastCycle} />
+      {coverage && (coveredFamilies.length > 0 || unsupportedFamilies.length > 0) && (
+        <div style={{ marginTop: "0.55rem", paddingTop: "0.45rem", borderTop: "1px dashed rgba(227,229,228,0.08)" }}>
+          <div style={{ ...mono, fontSize: "0.65rem", color: TEXT_DIM, textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: "0.3rem" }}>
+            primitive coverage
+          </div>
+          {coveredFamilies.length > 0 && (
+            <div style={{ ...mono, fontSize: "0.68rem", color: "#4ade80", marginBottom: "0.2rem" }}>
+              dry-run: {coveredFamilies.join(", ")}
+            </div>
+          )}
+          {unsupportedFamilies.length > 0 && (
+            <div style={{ ...mono, fontSize: "0.68rem", color: "#fbbf24" }}>
+              unsupported: {unsupportedFamilies.join(", ")}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -84,6 +84,32 @@ export interface PublicMetacognitionResponse {
       selfIntegrityLevel?: number;
       verifiedRatio?: number;
     };
+    // Additive primitive-coverage diagnostic. Only present when the
+    // SELF_INTEGRITY_PRIMITIVE_COVERAGE_ENABLED env flag is on. The UI
+    // treats this block as optional and tolerates `null` / missing.
+    primitiveCoverage?: {
+      generatedAtMs?: number;
+      buckets?: {
+        unsupported?: number;
+        registered?: number;
+        lookup_hit?: number;
+        dry_run_invoked?: number;
+        real_execution_pending?: number;
+      };
+      families?: Array<{
+        family: string;
+        status:
+          | "unsupported"
+          | "registered"
+          | "lookup_hit"
+          | "dry_run_invoked"
+          | "real_execution_pending";
+        primitiveId?: string;
+        explanation?: string;
+      }>;
+      coveredFamilies?: string[];
+      unsupportedFamilies?: string[];
+    } | null;
   };
   generatedAt?: string;
 }
