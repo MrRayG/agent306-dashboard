@@ -12,7 +12,8 @@
 //     (`PRIMITIVE_REGISTRY_ENABLED`) and every per-executor flag
 //     (`PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED`,
 //     `PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED`,
-//     `PRIMITIVE_OTHER_EXECUTOR_ENABLED`) default OFF.
+//     `PRIMITIVE_OTHER_EXECUTOR_ENABLED`,
+//     `PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED`) default OFF.
 //   - When the master flag is OFF, this function is a no-op even if
 //     per-executor flags are flipped — the registry would never be
 //     consulted, so registering is wasted work.
@@ -79,6 +80,12 @@ import {
   isOtherExecutorDryRun,
   OTHER_PRIMITIVE_ID,
 } from "./other/index.js";
+import {
+  registerArchivePrimitive,
+  isArchiveExecutorEnabled,
+  isArchiveExecutorDryRun,
+  ARCHIVE_PRIMITIVE_ID,
+} from "./archive/index.js";
 
 const TELEMETRY_ENGINE = "primitives-bootstrap";
 
@@ -183,6 +190,24 @@ export function maybeRegisterOtherPrimitive(): boolean {
 }
 
 /**
+ * Conditionally register the archive primitive. Returns `true` iff
+ * the executor was registered during this call. Idempotent: if the
+ * executor is already registered (from a previous bootstrap call in the
+ * same process, or via a test), this is a no-op.
+ */
+export function maybeRegisterArchivePrimitive(): boolean {
+  if (!isArchiveExecutorEnabled()) return false;
+  if (getPrimitive("archive", ARCHIVE_PRIMITIVE_ID) !== undefined) {
+    return false;
+  }
+  registerArchivePrimitive();
+  logEvent("archivePrimitiveRegistered", {
+    dryRun: isArchiveExecutorDryRun(),
+  });
+  return true;
+}
+
+/**
  * Bootstrap entrypoint. Safe to call multiple times. Returns a small
  * report describing what was registered — useful for tests and for a
  * future startup-summary log line.
@@ -192,6 +217,7 @@ export interface BootstrapReport {
   synthesisRegistered: boolean;
   artifactRegistered: boolean;
   otherRegistered: boolean;
+  archiveRegistered: boolean;
   synthesisReadOnlyPlannerInstalled: boolean;
 }
 
@@ -246,10 +272,13 @@ function emitStartupAudit(report: BootstrapReport): void {
     artifactDryRun: isArtifactExecutorDryRun(),
     otherEnabled: isOtherExecutorEnabled(),
     otherDryRun: isOtherExecutorDryRun(),
+    archiveEnabled: isArchiveExecutorEnabled(),
+    archiveDryRun: isArchiveExecutorDryRun(),
     readOnlyPlannerEnabled: isReadOnlySynthesisPlannerInstallEnabled(),
     synthesisRegistered: report.synthesisRegistered,
     artifactRegistered: report.artifactRegistered,
     otherRegistered: report.otherRegistered,
+    archiveRegistered: report.archiveRegistered,
     synthesisReadOnlyPlannerInstalled: report.synthesisReadOnlyPlannerInstalled,
     registeredFamilies: families,
     registeredPrimitives: ids,
@@ -272,6 +301,7 @@ export function bootstrapPrimitives(): BootstrapReport {
       synthesisRegistered: false,
       artifactRegistered: false,
       otherRegistered: false,
+      archiveRegistered: false,
       synthesisReadOnlyPlannerInstalled: false,
     };
     emitStartupAudit(offReport);
@@ -308,6 +338,19 @@ export function bootstrapPrimitives(): BootstrapReport {
     logEvent("otherPrimitiveRegistrationFailed", { error: msg });
   }
 
+  let archiveRegistered = false;
+  try {
+    archiveRegistered = maybeRegisterArchivePrimitive();
+  } catch (err: unknown) {
+    // Never let bootstrap kill startup. Isolated try/catch so an archive
+    // registration failure cannot prevent any other executor (or vice
+    // versa). Archival is destructive in its eventual real form, so we
+    // surface registration failures loudly via the log line but keep
+    // the rest of bootstrap intact.
+    const msg = err instanceof Error ? err.message : String(err);
+    logEvent("archivePrimitiveRegistrationFailed", { error: msg });
+  }
+
   let synthesisReadOnlyPlannerInstalled = false;
   try {
     synthesisReadOnlyPlannerInstalled = maybeInstallReadOnlySynthesisPlanner();
@@ -325,6 +368,7 @@ export function bootstrapPrimitives(): BootstrapReport {
     synthesisRegistered,
     artifactRegistered,
     otherRegistered,
+    archiveRegistered,
     synthesisReadOnlyPlannerInstalled,
   });
 
@@ -333,6 +377,7 @@ export function bootstrapPrimitives(): BootstrapReport {
     synthesisRegistered,
     artifactRegistered,
     otherRegistered,
+    archiveRegistered,
     synthesisReadOnlyPlannerInstalled,
   };
   emitStartupAudit(report);

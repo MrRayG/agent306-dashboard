@@ -83,6 +83,10 @@ const {
   PRIMITIVE_OTHER_EXECUTOR_ENABLED_ENV,
 } = await import("../primitives/other/index.js");
 const {
+  registerArchivePrimitive,
+  PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED_ENV,
+} = await import("../primitives/archive/index.js");
+const {
   PRIMITIVE_EXECUTOR_INVOCATION_ENABLED_ENV,
 } = await import("../primitives/dispatcher.js");
 const {
@@ -103,6 +107,7 @@ const ALL_ENV_KEYS = [
   PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED_ENV,
   PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED_ENV,
   PRIMITIVE_OTHER_EXECUTOR_ENABLED_ENV,
+  PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED_ENV,
   SELF_INTEGRITY_PRIMITIVE_COVERAGE_ENABLED_ENV,
 ];
 
@@ -131,6 +136,7 @@ function enableAllGates(): void {
   process.env[PRIMITIVE_SYNTHESIS_EXECUTOR_ENABLED_ENV] = "true";
   process.env[PRIMITIVE_ARTIFACT_EXECUTOR_ENABLED_ENV] = "true";
   process.env[PRIMITIVE_OTHER_EXECUTOR_ENABLED_ENV] = "true";
+  process.env[PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED_ENV] = "true";
 }
 
 function wipeRecs() {
@@ -218,6 +224,37 @@ describe("Self-Integrity primitive coverage — 5-state classification", () => {
     assert.equal(res.status, "dry_run_invoked");
     assert.equal(res.observedDryRunOk, true);
     assert.ok(/dry-run/i.test(res.explanation));
+  });
+
+  it("archive scaffold flows through the same 5-state classification as synthesis (PR-archive-scaffold)", () => {
+    // Default: archive has no registered primitive → unsupported.
+    let res = classifySelfIntegrityCoverageForFamily("archive", {
+      telemetry: [],
+    });
+    assert.equal(res.status, "unsupported");
+
+    // Register archive but leave gates off → registered.
+    registerArchivePrimitive();
+    res = classifySelfIntegrityCoverageForFamily("archive", { telemetry: [] });
+    assert.equal(res.status, "registered");
+    assert.equal(res.gatesAllOn, false);
+
+    // Flip all four gates ON, no telemetry yet → lookup_hit.
+    enableAllGates();
+    res = classifySelfIntegrityCoverageForFamily("archive", { telemetry: [] });
+    assert.equal(res.status, "lookup_hit");
+    assert.equal(res.gatesAllOn, true);
+
+    // Record a dry-run ok in dispatcher telemetry → dry_run_invoked.
+    recordDispatchTelemetry({
+      kind: "ok",
+      family: "archive",
+      id: "scaffold",
+      dryRun: true,
+    });
+    res = classifySelfIntegrityCoverageForFamily("archive");
+    assert.equal(res.status, "dry_run_invoked");
+    assert.equal(res.observedDryRunOk, true);
   });
 
   it("classifies as `real_execution_pending` when executor was reached outside dry-run", () => {

@@ -38,10 +38,15 @@
 //                              observed `ok` outcome was under dry-run;
 //                              real (non-dry-run) execution is the next step
 //
-//   archive and ttl have NO executor mapping in
-//   `FAMILY_ENABLED_ENV` (dispatcher.ts), so they classify as `unsupported`
-//   exactly as today. This is the intended pin: their scaffolds don't
-//   exist yet.
+//   ttl has NO executor mapping in `FAMILY_ENABLED_ENV` (dispatcher.ts),
+//   so it classifies as `unsupported` exactly as today. archive now has
+//   a scaffold (PR-archive-scaffold) — when the operator opts in via
+//   PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED + the master/dispatch/invocation
+//   gates, archive can advance from `unsupported` → `registered` →
+//   `lookup_hit` → `dry_run_invoked`. The diagnostic logic is unchanged;
+//   the seed-family + registry-keyed reads naturally surface whichever
+//   state archive is in right now. With every flag default-OFF (today's
+//   deploy), archive still classifies as `unsupported`.
 //
 // What this module DOES today
 // ---------------------------
@@ -221,13 +226,20 @@ export function isSelfIntegrityPrimitiveCoverageEnabled(): boolean {
 
 /**
  * The default seed family set the report considers when no
- * `extraFamilies` are passed. Includes the three scaffolded families
- * (`synthesis`, `artifact`, `other`) plus the two families that the
- * May 27 production logs called out as still unresolved (`archive`,
- * `ttl`). This is deliberate: even when those families have no
- * registered primitive AND the rec backlog happens to be empty for
- * that family in a given snapshot, the diagnostic should still report
- * them as `unsupported` so the Self-Integrity surface tells the truth.
+ * `extraFamilies` are passed. Includes the scaffolded families
+ * (`synthesis`, `artifact`, `other`, `archive`) plus the one family that
+ * the May 27 production logs called out as still unresolved (`ttl`).
+ * This is deliberate: even when a family has no registered primitive
+ * AND the rec backlog happens to be empty for that family in a given
+ * snapshot, the diagnostic should still report it (`unsupported` /
+ * `registered` / etc.) so the Self-Integrity surface tells the truth.
+ *
+ * NOTE: archive remains in the seed even though it now has a scaffold,
+ * because the seed's job is to keep the report honest about families
+ * the operator cares about regardless of whether they're registered
+ * yet. Until the operator flips `PRIMITIVE_ARCHIVE_EXECUTOR_ENABLED`,
+ * archive continues to classify as `unsupported` — the seed just
+ * guarantees it appears in the report.
  */
 const DEFAULT_SEED_FAMILIES: readonly PrimitiveFamily[] = [
   "synthesis",
