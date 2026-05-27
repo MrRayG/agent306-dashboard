@@ -3493,11 +3493,39 @@ export function registerRoutes(httpServer: Server, app: Express) {
     res.json({ ok: true });
   });
 
+  // ── Reflection video status (UI uses this to gate the toggle) ───────────
+  // MUST be registered BEFORE the `/:file` route below, otherwise the
+  // wildcard route intercepts `_status` and the dashboard sees a 400
+  // ("only .mp4 allowed") instead of the cap status — which makes the UI
+  // show the "Disabled. Set REFLECTION_VIDEO_ENABLED=true" copy even when
+  // the flag is on. See fix(reflection): surface and repair video render lane.
+  app.get("/api/reflection-videos/_status", (_req, res) => {
+    const { getReflectionVideoCapStatus } = require("./videoEngine.js");
+    try {
+      const status = getReflectionVideoCapStatus();
+      console.log(
+        `[ReflectionVideo] status request: enabled=${status.enabled} ` +
+        `providerConfigured=${status.providerConfigured} ` +
+        `used=${status.usedToday}/${status.capacity} reason=${status.reason ?? "ok"}`,
+      );
+      res.json(status);
+    } catch (e: any) {
+      console.error("[ReflectionVideo] status request failed:", e.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // ── Reflection video preview (PR #417) ──────────────────────────────────
   // Read-only path. Serves a single MP4 from the data-dir reflection_videos/
   // subdir. resolveReflectionVideoPath() rejects traversal and any non-.mp4
   // filename, so the route can never read outside that folder.
   app.get("/api/reflection-videos/:file", (req, res) => {
+    // Defensive: never match sentinel paths like `_status` even if a future
+    // refactor reorders the routes again. Express's `:file` would happily
+    // bind `_status` here without this guard.
+    if (req.params.file.startsWith("_")) {
+      return res.status(404).json({ error: "not found" });
+    }
     const { resolveReflectionVideoPath } = require("./videoEngine.js");
     try {
       const abs = resolveReflectionVideoPath(req.params.file);
@@ -3510,13 +3538,6 @@ export function registerRoutes(httpServer: Server, app: Express) {
     } catch (e: any) {
       return res.status(400).json({ error: e.message ?? "invalid filename" });
     }
-  });
-
-  // ── Reflection video status (UI uses this to gate the toggle) ───────────
-  app.get("/api/reflection-videos/_status", (_req, res) => {
-    const { getReflectionVideoCapStatus } = require("./videoEngine.js");
-    try { res.json(getReflectionVideoCapStatus()); }
-    catch (e: any) { res.status(500).json({ error: e.message }); }
   });
 
   // ── Publish a reflection draft with attached video to X ─────────────────
@@ -6619,6 +6640,17 @@ needsHelp: true only when you genuinely need his direction or information`,
         });
         savedDraftId = draft.draftId;
         console.log(`[GenerateNow] autoPost=false — saved ${engineId} draft ${draft.draftId} (${trimmed.length} chars)${reflectionVideo?.videoPath ? " +video" : ""}`);
+        if (reflectionVideo?.videoFile) {
+          console.log(
+            `[ReflectionVideo] asset_url_attached draft=${draft.draftId} ` +
+            `url=/api/reflection-videos/${reflectionVideo.videoFile}`,
+          );
+        } else if (reflectionVideo && reflectionVideo.includeVideo) {
+          console.warn(
+            `[ReflectionVideo] no_asset_attached draft=${draft.draftId} ` +
+            `warning=${reflectionVideo.videoWarning ?? "unknown"}`,
+          );
+        }
       } else if (!autoPost && !isTweetDraftEngine) {
         // Non-draftable engine with autoPost off. Rare (the main
         // always-post engines default to on) but honour the flag —

@@ -496,14 +496,20 @@ function EngineCards() {
   const [reflectionIncludeVideo, setReflectionIncludeVideo] = useState(false);
   const { data: reflectionVideoStatus } = useQuery<{
     enabled: boolean;
+    providerConfigured?: boolean;
     capacity: number;
     usedToday: number;
     remaining: number;
+    reason?: string | null;
   }>({
     queryKey: ["/api/reflection-videos/_status"],
     queryFn: () => fetch("/api/reflection-videos/_status").then(r => r.json()),
     refetchInterval: 60_000,
   });
+  const reflectionVideoUsable =
+    !!reflectionVideoStatus?.enabled &&
+    reflectionVideoStatus?.providerConfigured !== false &&
+    (reflectionVideoStatus?.remaining ?? 0) > 0;
 
   const { data: engineData, isLoading } = useQuery<{ engines: EngineInfo[] }>({
     queryKey: ["/api/engines/status"],
@@ -717,11 +723,11 @@ function EngineCards() {
               {/* Reflection Video Toggle (PR #417) — opt-in, draft-only */}
               {eng.id === "reflection" && (
                 <div style={{ marginTop: 10, padding: "8px 10px", background: "rgba(192,132,252,0.06)", border: "1px solid rgba(192,132,252,0.18)" }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: reflectionVideoStatus?.enabled ? "pointer" : "not-allowed", opacity: reflectionVideoStatus?.enabled ? 1 : 0.55 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: reflectionVideoUsable ? "pointer" : "not-allowed", opacity: reflectionVideoUsable ? 1 : 0.55 }}>
                     <input
                       type="checkbox"
                       checked={reflectionIncludeVideo}
-                      disabled={!reflectionVideoStatus?.enabled || (reflectionVideoStatus?.remaining ?? 0) <= 0}
+                      disabled={!reflectionVideoUsable}
                       onChange={(e) => setReflectionIncludeVideo(e.target.checked)}
                     />
                     <span style={{ ...mono, fontSize: "0.72rem", color: "#c084fc", textTransform: "uppercase", letterSpacing: "0.08em" }}>
@@ -729,10 +735,19 @@ function EngineCards() {
                     </span>
                   </label>
                   <div style={{ ...mono, fontSize: "0.65rem", color: "rgba(227,229,228,0.45)", marginTop: 4 }}>
-                    {reflectionVideoStatus?.enabled
-                      ? `Daily cap: ${reflectionVideoStatus.usedToday}/${reflectionVideoStatus.capacity} used today (${reflectionVideoStatus.remaining} remaining). Draft-only — manual publish required.`
-                      : "Disabled. Set REFLECTION_VIDEO_ENABLED=true to enable the video lane."}
+                    {reflectionVideoUsable
+                      ? `Daily cap: ${reflectionVideoStatus!.usedToday}/${reflectionVideoStatus!.capacity} used today (${reflectionVideoStatus!.remaining} remaining). Draft-only — manual publish required.`
+                      : reflectionVideoStatus?.reason
+                        ? reflectionVideoStatus.reason
+                        : reflectionVideoStatus?.enabled === false
+                          ? "Disabled. Set REFLECTION_VIDEO_ENABLED=true to enable the video lane."
+                          : "Reflection video status unavailable — see /api/reflection-videos/_status."}
                   </div>
+                  {reflectionVideoStatus?.enabled && reflectionVideoStatus?.providerConfigured === false && (
+                    <div style={{ ...mono, fontSize: "0.62rem", color: "#facc15", marginTop: 4 }}>
+                      Action: configure GROK_API_KEY or XAI_API_KEY on the server and restart, then re-open this view.
+                    </div>
+                  )}
                 </div>
               )}
 

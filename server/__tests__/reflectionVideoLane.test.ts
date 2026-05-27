@@ -260,3 +260,117 @@ describe("xPostScheduler — QueuedPost video contract (type-only)", () => {
     assert.equal(typeof mod.queueXPost, "function");
   });
 });
+
+// ────────────────────────────────────────────────────────────────────────────
+// PR fix(reflection): surface and repair video render lane
+// ────────────────────────────────────────────────────────────────────────────
+// The dashboard reported "Disabled. Set REFLECTION_VIDEO_ENABLED=true..." even
+// when the env flag was true. Root cause: route ordering. `/:file` was
+// registered before `/_status`, so Express bound `_status` to the wildcard
+// — which threw "only .mp4 allowed" and returned 400. The status payload
+// also lacked `providerConfigured` / `reason`, so the UI could not explain
+// why the lane was unavailable when the flag was on but no xAI key was set.
+// These tests pin the new contract.
+
+describe("getReflectionVideoCapStatus — actionable status payload", () => {
+  beforeEach(() => { snapshotEnv(); __resetReflectionDailyForTest(); });
+  afterEach(() => { restoreEnv(); __resetReflectionDailyForTest(); });
+
+  it("flag off → enabled:false, reason cites the env var", () => {
+    delete process.env.REFLECTION_VIDEO_ENABLED;
+    const status = getReflectionVideoCapStatus();
+    assert.equal(status.enabled, false);
+    assert.match(status.reason ?? "", /REFLECTION_VIDEO_ENABLED/);
+  });
+
+  it("flag on but no provider key → providerConfigured:false, reason cites the keys", () => {
+    process.env.REFLECTION_VIDEO_ENABLED = "true";
+    delete process.env.GROK_API_KEY;
+    delete process.env.XAI_API_KEY;
+    const status = getReflectionVideoCapStatus();
+    assert.equal(status.enabled, true);
+    assert.equal(status.providerConfigured, false);
+    assert.match(status.reason ?? "", /GROK_API_KEY|XAI_API_KEY/);
+  });
+
+  it("flag on AND provider key set → reason is null and remaining > 0", () => {
+    process.env.REFLECTION_VIDEO_ENABLED = "true";
+    process.env.GROK_API_KEY = "test-key";
+    const status = getReflectionVideoCapStatus();
+    assert.equal(status.enabled, true);
+    assert.equal(status.providerConfigured, true);
+    assert.equal(status.reason, null);
+    assert.ok(status.remaining > 0);
+  });
+
+  it("flag on, provider set, but cap=0 cannot break the floor (parser defaults to 3)", () => {
+    // Defensive: the existing parser treats invalid cap values as 3. Make
+    // sure the actionable status field still resolves cleanly.
+    process.env.REFLECTION_VIDEO_ENABLED = "true";
+    process.env.XAI_API_KEY = "test-key";
+    process.env.REFLECTION_VIDEO_DAILY_CAP = "0";
+    const status = getReflectionVideoCapStatus();
+    assert.equal(status.capacity, 3); // floor — see reflectionVideoDailyCap
+    assert.equal(status.reason, null);
+  });
+});
+
+describe("reflection video lane — route ordering smoke test", () => {
+  // The bug: /api/reflection-videos/:file was registered BEFORE /_status, so
+  // Express bound `_status` to `:file`. The wildcard route called
+  // resolveReflectionVideoPath("_status") which throws on the .mp4 check.
+  // We pin the contract here without standing up Express by reading the
+  // route registration order from routes.ts source — if the wildcard ever
+  // moves above _status again the test fails loudly.
+  it("/_status registration precedes /:file in server/routes.ts", () => {
+    const src = fs.readFileSync(
+      path.join(process.cwd(), "server/routes.ts"),
+      "utf8",
+    );
+    const statusIdx = src.indexOf('app.get("/api/reflection-videos/_status"');
+    const fileIdx   = src.indexOf('app.get("/api/reflection-videos/:file"');
+    assert.ok(statusIdx > -1, "missing /_status route");
+    assert.ok(fileIdx > -1, "missing /:file route");
+    assert.ok(
+      statusIdx < fileIdx,
+      `route ordering regressed — /_status (idx=${statusIdx}) must come before /:file (idx=${fileIdx})`,
+    );
+  });
+
+  it("resolveReflectionVideoPath rejects `_status` so the legacy wildcard would still 400", () => {
+    // Defense-in-depth: even if route order regresses, _status must NOT
+    // accidentally read a file off disk. The .mp4 / traversal guard already
+    // covered this; this test pins that the sentinel name remains rejected.
+    assert.throws(() => resolveReflectionVideoPath("_status"));
+  });
+});
+
+describe("reflection video lane — generateReflectionVideo metadata propagation", () => {
+  beforeEach(() => { snapshotEnv(); __resetReflectionDailyForTest(); });
+  afterEach(() => { restoreEnv(); __resetReflectionDailyForTest(); });
+
+  it("flag off path emits a videoWarning the route can surface to the UI", async () => {
+    delete process.env.REFLECTION_VIDEO_ENABLED;
+    const result = await generateReflectionVideo({
+      draftId: "tdraft_meta_flag_off",
+      reflectionText: "[306 REFLECTION]\n\nbody\n\n— Agent 306",
+    });
+    assert.ok(result && "warning" in result);
+    // The route response shape (`videoWarning`) is derived directly from this
+    // value — confirm it's a non-empty string the UI can render.
+    assert.equal(typeof (result as any).warning, "string");
+    assert.ok((result as any).warning.length > 0);
+  });
+
+  it("provider missing path returns a warning identifying the env vars to set", async () => {
+    process.env.REFLECTION_VIDEO_ENABLED = "true";
+    delete process.env.GROK_API_KEY;
+    delete process.env.XAI_API_KEY;
+    const result = await generateReflectionVideo({
+      draftId: "tdraft_meta_no_key",
+      reflectionText: "[306 REFLECTION]\n\nbody\n\n— Agent 306",
+    });
+    assert.ok(result && "warning" in result);
+    assert.match((result as any).warning, /GROK_API_KEY|XAI_API_KEY/);
+  });
+});

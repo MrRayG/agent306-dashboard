@@ -299,20 +299,43 @@ function todayKeyUTC(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-/** Read-only daily-cap probe used by route + UI surfaces. */
+/**
+ * Read-only daily-cap probe used by route + UI surfaces. Includes
+ * `providerConfigured` and a human-readable `reason` so the dashboard can
+ * tell the operator *why* the lane is unavailable instead of leaving the
+ * toggle silently disabled. `enabled` stays bound to the env flag alone
+ * (existing UI contract) — operability is layered via `providerConfigured`.
+ */
 export function getReflectionVideoCapStatus(): {
   enabled: boolean;
+  providerConfigured: boolean;
   capacity: number;
   usedToday: number;
   remaining: number;
+  reason: string | null;
 } {
   const cap = reflectionVideoDailyCap();
   const used = stats.reflectionDaily?.[todayKeyUTC()] ?? 0;
+  const enabled = isReflectionVideoEnabled();
+  const providerConfigured = !!xaiVideoKey();
+  const remaining = Math.max(0, cap - used);
+
+  let reason: string | null = null;
+  if (!enabled) {
+    reason = "REFLECTION_VIDEO_ENABLED is not set to 'true'.";
+  } else if (!providerConfigured) {
+    reason = "GROK_API_KEY / XAI_API_KEY not configured on the server.";
+  } else if (remaining <= 0) {
+    reason = `Daily cap reached (${used}/${cap}). Resets at 00:00 UTC.`;
+  }
+
   return {
-    enabled: isReflectionVideoEnabled(),
+    enabled,
+    providerConfigured,
     capacity: cap,
     usedToday: used,
-    remaining: Math.max(0, cap - used),
+    remaining,
+    reason,
   };
 }
 
@@ -366,11 +389,18 @@ export async function generateReflectionVideo(opts: {
   visualPrompt?: string;
 }): Promise<ReflectionVideoResult | ReflectionVideoWarning | null> {
   if (!isReflectionVideoEnabled()) {
+    console.log(`[ReflectionVideo] flag_disabled draft=${opts.draftId}`);
     return { videoPath: null, warning: "REFLECTION_VIDEO_ENABLED=false" };
   }
 
+  console.log(`[ReflectionVideo] requested draft=${opts.draftId}`);
+
   const key = xaiVideoKey();
   if (!key) {
+    console.error(
+      `[ReflectionVideo] provider_missing draft=${opts.draftId} ` +
+      `— GROK_API_KEY/XAI_API_KEY not configured`,
+    );
     return { videoPath: null, warning: "GROK_API_KEY/XAI_API_KEY not configured" };
   }
 
@@ -379,6 +409,9 @@ export async function generateReflectionVideo(opts: {
   const todayKey = todayKeyUTC();
   const usedToday = stats.reflectionDaily?.[todayKey] ?? 0;
   if (usedToday >= cap) {
+    console.warn(
+      `[ReflectionVideo] cap_exhausted draft=${opts.draftId} ${usedToday}/${cap}`,
+    );
     return {
       videoPath: null,
       warning: `Daily reflection-video cap reached (${usedToday}/${cap}). Try again tomorrow.`,
@@ -391,7 +424,10 @@ export async function generateReflectionVideo(opts: {
     visualPrompt: opts.visualPrompt,
   });
 
-  console.log(`[ReflectionVideo] Generating for draft ${opts.draftId} (cap ${usedToday + 1}/${cap})`);
+  console.log(
+    `[ReflectionVideo] queued draft=${opts.draftId} ` +
+    `slot=${usedToday + 1}/${cap} duration=${durationSec}s`,
+  );
 
   try {
     const startResp = await fetch(VIDEO_API, {
@@ -411,16 +447,20 @@ export async function generateReflectionVideo(opts: {
 
     if (!startResp.ok) {
       const err = await startResp.text();
-      console.error(`[ReflectionVideo] Start failed: ${startResp.status} ${err.slice(0, 200)}`);
+      console.error(
+        `[ReflectionVideo] render_failed draft=${opts.draftId} ` +
+        `stage=start http=${startResp.status} body=${err.slice(0, 200)}`,
+      );
       return { videoPath: null, warning: `xAI start failed: HTTP ${startResp.status}` };
     }
 
     const startData = await startResp.json() as { request_id?: string };
     const requestId = startData.request_id;
     if (!requestId) {
+      console.error(`[ReflectionVideo] render_failed draft=${opts.draftId} stage=start reason=no_request_id`);
       return { videoPath: null, warning: "xAI did not return request_id" };
     }
-    console.log(`[ReflectionVideo] Started request_id=${requestId}`);
+    console.log(`[ReflectionVideo] render_started draft=${opts.draftId} request_id=${requestId}`);
 
     // Poll up to 5 minutes (60 × 5s)
     for (let i = 0; i < 60; i++) {
@@ -442,7 +482,10 @@ export async function generateReflectionVideo(opts: {
         try {
           await downloadFile(data.video.url, videoPath);
         } catch (e: any) {
-          console.error(`[ReflectionVideo] Download failed: ${e.message}`);
+          console.error(
+            `[ReflectionVideo] render_failed draft=${opts.draftId} ` +
+            `stage=download error=${e.message}`,
+          );
           return { videoPath: null, warning: `Download failed: ${e.message}` };
         }
 
@@ -455,7 +498,13 @@ export async function generateReflectionVideo(opts: {
         stats.lastGenerated = new Date().toISOString();
         saveStats(stats);
 
-        console.log(`[ReflectionVideo] Done: ${videoPath}`);
+        console.log(
+          `[ReflectionVideo] render_succeeded draft=${opts.draftId} ` +
+          `request_id=${requestId} path=${videoPath}`,
+        );
+        console.log(
+          `[ReflectionVideo] asset_persisted draft=${opts.draftId} file=${filename}`,
+        );
         return {
           videoPath,
           videoFile: filename,
@@ -467,17 +516,24 @@ export async function generateReflectionVideo(opts: {
       }
 
       if (data.status === "expired" || data.status === "failed") {
-        console.error(`[ReflectionVideo] Generation ${data.status} for ${opts.draftId}`);
+        console.error(
+          `[ReflectionVideo] render_failed draft=${opts.draftId} ` +
+          `stage=poll status=${data.status}`,
+        );
         return { videoPath: null, warning: `xAI status=${data.status}` };
       }
       // still pending — keep polling
     }
 
-    console.error(`[ReflectionVideo] Timed out for ${opts.draftId}`);
+    console.error(
+      `[ReflectionVideo] render_failed draft=${opts.draftId} stage=poll reason=timeout`,
+    );
     return { videoPath: null, warning: "Timed out after 5 minutes" };
 
   } catch (e: any) {
-    console.error(`[ReflectionVideo] Error: ${e.message}`);
+    console.error(
+      `[ReflectionVideo] render_failed draft=${opts.draftId} stage=exception error=${e.message}`,
+    );
     return { videoPath: null, warning: `Error: ${e.message}` };
   }
 }
