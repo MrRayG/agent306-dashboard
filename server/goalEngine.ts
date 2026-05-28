@@ -770,8 +770,9 @@ export async function promoteInsightToGoal(
       // decision, rule registration, the promotion gate, obligation
       // refresh-count escalation, or the missingPrimitiveReconciler
       // lifecycle decisions. Pin 7 / Pin 11 invariants are preserved.
+      let bridgeOutcome: Awaited<ReturnType<typeof bridgeRegisteredPrimitive>> | null = null;
       try {
-        await bridgeRegisteredPrimitive(translation, {
+        bridgeOutcome = await bridgeRegisteredPrimitive(translation, {
           actionText: entry.proposedAction,
           insightText: entry.insight,
           sourceInsightId: entry.id,
@@ -783,6 +784,51 @@ export async function promoteInsightToGoal(
         console.warn(
           `[GoalEngine] primitive dispatch bridge failed for ${entry.id} (ignored): ${bridgeErr?.message ?? bridgeErr}`,
         );
+      }
+
+      // PR follow-up to #435/#438: when the guarded dispatcher invoked a
+      // registered fallback executor successfully (today: always a
+      // dry-run, since the scaffold executors refuse non-dry-run), the
+      // action IS primitive-covered for telemetry purposes — just not
+      // classified into a concrete enforcement primitive. In that case
+      // we suppress the misleading `missing-primitive-rec` signal and
+      // emit a clearer `primitive-fallback-rec` event instead. The
+      // insight ledger entry remains in its proposed state and will
+      // still expire per TTL; no rule registration, no rec proposal,
+      // no goal promotion, no apply path is triggered. Pin 7 / Pin 11
+      // invariants are preserved.
+      const fallbackCovered =
+        !!bridgeOutcome &&
+        bridgeOutcome.invoked === true &&
+        bridgeOutcome.kind === "ok";
+      if (fallbackCovered) {
+        try {
+          logEvent({
+            engine: "goalEngine",
+            event: "primitive-fallback-rec",
+            level: "info",
+            data: {
+              insightId: entry.id,
+              family: bridgeOutcome!.family ?? "other",
+              primitiveId: bridgeOutcome!.id,
+              dryRun: true,
+              classificationStatus: "unclassified-pending",
+              reason:
+                bridgeOutcome!.reason ??
+                translation.reason ??
+                "no primitive matched (fallback dry-run covered)",
+            },
+          });
+        } catch (e: any) {
+          console.warn(
+            `[GoalEngine] primitive-fallback-rec emit failed for ${entry.id}:`,
+            e?.message ?? e,
+          );
+        }
+        console.log(
+          `[GoalEngine] Insight ${entry.id} fallback-covered via ${bridgeOutcome!.family ?? "other"}::${bridgeOutcome!.id} dry-run — leaving proposed (will expire per TTL).`,
+        );
+        return null;
       }
 
       // Keep the warn log so observability isn't lost — but ALSO emit a
