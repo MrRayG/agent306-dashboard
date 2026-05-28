@@ -25,6 +25,40 @@ test("system prompt advertises the [306 REFLECTION] tag and signature rules", ()
   assert.ok(/ONE post/i.test(sys) || /\bONE thread\b/i.test(sys), "must enforce single-post shape");
 });
 
+// ── Temporal grounding (PR — May 2026 fix) ───────────────────────────────────
+// Reflections were drifting onto stale years (e.g. "On May 20, 2025…" when
+// the current year is 2026). The fix is to splice the same temporal
+// grounding block used by news/dispatch into the reflection system prompt
+// and to run checkTemporal() after verifyClaims(). These tests pin the
+// prompt-side half of that contract.
+
+test("system prompt anchors the current ISO date and year", () => {
+  const fixedNow = new Date("2026-05-28T12:00:00Z");
+  const sys = buildReflectionSystemPrompt(fixedNow);
+  assert.ok(sys.includes("2026-05-28"), "must include current ISO date");
+  assert.ok(/current year is 2026/.test(sys), "must include current year");
+});
+
+test("system prompt carries the shared temporal grounding rules", () => {
+  const sys = buildReflectionSystemPrompt(new Date("2026-05-28T12:00:00Z"));
+  // Same rules wired into news/dispatch — historical references must carry
+  // an explicit year or historical framer, "today/this week/now" cannot be
+  // attached to a non-current year.
+  assert.match(sys, /TEMPORAL GROUNDING/);
+  assert.match(sys, /historical|TerraUSD|FTX/i);
+  assert.match(sys, /today.*this week.*currently.*now/i);
+});
+
+test("system prompt defaults to real current date when none is passed", () => {
+  const sys = buildReflectionSystemPrompt();
+  // Defaults to new Date(); pin only that the year appears somewhere.
+  const currentYear = new Date().getFullYear();
+  assert.ok(
+    sys.includes(`current year is ${currentYear}`),
+    `expected current year ${currentYear} in default system prompt`,
+  );
+});
+
 test("system prompt forbids links and hashtags", () => {
   const sys = buildReflectionSystemPrompt();
   assert.ok(/no urls/i.test(sys) || /no links/i.test(sys) || /No URLs/.test(sys));

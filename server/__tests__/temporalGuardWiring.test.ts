@@ -32,6 +32,7 @@ const ENGINES = [
   "server/newsGenerator.ts",
   "server/routes.ts",
   "server/dispatchEngine.ts",
+  "server/reflectionPostEngine.ts",
 ];
 
 describe("Temporal grounding block is in each engine's system prompt", () => {

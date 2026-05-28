@@ -26,6 +26,7 @@ import { buildVoiceBlock } from "./voice.js";
 import { getSoulContext, getSentimentArc, getKnowledgeContext } from "./memoryEngine.js";
 import { enforcePostFormat } from "./postFormatGuard.js";
 import { verifyClaims } from "./claimVerifier.js";
+import { checkTemporal, buildTemporalGroundingBlock } from "./temporalGuard.js";
 
 // ── Optional internal-state readers ──────────────────────────────────────────
 // These are imported lazily so the engine still works even if individual
@@ -88,8 +89,21 @@ async function loadOptionalContext(): Promise<string[]> {
 
 // ── Prompt builders ──────────────────────────────────────────────────────────
 
-export function buildReflectionSystemPrompt(): string {
-  return `${buildVoiceBlock()}
+export function buildReflectionSystemPrompt(now: Date = new Date()): string {
+  // Temporal grounding (PR — May 2026 fix). Mirrors the wiring in
+  // newsGenerator/routes/dispatchEngine: bare "Today is YYYY-MM-DD (UTC)"
+  // anchor + the shared temporal grounding block so the LLM knows the
+  // current cycle date/year and the rules for historical references.
+  // Without this, reflections were drifting onto stale years (e.g.
+  // "On May 20, 2025, an OpenAI model disproved a math conjecture…"
+  // when the current year is 2026).
+  const todayLine = `Today is ${now.toISOString().slice(0, 10)} (UTC).`;
+  const temporalGroundingBlock = buildTemporalGroundingBlock(now);
+  return `${todayLine}
+
+${temporalGroundingBlock}
+
+${buildVoiceBlock()}
 
 YOU ARE WRITING A [306 REFLECTION] POST.
 
@@ -212,6 +226,35 @@ export async function generateReflectionPostContent(): Promise<ReflectionPostRes
       console.error(`  - ${c.reason}: ${c.sentence.slice(0, 180)}`);
     }
     throw new Error(`Reflection quarantined — ${verdict.unsupportedClaims.length} unsupported claims attributed to a source`);
+  }
+
+  // Temporal grounding guard. Runs AFTER the claim verifier — same pattern
+  // as newsGenerator/routes/dispatchEngine. The verifier scores attribution
+  // lanes, not temporal framing, so a reflection that confidently cites a
+  // wrong-year fact (e.g. "On May 20, 2025, an OpenAI model disproved a
+  // math conjecture…" when the current year is 2026) slips past the
+  // verifier. Reflections have no draft store / quarantine row, so HARD_FAIL
+  // throws — the caller treats this the same way it treats verifier
+  // HARD_FAIL: surface the error in the UI rather than queueing the draft.
+  // Propose-only invariant preserved: no existing posting gate is loosened.
+  const temporal = checkTemporal(formatted);
+  if (temporal.severity === "HARD_FAIL") {
+    console.error(
+      `[ReflectionPostEngine] TEMPORAL HARD_FAIL — ${temporal.findings.length} finding(s); rejecting draft`,
+    );
+    for (const f of temporal.findings) {
+      console.error(`  - [${f.kind}] ${f.reason}: ${f.sentence.slice(0, 180)}`);
+    }
+    throw new Error(
+      `Reflection quarantined — temporal_drift: ${temporal.findings
+        .map((f) => `${f.kind}`)
+        .join(", ")}`,
+    );
+  }
+  if (temporal.severity === "SOFT_WARN") {
+    console.warn(
+      `[ReflectionPostEngine] TEMPORAL SOFT_WARN — ${temporal.findings.length} finding(s); returning anyway`,
+    );
   }
 
   return {
