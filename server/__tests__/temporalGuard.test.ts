@@ -154,6 +154,50 @@ describe("checkTemporal — FUTURE_NO_SOURCE", () => {
   });
 });
 
+describe("checkTemporal — DATED_CLAIM_DRIFT", () => {
+  it("HARD_FAIL on the user-reported reflection bug (May 20, 2025 for a 2026 event)", () => {
+    const r = checkTemporal(
+      `On May 20, 2025, an OpenAI model disproved a math conjecture that stood for 80 years.`,
+      { now: NOW },
+    );
+    assert.equal(r.severity, "HARD_FAIL", JSON.stringify(r.findings));
+    assert.ok(r.findings.some((f) => f.kind === "DATED_CLAIM_DRIFT"));
+  });
+
+  it("PASS when the dated event is correctly anchored to the current year", () => {
+    const r = checkTemporal(
+      `On May 20, 2026, an OpenAI model disproved a math conjecture that stood for 80 years.`,
+      { now: NOW },
+    );
+    assert.equal(r.severity, "PASS", JSON.stringify(r.findings));
+  });
+
+  it("PASS when a non-current dated claim is framed as historical", () => {
+    const r = checkTemporal(
+      `Back in November 14, 2022, FTX filed for bankruptcy, reshaping the industry.`,
+      { now: NOW },
+    );
+    assert.equal(r.severity, "PASS", JSON.stringify(r.findings));
+  });
+
+  it("PASS when the day-month-year ordering matches the current year", () => {
+    const r = checkTemporal(
+      `On 20 May 2026, the Erdős unit-distance conjecture was disproved.`,
+      { now: NOW },
+    );
+    assert.equal(r.severity, "PASS", JSON.stringify(r.findings));
+  });
+
+  it("HARD_FAIL on day-month-year ordering with a wrong past year", () => {
+    const r = checkTemporal(
+      `On 20 May 2025, OpenAI's model disproved a long-standing math conjecture.`,
+      { now: NOW },
+    );
+    assert.equal(r.severity, "HARD_FAIL", JSON.stringify(r.findings));
+    assert.ok(r.findings.some((f) => f.kind === "DATED_CLAIM_DRIFT"));
+  });
+});
+
 describe("buildTemporalGroundingBlock", () => {
   it("includes the current ISO date and year", () => {
     const block = buildTemporalGroundingBlock(NOW);

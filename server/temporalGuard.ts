@@ -34,6 +34,13 @@
  *   4. WRONG_YEAR_CURRENT  — current-cycle adverbs ("today", "this week",
  *                            "currently", "now") attached to a specific
  *                            year that is NOT the current year (HARD_FAIL).
+ *   5. DATED_CLAIM_DRIFT   — explicit calendar date ("May 20, 2025") pins a
+ *                            factual claim to a non-current past year and
+ *                            the sentence is not framed as historical
+ *                            (HARD_FAIL). Added after the reflection lane
+ *                            generated "On May 20, 2025, an OpenAI model
+ *                            disproved a math conjecture…" when the current
+ *                            year was 2026.
  *
  * Severity returned is the worst of the findings. Empty findings → PASS.
  *
@@ -50,7 +57,8 @@ export type TemporalFindingKind =
   | "YEAR_DRIFT"
   | "STALE_AS_CURRENT"
   | "FUTURE_NO_SOURCE"
-  | "WRONG_YEAR_CURRENT";
+  | "WRONG_YEAR_CURRENT"
+  | "DATED_CLAIM_DRIFT";
 
 export interface TemporalFinding {
   kind: TemporalFindingKind;
@@ -87,6 +95,13 @@ const PRESENT_TENSE_VERBS = /\b(?:is|are|has|have|launches?|announces?|releases?
 const PAST_TENSE_MARKERS = /\b(?:was|were|had|did|launched|announced|released|raised|filed|charged|sued|reported|said|planned|collapsed|ago|earlier|previously|former|formerly)\b/i;
 const HISTORICAL_FRAMING = /\b(?:back\s+in|in\s+the\s+wake\s+of|after\s+the|following\s+the|recall\s+the|remember\s+(?:when|the)|reminiscent\s+of|history\s+(?:of|shows))\b/i;
 const YEAR_RX = /\b(20\d{2})\b/g;
+// Explicit calendar date with year: "May 20, 2025" / "May 20 2025" / "20 May 2025".
+// Used by DATED_CLAIM_DRIFT to flag factual claims pinned to the wrong year.
+const MONTHS = "(?:January|February|March|April|May|June|July|August|September|October|November|December)";
+const DATED_CLAIM_RX = new RegExp(
+  `\\b${MONTHS}\\s+\\d{1,2}(?:st|nd|rd|th)?,?\\s+(20\\d{2})\\b|\\b\\d{1,2}\\s+${MONTHS}\\s+(20\\d{2})\\b`,
+  "ig",
+);
 
 function splitSentences(text: string): string[] {
   // Newline-or-punctuation split; good enough for short-form posts.
@@ -179,6 +194,33 @@ export function checkTemporal(text: string, opts: TemporalGuardOpts = {}): Tempo
           });
           break;
         }
+      }
+    }
+
+    // DATED_CLAIM_DRIFT: an explicit calendar date ("May 20, 2025") pins a
+    // factual claim to a non-current year. The reflection lane was inventing
+    // dated factual claims about current-cycle news events but with a stale
+    // year. This is HARD_FAIL when the sentence is NOT framed as historical
+    // (no "back in", no past-event markers like "ago", "previously"). Future
+    // dates are handled by FUTURE_NO_SOURCE, so only flag past years here.
+    {
+      const hasHistoricalFraming = HISTORICAL_FRAMING.test(sentence);
+      const hasPastMarker = /\b(?:ago|earlier|previously|former|formerly)\b/i.test(sentence);
+      const datedMatches = Array.from(sentence.matchAll(DATED_CLAIM_RX));
+      for (const m of datedMatches) {
+        const yearStr = m[1] ?? m[2];
+        if (!yearStr) continue;
+        const y = parseInt(yearStr, 10);
+        if (!Number.isFinite(y) || y === currentYear) continue;
+        if (y > currentYear) continue; // future dates handled by FUTURE_NO_SOURCE
+        if (hasHistoricalFraming || hasPastMarker) continue;
+        findings.push({
+          kind:     "DATED_CLAIM_DRIFT",
+          severity: "HARD_FAIL",
+          sentence,
+          reason:   `Explicit calendar date pins claim to year ${y}, but current year is ${currentYear} and the sentence is not framed as historical`,
+        });
+        break;
       }
     }
 
