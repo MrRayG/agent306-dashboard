@@ -128,6 +128,17 @@ const SAFETY = {
   // mostly and we want one cycle to drain a parser-coverage backlog cleanly.
   MISSING_PRIMITIVE_RECONCILER_ENABLED: true,
   MAX_RECS_RECONCILED_PER_RUN: 20,
+  // PR #445 — supersede stale missing-primitive: <family> recs when the
+  // primitive registry now classifies that family as `dispatch_capable`
+  // (registered + every dispatcher gate ON). The translator-driven
+  // rejection path only catches recs whose insight wording is now
+  // parseable into a concrete enforcement primitive; for the scaffold
+  // executors (synthesis/artifact/other/archive/ttl, currently in dry-run
+  // fallback), the translator still returns `none`, so the historical
+  // recs persist in the proposed queue indefinitely. This gate lights up
+  // the second supersession path. Default ON; flip to false via env to
+  // restore pre-#445 behavior.
+  SUPERSEDE_MISSING_PRIMITIVE_ON_COVERAGE: true,
 };
 
 const CATEGORY_COMPETENCY_MAP: Record<GoalCategory, string[]> = {
@@ -636,16 +647,28 @@ export async function runGoalEngine(evalResult?: EvalResult, grokKey?: string): 
     try {
       const reconciled = reconcileMissingPrimitiveRecs({
         maxReconciledPerRun: SAFETY.MAX_RECS_RECONCILED_PER_RUN,
+        supersedeOnDispatchCoverage:
+          SAFETY.SUPERSEDE_MISSING_PRIMITIVE_ON_COVERAGE,
       });
       if (reconciled.reconciled > 0) {
+        const superseded = reconciled.supersededByPrimitiveCoverage ?? 0;
         console.log(
           `[GoalEngine] Reconciler cleared ${reconciled.reconciled} stale missing-primitive rec(s) ` +
             `(scanned=${reconciled.scanned}, stillUnparseable=${reconciled.stillUnparseable}, ` +
-            `missingLedger=${reconciled.missingLedgerEntry}, errors=${reconciled.errors})`,
+            `missingLedger=${reconciled.missingLedgerEntry}, ` +
+            `supersededByCoverage=${superseded}, errors=${reconciled.errors})`,
         );
-        result.brainEvolutionEvents.push(
-          `Auto-rejected ${reconciled.reconciled} stale missing-primitive rec(s) — translator now covers them`,
-        );
+        if (superseded > 0) {
+          result.brainEvolutionEvents.push(
+            `Auto-rejected ${superseded} stale missing-primitive rec(s) — primitive family now dispatch-capable`,
+          );
+        }
+        const translatorCleared = reconciled.reconciled - superseded;
+        if (translatorCleared > 0) {
+          result.brainEvolutionEvents.push(
+            `Auto-rejected ${translatorCleared} stale missing-primitive rec(s) — translator now covers them`,
+          );
+        }
       }
     } catch (e: any) {
       console.warn("[GoalEngine] Step 3.6 (missing-primitive reconciler) failed:", e.message);

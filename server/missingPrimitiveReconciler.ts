@@ -70,6 +70,40 @@ import {
   type PrimitiveCoverageStatus,
 } from "./primitives/coverageDiagnostic.js";
 
+/**
+ * PR #445 — supersession-on-coverage gate.
+ *
+ * When the runtime now emits `primitive-fallback-rec` for a family (because
+ * the primitive registry registers an executor for that family AND every
+ * dispatcher gate is ON, i.e. the coverage diagnostic classifies the family
+ * as `dispatch_capable`), the historical `missing-primitive: <family>` recs
+ * that pre-date the registration are obsolete: they were created precisely
+ * to track the absence of an executor that now exists.
+ *
+ * The translator-driven path in the reconciler does NOT catch these recs —
+ * for fallback-covered families the translator still returns `primitive: "none"`
+ * (the executor only attaches `registeredPrimitive` metadata and runs as a
+ * dry-run fallback; it does not classify into a concrete enforcement
+ * primitive). So the historical rec persists in the `proposed` queue.
+ *
+ * This gate enables a second supersession path: when the rec's family is
+ * `dispatch_capable` AND the translator still returns `none`, the rec is
+ * rejected with operator="reconciler" and a structured supersession note.
+ * Audit history is preserved via the existing reject flow (status=rejected,
+ * rejectedAt, approvedBy, reviewNote). Lifecycle for any other path is
+ * unchanged.
+ *
+ * Default OFF for the env flag; tests and the goal-engine wiring pass the
+ * option explicitly so existing deployments only see the new behavior when
+ * intentionally enabled.
+ */
+export const MISSING_PRIMITIVE_SUPERSEDE_ON_COVERAGE_ENV =
+  "MISSING_PRIMITIVE_SUPERSEDE_ON_COVERAGE_ENABLED";
+
+export function isSupersedeOnCoverageEnabled(): boolean {
+  return process.env[MISSING_PRIMITIVE_SUPERSEDE_ON_COVERAGE_ENV] === "true";
+}
+
 export interface ReconcilerOptions {
   /** Cap on rejections per call. Default 20. */
   maxReconciledPerRun?: number;
@@ -84,6 +118,14 @@ export interface ReconcilerOptions {
    * this to exercise the additive code path without leaking env state.
    */
   emitCoverageDiagnostic?: boolean;
+  /**
+   * PR #445 — force the supersession-on-coverage path ON or OFF for this
+   * call, overriding `MISSING_PRIMITIVE_SUPERSEDE_ON_COVERAGE_ENABLED`.
+   * When ON, recs whose translator still returns `none` but whose family
+   * is `dispatch_capable` are rejected with a supersession note. Default:
+   * env-driven. Tests pass `true` explicitly to exercise the new path.
+   */
+  supersedeOnDispatchCoverage?: boolean;
 }
 
 /**
@@ -109,6 +151,18 @@ export interface ReconcilerResult {
   missingLedgerEntry: number;
   errors: number;
   rejectedRecIds: string[];
+  /**
+   * PR #445 — count of recs rejected via the supersession-on-coverage
+   * path (translator still returns `none`, but the rec's family is now
+   * `dispatch_capable` in the primitive registry). Always 0 when the
+   * supersession gate is OFF. Ids of these rejections also appear in
+   * {@link rejectedRecIds} so existing consumers see them; the count
+   * here lets callers distinguish translator-driven rejections from
+   * coverage-driven supersessions in summary logs.
+   */
+  supersededByPrimitiveCoverage?: number;
+  /** Ids of supersession-on-coverage rejections (subset of rejectedRecIds). */
+  supersededRecIds?: string[];
   /**
    * Additive, optional coverage diagnostic. Populated ONLY when
    * `PRIMITIVE_RECONCILER_AWARENESS_ENABLED === "true"` (or
@@ -145,6 +199,9 @@ export function reconcileMissingPrimitiveRecs(
   const operator = opts.operator ?? "reconciler";
   const emitCoverage =
     opts.emitCoverageDiagnostic ?? isReconcilerAwarenessEnabled();
+  // PR #445 — supersession gate. Off by default; opt in via env or option.
+  const supersedeOnCoverage =
+    opts.supersedeOnDispatchCoverage ?? isSupersedeOnCoverageEnabled();
 
   const result: ReconcilerResult = {
     scanned: 0,
@@ -153,6 +210,8 @@ export function reconcileMissingPrimitiveRecs(
     missingLedgerEntry: 0,
     errors: 0,
     rejectedRecIds: [],
+    supersededByPrimitiveCoverage: 0,
+    supersededRecIds: [],
   };
 
   // Coverage diagnostic accumulator. Populated only when the awareness
@@ -232,8 +291,22 @@ export function reconcileMissingPrimitiveRecs(
 
     if (!entry) {
       // Ledger entry was rotated out (LEDGER_CAP) or pruned. Without the
-      // insight + action text we can't re-translate. Leave the rec alone —
-      // an operator can still reject it manually if they want.
+      // insight + action text we can't re-translate. PR #445: before
+      // giving up, try the supersession-on-coverage path — these are
+      // exactly the long-stale recs that pre-date primitive registration
+      // and that the translator-driven path can never clear (no ledger
+      // entry to translate).
+      if (
+        supersedeOnCoverage &&
+        trySupersedeOnCoverage({
+          rec,
+          entry: undefined,
+          operator,
+          result,
+        })
+      ) {
+        continue;
+      }
       result.missingLedgerEntry++;
       logEvent({
         engine: "goalEngine",
@@ -263,6 +336,26 @@ export function reconcileMissingPrimitiveRecs(
     }
 
     if (translation.primitive === "none") {
+      // PR #445 — supersession-on-coverage path. The translator still
+      // returns `none`, but if the rec's family is now `dispatch_capable`
+      // in the primitive registry, the historical missing-primitive rec
+      // is obsolete: a registered executor will catch this family via the
+      // fallback dry-run path (the runtime emits `primitive-fallback-rec`
+      // instead of `missing-primitive-rec` after #443/#444 landed).
+      // Auto-reject with a supersession note; falls through to the
+      // existing `stillUnparseable` accounting when the family is not
+      // dispatch-capable.
+      if (
+        supersedeOnCoverage &&
+        trySupersedeOnCoverage({
+          rec,
+          entry,
+          operator,
+          result,
+        })
+      ) {
+        continue;
+      }
       // Parser still can't handle this wording. Leave the rec visible — the
       // coverage gap is real and the operator should still see it.
       result.stillUnparseable++;
@@ -383,4 +476,97 @@ function buildRejectionNote(primitive: string, reason?: string): string {
     `'${primitive}'. Parser-coverage gap closed (PR #409 sweep); ` +
     `auto-rejecting stale missing-primitive rec.`;
   return reason ? `${base} Match: ${reason}` : base;
+}
+
+/**
+ * PR #445 — supersession-on-coverage helper.
+ *
+ * Detects the case where the rec's family is dispatch-capable in the
+ * primitive registry, then rejects via the existing `rejectRecommendation`
+ * audit path with a structured supersession note. Returns true iff the rec
+ * was rejected (so the caller can `continue` and skip the
+ * `stillUnparseable` / `missingLedgerEntry` accounting).
+ *
+ * Lifecycle effects:
+ *   - status: proposed → rejected
+ *   - reviewNote: structured supersession note
+ *   - approvedBy / rejectedAt: operator (default "reconciler") / now
+ *
+ * Audit history is preserved: the original row remains in the
+ * `self_recommendations` table with its original `createdAt`, `title`,
+ * `rationale`, `proposedChange`, `sourceInsightId`, and `evidence`. Only
+ * the lifecycle columns transition.
+ *
+ * Safety:
+ *   - No-op when no parseable family can be derived from the rec.
+ *   - No-op when the family is not `dispatch_capable` (i.e. either the
+ *     primitive isn't registered, or one of the dispatcher gates is OFF).
+ *     `registered_only` is intentionally NOT treated as superseded — the
+ *     gap is still real to operators while gates are off.
+ *   - Errors from `rejectRecommendation` are swallowed and counted as
+ *     `result.errors`, matching the existing translator-driven path.
+ */
+function trySupersedeOnCoverage(args: {
+  rec: { id: string; title?: string | null; sourceInsightId?: string | null };
+  entry: InsightLedgerEntry | undefined;
+  operator: string;
+  result: ReconcilerResult;
+}): boolean {
+  const { rec, entry, operator, result } = args;
+  const family = familyForRec(rec, entry);
+  if (family === null) return false;
+  const coverage = classifyPrimitiveCoverageForFamily(family);
+  if (coverage.status !== "dispatch_capable") return false;
+
+  const note = buildSupersessionNote(family, coverage.primitiveId);
+  try {
+    rejectRecommendation(rec.id, operator, note);
+    result.reconciled++;
+    result.rejectedRecIds.push(rec.id);
+    result.supersededByPrimitiveCoverage =
+      (result.supersededByPrimitiveCoverage ?? 0) + 1;
+    (result.supersededRecIds ??= []).push(rec.id);
+    logEvent({
+      engine: "goalEngine",
+      event: "missing-primitive-reconciler-superseded",
+      level: "info",
+      data: {
+        recId: rec.id,
+        insightId: rec.sourceInsightId ?? null,
+        family,
+        primitiveId: coverage.primitiveId ?? null,
+        operator,
+        reason: "primitive_family_now_dispatch_capable",
+      },
+    });
+    return true;
+  } catch (e: any) {
+    result.errors++;
+    logEvent({
+      engine: "goalEngine",
+      event: "missing-primitive-reconciler-error",
+      level: "warn",
+      data: {
+        recId: rec.id,
+        family,
+        error: e?.message ?? String(e),
+        phase: "rejectRecommendation:supersedeOnCoverage",
+      },
+    });
+    return false;
+  }
+}
+
+function buildSupersessionNote(
+  family: MissingPrimitiveFamily,
+  primitiveId: string | undefined,
+): string {
+  const ts = new Date().toISOString();
+  const idPart = primitiveId ? ` (${family}::${primitiveId})` : "";
+  return (
+    `[reconciler] Primitive family registered and lookup-hit; runtime now ` +
+    `emits primitive-fallback-rec instead of missing-primitive-rec` +
+    `${idPart}. Superseding stale missing-primitive: ${family} rec ` +
+    `(family is dispatch_capable as of ${ts}; PR #445).`
+  );
 }
