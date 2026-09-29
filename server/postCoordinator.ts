@@ -191,16 +191,20 @@ export function resetCooldown(key?: string) {
  */
 export function releasePost(key: string, platform: "x" | "farcaster" = "x") {
   const state = load();
+  // requestPost stamps lastPost before the tweet exists. A failed attempt
+  // must not consume the cooldown or the next scheduled slot is skipped.
   if (platform === "farcaster") {
     if (state.activeEngineFarcaster === key) {
       state.activeEngineFarcaster = null;
       state.activeEngineFarcasterStarted = null;
+      if (state.lastPostFarcaster) delete state.lastPostFarcaster[key];
       save(state);
     }
   } else {
     if (state.activeEngine === key) {
       state.activeEngine = null;
       state.activeEngineStarted = null;
+      if (state.lastPost) delete state.lastPost[key];
       save(state);
     }
   }

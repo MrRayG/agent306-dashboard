@@ -488,6 +488,14 @@ export function resetResearchLab(): { cleared: { topics: number; hypotheses: num
 
 // ── Topic management ──────────────────────────────────────────────────────────
 
+// Same-tick callers (dream bridge can addTopic twice in one cycle) used to
+// collide on `research_${Date.now()}`. Suffix stays compatible with stored ids.
+let addTopicSeq = 0;
+function nextTopicId(): string {
+  addTopicSeq += 1;
+  return `research_${Date.now()}_${addTopicSeq}`;
+}
+
 export function addTopic(input: {
   topic:       string;
   description: string;
@@ -497,7 +505,7 @@ export function addTopic(input: {
 }): ResearchTopic {
   const lab = loadLab();
   const topic: ResearchTopic = {
-    id:          `research_${Date.now()}`,
+    id:          nextTopicId(),
     topic:       input.topic,
     description: input.description,
     priority:    input.priority ?? "medium",

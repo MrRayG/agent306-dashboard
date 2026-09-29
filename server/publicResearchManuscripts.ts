@@ -59,7 +59,7 @@ function manuscriptTimestamp(t: ResearchTopic): string {
   return t.publishedAt ?? t.draftedAt ?? t.updatedAt ?? t.addedAt;
 }
 
-function isPublishable(t: ResearchTopic): boolean {
+export function isPublishable(t: ResearchTopic): boolean {
   if (!t.manuscript || t.manuscript.trim().length === 0) return false;
   if (UNPUBLISHABLE_STATUSES.has(t.status)) return false;
   if (isManuscriptVerifierBlocked(t)) return false;
