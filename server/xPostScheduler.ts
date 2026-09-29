@@ -612,101 +612,106 @@ async function processQueue(xWrite: any): Promise<void> {
   const state = loadQueue();
   pruneOldHistory(state);
 
-  const post = state.queue
+  const pending = state.queue
     .filter(p => !p.posted)
-    .sort((a, b) => a.priority - b.priority || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())[0] ?? null;
+    .sort((a, b) => a.priority - b.priority || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
-  if (!post) {
+  if (pending.length === 0) {
     console.log("[XScheduler] No engine content queued — skipping");
     return;
   }
 
-  console.log(`[XScheduler] Processing: ${post.type} (priority: ${post.priority})`);
+  // Skip stale/duplicate items in this tick so they cannot sit at the head
+  // of the queue and age out everything behind them (30min tick vs 4h freshness).
+  // Still post at most one tweet per tick.
+  for (const post of pending) {
+    console.log(`[XScheduler] Processing: ${post.type} (priority: ${post.priority})`);
 
-  // Freshness guard: skip posts older than the configured max age
-  if (isPostStale(post)) {
-    post.posted = true;
-    post.postedAt = new Date().toISOString();
-    post.skipped = true;
-    post.skippedReason = "stale";
-    saveQueue(state);
-    console.log(`[XScheduler] Skipped stale post: ${post.type} from ${post.createdAt}`);
-    return;
-  }
-
-  // Cross-platform dedup: skip if similar content was already posted
-  try {
-    const dupCheck = await isDuplicateContent(post.content);
-    if (dupCheck.isDuplicate) {
+    if (isPostStale(post)) {
       post.posted = true;
       post.postedAt = new Date().toISOString();
       post.skipped = true;
-      post.skippedReason = `duplicate_${dupCheck.matchPlatform}`;
+      post.skippedReason = "stale";
       saveQueue(state);
-      console.log(`[XScheduler] Skipped duplicate — similar to ${dupCheck.matchPlatform} post from ${dupCheck.matchDate}`);
+      console.log(`[XScheduler] Skipped stale post: ${post.type} from ${post.createdAt}`);
+      continue;
+    }
+
+    try {
+      const dupCheck = await isDuplicateContent(post.content);
+      if (dupCheck.isDuplicate) {
+        post.posted = true;
+        post.postedAt = new Date().toISOString();
+        post.skipped = true;
+        post.skippedReason = `duplicate_${dupCheck.matchPlatform}`;
+        saveQueue(state);
+        console.log(`[XScheduler] Skipped duplicate — similar to ${dupCheck.matchPlatform} post from ${dupCheck.matchDate}`);
+        continue;
+      }
+    } catch (e: any) {
+      console.warn("[XScheduler] Dedup check failed, proceeding:", e.message);
+    }
+
+    const compliance = validateXPost(post.content);
+    if (!compliance.allowed) {
+      console.log(`[XScheduler] Post blocked by compliance: ${compliance.reason}`);
+      // Rate limit rejections are temporary — DON'T mark as posted.
+      // Stop this tick so we retry the same post later.
+      // Only kill the post for hard safety rejections (content filter).
+      if (compliance.reason?.includes('content filter')) {
+        post.posted = true;
+        post.postedAt = new Date().toISOString();
+        saveQueue(state);
+        console.log(`[XScheduler] Post permanently killed (safety violation)`);
+        continue;
+      }
+      console.log(`[XScheduler] Post preserved in queue — will retry next check`);
       return;
     }
-  } catch (e: any) {
-    console.warn("[XScheduler] Dedup check failed, proceeding:", e.message);
-  }
 
-  // Run through compliance guard
-  const compliance = validateXPost(post.content);
-  if (!compliance.allowed) {
-    console.log(`[XScheduler] Post blocked by compliance: ${compliance.reason}`);
-    // Rate limit rejections are temporary — DON'T mark as posted.
-    // The post stays in queue for the next check.
-    // Only kill the post for hard safety rejections (content filter).
-    if (compliance.reason?.includes('content filter')) {
-      post.posted = true;
-      post.postedAt = new Date().toISOString();
-      saveQueue(state);
-      console.log(`[XScheduler] Post permanently killed (safety violation)`);
-    } else {
-      console.log(`[XScheduler] Post preserved in queue — will retry next check`);
-    }
-    return;
-  }
+    let safeContent = compliance.sanitizedContent ?? post.content;
 
-  let safeContent = compliance.sanitizedContent ?? post.content;
+    // LAST transform: enforce post format (show tag, mentions, hashtags, signature, char limit)
+    safeContent = enforcePostFormat(safeContent, post.type);
 
-  // LAST transform: enforce post format (show tag, mentions, hashtags, signature, char limit)
-  safeContent = enforcePostFormat(safeContent, post.type);
-
-  try {
-    const tweetPayload: any = { text: safeContent };
-    // Generate + attach image if requested (respects includeImage flag)
-    const mediaId = await prepareMediaForPost(xWrite, post, safeContent);
-    if (mediaId) {
-      tweetPayload.media = { media_ids: [mediaId] };
-      post.mediaId = mediaId;
-    }
-    const tweet = await xWrite.v2.tweet(tweetPayload);
-    const tweetId = tweet.data?.id;
-    if (tweetId) {
-      recordXPost(safeContent);
-      recordPostType(state, post.type);
-      post.posted = true;
-      post.postedAt = new Date().toISOString();
-      saveQueue(state);
-      console.log(`[XScheduler] Posted ${post.type}${mediaId ? " (with image)" : ""}: https://x.com/306Agent/status/${tweetId}`);
-
-      // Trigger daily soul reflection after the last post of the day (after 10pm ET / 02:00 UTC)
-      const nowUTC = new Date().getUTCHours();
-      if (nowUTC >= 2 && nowUTC < 6) {
-        const todayStr = new Date().toISOString().slice(0, 10);
-        const todaysPosts = state.queue
-          .filter(p => p.posted && p.postedAt?.startsWith(todayStr))
-          .map(p => ({ text: p.content, score: 0, url: "" }));
-        dailyReflection(todaysPosts).catch(err =>
-          console.warn("[XScheduler] Daily reflection failed:", err.message)
-        );
+    try {
+      const tweetPayload: any = { text: safeContent };
+      // Generate + attach image if requested (respects includeImage flag)
+      const mediaId = await prepareMediaForPost(xWrite, post, safeContent);
+      if (mediaId) {
+        tweetPayload.media = { media_ids: [mediaId] };
+        post.mediaId = mediaId;
       }
-    } else {
-      console.warn("[XScheduler] Tweet sent but no ID returned");
+      const tweet = await xWrite.v2.tweet(tweetPayload);
+      const tweetId = tweet.data?.id;
+      if (tweetId) {
+        recordXPost(safeContent);
+        recordPostType(state, post.type);
+        post.posted = true;
+        post.postedAt = new Date().toISOString();
+        saveQueue(state);
+        console.log(`[XScheduler] Posted ${post.type}${mediaId ? " (with image)" : ""}: https://x.com/306Agent/status/${tweetId}`);
+
+        // Trigger daily soul reflection after the last post of the day (after 10pm ET / 02:00 UTC)
+        const nowUTC = new Date().getUTCHours();
+        if (nowUTC >= 2 && nowUTC < 6) {
+          const todayStr = new Date().toISOString().slice(0, 10);
+          const todaysPosts = state.queue
+            .filter(p => p.posted && p.postedAt?.startsWith(todayStr))
+            .map(p => ({ text: p.content, score: 0, url: "" }));
+          dailyReflection(todaysPosts).catch(err =>
+            console.warn("[XScheduler] Daily reflection failed:", err.message)
+          );
+        }
+        return;
+      }
+      console.warn("[XScheduler] Tweet sent but no ID returned — leaving post queued");
+      return;
+    } catch (e: any) {
+      console.error("[XScheduler] Post failed:", e.message);
+      // Don't skip a post that may have landed; retry it next tick.
+      return;
     }
-  } catch (e: any) {
-    console.error("[XScheduler] Post failed:", e.message);
   }
 }
 

@@ -9,6 +9,7 @@
 
 import { knowledge, performance } from "./memoryEngine.js";
 import { getResearchLab, getGoals, getAspirations } from "./researchEngine.js";
+import { isPublishable } from "./publicResearchManuscripts.js";
 import { getPodcastState } from "./podcastEngine.js";
 import { getExplorationState } from "./explorationEngine.js";
 import { getAgentReachStatus } from "./agentReachEngine.js";
@@ -410,11 +411,16 @@ export function getPublicResearch() {
   return cached("research", () => {
     const lab = getResearchLab();
 
-    // Stats reflect ALL topics (not just the displayed 6)
-    const published = lab.topics.filter(t => t.status === "published").length;
-    const pendingReview = lab.topics.filter(t => t.status === "pending_review").length;
+    // Stats reflect ALL topics (not just the displayed 6).
+    // Autonomous manuscripts never reach status "published" (that transition
+    // required a URL). A non-empty manuscript that isPublishable() accepts
+    // counts as published here — same gate as the public manuscripts API.
+    const countsAsPublished = (t: typeof lab.topics[number]) =>
+      t.status === "published" || isPublishable(t);
+    const published = lab.topics.filter(countsAsPublished).length;
+    const pendingReview = lab.topics.filter(t => t.status === "pending_review" && !countsAsPublished(t)).length;
     const active = lab.topics.filter(t =>
-      !["published", "declined", "archived"].includes(t.status)
+      !countsAsPublished(t) && !["declined", "archived"].includes(t.status)
     ).length;
 
     // Categorize and pick the top 1 topic per category

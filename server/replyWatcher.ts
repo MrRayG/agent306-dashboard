@@ -117,7 +117,7 @@ function classifyReply(text: string): CommunityReply["replyType"] {
   if (text.includes("?") || lower.includes("how") || lower.includes("when") || lower.includes("what") || lower.includes("why")) return "question";
   if (lower.includes("should") || lower.includes("imagine") || lower.includes("what if") || lower.includes("story") || lower.includes("lore")) return "lore_suggestion";
   if (/\#\d{1,5}/.test(text) || lower.includes("my token") || lower.includes("token #")) return "holder_mention";
-  if (text.includes("@") && !text.toLowerCase().includes("@agent_306")) return "callout";
+  if (text.includes("@") && !text.toLowerCase().includes("@306agent")) return "callout";
   if (lower.includes("🔥") || lower.includes("lfg") || lower.includes("let's go") || lower.includes("amazing") || lower.includes("love") || lower.includes("fire") || lower.includes("🚀")) return "excitement";
   return "general";
 }
@@ -170,7 +170,7 @@ async function fetchMentionsViaTwitterAPI(): Promise<CommunityReply[]> {
       .filter((t: any) => {
         // Skip our own tweets
         const username = userMap.get(t.author_id) ?? "";
-        return username.toLowerCase() !== "agent_306";
+        return username.toLowerCase() !== "306agent";
       })
       .map((t: any) => {
         const username = userMap.get(t.author_id) ?? "unknown";

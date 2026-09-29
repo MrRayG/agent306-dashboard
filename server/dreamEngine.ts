@@ -357,7 +357,9 @@ Be specific about insights. Don't generate vague platitudes — only add an insi
     console.log(`[DreamEngine] Updated ${updated} dream(s)`);
   }
 
-  // Bridge high-value dream insights to research threads (max 2 per cycle)
+  // Bridge high-value dream insights to research threads (max 2 per cycle).
+  // Cap open (non-archived, non-published) topics at 40 — no existing topic-queue constant.
+  const MAX_OPEN_TOPICS = 40;
   try {
     let spawned = 0;
     for (const update of parsed.updates) {
@@ -369,8 +371,23 @@ Be specific about insights. Don't generate vague platitudes — only add an insi
       // Only bridge insights from actively progressing dreams
       if (dream.status !== "exploring" && dream.status !== "emerging_answer") continue;
 
+      const labNow = getResearchLab();
+      const openCount = labNow.topics.filter(t => t.status !== "archived" && t.status !== "published").length;
+      if (openCount >= MAX_OPEN_TOPICS) {
+        console.log(`[DreamEngine] Open topic cap (${MAX_OPEN_TOPICS}) reached — skipping dream insight bridge`);
+        break;
+      }
+      const insightPrefix = `Dream insight: ${update.newInsight.slice(0, 100)}`;
+      const alreadyQueued = labNow.topics.some(t =>
+        t.status !== "archived" && (t.topic === insightPrefix || t.topic.startsWith(insightPrefix)),
+      );
+      if (alreadyQueued) {
+        console.log(`[DreamEngine] Skipping duplicate dream insight: "${update.newInsight.slice(0, 80)}"`);
+        continue;
+      }
+
       addTopic({
-        topic: `Dream insight: ${update.newInsight.slice(0, 100)}`,
+        topic: insightPrefix,
         description: `Dream synthesis from "${dream.question}": ${update.newInsight}`,
         priority: "medium",
         addedBy: "agent",
