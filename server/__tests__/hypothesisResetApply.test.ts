@@ -158,7 +158,14 @@ describe("hypothesisResetApply — change list", () => {
 
   it("returns no_records_to_change when the bucket is empty", () => {
     const keep = makeHyp({ id: "h_keep" });
-    const rep = buildResetReport({ hypotheses: [keep] });
+    // formedAt is fixed at 2026-05-10. classifyReset sends forming/testing
+    // rows older than staleDays (30) to archive_stale, so a wall-clock now
+    // makes this bucket non-empty. Pin now inside the window so the
+    // assertion still covers a genuinely empty archive_stale bucket.
+    const rep = buildResetReport({
+      hypotheses: [keep],
+      now: new Date("2026-05-20T00:00:00Z"),
+    });
     const plan = computeApplyPlan(rep, [keep] as any, { selectedBuckets: ["archive_stale" as any] });
     assert.equal(plan.ok, false);
     if (!plan.ok) assert.equal(plan.reason, "no_records_to_change");
