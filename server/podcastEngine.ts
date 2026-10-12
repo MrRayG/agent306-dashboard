@@ -47,6 +47,7 @@ import {
   PODCAST_HOST_SYSTEM_PROMPT,
   PODCAST_HOST_REVISION_GUARDRAIL,
 } from "./prompts/podcastHost.js";
+import { getResearchKey } from "./freeLLM.js";
 const GROK_URL = LLM_BASE_URL;
 const PODCAST_FILE = dataPath("podcast_state.json");
 
@@ -445,7 +446,7 @@ The falsification segment is what makes you trustworthy. Anyone can be confident
 
   // ── Fresh context via Perplexity Sonar (same pattern as generateEpisodeFromThread) ──
   let freshContext = "";
-  const pplxKey = process.env.PERPLEXITY_API_KEY ?? "";
+  const pplxKey = getResearchKey() ?? "";
   if (pplxKey && pplxKey.length > 10) {
     try {
       const today = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
@@ -1384,7 +1385,7 @@ async function generateScriptForEpisode(
 
   // ── Fresh context via Perplexity Sonar ──────────────────────────────────
   let freshContext = "";
-  const pplxKey = process.env.PERPLEXITY_API_KEY ?? "";
+  const pplxKey = getResearchKey() ?? "";
   if (pplxKey && pplxKey.length > 10) {
     try {
       const today = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });

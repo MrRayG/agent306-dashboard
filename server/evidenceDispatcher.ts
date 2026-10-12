@@ -19,6 +19,7 @@ import { researchWithPerplexity, researchWithSemanticScholar, researchMultiSourc
 import { addKnowledge } from "./memoryEngine.js";
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 import { searchAllSources } from "./externalDataSources.js";
+import { getResearchKey } from "./freeLLM.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -324,7 +325,7 @@ async function executeSearch(query: string, sourceType: SourceType, queryModifie
   switch (sourceType) {
     case "perplexity_web":
     case "perplexity_news": {
-      const pplxKey = process.env.PERPLEXITY_API_KEY ?? "";
+      const pplxKey = getResearchKey() ?? "";
       if (!pplxKey) {
         console.warn("[EvidenceDispatcher] PERPLEXITY_API_KEY not set — skipping Perplexity search");
         return { content: "", citations: [], source: sourceType, addedToKB: false };

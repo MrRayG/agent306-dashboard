@@ -66,6 +66,7 @@ import type {
   SourceResult,
   VerifyResult,
 } from "./types.js";
+import { LLM_API_KEY } from "../llmConfig.js";
 
 /** Engine-specific options the article adapter recognizes on `PipelineInput`. */
 export interface ArticlePipelineOpts {
@@ -204,9 +205,9 @@ export class ArticlePipelineAdapter implements EnginePipelineAdapter {
     // Discovery path. Single attempt — multi-attempt fallback stays in the
     // cron wrapper. The pipeline orchestrator gives a clean failure event
     // when discovery fails so the dashboard always has a terminal row.
-    const apiKey = opts.apiKey ?? process.env.OPENROUTER_API_KEY ?? "";
+    const apiKey = opts.apiKey ?? LLM_API_KEY;
     if (!apiKey) {
-      throw new Error("plan: no apiKey supplied and OPENROUTER_API_KEY unset");
+      throw new Error("plan: no apiKey supplied and no LLM key set (GEMINI_API_KEY / GROQ_API_KEY / OPENROUTER_API_KEY)");
     }
     const articleInfo = await discoverArticle(apiKey);
     if (!articleInfo) {
@@ -261,7 +262,7 @@ export class ArticlePipelineAdapter implements EnginePipelineAdapter {
       throw new Error("compileDraft: prior stage state missing");
     }
     const opts = readArticleOpts(input);
-    const apiKey = opts.apiKey ?? process.env.OPENROUTER_API_KEY ?? "";
+    const apiKey = opts.apiKey ?? LLM_API_KEY;
 
     const draft = await compileArticleDraft({
       articleInfo: this.articleInfo,

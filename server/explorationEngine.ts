@@ -26,6 +26,7 @@ import { LLM_BASE_URL, LLM_RESPONSE_URL, LLM_API_KEY, getLLMHeaders } from "./ll
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 import { postChatCompletions, postXSearchResponses } from "./llmCall.js";
+import { llmCompatFetch } from "./freeLLM.js";
 const GROK_CHAT_API      = LLM_BASE_URL;
 const GROK_RESPONSE_API  = LLM_RESPONSE_URL;
 const PERPLEXITY_API     = "https://api.perplexity.ai";
@@ -78,7 +79,7 @@ async function searchWithPerplexity(
       "Content-Type": "application/json",
       "Authorization": `Bearer ${pplxKey}`,
     };
-    const res = await fetch(`${PERPLEXITY_API}/chat/completions`, {
+    const res = await llmCompatFetch(`${PERPLEXITY_API}/chat/completions`, {
       method: "POST",
       headers: pplxHeaders,
       body: JSON.stringify({

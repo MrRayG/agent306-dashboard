@@ -14,6 +14,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { postPerplexity } from "./llmCall.js";
+import { getResearchKey } from "./freeLLM.js";
 
 export interface PerplexityGroundingResult {
   content:   string;
@@ -44,7 +45,7 @@ export async function gatherPerplexityEvidence(
     return { ...EMPTY, reason: "empty query" };
   }
 
-  const key = process.env.PERPLEXITY_API_KEY ?? "";
+  const key = getResearchKey() ?? "";
   if (!key || key.length < 10) {
     console.warn("[DataSources] Perplexity grounding skipped — PERPLEXITY_API_KEY not set");
     return { ...EMPTY, reason: "no api key" };

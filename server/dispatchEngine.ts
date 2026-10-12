@@ -24,6 +24,7 @@ import { buildSharedClaimLaneContractBlock } from "./claimLaneContract.js";
 import { extractClaimsAndComments } from "./claimExtractor.js";
 import { buildResearchPack } from "./researchPack.js";
 import { checkTemporal, buildTemporalGroundingBlock } from "./temporalGuard.js";
+import { coingeckoHeaders } from "./coingecko.js";
 // ── Types ───────────────────────────────────────────────────────────────
 
 interface DispatchEpisode {
@@ -142,7 +143,7 @@ export async function generateDispatchContent(): Promise<string | null> {
   try {
     // Gather live market data
     const [cgRes] = await Promise.allSettled([
-      fetch("https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=ethereum,bitcoin&order=market_cap_desc&per_page=2&sparkline=false&price_change_percentage=24h"),
+      fetch("https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=ethereum,bitcoin&order=market_cap_desc&per_page=2&sparkline=false&price_change_percentage=24h", { headers: coingeckoHeaders() }),
     ]);
 
     let ethPrice = "", btcPrice = "", ethChange = "", btcChange = "";

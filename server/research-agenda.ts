@@ -29,6 +29,7 @@ import { analyzeResearchAdvance, getAnalysisContext } from "./analyzerEngine.js"
 import { safeParseLLMJson } from "./safeParseLLMJson.js";
 
 import { postChatCompletions } from "./llmCall.js";
+import { getResearchKey, llmCompatFetch } from "./freeLLM.js";
 const GROK_URL = LLM_BASE_URL;
 const AGENDA_FILE = dataPath("research-agenda.json");
 
@@ -226,11 +227,11 @@ export async function generateResearchAgenda(): Promise<ResearchThread[]> {
 
   // ── Live AI news via Perplexity Sonar ──────────────────────────────────
   let liveAINews = "";
-  const pplxKeyGen = process.env.PERPLEXITY_API_KEY ?? "";
+  const pplxKeyGen = getResearchKey() ?? "";
   if (pplxKeyGen && pplxKeyGen.length > 10) {
     try {
       const today = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-      const pplxRes = await fetch("https://api.perplexity.ai/chat/completions", {
+      const pplxRes = await llmCompatFetch("https://api.perplexity.ai/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -533,7 +534,7 @@ async function parallelPerplexitySearch(
   queries: string[],
   threadTitle: string,
 ): Promise<{ query: string; content: string }[]> {
-  const pplxKey = process.env.PERPLEXITY_API_KEY ?? "";
+  const pplxKey = getResearchKey() ?? "";
   if (!pplxKey || pplxKey.length <= 10) {
     console.warn("[ParallelSearch] No Perplexity API key — skipping parallel search");
     return [];
@@ -551,7 +552,7 @@ async function parallelPerplexitySearch(
       if (idx > 0) await new Promise(r => setTimeout(r, idx * 500));
 
       try {
-        const pplxRes = await fetch("https://api.perplexity.ai/chat/completions", {
+        const pplxRes = await llmCompatFetch("https://api.perplexity.ai/chat/completions", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -772,11 +773,11 @@ export async function advanceThread(threadId: string): Promise<ResearchThread | 
 
   // Fallback: single Perplexity query if parallel search produced nothing
   if (!liveContext) {
-    const pplxKey = process.env.PERPLEXITY_API_KEY ?? "";
+    const pplxKey = getResearchKey() ?? "";
     if (pplxKey && pplxKey.length > 10) {
       try {
         const today = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-        const pplxRes = await fetch("https://api.perplexity.ai/chat/completions", {
+        const pplxRes = await llmCompatFetch("https://api.perplexity.ai/chat/completions", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

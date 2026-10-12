@@ -33,6 +33,7 @@ import { startXPostScheduler } from "../xPostScheduler.js";
 import { startFarcasterPostScheduler } from "../farcasterQueue.js";
 import { startDailyNewsDispatch } from "../routes.js";
 import { registerPhase1Experiment } from "../experiments/registerPhase1.js";
+import { getResearchKey } from "../freeLLM.js";
 
 export interface SchedulerDeps {
   xClient: TwitterApi | undefined;
@@ -120,10 +121,10 @@ export const SCHEDULED_ENGINES: ScheduledEngineDef[] = [
   {
     id: "exploration",
     label: "Exploration Engine",
-    enabled: d => !!d.llmApiKey && !!process.env.PERPLEXITY_API_KEY,
+    enabled: d => !!d.llmApiKey && !!getResearchKey(),
     staggerMs: 60_000,
     start: d => {
-      const pplxKey = process.env.PERPLEXITY_API_KEY!;
+      const pplxKey = getResearchKey()!;
       scheduleExploration(d.llmApiKey, pplxKey);
       console.log("[Scheduler] Exploration engine scheduled");
     },
