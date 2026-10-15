@@ -26,6 +26,7 @@ import { saveTweetDraft } from "./tweetDrafts.js";
 
 import { postChatCompletions } from "./llmCall.js";
 import { proposeRecommendation } from "./selfRecommendationEngine.js";
+import { getResearchKey, llmCompatFetch } from "./freeLLM.js";
 // -- Types ------------------------------------------------------------------
 
 export interface BreakthroughScoreV2 {
@@ -349,7 +350,7 @@ export async function checkPredictions(): Promise<number> {
     const pastDue = store.predictions.filter(p => p.status === "pending" && p.checkDate <= now);
     if (pastDue.length === 0) return 0;
 
-    const pplxKey = process.env.PERPLEXITY_API_KEY ?? "";
+    const pplxKey = getResearchKey() ?? "";
     if (!pplxKey || pplxKey.length < 10) {
       console.log("[Breakthrough] No Perplexity key — skipping prediction verification");
       return 0;
@@ -358,7 +359,7 @@ export async function checkPredictions(): Promise<number> {
     let checked = 0;
     for (const prediction of pastDue.slice(0, 3)) {
       try {
-        const res = await fetch("https://api.perplexity.ai/chat/completions", {
+        const res = await llmCompatFetch("https://api.perplexity.ai/chat/completions", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

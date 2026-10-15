@@ -55,6 +55,7 @@ import { persistManuscriptClaimMap } from "./manuscriptClaimMap.js";
 import { maybeRunManuscriptVerifier } from "./manuscriptVerifier.js";
 import { buildSharedClaimLaneContractBlock } from "./claimLaneContract.js";
 import { buildVerifierContractBlock } from "./verifierContract.js";
+import { llmCompatFetch } from "./freeLLM.js";
 const GROK_CHAT_API    = LLM_BASE_URL;
 const PERPLEXITY_API   = "https://api.perplexity.ai";
 const RESEARCH_FILE    = dataPath("research_lab.json");
@@ -1037,7 +1038,7 @@ export function testHypothesisDetailed(id: string): TestHypothesisResult {
 
 export async function researchWithPerplexity(query: string, pplxKey: string): Promise<{ text: string; sources: string[] }> {
   try {
-    const res = await fetch(`${PERPLEXITY_API}/chat/completions`, {
+    const res = await llmCompatFetch(`${PERPLEXITY_API}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

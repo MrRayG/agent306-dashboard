@@ -53,6 +53,7 @@ import {
 import { buildClaimMap } from "./claimMapBuilder.js";
 import { buildVerifierContractBlock } from "./verifierContract.js";
 import { buildSharedClaimLaneContractBlock } from "./claimLaneContract.js";
+import { getResearchKey, llmCompatFetch } from "./freeLLM.js";
 const BLOG_FILE = dataPath("blog_state.json");
 
 /**
@@ -617,11 +618,11 @@ export async function assembleBlogSourcePack(opts: {
   sourceObjects?: SourceObject[];
 }): Promise<BlogSourceAssembly> {
   let freshContext = "";
-  const pplxKey = process.env.PERPLEXITY_API_KEY ?? "";
+  const pplxKey = getResearchKey() ?? "";
   if (pplxKey && pplxKey.length > 10) {
     try {
       const today = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-      const pplxRes = await fetch("https://api.perplexity.ai/chat/completions", {
+      const pplxRes = await llmCompatFetch("https://api.perplexity.ai/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

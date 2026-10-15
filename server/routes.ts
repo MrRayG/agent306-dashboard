@@ -190,6 +190,8 @@ import { generateBreakthroughContent } from "./breakthroughDetector.js";
 import { getScheduleConfig, updateEngineSchedule, formatScheduleDisplay, parseDaysAndHour, shouldAutoPost, type EngineSchedule } from "./engineScheduleConfig.js";
 import { getDispatchState, generateDispatchContent } from "./dispatchEngine.js";
 import { postChatCompletions } from "./llmCall.js";
+import { coingeckoHeaders } from "./coingecko.js";
+import { getResearchKey, llmCompatFetch } from "./freeLLM.js";
 // breakingNewsDetector removed — not needed for now
 
 // On-chain API removed
@@ -296,7 +298,6 @@ const AI_NEWS_SOURCES = [
   { name: "The Verge",     color: "#f43f5e", url: "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml" },
   { name: "TechCrunch",   color: "#f97316", url: "https://techcrunch.com/category/artificial-intelligence/feed/" },
   { name: "Ars Technica", color: "#a78bfa", url: "https://feeds.arstechnica.com/arstechnica/technology-lab" },
-  { name: "VentureBeat",  color: "#4ade80", url: "https://venturebeat.com/category/ai/feed/" },
   // AI + Web3 crossover
   { name: "CoinDesk",     color: "#f59e0b", url: "https://www.coindesk.com/arc/outboundfeeds/rss/" },
   { name: "Decrypt",      color: "#60a5fa", url: "https://decrypt.co/feed" },
@@ -422,7 +423,7 @@ async function postDailyNewsDispatch() {
   try {
     // ── 1. Gather live data ──────────────────────────────────────────────
     const [cgRes] = await Promise.allSettled([
-      fetch("https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=ethereum,bitcoin&order=market_cap_desc&per_page=2&sparkline=false&price_change_percentage=24h"),
+      fetch("https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=ethereum,bitcoin&order=market_cap_desc&per_page=2&sparkline=false&price_change_percentage=24h", { headers: coingeckoHeaders() }),
     ]);
 
     let ethPrice = "", btcPrice = "", ethChange = "", btcChange = "";
@@ -2432,7 +2433,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       // ── Perplexity Sonar search for "recent" mode ──────────────────────
       let freshContext = "";
       if (timeframe === "recent") {
-        const pplxKey = process.env.PERPLEXITY_API_KEY ?? "";
+        const pplxKey = getResearchKey() ?? "";
         if (pplxKey && pplxKey.length > 10) {
           const queries = [
             `most important AI developments this week ${today}`,
@@ -2443,7 +2444,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
           const results: string[] = [];
           for (const query of queries) {
             try {
-              const pplxRes = await fetch("https://api.perplexity.ai/chat/completions", {
+              const pplxRes = await llmCompatFetch("https://api.perplexity.ai/chat/completions", {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
@@ -2995,7 +2996,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
         // CoinGecko — free tier, no key needed
         fetch(
           "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=ethereum,bitcoin,the-sandbox,axie-infinity&order=market_cap_desc&per_page=4&sparkline=false&price_change_percentage=24h",
-          { headers: { "Accept": "application/json" }, signal: AbortSignal.timeout(8000) }
+          { headers: coingeckoHeaders({ "Accept": "application/json" }), signal: AbortSignal.timeout(8000) }
         ),
         // AI News — RSS from 7 sources including Web3/AI crossover feeds
         fetchAINews(),
@@ -3029,7 +3030,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
         try {
           const nativeGrokKey = process.env.GROK_API_KEY ?? "";
           const grokRespUrl = process.env.GROK_RESPONSES_URL ?? "https://api.x.ai/v1/responses";
-          const grokResp = await fetch(nativeGrokKey ? grokRespUrl : LLM_RESPONSE_URL, {
+          const grokResp = await llmCompatFetch(nativeGrokKey ? grokRespUrl : LLM_RESPONSE_URL, {
             method: "POST",
             headers: nativeGrokKey
               ? { "Content-Type": "application/json", "Authorization": `Bearer ${nativeGrokKey}` }
@@ -4395,7 +4396,7 @@ needsHelp: true only when you genuinely need his direction or information`,
     if (!apiKey) return res.status(500).json({ error: "GROK_API_KEY not set" });
     // Non-blocking — start exploration and return immediately
     res.json({ started: true, message: "Agent 306 is exploring the world. Check /api/exploration/state for progress." });
-    runExploration(apiKey, process.env.PERPLEXITY_API_KEY)
+    runExploration(apiKey, getResearchKey())
       .then(run => {
         console.log(`[Exploration] Run complete: ${run.findingsCount} findings, +${run.knowledgeAdded} knowledge`);
         // Take a snapshot after exploration
@@ -4571,7 +4572,7 @@ needsHelp: true only when you genuinely need his direction or information`,
   app.post("/api/research/run/:id", async (req, res) => {
     const { id } = req.params;
     const grokKey = LLM_API_KEY;
-    const pplxKey = process.env.PERPLEXITY_API_KEY;
+    const pplxKey = getResearchKey();
     if (!grokKey) return res.status(500).json({ error: "GROK_API_KEY not set" });
     res.json({ started: true, topicId: id });
     runResearchCycle(id, grokKey, pplxKey)
@@ -4855,7 +4856,7 @@ needsHelp: true only when you genuinely need his direction or information`,
     if (!ok) return res.status(404).json({ error: "Topic not found or not in needs_input status" });
     // Re-enter the pipeline
     const grokKey = LLM_API_KEY;
-    const pplxKey = process.env.PERPLEXITY_API_KEY;
+    const pplxKey = getResearchKey();
     if (grokKey) {
       runResearchCycle(id, grokKey, pplxKey)
         .then(t => console.log(`[Research] Pipeline resumed for: ${t?.topic?.slice(0, 50)}`))
@@ -4871,7 +4872,7 @@ needsHelp: true only when you genuinely need his direction or information`,
     if (!ok) return res.status(404).json({ error: "Topic not found or not in needs_input status" });
     // Re-enter the pipeline
     const grokKey = LLM_API_KEY;
-    const pplxKey = process.env.PERPLEXITY_API_KEY;
+    const pplxKey = getResearchKey();
     if (grokKey) {
       runResearchCycle(id, grokKey, pplxKey)
         .then(t => console.log(`[Research] Pipeline resumed (skipped input) for: ${t?.topic?.slice(0, 50)}`))

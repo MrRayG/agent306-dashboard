@@ -57,10 +57,11 @@ import {
 } from "./schemas.js";
 
 import { postChatCompletions } from "../llmCall.js";
+import { getResearchKey } from "../freeLLM.js";
 const MESSAGES_FILE = dataPath("triad-messages.json");
 const LOG_FILE = dataPath("triad-log.json");
-const LLM_API_KEY = process.env.OPENROUTER_API_KEY ?? process.env.GROK_API_KEY ?? "";
-const PPLX_KEY = process.env.PERPLEXITY_API_KEY ?? "";
+import { LLM_API_KEY } from "../llmConfig.js";
+const PPLX_KEY = getResearchKey() ?? "";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

@@ -67,7 +67,7 @@ export async function searchOpenAlex(query: string, limit = 5): Promise<DataSour
 
 export async function searchArxiv(query: string, limit = 5): Promise<DataSourceResult[]> {
   try {
-    const url = `http://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(query)}&max_results=${limit}&sortBy=relevance`;
+    const url = `https://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(query)}&max_results=${limit}&sortBy=relevance`;
     const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
     if (!res.ok) return [];
     const xml = await res.text();

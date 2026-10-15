@@ -18,6 +18,7 @@ import {
   getLLMHeaders,
 } from "./llmConfig.js";
 import { getModel, resolveTask } from "./modelRouter.js";
+import { isFreeLLMMode, freeChatCompletion, tavilyResearchCompletion, llmCompatFetch } from "./freeLLM.js";
 import { callResponsesAPI } from "./responsesAdapter.js";
 import { logRoute, inferTier } from "./routeLog.js";
 
@@ -135,6 +136,23 @@ export async function postChatCompletions(
 
   if (taskProvider === "perplexity") {
     return postPerplexityChat(payload, signal, task!, taskTier);
+  }
+
+  // Free mode: Gemini → Groq (chat) or Tavily + LLM (live research).
+  if (isFreeLLMMode()) {
+    const startedAt = Date.now();
+    const res = await freeChatCompletion(payload, signal);
+    logRoute({
+      task:      task ?? "post-chat-completions",
+      tier:      taskTier ?? inferTier(payload.model),
+      provider:  "free-llm",
+      model:     payload.model,
+      mode:      "chat",
+      latencyMs: Date.now() - startedAt,
+      status:    res.ok ? "ok" : "error",
+      errorMsg:  res.ok ? undefined : `http ${res.status}`,
+    });
+    return res;
   }
 
   const route = resolveChatRoute(payload.model);
@@ -342,6 +360,10 @@ async function postPerplexityChat(
   task: string,
   tier?: string,
 ): Promise<Response> {
+  if (isFreeLLMMode()) {
+    // Perplexity replaced by Tavily search + free LLM (same response shape + citations).
+    return tavilyResearchCompletion(payload, signal);
+  }
   const key = process.env.PERPLEXITY_API_KEY;
   if (!key) {
     throw new Error(
@@ -446,6 +468,16 @@ export async function postXSearchResponses(args: {
   signal?: AbortSignal;
 }): Promise<Response> {
   const { task, content, signal } = args;
+  if (isFreeLLMMode()) {
+    // No free live-X-search equivalent: answer from the LLM in the Responses
+    // API shape so callers parse it unchanged (no fresh X posts in context).
+    return llmCompatFetch("https://api.x.ai/v1/responses", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ input: [{ role: "user", content }] }),
+      signal,
+    });
+  }
   const nativeGrokKey = process.env.GROK_API_KEY;
   if (!nativeGrokKey) {
     throw new Error(

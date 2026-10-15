@@ -8,17 +8,29 @@
  * To switch models, just change the model string — no code changes needed.
  */
 
+import { isFreeLLMMode, getFreeLLMKey } from "./freeLLM.js";
+
+// Free mode (GEMINI_API_KEY / GROQ_API_KEY set): requests addressed to the
+// legacy OpenRouter/xAI URLs below are served by Gemini → Groq through the
+// fetch router in server/freeLLM.ts. The URLs are kept so existing call
+// sites and tests keep their shape.
+
 // OpenRouter base URL (OpenAI-compatible)
 export const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "https://openrouter.ai/api/v1/chat/completions";
 
 // API key: prefer OpenRouter, fall back to Grok for backward compatibility
-export const LLM_API_KEY = process.env.OPENROUTER_API_KEY ?? process.env.GROK_API_KEY ?? "";
+// Free mode: the "is the LLM configured?" key is the Gemini/Groq key. This key
+// is never sent to openrouter.ai — the free-mode fetch router intercepts it.
+export const LLM_API_KEY = isFreeLLMMode()
+  ? getFreeLLMKey()
+  : (process.env.OPENROUTER_API_KEY ?? process.env.GROK_API_KEY ?? "");
 
 // Response API (for models that support it — not all do via OpenRouter)
 export const LLM_RESPONSE_URL = process.env.LLM_RESPONSE_URL ?? "https://openrouter.ai/api/v1/chat/completions";
 
 // xAI direct key — used for xAI-only features (image, TTS, video, x_search, Responses API)
-export const XAI_DIRECT_API_KEY = process.env.GROK_API_KEY ?? "";
+// Empty in free mode so resolveChatRoute() never picks the xai-direct route.
+export const XAI_DIRECT_API_KEY = isFreeLLMMode() ? "" : (process.env.GROK_API_KEY ?? "");
 
 // xAI direct base URL (overridable for testing)
 export const XAI_DIRECT_BASE_URL = process.env.XAI_DIRECT_BASE_URL ?? "https://api.x.ai/v1";

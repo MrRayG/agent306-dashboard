@@ -140,7 +140,7 @@ async function fetchArxiv(): Promise<IntakeItem[]> {
   console.log("[DataIntake] Fetching arXiv...");
   const categories = ["cs.AI", "cs.LG", "cs.CL"];
   const query = categories.map(c => `cat:${c}`).join("+OR+");
-  const url = `http://export.arxiv.org/api/query?search_query=${query}&sortBy=submittedDate&sortOrder=descending&max_results=20`;
+  const url = `https://export.arxiv.org/api/query?search_query=${query}&sortBy=submittedDate&sortOrder=descending&max_results=20`;
 
   const res = await safeFetch(url);
   if (!res) return [];

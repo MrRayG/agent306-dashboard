@@ -76,6 +76,7 @@ import { run306Eval } from "./evalEngine.js";
 import { startCycle as startCycleContext, recordEvent as recordCycleEvent, endCycle as endCycleContext } from "./cycleContext.js";
 
 import { postChatCompletions } from "./llmCall.js";
+import { getResearchKey } from "./freeLLM.js";
 const GROK_URL     = LLM_BASE_URL;
 const GROK_API_KEY = LLM_API_KEY;
 const TRIAD_ENABLED = (process.env.TRIAD_ENABLED ?? "false").toLowerCase() === "true";
@@ -635,7 +636,7 @@ async function autoResolveHypotheses(): Promise<number> {
     .map(e => `- [${e.category}] ${e.title}: ${e.summary}`)
     .join("\n");
 
-  const pplxKey = process.env.PERPLEXITY_API_KEY ?? "";
+  const pplxKey = getResearchKey() ?? "";
 
   let resolved = 0;
   for (const hyp of remaining) {
@@ -1376,7 +1377,7 @@ export async function runDailyCycle(): Promise<DailyBriefing | null> {
 
       if (queuedTopics.length > 0) {
         const grokKey = GROK_API_KEY;
-        const pplxKey = process.env.PERPLEXITY_API_KEY;
+        const pplxKey = getResearchKey();
         if (grokKey) {
           for (const topic of queuedTopics) {
             try {

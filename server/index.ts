@@ -1,4 +1,6 @@
 import "dotenv/config";
+import { installFreeLLMRouting } from "./freeLLM.js";
+installFreeLLMRouting();
 import express, { type Request, Response, NextFunction } from "express";
 import cors from "cors";
 import { registerRoutes, getXClients } from "./routes";

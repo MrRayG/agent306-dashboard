@@ -21,7 +21,7 @@
  *   - Future self-evolution dashboard (PR #19)
  */
 
-export type RouteProvider = "xai-direct" | "openrouter" | "perplexity" | "unknown";
+export type RouteProvider = "xai-direct" | "openrouter" | "perplexity" | "free-llm" | "unknown";
 
 export interface RouteLogEntry {
   task:        string;
