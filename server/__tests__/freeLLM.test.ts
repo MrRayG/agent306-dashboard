@@ -8,10 +8,12 @@ import assert from "node:assert/strict";
 
 const calls: Array<{ url: string; body: any }> = [];
 let geminiStatus = 500;
+let groqStatus = 200;
 
 process.env.GEMINI_API_KEY = "test-gemini";
 process.env.GROQ_API_KEY = "test-groq";
 process.env.TAVILY_API_KEY = "test-tavily";
+process.env.NVIDIA_API_KEY = "test-nvidia";
 delete process.env.FREE_LLM_ROUTING;
 
 const chatBody = (text: string) =>
@@ -26,7 +28,12 @@ globalThis.fetch = (async (input: any, init?: RequestInit) => {
       ? new Response(chatBody("from gemini"), { status: 200 })
       : new Response("{\"error\":\"quota\"}", { status: geminiStatus });
   }
-  if (url.includes("api.groq.com")) return new Response(chatBody("from groq"), { status: 200 });
+  if (url.includes("api.groq.com")) {
+    return groqStatus === 200
+      ? new Response(chatBody("from groq"), { status: 200 })
+      : new Response("{\"error\":\"rate\"}", { status: groqStatus });
+  }
+  if (url.includes("integrate.api.nvidia.com")) return new Response(chatBody("from nvidia"), { status: 200 });
   if (url.includes("api.tavily.com")) {
     return new Response(JSON.stringify({ results: [{ title: "T", url: "https://ex.com/a", content: "c" }] }), { status: 200 });
   }
@@ -102,4 +109,41 @@ test("non-LLM hosts (X posting, CoinGecko) pass straight through", async () => {
 
 test("research key sentinel is set only when Tavily is configured", () => {
   assert.equal(free.getResearchKey(), "tavily-free-mode");
+});
+
+test("Nemotron is the third fallback with NVIDIA's sampling and output cap", async () => {
+  geminiStatus = 500;
+  groqStatus = 429;
+  calls.length = 0;
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    body: JSON.stringify({ model: "x", messages: [{ role: "user", content: "hi" }], temperature: 0.2, max_tokens: 20000 }),
+  });
+  assert.equal(((await res.json()) as any).choices[0].message.content, "from nvidia");
+  assert.deepEqual(calls.map(c => new URL(c.url).hostname), [
+    "generativelanguage.googleapis.com", "api.groq.com", "integrate.api.nvidia.com",
+  ]);
+  const nv = calls[2];
+  assert.equal(nv.url, "https://integrate.api.nvidia.com/v1/chat/completions");
+  assert.equal(nv.body.model, "nvidia/nemotron-3.5-super-vl-120b-a12b");
+  assert.equal(nv.body.temperature, 1.0);
+  assert.equal(nv.body.top_p, 0.95);
+  assert.equal(nv.body.max_tokens, 8192);
+  groqStatus = 200;
+});
+
+test("Nemotron is skipped when NVIDIA_API_KEY is unset", async () => {
+  geminiStatus = 500;
+  groqStatus = 429;
+  const saved = process.env.NVIDIA_API_KEY;
+  delete process.env.NVIDIA_API_KEY;
+  calls.length = 0;
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    body: JSON.stringify({ model: "x", messages: [{ role: "user", content: "hi" }] }),
+  });
+  assert.equal(res.status, 429, "last provider error is surfaced");
+  assert.ok(!calls.some(c => c.url.includes("integrate.api.nvidia.com")));
+  process.env.NVIDIA_API_KEY = saved;
+  groqStatus = 200;
 });

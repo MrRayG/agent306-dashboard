@@ -4,6 +4,7 @@
  * Replaces the paid OpenRouter / xAI / Perplexity stack with:
  *   - Gemini Flash via Google's OpenAI-compatible endpoint (GEMINI_API_KEY) — primary LLM
  *   - Groq OpenAI-compatible endpoint (GROQ_API_KEY)                        — fallback LLM
+ *   - NVIDIA NIM Nemotron 3.5 Super VL (NVIDIA_API_KEY, optional)           — 2nd fallback
  *   - Tavily search (TAVILY_API_KEY) + the LLM                              — replaces Perplexity Sonar
  *
  * "Free mode" is active whenever GEMINI_API_KEY or GROQ_API_KEY is set (and
@@ -28,6 +29,11 @@ export const GEMINI_BASE_URL =
 export const GROQ_BASE_URL = process.env.GROQ_BASE_URL ?? "https://api.groq.com/openai/v1";
 export const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
 export const GROQ_MODEL = process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile";
+// Optional third fallback: NVIDIA NIM (build.nvidia.com), OpenAI-compatible.
+export const NVIDIA_BASE_URL = process.env.NVIDIA_BASE_URL ?? "https://integrate.api.nvidia.com/v1";
+export const NVIDIA_MODEL = process.env.NVIDIA_MODEL ?? "nvidia/nemotron-3.5-super-vl-120b-a12b";
+/** Max output tokens NVIDIA serves for Nemotron 3.5 Super VL. */
+export const NVIDIA_MAX_OUTPUT_TOKENS = 8192;
 export const GEMINI_EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL ?? "gemini-embedding-001";
 export const TAVILY_SEARCH_URL = process.env.TAVILY_SEARCH_URL ?? "https://api.tavily.com/search";
 
@@ -35,12 +41,12 @@ const LEGACY_LLM_HOSTS = ["openrouter.ai", "api.x.ai", "api.perplexity.ai"];
 
 export function isFreeLLMMode(): boolean {
   if ((process.env.FREE_LLM_ROUTING ?? "true") === "false") return false;
-  return !!(process.env.GEMINI_API_KEY || process.env.GROQ_API_KEY);
+  return !!(process.env.GEMINI_API_KEY || process.env.GROQ_API_KEY || process.env.NVIDIA_API_KEY);
 }
 
 /** Key used by legacy "is the LLM configured?" guards. */
 export function getFreeLLMKey(): string {
-  return process.env.GEMINI_API_KEY || process.env.GROQ_API_KEY || "";
+  return process.env.GEMINI_API_KEY || process.env.GROQ_API_KEY || process.env.NVIDIA_API_KEY || "";
 }
 
 /**
@@ -81,7 +87,15 @@ function normalizeMessages(messages: any[]): ChatMessage[] {
 }
 
 /** Build a provider-safe payload: only fields both Gemini and Groq accept. */
-function sanitizeChatPayload(payload: any, model: string): Record<string, any> {
+interface ProviderTuning {
+  /** Force these sampling params (provider-recommended), overriding the caller's. */
+  temperature?: number;
+  top_p?: number;
+  /** Clamp max_tokens to this ceiling. */
+  maxOutputTokens?: number;
+}
+
+function sanitizeChatPayload(payload: any, model: string, tuning: ProviderTuning = {}): Record<string, any> {
   const out: Record<string, any> = {
     model,
     messages: normalizeMessages(payload?.messages ?? []),
@@ -92,6 +106,11 @@ function sanitizeChatPayload(payload: any, model: string): Record<string, any> {
   if (typeof payload?.temperature === "number") out.temperature = payload.temperature;
   if (typeof payload?.top_p === "number") out.top_p = payload.top_p;
   if (payload?.response_format?.type === "json_object") out.response_format = { type: "json_object" };
+  if (typeof tuning.temperature === "number") out.temperature = tuning.temperature;
+  if (typeof tuning.top_p === "number") out.top_p = tuning.top_p;
+  if (typeof tuning.maxOutputTokens === "number" && typeof out.max_tokens === "number") {
+    out.max_tokens = Math.min(out.max_tokens, tuning.maxOutputTokens);
+  }
   return out;
 }
 
@@ -110,21 +129,30 @@ async function postProvider(
 }
 
 /**
- * OpenAI-compatible chat completion: Gemini first, Groq on any failure
+ * OpenAI-compatible chat completion: Gemini first, then Groq, then (if
+ * NVIDIA_API_KEY is set) NVIDIA Nemotron, moving on at any failure
  * (network error, non-2xx, or empty content). Returns a Response whose body is
  * standard chat/completions JSON so existing callers parse it unchanged.
  */
 export async function freeChatCompletion(payload: any, signal?: AbortSignal | null): Promise<Response> {
-  const attempts: Array<{ name: string; base: string; key: string | undefined; model: string }> = [
+  const attempts: Array<{ name: string; base: string; key: string | undefined; model: string; tuning?: ProviderTuning }> = [
     { name: "gemini", base: GEMINI_BASE_URL, key: process.env.GEMINI_API_KEY, model: GEMINI_MODEL },
     { name: "groq", base: GROQ_BASE_URL, key: process.env.GROQ_API_KEY, model: GROQ_MODEL },
+    {
+      name: "nvidia",
+      base: NVIDIA_BASE_URL,
+      key: process.env.NVIDIA_API_KEY,
+      model: NVIDIA_MODEL,
+      // NVIDIA's recommended sampling for Nemotron; output capped at 8,192 tokens.
+      tuning: { temperature: 1.0, top_p: 0.95, maxOutputTokens: NVIDIA_MAX_OUTPUT_TOKENS },
+    },
   ];
   let last: Response | null = null;
   let lastErr: unknown = null;
   for (const a of attempts) {
     if (!a.key) continue;
     try {
-      const res = await postProvider(a.base, a.key, sanitizeChatPayload(payload, a.model), signal);
+      const res = await postProvider(a.base, a.key, sanitizeChatPayload(payload, a.model, a.tuning), signal);
       const text = await res.text();
       if (res.ok) {
         let parsed: any = null;
@@ -145,7 +173,7 @@ export async function freeChatCompletion(payload: any, signal?: AbortSignal | nu
   }
   if (last) return last;
   if (lastErr) throw lastErr;
-  return jsonResponse({ error: "No free LLM provider configured (set GEMINI_API_KEY or GROQ_API_KEY)" }, 503);
+  return jsonResponse({ error: "No free LLM provider configured (set GEMINI_API_KEY, GROQ_API_KEY or NVIDIA_API_KEY)" }, 503);
 }
 
 /** Convenience: returns just the text (or "" on failure). */
@@ -340,7 +368,8 @@ export function installFreeLLMRouting(): void {
   if (isFreeLLMMode()) {
     console.log(
       `[FreeLLM] Free mode ON — LLM: ${process.env.GEMINI_API_KEY ? `Gemini (${GEMINI_MODEL})` : "—"}` +
-      `${process.env.GROQ_API_KEY ? ` → Groq (${GROQ_MODEL})` : ""}; research: ${process.env.TAVILY_API_KEY ? "Tavily" : "disabled (no TAVILY_API_KEY)"}`,
+      `${process.env.GROQ_API_KEY ? ` → Groq (${GROQ_MODEL})` : ""}` +
+      `${process.env.NVIDIA_API_KEY ? ` → NVIDIA (${NVIDIA_MODEL})` : ""}; research: ${process.env.TAVILY_API_KEY ? "Tavily" : "disabled (no TAVILY_API_KEY)"}`,
     );
   }
 }
